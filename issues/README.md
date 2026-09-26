@@ -26,7 +26,7 @@ issues/
 ├── 06-discovery-and-querying/                 # Hybrid search, LBD Swanson linking & schema design
 ├── 07-evaluation-harness/                     # Benchmark integrity, alignment & hallucination scoring
 ├── 08-pipeline-enhancements/                  # Macro community synthesis & chunking hygiene
-└── 09-stnb-evaluation-capabilities/           # STNB ground-truth, adapter, TheoryNet & baseline harness
+└── 09-evaluation-workbench/                   # User analytics, coupled views & Studio API endpoints
 ```
 
 ---
@@ -60,3 +60,11 @@ issues/
 | [**ISSUE-023**](08-pipeline-enhancements/ISSUE-023-chunker-tokenization-and-provenance-hygiene.md)     | SemanticChunker Tokenization & Configurable Encodings       | 08-Pipeline Enhancements | `episteme-pipeline`                     | Horizon 1       | Low      | `Open`        |
 | [**ISSUE-024**](07-evaluation-harness/ISSUE-024-scigraph-evaluation-methodology.md)                    | SciGraph Evaluation Methodology (Soft Matching & Querying)  | 07-Evaluation Harness    | `episteme-pipeline` / `epistemetrics`   | Horizon 1 & 2   | High     | `Superseded`  |
 | [**ISSUE-025**](03-epistemic-metrics/ISSUE-025-model-theoretic-plausibility-score.md)                  | Model-Theoretic Plausibility Score ($p$) on Edges           | 03-Epistemic Metrics     | `epistemetrics` / `episteme-pipeline`   | Horizon 2       | Medium   | `Open`        |
+| [**ISSUE-026**](09-evaluation-workbench/ISSUE-026-evaluation-graph-alignment-overlay-projection.md)    | Evaluation Graph Alignment Overlay & Visual Error Projection| 09-Evaluation Workbench  | `episteme-studio`                       | Horizon 1       | Critical | `Open`        |
+| [**ISSUE-027**](09-evaluation-workbench/ISSUE-027-hitl-adjudication-queue-and-live-recalculation.md)   | HITL Borderline Adjudication Queue & Dynamic Re-evaluation  | 09-Evaluation Workbench  | `episteme-studio`                       | Horizon 1       | High     | `Open`        |
+| [**ISSUE-028**](09-evaluation-workbench/ISSUE-028-confidence-calibration-reliability-diagrams.md)       | Confidence Calibration Diagnostics & Reliability Diagrams   | 09-Evaluation Workbench  | `episteme-studio`                       | Horizon 1 & 2   | High     | `Open`        |
+| [**ISSUE-029**](09-evaluation-workbench/ISSUE-029-multimodal-grounding-evidence-inspection.md)         | Multi-Modal Deep Evidence Grounding & Bounding-Box Inspector| 09-Evaluation Workbench  | `episteme-studio`                       | Horizon 2       | Medium   | `Open`        |
+| [**ISSUE-030**](09-evaluation-workbench/ISSUE-030-multi-run-leaderboard-and-pareto-frontier.md)         | Multi-Run Benchmark Leaderboard & Multi-Virtue Pareto       | 09-Evaluation Workbench  | `episteme-studio`                       | Horizon 2       | High     | `Open`        |
+| [**ISSUE-031**](09-evaluation-workbench/ISSUE-031-adversarial-noise-robustness-stress-testing.md)       | Adversarial Noise Robustness Benchmarking & RDF Curves      | 09-Evaluation Workbench  | `episteme-studio`                       | Horizon 2       | Medium   | `Open`        |
+| [**ISSUE-032**](09-evaluation-workbench/ISSUE-032-competency-query-retrieval-diagnostics.md)           | Downstream Competency Retrieval Per-Query Diagnostics       | 09-Evaluation Workbench  | `episteme-studio`                       | Horizon 1       | Medium   | `Open`        |
+| [**ISSUE-033**](09-evaluation-workbench/ISSUE-033-benchmark-catalog-management-and-validation.md)      | Custom Benchmark Registration, Pre-Flight Linter & Export   | 09-Evaluation Workbench  | `episteme-studio`                       | Horizon 1 & 2   | Medium   | `Open`        |

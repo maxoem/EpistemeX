@@ -820,4 +820,290 @@ class TestEvaluationAPI:
                 assert any("evaluation.job.completed" in c for c in chunks)
 
 
+class TestEvaluationWorkbenchEndpoints:
+    """Comprehensive test suite for evaluation workbench endpoints (ISSUE-026 - ISSUE-033)."""
+
+    @pytest.fixture
+    def test_env(self, tmp_path: Path):
+        """Prepare temporary test environment with a persisted evaluation report."""
+        runs_dir = tmp_path / "runs"
+        reports_dir = tmp_path / "reports"
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        eval_id = "eval_bench_test_01"
+        report_data = {
+            "evaluation_id": eval_id,
+            "run_ids": ["run_bench_test_01"],
+            "dataset_ref": "stnb_cpm_pilot",
+            "dataset_type": "gold",
+            "outcome": "pass",
+            "key_metrics": {"f1": 0.88, "mcc": 1.0, "pfs": 0.85, "mrr": 0.80, "ece": 0.04},
+            "omitted_components": ["str:CPM_Axiom_3_ActionReaction"],
+            "violations": [{"type": "disjointness", "node_id": "pred:Unverified_Kinematic_Claim"}],
+            "model_decomposition": [
+                {
+                    "class_name": "actual_models",
+                    "symbol": "M",
+                    "reference_count": 3,
+                    "predicted_count": 2,
+                    "matched_count": 2,
+                    "completeness": 0.67,
+                }
+            ],
+            "summary_markdown": "## Bench Test Report\n- F1: 0.88",
+        }
+        (reports_dir / f"report_{eval_id}.json").write_text(json.dumps(report_data), encoding="utf-8")
+        (reports_dir / f"report_{eval_id}.md").write_text(report_data["summary_markdown"], encoding="utf-8")
+
+        settings = StudioSettings(
+            runs_dir=runs_dir,
+            reports_dir=reports_dir,
+            eval_data_dir=tmp_path / "data",
+        )
+        app = create_app(settings)
+        client = TestClient(app)
+        return {"client": client, "eval_id": eval_id, "reports_dir": reports_dir, "run_id": "run_bench_test_01"}
+
+    def test_graph_overlay_endpoints(self, test_env):
+        """Verify graph canvas overlay endpoint returns classified nodes and ghost nodes (ISSUE-026)."""
+        client = test_env["client"]
+        eval_id = test_env["eval_id"]
+        run_id = test_env["run_id"]
+
+        # Test evaluation report overlay
+        resp = client.get(f"/api/evaluation/reports/{eval_id}/graph-overlay?include_ghosts=true")
+        assert resp.status_code == 200
+        overlay = resp.json()
+        assert overlay["evaluation_id"] == eval_id
+        assert len(overlay["nodes"]) >= 2
+        assert len(overlay["edges"]) >= 1
+        assert overlay["summary_counts"]["fn_nodes"] >= 1
+        ghost_node = next((n for n in overlay["nodes"] if n["is_ghost"]), None)
+        assert ghost_node is not None
+        assert ghost_node["alignment_status"] == "false_negative"
+
+        # Test run-centric overlay endpoint
+        resp_run = client.get(f"/api/runs/{run_id}/evaluation/graph-overlay")
+        assert resp_run.status_code == 200
+        assert resp_run.json()["evaluation_id"] == run_id
+
+    def test_adjudication_queue_and_recalculate(self, test_env):
+        """Verify HITL adjudication queue and live metric recalculation (ISSUE-027)."""
+        client = test_env["client"]
+        eval_id = test_env["eval_id"]
+
+        # Get queue
+        resp = client.get(f"/api/evaluation/reports/{eval_id}/adjudication-queue?status=pending")
+        assert resp.status_code == 200
+        queue = resp.json()
+        assert queue["evaluation_id"] == eval_id
+        assert queue["total_candidates"] >= 1
+        assert len(queue["candidates"]) >= 1
+
+        cand = queue["candidates"][0]
+
+        # Submit adjudication and recalculate
+        adj_payload = {
+            "items": [
+                {
+                    "adjudication_id": f"adj_{cand['candidate_id']}",
+                    "predicted_edge": cand["predicted_edge"],
+                    "reference_edge": cand["reference_edge"],
+                    "similarity_score": cand["similarity_score"],
+                    "decision": "true_positive",
+                    "rationale": "Verified correct by physics domain expert.",
+                }
+            ]
+        }
+        recalc_resp = client.post(
+            f"/api/evaluation/reports/{eval_id}/adjudicate-and-recalculate",
+            json=adj_payload,
+        )
+        assert recalc_resp.status_code == 200
+        recalc_data = recalc_resp.json()
+        assert recalc_data["adjudicated_count"] == 1
+        assert "f1" in recalc_data["metric_deltas"]
+        assert recalc_data["metric_deltas"]["f1"] > 0
+        assert recalc_data["updated_report"]["key_metrics"]["f1"] > 0.88
+
+    def test_calibration_diagnostics(self, test_env):
+        """Verify confidence calibration and reliability diagram endpoint (ISSUE-028)."""
+        client = test_env["client"]
+        eval_id = test_env["eval_id"]
+        run_id = test_env["run_id"]
+
+        resp = client.get(f"/api/evaluation/reports/{eval_id}/calibration")
+        assert resp.status_code == 200
+        calib = resp.json()
+        assert calib["evaluation_id"] == eval_id
+        assert len(calib["bins"]) == 10
+        assert calib["expected_calibration_error"] >= 0.0
+        assert calib["brier_score"] >= 0.0
+        assert len(calib["high_confidence_hallucinations"]) >= 1
+        assert "accuracies" in calib["chart_series"]
+
+        # Run-centric calibration
+        resp_run = client.get(f"/api/runs/{run_id}/evaluation/calibration")
+        assert resp_run.status_code == 200
+
+    def test_multimodal_evidence_grounding(self, test_env):
+        """Verify deep multimodal evidence grounding inspection endpoint (ISSUE-029)."""
+        client = test_env["client"]
+        eval_id = test_env["eval_id"]
+        run_id = test_env["run_id"]
+
+        comp_id = "str:CPM_Axiom_2_Force"
+        resp = client.get(f"/api/evaluation/reports/{eval_id}/evidence/{comp_id}")
+        assert resp.status_code == 200
+        evidence = resp.json()
+        assert evidence["component_id"] == comp_id
+        assert evidence["predicted_anchor"] is not None
+        assert evidence["predicted_anchor"]["bbox"] is not None
+        assert evidence["predicted_anchor"]["bbox"]["page"] == 14
+        assert evidence["iou_score"] > 0.50
+
+        # Run-centric evidence
+        resp_run = client.get(f"/api/runs/{run_id}/evaluation/evidence/{comp_id}")
+        assert resp_run.status_code == 200
+
+    def test_leaderboard_and_pareto_frontier(self, test_env):
+        """Verify multi-run benchmark leaderboard matrix and Pareto frontier (ISSUE-030)."""
+        client = test_env["client"]
+
+        # Test POST
+        resp_post = client.post(
+            "/api/evaluation/leaderboard",
+            json={"pareto_axes": ["f1", "ece"], "sort_by": "f1"},
+        )
+        assert resp_post.status_code == 200
+        lb_post = resp_post.json()
+        assert lb_post["total_runs"] >= 2
+        assert len(lb_post["pareto_frontier"]) >= 1
+        assert any(e["is_pareto_optimal"] for e in lb_post["entries"])
+        assert "Multi-Run Benchmark Leaderboard" in lb_post["summary_markdown"]
+
+        # Test GET
+        resp_get = client.get("/api/evaluation/leaderboard?sort_by=f1")
+        assert resp_get.status_code == 200
+        assert resp_get.json()["total_runs"] >= 2
+
+    def test_noise_robustness_stress_test(self, test_env):
+        """Verify adversarial noise robustness stress test and curves (ISSUE-031)."""
+        client = test_env["client"]
+        eval_id = test_env["eval_id"]
+        run_id = test_env["run_id"]
+
+        stress_req = {
+            "run_id": run_id,
+            "perturbation_types": ["typo_insertion", "synonym_replacement"],
+            "noise_levels": [0.05, 0.10, 0.20],
+        }
+        resp = client.post("/api/evaluation/stress-test", json=stress_req)
+        assert resp.status_code == 201
+        stress_data = resp.json()
+        assert stress_data["run_id"] == run_id
+        assert stress_data["overall_rdf"] >= 0.0
+        assert "typo_insertion" in stress_data["breakdown_by_perturbation"]
+        assert len(stress_data["breakdown_by_perturbation"]["typo_insertion"]) == 3
+
+        # Retrieve report
+        resp_get = client.get(f"/api/evaluation/reports/{run_id}/robustness")
+        assert resp_get.status_code == 200
+        assert resp_get.json()["run_id"] == run_id
+
+    def test_retrieval_diagnostics(self, test_env):
+        """Verify competency question per-query diagnostics endpoint (ISSUE-032)."""
+        client = test_env["client"]
+        eval_id = test_env["eval_id"]
+
+        resp = client.get(f"/api/evaluation/reports/{eval_id}/retrieval-diagnostics")
+        assert resp.status_code == 200
+        diag = resp.json()
+        assert diag["evaluation_id"] == eval_id
+        assert diag["total_queries"] >= 1
+        assert diag["mrr"] > 0.0
+        assert len(diag["queries"]) >= 1
+        q0 = diag["queries"][0]
+        assert "query_text" in q0
+        assert len(q0["retrieved_candidates"]) >= 1
+
+    def test_benchmark_validation_and_registration(self, test_env):
+        """Verify pre-flight benchmark validation and registration (ISSUE-033)."""
+        client = test_env["client"]
+
+        # Valid DAG benchmark
+        valid_jsonld = json.dumps(
+            {
+                "@graph": [
+                    {"@id": "str:Root", "rdfs:label": "Root Law"},
+                    {"@id": "str:SubLaw", "rdfs:label": "Specialized Law", "source": "str:Root", "target": "str:SubLaw", "relation": "SPECIALIZES_TO"},
+                ]
+            }
+        )
+        resp_valid = client.post("/api/evaluation/benchmarks/validate", json={"content": valid_jsonld})
+        assert resp_valid.status_code == 200
+        val_res = resp_valid.json()
+        assert val_res["is_valid"] is True
+        assert val_res["is_dag"] is True
+
+        # Cyclic benchmark
+        cyclic_jsonld = json.dumps(
+            {
+                "@graph": [
+                    {"@id": "str:A", "source": "str:A", "target": "str:B"},
+                    {"@id": "str:B", "source": "str:B", "target": "str:A"},
+                ]
+            }
+        )
+        resp_cyclic = client.post("/api/evaluation/benchmarks/validate", json={"content": cyclic_jsonld})
+        assert resp_cyclic.status_code == 200
+        cyclic_res = resp_cyclic.json()
+        assert cyclic_res["is_valid"] is False
+        assert cyclic_res["is_dag"] is False
+        assert any(i["rule_id"] == "DAG_CYCLE_DETECTED" for i in cyclic_res["issues"])
+
+        # Register custom benchmark
+        reg_payload = {
+            "id": "quantum_mechanics_pilot",
+            "name": "Quantum Mechanics Pilot",
+            "description": "Dirac-von Neumann formulation of quantum theory",
+            "task_type": "structuralist",
+            "gold_standard_jsonld": valid_jsonld,
+        }
+        try:
+            reg_resp = client.post("/api/evaluation/benchmarks", json=reg_payload)
+            assert reg_resp.status_code == 201
+            assert reg_resp.json()["id"] == "quantum_mechanics_pilot"
+        finally:
+            bench_path = Path("packages/episteme-pipeline/episteme_pipeline/evaluation/data/quantum_mechanics_pilot.jsonld")
+            if bench_path.is_file():
+                bench_path.unlink()
+
+    def test_export_report_formats(self, test_env):
+        """Verify LaTeX, CSV, and JSON-LD report export (ISSUE-033)."""
+        client = test_env["client"]
+        eval_id = test_env["eval_id"]
+
+        # LaTeX export
+        resp_tex = client.get(f"/api/evaluation/reports/{eval_id}/export?format=latex")
+        assert resp_tex.status_code == 200
+        assert "text/x-tex" in resp_tex.headers.get("content-type", "")
+        assert "\\begin{table}" in resp_tex.text
+        assert "\\toprule" in resp_tex.text
+
+        # CSV export
+        resp_csv = client.get(f"/api/evaluation/reports/{eval_id}/export?format=csv")
+        assert resp_csv.status_code == 200
+        assert "text/csv" in resp_csv.headers.get("content-type", "")
+        assert "metric,value" in resp_csv.text
+
+        # JSON-LD export
+        resp_json = client.get(f"/api/evaluation/reports/{eval_id}/export?format=jsonld")
+        assert resp_json.status_code == 200
+        assert "application/ld+json" in resp_json.headers.get("content-type", "")
+        parsed = json.loads(resp_json.text)
+        assert parsed["evaluation_id"] == eval_id
+
+
 

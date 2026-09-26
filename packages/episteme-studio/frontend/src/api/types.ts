@@ -626,3 +626,270 @@ export interface EvaluationJobDescriptor {
   report?: any | null;
 }
 
+// =============================================================================
+// Evaluation Workbench Types (ISSUE-026 - ISSUE-033)
+// =============================================================================
+
+export type NodeAlignmentStatus = "true_positive" | "false_positive" | "false_negative" | "borderline";
+
+export type EdgeAlignmentStatus =
+  | "true_positive"
+  | "false_positive"
+  | "false_negative"
+  | "borderline"
+  | "polarity_conflict";
+
+export interface EvaluationNodeOverlay {
+  id: string;
+  label: string;
+  class_name?: string | null;
+  symbol?: string | null;
+  alignment_status: NodeAlignmentStatus;
+  gold_id?: string | null;
+  similarity_score: number;
+  is_ghost: boolean;
+  properties?: Record<string, any>;
+}
+
+export interface EvaluationEdgeOverlay {
+  id: string;
+  source: string;
+  target: string;
+  predicate: string;
+  alignment_status: EdgeAlignmentStatus;
+  gold_predicate?: string | null;
+  similarity_score: number;
+  is_ghost: boolean;
+  evidence_snippet?: string | null;
+}
+
+export interface EvaluationGraphOverlay {
+  evaluation_id: string;
+  run_id: string;
+  benchmark_id?: string | null;
+  nodes: EvaluationNodeOverlay[];
+  edges: EvaluationEdgeOverlay[];
+  summary_counts: Record<string, number>;
+}
+
+export interface AdjudicationQueueItem {
+  candidate_id: string;
+  evaluation_id: string;
+  predicted_edge: Record<string, any>;
+  reference_edge?: Record<string, any> | null;
+  similarity_score: number;
+  status: "pending" | "adjudicated";
+  current_decision?: AdjudicationDecision | null;
+  alias_target?: string | null;
+  evidence_snippet?: string | null;
+  confidence: number;
+}
+
+export interface AdjudicationQueueResponse {
+  evaluation_id: string;
+  total_candidates: number;
+  pending_count: number;
+  adjudicated_count: number;
+  candidates: AdjudicationQueueItem[];
+}
+
+export interface AdjudicateAndRecalculateRequest {
+  items: EdgeAdjudicationItem[];
+  export_dataset_path?: string | null;
+}
+
+export interface AdjudicateAndRecalculateResponse {
+  evaluation_id: string;
+  adjudicated_count: number;
+  updated_report: any;
+  metric_deltas: Record<string, number>;
+  message: string;
+}
+
+export interface CalibrationBinDetail {
+  bin_index: number;
+  bin_lower: number;
+  bin_upper: number;
+  sample_count: number;
+  mean_confidence: number;
+  empirical_accuracy: number;
+  calibration_gap: number;
+}
+
+export interface MiscalibratedAssertionItem {
+  assertion_id: string;
+  assertion_type: string;
+  descriptor: string;
+  confidence: number;
+  empirical_match: boolean;
+  discrepancy: number;
+  evidence_text?: string | null;
+  rationale?: string | null;
+}
+
+export interface CalibrationReportDetail {
+  evaluation_id: string;
+  run_id: string;
+  expected_calibration_error: number;
+  maximum_calibration_error: number;
+  brier_score: number;
+  is_well_calibrated: boolean;
+  num_samples: number;
+  bins: CalibrationBinDetail[];
+  high_confidence_hallucinations: MiscalibratedAssertionItem[];
+  chart_series: Record<string, any>;
+}
+
+export interface BoundingBoxCoordinates {
+  page: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+export interface MultiModalEvidenceAnchor {
+  anchor_id: string;
+  doc_id: string;
+  media_type: "text" | "figure" | "equation" | "table";
+  verbatim_text?: string | null;
+  char_start?: number | null;
+  char_end?: number | null;
+  bbox?: BoundingBoxCoordinates | null;
+  formula_latex?: string | null;
+  image_uri?: string | null;
+}
+
+export interface GroundingEvaluationDetail {
+  component_id: string;
+  component_type: string;
+  label: string;
+  predicted_anchor?: MultiModalEvidenceAnchor | null;
+  reference_anchor?: MultiModalEvidenceAnchor | null;
+  iou_score: number;
+  grounding_passed: boolean;
+  failure_reason?: string | null;
+}
+
+export interface LeaderboardEntry {
+  run_id: string;
+  evaluation_id: string;
+  benchmark_id: string;
+  model_name?: string | null;
+  prompt_strategy?: string | null;
+  outcome: string;
+  evaluated_at: string;
+  metrics: Record<string, number>;
+  total_cost_usd?: number | null;
+  duration_seconds?: number | null;
+  is_pareto_optimal: boolean;
+}
+
+export interface ParetoFrontierPoint {
+  run_id: string;
+  coordinates: Record<string, number>;
+  dominated_by: string[];
+}
+
+export interface LeaderboardRequest {
+  benchmark_id?: string | null;
+  run_ids?: string[];
+  pareto_axes?: string[];
+  sort_by?: string;
+  ascending?: boolean;
+}
+
+export interface LeaderboardResponse {
+  benchmark_id?: string | null;
+  total_runs: number;
+  entries: LeaderboardEntry[];
+  pareto_frontier: ParetoFrontierPoint[];
+  summary_markdown: string;
+}
+
+export type PerturbationType = "typo_insertion" | "synonym_replacement" | "sentence_shuffle" | "composite";
+
+export interface PerturbationSweepPoint {
+  noise_level: number;
+  f1_score: number;
+  mcc_score: number;
+  poset_dag_valid: boolean;
+  rdf_delta: number;
+}
+
+export interface NoiseRobustnessReportDetail {
+  evaluation_id: string;
+  run_id: string;
+  overall_rdf: number;
+  is_resilient: boolean;
+  baseline_f1: number;
+  worst_case_f1: number;
+  breakdown_by_perturbation: Record<string, PerturbationSweepPoint[]>;
+  chart_series: Record<string, any>;
+}
+
+export interface StressTestRequest {
+  run_id: string;
+  benchmark_id?: string | null;
+  perturbation_types?: PerturbationType[];
+  noise_levels?: number[];
+}
+
+export interface RetrievedCandidateItem {
+  rank: number;
+  node_id: string;
+  label: string;
+  class_name?: string | null;
+  similarity_score: number;
+  is_gold_target: boolean;
+}
+
+export interface CompetencyQueryDiagnosticItem {
+  query_id: string;
+  query_text: string;
+  target_category?: string | null;
+  expected_gold_nodes: string[];
+  retrieved_candidates: RetrievedCandidateItem[];
+  first_hit_rank?: number | null;
+  reciprocal_rank: number;
+  hits_at_1: boolean;
+  hits_at_3: boolean;
+  hits_at_10: boolean;
+  failure_mode?: string | null;
+}
+
+export interface RetrievalDiagnosticsResponse {
+  evaluation_id: string;
+  total_queries: number;
+  mrr: number;
+  hits_at_1: number;
+  hits_at_10: number;
+  queries: CompetencyQueryDiagnosticItem[];
+}
+
+export interface BenchmarkValidationIssue {
+  severity: "error" | "warning";
+  rule_id: string;
+  message: string;
+  location?: string | null;
+}
+
+export interface BenchmarkValidationResult {
+  is_valid: boolean;
+  total_entities: number;
+  total_triples: number;
+  is_dag: boolean;
+  root_element?: string | null;
+  issues: BenchmarkValidationIssue[];
+}
+
+export interface RegisterBenchmarkRequest {
+  id: string;
+  name: string;
+  description: string;
+  task_type?: string;
+  gold_standard_jsonld: string;
+  queries_yaml?: string | null;
+}
+
+

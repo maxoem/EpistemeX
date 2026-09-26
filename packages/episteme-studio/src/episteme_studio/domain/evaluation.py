@@ -702,3 +702,829 @@ class StartEvaluationJobRequest(BaseModel):
     gold_standard_path: str | None = None
     baseline: str | None = None
     build_graph: bool = False
+
+
+# =============================================================================
+# Evaluation Workbench & Interactive Analytics Models (ISSUE-026 - ISSUE-033)
+# =============================================================================
+
+
+class NodeAlignmentStatus(StrEnum):
+    """Alignment classification of an evaluated graph node against reference standard.
+
+    Attributes
+    ----------
+    TRUE_POSITIVE : str
+        Predicted node correctly aligned with a reference gold component.
+    FALSE_POSITIVE : str
+        Predicted node extracted without corresponding empirical reference.
+    FALSE_NEGATIVE : str
+        Reference gold component omitted from predicted graph (rendered as ghost node).
+    BORDERLINE : str
+        Alignment requires expert human adjudication.
+    """
+
+    TRUE_POSITIVE = "true_positive"
+    FALSE_POSITIVE = "false_positive"
+    FALSE_NEGATIVE = "false_negative"
+    BORDERLINE = "borderline"
+
+
+class EdgeAlignmentStatus(StrEnum):
+    """Alignment classification of an evaluated graph relation against reference standard.
+
+    Attributes
+    ----------
+    TRUE_POSITIVE : str
+        Predicted relation verified against reference standard.
+    FALSE_POSITIVE : str
+        Predicted relation not supported by reference standard.
+    FALSE_NEGATIVE : str
+        Reference relation omitted from predicted graph (rendered as ghost edge).
+    BORDERLINE : str
+        Relation alignment score falls in uncertainty band [0.80, 0.94].
+    POLARITY_CONFLICT : str
+        Relation endpoints match but epistemic polarity is inverted (e.g. SUPPORT vs ATTACK).
+    """
+
+    TRUE_POSITIVE = "true_positive"
+    FALSE_POSITIVE = "false_positive"
+    FALSE_NEGATIVE = "false_negative"
+    BORDERLINE = "borderline"
+    POLARITY_CONFLICT = "polarity_conflict"
+
+
+class EvaluationNodeOverlay(BaseModel):
+    """Interactive node representation for canvas evaluation error projection.
+
+    Parameters
+    ----------
+    id : str
+        Node identifier.
+    label : str
+        Human-readable entity or axiom label.
+    class_name : str or None, optional
+        Bourbaki structuralist model class (e.g. 'actual_models', 'potential_models').
+    symbol : str or None, optional
+        Mathematical symbol (e.g. 'M', 'Mp', 'C', 'I').
+    alignment_status : NodeAlignmentStatus
+        Verification state (true_positive, false_positive, false_negative, borderline).
+    gold_id : str or None, optional
+        Matched reference entity ID if aligned.
+    similarity_score : float, default 1.0
+        Semantic similarity score.
+    is_ghost : bool, default False
+        True if synthesized from reference standard to render omitted components.
+    properties : dict of str to Any, optional
+        Additional attributes and violation tags.
+    """
+
+    id: str
+    label: str
+    class_name: str | None = None
+    symbol: str | None = None
+    alignment_status: NodeAlignmentStatus = NodeAlignmentStatus.TRUE_POSITIVE
+    gold_id: str | None = None
+    similarity_score: float = 1.0
+    is_ghost: bool = False
+    properties: dict[str, Any] = Field(default_factory=dict)
+
+
+class EvaluationEdgeOverlay(BaseModel):
+    """Interactive edge representation for canvas evaluation error projection.
+
+    Parameters
+    ----------
+    id : str
+        Edge identifier.
+    source : str
+        Source node identifier.
+    target : str
+        Target node identifier.
+    predicate : str
+        Relationship predicate name.
+    alignment_status : EdgeAlignmentStatus
+        Edge alignment state.
+    gold_predicate : str or None, optional
+        Candidate reference relation predicate.
+    similarity_score : float, default 1.0
+        Semantic or embedding alignment score.
+    is_ghost : bool, default False
+        True if synthesized from reference standard.
+    evidence_snippet : str or None, optional
+        Primary source quote or bounding box coordinates.
+    """
+
+    id: str
+    source: str
+    target: str
+    predicate: str
+    alignment_status: EdgeAlignmentStatus = EdgeAlignmentStatus.TRUE_POSITIVE
+    gold_predicate: str | None = None
+    similarity_score: float = 1.0
+    is_ghost: bool = False
+    evidence_snippet: str | None = None
+
+
+class EvaluationGraphOverlay(BaseModel):
+    """Full graph canvas overlay for projecting evaluation alignment and errors.
+
+    Parameters
+    ----------
+    evaluation_id : str
+        Evaluation report identifier.
+    run_id : str
+        Participating run identifier.
+    benchmark_id : str or None, optional
+        Target benchmark dataset reference.
+    nodes : list of EvaluationNodeOverlay
+        Visual nodes with alignment classifications.
+    edges : list of EvaluationEdgeOverlay
+        Visual edges with alignment classifications.
+    summary_counts : dict of str to int
+        Breakdown counts of TP, FP, FN, and conflict elements.
+    """
+
+    evaluation_id: str
+    run_id: str
+    benchmark_id: str | None = None
+    nodes: list[EvaluationNodeOverlay] = Field(default_factory=list)
+    edges: list[EvaluationEdgeOverlay] = Field(default_factory=list)
+    summary_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class AdjudicationQueueItem(BaseModel):
+    """Borderline candidate alignment item queued for human expert adjudication.
+
+    Parameters
+    ----------
+    candidate_id : str
+        Unique candidate identifier.
+    evaluation_id : str
+        Parent evaluation identifier.
+    predicted_edge : dict of str to Any
+        Extracted relation descriptor (source, predicate, target).
+    reference_edge : dict of str to Any or None, optional
+        Candidate reference relation descriptor.
+    similarity_score : float
+        Soft alignment similarity score in uncertainty window.
+    status : str, default 'pending'
+        Triage status ('pending' or 'adjudicated').
+    current_decision : AdjudicationDecision or None, optional
+        Decision recorded if previously reviewed.
+    alias_target : str or None, optional
+        Canonical predicate name if classified as schema alias.
+    evidence_snippet : str or None, optional
+        Source text passage or bounding box reference.
+    confidence : float, default 1.0
+        Original extraction confidence.
+    """
+
+    candidate_id: str
+    evaluation_id: str
+    predicted_edge: dict[str, Any]
+    reference_edge: dict[str, Any] | None = None
+    similarity_score: float = 0.0
+    status: str = "pending"
+    current_decision: AdjudicationDecision | None = None
+    alias_target: str | None = None
+    evidence_snippet: str | None = None
+    confidence: float = 1.0
+
+
+class AdjudicationQueueResponse(BaseModel):
+    """Response payload containing candidate relation triage queue.
+
+    Parameters
+    ----------
+    evaluation_id : str
+        Evaluation identifier.
+    total_candidates : int
+        Total candidate pairs discovered.
+    pending_count : int
+        Count of unreviewed candidate pairs.
+    adjudicated_count : int
+        Count of completed candidate reviews.
+    candidates : list of AdjudicationQueueItem
+        Candidate items matching requested filter.
+    """
+
+    evaluation_id: str
+    total_candidates: int
+    pending_count: int
+    adjudicated_count: int
+    candidates: list[AdjudicationQueueItem] = Field(default_factory=list)
+
+
+class AdjudicateAndRecalculateRequest(BaseModel):
+    """Payload to submit edge adjudications and dynamically recompute evaluation scores.
+
+    Parameters
+    ----------
+    items : list of EdgeAdjudicationItem
+        Review adjudications to register.
+    export_dataset_path : str or None, optional
+        Target filesystem path to export curated gold standard.
+    """
+
+    items: list[EdgeAdjudicationItem] = Field(default_factory=list)
+    export_dataset_path: str | None = None
+
+
+class AdjudicateAndRecalculateResponse(BaseModel):
+    """Outcome payload with live recalculated evaluation metrics and deltas.
+
+    Parameters
+    ----------
+    evaluation_id : str
+        Evaluation identifier.
+    adjudicated_count : int
+        Number of items processed.
+    updated_report : EvaluationReportDetail
+        Re-evaluated report with updated metrics.
+    metric_deltas : dict of str to float
+        Instant score differences (e.g. {'f1': +0.03, 'mcc': 0.0}).
+    message : str, default ''
+        Informational status message.
+    """
+
+    evaluation_id: str
+    adjudicated_count: int
+    updated_report: EvaluationReportDetail
+    metric_deltas: dict[str, float] = Field(default_factory=dict)
+    message: str = ""
+
+
+class CalibrationBinDetail(BaseModel):
+    """Binned sample statistics for plotting reliability diagrams.
+
+    Parameters
+    ----------
+    bin_index : int
+        Index of the probability interval [0..num_bins-1].
+    bin_lower : float
+        Lower confidence boundary.
+    bin_upper : float
+        Upper confidence boundary.
+    sample_count : int
+        Number of samples in this confidence bucket.
+    mean_confidence : float
+        Average predicted probability within bin.
+    empirical_accuracy : float
+        Observed true positive ratio within bin.
+    calibration_gap : float
+        Absolute discrepancy |mean_confidence - empirical_accuracy|.
+    """
+
+    bin_index: int
+    bin_lower: float
+    bin_upper: float
+    sample_count: int
+    mean_confidence: float
+    empirical_accuracy: float
+    calibration_gap: float
+
+
+class MiscalibratedAssertionItem(BaseModel):
+    """Diagnostic descriptor of an overconfident false assertion.
+
+    Parameters
+    ----------
+    assertion_id : str
+        Assertion identifier.
+    assertion_type : str
+        Type of assertion ('triple', 'entity', 'axiom').
+    descriptor : str
+        Human-readable assertion summary.
+    confidence : float
+        High predicted probability score.
+    empirical_match : bool, default False
+        Empirical ground-truth verification outcome.
+    discrepancy : float
+        Miscalibration error magnitude.
+    evidence_text : str or None, optional
+        Source passage snippet.
+    rationale : str or None, optional
+        Explanation of omission or hallucination.
+    """
+
+    assertion_id: str
+    assertion_type: str = "triple"
+    descriptor: str
+    confidence: float
+    empirical_match: bool = False
+    discrepancy: float = 0.0
+    evidence_text: str | None = None
+    rationale: str | None = None
+
+
+class CalibrationReportDetail(BaseModel):
+    """Detailed probability calibration diagnostics and reliability diagram data.
+
+    Parameters
+    ----------
+    evaluation_id : str
+        Evaluation identifier.
+    run_id : str
+        Evaluated run identifier.
+    expected_calibration_error : float
+        Expected Calibration Error (ECE).
+    maximum_calibration_error : float
+        Maximum Calibration Error (MCE).
+    brier_score : float
+        Mean squared probability error.
+    is_well_calibrated : bool
+        Whether ECE satisfies threshold constraints (e.g. ECE < 0.05).
+    num_samples : int
+        Total samples evaluated.
+    bins : list of CalibrationBinDetail
+        Binned calibration series for reliability curves.
+    high_confidence_hallucinations : list of MiscalibratedAssertionItem
+        High-confidence assertions that failed empirical verification.
+    chart_series : dict of str to Any
+        Pre-structured series dataset for frontend plotting.
+    """
+
+    evaluation_id: str
+    run_id: str
+    expected_calibration_error: float
+    maximum_calibration_error: float
+    brier_score: float
+    is_well_calibrated: bool
+    num_samples: int
+    bins: list[CalibrationBinDetail] = Field(default_factory=list)
+    high_confidence_hallucinations: list[MiscalibratedAssertionItem] = Field(default_factory=list)
+    chart_series: dict[str, Any] = Field(default_factory=dict)
+
+
+class BoundingBoxCoordinates(BaseModel):
+    """Normalized bounding box coordinates on a scientific document page.
+
+    Parameters
+    ----------
+    page : int
+        Page number (1-indexed).
+    x0 : float
+        Normalized left coordinate [0.0, 1.0].
+    y0 : float
+        Normalized top coordinate [0.0, 1.0].
+    x1 : float
+        Normalized right coordinate [0.0, 1.0].
+    y1 : float
+        Normalized bottom coordinate [0.0, 1.0].
+    """
+
+    page: int
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
+
+class MultiModalEvidenceAnchor(BaseModel):
+    """Evidence anchor linking an extracted construct to multimodal source materials.
+
+    Parameters
+    ----------
+    anchor_id : str
+        Unique anchor identifier.
+    doc_id : str
+        Source document identifier.
+    media_type : str, default 'text'
+        Modality type ('text', 'figure', 'equation', 'table').
+    verbatim_text : str or None, optional
+        Verbatim primary source text quote.
+    char_start : int or None, optional
+        Character start offset.
+    char_end : int or None, optional
+        Character end offset.
+    bbox : BoundingBoxCoordinates or None, optional
+        Visual bounding box if grounded in a diagram or table.
+    formula_latex : str or None, optional
+        Extracted LaTeX formula if grounded in a math block.
+    image_uri : str or None, optional
+        URI to cropped snippet or diagram.
+    """
+
+    anchor_id: str
+    doc_id: str
+    media_type: str = "text"
+    verbatim_text: str | None = None
+    char_start: int | None = None
+    char_end: int | None = None
+    bbox: BoundingBoxCoordinates | None = None
+    formula_latex: str | None = None
+    image_uri: str | None = None
+
+
+class GroundingEvaluationDetail(BaseModel):
+    """Detailed multimodal evidence grounding evaluation for a specific theory component.
+
+    Parameters
+    ----------
+    component_id : str
+        Evaluated construct identifier.
+    component_type : str
+        Construct type ('entity', 'triple', 'axiom').
+    label : str
+        Human-readable component label.
+    predicted_anchor : MultiModalEvidenceAnchor or None, optional
+        Evidence anchor produced by the extraction pipeline.
+    reference_anchor : MultiModalEvidenceAnchor or None, optional
+        Gold reference evidence anchor.
+    iou_score : float, default 1.0
+        Alignment Grounding IoU (AG_IoU) score.
+    grounding_passed : bool, default True
+        Whether grounding meets minimum threshold.
+    failure_reason : str or None, optional
+        Explanation if grounding verification failed.
+    """
+
+    component_id: str
+    component_type: str = "axiom"
+    label: str
+    predicted_anchor: MultiModalEvidenceAnchor | None = None
+    reference_anchor: MultiModalEvidenceAnchor | None = None
+    iou_score: float = 1.0
+    grounding_passed: bool = True
+    failure_reason: str | None = None
+
+
+class LeaderboardEntry(BaseModel):
+    """Individual run entry in a multi-run benchmark leaderboard matrix.
+
+    Parameters
+    ----------
+    run_id : str
+        Pipeline run identifier.
+    evaluation_id : str
+        Associated evaluation report identifier.
+    benchmark_id : str
+        Benchmark identifier evaluated against.
+    model_name : str or None, optional
+        Underlying LLM or pipeline model name.
+    prompt_strategy : str or None, optional
+        Prompt strategy or ablation configuration.
+    outcome : EvaluationOutcome
+        Overall pass/fail outcome.
+    evaluated_at : datetime
+        Timestamp when evaluation completed.
+    metrics : dict of str to float
+        Headline KPI scores (mcc, f1, ece, mrr, etc.).
+    total_cost_usd : float or None, optional
+        Estimated token/API compute cost in USD.
+    duration_seconds : float or None, optional
+        Execution latency in seconds.
+    is_pareto_optimal : bool, default False
+        Whether this run resides on the non-dominated Pareto frontier.
+    """
+
+    run_id: str
+    evaluation_id: str
+    benchmark_id: str
+    model_name: str | None = None
+    prompt_strategy: str | None = None
+    outcome: EvaluationOutcome = EvaluationOutcome.INCONCLUSIVE
+    evaluated_at: datetime = Field(default_factory=utc_now)
+    metrics: dict[str, float] = Field(default_factory=dict)
+    total_cost_usd: float | None = None
+    duration_seconds: float | None = None
+    is_pareto_optimal: bool = False
+
+
+class ParetoFrontierPoint(BaseModel):
+    """A point in multi-dimensional objective space representing a non-dominated run.
+
+    Parameters
+    ----------
+    run_id : str
+        Run identifier.
+    coordinates : dict of str to float
+        Objective metric coordinates (e.g. {'f1': 0.90, 'cost': 0.12}).
+    dominated_by : list of str
+        Identifiers of any runs dominating this point.
+    """
+
+    run_id: str
+    coordinates: dict[str, float]
+    dominated_by: list[str] = Field(default_factory=list)
+
+
+class LeaderboardRequest(BaseModel):
+    """Request payload to construct a multi-run benchmark leaderboard and Pareto frontier.
+
+    Parameters
+    ----------
+    benchmark_id : str or None, optional
+        Benchmark identifier to filter runs by.
+    run_ids : list of str, optional
+        Specific list of run IDs to include.
+    pareto_axes : list of str, default ['f1', 'ece']
+        Metrics to evaluate for Pareto non-dominance.
+    sort_by : str, default 'f1'
+        Primary metric to sort leaderboard entries by.
+    ascending : bool, default False
+        Sort direction.
+    """
+
+    benchmark_id: str | None = None
+    run_ids: list[str] = Field(default_factory=list)
+    pareto_axes: list[str] = Field(default_factory=lambda: ["f1", "ece"])
+    sort_by: str = "f1"
+    ascending: bool = False
+
+
+class LeaderboardResponse(BaseModel):
+    """Response payload containing benchmark leaderboard matrix and Pareto frontier.
+
+    Parameters
+    ----------
+    benchmark_id : str or None, optional
+        Benchmark identifier evaluated.
+    total_runs : int
+        Number of participating runs.
+    entries : list of LeaderboardEntry
+        Sorted run entries.
+    pareto_frontier : list of ParetoFrontierPoint
+        Identified non-dominated Pareto points.
+    summary_markdown : str, default ''
+        Formatted markdown leaderboard table.
+    """
+
+    benchmark_id: str | None = None
+    total_runs: int
+    entries: list[LeaderboardEntry] = Field(default_factory=list)
+    pareto_frontier: list[ParetoFrontierPoint] = Field(default_factory=list)
+    summary_markdown: str = ""
+
+
+class PerturbationType(StrEnum):
+    """Category of synthetic adversarial noise applied to primary text inputs.
+
+    Attributes
+    ----------
+    TYPO_INSERTION : str
+        Character-level typographical insertions and deletions.
+    SYNONYM_REPLACEMENT : str
+        Domain synonym substitution causing terminology drift.
+    SENTENCE_SHUFFLE : str
+        Discourse sentence order permutations.
+    COMPOSITE : str
+        Mixed multi-perturbation stress test.
+    """
+
+    TYPO_INSERTION = "typo_insertion"
+    SYNONYM_REPLACEMENT = "synonym_replacement"
+    SENTENCE_SHUFFLE = "sentence_shuffle"
+    COMPOSITE = "composite"
+
+
+class PerturbationSweepPoint(BaseModel):
+    """Evaluated metric score at a specific adversarial noise rate.
+
+    Parameters
+    ----------
+    noise_level : float
+        Perturbation fraction rate (e.g. 0.05, 0.10, 0.20).
+    f1_score : float
+        Achieved relation extraction F1 score.
+    mcc_score : float
+        Achieved model component completeness.
+    poset_dag_valid : bool
+        Whether specialization hierarchy remained an acyclic DAG.
+    rdf_delta : float
+        Degradation magnitude at this noise rate.
+    """
+
+    noise_level: float
+    f1_score: float
+    mcc_score: float
+    poset_dag_valid: bool = True
+    rdf_delta: float = 0.0
+
+
+class NoiseRobustnessReportDetail(BaseModel):
+    """Comprehensive adversarial stress-testing and noise robustness evaluation report.
+
+    Parameters
+    ----------
+    evaluation_id : str
+        Evaluation identifier.
+    run_id : str
+        Baseline run identifier.
+    overall_rdf : float
+        Synthesized Robustness Degradation Factor (RDF).
+    is_resilient : bool
+        True if overall_rdf meets resilience threshold (e.g. RDF < 0.15).
+    baseline_f1 : float
+        Clean baseline F1 score.
+    worst_case_f1 : float
+        Minimum F1 achieved under maximum perturbation.
+    breakdown_by_perturbation : dict of str to list of PerturbationSweepPoint
+        Degradation series keyed by perturbation type.
+    chart_series : dict of str to Any
+        Pre-formatted line series data for frontend plotting.
+    """
+
+    evaluation_id: str
+    run_id: str
+    overall_rdf: float
+    is_resilient: bool
+    baseline_f1: float
+    worst_case_f1: float
+    breakdown_by_perturbation: dict[str, list[PerturbationSweepPoint]] = Field(default_factory=dict)
+    chart_series: dict[str, Any] = Field(default_factory=dict)
+
+
+class StressTestRequest(BaseModel):
+    """Payload to trigger adversarial noise perturbation sweeps against a run.
+
+    Parameters
+    ----------
+    run_id : str
+        Target run identifier to stress test.
+    benchmark_id : str or None, optional
+        Target benchmark dataset.
+    perturbation_types : list of PerturbationType
+        Types of noise to apply.
+    noise_levels : list of float, default [0.05, 0.10, 0.20]
+        Noise rates to evaluate.
+    """
+
+    run_id: str
+    benchmark_id: str | None = None
+    perturbation_types: list[PerturbationType] = Field(
+        default_factory=lambda: [PerturbationType.TYPO_INSERTION, PerturbationType.SYNONYM_REPLACEMENT]
+    )
+    noise_levels: list[float] = Field(default_factory=lambda: [0.05, 0.10, 0.20])
+
+
+class RetrievedCandidateItem(BaseModel):
+    """Ranked knowledge graph node returned for a competency question.
+
+    Parameters
+    ----------
+    rank : int
+        Position in ranked result list (1-indexed).
+    node_id : str
+        Retrieved node identifier.
+    label : str
+        Human-readable label.
+    class_name : str or None, optional
+        Model class or ontology type.
+    similarity_score : float
+        Retrieval similarity score.
+    is_gold_target : bool
+        Whether this node is an expected gold answer.
+    """
+
+    rank: int
+    node_id: str
+    label: str
+    class_name: str | None = None
+    similarity_score: float = 0.0
+    is_gold_target: bool = False
+
+
+class CompetencyQueryDiagnosticItem(BaseModel):
+    """Detailed evaluation diagnostics for a single downstream competency query.
+
+    Parameters
+    ----------
+    query_id : str
+        Unique query identifier.
+    query_text : str
+        Natural language competency question.
+    target_category : str or None, optional
+        Thematic category of the query.
+    expected_gold_nodes : list of str
+        Identifiers of expected answer nodes.
+    retrieved_candidates : list of RetrievedCandidateItem
+        Ranked candidate nodes retrieved.
+    first_hit_rank : int or None, optional
+        Rank of first relevant target (None if not in top K).
+    reciprocal_rank : float, default 0.0
+        1 / first_hit_rank.
+    hits_at_1 : bool, default False
+        True if first target was at rank 1.
+    hits_at_3 : bool, default False
+        True if target was in top 3.
+    hits_at_10 : bool, default False
+        True if target was in top 10.
+    failure_mode : str or None, optional
+        Classification of retrieval failure ('omitted_node', 'rank_cutoff', 'low_similarity').
+    """
+
+    query_id: str
+    query_text: str
+    target_category: str | None = None
+    expected_gold_nodes: list[str] = Field(default_factory=list)
+    retrieved_candidates: list[RetrievedCandidateItem] = Field(default_factory=list)
+    first_hit_rank: int | None = None
+    reciprocal_rank: float = 0.0
+    hits_at_1: bool = False
+    hits_at_3: bool = False
+    hits_at_10: bool = False
+    failure_mode: str | None = None
+
+
+class RetrievalDiagnosticsResponse(BaseModel):
+    """Response payload detailing query-by-query downstream retrieval effectiveness.
+
+    Parameters
+    ----------
+    evaluation_id : str
+        Evaluation identifier.
+    total_queries : int
+        Total competency queries evaluated.
+    mrr : float
+        Mean Reciprocal Rank across queries.
+    hits_at_1 : float
+        Hits@1 success rate.
+    hits_at_10 : float
+        Hits@10 success rate.
+    queries : list of CompetencyQueryDiagnosticItem
+        Per-query diagnostic breakdown.
+    """
+
+    evaluation_id: str
+    total_queries: int
+    mrr: float = 0.0
+    hits_at_1: float = 0.0
+    hits_at_10: float = 0.0
+    queries: list[CompetencyQueryDiagnosticItem] = Field(default_factory=list)
+
+
+class BenchmarkValidationIssue(BaseModel):
+    """Validation anomaly or schema violation detected in a benchmark dataset.
+
+    Parameters
+    ----------
+    severity : str
+        Severity level ('error', 'warning').
+    rule_id : str
+        Machine-readable rule identifier (e.g. 'DAG_CYCLE_DETECTED', 'DUPLICATE_ID').
+    message : str
+        Human-readable explanation.
+    location : str or None, optional
+        JSON-LD path or element identifier where error occurred.
+    """
+
+    severity: str = "error"
+    rule_id: str
+    message: str
+    location: str | None = None
+
+
+class BenchmarkValidationResult(BaseModel):
+    """Outcome report from pre-flight benchmark dataset linting.
+
+    Parameters
+    ----------
+    is_valid : bool
+        True if dataset passes all validation rules with zero errors.
+    total_entities : int, default 0
+        Number of parsed theory constructs.
+    total_triples : int, default 0
+        Number of parsed relationships.
+    is_dag : bool, default True
+        Whether specialization relations form an acyclic directed graph.
+    root_element : str or None, optional
+        Detected single root theory atom T_0.
+    issues : list of BenchmarkValidationIssue
+        Discovered validation issues or warnings.
+    """
+
+    is_valid: bool
+    total_entities: int = 0
+    total_triples: int = 0
+    is_dag: bool = True
+    root_element: str | None = None
+    issues: list[BenchmarkValidationIssue] = Field(default_factory=list)
+
+
+class RegisterBenchmarkRequest(BaseModel):
+    """Payload to register a new gold-standard benchmark in Episteme Studio.
+
+    Parameters
+    ----------
+    id : str
+        Unique benchmark identifier (slug format).
+    name : str
+        Human-readable title.
+    description : str
+        Methodological and scientific description.
+    task_type : str, default 'structuralist'
+        Benchmark task type ('structuralist', 'extraction', 'argumentation', 'retrieval').
+    gold_standard_jsonld : str
+        Raw JSON-LD content string or filesystem path.
+    queries_yaml : str or None, optional
+        Raw YAML content or path for competency queries.
+    """
+
+    id: str
+    name: str
+    description: str
+    task_type: str = "structuralist"
+    gold_standard_jsonld: str
+    queries_yaml: str | None = None

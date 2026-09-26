@@ -11,7 +11,12 @@ from episteme_studio.api.deps import (
     get_run_service,
     get_settings,
 )
-from episteme_studio.domain.evaluation import EvaluationReportDetail
+from episteme_studio.domain.evaluation import (
+    CalibrationReportDetail,
+    EvaluationGraphOverlay,
+    EvaluationReportDetail,
+    GroundingEvaluationDetail,
+)
 from episteme_studio.domain.graph import GraphView
 from episteme_studio.domain.runs import (
     ArtifactRef,
@@ -311,4 +316,93 @@ async def get_run_evaluation(
         Evaluation report detail if evaluated, None otherwise.
     """
     return eval_service.get_run_evaluation(run_id)
+
+
+@router.get("/{run_id}/evaluation/graph-overlay", response_model=EvaluationGraphOverlay)
+async def get_run_evaluation_graph_overlay(
+    run_id: str,
+    include_ghosts: bool = Query(True, description="Whether to include synthesized ghost nodes for omissions"),
+    filter_status: str | None = Query(None, description="Optional alignment status filter"),
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationGraphOverlay:
+    """Retrieve interactive graph canvas overlay projecting evaluation alignment for this run.
+
+    Parameters
+    ----------
+    run_id : str
+        Run identifier.
+    include_ghosts : bool, default True
+        Whether to include synthesized ghost nodes.
+    filter_status : str or None, optional
+        Filter status.
+    eval_service : EvaluationService
+        Evaluation service.
+
+    Returns
+    -------
+    EvaluationGraphOverlay
+        Evaluation graph overlay.
+    """
+    return eval_service.build_graph_overlay(
+        evaluation_id=run_id,
+        include_ghosts=include_ghosts,
+        filter_status=filter_status,
+    )
+
+
+@router.get("/{run_id}/evaluation/calibration", response_model=CalibrationReportDetail)
+async def get_run_evaluation_calibration(
+    run_id: str,
+    min_confidence: float = Query(0.85, description="Threshold for highlighting overconfident assertions"),
+    limit: int = Query(50, description="Max miscalibrated assertions to return"),
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> CalibrationReportDetail:
+    """Retrieve confidence calibration metrics and reliability diagram data for this run.
+
+    Parameters
+    ----------
+    run_id : str
+        Run identifier.
+    min_confidence : float, default 0.85
+        Overconfidence threshold.
+    limit : int, default 50
+        Max errors to return.
+    eval_service : EvaluationService
+        Evaluation service.
+
+    Returns
+    -------
+    CalibrationReportDetail
+        Calibration report detail.
+    """
+    return eval_service.get_calibration_report(
+        evaluation_id=run_id,
+        min_confidence_filter=min_confidence,
+        limit=limit,
+    )
+
+
+@router.get("/{run_id}/evaluation/evidence/{component_id}", response_model=GroundingEvaluationDetail)
+async def get_run_component_evidence(
+    run_id: str,
+    component_id: str,
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> GroundingEvaluationDetail:
+    """Retrieve multi-modal primary source evidence grounding for a construct in this run.
+
+    Parameters
+    ----------
+    run_id : str
+        Run identifier.
+    component_id : str
+        Target construct or axiom identifier.
+    eval_service : EvaluationService
+        Evaluation service.
+
+    Returns
+    -------
+    GroundingEvaluationDetail
+        Multi-modal evidence anchors and IoU score.
+    """
+    return eval_service.get_evidence_detail(evaluation_id=run_id, component_id=component_id)
 

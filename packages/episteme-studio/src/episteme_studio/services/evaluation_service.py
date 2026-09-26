@@ -15,9 +15,14 @@ from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.adapters.evaluation_adapter import EvaluationAdapter
 from episteme_studio.domain.events import StudioEvent
 from episteme_studio.domain.evaluation import (
+    AdjudicateAndRecalculateRequest,
+    AdjudicateAndRecalculateResponse,
+    AdjudicationQueueResponse,
     AdjudicationRequest,
     AdjudicationResponse,
     BenchmarkDescriptor,
+    BenchmarkValidationResult,
+    CalibrationReportDetail,
     ComparativeEvaluationResponse,
     CompareRunsRequest,
     DynamicsTrajectoryRequest,
@@ -25,11 +30,19 @@ from episteme_studio.domain.evaluation import (
     EdgeAdjudicationItem,
     EvaluateManifestRequest,
     EvaluateRunRequest,
+    EvaluationGraphOverlay,
     EvaluationJobDescriptor,
     EvaluationJobStatus,
     EvaluationReportDetail,
     EvaluationReportSummary,
+    GroundingEvaluationDetail,
+    LeaderboardRequest,
+    LeaderboardResponse,
+    NoiseRobustnessReportDetail,
+    RegisterBenchmarkRequest,
+    RetrievalDiagnosticsResponse,
     StartEvaluationJobRequest,
+    StressTestRequest,
 )
 from episteme_studio.runtime.broker import EventBroker
 from episteme_studio.settings import StudioSettings
@@ -411,3 +424,269 @@ class EvaluationService:
             emit("evaluation.job.failed", f"Evaluation failed: {e}", {"error": str(e)}, level="error")
         finally:
             broker.close_run(job_id)
+
+    # -------------------------------------------------------------------------
+    # Evaluation Workbench & Interactive Analytics (ISSUE-026 - ISSUE-033)
+    # -------------------------------------------------------------------------
+
+    def build_graph_overlay(
+        self,
+        evaluation_id: str,
+        include_ghosts: bool = True,
+        filter_status: str | None = None,
+    ) -> EvaluationGraphOverlay:
+        """Construct interactive graph canvas overlay projecting evaluation alignment and errors.
+
+        Parameters
+        ----------
+        evaluation_id : str
+            Evaluation identifier.
+        include_ghosts : bool, default True
+            Whether to synthesize ghost nodes/edges for omitted gold components.
+        filter_status : str or None, optional
+            Filter elements by alignment status.
+
+        Returns
+        -------
+        EvaluationGraphOverlay
+            Complete node and edge overlay with alignment classifications.
+        """
+        return self.adapter.build_graph_overlay(
+            evaluation_id=evaluation_id,
+            include_ghosts=include_ghosts,
+            filter_status=filter_status,
+        )
+
+    def get_adjudication_queue(
+        self,
+        evaluation_id: str,
+        status: str = "pending",
+        min_sim: float = 0.75,
+        max_sim: float = 0.95,
+    ) -> AdjudicationQueueResponse:
+        """Retrieve candidate edge alignments in uncertainty band for human review.
+
+        Parameters
+        ----------
+        evaluation_id : str
+            Evaluation identifier.
+        status : str, default 'pending'
+            Filter by triage status ('pending', 'adjudicated', 'all').
+        min_sim : float, default 0.75
+            Minimum soft similarity threshold.
+        max_sim : float, default 0.95
+            Maximum soft similarity threshold.
+
+        Returns
+        -------
+        AdjudicationQueueResponse
+            Queue containing candidate items and status counts.
+        """
+        return self.adapter.get_adjudication_queue(
+            evaluation_id=evaluation_id,
+            status=status,
+            min_sim=min_sim,
+            max_sim=max_sim,
+        )
+
+    def adjudicate_and_recalculate(
+        self,
+        evaluation_id: str,
+        request: AdjudicateAndRecalculateRequest,
+    ) -> AdjudicateAndRecalculateResponse:
+        """Register expert decisions and dynamically recalculate evaluation report metrics.
+
+        Parameters
+        ----------
+        evaluation_id : str
+            Evaluation identifier.
+        request : AdjudicateAndRecalculateRequest
+            Submitted review items and target export destination.
+
+        Returns
+        -------
+        AdjudicateAndRecalculateResponse
+            Updated report and metric deltas.
+        """
+        return self.adapter.adjudicate_and_recalculate(
+            evaluation_id=evaluation_id,
+            request=request,
+        )
+
+    def get_calibration_report(
+        self,
+        evaluation_id: str,
+        min_confidence_filter: float = 0.85,
+        limit: int = 50,
+    ) -> CalibrationReportDetail:
+        """Compute confidence calibration metrics, 10-bin reliability diagram, and overconfidence errors.
+
+        Parameters
+        ----------
+        evaluation_id : str
+            Evaluation identifier.
+        min_confidence_filter : float, default 0.85
+            Threshold for flagging overconfident errors.
+        limit : int, default 50
+            Maximum miscalibrated errors to return.
+
+        Returns
+        -------
+        CalibrationReportDetail
+            Calibration metrics, bin distributions, and miscalibrated assertions.
+        """
+        return self.adapter.get_calibration_report(
+            evaluation_id=evaluation_id,
+            min_confidence_filter=min_confidence_filter,
+            limit=limit,
+        )
+
+    def get_evidence_detail(
+        self,
+        evaluation_id: str,
+        component_id: str,
+    ) -> GroundingEvaluationDetail:
+        """Retrieve multi-modal primary source evidence grounding for an evaluated construct.
+
+        Parameters
+        ----------
+        evaluation_id : str
+            Evaluation identifier.
+        component_id : str
+            Construct or axiom identifier.
+
+        Returns
+        -------
+        GroundingEvaluationDetail
+            Multi-modal bounding boxes, verbatim text anchors, and IoU score.
+        """
+        return self.adapter.get_evidence_detail(
+            evaluation_id=evaluation_id,
+            component_id=component_id,
+        )
+
+    def compute_leaderboard(
+        self,
+        request: LeaderboardRequest,
+    ) -> LeaderboardResponse:
+        """Construct multi-run benchmark leaderboard matrix and calculate Pareto frontier.
+
+        Parameters
+        ----------
+        request : LeaderboardRequest
+            Benchmark filtering, Pareto axes, and sorting options.
+
+        Returns
+        -------
+        LeaderboardResponse
+            Aggregated leaderboard entries and non-dominated Pareto frontier points.
+        """
+        return self.adapter.compute_leaderboard(request=request)
+
+    def execute_stress_test(
+        self,
+        request: StressTestRequest,
+    ) -> NoiseRobustnessReportDetail:
+        """Trigger synthetic adversarial noise sweeps and calculate Robustness Degradation Factors.
+
+        Parameters
+        ----------
+        request : StressTestRequest
+            Target run, perturbation modalities, and noise rates.
+
+        Returns
+        -------
+        NoiseRobustnessReportDetail
+            Degradation series and RDF robustness score.
+        """
+        return self.adapter.execute_stress_test(request=request)
+
+    def get_robustness_report(self, evaluation_id: str) -> NoiseRobustnessReportDetail:
+        """Retrieve previously executed noise robustness report.
+
+        Parameters
+        ----------
+        evaluation_id : str
+            Evaluation identifier.
+
+        Returns
+        -------
+        NoiseRobustnessReportDetail
+            Stored robustness report.
+        """
+        return self.adapter.get_robustness_report(evaluation_id=evaluation_id)
+
+    def get_retrieval_diagnostics(
+        self,
+        evaluation_id: str,
+        failed_only: bool = False,
+        limit: int = 100,
+    ) -> RetrievalDiagnosticsResponse:
+        """Expose per-query competency question ranking breakdowns and retrieval failures.
+
+        Parameters
+        ----------
+        evaluation_id : str
+            Evaluation identifier.
+        failed_only : bool, default False
+            Whether to only return queries where first hit rank > 10.
+        limit : int, default 100
+            Maximum queries to return.
+
+        Returns
+        -------
+        RetrievalDiagnosticsResponse
+            Query breakdown items with ranking positions and hit flags.
+        """
+        return self.adapter.get_retrieval_diagnostics(
+            evaluation_id=evaluation_id,
+            failed_only=failed_only,
+            limit=limit,
+        )
+
+    def validate_benchmark(self, raw_content: str) -> BenchmarkValidationResult:
+        """Pre-flight lint and validate benchmark dataset structure, uniqueness, and DAG acyclicity.
+
+        Parameters
+        ----------
+        raw_content : str
+            JSON-LD or YAML dataset content.
+
+        Returns
+        -------
+        BenchmarkValidationResult
+            Verification results with detected issues and root element conformity.
+        """
+        return self.adapter.validate_benchmark(raw_content=raw_content)
+
+    def register_benchmark(self, request: RegisterBenchmarkRequest) -> BenchmarkDescriptor:
+        """Register a new gold-standard benchmark in the filesystem catalog.
+
+        Parameters
+        ----------
+        request : RegisterBenchmarkRequest
+            Benchmark metadata and raw contents.
+
+        Returns
+        -------
+        BenchmarkDescriptor
+            Registered benchmark descriptor.
+        """
+        return self.adapter.register_benchmark(request=request)
+
+    def export_report(self, evaluation_id: str, format: str = "latex") -> tuple[str, str]:
+        """Export publication-ready LaTeX tables, CSV summaries, or JSON-LD graph bundles.
+
+        Parameters
+        ----------
+        evaluation_id : str
+            Evaluation identifier.
+        format : str, default 'latex'
+            Export format ('latex', 'csv', 'jsonld').
+
+        Returns
+        -------
+        tuple of str, str
+            (Export content string, MIME media type).
+        """
+        return self.adapter.export_report(evaluation_id=evaluation_id, format=format)
