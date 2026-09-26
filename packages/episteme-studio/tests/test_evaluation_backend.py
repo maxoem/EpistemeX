@@ -9,8 +9,10 @@ Verifies:
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
+
 import pytest
 from starlette.testclient import TestClient
 
@@ -18,16 +20,14 @@ from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.adapters.evaluation_adapter import EvaluationAdapter
 from episteme_studio.app import create_app
 from episteme_studio.domain.evaluation import (
-    BenchmarkDescriptor,
     ComparativeMetricDelta,
-    EvaluateRunRequest,
     EvaluationOutcome,
     EvaluationReportDetail,
     EvaluationReportSummary,
     ModelDecompositionEntry,
     PosetEvaluationDetail,
 )
-from episteme_studio.services.evaluation_service import EvaluationService
+from episteme_studio.runtime import EventBroker
 from episteme_studio.settings import StudioSettings
 
 
@@ -453,4 +453,371 @@ class TestEvaluationAPI:
         assert report["outcome"] == "pass"
         assert report["key_metrics"]["mcc"] >= 1.0
         assert (settings.reports_dir / f"report_{run_id}.json").is_file()
+
+    def test_dynamics_trajectory_endpoint_progressive(self, client: TestClient):
+        """Verify POST /api/evaluation/dynamics/trajectory evaluates progressive trajectory.
+
+        Parameters
+        ----------
+        client : TestClient
+            Initialized test client.
+        """
+        snapshots = [
+            {
+                "core_axioms": {"str:T_CPM_Base": "F = m*a"},
+                "auxiliary_hypotheses": [],
+                "anomalies": [],
+                "empirical_content": ["str:I0_PlanetaryOrbits"],
+            },
+            {
+                "core_axioms": {"str:T_CPM_Base": "F = m*a"},
+                "auxiliary_hypotheses": ["str:M_CPM_Aux1"],
+                "anomalies": [],
+                "empirical_content": ["str:I0_PlanetaryOrbits", "str:I0_TerrestrialFreeFall", "str:I0_HarmonicSpring"],
+            },
+            {
+                "core_axioms": {"str:T_CPM_Base": "F = m*a"},
+                "auxiliary_hypotheses": ["str:M_CPM_Aux1"],
+                "anomalies": [],
+                "empirical_content": ["str:I0_PlanetaryOrbits", "str:I0_TerrestrialFreeFall", "str:I0_HarmonicSpring", "str:I0_Tides"],
+            },
+        ]
+
+        resp = client.post(
+            "/api/evaluation/dynamics/trajectory",
+            json={
+                "snapshots": snapshots,
+                "core_node_ids": ["str:T_CPM_Base"],
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["is_progressive"] is True
+        assert data["core_invariant"] is True
+        assert data["degeneration_index"] < 1.0
+        assert data["delta_auxiliary"] == 1
+        assert data["delta_empirical_content"] == 3
+        assert len(data["trajectory"]) == 2
+        assert "epochs" in data["chart_data"]
+        assert len(data["chart_data"]["epochs"]) == 3
+        assert "di_series" in data["chart_data"]
+
+    def test_dynamics_trajectory_endpoint_hard_core_violation(self, client: TestClient):
+        """Verify POST /api/evaluation/dynamics/trajectory detects core axiom violation.
+
+        Parameters
+        ----------
+        client : TestClient
+            Initialized test client.
+        """
+        snapshots = [
+            {
+                "core_axioms": {"str:T_CPM_Base": "F = m*a", "str:T_CPM_Grav": "F_g = G*m1*m2/r^2"},
+                "auxiliary_hypotheses": [],
+                "anomalies": [],
+                "empirical_content": ["str:I0_PlanetaryOrbits"],
+            },
+            {
+                # Core axiom str:T_CPM_Grav deleted/mutated
+                "core_axioms": {"str:T_CPM_Base": "F = m*a"},
+                "auxiliary_hypotheses": ["str:M_CPM_Aux1", "str:M_CPM_Aux2"],
+                "anomalies": ["str:Anom_Precession"],
+                "empirical_content": ["str:I0_PlanetaryOrbits"],
+            },
+        ]
+
+        resp = client.post(
+            "/api/evaluation/dynamics/trajectory",
+            json={
+                "snapshots": snapshots,
+                "core_node_ids": ["str:T_CPM_Base", "str:T_CPM_Grav"],
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["core_invariant"] is False
+        assert len(data["violated_invariance"]) >= 1
+        assert any(v["node_id"] == "str:T_CPM_Grav" for v in data["violated_invariance"])
+
+    def test_record_and_list_adjudications_endpoint(self, client: TestClient):
+        """Verify POST and GET /api/evaluation/adjudications.
+
+        Parameters
+        ----------
+        client : TestClient
+            Initialized test client.
+        """
+        items = [
+            {
+                "adjudication_id": "adj_test_01",
+                "predicted_edge": {"source": "str:T_Grav", "predicate": "specializes", "target": "str:T_Base"},
+                "decision": "true_positive",
+                "similarity_score": 0.95,
+                "rationale": "Correct theoretical specialization.",
+                "adjudicated_by": "expert_reviewer_1",
+            },
+            {
+                "adjudication_id": "adj_test_02",
+                "predicted_edge": {"source": "str:T_Hooke", "predicate": "sub_model_of", "target": "str:T_Base"},
+                "decision": "schema_alias",
+                "alias_target": "str:specializes",
+                "similarity_score": 0.82,
+                "rationale": "sub_model_of is a semantic alias for specializes.",
+                "adjudicated_by": "expert_reviewer_2",
+            },
+            {
+                "adjudication_id": "adj_test_03",
+                "predicted_edge": {"source": "str:T_Hooke", "predicate": "contradicts", "target": "str:T_Grav"},
+                "decision": "false_positive",
+                "similarity_score": 0.40,
+                "rationale": "Spurious hallucinated relation.",
+                "adjudicated_by": "expert_reviewer_1",
+            },
+        ]
+
+        post_resp = client.post(
+            "/api/evaluation/adjudications",
+            json={"items": items},
+        )
+        assert post_resp.status_code == 200
+        post_data = post_resp.json()
+        assert post_data["adjudicated_count"] == 3
+        assert len(post_data["stored_items"]) == 3
+
+        get_resp = client.get("/api/evaluation/adjudications")
+        assert get_resp.status_code == 200
+        saved_items = get_resp.json()
+        assert len(saved_items) == 3
+        decisions = {it["adjudication_id"]: it["decision"] for it in saved_items}
+        assert decisions["adj_test_01"] == "true_positive"
+        assert decisions["adj_test_02"] == "schema_alias"
+        assert decisions["adj_test_03"] == "false_positive"
+
+    def test_adjudication_export_curated_gold_standard(self, client: TestClient, tmp_path: Path):
+        """Verify adjudications export and merge into a curated JSON-LD dataset.
+
+        Parameters
+        ----------
+        client : TestClient
+            Initialized test client.
+        tmp_path : Path
+            Pytest temporary directory fixture.
+        """
+        export_file = tmp_path / "curated_dataset.jsonld"
+        items = [
+            {
+                "adjudication_id": "adj_gold_01",
+                "predicted_edge": {"source": "str:T_CPM_Grav", "predicate": "specializes", "target": "str:T_CPM_Base"},
+                "decision": "true_positive",
+            },
+            {
+                "adjudication_id": "adj_gold_02",
+                "predicted_edge": {"predicate": "derived_from"},
+                "decision": "schema_alias",
+                "alias_target": "str:specializes",
+            },
+        ]
+
+        resp = client.post(
+            "/api/evaluation/adjudications",
+            json={
+                "items": items,
+                "export_dataset_path": str(export_file),
+            },
+        )
+        assert resp.status_code == 200
+        assert export_file.is_file()
+
+        curated_data = json.loads(export_file.read_text(encoding="utf-8"))
+        assert "@graph" in curated_data
+        assert any(
+            g.get("source") == "str:T_CPM_Grav"
+            and g.get("target") == "str:T_CPM_Base"
+            and g.get("adjudicated_status") == "true_positive"
+            for g in curated_data["@graph"]
+        )
+        assert "@context" in curated_data
+        assert curated_data["@context"].get("derived_from") == "str:specializes"
+
+    def test_get_unknown_job_returns_404(self, client: TestClient):
+        """Verify GET /api/evaluation/jobs/{job_id} returns 404 for unknown job.
+
+        Parameters
+        ----------
+        client : TestClient
+            Initialized test client.
+        """
+        resp = client.get("/api/evaluation/jobs/eval_job_unknown_9999")
+        assert resp.status_code == 404
+        assert "not found" in resp.json().get("detail", "").lower()
+
+    @pytest.mark.asyncio
+    async def test_asynchronous_evaluation_job_lifecycle(self, tmp_path: Path):
+        """Verify POST /api/evaluation/jobs/run initiates async job and reaches completed status.
+
+        Parameters
+        ----------
+        tmp_path : Path
+            Pytest temporary directory fixture.
+        """
+        from httpx import ASGITransport, AsyncClient
+
+        settings = StudioSettings(
+            runs_dir=tmp_path / "runs",
+            artifacts_dir=tmp_path / "artifacts",
+            reports_dir=tmp_path / "reports",
+            token=None,
+        )
+        settings.runs_dir.mkdir(parents=True, exist_ok=True)
+        settings.artifacts_dir.mkdir(parents=True, exist_ok=True)
+        settings.reports_dir.mkdir(parents=True, exist_ok=True)
+
+        run_id = "test_async_job_run"
+        run_art_dir = settings.artifacts_dir / run_id
+        run_art_dir.mkdir(parents=True, exist_ok=True)
+
+        atoms = [
+            {"id": "str:T_CPM_Base", "text": "Base", "component_type": "theory_element"},
+            {"id": "str:T_CPM_Grav", "text": "Grav", "component_type": "theory_element"},
+            {"id": "str:M_CPM_Newton1", "text": "Law 1", "component_type": "actual_model"},
+            {"id": "str:M_CPM_Newton2", "text": "Law 2", "component_type": "actual_model"},
+            {"id": "str:M_CPM_Newton3", "text": "Law 3", "component_type": "actual_model"},
+            {"id": "str:M_CPM_Grav", "text": "Grav Law", "component_type": "actual_model"},
+            {"id": "str:M_CPM_Hooke", "text": "Hooke Law", "component_type": "actual_model"},
+            {"id": "str:M_CPM_Free", "text": "Free Law", "component_type": "actual_model"},
+            {"id": "str:Mp_CPM", "text": "Mp CPM", "component_type": "potential_model"},
+            {"id": "str:Mp_Grav", "text": "Mp Grav", "component_type": "potential_model"},
+            {"id": "str:Mp_Harmonic", "text": "Mp Harmonic", "component_type": "potential_model"},
+            {"id": "str:Mpp_CPM", "text": "Mpp CPM", "component_type": "partial_potential_model"},
+            {"id": "str:GC_Mass", "text": "GC Mass", "component_type": "constraint"},
+            {"id": "str:GC_Force", "text": "GC Force", "component_type": "constraint"},
+            {"id": "str:I0_PlanetaryOrbits", "text": "Planets", "component_type": "paradigm"},
+            {"id": "str:I0_TerrestrialFreeFall", "text": "Fall", "component_type": "paradigm"},
+            {"id": "str:I0_HarmonicSpring", "text": "Spring", "component_type": "paradigm"},
+        ]
+        for atom in atoms:
+            env = {"artifact_id": f"art_{atom['id'].replace(':', '_')}", "kind": "theory_atom", "payload": atom}
+            (run_art_dir / f"{env['artifact_id']}.json").write_text(json.dumps(env), encoding="utf-8")
+
+        rel_env = {
+            "artifact_id": "art_rel_grav_base",
+            "kind": "theory_relation",
+            "payload": {
+                "source_id": "str:T_CPM_Grav",
+                "target_id": "str:T_CPM_Base",
+                "relation_type": "specializes",
+            },
+        }
+        (run_art_dir / "art_rel_grav_base.json").write_text(json.dumps(rel_env), encoding="utf-8")
+
+        manifest = {"run_id": run_id, "created_at": "2026-09-26T12:00:00Z", "status": "completed"}
+        (settings.runs_dir / f"{run_id}.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+        app = create_app(settings)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            post_resp = await ac.post(
+                "/api/evaluation/jobs/run",
+                json={
+                    "run_id": run_id,
+                    "benchmark_id": "stnb_cpm_pilot",
+                    "strategy": "structuralist",
+                    "min_pfs": 0.4,
+                },
+            )
+            assert post_resp.status_code == 202
+            job_data = post_resp.json()
+            job_id = job_data["job_id"]
+            assert job_data["status"] == "running"
+
+            # Poll for completion
+            for _ in range(30):
+                await asyncio.sleep(0.1)
+                get_resp = await ac.get(f"/api/evaluation/jobs/{job_id}")
+                assert get_resp.status_code == 200
+                status_val = get_resp.json()["status"]
+                if status_val == "completed":
+                    break
+                assert status_val != "failed", f"Job failed: {get_resp.json().get('error')}"
+
+            final_resp = await ac.get(f"/api/evaluation/jobs/{job_id}")
+            final_data = final_resp.json()
+            assert final_data["status"] == "completed"
+            assert final_data["report_id"] == f"eval_{run_id}"
+            assert final_data["report"] is not None
+            assert final_data["report"]["outcome"] == "pass"
+
+            # Verify events were captured in EventBroker
+            broker: EventBroker = app.state.broker
+            events = broker.get_history(job_id)
+            assert len(events) >= 3
+            kinds = [e.kind for e in events]
+            assert "evaluation.job.started" in kinds
+            assert "evaluation.job.completed" in kinds
+
+    @pytest.mark.asyncio
+    async def test_asynchronous_evaluation_job_sse_stream(self, tmp_path: Path):
+        """Verify GET /api/evaluation/jobs/{job_id}/stream streams SSE events.
+
+        Parameters
+        ----------
+        tmp_path : Path
+            Pytest temporary directory fixture.
+        """
+        from httpx import ASGITransport, AsyncClient
+
+        settings = StudioSettings(
+            runs_dir=tmp_path / "runs",
+            artifacts_dir=tmp_path / "artifacts",
+            reports_dir=tmp_path / "reports",
+            token=None,
+        )
+        settings.runs_dir.mkdir(parents=True, exist_ok=True)
+        settings.artifacts_dir.mkdir(parents=True, exist_ok=True)
+        settings.reports_dir.mkdir(parents=True, exist_ok=True)
+
+        app = create_app(settings)
+        broker: EventBroker = app.state.broker
+        job_id = "eval_job_stream_test"
+
+        # Publish events into the broker for this job_id
+        broker.publish(
+            job_id,
+            {
+                "kind": "evaluation.job.started",
+                "run_id": job_id,
+                "message": "Job initiated",
+            },
+        )
+        broker.publish(
+            job_id,
+            {
+                "kind": "evaluation.stage.completed",
+                "run_id": job_id,
+                "message": "Stage verified",
+            },
+        )
+        broker.publish(
+            job_id,
+            {
+                "kind": "evaluation.job.completed",
+                "run_id": job_id,
+                "message": "Job finished",
+            },
+        )
+        broker.close_run(job_id)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            async with ac.stream("GET", f"/api/evaluation/jobs/{job_id}/stream") as resp:
+                assert resp.status_code == 200
+                assert "text/event-stream" in resp.headers.get("content-type", "")
+                chunks: list[str] = []
+                async for line in resp.aiter_lines():
+                    if line.startswith("data:"):
+                        chunks.append(line)
+
+                assert len(chunks) == 3
+                assert any("evaluation.job.started" in c for c in chunks)
+                assert any("evaluation.job.completed" in c for c in chunks)
+
+
 

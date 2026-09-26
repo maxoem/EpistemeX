@@ -441,3 +441,264 @@ class EvaluateManifestRequest(BaseModel):
     manifest_path: str
     baseline: str | None = None
     build_graph: bool = False
+
+
+class DynamicsStepDetail(BaseModel):
+    """Detailed step transition in a diachronic theory evolution trajectory.
+
+    Parameters
+    ----------
+    step : str
+        Transition identifier (e.g. 'T_0 -> T_1').
+    delta_auxiliary : int
+        Count of auxiliary hypotheses introduced in this transition.
+    anomalies_count : int
+        Active empirical anomalies during this transition.
+    delta_empirical : int
+        Count of novel empirical paradigms or content elements introduced.
+    step_degeneration_index : float
+        Degeneration index evaluated for this single transition.
+    """
+
+    step: str
+    delta_auxiliary: int
+    anomalies_count: int
+    delta_empirical: int
+    step_degeneration_index: float
+
+
+class DynamicsTrajectoryRequest(BaseModel):
+    """Request payload to evaluate diachronic Lakatosian degeneration across successive runs.
+
+    Parameters
+    ----------
+    run_ids : list of str, optional
+        Chronological sequence of pipeline run identifiers [T_0, T_1, ..., T_k].
+    snapshots : list of dict of str to Any, optional
+        Explicit graph snapshot representations if evaluating in-memory or synthetic runs.
+    core_node_ids : list of str, optional
+        Specific hard-core axiom node identifiers to monitor for invariance.
+    epsilon : float, default 1e-6
+        Stability constant avoiding division by zero.
+    """
+
+    run_ids: list[str] = Field(default_factory=list)
+    snapshots: list[dict[str, Any]] | None = None
+    core_node_ids: list[str] | None = None
+    epsilon: float = 1e-6
+
+
+class DynamicsTrajectoryResponse(BaseModel):
+    """Response payload containing multi-run diachronic trajectory and degeneration metrics.
+
+    Parameters
+    ----------
+    degeneration_index : float
+        Overall Lakatosian Degeneration Index (DI).
+    is_progressive : bool
+        Whether the trajectory satisfies progressive criteria (DI < 1.0 and core invariant).
+    core_invariant : bool
+        Whether hard-core axioms remained unchanged across all epochs.
+    delta_auxiliary : int
+        Total net addition of auxiliary protective belt hypotheses.
+    anomalies_count : int
+        Final count of unresolved empirical anomalies.
+    delta_empirical_content : int
+        Total novel empirical phenomena and paradigms explained.
+    violated_invariance : list of dict of str to Any
+        Details of any detected core mutations or deletions.
+    node_immunization_scores : dict of str to float
+        Per-node immunization index (II) detecting ad-hoc stratagems.
+    trajectory : list of DynamicsStepDetail
+        Epoch-by-epoch transition metrics.
+    chart_data : dict of str to Any
+        Pre-formatted series data for frontend plotting.
+    summary_markdown : str
+        Formatted Markdown analysis.
+    """
+
+    degeneration_index: float
+    is_progressive: bool
+    core_invariant: bool
+    delta_auxiliary: int = 0
+    anomalies_count: int = 0
+    delta_empirical_content: int = 0
+    violated_invariance: list[dict[str, Any]] = Field(default_factory=list)
+    node_immunization_scores: dict[str, float] = Field(default_factory=dict)
+    trajectory: list[DynamicsStepDetail] = Field(default_factory=list)
+    chart_data: dict[str, Any] = Field(default_factory=dict)
+    summary_markdown: str = ""
+
+
+class AdjudicationDecision(StrEnum):
+    """Review decision for a human-in-the-loop edge alignment.
+
+    Attributes
+    ----------
+    TRUE_POSITIVE : str
+        Alignment is empirically verified as correct.
+    FALSE_POSITIVE : str
+        Alignment is rejected as a hallucination or invalid link.
+    SCHEMA_ALIAS : str
+        Predicted relation is an acceptable semantic alias for the gold predicate.
+    """
+
+    TRUE_POSITIVE = "true_positive"
+    FALSE_POSITIVE = "false_positive"
+    SCHEMA_ALIAS = "schema_alias"
+
+
+class EdgeAdjudicationItem(BaseModel):
+    """A human-adjudicated edge alignment decision.
+
+    Parameters
+    ----------
+    adjudication_id : str
+        Unique identifier for the adjudication record.
+    predicted_edge : dict of str to Any
+        Predicted relation descriptor (source, predicate, target, confidence).
+    reference_edge : dict of str to Any or None, optional
+        Candidate reference relation descriptor if partially aligned.
+    similarity_score : float, default 0.0
+        Similarity score from soft alignment (e.g. GM-GBS or cross-encoder).
+    decision : AdjudicationDecision
+        Expert verdict (true_positive, false_positive, or schema_alias).
+    alias_target : str or None, optional
+        Canonical target predicate name when decision is schema_alias.
+    rationale : str or None, optional
+        Expert commentary or rationale.
+    adjudicated_by : str or None, optional
+        Identifier of the human reviewer.
+    adjudicated_at : datetime
+        Timestamp of adjudication.
+    """
+
+    adjudication_id: str = Field(default_factory=lambda: f"adj_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}")
+    predicted_edge: dict[str, Any]
+    reference_edge: dict[str, Any] | None = None
+    similarity_score: float = 0.0
+    decision: AdjudicationDecision
+    alias_target: str | None = None
+    rationale: str | None = None
+    adjudicated_by: str | None = None
+    adjudicated_at: datetime = Field(default_factory=utc_now)
+
+
+class AdjudicationRequest(BaseModel):
+    """Payload to submit edge review adjudications and optionally export curated gold standard.
+
+    Parameters
+    ----------
+    items : list of EdgeAdjudicationItem
+        Adjudication decisions to register.
+    gold_standard_path : str or None, optional
+        Source reference gold standard path to merge with.
+    export_dataset_path : str or None, optional
+        Target filesystem path to export the curated JSON-LD dataset.
+    """
+
+    items: list[EdgeAdjudicationItem] = Field(default_factory=list)
+    gold_standard_path: str | None = None
+    export_dataset_path: str | None = None
+
+
+class AdjudicationResponse(BaseModel):
+    """Outcome summary of processed edge adjudications.
+
+    Parameters
+    ----------
+    adjudicated_count : int
+        Count of recorded adjudications.
+    stored_items : list of EdgeAdjudicationItem
+        Registered adjudication records.
+    exported_gold_path : str or None, optional
+        Filesystem path of the curated gold standard dataset if exported.
+    message : str, default ''
+        Informational status message.
+    """
+
+    adjudicated_count: int
+    stored_items: list[EdgeAdjudicationItem] = Field(default_factory=list)
+    exported_gold_path: str | None = None
+    message: str = ""
+
+
+class EvaluationJobStatus(StrEnum):
+    """Lifecycle state of an asynchronous evaluation job.
+
+    Attributes
+    ----------
+    PENDING : str
+        Job queued but not yet running.
+    RUNNING : str
+        Job actively evaluating stages or ranking queries.
+    COMPLETED : str
+        Job finished successfully with report synthesized.
+    FAILED : str
+        Job encountered an unhandled execution error.
+    """
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class EvaluationJobDescriptor(BaseModel):
+    """Descriptor tracking an asynchronous batch evaluation task.
+
+    Parameters
+    ----------
+    job_id : str
+        Unique job identifier.
+    status : EvaluationJobStatus
+        Current lifecycle state.
+    created_at : datetime
+        Timestamp when job was created.
+    completed_at : datetime or None, optional
+        Timestamp when job completed or failed.
+    request_type : str, default 'manifest'
+        Type of evaluation ('manifest' or 'run').
+    report_id : str or None, optional
+        Identifier of the generated evaluation report once complete.
+    error : str or None, optional
+        Error message if execution failed.
+    report : EvaluationReportDetail or None, optional
+        Synthesized report detail once completed.
+    """
+
+    job_id: str
+    status: EvaluationJobStatus
+    created_at: datetime = Field(default_factory=utc_now)
+    completed_at: datetime | None = None
+    request_type: str = "manifest"
+    report_id: str | None = None
+    error: str | None = None
+    report: EvaluationReportDetail | None = None
+
+
+class StartEvaluationJobRequest(BaseModel):
+    """Request payload to initiate an asynchronous batch evaluation job.
+
+    Parameters
+    ----------
+    manifest_path : str or None, optional
+        Filesystem path to evaluation YAML manifest.
+    run_id : str or None, optional
+        Target run identifier if evaluating an existing run.
+    benchmark_id : str or None, optional
+        Registered benchmark identifier.
+    gold_standard_path : str or None, optional
+        Custom gold reference path.
+    baseline : str or None, optional
+        Comparative baseline override.
+    build_graph : bool, default False
+        Whether to construct graph before scoring.
+    """
+
+    manifest_path: str | None = None
+    run_id: str | None = None
+    benchmark_id: str | None = None
+    gold_standard_path: str | None = None
+    baseline: str | None = None
+    build_graph: bool = False

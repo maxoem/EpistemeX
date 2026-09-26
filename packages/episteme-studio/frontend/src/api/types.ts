@@ -107,11 +107,28 @@ export interface StudioEdge {
   props: Record<string, any>;
 }
 
+export interface TextAnchor {
+  source_doc_id?: string | null;
+  char_start?: number | null;
+  char_end?: number | null;
+  verbatim_quote?: string | null;
+  bbox?: number[] | null;
+  page?: number | null;
+  formula_id?: string | null;
+  table_id?: string | null;
+  figure_id?: string | null;
+}
+
 export interface EvidenceSpan {
   start_char?: number | null;
   end_char?: number | null;
   text: string;
-  mode: "exact" | "substring" | "whole_chunk";
+  mode: "exact" | "substring" | "whole_chunk" | "visual" | "tabular" | "formula";
+  bbox?: number[] | null;
+  page?: number | null;
+  formula_id?: string | null;
+  table_id?: string | null;
+  figure_id?: string | null;
 }
 
 export interface EvidenceChunk {
@@ -126,6 +143,7 @@ export interface EvidenceTrail {
   node_id: string;
   layer: number;
   chunks: EvidenceChunk[];
+  anchors?: TextAnchor[];
 }
 
 export interface GraphView {
@@ -526,5 +544,85 @@ export interface EngineSettingsPatch {
   schema_config?: Partial<SchemaConfig>;
   predicate_aliases?: Record<string, any>;
   models?: Partial<EngineSettings["models"]>;
+}
+
+export interface DynamicsStepDetail {
+  step: string;
+  delta_auxiliary: number;
+  anomalies_count: number;
+  delta_empirical: number;
+  step_degeneration_index: number;
+}
+
+export interface DynamicsTrajectoryRequest {
+  run_ids?: string[];
+  snapshots?: Record<string, any>[];
+  core_node_ids?: string[];
+  epsilon?: number;
+}
+
+export interface DynamicsTrajectoryResponse {
+  degeneration_index: number;
+  is_progressive: boolean;
+  core_invariant: boolean;
+  delta_auxiliary: number;
+  anomalies_count: number;
+  delta_empirical_content: number;
+  violated_invariance: Record<string, any>[];
+  node_immunization_scores: Record<string, number>;
+  trajectory: DynamicsStepDetail[];
+  chart_data: {
+    epochs: string[];
+    steps: string[];
+    di_series: number[];
+    delta_auxiliary_series: number[];
+    delta_empirical_series: number[];
+    anomalies_series: number[];
+    overall_degeneration_index: number;
+    progressive_threshold: number;
+    is_progressive: boolean;
+    core_invariant: boolean;
+  };
+  summary_markdown: string;
+}
+
+export type AdjudicationDecision = "true_positive" | "false_positive" | "schema_alias";
+
+export interface EdgeAdjudicationItem {
+  adjudication_id: string;
+  predicted_edge: Record<string, any>;
+  reference_edge?: Record<string, any> | null;
+  similarity_score?: number;
+  decision: AdjudicationDecision;
+  alias_target?: string | null;
+  rationale?: string | null;
+  adjudicated_by?: string | null;
+  adjudicated_at?: string;
+}
+
+export interface AdjudicationRequest {
+  items: EdgeAdjudicationItem[];
+  gold_standard_path?: string | null;
+  export_dataset_path?: string | null;
+}
+
+export interface AdjudicationResponse {
+  adjudicated_count: number;
+  stored_items: EdgeAdjudicationItem[];
+  exported_gold_path?: string | null;
+  message: string;
+}
+
+export type EvaluationJobStatus = "pending" | "running" | "completed" | "failed";
+
+export interface EvaluationJobDescriptor {
+  job_id: string;
+  status: EvaluationJobStatus;
+  created_at: string;
+  completed_at?: string | null;
+  request_type: string;
+  report_id?: string | null;
+  error?: string | null;
+  report?: any | null;
 }
 

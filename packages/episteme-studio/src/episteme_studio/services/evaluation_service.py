@@ -6,20 +6,32 @@ and remains free of FastAPI dependencies for complete unit testability.
 
 from __future__ import annotations
 
+import asyncio
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.adapters.evaluation_adapter import EvaluationAdapter
+from episteme_studio.domain.events import StudioEvent
 from episteme_studio.domain.evaluation import (
+    AdjudicationRequest,
+    AdjudicationResponse,
     BenchmarkDescriptor,
     ComparativeEvaluationResponse,
+    CompareRunsRequest,
+    DynamicsTrajectoryRequest,
+    DynamicsTrajectoryResponse,
+    EdgeAdjudicationItem,
     EvaluateManifestRequest,
     EvaluateRunRequest,
+    EvaluationJobDescriptor,
+    EvaluationJobStatus,
     EvaluationReportDetail,
     EvaluationReportSummary,
-    CompareRunsRequest,
+    StartEvaluationJobRequest,
 )
+from episteme_studio.runtime.broker import EventBroker
 from episteme_studio.settings import StudioSettings
 
 
@@ -45,6 +57,7 @@ class EvaluationService:
         self.adapter = adapter
         self.reader = reader
         self.reports_dir = Path(reports_dir)
+        self._jobs: dict[str, EvaluationJobDescriptor] = {}
 
     @classmethod
     def from_settings(cls, settings: StudioSettings) -> EvaluationService:
@@ -207,3 +220,194 @@ class EvaluationService:
             Manifest descriptors.
         """
         return self.adapter.discover_manifests()
+
+    def compute_dynamics_trajectory(
+        self,
+        request: DynamicsTrajectoryRequest,
+    ) -> DynamicsTrajectoryResponse:
+        """Compute diachronic Lakatosian degeneration trajectory across multiple successive runs.
+
+        Parameters
+        ----------
+        request : DynamicsTrajectoryRequest
+            Trajectory request options.
+
+        Returns
+        -------
+        DynamicsTrajectoryResponse
+            Trajectory metrics and interactive chart data.
+        """
+        return self.adapter.evaluate_trajectory(request=request, reader=self.reader)
+
+    def save_adjudications(self, request: AdjudicationRequest) -> AdjudicationResponse:
+        """Store expert edge adjudications and optionally export curated gold standard dataset.
+
+        Parameters
+        ----------
+        request : AdjudicationRequest
+            Review adjudications to persist.
+
+        Returns
+        -------
+        AdjudicationResponse
+            Adjudication result summary.
+        """
+        return self.adapter.save_adjudications(request)
+
+    def list_adjudications(self) -> list[EdgeAdjudicationItem]:
+        """List all previously recorded human review adjudications.
+
+        Returns
+        -------
+        list of EdgeAdjudicationItem
+            Stored edge review items.
+        """
+        return self.adapter.list_adjudications()
+
+    def get_job(self, job_id: str) -> EvaluationJobDescriptor | None:
+        """Retrieve the status and metadata of an evaluation job.
+
+        Parameters
+        ----------
+        job_id : str
+            Unique job identifier.
+
+        Returns
+        -------
+        EvaluationJobDescriptor or None
+            Job descriptor if registered, None otherwise.
+        """
+        return self._jobs.get(job_id)
+
+    async def start_evaluation_job(
+        self,
+        broker: EventBroker,
+        manifest_request: EvaluateManifestRequest | None = None,
+        run_request: EvaluateRunRequest | None = None,
+    ) -> EvaluationJobDescriptor:
+        """Spawn a background asynchronous batch evaluation job streaming events via SSE.
+
+        Parameters
+        ----------
+        broker : EventBroker
+            Event broker instance to publish telemetry events to.
+        manifest_request : EvaluateManifestRequest or None, optional
+            Manifest evaluation options.
+        run_request : EvaluateRunRequest or None, optional
+            Run evaluation options.
+
+        Returns
+        -------
+        EvaluationJobDescriptor
+            Registered job descriptor.
+        """
+        job_id = f"eval_job_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+        req_type = "manifest" if manifest_request is not None else "run"
+        descriptor = EvaluationJobDescriptor(
+            job_id=job_id,
+            status=EvaluationJobStatus.RUNNING,
+            request_type=req_type,
+        )
+        self._jobs[job_id] = descriptor
+
+        asyncio.create_task(
+            self._run_evaluation_job_worker(
+                job_id=job_id,
+                manifest_request=manifest_request,
+                run_request=run_request,
+                broker=broker,
+            )
+        )
+        return descriptor
+
+    async def _run_evaluation_job_worker(
+        self,
+        job_id: str,
+        manifest_request: EvaluateManifestRequest | None,
+        run_request: EvaluateRunRequest | None,
+        broker: EventBroker,
+    ) -> None:
+        """Execute evaluation job asynchronously in background and emit SSE events."""
+        def emit(kind: str, message: str, payload: dict[str, Any] | None = None, level: str = "info") -> None:
+            event = StudioEvent(
+                seq=1,
+                run_id=job_id,
+                ts=datetime.now(timezone.utc),
+                kind=kind,
+                level=level,
+                phase="Evaluation",
+                message=message,
+                payload=payload or {},
+            )
+            broker.publish(job_id, event)
+
+        try:
+            emit("evaluation.job.started", "Asynchronous evaluation job started", {"job_id": job_id})
+
+            report: EvaluationReportDetail
+            if manifest_request is not None:
+                emit(
+                    "evaluation.stage.started",
+                    "Evaluating manifest configuration",
+                    {"manifest_path": manifest_request.manifest_path},
+                )
+                report = await self.evaluate_manifest(manifest_request)
+            elif run_request is not None:
+                emit(
+                    "evaluation.stage.started",
+                    f"Evaluating run {run_request.run_id}",
+                    {"run_id": run_request.run_id},
+                )
+                report = await self.evaluate_run(run_request)
+            else:
+                raise ValueError("Neither manifest_request nor run_request was provided.")
+
+            # Emit stage completion telemetry
+            for level, results in report.results_by_level.items():
+                for res in results:
+                    emit(
+                        "evaluation.stage.completed",
+                        f"Stage completed: {res.phase_name or level}",
+                        {
+                            "stage": level,
+                            "phase_name": res.phase_name,
+                            "metrics": [m.model_dump() for m in res.metrics],
+                            "outcome": res.outcome,
+                        },
+                    )
+
+            if report.retrieval_detail and report.retrieval_detail.num_queries > 0:
+                emit(
+                    "evaluation.query.ranked",
+                    "Competency retrieval queries evaluated",
+                    {
+                        "mrr": report.retrieval_detail.mrr,
+                        "hits_at_1": report.retrieval_detail.hits_at_1,
+                        "ndcg": report.retrieval_detail.ndcg,
+                        "num_queries": report.retrieval_detail.num_queries,
+                    },
+                )
+
+            # Mark completed
+            desc = self._jobs[job_id]
+            desc.status = EvaluationJobStatus.COMPLETED
+            desc.completed_at = datetime.now(timezone.utc)
+            desc.report_id = report.evaluation_id
+            desc.report = report
+
+            emit(
+                "evaluation.job.completed",
+                f"Evaluation job completed with outcome: {report.outcome}",
+                {"evaluation_id": report.evaluation_id, "outcome": report.outcome},
+            )
+
+        except Exception as e:
+            logger.error("Evaluation job %s failed: %s", job_id, e, exc_info=True)
+            desc = self._jobs.get(job_id)
+            if desc:
+                desc.status = EvaluationJobStatus.FAILED
+                desc.completed_at = datetime.now(timezone.utc)
+                desc.error = str(e)
+            emit("evaluation.job.failed", f"Evaluation failed: {e}", {"error": str(e)}, level="error")
+        finally:
+            broker.close_run(job_id)

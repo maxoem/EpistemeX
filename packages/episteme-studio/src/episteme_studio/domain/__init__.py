@@ -18,6 +18,7 @@ from .runs import (
     RunDetail,
     RunStatus,
     RunSummary,
+    TextAnchor,
 )
 
 __all__ = [
@@ -41,4 +42,5 @@ __all__ = [
     "StudioEdge",
     "StudioEvent",
     "StudioNode",
+    "TextAnchor",
 ]

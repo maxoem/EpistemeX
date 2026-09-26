@@ -53,6 +53,42 @@ class GlobalStructuralAnchor(BaseModel):
 
 
 
+class TextAnchor(BaseModel):
+    """Multi-modal source evidence anchor supporting text, formulas, tables, and figures.
+
+    Parameters
+    ----------
+    source_doc_id : str or None, optional
+        Document identifier.
+    char_start : int or None, optional
+        0-indexed character start offset.
+    char_end : int or None, optional
+        0-indexed character end offset.
+    verbatim_quote : str or None, optional
+        Verbatim textual quote.
+    bbox : list of float or None, optional
+        Bounding box region [x0, y0, x1, y1] or [x0, y0, x1, y1, page].
+    page : int or None, optional
+        Document page number.
+    formula_id : str or None, optional
+        Unique formula identifier.
+    table_id : str or None, optional
+        Unique table identifier.
+    figure_id : str or None, optional
+        Unique figure identifier.
+    """
+
+    source_doc_id: str | None = None
+    char_start: int | None = None
+    char_end: int | None = None
+    verbatim_quote: str | None = None
+    bbox: list[float] | None = None
+    page: int | None = None
+    formula_id: str | None = None
+    table_id: str | None = None
+    figure_id: str | None = None
+
+
 class L1Chunk(BaseModel):
     id: str
     text: str
@@ -61,6 +97,7 @@ class L1Chunk(BaseModel):
     sequence_index: int
     token_count: int
     embedding: list[float] | None = None
+    text_anchor: TextAnchor | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -103,6 +140,7 @@ class L2Entity(BaseModel):
     textual_envelope: str | None = None
     is_mature: bool = False
     confidence: float | None = None
+    text_anchor: TextAnchor | None = None
     source_chunk_ids: list[str] = Field(default_factory=list)
 
 
@@ -194,6 +232,7 @@ class TheoryAtom(BaseModel):
     entity_ids: list[str] = Field(default_factory=list)
     epistemic_status: str | None = None
     scope_type: str | None = None
+    text_anchor: TextAnchor | None = None
     measurements: list[Measurement] = Field(default_factory=list)
     parameters: dict[str, Any] = Field(default_factory=dict)
     tenability: TenabilityResult | None = None

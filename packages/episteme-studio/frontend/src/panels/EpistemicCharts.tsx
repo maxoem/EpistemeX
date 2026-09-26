@@ -864,3 +864,154 @@ export const InlineOntologicalDistributionBar: React.FC<InlineOntologicalDistrib
     </div>
   );
 };
+
+/**
+ * 8. Diachronic Lakatosian Degeneration Trajectory Chart
+ * Plots the longitudinal Degeneration Index (DI) across successive theory versions T_0 -> T_1 -> T_2
+ * alongside Delta Auxiliary vs Delta Empirical bars and progressive threshold line (DI = 1.0).
+ */
+export interface LakatosianDegenerationTrajectoryChartProps extends BaseChartProps {
+  steps?: string[];
+  diSeries?: number[];
+  deltaAuxiliarySeries?: number[];
+  deltaEmpiricalSeries?: number[];
+  anomaliesSeries?: number[];
+  overallDi?: number;
+  height?: number;
+}
+
+export const LakatosianDegenerationTrajectoryChart: React.FC<LakatosianDegenerationTrajectoryChartProps> = ({
+  steps = [],
+  diSeries = [],
+  deltaAuxiliarySeries = [],
+  deltaEmpiricalSeries = [],
+  anomaliesSeries = [],
+  overallDi,
+  className,
+  style,
+  height = 300,
+}) => {
+  const chartRef = useRef<HTMLDivElement>(null);
+  const chartInstance = useRef<echarts.ECharts | null>(null);
+  const { theme } = useThemeStore();
+  const isDark = theme === "dark";
+
+  const safeSteps = steps.length > 0 ? steps : ["T_0 -> T_1", "T_1 -> T_2", "T_2 -> T_3"];
+  const safeDi = diSeries.length > 0 ? diSeries : [0.45, 0.72, 1.25];
+  const safeAux = deltaAuxiliarySeries.length > 0 ? deltaAuxiliarySeries : [2, 5, 8];
+  const safeEmp = deltaEmpiricalSeries.length > 0 ? deltaEmpiricalSeries : [5, 6, 4];
+
+  useEffect(() => {
+    if (!chartRef.current) return;
+    try {
+      if (!chartInstance.current) {
+        chartInstance.current = echarts.init(chartRef.current, isDark ? "dark" : undefined, {
+          renderer: "canvas",
+        });
+      }
+
+      const option: any = {
+        backgroundColor: "transparent",
+        animation: true,
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "cross" },
+        },
+        legend: {
+          data: ["Degeneration Index (DI)", "Delta Auxiliary", "Delta Empirical Content"],
+          top: 4,
+          textStyle: {
+            color: isDark ? "#A1A1AA" : "#4B5563",
+            fontSize: 11,
+          },
+        },
+        grid: {
+          top: 36,
+          left: 45,
+          right: 45,
+          bottom: 25,
+        },
+        xAxis: {
+          type: "category",
+          data: safeSteps,
+          axisLine: { lineStyle: { color: isDark ? "#3F3F46" : "#E2E8F0" } },
+          axisLabel: { color: isDark ? "#A1A1AA" : "#64748B", fontSize: 11 },
+        },
+        yAxis: [
+          {
+            type: "value",
+            name: "DI",
+            position: "left",
+            axisLine: { lineStyle: { color: isDark ? "#3F3F46" : "#E2E8F0" } },
+            axisLabel: { color: isDark ? "#A1A1AA" : "#64748B", fontSize: 10 },
+            splitLine: { lineStyle: { color: isDark ? "#27272A" : "#F1F5F9" } },
+          },
+          {
+            type: "value",
+            name: "Count",
+            position: "right",
+            axisLine: { lineStyle: { color: isDark ? "#3F3F46" : "#E2E8F0" } },
+            axisLabel: { color: isDark ? "#A1A1AA" : "#64748B", fontSize: 10 },
+            splitLine: { show: false },
+          },
+        ],
+        series: [
+          {
+            name: "Delta Auxiliary",
+            type: "bar",
+            yAxisIndex: 1,
+            data: safeAux,
+            itemStyle: { color: "#F59E0B" },
+          },
+          {
+            name: "Delta Empirical Content",
+            type: "bar",
+            yAxisIndex: 1,
+            data: safeEmp,
+            itemStyle: { color: "#10B981" },
+          },
+          {
+            name: "Degeneration Index (DI)",
+            type: "line",
+            yAxisIndex: 0,
+            data: safeDi,
+            lineStyle: { width: 2.5, color: "#8B5CF6" },
+            itemStyle: { color: "#8B5CF6" },
+            markLine: {
+              silent: true,
+              data: [
+                {
+                  yAxis: 1.0,
+                  name: "Progressive Threshold (DI = 1.0)",
+                  lineStyle: { color: "#EF4444", type: "dashed", width: 1.5 },
+                  label: {
+                    formatter: "DI = 1.0 (Degenerating)",
+                    position: "middle",
+                    color: "#EF4444",
+                    fontSize: 10,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      chartInstance.current.setOption(option, true);
+    } catch (e) {
+      console.error("Failed to render LakatosianDegenerationTrajectoryChart", e);
+    }
+  }, [isDark, safeSteps, safeDi, safeAux, safeEmp]);
+
+  useEffect(() => {
+    const handleResize = () => chartInstance.current?.resize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return (
+    <div className={className} style={{ width: "100%", height, ...style }}>
+      <div ref={chartRef} style={{ width: "100%", height: "100%" }} />
+    </div>
+  );
+};

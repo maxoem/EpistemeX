@@ -8,6 +8,7 @@ from episteme_pipeline.contracts.domain import (
     TheoryRelation,
     SearchResult,
     SubGraph,
+    TextAnchor,
 )
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 
@@ -19,6 +20,7 @@ __all__ = [
     "L2Triple",
     "SubGraph",
     "SearchResult",
+    "TextAnchor",
     "TheoryAtom",
     "TheoryRelation",
     "TheoryNet",

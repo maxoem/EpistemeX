@@ -279,6 +279,12 @@ class ExtractionStrategy:
         elif isinstance(gold, dict):
             gold_entities = gold.get("l2_entities", [])
             gold_triples = gold.get("l2_triples", [])
+        elif isinstance(gold, list):
+            for item in gold:
+                if isinstance(item, L2Entity):
+                    gold_entities.append(item)
+                elif isinstance(item, L2Triple):
+                    gold_triples.append(item)
         elif isinstance(gold, nx.DiGraph):
             for nid, data in gold.nodes(data=True):
                 gold_entities.append(
@@ -647,6 +653,335 @@ class ArgumentationStrategy:
 
         return build_l3_eval_pipeline(event_emitter=event_emitter, in_memory=in_memory, **kwargs)
 
+def apply_typo_noise(text: str, typo_rate: float = 0.05, seed: int = 42) -> str:
+    """Introduce adversarial character-level typographical mutations into source text.
+
+    Parameters
+    ----------
+    text : str
+        Source input text.
+    typo_rate : float, default 0.05
+        Probability of introducing a character swap or omission per word.
+    seed : int, default 42
+        Deterministic random seed.
+
+    Returns
+    -------
+    str
+        Perturbed text with simulated typographical errors.
+    """
+    if not text or typo_rate <= 0.0:
+        return text
+
+    import random
+    rng = random.Random(seed)
+    words = text.split(" ")
+    perturbed_words = []
+
+    for word in words:
+        if len(word) > 3 and rng.random() < typo_rate:
+            chars = list(word)
+            idx = rng.randint(1, len(chars) - 2)
+            op = rng.choice(["swap", "drop", "sub"])
+            if op == "swap":
+                chars[idx], chars[idx + 1] = chars[idx + 1], chars[idx]
+            elif op == "drop":
+                chars.pop(idx)
+            else:
+                chars[idx] = rng.choice("abcdefghijklmnopqrstuvwxyz")
+            perturbed_words.append("".join(chars))
+        else:
+            perturbed_words.append(word)
+
+    return " ".join(perturbed_words)
+
+
+def apply_sentence_shuffling(text: str, seed: int = 42) -> str:
+    """Perturb discourse structure by permuting sentence order.
+
+    Parameters
+    ----------
+    text : str
+        Source paragraph or multi-sentence chunk text.
+    seed : int, default 42
+        Deterministic random seed.
+
+    Returns
+    -------
+    str
+        Perturbed text with shuffled sentences.
+    """
+    if not text:
+        return text
+
+    import random
+    import re
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+    if len(sentences) <= 1:
+        return text
+
+    rng = random.Random(seed)
+    shuffled = list(sentences)
+    rng.shuffle(shuffled)
+    return " ".join(shuffled)
+
+
+def apply_entity_synonym_swaps(
+    text: str,
+    synonyms: dict[str, str] | None = None,
+    seed: int = 42,
+) -> str:
+    """Replace entity names and key terms with lexical synonyms or paraphrase variants.
+
+    Parameters
+    ----------
+    text : str
+        Source text snippet.
+    synonyms : dict of str to str, optional
+        Mapping from canonical entity names to synonym variants.
+    seed : int, default 42
+        Deterministic random seed.
+
+    Returns
+    -------
+    str
+        Text with synonym replacements applied.
+    """
+    if not text or not synonyms:
+        return text
+
+    import re
+    result = text
+    for canon, syn in synonyms.items():
+        pattern = re.compile(rf"\b{re.escape(canon)}\b", flags=re.IGNORECASE)
+        result = pattern.sub(syn, result)
+    return result
+
+
+def apply_graph_perturbation(
+    graph: nx.DiGraph,
+    drop_rate: float = 0.10,
+    seed: int = 42,
+) -> nx.DiGraph:
+    """Introduce stochastic relational noise by dropping a fraction of graph edges.
+
+    Parameters
+    ----------
+    graph : nx.DiGraph
+        Original directed knowledge graph.
+    drop_rate : float, default 0.10
+        Fraction of edges to drop [0.0, 1.0].
+    seed : int, default 42
+        Deterministic random seed.
+
+    Returns
+    -------
+    nx.DiGraph
+        Perturbed graph with dropped edges.
+    """
+    import random
+    rng = random.Random(seed)
+    perturbed = graph.copy()
+    edges = list(perturbed.edges())
+    num_to_drop = int(len(edges) * drop_rate)
+    if num_to_drop > 0 and edges:
+        to_drop = rng.sample(edges, min(num_to_drop, len(edges)))
+        perturbed.remove_edges_from(to_drop)
+    return perturbed
+
+
+def compute_rdf(f1_clean: float, f1_perturbed: float) -> float:
+    """Calculate the Robustness Degradation Factor (RDF).
+
+    .. math::
+        \\text{RDF} = 1.0 - \\frac{F_1(\\text{perturbed})}{F_1(\\text{clean})}
+
+    Parameters
+    ----------
+    f1_clean : float
+        Performance score achieved on clean unperturbed inputs.
+    f1_perturbed : float
+        Performance score achieved on perturbed inputs.
+
+    Returns
+    -------
+    float
+        Degradation factor (0.0 means perfectly robust, 1.0 means complete collapse).
+    """
+    if f1_clean <= 0.0:
+        return 0.0 if f1_perturbed <= 0.0 else 0.0
+    rdf = 1.0 - (f1_perturbed / f1_clean)
+    return float(max(-1.0, min(1.0, rdf)))
+
+
+class NoiseRobustnessStrategy:
+    """Strategy for evaluating pipeline robustness under text and graph perturbations.
+
+    Measures model sensitivity to adversarial typos, sentence shuffling, entity synonyms,
+    and relational noise, computing the Robustness Degradation Factor (RDF):
+
+    .. math::
+        \\text{RDF} = 1.0 - \\frac{F_1(\\text{perturbed})}{F_1(\\text{clean})}
+
+    Parameters
+    ----------
+    base_strategy : EvaluationStrategy or None, optional
+        Underlying evaluation strategy for clean evaluation. Defaults to ExtractionStrategy.
+    typo_rate : float, default 0.05
+        Simulated typographical mutation rate.
+    drop_rate : float, default 0.10
+        Edge dropout perturbation rate for graphs.
+    synonyms : dict of str to str, optional
+        Entity synonym swap dictionary.
+    seed : int, default 42
+        Deterministic random seed.
+    max_rdf_threshold : float, default 0.25
+        Maximum acceptable degradation factor threshold.
+    """
+
+    def __init__(
+        self,
+        base_strategy: EvaluationStrategy | None = None,
+        typo_rate: float = 0.05,
+        drop_rate: float = 0.10,
+        synonyms: dict[str, str] | None = None,
+        seed: int = 42,
+        max_rdf_threshold: float = 0.25,
+    ) -> None:
+        self.base_strategy = base_strategy
+        self.typo_rate = typo_rate
+        self.drop_rate = drop_rate
+        self.synonyms = synonyms or {}
+        self.seed = seed
+        self.max_rdf_threshold = max_rdf_threshold
+
+    async def evaluate(
+        self,
+        predicted: Any,
+        gold: Any,
+        run_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> list[EvaluationResult]:
+        """Evaluate clean performance versus perturbed performance to calculate RDF.
+
+        Parameters
+        ----------
+        predicted : Any
+            Predicted pipeline representation (ArtifactCollection, TheoryNet, or nx.DiGraph).
+        gold : Any
+            Reference gold standard representation.
+        run_id : str
+            Run identifier.
+        context : dict of str to Any, optional
+            Evaluation options and metadata.
+
+        Returns
+        -------
+        list of EvaluationResult
+            Evaluation results containing clean metrics, perturbed metrics, and RDF.
+        """
+        ctx = context or {}
+        strat = self.base_strategy or default_registry.infer(predicted=predicted, gold=gold)
+
+        # 1. Clean evaluation
+        clean_results = await strat.evaluate(predicted, gold, run_id, context=ctx)
+        f1_clean = 0.0
+        if clean_results and clean_results[0].metrics:
+            m_dict = {m.name: m.value for m in clean_results[0].metrics}
+            f1_clean = m_dict.get("relation_f1", m_dict.get("f1", m_dict.get("mcc", clean_results[0].metrics[0].value)))
+
+        # 2. Generate perturbed representation
+        perturbed_pred = self._perturb_representation(predicted)
+
+        # 3. Perturbed evaluation
+        pert_results = await strat.evaluate(perturbed_pred, gold, f"{run_id}_perturbed", context=ctx)
+        f1_pert = 0.0
+        if pert_results and pert_results[0].metrics:
+            m_dict = {m.name: m.value for m in pert_results[0].metrics}
+            f1_pert = m_dict.get("relation_f1", m_dict.get("f1", m_dict.get("mcc", pert_results[0].metrics[0].value)))
+
+        # 4. Compute RDF
+        rdf = compute_rdf(f1_clean, f1_pert)
+        passes_threshold = rdf <= self.max_rdf_threshold
+        outcome = (
+            EvaluationOutcome.PASS
+            if passes_threshold
+            else EvaluationOutcome.WARNING
+            if rdf <= self.max_rdf_threshold * 1.5
+            else EvaluationOutcome.FAIL
+        )
+
+        metrics = [
+            EvaluationMetric(
+                name="rdf",
+                value=rdf,
+                unit="factor",
+                threshold=self.max_rdf_threshold,
+                passes_threshold=passes_threshold,
+            ),
+            EvaluationMetric(
+                name="f1_clean",
+                value=f1_clean,
+                unit="score",
+            ),
+            EvaluationMetric(
+                name="f1_perturbed",
+                value=f1_pert,
+                unit="score",
+            ),
+        ]
+
+        markdown_report = (
+            "## Noise & Perturbation Robustness Benchmarking Report\n\n"
+            f"- **Robustness Degradation Factor (RDF):** {rdf:.4f} "
+            f"({'Robust ✅' if passes_threshold else 'Degraded ❌'})\n"
+            f"- **Clean Score ($F_1$ / $MCC$):** {f1_clean:.4f}\n"
+            f"- **Perturbed Score:** {f1_pert:.4f}\n"
+            f"- **Perturbation Config:** typo_rate={self.typo_rate}, drop_rate={self.drop_rate}\n"
+        )
+
+        result = EvaluationResult(
+            run_id=run_id,
+            evaluation_level=EvaluationLevel.STAGE,
+            phase_name="Perturbation & Noise Robustness",
+            dataset_ref=ctx.get("dataset_ref", "robustness_stress_test"),
+            dataset_type=DatasetType.STRESS_TEST,
+            metrics=metrics,
+            outcome=outcome,
+            robustness_factor=rdf,
+            notes={
+                "category": "stress_testing",
+                "markdown_report": markdown_report,
+                "typo_rate": str(self.typo_rate),
+                "drop_rate": str(self.drop_rate),
+            },
+        )
+        return [result]
+
+    def _perturb_representation(self, pred: Any) -> Any:
+        """Apply noise perturbations to predicted domain objects."""
+        if isinstance(pred, nx.DiGraph):
+            return apply_graph_perturbation(pred, drop_rate=self.drop_rate, seed=self.seed)
+
+        if isinstance(pred, TheoryNet):
+            import random
+            rng = random.Random(self.seed)
+            perturbed_atoms = [
+                atom.model_copy(update={"text": apply_typo_noise(atom.text, typo_rate=self.typo_rate, seed=self.seed)})
+                for atom in pred.atoms
+            ]
+            num_rels = int(len(pred.relations) * (1.0 - self.drop_rate))
+            perturbed_rels = rng.sample(pred.relations, max(1, num_rels)) if pred.relations and num_rels > 0 else []
+            return TheoryNet(atoms=perturbed_atoms, relations=perturbed_rels)
+
+        if isinstance(pred, list):
+            import random
+            rng = random.Random(self.seed)
+            num_keep = max(1, int(len(pred) * (1.0 - self.drop_rate)))
+            return rng.sample(pred, min(num_keep, len(pred))) if pred else []
+
+        return pred
+
 
 class StrategyRegistry:
     """Registry maintaining available evaluation strategies and handling auto-inference."""
@@ -674,6 +1009,11 @@ class StrategyRegistry:
         self.register("arg_microtexts", ArgumentationStrategy)
         self.register("l3", ArgumentationStrategy)
 
+        self.register("robustness", NoiseRobustnessStrategy)
+        self.register("perturbation", NoiseRobustnessStrategy)
+        self.register("noise_robustness", NoiseRobustnessStrategy)
+        self.register("stress_test", NoiseRobustnessStrategy)
+
         # Register default pipeline builders
         from episteme_pipeline.evaluation.pipelines import (
             build_l2_eval_pipeline,
@@ -695,6 +1035,10 @@ class StrategyRegistry:
         self.register_pipeline_builder("argumentation", build_l3_eval_pipeline)
         self.register_pipeline_builder("arg_microtexts", build_l3_eval_pipeline)
         self.register_pipeline_builder("l3", build_l3_eval_pipeline)
+
+        self.register_pipeline_builder("robustness", build_l2_eval_pipeline)
+        self.register_pipeline_builder("perturbation", build_l2_eval_pipeline)
+        self.register_pipeline_builder("stress_test", build_l2_eval_pipeline)
 
     def register_pipeline_builder(
         self,
@@ -834,6 +1178,8 @@ class StrategyRegistry:
         # 1. Match dataset_type if provided
         if dataset_type:
             dt_clean = dataset_type.lower().strip()
+            if dt_clean in ("stress_test", "robustness", "perturbation", "noise_robustness"):
+                return self.get("robustness")
             if dt_clean in self._strategies:
                 return self.get(dt_clean)
 
@@ -851,6 +1197,21 @@ class StrategyRegistry:
             if "l2_entities" in gold or "l2_triples" in gold:
                 return self.get("extraction")
             if "l3_atoms" in gold or "l3_relations" in gold:
+                return self.get("argumentation")
+
+        # 3. Inspect predicted / gold sequence representations
+        if isinstance(predicted, (list, tuple)) and predicted:
+            first = predicted[0]
+            if isinstance(first, (L2Triple, L2Entity)):
+                return self.get("extraction")
+            if isinstance(first, (TheoryAtom, TheoryRelation)):
+                return self.get("argumentation")
+
+        if isinstance(gold, (list, tuple)) and gold:
+            first = gold[0]
+            if isinstance(first, (L2Triple, L2Entity)):
+                return self.get("extraction")
+            if isinstance(first, (TheoryAtom, TheoryRelation)):
                 return self.get("argumentation")
 
         # 3. Inspect predicted representation
@@ -871,3 +1232,18 @@ class StrategyRegistry:
 
 
 default_registry = StrategyRegistry()
+
+__all__ = [
+    "EvaluationStrategy",
+    "StructuralistStrategy",
+    "ExtractionStrategy",
+    "ArgumentationStrategy",
+    "NoiseRobustnessStrategy",
+    "StrategyRegistry",
+    "default_registry",
+    "apply_typo_noise",
+    "apply_sentence_shuffling",
+    "apply_entity_synonym_swaps",
+    "apply_graph_perturbation",
+    "compute_rdf",
+]

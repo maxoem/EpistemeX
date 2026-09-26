@@ -42,18 +42,27 @@ from episteme_pipeline.evaluation.models import (
     EvaluationReport as PipelineEvaluationReport,
     EvaluationResult as PipelineEvaluationResult,
 )
+import epistemetrics as em
 from episteme_pipeline.evaluation.scorers.domain_bridge import (
     l2_triples_to_digraph,
     theory_net_to_digraph,
+    theory_net_to_theory_graph,
 )
 from episteme_pipeline.evaluation.scorers.retrieval import ExtrinsicRetrievalEvaluator
 from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.domain.evaluation import (
+    AdjudicationDecision,
+    AdjudicationRequest,
+    AdjudicationResponse,
     BenchmarkDescriptor,
     ComparativeEvaluationResponse,
     ComparativeMetricDelta,
+    DynamicsStepDetail,
+    DynamicsTrajectoryRequest,
+    DynamicsTrajectoryResponse,
+    EdgeAdjudicationItem,
     EvaluationLevelResult,
     EvaluationMetricValue,
     EvaluationOutcome,
@@ -1011,4 +1020,194 @@ class EvaluationAdapter:
             hits_at_3=h3,
             hits_at_10=h10,
             ndcg=ndcg,
+        )
+
+    def evaluate_trajectory(
+        self,
+        request: DynamicsTrajectoryRequest,
+        reader: ArtifactReader | None = None,
+    ) -> DynamicsTrajectoryResponse:
+        """Evaluate longitudinal diachronic theory evolution and Lakatosian degeneration.
+
+        Parameters
+        ----------
+        request : DynamicsTrajectoryRequest
+            Request specifying run identifiers or explicit snapshot representations.
+        reader : ArtifactReader or None, optional
+            Active artifact reader used when extracting snapshots from run IDs.
+
+        Returns
+        -------
+        DynamicsTrajectoryResponse
+            Trajectory metrics including epoch-by-epoch steps, DI progression,
+            immunization indices, and pre-formatted chart data.
+        """
+        snapshots: list[Any] = []
+
+        if request.snapshots:
+            snapshots = list(request.snapshots)
+        elif request.run_ids:
+            if not reader:
+                raise ValueError("ArtifactReader is required when evaluating trajectory by run_ids.")
+            for rid in request.run_ids:
+                target = self._load_run_evaluation_target(rid, reader)
+                if isinstance(target, TheoryNet):
+                    snapshots.append(theory_net_to_theory_graph(target))
+                elif isinstance(target, nx.DiGraph):
+                    snapshots.append(target)
+                elif isinstance(target, em.TheoryGraph):
+                    snapshots.append(target)
+                else:
+                    snapshots.append(target)
+
+        core_ids = set(request.core_node_ids) if request.core_node_ids else None
+        dyn_res = em.evaluate_diachronic_dynamics(
+            snapshots,
+            epsilon=request.epsilon,
+            core_node_ids=core_ids,
+        )
+
+        steps = [
+            DynamicsStepDetail(
+                step=str(s.get("step", "")),
+                delta_auxiliary=int(s.get("delta_auxiliary", 0)),
+                anomalies_count=int(s.get("anomalies_count", 0)),
+                delta_empirical=int(s.get("delta_empirical", 0)),
+                step_degeneration_index=float(s.get("step_degeneration_index", 0.0)),
+            )
+            for s in dyn_res.trajectory
+        ]
+
+        chart_data = {
+            "epochs": [f"T_{i}" for i in range(len(snapshots))],
+            "steps": [s.step for s in steps],
+            "di_series": [s.step_degeneration_index for s in steps],
+            "delta_auxiliary_series": [s.delta_auxiliary for s in steps],
+            "delta_empirical_series": [s.delta_empirical for s in steps],
+            "anomalies_series": [s.anomalies_count for s in steps],
+            "overall_degeneration_index": dyn_res.degeneration_index,
+            "progressive_threshold": 1.0,
+            "is_progressive": dyn_res.is_progressive,
+            "core_invariant": dyn_res.core_invariant,
+        }
+
+        return DynamicsTrajectoryResponse(
+            degeneration_index=dyn_res.degeneration_index,
+            is_progressive=dyn_res.is_progressive,
+            core_invariant=dyn_res.core_invariant,
+            delta_auxiliary=dyn_res.delta_auxiliary,
+            anomalies_count=dyn_res.anomalies_count,
+            delta_empirical_content=dyn_res.delta_empirical_content,
+            violated_invariance=dyn_res.violated_invariance,
+            node_immunization_scores=dyn_res.node_immunization_scores,
+            trajectory=steps,
+            chart_data=chart_data,
+            summary_markdown=dyn_res.to_markdown(),
+        )
+
+    def _get_adjudications_path(self) -> Path:
+        """Resolve the persistent adjudications storage file path."""
+        adj_dir = self.reports_dir.parent / "adjudications"
+        adj_dir.mkdir(parents=True, exist_ok=True)
+        return adj_dir / "adjudications.json"
+
+    def list_adjudications(self) -> list[EdgeAdjudicationItem]:
+        """Retrieve all registered human-in-the-loop edge review adjudications.
+
+        Returns
+        -------
+        list of EdgeAdjudicationItem
+            Stored adjudication records.
+        """
+        path = self._get_adjudications_path()
+        if not path.is_file():
+            return []
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return [EdgeAdjudicationItem.model_validate(item) for item in data]
+        except Exception as e:
+            logger.error("Failed to load adjudications from %s: %s", path, e)
+            return []
+
+    def save_adjudications(self, request: AdjudicationRequest) -> AdjudicationResponse:
+        """Record human review adjudications and optionally export curated gold dataset.
+
+        Parameters
+        ----------
+        request : AdjudicationRequest
+            Submitted review items and target gold dataset destination.
+
+        Returns
+        -------
+        AdjudicationResponse
+            Summary of recorded adjudications and export status.
+        """
+        existing = {item.adjudication_id: item for item in self.list_adjudications()}
+        for item in request.items:
+            existing[item.adjudication_id] = item
+
+        stored_items = list(existing.values())
+        path = self._get_adjudications_path()
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump([item.model_dump(mode="json") for item in stored_items], f, indent=2)
+
+        exported_path: str | None = None
+        target_dest = request.export_dataset_path or request.gold_standard_path
+        if target_dest:
+            dest_file = Path(target_dest)
+            dest_file.parent.mkdir(parents=True, exist_ok=True)
+
+            gold_data: dict[str, Any] = {}
+            if request.gold_standard_path and Path(request.gold_standard_path).is_file():
+                try:
+                    with open(request.gold_standard_path, "r", encoding="utf-8") as gf:
+                        gold_data = json.load(gf)
+                except Exception:
+                    gold_data = {}
+
+            if "@graph" not in gold_data or not isinstance(gold_data["@graph"], list):
+                gold_data = {
+                    "@context": {
+                        "@vocab": "https://episteme.ai/schema#",
+                        "str": "https://episteme.ai/structuralist#",
+                        "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+                    },
+                    "@graph": [],
+                }
+
+            # Merge adjudications into gold standard graph
+            for item in request.items:
+                if item.decision == AdjudicationDecision.TRUE_POSITIVE:
+                    edge = item.predicted_edge
+                    src = edge.get("source") or edge.get("source_id") or edge.get("subject_id")
+                    tgt = edge.get("target") or edge.get("target_id") or edge.get("object_id")
+                    pred = edge.get("predicate") or edge.get("relation") or edge.get("relation_type")
+                    if src and tgt and pred:
+                        gold_data["@graph"].append(
+                            {
+                                "@id": f"{src}_{pred}_{tgt}",
+                                "@type": "CuratedRelation",
+                                "rdfs:label": pred,
+                                "source": src,
+                                "target": tgt,
+                                "relation": pred,
+                                "adjudicated_status": "true_positive",
+                            }
+                        )
+                elif item.decision == AdjudicationDecision.SCHEMA_ALIAS and item.alias_target:
+                    edge = item.predicted_edge
+                    pred = edge.get("predicate") or edge.get("relation") or edge.get("relation_type")
+                    if pred and isinstance(gold_data.get("@context"), dict):
+                        gold_data["@context"][str(pred)] = str(item.alias_target)
+
+            with open(dest_file, "w", encoding="utf-8") as out_f:
+                json.dump(gold_data, out_f, indent=2)
+            exported_path = str(dest_file)
+
+        return AdjudicationResponse(
+            adjudicated_count=len(request.items),
+            stored_items=stored_items,
+            exported_gold_path=exported_path,
+            message=f"Recorded {len(request.items)} adjudications successfully.",
         )

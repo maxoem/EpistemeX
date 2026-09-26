@@ -36,6 +36,7 @@ from epistemetrics.epistemic import (
     ModelComponentEvaluationResult,
     PosetEvaluationResult,
     ReductionEvaluationResult,
+    calculate_anchor_iou,
     evaluate_diachronic_dynamics,
     evaluate_intertheoretical_links,
     evaluate_model_components,
@@ -69,6 +70,7 @@ __all__ = [
     # Epistemic model component evaluation
     "ModelComponentEvaluationResult",
     "evaluate_model_components",
+    "calculate_anchor_iou",
     # Poset specialization hierarchies
     "PosetEvaluationResult",
     "evaluate_specialization_poset",

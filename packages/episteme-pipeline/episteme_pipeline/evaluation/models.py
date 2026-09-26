@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -73,6 +74,8 @@ class EvaluationResult(BaseModel):
     notes: dict[str, str] = Field(default_factory=dict)
     outcome: EvaluationOutcome = EvaluationOutcome.INCONCLUSIVE
     evaluated_at: datetime = Field(default_factory=utc_now)
+    reliability_diagram: list[dict[str, Any]] | None = None
+    robustness_factor: float | None = None
 
 
 class EvaluationReport(BaseModel):

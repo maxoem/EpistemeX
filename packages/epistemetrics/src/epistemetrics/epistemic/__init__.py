@@ -13,6 +13,7 @@ from epistemetrics.epistemic.dynamics import (
 )
 from epistemetrics.epistemic.model_evaluation import (
     ModelComponentEvaluationResult,
+    calculate_anchor_iou,
     evaluate_model_components,
 )
 from epistemetrics.epistemic.poset_evaluation import (
@@ -28,6 +29,7 @@ __all__ = [
     # Intrinsic model component evaluation
     "ModelComponentEvaluationResult",
     "evaluate_model_components",
+    "calculate_anchor_iou",
     # Specialization poset hierarchies
     "PosetEvaluationResult",
     "evaluate_specialization_poset",

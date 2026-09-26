@@ -203,8 +203,44 @@ class ArtifactRef(BaseModel):
     size_bytes: int = 0
 
 
+class TextAnchor(BaseModel):
+    """Multi-modal source evidence anchor for textual, tabular, or visual grounding.
+
+    Parameters
+    ----------
+    source_doc_id : str or None, optional
+        Identifier of the parent document.
+    char_start : int or None, optional
+        0-indexed character start offset in document/chunk text.
+    char_end : int or None, optional
+        0-indexed character end offset in document/chunk text.
+    verbatim_quote : str or None, optional
+        Verbatim textual quote.
+    bbox : list of float or None, optional
+        2D bounding box region [x0, y0, x1, y1] or [x0, y0, x1, y1, page].
+    page : int or None, optional
+        Document page number.
+    formula_id : str or None, optional
+        Formula identifier for mathematical equation blocks.
+    table_id : str or None, optional
+        Table identifier for tabular data grounding.
+    figure_id : str or None, optional
+        Figure identifier for diagrammatic and image grounding.
+    """
+
+    source_doc_id: str | None = None
+    char_start: int | None = None
+    char_end: int | None = None
+    verbatim_quote: str | None = None
+    bbox: list[float] | None = None
+    page: int | None = None
+    formula_id: str | None = None
+    table_id: str | None = None
+    figure_id: str | None = None
+
+
 class EvidenceSpan(BaseModel):
-    """Character span offset within a source text chunk and the resolution mode used.
+    """Multi-modal evidence region offset within a source text chunk, figure, or table.
 
     Parameters
     ----------
@@ -214,14 +250,29 @@ class EvidenceSpan(BaseModel):
         0-indexed end character offset in chunk text.
     text : str or None, optional
         Extracted text snippet.
-    mode : Literal["exact", "substring", "whole_chunk"]
+    mode : Literal["exact", "substring", "whole_chunk", "visual", "tabular", "formula"]
         Resolution mode used to locate the span (D-19).
+    bbox : list of float or None, optional
+        Spatial bounding box region [x0, y0, x1, y1] or [x0, y0, x1, y1, page].
+    page : int or None, optional
+        Document page number.
+    formula_id : str or None, optional
+        Formula identifier for mathematical equations.
+    table_id : str or None, optional
+        Table identifier for tabular grounding.
+    figure_id : str or None, optional
+        Figure identifier for diagram grounding.
     """
 
     start_char: int | None = None
     end_char: int | None = None
     text: str | None = None
     mode: str = "exact"
+    bbox: list[float] | None = None
+    page: int | None = None
+    formula_id: str | None = None
+    table_id: str | None = None
+    figure_id: str | None = None
 
 
 class EvidenceChunk(BaseModel):
@@ -246,7 +297,7 @@ class EvidenceChunk(BaseModel):
 
 
 class EvidenceTrail(BaseModel):
-    """Complete provenance trail tracing a graph node back to source chunks.
+    """Complete provenance trail tracing a graph node back to source chunks and multimodal anchors.
 
     Parameters
     ----------
@@ -256,11 +307,14 @@ class EvidenceTrail(BaseModel):
         Graph layer (1, 2, or 3).
     chunks : list of EvidenceChunk, optional
         Grounding source chunks with highlighted spans.
+    anchors : list of TextAnchor, optional
+        Explicit multimodal anchors (text, bbox, formula, table).
     """
 
     node_id: str
     layer: int
     chunks: list[EvidenceChunk] = Field(default_factory=list)
+    anchors: list[TextAnchor] = Field(default_factory=list)
 
 
 class StartRunRequest(BaseModel):

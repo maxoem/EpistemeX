@@ -234,13 +234,13 @@ def calculate_anchor_iou(
     anchor_ref: Mapping[str, Any] | None,
     anchor_pred: Mapping[str, Any] | None,
 ) -> float:
-    """Calculate character span Intersection over Union (IoU) between two text anchors.
+    """Calculate character span Intersection over Union (IoU) between text anchors.
 
     Parameters
     ----------
-    anchor_ref : Mapping[str, Any] | None
+    anchor_ref : Mapping of str to Any or None
         Reference text anchor coordinates.
-    anchor_pred : Mapping[str, Any] | None
+    anchor_pred : Mapping of str to Any or None
         Predicted text anchor coordinates.
 
     Returns
@@ -256,10 +256,12 @@ def calculate_anchor_iou(
     def get_span(a: Mapping[str, Any]) -> tuple[int, int] | None:
         s = a.get("charStart") if a.get("charStart") is not None else a.get("char_start")
         if s is None:
-            s = a.get("start_char")
+            s = a.get("start_char") or a.get("char_offset")
         e = a.get("charEnd") if a.get("charEnd") is not None else a.get("char_end")
         if e is None:
             e = a.get("end_char")
+        if e is None and s is not None and "length" in a:
+            e = s + a["length"]
         if s is not None and e is not None:
             try:
                 return int(s), int(e)
