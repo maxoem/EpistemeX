@@ -1,4 +1,6 @@
 import pytest
+pytest.importorskip("graspologic")
+
 from tests.conftest import InMemoryGraphStore
 from episteme_pipeline.contracts.domain import L2Entity, L2Triple
 from episteme_pipeline.phases.phase5_fusion.leiden_clustering import LeidenTheoryClustering

@@ -13,6 +13,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+from episteme_pipeline.evaluation.comparison import RunComparison
+
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -93,5 +95,6 @@ class EvaluationReport(BaseModel):
     schema_version: str | None = None
     pipeline_version: str | None = None
     results_by_level: dict[str, list[EvaluationResult]] = Field(default_factory=dict)
+    pairwise_comparisons: list[RunComparison] = Field(default_factory=list)
     summary: str = ""
     created_at: datetime = Field(default_factory=utc_now)

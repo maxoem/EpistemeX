@@ -49,6 +49,7 @@ from episteme_pipeline.evaluation.scorers.domain_bridge import (
 )
 from episteme_pipeline.evaluation.scorers.model_scorer import ModelScorer
 from episteme_pipeline.evaluation.scorers.oep import OptimalEditPathEvaluator
+from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
 
 logger = logging.getLogger(__name__)
 
@@ -184,15 +185,22 @@ class ExtractionStrategy:
     and relation extraction triples, as well as Optimal Edit Path (OEP) error rates.
     """
 
-    def __init__(self, match_case_sensitive: bool = False) -> None:
+    def __init__(
+        self,
+        match_case_sensitive: bool = False,
+        schema: SchemaConfig | None = None,
+    ) -> None:
         """Initialize the extraction evaluation strategy.
 
         Parameters
         ----------
         match_case_sensitive : bool, optional
             Whether entity and relation string matching should be case-sensitive (default: False).
+        schema : SchemaConfig, optional
+            Schema defining taxonomy and relation polarities.
         """
         self.match_case_sensitive = match_case_sensitive
+        self.schema = schema
 
     async def evaluate(
         self,
@@ -341,9 +349,37 @@ class ExtractionStrategy:
             pred_graph, gold_graph, matched_preds, matched_golds
         )
 
+        # 6. Compute Polarity Concordance
+        schema = ctx.get("schema") or self.schema
+        polarity_accuracy = 1.0
+        polarity_conflict_rate = 0.0
+        if schema and getattr(schema, "relation_polarities", None):
+            pred_pair_pols: dict[tuple[str, str], set[int]] = {}
+            for t in pred_triples:
+                pair = (pred_ent_id_to_name.get(t.subject_id, norm(t.subject_id)), pred_ent_id_to_name.get(t.object_id, norm(t.object_id)))
+                pol = schema.relation_polarities.get(t.predicate, schema.relation_polarities.get(t.predicate.upper(), 0))
+                pred_pair_pols.setdefault(pair, set()).add(pol)
+
+            gold_pair_pols: dict[tuple[str, str], set[int]] = {}
+            for t in gold_triples:
+                pair = (gold_ent_id_to_name.get(t.subject_id, norm(t.subject_id)), gold_ent_id_to_name.get(t.object_id, norm(t.object_id)))
+                pol = schema.relation_polarities.get(t.predicate, schema.relation_polarities.get(t.predicate.upper(), 0))
+                gold_pair_pols.setdefault(pair, set()).add(pol)
+
+            shared_pairs = set(pred_pair_pols.keys()) & set(gold_pair_pols.keys())
+            if shared_pairs:
+                correct_pols = sum(1 for pair in shared_pairs if pred_pair_pols[pair] & gold_pair_pols[pair])
+                conflicts = sum(
+                    1
+                    for pair in shared_pairs
+                    if any((pp > 0 and gp < 0) or (pp < 0 and gp > 0) for pp in pred_pair_pols[pair] for gp in gold_pair_pols[pair])
+                )
+                polarity_accuracy = round(correct_pols / len(shared_pairs), 4)
+                polarity_conflict_rate = round(conflicts / len(shared_pairs), 4)
+
         outcome = (
             EvaluationOutcome.PASS
-            if (ent_f1 >= 0.5 and rel_f1 >= 0.4)
+            if (ent_f1 >= 0.5 and rel_f1 >= 0.4 and polarity_conflict_rate <= 0.1)
             else EvaluationOutcome.WARNING
             if (ent_f1 > 0 or rel_f1 > 0)
             else EvaluationOutcome.FAIL
@@ -358,6 +394,8 @@ class ExtractionStrategy:
             EvaluationMetric(name="relation_f1", value=rel_f1),
             EvaluationMetric(name="hallucination_rate", value=hallucination_rate),
             EvaluationMetric(name="omission_rate", value=omission_rate),
+            EvaluationMetric(name="polarity_accuracy", value=polarity_accuracy),
+            EvaluationMetric(name="polarity_conflict_rate", value=polarity_conflict_rate),
         ]
 
         markdown_report = (
@@ -414,6 +452,16 @@ class ExtractionStrategy:
 
 class ArgumentationStrategy:
     """Strategy for evaluating Layer 3 Argument Component (ADU) and Relation (ARC) Mining."""
+
+    def __init__(self, schema: SchemaConfig | None = None) -> None:
+        """Initialize the argumentation evaluation strategy.
+
+        Parameters
+        ----------
+        schema : SchemaConfig, optional
+            Schema defining argument taxonomy and relation polarities.
+        """
+        self.schema = schema
 
     async def evaluate(
         self,
@@ -503,6 +551,36 @@ class ArgumentationStrategy:
         rec_rel = tp_rel / len(gold_rels) if gold_rels else 1.0
         f1_rel = (2 * prec_rel * rec_rel) / (prec_rel + rec_rel) if (prec_rel + rec_rel) > 0 else 0.0
 
+        # Compute Polarity Concordance
+        schema = ctx.get("schema") or self.schema
+        polarity_accuracy = 1.0
+        polarity_conflict_rate = 0.0
+        if schema and getattr(schema, "relation_polarities", None):
+            pred_pair_pols: dict[tuple[str, str], set[int]] = {}
+            for r in pred_relations:
+                src = pred_atom_id_to_text.get(r.source_id, r.source_id.lower())
+                tgt = pred_atom_id_to_text.get(r.target_id, r.target_id.lower())
+                p = schema.relation_polarities.get(r.relation_type, schema.relation_polarities.get(r.relation_type.upper(), 0))
+                pred_pair_pols.setdefault((src, tgt), set()).add(p)
+
+            gold_pair_pols: dict[tuple[str, str], set[int]] = {}
+            for r in gold_relations:
+                src = gold_atom_id_to_text.get(r.source_id, r.source_id.lower())
+                tgt = gold_atom_id_to_text.get(r.target_id, r.target_id.lower())
+                p = schema.relation_polarities.get(r.relation_type, schema.relation_polarities.get(r.relation_type.upper(), 0))
+                gold_pair_pols.setdefault((src, tgt), set()).add(p)
+
+            shared_pairs = set(pred_pair_pols.keys()) & set(gold_pair_pols.keys())
+            if shared_pairs:
+                correct_pols = sum(1 for pair in shared_pairs if pred_pair_pols[pair] & gold_pair_pols[pair])
+                conflicts = sum(
+                    1
+                    for pair in shared_pairs
+                    if any((pp > 0 and gp < 0) or (pp < 0 and gp > 0) for pp in pred_pair_pols[pair] for gp in gold_pair_pols[pair])
+                )
+                polarity_accuracy = round(correct_pols / len(shared_pairs), 4)
+                polarity_conflict_rate = round(conflicts / len(shared_pairs), 4)
+
         metrics = [
             EvaluationMetric(name="adu_precision", value=prec_adu),
             EvaluationMetric(name="adu_recall", value=rec_adu),
@@ -510,6 +588,8 @@ class ArgumentationStrategy:
             EvaluationMetric(name="arc_precision", value=prec_rel),
             EvaluationMetric(name="arc_recall", value=rec_rel),
             EvaluationMetric(name="arc_f1", value=f1_rel),
+            EvaluationMetric(name="polarity_accuracy", value=polarity_accuracy),
+            EvaluationMetric(name="polarity_conflict_rate", value=polarity_conflict_rate),
         ]
 
         markdown_report = (

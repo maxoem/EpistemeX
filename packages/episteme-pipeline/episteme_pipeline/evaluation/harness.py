@@ -64,6 +64,7 @@ from episteme_pipeline.evaluation.strategies import (
 from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
 from episteme_pipeline.graph.validation import GraphValidator
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
+from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
 
     def __init__(
         self,
+        schema: SchemaConfig | None = None,
         event_emitter: EventEmitter | None = None,
         model_scorer: ModelScorer | None = None,
         retrieval_scorer: ExtrinsicRetrievalEvaluator | None = None,
@@ -112,6 +114,8 @@ class EvaluationHarness(EvaluationHarnessProtocol):
 
         Parameters
         ----------
+        schema : SchemaConfig, optional
+            Schema defining node types, relation taxonomy, and polarities.
         event_emitter : EventEmitter, optional
             Event bus for publishing evaluation and validation telemetry.
         model_scorer : ModelScorer, optional
@@ -127,6 +131,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         reports_dir : str or Path, optional
             Output directory for persisted JSON and Markdown reports.
         """
+        self.schema = schema or DEFAULT_SCHEMA
         self.event_emitter = event_emitter or NoOpEventEmitter()
         self.model_scorer = model_scorer or ModelScorer()
         self.retrieval_scorer = retrieval_scorer
@@ -187,6 +192,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
             strat = self.strategy_registry.infer(predicted=predicted, gold=gold)
 
         context = {
+            "schema": self.schema,
             "min_mcc": min_mcc,
             "min_pfs": min_pfs,
             "sim_threshold": sim_threshold,
@@ -281,6 +287,20 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         gold_path = corpus_cfg.get("gold_standard_path")
         limit = corpus_cfg.get("limit", 10)
 
+        # Resolve schema configuration from manifest or harness default
+        manifest_schema = self.schema
+        if "schema" in manifest or "graph_schema" in manifest:
+            s_val = manifest.get("schema") or manifest.get("graph_schema")
+            if isinstance(s_val, SchemaConfig):
+                manifest_schema = s_val
+            elif isinstance(s_val, dict):
+                manifest_schema = SchemaConfig(**s_val)
+            elif isinstance(s_val, str):
+                s_path = Path(s_val) if Path(s_val).is_file() else path.parent / s_val
+                if s_path.is_file():
+                    with open(s_path, "r", encoding="utf-8") as sf:
+                        manifest_schema = SchemaConfig(**yaml.safe_load(sf))
+
         # Resolve evaluation strategy
         strat: EvaluationStrategy
         if isinstance(strategy, str):
@@ -337,7 +357,12 @@ class EvaluationHarness(EvaluationHarnessProtocol):
                 predicted=predicted_target,
                 gold=gold_path,
                 run_id=run_id,
-                context={"corpus_cfg": corpus_cfg, "limit": limit, "dataset_ref": str(gold_path)},
+                context={
+                    "schema": manifest_schema,
+                    "corpus_cfg": corpus_cfg,
+                    "limit": limit,
+                    "dataset_ref": str(gold_path),
+                },
             )
             report_results.extend(stage_results)
 
@@ -476,11 +501,12 @@ class EvaluationHarness(EvaluationHarnessProtocol):
                     baseline_metrics[m.name] = m.value
 
             elif baseline_name == "naive_kg":
-                naive_runner = BaselineNaiveKG()
+                naive_runner = BaselineNaiveKG(schema=manifest_schema)
                 nkg_results, _ = await naive_runner.run_and_evaluate(
                     corpus=gold_path or texts_dir or "",
                     gold=gold_path,
                     run_id=baseline_run_id,
+                    context={"schema": manifest_schema},
                 )
                 baseline_results.extend(nkg_results)
                 for res in nkg_results:

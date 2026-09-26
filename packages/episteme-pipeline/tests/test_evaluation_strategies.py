@@ -173,6 +173,37 @@ class TestExtractionStrategy:
         assert metrics["hallucination_rate"] == 0.0
         assert metrics["omission_rate"] == 0.0
 
+    @pytest.mark.asyncio
+    async def test_extraction_polarity_concordance_and_conflict(self):
+        """Verify polarity accuracy and conflict rate detection when opposing relations are predicted."""
+        from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
+
+        strategy = ExtractionStrategy(schema=DEFAULT_SCHEMA)
+
+        # Predicted says: Hypothesis SUPPORTS Evidence (+1)
+        predicted = [
+            L2Entity(id="e1", name="Hypothesis", label="Concept"),
+            L2Entity(id="e2", name="Evidence", label="Concept"),
+            L2Triple(subject_id="e1", predicate="SUPPORTS", object_id="e2", confidence=1.0, scope="local"),
+        ]
+
+        # Gold standard says: Hypothesis REFUTES Evidence (-1)
+        gold = {
+            "l2_entities": [
+                L2Entity(id="g1", name="Hypothesis", label="Concept"),
+                L2Entity(id="g2", name="Evidence", label="Concept"),
+            ],
+            "l2_triples": [
+                L2Triple(subject_id="g1", predicate="REFUTES", object_id="g2", confidence=1.0, scope="local"),
+            ],
+        }
+
+        results = await strategy.evaluate(predicted=predicted, gold=gold, run_id="run_pol_conflict")
+        metrics = {m.name: m.value for m in results[0].metrics}
+
+        assert metrics["polarity_accuracy"] == 0.0
+        assert metrics["polarity_conflict_rate"] == 1.0
+
 
 class TestArgumentationStrategy:
     """Test suite for Layer 3 ArgumentationStrategy."""
@@ -205,6 +236,35 @@ class TestArgumentationStrategy:
         assert metrics["adu_f1"] == 1.0
         assert metrics["arc_f1"] == 1.0
         assert results[0].outcome == EvaluationOutcome.PASS
+
+    @pytest.mark.asyncio
+    async def test_argumentation_polarity_concordance(self):
+        """Verify ArgumentationStrategy computes polarity accuracy between argument relations."""
+        from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
+
+        strategy = ArgumentationStrategy(schema=DEFAULT_SCHEMA)
+
+        predicted = [
+            TheoryAtom(id="a1", text="Premise A", component_type="ObservationUnit", source_chunk_id="c1"),
+            TheoryAtom(id="a2", text="Conclusion B", component_type="TheoreticalHypothesis", source_chunk_id="c1"),
+            TheoryRelation(source_id="a1", target_id="a2", relation_type="SUPPORTS_ARG", confidence=1.0, scope="local"),
+        ]
+        gold = {
+            "l3_atoms": [
+                TheoryAtom(id="a1", text="Premise A", component_type="ObservationUnit", source_chunk_id="c1"),
+                TheoryAtom(id="a2", text="Conclusion B", component_type="TheoreticalHypothesis", source_chunk_id="c1"),
+            ],
+            "l3_relations": [
+                # Gold has COHERES_WITH (+1 polarity), predicted has SUPPORTS_ARG (+1 polarity)
+                TheoryRelation(source_id="a1", target_id="a2", relation_type="COHERES_WITH", confidence=1.0, scope="local"),
+            ],
+        }
+
+        results = await strategy.evaluate(predicted=predicted, gold=gold, run_id="run_arg_pol")
+        metrics = {m.name: m.value for m in results[0].metrics}
+
+        assert metrics["polarity_accuracy"] == 1.0
+        assert metrics["polarity_conflict_rate"] == 0.0
 
 
 class TestInMemoryStoreSearchIndexing:

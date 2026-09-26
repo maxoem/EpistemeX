@@ -22,10 +22,17 @@ from episteme_pipeline.evaluation.benchmarks import (
     load_structuralist_theory_graph,
     structuralist_digraph_to_theory_graph,
 )
+from episteme_pipeline.evaluation.baselines import (
+    BaselineNaiveKG,
+    BaselineTextRAG,
+    BaselineZeroShotLLM,
+)
 from episteme_pipeline.evaluation.comparison import (
     ComparisonAxis,
     EvaluationComparison,
     RunComparison,
+    compute_run_comparisons,
+    format_comparison_markdown,
 )
 from episteme_pipeline.evaluation.datasets import DatasetReference, EvaluationDataset
 from episteme_pipeline.evaluation.extrinsic import (
@@ -119,10 +126,16 @@ __all__ = [
     "ArgumentationStrategy",
     "StrategyRegistry",
     "default_registry",
+    # baselines
+    "BaselineTextRAG",
+    "BaselineNaiveKG",
+    "BaselineZeroShotLLM",
     # comparison
     "ComparisonAxis",
     "EvaluationComparison",
     "RunComparison",
+    "compute_run_comparisons",
+    "format_comparison_markdown",
     # datasets
     "DatasetReference",
     "EvaluationDataset",
