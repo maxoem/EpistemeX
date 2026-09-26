@@ -150,6 +150,32 @@ class StructuralistStrategy:
         )
         return [stage_res]
 
+    def build_pipeline(
+        self,
+        event_emitter: Any | None = None,
+        in_memory: bool = True,
+        **kwargs: Any,
+    ) -> Any:
+        """Construct the matching evaluation pipeline for structuralist Bourbaki theory nets.
+
+        Parameters
+        ----------
+        event_emitter : Any, optional
+            Telemetry event bus.
+        in_memory : bool, optional
+            Whether to run purely in memory without Neo4j (default: True).
+        **kwargs : Any
+            Additional pipeline construction arguments.
+
+        Returns
+        -------
+        Pipeline
+            Instantiated evaluation pipeline.
+        """
+        from episteme_pipeline.evaluation.pipelines import build_l4_theorynet_eval_pipeline
+
+        return build_l4_theorynet_eval_pipeline(event_emitter=event_emitter, in_memory=in_memory, **kwargs)
+
 
 class ExtractionStrategy:
     """Strategy for evaluating Layer 2 Named Entity Recognition and Relation Extraction.
@@ -359,6 +385,32 @@ class ExtractionStrategy:
         )
         return [result]
 
+    def build_pipeline(
+        self,
+        event_emitter: Any | None = None,
+        in_memory: bool = True,
+        **kwargs: Any,
+    ) -> Any:
+        """Construct the matching evaluation pipeline for Layer 2 extraction.
+
+        Parameters
+        ----------
+        event_emitter : Any, optional
+            Telemetry event bus.
+        in_memory : bool, optional
+            Whether to run purely in memory without Neo4j (default: True).
+        **kwargs : Any
+            Additional pipeline construction arguments.
+
+        Returns
+        -------
+        Pipeline
+            Instantiated evaluation pipeline.
+        """
+        from episteme_pipeline.evaluation.pipelines import build_l2_eval_pipeline
+
+        return build_l2_eval_pipeline(event_emitter=event_emitter, in_memory=in_memory, **kwargs)
+
 
 class ArgumentationStrategy:
     """Strategy for evaluating Layer 3 Argument Component (ADU) and Relation (ARC) Mining."""
@@ -483,6 +535,32 @@ class ArgumentationStrategy:
         )
         return [result]
 
+    def build_pipeline(
+        self,
+        event_emitter: Any | None = None,
+        in_memory: bool = True,
+        **kwargs: Any,
+    ) -> Any:
+        """Construct the matching evaluation pipeline for Layer 3 argumentation.
+
+        Parameters
+        ----------
+        event_emitter : Any, optional
+            Telemetry event bus.
+        in_memory : bool, optional
+            Whether to run purely in memory without Neo4j (default: True).
+        **kwargs : Any
+            Additional pipeline construction arguments.
+
+        Returns
+        -------
+        Pipeline
+            Instantiated evaluation pipeline.
+        """
+        from episteme_pipeline.evaluation.pipelines import build_l3_eval_pipeline
+
+        return build_l3_eval_pipeline(event_emitter=event_emitter, in_memory=in_memory, **kwargs)
+
 
 class StrategyRegistry:
     """Registry maintaining available evaluation strategies and handling auto-inference."""
@@ -490,10 +568,11 @@ class StrategyRegistry:
     def __init__(self) -> None:
         """Initialize the strategy registry with standard built-in strategies."""
         self._strategies: dict[str, type[EvaluationStrategy] | Callable[[], EvaluationStrategy] | EvaluationStrategy] = {}
+        self._pipeline_builders: dict[str, Callable[..., Any]] = {}
         self._register_defaults()
 
     def _register_defaults(self) -> None:
-        """Register default strategies."""
+        """Register default strategies and pipeline factories."""
         self.register("structuralist", StructuralistStrategy)
         self.register("stnb", StructuralistStrategy)
         self.register("theorynet", StructuralistStrategy)
@@ -508,6 +587,86 @@ class StrategyRegistry:
         self.register("argumentation", ArgumentationStrategy)
         self.register("arg_microtexts", ArgumentationStrategy)
         self.register("l3", ArgumentationStrategy)
+
+        # Register default pipeline builders
+        from episteme_pipeline.evaluation.pipelines import (
+            build_l2_eval_pipeline,
+            build_l3_eval_pipeline,
+            build_l4_theorynet_eval_pipeline,
+        )
+
+        self.register_pipeline_builder("structuralist", build_l4_theorynet_eval_pipeline)
+        self.register_pipeline_builder("stnb", build_l4_theorynet_eval_pipeline)
+        self.register_pipeline_builder("theorynet", build_l4_theorynet_eval_pipeline)
+        self.register_pipeline_builder("l4", build_l4_theorynet_eval_pipeline)
+
+        self.register_pipeline_builder("extraction", build_l2_eval_pipeline)
+        self.register_pipeline_builder("scierc", build_l2_eval_pipeline)
+        self.register_pipeline_builder("ner", build_l2_eval_pipeline)
+        self.register_pipeline_builder("re", build_l2_eval_pipeline)
+        self.register_pipeline_builder("l2", build_l2_eval_pipeline)
+
+        self.register_pipeline_builder("argumentation", build_l3_eval_pipeline)
+        self.register_pipeline_builder("arg_microtexts", build_l3_eval_pipeline)
+        self.register_pipeline_builder("l3", build_l3_eval_pipeline)
+
+    def register_pipeline_builder(
+        self,
+        name: str,
+        builder: Callable[..., Any],
+    ) -> None:
+        """Register a pipeline factory callable by name or dataset identifier.
+
+        Parameters
+        ----------
+        name : str
+            Unique key identifying the pipeline builder.
+        builder : Callable
+            Pipeline factory callable (e.g. `(event_emitter, in_memory) -> Pipeline`).
+        """
+        self._pipeline_builders[name.lower().strip()] = builder
+
+    def get_pipeline_builder(self, name: str) -> Callable[..., Any]:
+        """Retrieve a pipeline builder callable by name, strategy alias, or dynamic path.
+
+        Parameters
+        ----------
+        name : str
+            Registered name or fully-qualified function path ('module.path:func_name').
+
+        Returns
+        -------
+        Callable
+            Pipeline builder factory.
+
+        Raises
+        ------
+        ValueError
+            If the requested builder cannot be resolved.
+        """
+        key = name.lower().strip()
+        if key in self._pipeline_builders:
+            return self._pipeline_builders[key]
+
+        # Check if an evaluation strategy with this key has build_pipeline
+        if key in self._strategies:
+            strat = self.get(key)
+            if hasattr(strat, "build_pipeline"):
+                return getattr(strat, "build_pipeline")
+
+        # Support dynamic import: 'my_module:build_pipeline' or 'my_module.build_pipeline'
+        if ":" in name or "." in name:
+            try:
+                mod_path, fn_name = name.split(":", 1) if ":" in name else name.rsplit(".", 1)
+                mod = importlib.import_module(mod_path)
+                fn = getattr(mod, fn_name)
+                return fn
+            except Exception as e:
+                raise ValueError(f"Failed to dynamically import pipeline builder '{name}': {e}") from e
+
+        raise ValueError(
+            f"Unknown pipeline builder: '{name}'. Available registered builders: {list(self._pipeline_builders.keys())}"
+        )
 
     def register(
         self,

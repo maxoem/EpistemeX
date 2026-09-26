@@ -361,3 +361,47 @@ class TestHarnessAgnosticExecution:
         assert metrics["entity_f1"] == 1.0
         assert "relation_f1" in metrics
         assert metrics["relation_f1"] == 1.0
+
+    def test_pipeline_builder_resolution_and_custom_registration(self):
+        """Verify StrategyRegistry resolves default and custom pipeline builders."""
+        registry = StrategyRegistry()
+
+        # Built-in pipeline builders
+        l2_builder = registry.get_pipeline_builder("scierc")
+        assert callable(l2_builder)
+        l3_builder = registry.get_pipeline_builder("argumentation")
+        assert callable(l3_builder)
+        l4_builder = registry.get_pipeline_builder("structuralist")
+        assert callable(l4_builder)
+
+        # Custom pipeline builder registration
+        mock_pipeline = object()
+        registry.register_pipeline_builder("custom_domain", lambda **kwargs: mock_pipeline)
+        resolved = registry.get_pipeline_builder("custom_domain")
+        assert resolved() is mock_pipeline
+
+    def test_harness_pluggable_pipeline_builder_resolution(self):
+        """Verify EvaluationHarness resolves custom callable or strategy pipeline builders without hardcoding."""
+        harness = EvaluationHarness()
+
+        # 1. Custom callable builder reference
+        mock_pipe = object()
+        built = harness._build_pipeline_for_dataset(
+            dataset_type="arbitrary_dataset",
+            builder_ref=lambda **kwargs: mock_pipe,
+        )
+        assert built is mock_pipe
+
+        # 2. Strategy implementing build_pipeline
+        class CustomStrategyWithPipeline:
+            def build_pipeline(self, **kwargs):
+                return mock_pipe
+
+            async def evaluate(self, predicted, gold, run_id, context=None):
+                return []
+
+        built_strat = harness._build_pipeline_for_dataset(
+            dataset_type="unknown_key",
+            strategy=CustomStrategyWithPipeline(),
+        )
+        assert built_strat is mock_pipe

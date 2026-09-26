@@ -7,9 +7,10 @@ import asyncio
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Callable, Protocol, runtime_checkable
 
 import networkx as nx
 import yaml
@@ -20,7 +21,19 @@ from episteme_pipeline.contracts.domain import TheoryNet
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.events import EventEmitter, NoOpEventEmitter
 from episteme_pipeline.events.models import EvaluationCompleted, ValidationViolationDetected
+from episteme_pipeline.evaluation.baselines import (
+    BaselineNaiveKG,
+    BaselineTextRAG,
+    BaselineZeroShotLLM,
+)
 from episteme_pipeline.evaluation.benchmarks.structuralist import load_structuralist_benchmark
+from episteme_pipeline.evaluation.comparison import (
+    ComparisonAxis,
+    EvaluationComparison,
+    RunComparison,
+    compute_run_comparisons,
+    format_comparison_markdown,
+)
 from episteme_pipeline.evaluation.models import (
     DatasetType,
     EvaluationLevel,
@@ -76,6 +89,7 @@ class EvaluationHarnessProtocol(Protocol):
         manifest_path: str | Path,
         build_graph: bool = False,
         strategy: str | EvaluationStrategy | None = None,
+        baseline: str | None = None,
     ) -> EvaluationReport:
         """Execute an evaluation run configured by a manifest YAML file."""
         ...
@@ -231,6 +245,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         manifest_path: str | Path,
         build_graph: bool = False,
         strategy: str | EvaluationStrategy | None = None,
+        baseline: str | None = None,
     ) -> EvaluationReport:
         """Execute an evaluation run configured by a manifest YAML file.
 
@@ -242,12 +257,15 @@ class EvaluationHarness(EvaluationHarnessProtocol):
             Whether to invoke pipeline execution prior to scoring (default: False).
         strategy : str or EvaluationStrategy, optional
             Explicit strategy name or instance override.
+        baseline : str, optional
+            Comparative baseline to evaluate ('text_rag', 'naive_kg', or 'zero_shot').
 
         Returns
         -------
         EvaluationReport
             Synthesized evaluation report.
         """
+        pipeline_start_time = time.perf_counter()
         path = Path(manifest_path)
         if not path.is_file():
             raise FileNotFoundError(f"Manifest not found: {path}")
@@ -259,6 +277,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         corpus_cfg = manifest.get("corpus", {})
         dataset_type = corpus_cfg.get("dataset_type", "structuralist")
         strategy_name = manifest.get("strategy") or corpus_cfg.get("strategy") or manifest.get("evaluator")
+        builder_ref = manifest.get("pipeline_builder") or corpus_cfg.get("pipeline_builder")
         gold_path = corpus_cfg.get("gold_standard_path")
         limit = corpus_cfg.get("limit", 10)
 
@@ -280,7 +299,11 @@ class EvaluationHarness(EvaluationHarnessProtocol):
 
         if build_graph:
             logger.info("Executing pipeline for evaluation using manifest: %s", manifest_path)
-            pipeline = self._build_pipeline_for_dataset(dataset_type)
+            pipeline = self._build_pipeline_for_dataset(
+                dataset_type=dataset_type,
+                strategy=strat,
+                builder_ref=builder_ref,
+            )
             input_sources = corpus_cfg.get("input_sources", [])
             texts_dir = corpus_cfg.get("texts_dir")
 
@@ -404,13 +427,131 @@ class EvaluationHarness(EvaluationHarnessProtocol):
             for m in res.metrics:
                 metrics_all[m.name] = m.value
 
+        pipeline_latency = time.perf_counter() - pipeline_start_time
+        if "latency" not in metrics_all:
+            metrics_all["latency"] = round(pipeline_latency, 4)
+        if "token_cost" not in metrics_all:
+            metrics_all["token_cost"] = 0.0
+
+        # Baseline execution and comparative scoring
+        baseline_name = baseline or manifest.get("baseline")
+        if isinstance(baseline_name, str):
+            baseline_name = baseline_name.strip().lower()
+
+        baseline_results: list[EvaluationResult] = []
+        baseline_metrics: dict[str, float] = {}
+        pairwise_comparisons: list[RunComparison] = []
+        comparison_obj: EvaluationComparison | None = None
+        highlights_md = ""
+        baseline_run_id = f"baseline_{baseline_name}_{run_id}" if baseline_name else ""
+
+        if baseline_name in ("text_rag", "naive_kg", "zero_shot"):
+            logger.info("Executing comparative baseline '%s' (run_id: %s)", baseline_name, baseline_run_id)
+
+            texts_dir = corpus_cfg.get("texts_dir")
+            queries_path = corpus_cfg.get("queries_path")
+            if not queries_path and gold_path:
+                cand_path = Path(gold_path).parent / f"{Path(gold_path).stem}_queries.yaml"
+                if cand_path.is_file():
+                    queries_path = str(cand_path)
+                else:
+                    cand_path = Path(gold_path).parent / "stnb_cpm_queries.yaml"
+                    if cand_path.is_file():
+                        queries_path = str(cand_path)
+                    else:
+                        cand_path = Path(__file__).parent / "data" / "stnb_cpm_queries.yaml"
+                        if cand_path.is_file() and dataset_type == "structuralist":
+                            queries_path = str(cand_path)
+
+            if baseline_name == "text_rag":
+                rag_runner = BaselineTextRAG(graph_store=InMemoryGraphStore())
+                rag_res, _ = await rag_runner.run_and_evaluate(
+                    corpus=gold_path or texts_dir or "",
+                    queries=queries_path or "",
+                    run_id=baseline_run_id,
+                    top_k=10,
+                )
+                baseline_results.append(rag_res)
+                for m in rag_res.metrics:
+                    baseline_metrics[m.name] = m.value
+
+            elif baseline_name == "naive_kg":
+                naive_runner = BaselineNaiveKG()
+                nkg_results, _ = await naive_runner.run_and_evaluate(
+                    corpus=gold_path or texts_dir or "",
+                    gold=gold_path,
+                    run_id=baseline_run_id,
+                )
+                baseline_results.extend(nkg_results)
+                for res in nkg_results:
+                    for m in res.metrics:
+                        baseline_metrics[m.name] = m.value
+
+            elif baseline_name == "zero_shot":
+                zs_runner = BaselineZeroShotLLM()
+                zs_results, _ = await zs_runner.run_and_evaluate(
+                    corpus=gold_path or texts_dir or "",
+                    gold=gold_path,
+                    run_id=baseline_run_id,
+                )
+                baseline_results.extend(zs_results)
+                for res in zs_results:
+                    for m in res.metrics:
+                        baseline_metrics[m.name] = m.value
+
+            # Canonical F1 resolution across representations
+            for k in ("poset_f1", "relation_f1", "entity_f1"):
+                if k in metrics_all and "f1" not in metrics_all:
+                    metrics_all["f1"] = metrics_all[k]
+                if k in baseline_metrics and "f1" not in baseline_metrics:
+                    baseline_metrics["f1"] = baseline_metrics[k]
+
+            # Compute deltas using RunComparison
+            pairwise_comparisons = compute_run_comparisons(
+                run_id_a=baseline_run_id,
+                run_id_b=run_id,
+                metrics_a=baseline_metrics,
+                metrics_b=metrics_all,
+                axis=ComparisonAxis.METHOD,
+            )
+
+            delta_f1 = metrics_all.get("f1", 0.0) - baseline_metrics.get("f1", 0.0)
+            delta_mrr = metrics_all.get("mrr", 0.0) - baseline_metrics.get("mrr", 0.0)
+            cost_p = metrics_all.get("token_cost", 0.0)
+            cost_b = baseline_metrics.get("token_cost", 0.0)
+            delta_cost = cost_p - cost_b
+            lat_p = metrics_all.get("latency", 0.0)
+            lat_b = baseline_metrics.get("latency", 0.0)
+            delta_lat = lat_p - lat_b
+
+            highlights_md = (
+                f"\n\n## Comparative Baseline Evaluation: {baseline_name.upper()} vs Pipeline\n\n"
+                f"- **ΔF1:** {delta_f1:+.4f} (Pipeline: {metrics_all.get('f1', 0.0):.4f} vs Baseline: {baseline_metrics.get('f1', 0.0):.4f})\n"
+                f"- **ΔMRR:** {delta_mrr:+.4f} (Pipeline: {metrics_all.get('mrr', 0.0):.4f} vs Baseline: {baseline_metrics.get('mrr', 0.0):.4f})\n"
+                f"- **Token Cost:** Pipeline ${cost_p:.4f} vs Baseline ${cost_b:.4f} (Δ ${delta_cost:+.4f})\n"
+                f"- **Latency:** Pipeline {lat_p:.4f}s vs Baseline {lat_b:.4f}s (Δ {delta_lat:+.4f}s)\n\n"
+                + format_comparison_markdown(pairwise_comparisons, title=f"Side-by-Side Metrics ({baseline_name})", name_a="Baseline", name_b="Pipeline")
+            )
+
+            comparison_obj = EvaluationComparison(
+                comparison_id=f"comp_{run_id}_vs_{baseline_run_id}",
+                run_ids=[baseline_run_id, run_id],
+                axis=ComparisonAxis.METHOD,
+                dataset_ref=str(gold_path) if gold_path else "manifest_corpus",
+                dataset_type=DatasetType.GOLD,
+                pairwise_comparisons=pairwise_comparisons,
+                summary=highlights_md,
+            )
+            results_by_level["baseline"] = baseline_results
+
         report = EvaluationReport(
             evaluation_id=f"eval_{run_id}",
-            run_ids=[run_id],
+            run_ids=[run_id] + ([baseline_run_id] if baseline_name in ("text_rag", "naive_kg", "zero_shot") else []),
             dataset_ref=str(gold_path) if gold_path else "manifest_corpus",
             dataset_type=DatasetType.GOLD,
             results_by_level=results_by_level,
-            summary="\n\n".join(r.notes.get("markdown_report", "") for r in all_results),
+            pairwise_comparisons=pairwise_comparisons,
+            summary="\n\n".join(r.notes.get("markdown_report", "") for r in all_results) + highlights_md,
         )
 
         self._persist_reports(report, manifest_path=str(manifest_path))
@@ -426,13 +567,48 @@ class EvaluationHarness(EvaluationHarnessProtocol):
 
         return report
 
-    def _build_pipeline_for_dataset(self, dataset_type: str):
-        if dataset_type in ("scierc", "l2", "extraction"):
-            return build_l2_eval_pipeline(self.event_emitter, in_memory=True)
-        elif dataset_type in ("arg_microtexts", "l3", "argumentation"):
-            return build_l3_eval_pipeline(self.event_emitter, in_memory=True)
-        else:
-            return build_l4_theorynet_eval_pipeline(self.event_emitter, in_memory=True)
+    def _build_pipeline_for_dataset(
+        self,
+        dataset_type: str,
+        strategy: EvaluationStrategy | None = None,
+        builder_ref: str | Callable[..., Any] | None = None,
+    ) -> Any:
+        """Resolve and instantiate an execution pipeline for evaluation benchmarks.
+
+        Parameters
+        ----------
+        dataset_type : str
+            Dataset identifier or category name.
+        strategy : EvaluationStrategy, optional
+            Active evaluation strategy that may supply its own pipeline factory.
+        builder_ref : str or Callable, optional
+            Explicit pipeline factory callable or dynamic module reference.
+
+        Returns
+        -------
+        Pipeline
+            Configured and instantiated pipeline instance.
+        """
+        # 1. Explicit builder reference (Callable or dynamic module path string)
+        if callable(builder_ref):
+            return builder_ref(event_emitter=self.event_emitter, in_memory=True)
+        if isinstance(builder_ref, str):
+            fn = self.strategy_registry.get_pipeline_builder(builder_ref)
+            return fn(event_emitter=self.event_emitter, in_memory=True)
+
+        # 2. Strategy's own build_pipeline method if implemented
+        if strategy is not None and hasattr(strategy, "build_pipeline"):
+            return getattr(strategy, "build_pipeline")(event_emitter=self.event_emitter, in_memory=True)
+
+        # 3. Lookup builder by dataset_type in registry
+        try:
+            fn = self.strategy_registry.get_pipeline_builder(dataset_type)
+            return fn(event_emitter=self.event_emitter, in_memory=True)
+        except ValueError:
+            pass
+
+        # 4. Default fallback: Level 4 TheoryNet pipeline
+        return build_l4_theorynet_eval_pipeline(event_emitter=self.event_emitter, in_memory=True)
 
     async def _run_validation(self) -> list[dict[str, Any]]:
         validator = GraphValidator(self.graph_store)
@@ -487,10 +663,23 @@ def main() -> None:
         action="store_true",
         help="Whether to execute pipeline prior to scoring.",
     )
+    parser.add_argument(
+        "--baseline",
+        type=str,
+        choices=["text_rag", "naive_kg", "zero_shot"],
+        default=None,
+        help="Comparative baseline to evaluate against pipeline output.",
+    )
     args = parser.parse_args()
 
     harness = EvaluationHarness()
-    report = asyncio.run(harness.evaluate_manifest(args.manifest, build_graph=args.build_graph))
+    report = asyncio.run(
+        harness.evaluate_manifest(
+            args.manifest,
+            build_graph=args.build_graph,
+            baseline=args.baseline,
+        )
+    )
     print(f"Evaluation completed: {report.evaluation_id}")
     print(report.summary)
 
