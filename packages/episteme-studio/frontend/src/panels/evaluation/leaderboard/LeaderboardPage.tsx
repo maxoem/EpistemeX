@@ -277,6 +277,16 @@ export const LeaderboardPage: React.FC = () => {
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
           </button>
 
+          {/* Launch Longitudinal Trajectory Action Trigger */}
+          <button
+            onClick={() => setActiveMode("longitudinal")}
+            className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-app-surface hover:bg-app-subtle text-app-text border border-app-border transition-colors shadow-2xs"
+            title="Launch diachronic multi-run Lakatosian degeneration analysis"
+          >
+            <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
+            <span>Launch Longitudinal Trajectory</span>
+          </button>
+
           {/* Fast Evaluate Run Modal Trigger */}
           <button
             onClick={() => setIsEvaluateModalOpen(true)}

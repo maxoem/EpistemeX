@@ -15,6 +15,7 @@ import {
   Search,
   Sliders,
   Sparkles,
+  TrendingUp,
   TriangleAlert,
   XCircle,
 } from "lucide-react";
@@ -25,6 +26,7 @@ import { PromoteToGoldModal } from "./catalog/PromoteToGoldModal";
 import { RegisterBenchmarkModal } from "./catalog/RegisterBenchmarkModal";
 import { LeaderboardPage } from "./leaderboard/LeaderboardPage";
 import { RunEvaluationInspector } from "./inspector/RunEvaluationInspector";
+import { LongitudinalTrajectoryStudio } from "./longitudinal/LongitudinalTrajectoryStudio";
 import type { EvaluationOutcome } from "../../api/types";
 
 export const EvaluationWorkspace: React.FC = () => {
@@ -160,6 +162,17 @@ export const EvaluationWorkspace: React.FC = () => {
             <Activity className="w-3.5 h-3.5" />
             <span>Run Inspector</span>
           </button>
+          <button
+            onClick={() => setActiveMode("longitudinal")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+              activeMode === "longitudinal"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "text-app-muted hover:text-app-text hover:bg-app-subtle"
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>Longitudinal Studio</span>
+          </button>
         </div>
 
         {/* Center / Breadcrumb info */}
@@ -211,7 +224,7 @@ export const EvaluationWorkspace: React.FC = () => {
       {/* Main Split: Left Rail Controller + Center Fluid Workspace */}
       <div className="flex flex-1 w-full h-full overflow-hidden">
         {/* Left Primary Controller Rail (280px - 320px Resizable) */}
-        {activeMode !== "leaderboard" && (
+        {activeMode !== "leaderboard" && activeMode !== "longitudinal" && (
           <ResizablePanel
             side="left"
             storageKey="episteme-eval-left-sidebar-width"
@@ -370,8 +383,11 @@ export const EvaluationWorkspace: React.FC = () => {
           ) : activeMode === "leaderboard" ? (
             /* Page 2: Benchmark Leaderboard Matrix & Pareto Studio (Phase 1) */
             <LeaderboardPage />
+          ) : activeMode === "longitudinal" ? (
+            /* Sub-View 3.4 / Diachronic Studio: Lakatosian Longitudinal Trajectory (Phase 3) */
+            <LongitudinalTrajectoryStudio />
           ) : (
-            /* Page 3: Deep Single-Run Evaluation Inspector (Phase 2) */
+            /* Page 3: Deep Single-Run Evaluation Inspector (Phase 2 & 3) */
             <RunEvaluationInspector />
           )}
         </div>

@@ -175,17 +175,17 @@ Provide theoretical coherence metrics (Sub-View 3.2) verifying Bourbaki structur
 * Diachronic Trajectory: [`DynamicsTrajectoryResponse`](file:///Users/maxoehm/EpistemeX/packages/episteme-studio/frontend/src/api/types.ts#L655)
 
 #### Tasks
-* [ ] **3.1 Cascading Bourbaki Model Tree Grid (`src/panels/evaluation/inspector/epistemics/CascadingBourbakiGrid.tsx`):**
+* [x] **3.1 Cascading Bourbaki Model Tree Grid (`src/panels/evaluation/inspector/epistemics/CascadingBourbakiGrid.tsx`):**
   * Hierarchical tree grid ($M_p \to M \to I$).
   * Implements **Conditional Cascade Masking**: If parent axiom $M_p$ fails, downstream actual models ($M$) and empirical applications ($I$) are labeled `[CASCADE_MASKED_ORPHAN]` to prevent artificial double-penalization.
-* [ ] **3.2 Poset Specialization DAG & Cyclical Path Isolation (`src/panels/evaluation/inspector/epistemics/PosetDagViewer.tsx`):**
+* [x] **3.2 Poset Specialization DAG & Cyclical Path Isolation (`src/panels/evaluation/inspector/epistemics/PosetDagViewer.tsx`):**
   * Telemetry readout: Strict DAG verification, root conformity $B(TN) = \{T_0\}$, Transitive Reduction $F_1$, and Reachability $F_1$.
   * **Cyclical Edge Violations Card:**
     * When acyclicity fails, displays the exact cycle path ($A \to B \to C \to A$).
     * Provides an instant `[Isolate Cycle on Canvas]` button that navigates to Sub-View 3.1, dims unrelated nodes, and centers on the circular back-edge with a pulsating red hazard stroke.
-* [ ] **3.3 Polarity Conflict Matrix (`src/panels/evaluation/inspector/epistemics/PolarityConflictMatrix.tsx`):**
+* [x] **3.3 Polarity Conflict Matrix (`src/panels/evaluation/inspector/epistemics/PolarityConflictMatrix.tsx`):**
   * Breakdown of severe inferential errors (confusing `SUPPORTS` with `ATTACKS`), linking directly to source quotes.
-* [ ] **3.4 Longitudinal Trajectory Studio (`src/panels/evaluation/longitudinal/LongitudinalTrajectoryStudio.tsx`):**
+* [x] **3.4 Longitudinal Trajectory Studio (`src/panels/evaluation/longitudinal/LongitudinalTrajectoryStudio.tsx`):**
   * Multi-run diachronic trajectory view calling `POST /api/evaluation/dynamics/trajectory`.
   * Plots the Lakatosian Degeneration Index ($DI$) curve across historical treatise editions ($T_0 \to T_1 \to T_2$).
 

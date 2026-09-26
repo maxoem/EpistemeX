@@ -689,7 +689,7 @@ export type EvaluationSubTab =
   | "grounding"
   | "retrieval";
 
-export type EvaluationMode = "catalog" | "leaderboard" | "inspector";
+export type EvaluationMode = "catalog" | "leaderboard" | "inspector" | "longitudinal";
 
 export interface DynamicsStepDetail {
   step: string;

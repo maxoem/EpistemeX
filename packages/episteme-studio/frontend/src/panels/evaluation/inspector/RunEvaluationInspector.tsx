@@ -11,6 +11,7 @@ import {
 import { useEvaluationStore } from "../../../store/evaluationStore";
 import { EvaluationHeader } from "../components/EvaluationHeader";
 import { TopologicalCanvasView } from "./canvas/TopologicalCanvasView";
+import { EpistemicTheoryNetView } from "./epistemics/EpistemicTheoryNetView";
 
 export interface RunEvaluationInspectorProps {
   onOpenConfigEditor?: () => void;
@@ -46,11 +47,13 @@ export const RunEvaluationInspector: React.FC<RunEvaluationInspectorProps> = ({
         {activeSubTab === "canvas" ? (
           /* Sub-View 3.1: Topological Alignment Canvas (Phase 2) */
           <TopologicalCanvasView />
+        ) : activeSubTab === "epistemics" ? (
+          /* Sub-View 3.2: Formal Epistemic Invariants & Dialectical Verification (Phase 3) */
+          <EpistemicTheoryNetView />
         ) : (
           /* Placeholder / Preparatory views for Subsequent Phases */
           <div className="flex flex-col items-center justify-center h-full p-8 text-center text-app-muted select-none">
             <div className="p-3 rounded-full bg-blue-500/10 text-blue-500 mb-3">
-              {activeSubTab === "epistemics" && <Layers className="w-6 h-6" />}
               {activeSubTab === "adjudication" && <Sliders className="w-6 h-6" />}
               {activeSubTab === "calibration" && <Sparkles className="w-6 h-6" />}
               {activeSubTab === "grounding" && <BookOpen className="w-6 h-6" />}
@@ -58,7 +61,6 @@ export const RunEvaluationInspector: React.FC<RunEvaluationInspectorProps> = ({
             </div>
 
             <h3 className="text-sm font-semibold text-app-heading mb-1 capitalize">
-              {activeSubTab === "epistemics" && "Sub-View 3.2: Epistemic & TheoryNet Inspector"}
               {activeSubTab === "adjudication" && "Sub-View 3.3: HITL Borderline Adjudication Desk"}
               {activeSubTab === "calibration" && "Sub-View 3.4: Confidence Calibration & Reliability Lab"}
               {activeSubTab === "grounding" && "Sub-View 3.5: Multimodal Document Grounding"}
@@ -68,8 +70,6 @@ export const RunEvaluationInspector: React.FC<RunEvaluationInspectorProps> = ({
             <p className="text-xs max-w-md text-app-muted leading-relaxed mb-4">
               Active Evaluation: <span className="font-mono text-app-text">{activeReport.evaluation_id}</span>
               <br />
-              {activeSubTab === "epistemics" &&
-                "Bourbaki structuralist model tree and Poset cyclical back-edge isolation ready for Phase 3."}
               {activeSubTab === "adjudication" &&
                 "Keyboard-first relation triage desk with staged batch commits ready for Phase 4."}
               {activeSubTab === "calibration" &&
