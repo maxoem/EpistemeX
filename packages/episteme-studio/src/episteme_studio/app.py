@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from episteme_studio.api.config import router as config_router
 from episteme_studio.api.diff import router as diff_router
 from episteme_studio.api.engine import router as engine_router
+from episteme_studio.api.evaluation import router as evaluation_router
 from episteme_studio.api.errors import (
     StudioProblemException,
     problem_exception_handler,
@@ -192,6 +193,7 @@ def create_app(settings: StudioSettings | None = None) -> FastAPI:
     app.include_router(config_router)
     app.include_router(diff_router)
     app.include_router(engine_router)
+    app.include_router(evaluation_router)
 
     static_dir = resolve_static_dir(current_settings)
     index_html = static_dir / "index.html"

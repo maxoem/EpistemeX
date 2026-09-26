@@ -295,3 +295,28 @@ def get_engine_settings_service(
         )
     return cast(EngineSettingsService, request.app.state.engine_settings_service)
 
+
+def get_evaluation_service(
+    request: Request,
+    settings: StudioSettings = Depends(get_settings),
+) -> Any:
+    """Retrieve the EvaluationService instance from application state.
+
+    Parameters
+    ----------
+    request : Request
+        Incoming request.
+    settings : StudioSettings
+        Current application settings.
+
+    Returns
+    -------
+    EvaluationService
+        Configured evaluation service.
+    """
+    from episteme_studio.services.evaluation_service import EvaluationService
+
+    if not hasattr(request.app.state, "evaluation_service") or request.app.state.evaluation_service is None:
+        request.app.state.evaluation_service = EvaluationService.from_settings(settings)
+    return request.app.state.evaluation_service
+

@@ -121,6 +121,30 @@ class InvalidConfigPatchException(StudioProblemException):
         )
 
 
+class EvaluationReportNotFoundException(StudioProblemException):
+    """Raised when an evaluation report cannot be found."""
+
+    def __init__(self, evaluation_id: str) -> None:
+        super().__init__(
+            type="evaluation-report-not-found",
+            title="Evaluation Report Not Found",
+            status=404,
+            detail=f"Evaluation report '{evaluation_id}' was not found.",
+        )
+
+
+class BenchmarkNotFoundException(StudioProblemException):
+    """Raised when a requested evaluation benchmark cannot be resolved."""
+
+    def __init__(self, benchmark_id: str) -> None:
+        super().__init__(
+            type="benchmark-not-found",
+            title="Benchmark Not Found",
+            status=404,
+            detail=f"Evaluation benchmark '{benchmark_id}' was not found on the filesystem.",
+        )
+
+
 
 def problem_json_response(problem: ProblemDetail) -> JSONResponse:
     """Serialize a ProblemDetail instance into an application/problem+json response.

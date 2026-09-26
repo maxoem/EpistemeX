@@ -5,7 +5,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Request
 from sse_starlette.sse import EventSourceResponse
 
-from episteme_studio.api.deps import get_broker, get_run_service, get_settings
+from episteme_studio.api.deps import (
+    get_broker,
+    get_evaluation_service,
+    get_run_service,
+    get_settings,
+)
+from episteme_studio.domain.evaluation import EvaluationReportDetail
 from episteme_studio.domain.graph import GraphView
 from episteme_studio.domain.runs import (
     ArtifactRef,
@@ -15,6 +21,7 @@ from episteme_studio.domain.runs import (
     StartRunRequest,
 )
 from episteme_studio.runtime.broker import EventBroker
+from episteme_studio.services.evaluation_service import EvaluationService
 from episteme_studio.services.graph_service import GraphService
 from episteme_studio.services.run_service import RunService
 from episteme_studio.settings import StudioSettings
@@ -282,4 +289,26 @@ async def get_run_langfuse_stats(
     return service.get_run_langfuse_stats(
         run_id, host=host, public_key=public_key, secret_key=secret_key, limit=limit
     )
+
+
+@router.get("/{run_id}/evaluation", response_model=EvaluationReportDetail | None)
+async def get_run_evaluation(
+    run_id: str,
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationReportDetail | None:
+    """Retrieve evaluation report associated with this run, if available.
+
+    Parameters
+    ----------
+    run_id : str
+        Run identifier.
+    eval_service : EvaluationService
+        Evaluation service.
+
+    Returns
+    -------
+    EvaluationReportDetail or None
+        Evaluation report detail if evaluated, None otherwise.
+    """
+    return eval_service.get_run_evaluation(run_id)
 

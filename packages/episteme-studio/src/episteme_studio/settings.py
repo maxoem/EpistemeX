@@ -136,6 +136,18 @@ def _resolve_default_artifacts_dir() -> Path:
     return _resolve_default_dir(".pipeline_artifacts")
 
 
+def _resolve_default_reports_dir() -> Path:
+    """Resolve default path to evaluation reports store directory.
+
+    Returns
+    -------
+    Path
+        Found directory in current working directory or parent hierarchy;
+        falls back to Path('evaluation/reports').
+    """
+    return _resolve_default_dir("evaluation/reports")
+
+
 def _resolve_default_neo4j_url() -> str | None:
     """Resolve default Neo4j connection URI.
 
@@ -265,6 +277,7 @@ class StudioSettings(BaseSettings):
     token: str | None = None
     artifacts_dir: Path = Field(default_factory=_resolve_default_artifacts_dir)
     runs_dir: Path = Field(default_factory=_resolve_default_runs_dir)
+    reports_dir: Path = Field(default_factory=_resolve_default_reports_dir)
     extra_runs_dirs: list[Path] = Field(default_factory=list)
     extra_artifacts_dirs: list[Path] = Field(default_factory=list)
     node_budget: int = 500
