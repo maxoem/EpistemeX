@@ -498,6 +498,9 @@ class ArgumentationStrategy:
             p4 = Phase4ArtifactsView.from_collection(predicted)
             pred_atoms = p4.theory_atoms
             pred_relations = p4.theory_relations
+        elif isinstance(predicted, TheoryNet):
+            pred_atoms = list(predicted.atoms)
+            pred_relations = list(predicted.relations)
         elif isinstance(predicted, list):
             for item in predicted:
                 if isinstance(item, TheoryAtom):
@@ -514,6 +517,9 @@ class ArgumentationStrategy:
             gold_data = load_arg_microtexts_subset(gold, limit=ctx.get("limit", 1000))
             gold_atoms = gold_data.get("l3_atoms", [])
             gold_relations = gold_data.get("l3_relations", [])
+        elif isinstance(gold, TheoryNet):
+            gold_atoms = list(gold.atoms)
+            gold_relations = list(gold.relations)
         elif isinstance(gold, dict):
             gold_atoms = gold.get("l3_atoms", [])
             gold_relations = gold.get("l3_relations", [])
