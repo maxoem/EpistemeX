@@ -893,6 +893,12 @@ export interface BoundingBoxCoordinates {
   y1: number;
 }
 
+export interface TextSpanCoordinates {
+  page: number;
+  bbox: [number, number, number, number]; // [x0, y0, x1, y1] normalized
+  is_continuation?: boolean;
+}
+
 export interface MultiModalEvidenceAnchor {
   anchor_id: string;
   doc_id: string;
@@ -901,6 +907,7 @@ export interface MultiModalEvidenceAnchor {
   char_start?: number | null;
   char_end?: number | null;
   bbox?: BoundingBoxCoordinates | null;
+  spans?: TextSpanCoordinates[] | null;
   formula_latex?: string | null;
   image_uri?: string | null;
 }

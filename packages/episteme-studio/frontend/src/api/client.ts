@@ -552,12 +552,16 @@ export const api = {
       status?: "all" | "pending" | "adjudicated";
       min_similarity?: number;
       max_similarity?: number;
+      min_sim?: number;
+      max_sim?: number;
     }
   ): Promise<AdjudicationQueueResponse> {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
-    if (params?.min_similarity !== undefined) q.set("min_similarity", params.min_similarity.toString());
-    if (params?.max_similarity !== undefined) q.set("max_similarity", params.max_similarity.toString());
+    const minVal = params?.min_sim ?? params?.min_similarity;
+    if (minVal !== undefined) q.set("min_sim", minVal.toString());
+    const maxVal = params?.max_sim ?? params?.max_similarity;
+    if (maxVal !== undefined) q.set("max_sim", maxVal.toString());
     const query = q.toString() ? `?${q.toString()}` : "";
     const res = await fetch(
       `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(evaluationId)}/adjudication-queue${query}`
@@ -582,11 +586,18 @@ export const api = {
 
   async getCalibrationReport(
     evaluationId: string,
-    params?: { num_bins?: number; run_id?: string }
+    params?: {
+      num_bins?: number;
+      run_id?: string;
+      min_confidence?: number;
+      limit?: number;
+    }
   ): Promise<CalibrationReportDetail> {
     const q = new URLSearchParams();
     if (params?.num_bins !== undefined) q.set("num_bins", params.num_bins.toString());
     if (params?.run_id) q.set("run_id", params.run_id);
+    if (params?.min_confidence !== undefined) q.set("min_confidence", params.min_confidence.toString());
+    if (params?.limit !== undefined) q.set("limit", params.limit.toString());
     const query = q.toString() ? `?${q.toString()}` : "";
     const res = await fetch(
       `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(evaluationId)}/calibration${query}`

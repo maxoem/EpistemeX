@@ -204,22 +204,22 @@ Deliver keyboard-first relation adjudication (Sub-View 3.3) and uncertainty cali
 * [`ISSUE-028`](file:///Users/maxoehm/EpistemeX/packages/episteme-studio/tests/test_evaluation_backend.py#L931): Confidence Calibration & Reliability Diagrams
 
 #### Tasks
-* [ ] **4.1 HITL Adjudication Desk (`src/panels/evaluation/inspector/adjudication/AdjudicationDeskView.tsx`):**
+* [x] **4.1 HITL Adjudication Desk (`src/panels/evaluation/inspector/adjudication/AdjudicationDeskView.tsx`):**
   * 3-pane layout: Queue list (300px) $\to$ Triad comparison card (Fluid) $\to$ Evidence & Schema Aliasing pane (360px).
-* [ ] **4.2 Deterministic Staging Buffer (`src/panels/evaluation/inspector/adjudication/useAdjudicationStaging.ts`):**
+* [x] **4.2 Deterministic Staging Buffer (`src/panels/evaluation/inspector/adjudication/useAdjudicationStaging.ts`):**
   * Keypresses stage decisions locally in `stagedAdjudications` with instant $\mathcal{O}(1)$ local score delta animation (`+0.024 F1 [Staged]`).
   * **No idle auto-debounce:** Prevents network race conditions during deliberate reading.
   * Undo hotkey (`[U]` / `Cmd+Z`).
   * Explicit batch commit via `Cmd+Enter` or `[Commit Batch (N)]` button calling `POST .../adjudicate-and-recalculate`.
-* [ ] **4.3 Keyboard Ergonomics (`src/panels/evaluation/inspector/adjudication/useEvaluationHotkeys.ts`):**
+* [x] **4.3 Keyboard Ergonomics (`src/panels/evaluation/inspector/adjudication/useEvaluationHotkeys.ts`):**
   * Hotkeys: `j`/`k` (traverse queue), `a` (Accept TP), `r` (Reject FP), `s` (Schema Alias omnibar), `Cmd+Enter` (Commit).
   * Strict bypass guard when focus is inside text fields, textareas, or code editors.
-* [ ] **4.4 Confidence Calibration Lab (`src/panels/evaluation/inspector/calibration/CalibrationLabView.tsx`):**
+* [x] **4.4 Confidence Calibration Lab (`src/panels/evaluation/inspector/calibration/CalibrationLabView.tsx`):**
   * ECharts 10-bin Reliability Diagram plotting Mean Predicted Confidence vs. Empirical Accuracy with shaded calibration gaps.
   * Telemetry readouts: Expected Calibration Error (ECE), Maximum Calibration Error (MCE), and Brier Score.
-* [ ] **4.5 Overconfidence Hallucination Table (`src/panels/evaluation/inspector/calibration/OverconfidenceTable.tsx`):**
+* [x] **4.5 Overconfidence Hallucination Table (`src/panels/evaluation/inspector/calibration/OverconfidenceTable.tsx`):**
   * Audit table of assertions with confidence $> 0.85$ that failed verification, complete with source context and prompt-tuning action links.
-* [ ] **4.6 Interactive Threshold Slider (`src/panels/evaluation/inspector/calibration/ThresholdOptimizerBar.tsx`):**
+* [x] **4.6 Interactive Threshold Slider (`src/panels/evaluation/inspector/calibration/ThresholdOptimizerBar.tsx`):**
   * Dynamic slider ($\tau \in [0.50, 0.99]$) projecting Precision vs. Recall vs. Discarded Triples.
 
 #### Definition of Done (DoD)
@@ -238,17 +238,17 @@ Verify document grounding in continuous PDF pages (Sub-View 3.5) and evaluate mu
 * [`ISSUE-031`](file:///Users/maxoehm/EpistemeX/packages/episteme-studio/tests/test_evaluation_backend.py#L992): Adversarial Noise Robustness Stress Testing
 
 #### Tasks
-* [ ] **5.1 Multimodal Document Grounding Viewer (`src/panels/evaluation/inspector/grounding/DocumentGroundingView.tsx`):**
+* [x] **5.1 Multimodal Document Grounding Viewer (`src/panels/evaluation/inspector/grounding/DocumentGroundingView.tsx`):**
   * *Left Pane (380px):* Theory atom details, Alignment Grounding IoU ($\text{AG\_IoU}$), and side-by-side KaTeX formula verifier.
   * *Right Vitrine (Fluid):* `MultiPagePdfVitrine.tsx` rendering continuous virtualized PDF pages.
-* [ ] **5.2 Two-Tier Coordinate Scaling Engine (`src/panels/evaluation/inspector/grounding/coordinateScaling.ts`):**
+* [x] **5.2 Two-Tier Coordinate Scaling Engine (`src/panels/evaluation/inspector/grounding/coordinateScaling.ts`):**
   * *Tier 1 (Global Continuous Container):*
     $$\text{box}_{\text{top\_global}} = \sum_{i=1}^{p-1} \left( H_{\text{page}(i)} + \text{gap}_{\text{page}} \right) + \left( y_0 \cdot H_{\text{page}(p)} \right)$$
   * *Tier 2 (Page-Local SVG Viewports):* Renders within-page bounding quads locally within each page card.
   * Draws continuous cubic Bézier splines across page boundaries for multi-page `SpanArray` arguments.
-* [ ] **5.3 Competency Query Ranking Grid (`src/panels/evaluation/inspector/retrieval/CompetencyRankingTable.tsx`):**
+* [x] **5.3 Competency Query Ranking Grid (`src/panels/evaluation/inspector/retrieval/CompetencyRankingTable.tsx`):**
   * Table rendering MRR, NDCG@10, Hits@1/3/10. Failing queries expand to compare expected gold nodes against retrieved nodes, pinpointing missing graph paths.
-* [ ] **5.4 Adversarial Noise Robustness Curves (`src/panels/evaluation/inspector/retrieval/NoiseRobustnessPlot.tsx`):**
+* [x] **5.4 Adversarial Noise Robustness Curves (`src/panels/evaluation/inspector/retrieval/NoiseRobustnessPlot.tsx`):**
   * Area chart plotting Robustness Degradation Factor (RDF) curves across Typo, Synonym, and Sentence Shuffling perturbation sweeps.
   * `[Trigger Synthetic Noise Sweep]` action button.
 

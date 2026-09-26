@@ -37,6 +37,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
     graphOverlay,
     setActiveSubTab,
     stageAdjudication,
+    setSelectedGroundingComponentId,
   } = useEvaluationStore();
 
   const renderStatusBadge = (status: NodeAlignmentStatus | EdgeAlignmentStatus, isGhost: boolean) => {
@@ -86,6 +87,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
   };
 
   const handleJumpToBBox = (id: string) => {
+    setSelectedGroundingComponentId(id);
     if (onJumpToBBox) {
       onJumpToBBox(id);
     } else {

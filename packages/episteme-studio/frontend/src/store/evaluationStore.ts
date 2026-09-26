@@ -55,6 +55,7 @@ export interface EvaluationState {
   selectedBourbakiClasses: Set<string>;
   isAmbiguousDrawerOpen: boolean;
   cycleHighlightNodeIds: string[] | null;
+  selectedGroundingComponentId: string | null;
 
   // HITL Staging Buffer (Deterministic, no auto-debounce race conditions)
   stagedAdjudications: Map<string, EdgeAdjudicationItem>;
@@ -87,6 +88,7 @@ export interface EvaluationState {
   toggleBourbakiClass: (cls: string) => void;
   setIsAmbiguousDrawerOpen: (open: boolean) => void;
   setCycleHighlightNodeIds: (nodeIds: string[] | null) => void;
+  setSelectedGroundingComponentId: (id: string | null) => void;
 
   // Staging Buffer Actions
   stageAdjudication: (candidateId: string, item: EdgeAdjudicationItem) => void;
@@ -139,6 +141,7 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
   selectedBourbakiClasses: new Set(DEFAULT_BOURBAKI_CLASSES),
   isAmbiguousDrawerOpen: false,
   cycleHighlightNodeIds: null,
+  selectedGroundingComponentId: null,
 
   stagedAdjudications: new Map<string, EdgeAdjudicationItem>(),
   optimisticScalarDeltas: INITIAL_OPTIMISTIC_DELTAS,
@@ -274,6 +277,8 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
 
   setCycleHighlightNodeIds: (nodeIds) => set({ cycleHighlightNodeIds: nodeIds }),
 
+  setSelectedGroundingComponentId: (id) => set({ selectedGroundingComponentId: id }),
+
   stageAdjudication: (candidateId, item) => {
     const current = get().stagedAdjudications;
     const nextMap = new Map(current);
@@ -385,6 +390,7 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
       selectedOverlayItem: null,
       isAmbiguousDrawerOpen: false,
       cycleHighlightNodeIds: null,
+      selectedGroundingComponentId: null,
       stagedAdjudications: new Map(),
       optimisticScalarDeltas: INITIAL_OPTIMISTIC_DELTAS,
       isCommittingBatch: false,
