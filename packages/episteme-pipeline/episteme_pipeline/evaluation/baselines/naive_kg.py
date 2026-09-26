@@ -227,7 +227,6 @@ class BaselineNaiveKG:
         context: dict[str, Any] | None = None,
     ) -> tuple[list[EvaluationResult], dict[str, Any]]:
         """Extract flat Open-IE KG and evaluate directly against gold benchmark.
-        """Extract flat Open-IE KG and evaluate directly against gold benchmark.
 
         Parameters
         ----------

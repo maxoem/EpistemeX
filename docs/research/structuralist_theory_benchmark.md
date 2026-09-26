@@ -319,9 +319,9 @@ print(result.to_markdown())
 ### Quantitative Metrics Formulation
 
 1. **Model Component Completeness ($MCC$):**
-   $$\text{MCC}(T) = \frac{|\mathcal{M}_{p, \text{matched}}| + |\mathcal{M}_{\text{matched}}| + |\mathcal{M}_{pp, \text{matched}}| + |GC_{\text{matched}}| + |I_{0, \text{matched}}|}{|\text{Total Reference Components}(T)|}$$
+   $\text{MCC}(T) = \frac{|\mathcal{M}_{p, \text{matched}}| + |\mathcal{M}_{\text{matched}}| + |\mathcal{M}_{pp, \text{matched}}| + |GC_{\text{matched}}| + |I_{0, \text{matched}}|}{|\text{Total Reference Components}(T)|}$
 2. **Axiomatic Omission Rate ($AOR$):**
-   $$AOR = \frac{| \mathcal{M}_{\text{ref}} \setminus \mathcal{M}_{\text{pred, matched}} |}{| \mathcal{M}_{\text{ref}} |}$$
+   $AOR = \frac{| \mathcal{M}_{\text{ref}} \setminus \mathcal{M}_{\text{pred, matched}} |}{| \mathcal{M}_{\text{ref}} |}$
    *Capability Criterion:* Strict $AOR = 0.0$ (Zero-Omission of foundational substantive laws).
 3. **Property Fidelity Score ($PFS$):**
    Macro average across node types, epistemic stances, edge semantics, weights, and polarities.
@@ -349,9 +349,9 @@ rtk uv run python -m episteme_pipeline.evaluation.harness --manifest packages/ep
 | **Structuralist Adapter Fixes**    | `Implemented`  | Edge decoding, array targets, resilient anchors, and poset orientation in [`packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/structuralist.py`](packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/structuralist.py). |
 | **CPM Pilot Corpus (Principia)**   | `Implemented`  | Newton *Principia* Book 1 Axioms, Laws, and Corollaries in [`packages/episteme-pipeline/episteme_pipeline/evaluation/data/newton_principia_1687.txt`](packages/episteme-pipeline/episteme_pipeline/evaluation/data/newton_principia_1687.txt). |
 | **Consolidated In-Memory Harness** | `Implemented`  | `EvaluationHarness` & in-memory pipeline runners in [`packages/episteme-pipeline/episteme_pipeline/evaluation/`](packages/episteme-pipeline/episteme_pipeline/evaluation/). |
-| **Specialization Poset Verification** | `Planned (ISSUE-031)` | Specialization DAG acyclicity, root conformity, and model inheritance verification.                                                                                                                              |
-| **Competency Query Testbed**       | `Planned (ISSUE-032)` | Extrinsic scientific retrieval testbed for STNB with domain query suites.                                                                                                                                       |
-| **Multi-Theory Inter-Net Harness** | `Planned (ISSUE-033)` | Comparative baselines (Zero-Shot LLM, Naive KG, Text RAG) across multiple theory elements.                                                                                                                      |
+| **Specialization Poset Verification** | `Implemented`  | Specialization DAG acyclicity, root conformity, and transitive reduction in `epistemetrics` (`poset_evaluation.py`, `dynamics.py`). |
+| **Competency Query Testbed**       | `Implemented`  | Extrinsic scientific retrieval testbed for STNB with domain query suites in [`packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_queries.yaml`](packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_queries.yaml). |
+| **Comparative Baselines & Strategies** | `Implemented`  | Pluggable evaluation strategies and baselines (Zero-Shot LLM, Naive KG, Text RAG) in [`packages/episteme-pipeline/episteme_pipeline/evaluation/`](packages/episteme-pipeline/episteme_pipeline/evaluation/). |
 
 ---
 
