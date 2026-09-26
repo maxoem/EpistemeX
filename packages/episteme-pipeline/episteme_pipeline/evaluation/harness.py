@@ -43,6 +43,11 @@ from episteme_pipeline.evaluation.scorers.gm_gbs import GraphBERTScoreEvaluator
 from episteme_pipeline.evaluation.scorers.model_scorer import ModelScorer
 from episteme_pipeline.evaluation.scorers.oep import OptimalEditPathEvaluator
 from episteme_pipeline.evaluation.scorers.retrieval import ExtrinsicRetrievalEvaluator
+from episteme_pipeline.evaluation.strategies import (
+    EvaluationStrategy,
+    StrategyRegistry,
+    default_registry,
+)
 from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
 from episteme_pipeline.graph.validation import GraphValidator
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
@@ -56,9 +61,12 @@ class EvaluationHarnessProtocol(Protocol):
 
     async def evaluate_in_memory(
         self,
-        predicted: ArtifactCollection | TheoryNet | em.TheoryGraph | nx.DiGraph,
-        gold: str | Path | em.TheoryGraph | nx.DiGraph,
+        predicted: Any,
+        gold: Any,
         run_id: str = "in_memory_run",
+        strategy: str | EvaluationStrategy | None = None,
+        dataset_ref: str | None = None,
+        **kwargs: Any,
     ) -> EvaluationReport:
         """Evaluate pipeline output directly in memory without requiring remote stores."""
         ...
@@ -67,6 +75,7 @@ class EvaluationHarnessProtocol(Protocol):
         self,
         manifest_path: str | Path,
         build_graph: bool = False,
+        strategy: str | EvaluationStrategy | None = None,
     ) -> EvaluationReport:
         """Execute an evaluation run configured by a manifest YAML file."""
         ...
@@ -82,6 +91,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         retrieval_scorer: ExtrinsicRetrievalEvaluator | None = None,
         gm_gbs_evaluator: GraphBERTScoreEvaluator | None = None,
         graph_store: ProcessingGraph | None = None,
+        strategy_registry: StrategyRegistry | None = None,
         reports_dir: str | Path = "evaluation/reports",
     ) -> None:
         """Initialize the evaluation harness with dependency injection.
@@ -98,6 +108,8 @@ class EvaluationHarness(EvaluationHarnessProtocol):
             Graph BERTScore evaluator.
         graph_store : ProcessingGraph, optional
             Graph storage backend (defaults to InMemoryGraphStore).
+        strategy_registry : StrategyRegistry, optional
+            Registry of evaluation strategies (defaults to default_registry).
         reports_dir : str or Path, optional
             Output directory for persisted JSON and Markdown reports.
         """
@@ -106,62 +118,101 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         self.retrieval_scorer = retrieval_scorer
         self.gm_gbs_evaluator = gm_gbs_evaluator
         self.graph_store = graph_store or InMemoryGraphStore()
+        self.strategy_registry = strategy_registry or default_registry
         self.reports_dir = Path(reports_dir)
 
     async def evaluate_in_memory(
         self,
-        predicted: ArtifactCollection | TheoryNet | em.TheoryGraph | nx.DiGraph,
-        gold: str | Path | em.TheoryGraph | nx.DiGraph,
+        predicted: ArtifactCollection | TheoryNet | em.TheoryGraph | nx.DiGraph | Any,
+        gold: str | Path | em.TheoryGraph | nx.DiGraph | Any,
         run_id: str = "in_memory_run",
+        strategy: str | EvaluationStrategy | None = None,
         dataset_ref: str | None = None,
         min_mcc: float = 1.0,
         min_pfs: float = 0.8,
         sim_threshold: float = 0.50,
+        **kwargs: Any,
     ) -> EvaluationReport:
-        """Evaluate pipeline output directly in memory.
+        """Evaluate pipeline output directly in memory using pluggable strategies.
 
-        Uses pipeline ArtifactCollection or TheoryNet converted to
-        epistemetrics.TheoryGraph, requiring zero Neo4j database or network connectivity.
+        Supports arbitrary datasets and pipeline layers (L2 extraction, L3 argumentation,
+        L4 formal theory-nets) without requiring Neo4j or network connectivity.
 
         Parameters
         ----------
-        predicted : ArtifactCollection, TheoryNet, em.TheoryGraph, or nx.DiGraph
+        predicted : Any
             Predicted representation from pipeline execution.
-        gold : str, Path, em.TheoryGraph, or nx.DiGraph
-            Gold standard reference graph or path to STNB JSON-LD file.
+        gold : Any
+            Gold standard reference graph, dataset path, or annotations.
         run_id : str, optional
             Run identifier for reporting (default: "in_memory_run").
+        strategy : str or EvaluationStrategy, optional
+            Explicit strategy name or instance. If None, automatically inferred from inputs.
         dataset_ref : str, optional
             Dataset reference name or path.
         min_mcc : float, optional
-            Minimum MCC threshold (default: 1.0).
+            Minimum MCC threshold for structuralist evaluation (default: 1.0).
         min_pfs : float, optional
-            Minimum PFS threshold (default: 0.8).
+            Minimum PFS threshold for structuralist evaluation (default: 0.8).
         sim_threshold : float, optional
             Minimum node similarity threshold (default: 0.50).
+        **kwargs : Any
+            Additional hyperparameters forwarded to the evaluation strategy.
 
         Returns
         -------
         EvaluationReport
-            Structured evaluation report containing intrinsic metrics and markdown summary.
+            Structured evaluation report containing evaluated metrics and markdown summary.
         """
-        scorer = ModelScorer(min_mcc=min_mcc, min_pfs=min_pfs, sim_threshold=sim_threshold)
-        stage_result = scorer.evaluate_to_result(
+        strat: EvaluationStrategy
+        if isinstance(strategy, str):
+            strat = self.strategy_registry.get(strategy)
+        elif strategy is not None:
+            strat = strategy
+        else:
+            strat = self.strategy_registry.infer(predicted=predicted, gold=gold)
+
+        context = {
+            "min_mcc": min_mcc,
+            "min_pfs": min_pfs,
+            "sim_threshold": sim_threshold,
+            "dataset_ref": dataset_ref,
+            **kwargs,
+        }
+        stage_results = await strat.evaluate(
             predicted=predicted,
             gold=gold,
             run_id=run_id,
-            phase_name="Phase 6: TheoryNet Projection",
-            dataset_ref=dataset_ref or (str(gold) if isinstance(gold, (str, Path)) else "in_memory_gold"),
+            context=context,
         )
 
-        metrics_dict = {m.name: m.value for m in stage_result.metrics}
+        results_by_level: dict[str, list[EvaluationResult]] = {}
+        metrics_dict: dict[str, float] = {}
+        for res in stage_results:
+            lvl = str(res.evaluation_level)
+            results_by_level.setdefault(lvl, []).append(res)
+            for m in res.metrics:
+                metrics_dict[m.name] = m.value
+
+        summary_text = "\n\n".join(r.notes.get("markdown_report", "") for r in stage_results)
+        primary_ref = (
+            stage_results[0].dataset_ref
+            if stage_results and stage_results[0].dataset_ref
+            else (dataset_ref or (str(gold) if isinstance(gold, (str, Path)) else "in_memory_gold"))
+        )
+        overall_outcome = (
+            "success"
+            if all(r.outcome in (EvaluationOutcome.PASS, EvaluationOutcome.WARNING) for r in stage_results)
+            else "failure"
+        )
+
         report = EvaluationReport(
             evaluation_id=f"eval_{run_id}",
             run_ids=[run_id],
-            dataset_ref=stage_result.dataset_ref,
+            dataset_ref=primary_ref,
             dataset_type=DatasetType.GOLD,
-            results_by_level={EvaluationLevel.STAGE: [stage_result]},
-            summary=stage_result.notes.get("markdown_report", ""),
+            results_by_level=results_by_level,
+            summary=summary_text,
         )
 
         self.event_emitter.emit(
@@ -169,7 +220,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
                 evaluation_id=report.evaluation_id,
                 run_id=run_id,
                 metrics=metrics_dict,
-                outcome="success" if stage_result.outcome == EvaluationOutcome.PASS else "failure",
+                outcome=overall_outcome,
             )
         )
 
@@ -179,6 +230,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         self,
         manifest_path: str | Path,
         build_graph: bool = False,
+        strategy: str | EvaluationStrategy | None = None,
     ) -> EvaluationReport:
         """Execute an evaluation run configured by a manifest YAML file.
 
@@ -188,6 +240,8 @@ class EvaluationHarness(EvaluationHarnessProtocol):
             Filesystem path to the manifest YAML file.
         build_graph : bool, optional
             Whether to invoke pipeline execution prior to scoring (default: False).
+        strategy : str or EvaluationStrategy, optional
+            Explicit strategy name or instance override.
 
         Returns
         -------
@@ -204,8 +258,22 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         run_id = str(manifest.get("run_id", "unknown_run"))
         corpus_cfg = manifest.get("corpus", {})
         dataset_type = corpus_cfg.get("dataset_type", "structuralist")
+        strategy_name = manifest.get("strategy") or corpus_cfg.get("strategy") or manifest.get("evaluator")
         gold_path = corpus_cfg.get("gold_standard_path")
         limit = corpus_cfg.get("limit", 10)
+
+        # Resolve evaluation strategy
+        strat: EvaluationStrategy
+        if isinstance(strategy, str):
+            strat = self.strategy_registry.get(strategy)
+        elif strategy is not None:
+            strat = strategy
+        elif strategy_name:
+            strat = self.strategy_registry.get(strategy_name)
+        else:
+            strat = self.strategy_registry.infer(
+                predicted=None, gold=gold_path, dataset_type=dataset_type
+            )
 
         report_results: list[EvaluationResult] = []
         artifacts: ArtifactCollection | None = None
@@ -224,89 +292,101 @@ class EvaluationHarness(EvaluationHarnessProtocol):
             exec_result = await pipeline.run(PipelineInput(source_paths=input_sources[:limit]))
             artifacts = getattr(exec_result, "artifacts", None)
 
-        # Intrinsic scoring
+        # Intrinsic scoring via resolved strategy
         downstream_results: list[EvaluationResult] = []
+        predicted_target: Any = None
         if gold_path and os.path.exists(gold_path):
-            if dataset_type == "structuralist":
-                chunks, gold_graph = load_structuralist_benchmark(gold_path)
-                predicted_target: Any
-                if artifacts is not None:
-                    predicted_target = artifacts
-                else:
-                    # Ingest existing entities/atoms from graph store
-                    atoms = await self.graph_store.get_theory_atoms()
-                    rels = await self.graph_store.get_all_theory_relations()
+            if artifacts is not None:
+                predicted_target = artifacts
+            else:
+                atoms = await self.graph_store.get_theory_atoms()
+                rels = await self.graph_store.get_all_theory_relations()
+                entities = await self.graph_store.get_entities()
+                triples = await self.graph_store.get_all_entity_triples()
+                if atoms or rels:
                     predicted_target = TheoryNet(atoms=atoms, relations=rels)
+                elif entities or triples:
+                    predicted_target = l2_triples_to_digraph(entities, triples)
+                else:
+                    predicted_target = ArtifactCollection(artifacts=[])
 
-                stage_result = self.model_scorer.evaluate_to_result(
-                    predicted=predicted_target,
-                    gold=gold_graph,
-                    run_id=run_id,
-                    phase_name="Phase 6: TheoryNet Projection",
-                    dataset_ref=str(gold_path),
-                )
-                report_results.append(stage_result)
+            stage_results = await strat.evaluate(
+                predicted=predicted_target,
+                gold=gold_path,
+                run_id=run_id,
+                context={"corpus_cfg": corpus_cfg, "limit": limit, "dataset_ref": str(gold_path)},
+            )
+            report_results.extend(stage_results)
 
-                # Extrinsic competency query evaluation
-                queries_path = corpus_cfg.get("queries_path")
-                if not queries_path:
+            # Extrinsic retrieval evaluation
+            queries_path = corpus_cfg.get("queries_path")
+            if not queries_path and gold_path:
+                cand_path = Path(gold_path).parent / f"{Path(gold_path).stem}_queries.yaml"
+                if cand_path.is_file():
+                    queries_path = str(cand_path)
+                else:
                     cand_path = Path(gold_path).parent / "stnb_cpm_queries.yaml"
                     if cand_path.is_file():
                         queries_path = str(cand_path)
                     else:
                         cand_path = Path(__file__).parent / "data" / "stnb_cpm_queries.yaml"
-                        if cand_path.is_file():
+                        if cand_path.is_file() and dataset_type == "structuralist":
                             queries_path = str(cand_path)
 
-                if queries_path and os.path.isfile(queries_path):
-                    with open(queries_path, "r", encoding="utf-8") as qf:
-                        q_data = yaml.safe_load(qf)
-                    queries = q_data.get("queries", [])
-                    if queries:
-                        retrieval_eval = self.retrieval_scorer or ExtrinsicRetrievalEvaluator(
-                            graph_reader=self.graph_store
-                        )
-                        # Ensure graph store has the target nodes indexed for search
-                        if hasattr(self.graph_store, "index_theory_graph"):
-                            if artifacts is not None:
-                                tg = artifact_collection_to_theory_graph(artifacts)
-                                self.graph_store.index_theory_graph(tg, run_id=run_id)
-                            elif hasattr(predicted_target, "atoms") and predicted_target.atoms:
-                                self.graph_store.index_theory_graph(predicted_target, run_id=run_id)
-                            elif isinstance(gold_graph, (nx.DiGraph, nx.Graph)):
-                                self.graph_store.index_theory_graph(gold_graph, run_id=run_id)
+            if queries_path and os.path.isfile(queries_path):
+                with open(queries_path, "r", encoding="utf-8") as qf:
+                    q_data = yaml.safe_load(qf)
+                queries = q_data.get("queries", [])
+                if queries:
+                    retrieval_eval = self.retrieval_scorer or ExtrinsicRetrievalEvaluator(
+                        graph_reader=self.graph_store
+                    )
+                    # Ensure graph store has the target nodes indexed for search
+                    if hasattr(self.graph_store, "index_for_search"):
+                        if artifacts is not None:
+                            self.graph_store.index_for_search(artifacts, run_id=run_id)
+                        elif predicted_target is not None:
+                            self.graph_store.index_for_search(predicted_target, run_id=run_id)
+                        elif gold_path:
+                            self.graph_store.index_for_search(gold_path, run_id=run_id)
+                    elif hasattr(self.graph_store, "index_theory_graph"):
+                        if artifacts is not None:
+                            tg = artifact_collection_to_theory_graph(artifacts)
+                            self.graph_store.index_theory_graph(tg, run_id=run_id)
+                        elif hasattr(predicted_target, "atoms") and predicted_target.atoms:
+                            self.graph_store.index_theory_graph(predicted_target, run_id=run_id)
 
-                        retrieval_metrics = await retrieval_eval.evaluate_batch(
-                            queries, top_k=10, run_id=run_id
-                        )
+                    retrieval_metrics = await retrieval_eval.evaluate_batch(
+                        queries, top_k=10, run_id=run_id
+                    )
 
-                        downstream_result = EvaluationResult(
-                            run_id=run_id,
-                            evaluation_level=EvaluationLevel.DOWNSTREAM,
-                            phase_name="Extrinsic Retrieval: STNB Competency",
-                            dataset_ref=str(queries_path),
-                            dataset_type=DatasetType.GOLD,
-                            metrics=[
-                                EvaluationMetric(name="mrr", value=retrieval_metrics.get("MRR", 0.0)),
-                                EvaluationMetric(name="hits@1", value=retrieval_metrics.get("Hits@1", 0.0)),
-                                EvaluationMetric(name="hits@3", value=retrieval_metrics.get("Hits@3", 0.0)),
-                                EvaluationMetric(name="hits@10", value=retrieval_metrics.get("Hits@10", 0.0)),
-                                EvaluationMetric(name="ndcg", value=retrieval_metrics.get("nDCG", 0.0)),
-                            ],
-                            outcome=EvaluationOutcome.PASS if retrieval_metrics.get("MRR", 0.0) > 0.0 else EvaluationOutcome.WARNING,
-                            notes={
-                                "category": "extrinsic_retrieval",
-                                "markdown_report": (
-                                    "## STNB Competency Retrieval Evaluation Report\n\n"
-                                    f"- **MRR:** {retrieval_metrics.get('MRR', 0.0):.4f}\n"
-                                    f"- **Hits@1:** {retrieval_metrics.get('Hits@1', 0.0):.4f}\n"
-                                    f"- **Hits@3:** {retrieval_metrics.get('Hits@3', 0.0):.4f}\n"
-                                    f"- **Hits@10:** {retrieval_metrics.get('Hits@10', 0.0):.4f}\n"
-                                    f"- **nDCG:** {retrieval_metrics.get('nDCG', 0.0):.4f}\n"
-                                ),
-                            },
-                        )
-                        downstream_results.append(downstream_result)
+                    downstream_result = EvaluationResult(
+                        run_id=run_id,
+                        evaluation_level=EvaluationLevel.DOWNSTREAM,
+                        phase_name="Extrinsic Retrieval Evaluation",
+                        dataset_ref=str(queries_path),
+                        dataset_type=DatasetType.GOLD,
+                        metrics=[
+                            EvaluationMetric(name="mrr", value=retrieval_metrics.get("MRR", 0.0)),
+                            EvaluationMetric(name="hits@1", value=retrieval_metrics.get("Hits@1", 0.0)),
+                            EvaluationMetric(name="hits@3", value=retrieval_metrics.get("Hits@3", 0.0)),
+                            EvaluationMetric(name="hits@10", value=retrieval_metrics.get("Hits@10", 0.0)),
+                            EvaluationMetric(name="ndcg", value=retrieval_metrics.get("nDCG", 0.0)),
+                        ],
+                        outcome=EvaluationOutcome.PASS if retrieval_metrics.get("MRR", 0.0) > 0.0 else EvaluationOutcome.WARNING,
+                        notes={
+                            "category": "extrinsic_retrieval",
+                            "markdown_report": (
+                                "## Extrinsic Retrieval Evaluation Report\n\n"
+                                f"- **MRR:** {retrieval_metrics.get('MRR', 0.0):.4f}\n"
+                                f"- **Hits@1:** {retrieval_metrics.get('Hits@1', 0.0):.4f}\n"
+                                f"- **Hits@3:** {retrieval_metrics.get('Hits@3', 0.0):.4f}\n"
+                                f"- **Hits@10:** {retrieval_metrics.get('Hits@10', 0.0):.4f}\n"
+                                f"- **nDCG:** {retrieval_metrics.get('nDCG', 0.0):.4f}\n"
+                            ),
+                        },
+                    )
+                    downstream_results.append(downstream_result)
 
         # Validation checks
         violations = await self._run_validation()
@@ -327,7 +407,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         report = EvaluationReport(
             evaluation_id=f"eval_{run_id}",
             run_ids=[run_id],
-            dataset_ref=gold_path,
+            dataset_ref=str(gold_path) if gold_path else "manifest_corpus",
             dataset_type=DatasetType.GOLD,
             results_by_level=results_by_level,
             summary="\n\n".join(r.notes.get("markdown_report", "") for r in all_results),
@@ -347,9 +427,9 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         return report
 
     def _build_pipeline_for_dataset(self, dataset_type: str):
-        if dataset_type == "scierc":
+        if dataset_type in ("scierc", "l2", "extraction"):
             return build_l2_eval_pipeline(self.event_emitter, in_memory=True)
-        elif dataset_type == "arg_microtexts":
+        elif dataset_type in ("arg_microtexts", "l3", "argumentation"):
             return build_l3_eval_pipeline(self.event_emitter, in_memory=True)
         else:
             return build_l4_theorynet_eval_pipeline(self.event_emitter, in_memory=True)

@@ -74,6 +74,14 @@ from episteme_pipeline.evaluation.scorers import (
     theory_net_to_digraph,
     theory_net_to_theory_graph,
 )
+from episteme_pipeline.evaluation.strategies import (
+    ArgumentationStrategy,
+    EvaluationStrategy,
+    ExtractionStrategy,
+    StrategyRegistry,
+    StructuralistStrategy,
+    default_registry,
+)
 
 __all__ = [
     # harness
@@ -104,6 +112,13 @@ __all__ = [
     "theory_net_to_theory_graph",
     "artifact_collection_to_theory_graph",
     "gold_standard_to_digraph",
+    # strategies
+    "EvaluationStrategy",
+    "StructuralistStrategy",
+    "ExtractionStrategy",
+    "ArgumentationStrategy",
+    "StrategyRegistry",
+    "default_registry",
     # comparison
     "ComparisonAxis",
     "EvaluationComparison",

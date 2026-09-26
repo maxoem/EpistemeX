@@ -11,6 +11,13 @@ import math
 import re
 from typing import Any
 
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    Phase1ArtifactsView,
+    Phase2ArtifactsView,
+    Phase3ArtifactsView,
+    Phase4ArtifactsView,
+)
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
     L2Entity,
@@ -113,13 +120,28 @@ class InMemoryGraphStore(ProcessingGraph):
 
     async def vector_search(
         self,
-        embedding: list[float],
-        top_k: int,
+        embedding: list[float] | None = None,
+        top_k: int = 10,
         node_label: str | None = None,
         run_id: str | None = None,
+        query_text: str | None = None,
     ) -> list[SearchResult]:
         """Search in-memory entities, atoms, and nodes using embedding cosine similarity."""
+        if embedding is None and query_text:
+            embedding = deterministic_text_embedding(query_text)
+
         candidates: dict[str, dict[str, Any]] = {}
+
+        # 0. Ingest chunks
+        for cid, chunk in self._chunks.items():
+            if cid not in candidates:
+                candidates[cid] = {
+                    "node_id": cid,
+                    "node_label": "Chunk",
+                    "node_name": cid,
+                    "text": chunk.text,
+                    "run_id": self._node_run_ids.get(cid),
+                }
 
         # 1. Ingest entities
         for ent in self._entities.values():
@@ -193,29 +215,128 @@ class InMemoryGraphStore(ProcessingGraph):
         scored_results.sort(key=lambda r: r.score, reverse=True)
         return scored_results[:top_k]
 
-    def index_theory_graph(self, graph: Any, run_id: str | None = None) -> None:
-        """Index a TheoryGraph, NetworkX DiGraph, or TheoryNet into this store for search.
+    def index_for_search(self, target: Any, run_id: str | None = None) -> int:
+        """Polymorphically index chunks, entities, theory atoms, or graph structures for search.
+
+        Supports ArtifactCollection, list of L1Chunk, list of L2Entity, list of TheoryAtom,
+        TheoryNet, epistemetrics.TheoryGraph, and NetworkX DiGraph.
 
         Parameters
         ----------
-        graph : Any
-            The graph or theory net container.
+        target : Any
+            The artifact collection, graph, or list of domain items to index.
         run_id : str | None, optional
             Run identifier to associate with indexed nodes.
+
+        Returns
+        -------
+        int
+            Total number of items indexed.
         """
-        if hasattr(graph, "atoms"):
-            for atom in graph.atoms:
+        indexed_count = 0
+
+        # 1. ArtifactCollection: unpack and index all available layers
+        if isinstance(target, ArtifactCollection):
+            p1 = Phase1ArtifactsView.from_collection(target)
+            for chunk in p1.chunks:
+                self._chunks[chunk.id] = chunk
+                if run_id:
+                    self._node_run_ids[chunk.id] = run_id
+                self._embeddings[chunk.id] = deterministic_text_embedding(chunk.text)
+                self._nodes[chunk.id] = {
+                    "label": "Chunk",
+                    "name": chunk.id,
+                    "text": chunk.text,
+                    "run_id": run_id,
+                }
+                indexed_count += 1
+
+            p2 = Phase2ArtifactsView.from_collection(target)
+            for ent in p2.entities:
+                self._entities[ent.id] = ent
+                if run_id:
+                    self._node_run_ids[ent.id] = run_id
+                txt = f"{ent.name or ''} {ent.label or ''} {ent.description or ''}".strip()
+                self._embeddings[ent.id] = deterministic_text_embedding(txt)
+                self._nodes[ent.id] = {
+                    "label": ent.label,
+                    "name": ent.name or ent.id,
+                    "description": ent.description,
+                    "run_id": run_id,
+                }
+                indexed_count += 1
+            for trip in p2.local_triples:
+                self._triples.append(trip)
+
+            p3 = Phase3ArtifactsView.from_collection(target)
+            for trip in p3.global_triples:
+                self._triples.append(trip)
+
+            p4 = Phase4ArtifactsView.from_collection(target)
+            for atom in p4.theory_atoms:
+                self._theory_atoms[atom.id] = atom
+                if run_id:
+                    self._node_run_ids[atom.id] = run_id
+                txt = f"{atom.id} {atom.component_type} {atom.text or ''}".strip()
+                self._embeddings[atom.id] = deterministic_text_embedding(txt)
+                self._nodes[atom.id] = {
+                    "label": atom.component_type,
+                    "name": atom.id,
+                    "formalAxiom": atom.text or "",
+                    "run_id": run_id,
+                }
+                indexed_count += 1
+            for rel in p4.theory_relations:
+                self._theory_relations.append(rel)
+
+            return indexed_count
+
+        # 2. Lists of items
+        if isinstance(target, list):
+            for item in target:
+                if isinstance(item, L1Chunk):
+                    self._chunks[item.id] = item
+                    if run_id:
+                        self._node_run_ids[item.id] = run_id
+                    self._embeddings[item.id] = deterministic_text_embedding(item.text)
+                    indexed_count += 1
+                elif isinstance(item, L2Entity):
+                    self._entities[item.id] = item
+                    if run_id:
+                        self._node_run_ids[item.id] = run_id
+                    txt = f"{item.name or ''} {item.label or ''} {item.description or ''}".strip()
+                    self._embeddings[item.id] = deterministic_text_embedding(txt)
+                    indexed_count += 1
+                elif isinstance(item, L2Triple):
+                    self._triples.append(item)
+                elif isinstance(item, TheoryAtom):
+                    self._theory_atoms[item.id] = item
+                    if run_id:
+                        self._node_run_ids[item.id] = run_id
+                    txt = f"{item.id} {item.component_type} {item.text or ''}".strip()
+                    self._embeddings[item.id] = deterministic_text_embedding(txt)
+                    indexed_count += 1
+                elif isinstance(item, TheoryRelation):
+                    self._theory_relations.append(item)
+            return indexed_count
+
+        # 3. TheoryNet domain object
+        if hasattr(target, "atoms"):
+            for atom in target.atoms:
                 self._theory_atoms[atom.id] = atom
                 if run_id:
                     self._node_run_ids[atom.id] = run_id
                 txt = f"{atom.id} {atom.component_type} {atom.text or ''}"
                 self._embeddings[atom.id] = deterministic_text_embedding(txt)
-            if hasattr(graph, "relations"):
-                for rel in graph.relations:
+                indexed_count += 1
+            if hasattr(target, "relations"):
+                for rel in target.relations:
                     self._theory_relations.append(rel)
+            return indexed_count
 
-        elif hasattr(graph, "nodes") and callable(getattr(graph, "nodes")):
-            for nid, data in graph.nodes(data=True):
+        # 4. NetworkX DiGraph
+        if hasattr(target, "nodes") and callable(getattr(target, "nodes")):
+            for nid, data in target.nodes(data=True):
                 node_id = str(nid)
                 lbl = str(data.get("label", data.get("node_type", "Concept")))
                 name = str(data.get("name", node_id))
@@ -237,7 +358,6 @@ class InMemoryGraphStore(ProcessingGraph):
                     self._node_run_ids[node_id] = run_id
                 self._embeddings[node_id] = deterministic_text_embedding(txt)
 
-                # Populate theory atoms for model components
                 chunk_id = anchor.get("chunkId", "") if isinstance(anchor, dict) else ""
                 self._theory_atoms[node_id] = TheoryAtom(
                     id=node_id,
@@ -246,8 +366,9 @@ class InMemoryGraphStore(ProcessingGraph):
                     source_chunk_id=chunk_id or f"chunk_{node_id}",
                     confidence=float(data.get("confidence", 1.0)),
                 )
+                indexed_count += 1
 
-            for u, v, edata in graph.edges(data=True):
+            for u, v, edata in target.edges(data=True):
                 rel_str = str(edata.get("relation", edata.get("label", "explains")))
                 scope_val = edata.get("scope", "global")
                 self._theory_relations.append(
@@ -259,9 +380,11 @@ class InMemoryGraphStore(ProcessingGraph):
                         scope=scope_val if scope_val in ("local", "global") else "global",
                     )
                 )
+            return indexed_count
 
-        elif hasattr(graph, "nodes") and isinstance(graph.nodes, dict):
-            for nid, node in graph.nodes.items():
+        # 5. epistemetrics.TheoryGraph
+        if hasattr(target, "nodes") and isinstance(target.nodes, dict):
+            for nid, node in target.nodes.items():
                 node_id = str(nid)
                 txt = f"{node.name} {node.node_type} {node.description or ''}"
                 self._nodes[node_id] = {
@@ -281,8 +404,9 @@ class InMemoryGraphStore(ProcessingGraph):
                     source_chunk_id=node.provenance[0] if node.provenance else f"chunk_{node_id}",
                     confidence=node.confidence,
                 )
+                indexed_count += 1
 
-            for edge in graph.edges:
+            for edge in target.edges:
                 edge_scope = edge.attributes.get("scope", "global")
                 self._theory_relations.append(
                     TheoryRelation(
@@ -293,6 +417,23 @@ class InMemoryGraphStore(ProcessingGraph):
                         scope=edge_scope if edge_scope in ("local", "global") else "global",
                     )
                 )
+            return indexed_count
+
+        return indexed_count
+
+    def index_theory_graph(self, graph: Any, run_id: str | None = None) -> None:
+        """Index a TheoryGraph, NetworkX DiGraph, or TheoryNet into this store for search.
+
+        Kept for backward-compatibility with existing callers; delegates to `index_for_search`.
+
+        Parameters
+        ----------
+        graph : Any
+            The graph or theory net container.
+        run_id : str | None, optional
+            Run identifier to associate with indexed nodes.
+        """
+        self.index_for_search(graph, run_id=run_id)
 
     async def get_theory_atoms(self) -> list[TheoryAtom]:
         return list(self._theory_atoms.values())
