@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 
 interface AppDiffBottomDockProps {
-  activeTab: "runs" | "graph" | "cypher" | "config" | "engine";
-  onNavigateTab: (tab: "runs" | "graph" | "cypher" | "config" | "engine") => void;
+  activeTab: "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation";
+  onNavigateTab: (tab: "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation") => void;
 }
 
 export const AppDiffBottomDock: React.FC<AppDiffBottomDockProps> = ({

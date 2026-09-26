@@ -546,6 +546,151 @@ export interface EngineSettingsPatch {
   models?: Partial<EngineSettings["models"]>;
 }
 
+export type EvaluationOutcome = "pass" | "fail" | "warning" | "inconclusive";
+
+export interface EvaluationMetricValue {
+  name: string;
+  value: number;
+  unit?: string;
+  threshold?: number | null;
+  passes_threshold?: boolean | null;
+}
+
+export interface ModelDecompositionEntry {
+  class_name: string;
+  symbol: string;
+  reference_count: number;
+  predicted_count: number;
+  matched_count: number;
+  completeness: number;
+}
+
+export interface PosetEvaluationDetail {
+  is_dag: boolean;
+  root_element?: string | null;
+  root_conformity: boolean;
+  transitive_reduction_f1: number;
+  reachability_f1: number;
+  predicted_edge_count: number;
+  reference_edge_count: number;
+}
+
+export interface PolarityConcordanceDetail {
+  polarity_accuracy: number;
+  polarity_conflict_rate: number;
+  conflicting_pairs_count: number;
+  agreed_pairs_count: number;
+}
+
+export interface RetrievalEvaluationDetail {
+  mrr: number;
+  hits_at_1: number;
+  hits_at_3: number;
+  hits_at_10: number;
+  ndcg: number;
+  num_queries: number;
+}
+
+export interface ComparativeMetricDelta {
+  metric_name: string;
+  value_baseline: number;
+  value_pipeline: number;
+  delta: number;
+  favorable?: boolean | null;
+  winner?: string;
+}
+
+export interface EvaluationLevelResult {
+  run_id: string;
+  level: string;
+  phase_name?: string | null;
+  dataset_ref?: string | null;
+  outcome: EvaluationOutcome;
+  metrics: EvaluationMetricValue[];
+  notes?: Record<string, any>;
+  evaluated_at: string;
+}
+
+export interface EvaluationReportSummary {
+  evaluation_id: string;
+  run_ids: string[];
+  dataset_ref?: string | null;
+  dataset_type: string;
+  outcome: EvaluationOutcome;
+  created_at: string;
+  key_metrics: Record<string, number>;
+  has_markdown: boolean;
+  has_baseline: boolean;
+}
+
+export interface EvaluationReportDetail extends EvaluationReportSummary {
+  results_by_level: Record<string, EvaluationLevelResult[]>;
+  model_decomposition: ModelDecompositionEntry[];
+  poset_detail?: PosetEvaluationDetail | null;
+  polarity_detail?: PolarityConcordanceDetail | null;
+  retrieval_detail?: RetrievalEvaluationDetail | null;
+  comparative_deltas: ComparativeMetricDelta[];
+  summary_markdown: string;
+  omitted_components: string[];
+  violations: Record<string, any>[];
+}
+
+export interface BenchmarkDescriptor {
+  id: string;
+  name: string;
+  description: string;
+  task_type: string;
+  gold_standard_path: string;
+  queries_path?: string | null;
+  available: boolean;
+}
+
+export interface EvaluateRunRequest {
+  run_id: string;
+  benchmark_id?: string | null;
+  gold_standard_path?: string | null;
+  queries_path?: string | null;
+  strategy?: string | null;
+  baseline?: string | null;
+  min_mcc?: number;
+  min_pfs?: number;
+  sim_threshold?: number;
+  persist?: boolean;
+}
+
+export interface CompareRunsRequest {
+  run_id_a: string;
+  run_id_b: string;
+  gold_standard_path?: string | null;
+  axis?: string;
+}
+
+export interface ComparativeEvaluationResponse {
+  comparison_id: string;
+  run_id_a: string;
+  run_id_b: string;
+  axis: string;
+  dataset_ref?: string | null;
+  deltas: ComparativeMetricDelta[];
+  summary_markdown: string;
+}
+
+export interface EvaluateManifestRequest {
+  manifest_path: string;
+  baseline?: string | null;
+  build_graph?: boolean;
+}
+
+export type EvaluationSubTab =
+  | "canvas"
+  | "epistemics"
+  | "adjudication"
+  | "calibration"
+  | "grounding"
+  | "retrieval";
+
+export type EvaluationMode = "catalog" | "leaderboard" | "inspector";
+
 export interface DynamicsStepDetail {
   step: string;
   delta_auxiliary: number;

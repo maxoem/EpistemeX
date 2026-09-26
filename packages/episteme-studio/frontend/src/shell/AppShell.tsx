@@ -24,8 +24,8 @@ import {
 
 interface AppShellProps {
   children: React.ReactNode;
-  activeTab: "runs" | "graph" | "cypher" | "config" | "engine";
-  setActiveTab: (tab: "runs" | "graph" | "cypher" | "config" | "engine") => void;
+  activeTab: "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation";
+  setActiveTab: (tab: "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation") => void;
 }
 
 const NAV_TABS = [
@@ -40,6 +40,12 @@ const NAV_TABS = [
     label: "Corpus",
     title: "Corpus & Pipeline Runs: Artifact Provenance & Execution Manifests",
     icon: Layers,
+  },
+  {
+    id: "evaluation" as const,
+    label: "Evaluation",
+    title: "Evaluation Workbench: Benchmark Verification, Calibration & Alignment",
+    icon: Activity,
   },
   {
     id: "cypher" as const,

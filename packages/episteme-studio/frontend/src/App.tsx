@@ -20,8 +20,16 @@ const GraphCanvas = React.lazy(() =>
   import("./graph/GraphCanvas").then((m) => ({ default: m.GraphCanvas }))
 );
 
+const EvaluationWorkspace = React.lazy(() =>
+  import("./panels/evaluation/EvaluationWorkspace").then((m) => ({
+    default: m.EvaluationWorkspace,
+  }))
+);
+
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"runs" | "graph" | "cypher" | "config" | "engine">("runs");
+  const [activeTab, setActiveTab] = useState<
+    "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation"
+  >("runs");
   const [stagingOverride, setStagingOverride] = useState(false);
   const { isDiffActive, diffData } = useDiffStore();
   const {
@@ -94,23 +102,26 @@ export const App: React.FC = () => {
       <div className="flex flex-col w-full h-full overflow-hidden">
         <div className="flex flex-1 w-full h-full overflow-hidden">
           {/* Left: Run Browser List (Shown for runs and graph views) */}
-          {activeTab !== "cypher" && activeTab !== "config" && activeTab !== "engine" && (
-            <ResizablePanel
-              side="left"
-              storageKey="glp-studio-left-sidebar-width"
-              defaultWidth={280}
-              minWidth={280}
-              maxWidth={500}
-              collapsible={true}
-              collapseThreshold={120}
-              showFooter={false}
-              className="!bg-[#F8FAFC] dark:!bg-app-rail !border-r !border-[#E2E8F0] dark:!border-app-border"
-            >
-              <RunList />
-            </ResizablePanel>
-          )}
+          {activeTab !== "cypher" &&
+            activeTab !== "config" &&
+            activeTab !== "engine" &&
+            activeTab !== "evaluation" && (
+              <ResizablePanel
+                side="left"
+                storageKey="glp-studio-left-sidebar-width"
+                defaultWidth={280}
+                minWidth={280}
+                maxWidth={500}
+                collapsible={true}
+                collapseThreshold={120}
+                showFooter={false}
+                className="!bg-[#F8FAFC] dark:!bg-app-rail !border-r !border-[#E2E8F0] dark:!border-app-border"
+              >
+                <RunList />
+              </ResizablePanel>
+            )}
 
-          {/* Right: Main Workbench View, Graph View, Cypher Console, Engine Settings, or Config Editor */}
+          {/* Right: Main Workbench View, Graph View, Cypher Console, Engine Settings, Evaluation, or Config Editor */}
           <div className="flex-1 h-full overflow-hidden bg-app-bg">
             {activeTab === "runs" ? (
               <RunDetailView
@@ -126,6 +137,16 @@ export const App: React.FC = () => {
                 }
               >
                 <GraphCanvas onNavigateToCypher={() => setActiveTab("cypher")} />
+              </React.Suspense>
+            ) : activeTab === "evaluation" ? (
+              <React.Suspense
+                fallback={
+                  <div className="flex items-center justify-center h-full text-xs text-app-muted">
+                    Loading Evaluation Workbench...
+                  </div>
+                }
+              >
+                <EvaluationWorkspace />
               </React.Suspense>
             ) : activeTab === "cypher" ? (
               <div className="p-3 h-full">

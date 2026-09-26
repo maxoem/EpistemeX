@@ -29,8 +29,8 @@ import { useProjectSettingsStore } from "../store/projectSettingsStore";
 interface GlobalCommandOmnibarProps {
   nodes?: StudioNode[];
   onSelectNode: (node: StudioNode) => void;
-  activeTab: "runs" | "graph" | "cypher" | "config" | "engine";
-  setActiveTab: (tab: "runs" | "graph" | "cypher" | "config" | "engine") => void;
+  activeTab: "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation";
+  setActiveTab: (tab: "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation") => void;
   onOpenSettings: () => void;
   onOpenCreds: () => void;
   className?: string;
@@ -603,6 +603,23 @@ export const GlobalCommandOmnibar: React.FC<GlobalCommandOmnibarProps> = ({
                     <div className="flex items-center gap-2.5 min-w-0">
                       <Cpu className="w-3.5 h-3.5 text-blue-400 group-data-[selected=true]:text-white shrink-0" />
                       <span className="font-medium truncate">Engine Settings</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-app-muted group-data-[selected=true]:text-white/80 shrink-0">
+                      Navigate
+                    </span>
+                  </Command.Item>
+
+                  <Command.Item
+                    value="Go to Knowledge Graph Evaluation Workbench Benchmarks Calibration Leaderboard Triage"
+                    onSelect={() => {
+                      setActiveTab("evaluation");
+                      setIsOpen(false);
+                    }}
+                    className="flex items-center justify-between px-2.5 py-2 rounded-md cursor-pointer text-xs text-app-text hover:bg-app-subtle hover:text-app-heading data-[selected=true]:bg-blue-600 data-[selected=true]:text-white transition-colors group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Activity className="w-3.5 h-3.5 text-emerald-400 group-data-[selected=true]:text-white shrink-0" />
+                      <span className="font-medium truncate">Evaluation Workbench</span>
                     </div>
                     <span className="text-[10px] font-mono text-app-muted group-data-[selected=true]:text-white/80 shrink-0">
                       Navigate

@@ -87,16 +87,16 @@ Every analytical use case in Episteme Studio maps directly to an established bac
 Establish the TypeScript API client bindings, global state slice, and shell routing without regressions to existing panels.
 
 #### Tasks
-* [ ] **0.1 API Client Implementation (`src/api/client.ts`):**
+* [x] **0.1 API Client Implementation (`src/api/client.ts`):**
   * Implement typed methods for all `/api/evaluation/*` routes referencing types in [`src/api/types.ts`](file:///Users/maxoehm/EpistemeX/packages/episteme-studio/frontend/src/api/types.ts).
-* [ ] **0.2 State Store Definition (`src/store/evaluationStore.ts`):**
+* [x] **0.2 State Store Definition (`src/store/evaluationStore.ts`):**
   * Create unified Zustand store supporting:
     * `activeReport`: `EvaluationReportDetail | null`
     * `activeSubTab`: `"canvas" | "epistemics" | "adjudication" | "calibration" | "grounding" | "retrieval"`
     * `stagedAdjudications`: `Map<string, EdgeAdjudicationItem>`
     * `optimisticScalarDeltas`: `{ f1: number, precision: number, recall: number }`
     * `isCommittingBatch`: `boolean`
-* [ ] **0.3 Shell Navigation Integration (`src/shell/AppShell.tsx` & `src/App.tsx`):**
+* [x] **0.3 Shell Navigation Integration (`src/shell/AppShell.tsx` & `src/App.tsx`):**
   * Add `"evaluation"` (`"Evaluation"`, icon: `Activity`) to `NAV_TABS` in `AppShell.tsx`.
   * Add lazy-loaded route in `App.tsx` rendering `EvaluationWorkspace.tsx`.
 
