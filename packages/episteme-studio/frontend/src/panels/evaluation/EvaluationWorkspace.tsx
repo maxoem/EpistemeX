@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import {
   Activity,
+  Award,
   BarChart2,
   BookOpen,
   CheckCircle2,
@@ -9,6 +10,7 @@ import {
   Filter,
   Layers,
   Network,
+  Plus,
   RefreshCw,
   Search,
   Sliders,
@@ -18,6 +20,10 @@ import {
 } from "lucide-react";
 import { useEvaluationStore } from "../../store/evaluationStore";
 import { ResizablePanel } from "../ResizablePanel";
+import { BenchmarkCatalogPage } from "./catalog/BenchmarkCatalogPage";
+import { PromoteToGoldModal } from "./catalog/PromoteToGoldModal";
+import { RegisterBenchmarkModal } from "./catalog/RegisterBenchmarkModal";
+import { LeaderboardPage } from "./leaderboard/LeaderboardPage";
 import type { EvaluationMode, EvaluationSubTab, EvaluationOutcome } from "../../api/types";
 
 const SUB_TABS: Array<{ id: EvaluationSubTab; label: string; icon: React.ElementType }> = [
@@ -52,6 +58,8 @@ export const EvaluationWorkspace: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState<string>("all");
+  const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 
   useEffect(() => {
     fetchReports();
@@ -211,19 +219,20 @@ export const EvaluationWorkspace: React.FC = () => {
       {/* Main Split: Left Rail Controller + Center Fluid Workspace */}
       <div className="flex flex-1 w-full h-full overflow-hidden">
         {/* Left Primary Controller Rail (280px - 320px Resizable) */}
-        <ResizablePanel
-          side="left"
-          storageKey="episteme-eval-left-sidebar-width"
-          defaultWidth={300}
-          minWidth={260}
-          maxWidth={460}
-          collapsible={true}
-          collapseThreshold={120}
-          showFooter={false}
-          className="!bg-[#F8FAFC] dark:!bg-app-rail !border-r !border-[#E2E8F0] dark:!border-app-border flex flex-col"
-        >
-          <div className="flex flex-col h-full overflow-hidden">
-            {/* Search & Filter Header */}
+        {activeMode !== "leaderboard" && (
+          <ResizablePanel
+            side="left"
+            storageKey="episteme-eval-left-sidebar-width"
+            defaultWidth={300}
+            minWidth={260}
+            maxWidth={460}
+            collapsible={true}
+            collapseThreshold={120}
+            showFooter={false}
+            className="!bg-[#F8FAFC] dark:!bg-app-rail !border-r !border-[#E2E8F0] dark:!border-app-border flex flex-col"
+          >
+            <div className="flex flex-col h-full overflow-hidden">
+              {/* Search & Filter Header */}
             <div className="p-2.5 border-b border-app-border space-y-2 shrink-0">
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-app-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -337,43 +346,38 @@ export const EvaluationWorkspace: React.FC = () => {
                 })
               )}
             </div>
+
+            {/* Catalog Action Buttons at bottom of Left Rail */}
+            {activeMode === "catalog" && (
+              <div className="p-2 border-t border-app-border space-y-1.5 shrink-0 bg-app-surface/60">
+                <button
+                  onClick={() => setIsPromoteModalOpen(true)}
+                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white transition-colors shadow-xs"
+                >
+                  <Award className="w-3.5 h-3.5" />
+                  <span>+ Promote from Run</span>
+                </button>
+                <button
+                  onClick={() => setIsRegisterModalOpen(true)}
+                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-app-surface hover:bg-app-subtle text-app-text border border-app-border transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5 text-app-muted" />
+                  <span>+ Register Benchmark</span>
+                </button>
+              </div>
+            )}
           </div>
         </ResizablePanel>
+        )}
 
         {/* Center Fluid Workspace */}
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-app-bg">
           {activeMode === "catalog" ? (
-            /* Page 1: Benchmark Catalog (Phase 1 mount target) */
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-app-muted">
-              <BookOpen className="w-12 h-12 text-blue-500 mb-3 opacity-60" />
-              <h2 className="text-base font-semibold text-app-heading mb-1">
-                Benchmark Catalog & Curation Vitrine
-              </h2>
-              <p className="text-xs max-w-md text-app-muted leading-relaxed mb-4">
-                Gold-standard benchmark repository, pre-flight DAG acyclicity linters (ISSUE-033),
-                and golden pathway pipeline promotions.
-              </p>
-              <div className="flex items-center gap-2 text-[11px] font-mono bg-app-surface px-3 py-1.5 rounded border border-app-border">
-                <span>Phase 1 Mount Ready:</span>
-                <span className="text-blue-500">BenchmarkCatalogPage.tsx</span>
-              </div>
-            </div>
+            /* Page 1: Benchmark Catalog (Phase 1) */
+            <BenchmarkCatalogPage />
           ) : activeMode === "leaderboard" ? (
-            /* Page 2: Benchmark Leaderboard Matrix & Pareto Studio (Phase 1 mount target) */
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-app-muted">
-              <BarChart2 className="w-12 h-12 text-blue-500 mb-3 opacity-60" />
-              <h2 className="text-base font-semibold text-app-heading mb-1">
-                Multi-Virtue Pareto Frontier & Leaderboard Studio
-              </h2>
-              <p className="text-xs max-w-md text-app-muted leading-relaxed mb-4">
-                Multi-objective comparative analysis (F₁ vs. Bourbaki Tenability δ* vs.
-                Cost/Latency, ISSUE-030) and pairwise diff inspection.
-              </p>
-              <div className="flex items-center gap-2 text-[11px] font-mono bg-app-surface px-3 py-1.5 rounded border border-app-border">
-                <span>Phase 1 Mount Ready:</span>
-                <span className="text-blue-500">LeaderboardPage.tsx</span>
-              </div>
-            </div>
+            /* Page 2: Benchmark Leaderboard Matrix & Pareto Studio (Phase 1) */
+            <LeaderboardPage />
           ) : (
             /* Page 3: Deep Single-Run Evaluation Inspector */
             <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -501,6 +505,16 @@ export const EvaluationWorkspace: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Global Promotion & Benchmark Registration Modals */}
+      <PromoteToGoldModal
+        isOpen={isPromoteModalOpen}
+        onClose={() => setIsPromoteModalOpen(false)}
+      />
+      <RegisterBenchmarkModal
+        isOpen={isRegisterModalOpen}
+        onClose={() => setIsRegisterModalOpen(false)}
+      />
     </div>
   );
 };

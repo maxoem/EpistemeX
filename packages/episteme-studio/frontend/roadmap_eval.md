@@ -116,20 +116,20 @@ Provide the benchmark dataset management desk and cross-run comparative Pareto a
 * [`ISSUE-030`](file:///Users/maxoehm/EpistemeX/packages/episteme-studio/tests/test_evaluation_backend.py#L971): Multi-Run Benchmark Leaderboard Matrix & Pareto Frontier
 
 #### Tasks
-* [ ] **1.1 Benchmark Catalog Page (`src/panels/evaluation/catalog/BenchmarkCatalogPage.tsx`):**
+* [x] **1.1 Benchmark Catalog Page (`src/panels/evaluation/catalog/BenchmarkCatalogPage.tsx`):**
   * Master-detail 3-column split: Dataset list (300px) $\to$ Invariant Vitrine (Fluid) $\to$ Pre-Flight Linter Rail (380px).
-* [ ] **1.2 Pre-Flight Linter Rail (`src/panels/evaluation/catalog/PreFlightLinterRail.tsx`):**
+* [x] **1.2 Pre-Flight Linter Rail (`src/panels/evaluation/catalog/PreFlightLinterRail.tsx`):**
   * Calls `validateBenchmark` to display strict DAG acyclicity, root element conformity $B(TN) = \{T_0\}$, and dangling edge detection.
   * Embedded CodeMirror JSON-LD editor with syntax error squiggles.
-* [ ] **1.3 "Golden Pathway" Promotion Modal (`src/panels/evaluation/catalog/PromoteToGoldModal.tsx`):**
+* [x] **1.3 "Golden Pathway" Promotion Modal (`src/panels/evaluation/catalog/PromoteToGoldModal.tsx`):**
   * Converts an executed, visually corrected pipeline run into an immutable gold benchmark (`v1.0-gold`).
-* [ ] **1.4 Benchmark Leaderboard Matrix (`src/panels/evaluation/leaderboard/LeaderboardPage.tsx`):**
+* [x] **1.4 Benchmark Leaderboard Matrix (`src/panels/evaluation/leaderboard/LeaderboardPage.tsx`):**
   * Headless Linear-style table (40px fixed rows, tabular numerals `tnum`, click-to-sort headers).
   * 44px top toolbar with benchmark dataset picker and `[+ Fast Evaluate Run]` modal trigger.
-* [ ] **1.5 Interactive Multi-Virtue Pareto Canvas (`src/panels/evaluation/leaderboard/ParetoFrontierPlot.tsx`):**
+* [x] **1.5 Interactive Multi-Virtue Pareto Canvas (`src/panels/evaluation/leaderboard/ParetoFrontierPlot.tsx`):**
   * ECharts scatter canvas plotting runs in multi-dimensional objective space ($F_1$ vs. Bourbaki Tenability $\delta^*$ vs. Cost/Latency).
   * Renders non-dominated step-line and highlights Pareto-optimal runs with glowing blue vertices.
-* [ ] **1.6 Collapsible Pairwise Run Diff Dock (`src/panels/evaluation/leaderboard/PairwiseDiffDrawer.tsx`):**
+* [x] **1.6 Collapsible Pairwise Run Diff Dock (`src/panels/evaluation/leaderboard/PairwiseDiffDrawer.tsx`):**
   * 260px collapsible drawer comparing Model A vs. Model B (metric deltas, gained triples, lost triples, inverted polarities).
 
 #### Definition of Done (DoD)
