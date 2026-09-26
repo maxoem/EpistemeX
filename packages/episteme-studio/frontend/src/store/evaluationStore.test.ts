@@ -87,3 +87,64 @@ test("evaluationStore: HITL staging buffer stages, unstages, and tracks optimist
   assert.equal(stateAfterClear.stagedAdjudications.size, 0);
   assert.deepEqual(stateAfterClear.optimisticScalarDeltas, { f1: 0, precision: 0, recall: 0 });
 });
+
+test("evaluationStore: Phase 2 graph overlay, filters, opacity, and selection state updates", () => {
+  const store = useEvaluationStore.getState();
+  store.resetStore();
+
+  // Test alignment filter toggles
+  assert.equal(useEvaluationStore.getState().alignmentFilters.fn, true);
+  store.toggleAlignmentFilter("fn");
+  assert.equal(useEvaluationStore.getState().alignmentFilters.fn, false);
+  store.toggleAlignmentFilter("fn");
+  assert.equal(useEvaluationStore.getState().alignmentFilters.fn, true);
+
+  // Test ghost opacity clamping
+  store.setGhostOpacity(0.65);
+  assert.equal(useEvaluationStore.getState().ghostOpacity, 0.65);
+  store.setGhostOpacity(2.0); // should clamp to 1.0
+  assert.equal(useEvaluationStore.getState().ghostOpacity, 1.0);
+  store.setGhostOpacity(-0.5); // should clamp to 0.1
+  assert.equal(useEvaluationStore.getState().ghostOpacity, 0.1);
+
+  // Test selected overlay item
+  const sampleNode = {
+    id: "str:CPM_Axiom_1_Inertia",
+    label: "Law of Inertia",
+    class_name: "actual_models",
+    symbol: "M",
+    alignment_status: "true_positive" as const,
+    similarity_score: 1.0,
+    is_ghost: false,
+  };
+  store.setSelectedOverlayItem({ type: "node", item: sampleNode });
+  assert.deepEqual(useEvaluationStore.getState().selectedOverlayItem, {
+    type: "node",
+    item: sampleNode,
+  });
+
+  store.setSelectedOverlayItem(null);
+  assert.equal(useEvaluationStore.getState().selectedOverlayItem, null);
+
+  // Test Bourbaki hull and class filters
+  assert.equal(useEvaluationStore.getState().bourbakiHullEnabled, false);
+  store.setBourbakiHullEnabled(true);
+  assert.equal(useEvaluationStore.getState().bourbakiHullEnabled, true);
+
+  assert.equal(useEvaluationStore.getState().selectedBourbakiClasses.has("Mp"), true);
+  store.toggleBourbakiClass("Mp");
+  assert.equal(useEvaluationStore.getState().selectedBourbakiClasses.has("Mp"), false);
+
+  // Test ambiguous drawer toggle and cycle isolation
+  store.setIsAmbiguousDrawerOpen(true);
+  assert.equal(useEvaluationStore.getState().isAmbiguousDrawerOpen, true);
+
+  store.setCycleHighlightNodeIds(["node-a", "node-b", "node-a"]);
+  assert.deepEqual(useEvaluationStore.getState().cycleHighlightNodeIds, [
+    "node-a",
+    "node-b",
+    "node-a",
+  ]);
+  store.setCycleHighlightNodeIds(null);
+  assert.equal(useEvaluationStore.getState().cycleHighlightNodeIds, null);
+});

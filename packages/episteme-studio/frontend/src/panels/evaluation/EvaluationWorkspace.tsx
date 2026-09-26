@@ -24,16 +24,8 @@ import { BenchmarkCatalogPage } from "./catalog/BenchmarkCatalogPage";
 import { PromoteToGoldModal } from "./catalog/PromoteToGoldModal";
 import { RegisterBenchmarkModal } from "./catalog/RegisterBenchmarkModal";
 import { LeaderboardPage } from "./leaderboard/LeaderboardPage";
-import type { EvaluationMode, EvaluationSubTab, EvaluationOutcome } from "../../api/types";
-
-const SUB_TABS: Array<{ id: EvaluationSubTab; label: string; icon: React.ElementType }> = [
-  { id: "canvas", label: "Topological Canvas", icon: Network },
-  { id: "epistemics", label: "Epistemic TheoryNet", icon: Layers },
-  { id: "adjudication", label: "Adjudication Queue", icon: Sliders },
-  { id: "calibration", label: "Calibration Lab", icon: Sparkles },
-  { id: "grounding", label: "Document Grounding", icon: BookOpen },
-  { id: "retrieval", label: "Retrieval & Stress", icon: Filter },
-];
+import { RunEvaluationInspector } from "./inspector/RunEvaluationInspector";
+import type { EvaluationOutcome } from "../../api/types";
 
 export const EvaluationWorkspace: React.FC = () => {
   const {
@@ -379,129 +371,8 @@ export const EvaluationWorkspace: React.FC = () => {
             /* Page 2: Benchmark Leaderboard Matrix & Pareto Studio (Phase 1) */
             <LeaderboardPage />
           ) : (
-            /* Page 3: Deep Single-Run Evaluation Inspector */
-            <div className="flex-1 flex flex-col h-full overflow-hidden">
-              {/* Header & Persistent KPI Strip (Row 1: 48px Fixed + Row 2: 40px Sub-Nav) */}
-              <div className="shrink-0 border-b border-app-border bg-app-surface">
-                {/* Row 1: Fixed 48px Header */}
-                <div className="h-12 px-4 flex items-center justify-between border-b border-app-border/60">
-                  <div className="flex items-center gap-3 min-w-0">
-                    {activeReport ? (
-                      renderOutcomeBadge(activeReport.outcome)
-                    ) : (
-                      <span className="text-xs text-app-muted">No Run Selected</span>
-                    )}
-
-                    <div className="flex items-center gap-2 truncate">
-                      <h1 className="text-sm font-semibold text-app-heading truncate">
-                        {activeReport ? activeReport.evaluation_id : "Select an Evaluation Run"}
-                      </h1>
-                      {activeReport?.dataset_ref && (
-                        <span className="text-[11px] font-mono text-app-muted px-1.5 py-0.5 bg-app-bg rounded border border-app-border truncate">
-                          {activeReport.dataset_ref}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Persistent KPI Strip with Tabular Numerals */}
-                  {activeReport && (
-                    <div className="flex items-center gap-4 text-xs font-mono tabular-nums">
-                      <div className="flex flex-col items-end">
-                        <span className="text-[10px] uppercase text-app-muted font-sans font-semibold">
-                          Macro F₁
-                        </span>
-                        <span className="text-xs font-semibold text-app-text">
-                          {(activeReport.key_metrics?.f1 ?? activeReport.key_metrics?.macro_f1 ?? 0).toFixed(3)}
-                        </span>
-                      </div>
-                      <div className="h-5 w-px bg-app-border" />
-                      <div className="flex flex-col items-end">
-                        <span className="text-[10px] uppercase text-app-muted font-sans font-semibold">
-                          Tenability δ*
-                        </span>
-                        <span className="text-xs font-semibold text-app-text">
-                          {(activeReport.key_metrics?.delta_star ?? activeReport.key_metrics?.tenability ?? 0).toFixed(3)}
-                        </span>
-                      </div>
-                      <div className="h-5 w-px bg-app-border" />
-                      <div className="flex flex-col items-end">
-                        <span className="text-[10px] uppercase text-app-muted font-sans font-semibold">
-                          ECE
-                        </span>
-                        <span className="text-xs font-semibold text-app-text">
-                          {(activeReport.key_metrics?.ece ?? 0).toFixed(3)}
-                        </span>
-                      </div>
-                      <div className="h-5 w-px bg-app-border" />
-                      <div className="flex flex-col items-end">
-                        <span className="text-[10px] uppercase text-app-muted font-sans font-semibold">
-                          MRR
-                        </span>
-                        <span className="text-xs font-semibold text-app-text">
-                          {(activeReport.key_metrics?.mrr ?? 0).toFixed(3)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Row 2: Fixed 40px Zero-Box Segmented Sub-Nav */}
-                <div className="h-10 px-4 flex items-center gap-1 overflow-x-auto">
-                  {SUB_TABS.map((tab) => {
-                    const Icon = tab.icon;
-                    const isActive = activeSubTab === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveSubTab(tab.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-                          isActive
-                            ? "bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400 font-semibold"
-                            : "text-app-muted hover:text-app-text hover:bg-app-subtle"
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5" />
-                        <span>{tab.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Sub-View Content Body */}
-              <div className="flex-1 overflow-hidden relative">
-                {!activeReport ? (
-                  <div className="flex flex-col items-center justify-center h-full p-8 text-center text-app-muted">
-                    <Activity className="w-10 h-10 text-app-muted/50 mb-2" />
-                    <p className="text-xs">
-                      Select an evaluation report from the left panel to inspect metrics and graph
-                      alignments.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full p-8 text-center text-app-muted">
-                    <div className="p-3 rounded-full bg-blue-500/10 text-blue-500 mb-3">
-                      {React.createElement(
-                        SUB_TABS.find((t) => t.id === activeSubTab)?.icon || Activity,
-                        { className: "w-6 h-6" }
-                      )}
-                    </div>
-                    <h3 className="text-sm font-semibold text-app-heading mb-1">
-                      {SUB_TABS.find((t) => t.id === activeSubTab)?.label}
-                    </h3>
-                    <p className="text-xs max-w-md text-app-muted leading-relaxed mb-4">
-                      Active Report: <span className="font-mono text-app-text">{activeReport.evaluation_id}</span>
-                      <br />
-                      Sub-view ready for vertical slice implementation according to roadmap.
-                    </p>
-                    <div className="text-[11px] font-mono bg-app-surface px-3 py-1.5 rounded border border-app-border text-app-muted">
-                      Status: Phase 0 Foundations & Shell Wiring Complete
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            /* Page 3: Deep Single-Run Evaluation Inspector (Phase 2) */
+            <RunEvaluationInspector />
           )}
         </div>
       </div>

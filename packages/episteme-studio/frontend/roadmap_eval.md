@@ -147,16 +147,16 @@ Deliver the single-run diagnostic cockpit (Sub-View 3.1) enabling visual error t
 * [`ISSUE-026`](file:///Users/maxoehm/EpistemeX/packages/episteme-studio/tests/test_evaluation_backend.py#L869): Visual Error Triage & Canvas Overlay (Ghost Node Synthesis)
 
 #### Tasks
-* [ ] **2.1 Run Evaluation Inspector Header (`src/panels/evaluation/components/EvaluationHeader.tsx`):**
+* [x] **2.1 Run Evaluation Inspector Header (`src/panels/evaluation/components/EvaluationHeader.tsx`):**
   * Persistent 48px header displaying run breadcrumbs, outcome pill (`PASS` / `FAIL`), and persistent KPI strip ($F_1$, ECE, $\delta^*$, MRR) with tabular numerals.
   * Persistent 40px zero-box segmented sub-nav switching between Sub-Views 3.1 through 3.6.
-* [ ] **2.2 G6 Dual-Graph Canvas (`src/panels/evaluation/inspector/canvas/TopologicalCanvasView.tsx`):**
+* [x] **2.2 G6 Dual-Graph Canvas (`src/panels/evaluation/inspector/canvas/TopologicalCanvasView.tsx`):**
   * `@antv/g6` canvas rendering True Positives (Green), False Positives (Coral Red), Ghost False Negatives (Slate Dashed, 40% opacity), and Polarity Inversions (Amber Hazard).
-* [ ] **2.3 Canvas Evaluation HUD (`src/panels/evaluation/inspector/canvas/CanvasEvaluationHud.tsx`):**
+* [x] **2.3 Canvas Evaluation HUD (`src/panels/evaluation/inspector/canvas/CanvasEvaluationHud.tsx`):**
   * Floating 220px dock with alignment filters, ghost node opacity slider, and Bourbaki hull clustering toggle.
-* [ ] **2.4 Docked Topological Error Quad (`src/panels/evaluation/inspector/canvas/TopologicalErrorQuad.tsx`):**
+* [x] **2.4 Docked Topological Error Quad (`src/panels/evaluation/inspector/canvas/TopologicalErrorQuad.tsx`):**
   * 360px docked panel presenting predicted triple, gold reference match, similarity score, LLM confidence, verbatim quote, and a direct `[Jump to Document BBox]` link.
-* [ ] **2.5 Ambiguous Entity Reconciliation Drawer (`src/panels/evaluation/inspector/canvas/AmbiguousAliasDrawer.tsx`):**
+* [x] **2.5 Ambiguous Entity Reconciliation Drawer (`src/panels/evaluation/inspector/canvas/AmbiguousAliasDrawer.tsx`):**
   * Non-blocking slide-out drawer listing borderline entity merges ($\tau \in [0.75, 0.88]$) for bulk review without blocking canvas interaction.
 
 #### Definition of Done (DoD)

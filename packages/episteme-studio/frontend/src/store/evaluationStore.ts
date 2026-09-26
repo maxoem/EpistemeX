@@ -8,12 +8,27 @@ import type {
   EvaluationReportDetail,
   EvaluationReportSummary,
   EvaluationSubTab,
+  EvaluationGraphOverlay,
+  EvaluationNodeOverlay,
+  EvaluationEdgeOverlay,
 } from "../api/types";
 
 export interface OptimisticScalarDeltas {
   f1: number;
   precision: number;
   recall: number;
+}
+
+export type OverlaySelectedItem =
+  | { type: "node"; item: EvaluationNodeOverlay }
+  | { type: "edge"; item: EvaluationEdgeOverlay };
+
+export interface CanvasAlignmentFilters {
+  tp: boolean;
+  fp: boolean;
+  fn: boolean;
+  polarity: boolean;
+  borderline: boolean;
 }
 
 export interface EvaluationState {
@@ -29,6 +44,17 @@ export interface EvaluationState {
   // Benchmarks
   benchmarks: BenchmarkDescriptor[];
   selectedBenchmarkId: string | null;
+
+  // Graph Overlay & Canvas State (Phase 2)
+  graphOverlay: EvaluationGraphOverlay | null;
+  isLoadingOverlay: boolean;
+  selectedOverlayItem: OverlaySelectedItem | null;
+  alignmentFilters: CanvasAlignmentFilters;
+  ghostOpacity: number;
+  bourbakiHullEnabled: boolean;
+  selectedBourbakiClasses: Set<string>;
+  isAmbiguousDrawerOpen: boolean;
+  cycleHighlightNodeIds: string[] | null;
 
   // HITL Staging Buffer (Deterministic, no auto-debounce race conditions)
   stagedAdjudications: Map<string, EdgeAdjudicationItem>;
@@ -50,6 +76,17 @@ export interface EvaluationState {
   fetchReports: (params?: { run_id?: string; outcome?: string }) => Promise<void>;
   fetchReportDetail: (evaluationId: string) => Promise<EvaluationReportDetail | null>;
   fetchBenchmarks: () => Promise<void>;
+  fetchGraphOverlay: (evaluationId: string) => Promise<EvaluationGraphOverlay | null>;
+
+  // Canvas & Overlay Actions
+  setSelectedOverlayItem: (item: OverlaySelectedItem | null) => void;
+  toggleAlignmentFilter: (key: keyof CanvasAlignmentFilters) => void;
+  setAlignmentFilters: (filters: CanvasAlignmentFilters) => void;
+  setGhostOpacity: (opacity: number) => void;
+  setBourbakiHullEnabled: (enabled: boolean) => void;
+  toggleBourbakiClass: (cls: string) => void;
+  setIsAmbiguousDrawerOpen: (open: boolean) => void;
+  setCycleHighlightNodeIds: (nodeIds: string[] | null) => void;
 
   // Staging Buffer Actions
   stageAdjudication: (candidateId: string, item: EdgeAdjudicationItem) => void;
@@ -71,6 +108,16 @@ const INITIAL_OPTIMISTIC_DELTAS: OptimisticScalarDeltas = {
   recall: 0.0,
 };
 
+const DEFAULT_ALIGNMENT_FILTERS: CanvasAlignmentFilters = {
+  tp: true,
+  fp: true,
+  fn: true,
+  polarity: true,
+  borderline: true,
+};
+
+const DEFAULT_BOURBAKI_CLASSES = new Set<string>(["Mp", "M", "Mpp", "C", "I"]);
+
 export const useEvaluationStore = create<EvaluationState>((set, get) => ({
   activeMode: "inspector",
   activeSubTab: "canvas",
@@ -81,6 +128,17 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
 
   benchmarks: [],
   selectedBenchmarkId: null,
+
+  // Graph Overlay & Canvas State (Phase 2)
+  graphOverlay: null,
+  isLoadingOverlay: false,
+  selectedOverlayItem: null,
+  alignmentFilters: DEFAULT_ALIGNMENT_FILTERS,
+  ghostOpacity: 0.4,
+  bourbakiHullEnabled: false,
+  selectedBourbakiClasses: new Set(DEFAULT_BOURBAKI_CLASSES),
+  isAmbiguousDrawerOpen: false,
+  cycleHighlightNodeIds: null,
 
   stagedAdjudications: new Map<string, EdgeAdjudicationItem>(),
   optimisticScalarDeltas: INITIAL_OPTIMISTIC_DELTAS,
@@ -94,19 +152,32 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
   setActiveSubTab: (tab) => set({ activeSubTab: tab }),
 
   setActiveReportId: (id) => {
-    set({ activeReportId: id });
+    set({
+      activeReportId: id,
+      selectedOverlayItem: null,
+      cycleHighlightNodeIds: null,
+    });
     if (id) {
       get().fetchReportDetail(id);
+      get().fetchGraphOverlay(id);
     } else {
-      set({ activeReport: null });
+      set({ activeReport: null, graphOverlay: null });
     }
   },
 
-  setActiveReport: (report) =>
+  setActiveReport: (report) => {
     set({
       activeReport: report,
       activeReportId: report ? report.evaluation_id : null,
-    }),
+      selectedOverlayItem: null,
+      cycleHighlightNodeIds: null,
+    });
+    if (report) {
+      get().fetchGraphOverlay(report.evaluation_id);
+    } else {
+      set({ graphOverlay: null });
+    }
+  },
 
   setSelectedBenchmarkId: (id) => set({ selectedBenchmarkId: id }),
 
@@ -150,6 +221,58 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
       });
     }
   },
+
+  fetchGraphOverlay: async (evaluationId: string) => {
+    if (typeof window === "undefined") {
+      set({ isLoadingOverlay: false });
+      return null;
+    }
+    set({ isLoadingOverlay: true });
+    try {
+      const overlay = await api.getEvaluationGraphOverlay(evaluationId, {
+        includeGhosts: true,
+      });
+      set({ graphOverlay: overlay, isLoadingOverlay: false });
+      return overlay;
+    } catch (err: any) {
+      console.warn("Failed to fetch graph overlay:", err);
+      set({ isLoadingOverlay: false });
+      return null;
+    }
+  },
+
+  setSelectedOverlayItem: (item) => set({ selectedOverlayItem: item }),
+
+  toggleAlignmentFilter: (key) => {
+    const current = get().alignmentFilters;
+    set({
+      alignmentFilters: {
+        ...current,
+        [key]: !current[key],
+      },
+    });
+  },
+
+  setAlignmentFilters: (filters) => set({ alignmentFilters: filters }),
+
+  setGhostOpacity: (opacity) =>
+    set({ ghostOpacity: Math.max(0.1, Math.min(1.0, opacity)) }),
+
+  setBourbakiHullEnabled: (enabled) => set({ bourbakiHullEnabled: enabled }),
+
+  toggleBourbakiClass: (cls) => {
+    const current = new Set(get().selectedBourbakiClasses);
+    if (current.has(cls)) {
+      current.delete(cls);
+    } else {
+      current.add(cls);
+    }
+    set({ selectedBourbakiClasses: current });
+  },
+
+  setIsAmbiguousDrawerOpen: (open) => set({ isAmbiguousDrawerOpen: open }),
+
+  setCycleHighlightNodeIds: (nodeIds) => set({ cycleHighlightNodeIds: nodeIds }),
 
   stageAdjudication: (candidateId, item) => {
     const current = get().stagedAdjudications;
@@ -258,6 +381,10 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
     set({
       activeReportId: null,
       activeReport: null,
+      graphOverlay: null,
+      selectedOverlayItem: null,
+      isAmbiguousDrawerOpen: false,
+      cycleHighlightNodeIds: null,
       stagedAdjudications: new Map(),
       optimisticScalarDeltas: INITIAL_OPTIMISTIC_DELTAS,
       isCommittingBatch: false,

@@ -517,12 +517,28 @@ export const api = {
 
   async getEvaluationGraphOverlay(
     evaluationId: string,
-    runId?: string,
+    runIdOrParams?:
+      | string
+      | {
+          runId?: string;
+          benchmarkId?: string;
+          includeGhosts?: boolean;
+          filterStatus?: string;
+        },
     benchmarkId?: string
   ): Promise<EvaluationGraphOverlay> {
     const q = new URLSearchParams();
-    if (runId) q.set("run_id", runId);
-    if (benchmarkId) q.set("benchmark_id", benchmarkId);
+    if (typeof runIdOrParams === "string") {
+      if (runIdOrParams) q.set("run_id", runIdOrParams);
+      if (benchmarkId) q.set("benchmark_id", benchmarkId);
+    } else if (runIdOrParams) {
+      if (runIdOrParams.runId) q.set("run_id", runIdOrParams.runId);
+      if (runIdOrParams.benchmarkId) q.set("benchmark_id", runIdOrParams.benchmarkId);
+      if (runIdOrParams.includeGhosts !== undefined) {
+        q.set("include_ghosts", runIdOrParams.includeGhosts.toString());
+      }
+      if (runIdOrParams.filterStatus) q.set("filter_status", runIdOrParams.filterStatus);
+    }
     const query = q.toString() ? `?${q.toString()}` : "";
     const res = await fetch(
       `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(evaluationId)}/graph-overlay${query}`
