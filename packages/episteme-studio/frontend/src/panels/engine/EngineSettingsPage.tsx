@@ -39,6 +39,16 @@ export const EngineSettingsPage: React.FC = () => {
     isLoading,
     isSaving,
     error,
+    activeCategory,
+    setActiveCategory,
+    ontologySubTab,
+    setOntologySubTab,
+    unmappedSubTab,
+    setUnmappedSubTab,
+    selectedItem,
+    setSelectedItem,
+    selectedUnmapped,
+    setSelectedUnmapped,
     fetchEngineSettings,
     fetchUnmappedPredicates,
     updateEngineSettings,
@@ -46,28 +56,12 @@ export const EngineSettingsPage: React.FC = () => {
     mapPredicate,
   } = useEngineSettingsStore();
 
-  // Rail 1: Top-Level Configuration Tree Category
-  const [activeCategory, setActiveCategory] = useState<"ontology" | "unmapped" | "models">("ontology");
-
-  // Rail 2: Zero-Box Sub-Tab Scoping (Localized Compact Controls)
-  const [ontologySubTab, setOntologySubTab] = useState<
-    "nodes" | "relations" | "components" | "arg_relations"
-  >("nodes");
-  const [unmappedSubTab, setUnmappedSubTab] = useState<"discovered" | "aliases">("discovered");
-
-  // Rail 3: Contextual Inspector Selection (Master-Detail Pattern)
-  const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(() => ({
-    type: "node",
-    id: "Concept",
-  }));
-
   // Search filters
   const [searchFilter, setSearchFilter] = useState("");
   const [unmappedSearch, setUnmappedSearch] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Multi-select state for unmapped predicates
-  const [selectedUnmapped, setSelectedUnmapped] = useState<Set<string>>(new Set());
+  // Multi-select state for unmapped predicates batch canonical
   const [batchCanonical, setBatchCanonical] = useState<string>("");
   const [isBatchMapping, setIsBatchMapping] = useState(false);
 

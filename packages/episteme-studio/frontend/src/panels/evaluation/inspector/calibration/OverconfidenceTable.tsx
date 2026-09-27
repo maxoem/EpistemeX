@@ -9,6 +9,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import type { MiscalibratedAssertionItem } from "../../../../api/types";
+import { ActionableHookPill } from "../../components/ActionableHookPill";
 
 export interface OverconfidenceTableProps {
   assertions: MiscalibratedAssertionItem[];
@@ -173,18 +174,16 @@ export const OverconfidenceTable: React.FC<OverconfidenceTableProps> = ({
             </div>
           )}
 
-          {/* Action Trigger */}
-          {onOpenConfigEditor && (
-            <div className="pt-1 flex justify-end">
-              <button
-                onClick={onOpenConfigEditor}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-2xs cursor-pointer"
-              >
-                <Wrench className="w-3.5 h-3.5" />
-                <span>Tune Extraction Prompt in Execution</span>
-              </button>
-            </div>
-          )}
+          {/* Action Trigger: Cross-module prompt tuning hook */}
+          <div className="pt-1 flex justify-end">
+            <ActionableHookPill
+              type="overconfidence"
+              sourceText={selectedItem.evidence_text || selectedItem.descriptor}
+              assertionId={selectedItem.assertion_id}
+              phaseKey="phase2"
+              onClick={onOpenConfigEditor}
+            />
+          </div>
         </div>
       )}
     </div>

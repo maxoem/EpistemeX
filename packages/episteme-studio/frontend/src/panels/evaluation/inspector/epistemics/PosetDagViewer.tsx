@@ -12,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEvaluationStore } from "../../../../store/evaluationStore";
+import { ActionableHookPill } from "../../components/ActionableHookPill";
 import type { PosetEvaluationDetail } from "../../../../api/types";
 
 export interface CycleViolation {
@@ -248,14 +249,12 @@ export const PosetDagViewer: React.FC = () => {
                       ))}
                     </div>
 
-                    {/* Isolate Cycle Action Button */}
-                    <button
-                      onClick={() => handleIsolateCycle(cycle)}
-                      className="px-2.5 py-1 rounded text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-colors shadow-2xs flex items-center gap-1.5"
-                    >
-                      <Network className="w-3.5 h-3.5" />
-                      <span>Isolate Cycle on Canvas</span>
-                    </button>
+                    {/* Isolate Cycle Action Button / Hook */}
+                    <ActionableHookPill
+                      type="dag_cycle"
+                      cycleNodes={cycle.path}
+                      label="Isolate Cycle on Canvas"
+                    />
                   </div>
 
                   <div className="text-[11px] text-app-muted flex items-center justify-between border-t border-app-border/40 pt-2">

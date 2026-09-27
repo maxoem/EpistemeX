@@ -11,6 +11,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { useEvaluationStore } from "../../../../store/evaluationStore";
+import { ActionableHookPill } from "../../components/ActionableHookPill";
 import type { EvaluationNodeOverlay } from "../../../../api/types";
 
 export interface AmbiguousEntityCandidate {
@@ -277,6 +278,11 @@ export const AmbiguousAliasDrawer: React.FC<AmbiguousAliasDrawerProps> = ({
                 </div>
               ) : (
                 <>
+                  <ActionableHookPill
+                    type="schema_drift"
+                    predicate={cand.predicted_label}
+                    label="Map in Engine"
+                  />
                   <button
                     onClick={() => handleDecision(cand.id, "rejected")}
                     className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium text-rose-600 hover:bg-rose-500/10 border border-rose-500/20 transition-colors"

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { useRunsStore } from "./runsStore";
-import { StudioEvent } from "../api/types";
+import { useRunsStore } from "./runsStore.ts";
+import type { StudioEvent } from "../api/types.ts";
 
 test("subtask status remains running when current >= total until ProgressCompleted", () => {
   const store = useRunsStore.getState();

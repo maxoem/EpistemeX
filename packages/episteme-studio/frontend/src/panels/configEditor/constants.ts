@@ -1,5 +1,5 @@
-import { InvalidationPreview } from "../../api/types";
-import { ThinkingLevelPreset } from "./types";
+import type { InvalidationPreview } from "../../api/types.ts";
+import type { ThinkingLevelPreset } from "./types.ts";
 
 export const BASELINE_PREVIEW: InvalidationPreview = {
   invalidated_phases: [],

@@ -11,6 +11,7 @@ import {
 } from "../api/types";
 import { useRunsStore } from "../store/runsStore";
 import { useProjectSettingsStore } from "../store/projectSettingsStore";
+import { useNavigationStore } from "../store/navigationStore";
 import {
   PHASE_REGISTRY,
   PhaseMetadata,
@@ -173,6 +174,23 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ onNavigateToRuns }) 
     database: string;
     runIds: string[];
   } | null>(null);
+
+  // Cross-module prompt tuning target listener (Phase 6)
+  const { promptTuningTarget, setPromptTuningTarget } = useNavigationStore();
+  useEffect(() => {
+    if (!promptTuningTarget) return;
+
+    if (promptTuningTarget.phaseKey) {
+      setSelectedPhaseKey(promptTuningTarget.phaseKey);
+    }
+    if (promptTuningTarget.promptKey) {
+      setActivePromptSubTab(promptTuningTarget.promptKey);
+    }
+    if (promptTuningTarget.sourceText) {
+      setCustomSourceInput(promptTuningTarget.sourceText);
+    }
+    setPromptTuningTarget(null);
+  }, [promptTuningTarget, setPromptTuningTarget]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

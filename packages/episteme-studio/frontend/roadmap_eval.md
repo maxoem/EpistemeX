@@ -267,18 +267,18 @@ Close the feedback loop to pipeline configuration, provide academic export forma
 * Cross-Module Navigation: [`EngineSettingsPage.tsx`](file:///Users/maxoehm/EpistemeX/packages/episteme-studio/frontend/src/panels/engine/EngineSettingsPage.tsx) & [`ConfigEditor.tsx`](file:///Users/maxoehm/EpistemeX/packages/episteme-studio/frontend/src/panels/ConfigEditor.tsx)
 
 #### Tasks
-* [ ] **6.1 Actionable Epistemic Hooks (`src/panels/evaluation/components/ActionableHookPill.tsx`):**
+* [x] **6.1 Actionable Epistemic Hooks (`src/panels/evaluation/components/ActionableHookPill.tsx`):**
   * *Schema Drift Hook:* Routes to `EngineSettingsPage` (`activeCategory: "unmapped"`).
   * *Argument Polarity Hook:* Routes to `EngineSettingsPage` (`activeCategory: "ontology"`, `ontologySubTab: "arg_relations"`).
   * *Overconfidence Hook:* Routes to `ConfigEditor`, pre-loading the offending text in the phase prompt tester.
   * *DAG Cycle Isolation Hook:* Switches to Sub-View 3.1, isolating cycle node IDs on the G6 canvas.
-* [ ] **6.2 Academic & Publication Export Modal (`src/panels/evaluation/components/ExportReportModal.tsx`):**
+* [x] **6.2 Academic & Publication Export Modal (`src/panels/evaluation/components/ExportReportModal.tsx`):**
   * Exposes `GET /api/evaluation/reports/{id}/export?format={latex|jsonld|csv}`.
   * Interactive modal with syntax-highlighted preview and instant "Copy to Clipboard":
     * **LaTeX:** Publication-ready `\begin{table}` booktabs ready for insertion into papers.
     * **JSON-LD:** Standard semantic graph serialization with provenance headers.
     * **CSV:** Tabular metric summary.
-* [ ] **6.3 Hardening & Performance Validation:**
+* [x] **6.3 Hardening & Performance Validation:**
   * Enforce WebGL/Canvas memory cleanup on sub-tab unmount (`g6Instance.destroy()`, `echartsInstance.dispose()`).
   * Verify that tabular numerals (`tnum`) are applied across all metrics.
   * Run test suite: `rtk uv run pytest` and `npm run build`.

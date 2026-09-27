@@ -1,12 +1,12 @@
 import { create } from "zustand";
-import { api } from "../api/client";
-import {
+import { api } from "../api/client.ts";
+import type {
   EngineSettings,
   EngineSettingsPatch,
   PredicateMapping,
   SchemaConfig,
   UnmappedPredicateInfo,
-} from "../api/types";
+} from "../api/types.ts";
 import {
   DEFAULT_L2_NODE_DEFINITIONS,
   DEFAULT_L2_RELATION_DEFINITIONS,
@@ -14,7 +14,8 @@ import {
   DEFAULT_L3_ARGUMENT_RELATION_DEFINITIONS,
   DEFAULT_COMPONENT_PARTITIONS,
   DEFAULT_RELATION_POLARITIES,
-} from "../panels/configEditor/constants";
+} from "../panels/configEditor/constants.ts";
+import type { SelectedItem } from "../panels/engine/types.ts";
 
 export interface EngineSettingsState {
   settings: EngineSettings | null;
@@ -23,6 +24,24 @@ export interface EngineSettingsState {
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
+
+  // Rail 1: Category selection
+  activeCategory: "ontology" | "unmapped" | "models";
+  setActiveCategory: (cat: "ontology" | "unmapped" | "models") => void;
+
+  // Rail 2: Sub-tab scoping
+  ontologySubTab: "nodes" | "relations" | "components" | "arg_relations";
+  setOntologySubTab: (tab: "nodes" | "relations" | "components" | "arg_relations") => void;
+  unmappedSubTab: "discovered" | "aliases";
+  setUnmappedSubTab: (tab: "discovered" | "aliases") => void;
+
+  // Rail 3: Contextual selection
+  selectedItem: SelectedItem | null;
+  setSelectedItem: (item: SelectedItem | null) => void;
+  selectedUnmapped: Set<string>;
+  setSelectedUnmapped: (
+    val: Set<string> | ((prev: Set<string>) => Set<string>)
+  ) => void;
 
   // Actions
   fetchEngineSettings: () => Promise<void>;
@@ -62,6 +81,24 @@ export const useEngineSettingsStore = create<EngineSettingsState>((set, get) => 
   isLoading: false,
   isSaving: false,
   error: null,
+
+  activeCategory: "ontology",
+  setActiveCategory: (cat) => set({ activeCategory: cat }),
+
+  ontologySubTab: "nodes",
+  setOntologySubTab: (tab) => set({ ontologySubTab: tab }),
+
+  unmappedSubTab: "discovered",
+  setUnmappedSubTab: (tab) => set({ unmappedSubTab: tab }),
+
+  selectedItem: { type: "node", id: "Concept" },
+  setSelectedItem: (item) => set({ selectedItem: item }),
+
+  selectedUnmapped: new Set<string>(),
+  setSelectedUnmapped: (val) =>
+    set((state) => ({
+      selectedUnmapped: typeof val === "function" ? val(state.selectedUnmapped) : val,
+    })),
 
   fetchEngineSettings: async () => {
     set({ isLoading: true, error: null });

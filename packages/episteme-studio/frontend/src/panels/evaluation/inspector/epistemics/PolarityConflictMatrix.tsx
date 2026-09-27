@@ -14,6 +14,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEvaluationStore } from "../../../../store/evaluationStore";
+import { ActionableHookPill } from "../../components/ActionableHookPill";
 import type { PolarityConcordanceDetail } from "../../../../api/types";
 
 export interface PolarityConflictItem {
@@ -293,6 +294,13 @@ export const PolarityConflictMatrix: React.FC = () => {
 
                 {/* Action Footer */}
                 <div className="flex items-center justify-end gap-2 pt-1 border-t border-app-border/30">
+                  <ActionableHookPill
+                    type="argument_polarity"
+                    relationId={conflict.predictedPredicate}
+                    sourceNode={conflict.sourceNode}
+                    targetNode={conflict.targetNode}
+                    label="Configure in Engine"
+                  />
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

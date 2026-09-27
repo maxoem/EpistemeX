@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useEvaluationStore } from "../../../store/evaluationStore";
 import { ExportReportModal } from "./ExportReportModal";
+import { openPhasePromptInExecution } from "./ActionableHookPill";
 import type { EvaluationOutcome, EvaluationSubTab } from "../../../api/types";
 
 export interface EvaluationHeaderProps {
@@ -167,16 +168,23 @@ export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ onOpenConfig
                 <span className="hidden sm:inline">Export Report</span>
               </button>
 
-              {onOpenConfigEditor && (
-                <button
-                  onClick={onOpenConfigEditor}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-app-muted hover:text-app-text border border-app-border transition-colors shadow-2xs"
-                  title="Tune prompts or parameters in ConfigEditor"
-                >
-                  <Wrench className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Tune Prompt</span>
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  if (onOpenConfigEditor) {
+                    onOpenConfigEditor();
+                  } else {
+                    openPhasePromptInExecution({
+                      phaseKey: "phase2",
+                      promptKey: "entity_extraction",
+                    });
+                  }
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-app-muted hover:text-app-text border border-app-border transition-colors shadow-2xs cursor-pointer"
+                title="Tune prompts or parameters in ConfigEditor"
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Tune Prompt</span>
+              </button>
             </div>
           )}
         </div>

@@ -9,6 +9,7 @@ import { AppDiffBottomDock } from "./shell/AppDiffBottomDock";
 import { useRunsStore } from "./store/runsStore";
 import { useDiffStore } from "./store/diffStore";
 import { useEngineSettingsStore } from "./store/engineSettingsStore";
+import { useNavigationStore } from "./store/navigationStore";
 import { EngineSettingsPage } from "./panels/engine/EngineSettingsPage";
 import { subscribeToRunEvents } from "./api/sse";
 
@@ -27,9 +28,7 @@ const EvaluationWorkspace = React.lazy(() =>
 );
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<
-    "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation"
-  >("runs");
+  const { activeTab, setActiveTab } = useNavigationStore();
   const [stagingOverride, setStagingOverride] = useState(false);
   const { isDiffActive, diffData } = useDiffStore();
   const {
