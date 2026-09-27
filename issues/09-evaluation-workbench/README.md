@@ -143,6 +143,7 @@ The existing endpoints implemented in `packages/episteme-studio` provide essenti
 | **Competency Query Diagnostics** | `RetrievalEvaluationDetail` | Only yields macro averages (MRR, Hits@10). Cannot inspect individual queries, ranked retrieved nodes, or search failure paths. | `GET /api/evaluation/reports/{id}/retrieval-diagnostics` | **ISSUE-032** |
 | **Custom Benchmark Linter** | `GET /api/evaluation/benchmarks` | Read-only discovery of local files. Cannot upload, validate DAG acyclicity, or pre-flight lint custom user benchmarks. | `POST /api/evaluation/benchmarks`<br>`POST /api/evaluation/benchmarks/validate` | **ISSUE-033** |
 | **Academic Multi-Format Export** | `GET /api/evaluation/reports/{id}/markdown` | Only returns raw Markdown. Cannot export publication-ready LaTeX tables, CSV summaries, or standardized JSON-LD graph bundles. | `GET /api/evaluation/reports/{id}/export?format=latex\|csv\|jsonld` | **ISSUE-033** |
+| **Interactive Job Execution** | `POST /api/evaluation/run` | Synchronous endpoint risks HTTP timeouts on large graphs; lacks live SSE progress streaming and cancellation supervision. | `POST /api/evaluation/jobs/run`<br>`GET /api/evaluation/jobs/{id}/stream`<br>`POST /api/evaluation/jobs/{id}/cancel` | **ISSUE-034** |
 
 ---
 
@@ -158,3 +159,4 @@ The existing endpoints implemented in `packages/episteme-studio` provide essenti
 | [**ISSUE-031**](ISSUE-031-adversarial-noise-robustness-stress-testing.md) | Adversarial Noise Robustness Benchmarking & RDF Degradation Curves | Automated perturbation sweeps and Robustness Degradation Factor curves | Horizon 2 | **Medium** |
 | [**ISSUE-032**](ISSUE-032-competency-query-retrieval-diagnostics.md) | Downstream Competency Retrieval Per-Query Diagnostics & Traversal Traces | Per-query ranking breakdown, hit analysis, and graph retrieval failure traces | Horizon 1 | **Medium** |
 | [**ISSUE-033**](ISSUE-033-benchmark-catalog-management-and-validation.md) | Custom Benchmark Registration, Pre-Flight Linter & Multi-Format Export | Custom gold upload, DAG acyclicity validation, and LaTeX/CSV export | Horizon 1 & 2 | **Medium** |
+| [**ISSUE-034**](ISSUE-034-on-demand-evaluation-execution-and-streaming-job-runner.md) | On-Demand Evaluation Execution, Asynchronous Job Orchestration & Streaming Telemetry | Interactive launch dialog, worker supervision, SSE streaming, and cancellation | Horizon 1 | **High** |

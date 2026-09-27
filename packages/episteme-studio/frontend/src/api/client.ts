@@ -49,6 +49,7 @@ import type {
   AdjudicationResponse,
   EdgeAdjudicationItem,
   EvaluationJobDescriptor,
+  CancelEvaluationJobResponse,
   EvaluationGraphOverlay,
   AdjudicationQueueResponse,
   AdjudicateAndRecalculateRequest,
@@ -515,6 +516,14 @@ export const api = {
     return handleResponse(res);
   },
 
+  async cancelEvaluationJob(jobId: string): Promise<CancelEvaluationJobResponse> {
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/jobs/${encodeURIComponent(jobId)}/cancel`,
+      { method: "POST" }
+    );
+    return handleResponse(res);
+  },
+
   async getEvaluationGraphOverlay(
     evaluationId: string,
     runIdOrParams?:
@@ -682,4 +691,6 @@ export const api = {
     return handleTextResponse(res);
   },
 };
+
+export const apiClient = api;
 

@@ -341,6 +341,8 @@ class EvaluationAdapter:
         min_pfs: float = 0.8,
         sim_threshold: float = 0.50,
         persist: bool = True,
+        llm_model: str | None = None,
+        embedding_model: str | None = None,
     ) -> EvaluationReportDetail:
         """Evaluate a completed pipeline run against a gold standard in-memory.
 

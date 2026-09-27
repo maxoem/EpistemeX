@@ -7,6 +7,7 @@ import {
   Filter,
   Layers,
   Network,
+  Play,
   Sliders,
   Sparkles,
   TriangleAlert,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { useEvaluationStore } from "../../../store/evaluationStore";
 import { ExportReportModal } from "./ExportReportModal";
+import { ExecuteEvaluationModal } from "./ExecuteEvaluationModal";
 import { openPhasePromptInExecution } from "./ActionableHookPill";
 import type { EvaluationOutcome, EvaluationSubTab } from "../../../api/types";
 
@@ -38,9 +40,12 @@ export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ onOpenConfig
     setActiveSubTab,
     stagedAdjudications,
     optimisticScalarDeltas,
+    setActiveMode,
+    setTargetRunId,
   } = useEvaluationStore();
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isExecuteModalOpen, setIsExecuteModalOpen] = useState(false);
 
   const renderOutcomeBadge = (outcome: EvaluationOutcome | string) => {
     switch (outcome?.toLowerCase()) {
@@ -157,36 +162,52 @@ export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ onOpenConfig
           )}
 
           {/* Action Bar */}
-          {activeReport && (
-            <div className="flex items-center gap-2 pl-2">
-              <button
-                onClick={() => setIsExportModalOpen(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-app-text border border-app-border transition-colors shadow-2xs"
-                title="Export report in LaTeX, JSON-LD, or Markdown"
-              >
-                <Download className="w-3.5 h-3.5 text-blue-500" />
-                <span className="hidden sm:inline">Export Report</span>
-              </button>
+          <div className="flex items-center gap-2 pl-2">
+            <button
+              onClick={() => {
+                if (activeReport?.run_ids?.[0]) {
+                  setTargetRunId(activeReport.run_ids[0]);
+                }
+                setActiveMode("execute");
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-2xs cursor-pointer"
+              title="Navigate to dedicated On-Demand Evaluation Studio"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Run Evaluation</span>
+            </button>
 
-              <button
-                onClick={() => {
-                  if (onOpenConfigEditor) {
-                    onOpenConfigEditor();
-                  } else {
-                    openPhasePromptInExecution({
-                      phaseKey: "phase2",
-                      promptKey: "entity_extraction",
-                    });
-                  }
-                }}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-app-muted hover:text-app-text border border-app-border transition-colors shadow-2xs cursor-pointer"
-                title="Tune prompts or parameters in ConfigEditor"
-              >
-                <Wrench className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Tune Prompt</span>
-              </button>
-            </div>
-          )}
+            {activeReport && (
+              <>
+                <button
+                  onClick={() => setIsExportModalOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-app-text border border-app-border transition-colors shadow-2xs"
+                  title="Export report in LaTeX, JSON-LD, or Markdown"
+                >
+                  <Download className="w-3.5 h-3.5 text-blue-500" />
+                  <span className="hidden sm:inline">Export Report</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (onOpenConfigEditor) {
+                      onOpenConfigEditor();
+                    } else {
+                      openPhasePromptInExecution({
+                        phaseKey: "phase2",
+                        promptKey: "entity_extraction",
+                      });
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-app-muted hover:text-app-text border border-app-border transition-colors shadow-2xs cursor-pointer"
+                  title="Tune prompts or parameters in ConfigEditor"
+                >
+                  <Wrench className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Tune Prompt</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Row 2: Fixed 40px Zero-Box Segmented Sub-Nav */}
@@ -226,6 +247,12 @@ export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ onOpenConfig
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         report={activeReport}
+      />
+
+      <ExecuteEvaluationModal
+        isOpen={isExecuteModalOpen}
+        onClose={() => setIsExecuteModalOpen(false)}
+        defaultRunId={activeReport?.run_ids?.[0] || ""}
       />
     </>
   );

@@ -727,7 +727,7 @@ class TestEvaluationAPI:
             assert post_resp.status_code == 202
             job_data = post_resp.json()
             job_id = job_data["job_id"]
-            assert job_data["status"] == "running"
+            assert job_data["status"] in ("pending", "running")
 
             # Poll for completion
             for _ in range(30):
@@ -818,6 +818,113 @@ class TestEvaluationAPI:
                 assert len(chunks) == 3
                 assert any("evaluation.job.started" in c for c in chunks)
                 assert any("evaluation.job.completed" in c for c in chunks)
+
+    @pytest.mark.asyncio
+    async def test_cancel_evaluation_job_lifecycle(self, tmp_path: Path):
+        """Verify POST /api/evaluation/jobs/{job_id}/cancel cancels an active evaluation job.
+
+        Parameters
+        ----------
+        tmp_path : Path
+            Pytest temporary directory fixture.
+        """
+        from httpx import ASGITransport, AsyncClient
+
+        settings = StudioSettings(
+            runs_dir=tmp_path / "runs",
+            artifacts_dir=tmp_path / "artifacts",
+            reports_dir=tmp_path / "reports",
+        )
+        app = create_app(settings)
+        from episteme_studio.services.evaluation_service import EvaluationService
+
+        eval_service = EvaluationService.from_settings(settings)
+        app.state.evaluation_service = eval_service
+
+        async def slow_evaluate_run(*args, **kwargs):
+            await asyncio.sleep(1.0)
+            return await eval_service.adapter.evaluate_run(*args, **kwargs)
+
+        eval_service.evaluate_run = slow_evaluate_run
+
+        transport = ASGITransport(app=app)
+
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            # 1. Start a job
+            post_resp = await ac.post(
+                "/api/evaluation/jobs/run",
+                json={
+                    "run_id": "test_cancellation_run",
+                    "benchmark_id": "stnb_cpm_pilot",
+                    "strategy": "structuralist",
+                },
+            )
+            assert post_resp.status_code == 202
+            job_id = post_resp.json()["job_id"]
+
+            # 2. Cancel the job
+            cancel_resp = await ac.post(f"/api/evaluation/jobs/{job_id}/cancel")
+            assert cancel_resp.status_code == 200
+            cancel_data = cancel_resp.json()
+            assert cancel_data["job_id"] == job_id
+            assert cancel_data["status"] == "aborted"
+
+            # 3. Verify get_job returns aborted status
+            get_resp = await ac.get(f"/api/evaluation/jobs/{job_id}")
+            assert get_resp.status_code == 200
+            assert get_resp.json()["status"] == "aborted"
+
+    @pytest.mark.asyncio
+    async def test_cancel_unknown_job_returns_404(self, tmp_path: Path):
+        """Verify cancelling a non-existent job returns 404."""
+        from httpx import ASGITransport, AsyncClient
+
+        settings = StudioSettings(
+            runs_dir=tmp_path / "runs",
+            artifacts_dir=tmp_path / "artifacts",
+            reports_dir=tmp_path / "reports",
+        )
+        app = create_app(settings)
+        transport = ASGITransport(app=app)
+
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            resp = await ac.post("/api/evaluation/jobs/eval_job_unknown_xyz/cancel")
+            assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_evaluate_run_request_boundary_validation(self, tmp_path: Path):
+        """Verify Pydantic validation rejects out-of-range thresholds."""
+        from httpx import ASGITransport, AsyncClient
+
+        settings = StudioSettings(
+            runs_dir=tmp_path / "runs",
+            artifacts_dir=tmp_path / "artifacts",
+            reports_dir=tmp_path / "reports",
+        )
+        app = create_app(settings)
+        transport = ASGITransport(app=app)
+
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            # sim_threshold out of range [0.0, 1.0]
+            resp_sim = await ac.post(
+                "/api/evaluation/jobs/run",
+                json={"run_id": "test_run", "sim_threshold": 1.5},
+            )
+            assert resp_sim.status_code == 422
+
+            # delta_star out of range [0.0, 0.50]
+            resp_delta = await ac.post(
+                "/api/evaluation/jobs/run",
+                json={"run_id": "test_run", "delta_star": 0.8},
+            )
+            assert resp_delta.status_code == 422
+
+            # min_mcc out of range [0.0, 1.0]
+            resp_mcc = await ac.post(
+                "/api/evaluation/jobs/run",
+                json={"run_id": "test_run", "min_mcc": -0.1},
+            )
+            assert resp_mcc.status_code == 422
 
 
 class TestEvaluationWorkbenchEndpoints:

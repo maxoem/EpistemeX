@@ -21,6 +21,7 @@ from episteme_studio.domain.evaluation import (
     BenchmarkDescriptor,
     BenchmarkValidationResult,
     CalibrationReportDetail,
+    CancelEvaluationJobResponse,
     ComparativeEvaluationResponse,
     CompareRunsRequest,
     DynamicsTrajectoryRequest,
@@ -435,6 +436,42 @@ async def stream_evaluation_job_telemetry(
             }
 
     return EventSourceResponse(event_generator())
+
+
+@router.post("/jobs/{job_id}/cancel", response_model=CancelEvaluationJobResponse)
+async def cancel_evaluation_job(
+    job_id: str,
+    broker: EventBroker = Depends(get_broker),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> CancelEvaluationJobResponse:
+    """Cancel an in-flight or queued evaluation job.
+
+    Parameters
+    ----------
+    job_id : str
+        Target evaluation job identifier.
+    broker : EventBroker
+        Telemetry event broker.
+    service : EvaluationService
+        Injected evaluation service.
+
+    Returns
+    -------
+    CancelEvaluationJobResponse
+        Confirmation payload for the cancelled evaluation job.
+
+    Raises
+    ------
+    HTTPException
+        If the job_id cannot be found.
+    """
+    try:
+        return service.cancel_evaluation_job(job_id, broker=broker)
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Evaluation job '{job_id}' not found.",
+        )
 
 
 # =============================================================================

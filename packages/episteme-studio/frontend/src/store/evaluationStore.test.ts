@@ -12,13 +12,20 @@ test("evaluationStore: initial state adheres to Phase 0 contracts", () => {
   assert.equal(state.activeSubTab, "canvas");
   assert.equal(state.activeReport, null);
   assert.equal(state.activeReportId, null);
+  assert.equal(state.targetRunId, null);
   assert.equal(state.stagedAdjudications.size, 0);
   assert.deepEqual(state.optimisticScalarDeltas, { f1: 0, precision: 0, recall: 0 });
   assert.equal(state.isCommittingBatch, false);
 });
 
-test("evaluationStore: navigation and sub-tab state updates", () => {
+test("evaluationStore: navigation, execute mode, and target run state updates", () => {
   const store = useEvaluationStore.getState();
+  store.setActiveMode("execute");
+  assert.equal(useEvaluationStore.getState().activeMode, "execute");
+
+  store.setTargetRunId("run-kant-cpr-001");
+  assert.equal(useEvaluationStore.getState().targetRunId, "run-kant-cpr-001");
+
   store.setActiveMode("catalog");
   assert.equal(useEvaluationStore.getState().activeMode, "catalog");
 

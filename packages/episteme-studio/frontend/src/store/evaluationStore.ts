@@ -45,6 +45,9 @@ export interface EvaluationState {
   benchmarks: BenchmarkDescriptor[];
   selectedBenchmarkId: string | null;
 
+  // Evaluation Execution Target
+  targetRunId: string | null;
+
   // Graph Overlay & Canvas State (Phase 2)
   graphOverlay: EvaluationGraphOverlay | null;
   isLoadingOverlay: boolean;
@@ -72,6 +75,7 @@ export interface EvaluationState {
   setActiveReportId: (id: string | null) => void;
   setActiveReport: (report: EvaluationReportDetail | null) => void;
   setSelectedBenchmarkId: (id: string | null) => void;
+  setTargetRunId: (id: string | null) => void;
 
   // Data Fetching
   fetchReports: (params?: { run_id?: string; outcome?: string }) => Promise<void>;
@@ -130,6 +134,7 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
 
   benchmarks: [],
   selectedBenchmarkId: null,
+  targetRunId: null,
 
   // Graph Overlay & Canvas State (Phase 2)
   graphOverlay: null,
@@ -183,6 +188,7 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
   },
 
   setSelectedBenchmarkId: (id) => set({ selectedBenchmarkId: id }),
+  setTargetRunId: (id) => set({ targetRunId: id }),
 
   fetchReports: async (params) => {
     set({ isLoading: true, error: null });
@@ -386,6 +392,7 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
     set({
       activeReportId: null,
       activeReport: null,
+      targetRunId: null,
       graphOverlay: null,
       selectedOverlayItem: null,
       isAmbiguousDrawerOpen: false,

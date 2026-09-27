@@ -10,6 +10,7 @@ import {
   Filter,
   Layers,
   Network,
+  Play,
   Plus,
   RefreshCw,
   Search,
@@ -27,6 +28,7 @@ import { RegisterBenchmarkModal } from "./catalog/RegisterBenchmarkModal";
 import { LeaderboardPage } from "./leaderboard/LeaderboardPage";
 import { RunEvaluationInspector } from "./inspector/RunEvaluationInspector";
 import { LongitudinalTrajectoryStudio } from "./longitudinal/LongitudinalTrajectoryStudio";
+import { ExecuteEvaluationPage } from "./execution/ExecuteEvaluationPage";
 import type { EvaluationOutcome } from "../../api/types";
 
 export const EvaluationWorkspace: React.FC = () => {
@@ -173,6 +175,17 @@ export const EvaluationWorkspace: React.FC = () => {
             <TrendingUp className="w-3.5 h-3.5" />
             <span>Longitudinal Studio</span>
           </button>
+          <button
+            onClick={() => setActiveMode("execute")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+              activeMode === "execute"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "text-app-muted hover:text-app-text hover:bg-app-subtle"
+            }`}
+          >
+            <Play className="w-3.5 h-3.5" />
+            <span>Execute Evaluation</span>
+          </button>
         </div>
 
         {/* Center / Breadcrumb info */}
@@ -224,7 +237,9 @@ export const EvaluationWorkspace: React.FC = () => {
       {/* Main Split: Left Rail Controller + Center Fluid Workspace */}
       <div className="flex flex-1 w-full h-full overflow-hidden">
         {/* Left Primary Controller Rail (280px - 320px Resizable) */}
-        {activeMode !== "leaderboard" && activeMode !== "longitudinal" && (
+        {activeMode !== "leaderboard" &&
+          activeMode !== "longitudinal" &&
+          activeMode !== "execute" && (
           <ResizablePanel
             side="left"
             storageKey="episteme-eval-left-sidebar-width"
@@ -386,6 +401,9 @@ export const EvaluationWorkspace: React.FC = () => {
           ) : activeMode === "longitudinal" ? (
             /* Sub-View 3.4 / Diachronic Studio: Lakatosian Longitudinal Trajectory (Phase 3) */
             <LongitudinalTrajectoryStudio />
+          ) : activeMode === "execute" ? (
+            /* Page 4: On-Demand Evaluation Execution Studio */
+            <ExecuteEvaluationPage />
           ) : (
             /* Page 3: Deep Single-Run Evaluation Inspector (Phase 2 & 3) */
             <RunEvaluationInspector />

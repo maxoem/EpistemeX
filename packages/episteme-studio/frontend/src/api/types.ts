@@ -655,7 +655,12 @@ export interface EvaluateRunRequest {
   min_mcc?: number;
   min_pfs?: number;
   sim_threshold?: number;
+  delta_star?: number;
+  mode?: string;
+  evaluate_retrieval?: boolean;
   persist?: boolean;
+  llm_model?: string | null;
+  embedding_model?: string | null;
 }
 
 export interface CompareRunsRequest {
@@ -689,7 +694,12 @@ export type EvaluationSubTab =
   | "grounding"
   | "retrieval";
 
-export type EvaluationMode = "catalog" | "leaderboard" | "inspector" | "longitudinal";
+export type EvaluationMode =
+  | "catalog"
+  | "leaderboard"
+  | "inspector"
+  | "longitudinal"
+  | "execute";
 
 export interface DynamicsStepDetail {
   step: string;
@@ -758,7 +768,7 @@ export interface AdjudicationResponse {
   message: string;
 }
 
-export type EvaluationJobStatus = "pending" | "running" | "completed" | "failed";
+export type EvaluationJobStatus = "pending" | "running" | "completed" | "failed" | "aborted";
 
 export interface EvaluationJobDescriptor {
   job_id: string;
@@ -769,6 +779,12 @@ export interface EvaluationJobDescriptor {
   report_id?: string | null;
   error?: string | null;
   report?: any | null;
+}
+
+export interface CancelEvaluationJobResponse {
+  job_id: string;
+  status: EvaluationJobStatus;
+  message: string;
 }
 
 // =============================================================================

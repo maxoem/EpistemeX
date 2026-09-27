@@ -29,6 +29,7 @@ import {
   ChevronUp,
   Square,
   Play,
+  Sparkles,
   Terminal,
   Loader2,
   Brain,
@@ -38,7 +39,10 @@ import {
 import { RunStatus, GraphView } from "../api/types";
 import { api } from "../api/client";
 import { useDiffStore } from "../store/diffStore";
+import { useNavigationStore } from "../store/navigationStore";
+import { useEvaluationStore } from "../store/evaluationStore";
 import { RunCompareModal } from "./RunCompareModal";
+import { ExecuteEvaluationModal } from "./evaluation/components/ExecuteEvaluationModal";
 import { useViewOverlayStore } from "../store/viewOverlayStore";
 import { resolveStageArtifacts } from "./stageModel";
 import {
@@ -141,11 +145,14 @@ export const RunDetailView: React.FC<RunDetailViewProps> = ({
     setSelectedPhaseKey,
   } = useRunsStore();
   const { setIsCompareModalOpen } = useDiffStore();
+  const { setActiveTab } = useNavigationStore();
+  const { setActiveMode, setTargetRunId } = useEvaluationStore();
   const { setActiveLens } = useViewOverlayStore();
   const { stageRefreshIntervalSeconds, openProjectSettings } = useProjectSettingsStore();
   const [copiedId, setCopiedId] = useState(false);
   const [isOverflowOpen, setIsOverflowOpen] = useState(false);
   const [isRunConfigOpen, setIsRunConfigOpen] = useState(false);
+  const [isEvaluateModalOpen, setIsEvaluateModalOpen] = useState(false);
   const [phaseViewMode, setPhaseViewMode] = useState<"artifacts" | "config">("artifacts");
 
   // State for fetched run graph data
@@ -643,17 +650,36 @@ export const RunDetailView: React.FC<RunDetailViewProps> = ({
               )}
               <span>{isCancellingRun ? "Cancelling..." : "Cancel Run"}</span>
             </button>
-          ) : onNavigateToConfig ? (
-            <button
-              type="button"
-              onClick={onNavigateToConfig}
-              className="inline-flex items-center gap-1.5 h-7 px-3 rounded-md bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs shadow-sm transition-all cursor-pointer"
-              title="Configure and launch a new pipeline execution run"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Run Pipeline</span>
-            </button>
-          ) : null}
+          ) : (
+            <>
+              {selectedRunDetail.status === "completed" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTargetRunId(selectedRunDetail.run_id);
+                    setActiveMode("execute");
+                    setActiveTab("evaluation");
+                  }}
+                  className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                  title="Evaluate this completed run in On-Demand Evaluation Studio"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Evaluate Run</span>
+                </button>
+              )}
+              {onNavigateToConfig && (
+                <button
+                  type="button"
+                  onClick={onNavigateToConfig}
+                  className="inline-flex items-center gap-1.5 h-7 px-3 rounded-md bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs shadow-sm transition-all cursor-pointer"
+                  title="Configure and launch a new pipeline execution run"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Run Pipeline</span>
+                </button>
+              )}
+            </>
+          )}
 
           {/* Overflow Menu Button */}
           <div className="relative">
@@ -674,6 +700,20 @@ export const RunDetailView: React.FC<RunDetailViewProps> = ({
                   onClick={() => setIsOverflowOpen(false)}
                 />
                 <div className="absolute right-0 top-full mt-1 w-48 py-1 rounded-md bg-app-surface border border-app-border shadow-lg z-50 text-xs animate-in fade-in zoom-in-95 duration-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsOverflowOpen(false);
+                      setTargetRunId(selectedRunDetail.run_id);
+                      setActiveMode("execute");
+                      setActiveTab("evaluation");
+                    }}
+                    className="w-full px-3 py-1.5 text-left text-app-text hover:text-app-heading hover:bg-app-subtle flex items-center gap-2 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Evaluate Run...</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -925,6 +965,13 @@ export const RunDetailView: React.FC<RunDetailViewProps> = ({
 
       {/* Run Comparison Modal */}
       <RunCompareModal onNavigateToGraph={onNavigateToGraph} />
+
+      {/* On-Demand Evaluation Modal */}
+      <ExecuteEvaluationModal
+        isOpen={isEvaluateModalOpen}
+        onClose={() => setIsEvaluateModalOpen(false)}
+        defaultRunId={selectedRunDetail.run_id}
+      />
     </div>
   );
 };

@@ -23,6 +23,7 @@ from episteme_studio.domain.evaluation import (
     BenchmarkDescriptor,
     BenchmarkValidationResult,
     CalibrationReportDetail,
+    CancelEvaluationJobResponse,
     ComparativeEvaluationResponse,
     CompareRunsRequest,
     DynamicsTrajectoryRequest,
@@ -66,11 +67,32 @@ class EvaluationService:
         adapter: EvaluationAdapter,
         reader: ArtifactReader,
         reports_dir: Path | str = "evaluation/reports",
+        jobs_dir: Path | str | None = None,
+        max_concurrent_jobs: int = 2,
     ) -> None:
         self.adapter = adapter
         self.reader = reader
         self.reports_dir = Path(reports_dir)
+        self._jobs_dir = Path(jobs_dir) if jobs_dir else (self.reports_dir.parent / ".evaluation_jobs")
+        self._jobs_dir.mkdir(parents=True, exist_ok=True)
         self._jobs: dict[str, EvaluationJobDescriptor] = {}
+        self._tasks: dict[str, asyncio.Task[Any]] = {}
+        self._cancellation_events: dict[str, asyncio.Event] = {}
+        self._semaphore = asyncio.Semaphore(max_concurrent_jobs)
+
+    def _persist_job(self, desc: EvaluationJobDescriptor) -> None:
+        """Persist evaluation job descriptor to disk for crash resilience.
+
+        Parameters
+        ----------
+        desc : EvaluationJobDescriptor
+            Job descriptor to serialize and persist.
+        """
+        try:
+            target_file = self._jobs_dir / f"{desc.job_id}.json"
+            target_file.write_text(desc.model_dump_json(indent=2), encoding="utf-8")
+        except Exception as e:
+            logger.warning("Failed to persist evaluation job %s: %s", desc.job_id, e)
 
     @classmethod
     def from_settings(cls, settings: StudioSettings) -> EvaluationService:
@@ -174,6 +196,8 @@ class EvaluationService:
             min_pfs=request.min_pfs,
             sim_threshold=request.sim_threshold,
             persist=request.persist,
+            llm_model=request.llm_model,
+            embedding_model=request.embedding_model,
         )
 
     async def evaluate_manifest(self, request: EvaluateManifestRequest) -> EvaluationReportDetail:
@@ -290,7 +314,18 @@ class EvaluationService:
         EvaluationJobDescriptor or None
             Job descriptor if registered, None otherwise.
         """
-        return self._jobs.get(job_id)
+        if job_id in self._jobs:
+            return self._jobs[job_id]
+
+        target_file = self._jobs_dir / f"{job_id}.json"
+        if target_file.is_file():
+            try:
+                desc = EvaluationJobDescriptor.model_validate_json(target_file.read_text(encoding="utf-8"))
+                self._jobs[job_id] = desc
+                return desc
+            except Exception as e:
+                logger.warning("Failed to read job file for %s: %s", job_id, e)
+        return None
 
     async def start_evaluation_job(
         self,
@@ -312,18 +347,20 @@ class EvaluationService:
         Returns
         -------
         EvaluationJobDescriptor
-            Registered job descriptor.
+            Registered job descriptor in PENDING or RUNNING status.
         """
         job_id = f"eval_job_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
         req_type = "manifest" if manifest_request is not None else "run"
         descriptor = EvaluationJobDescriptor(
             job_id=job_id,
-            status=EvaluationJobStatus.RUNNING,
+            status=EvaluationJobStatus.PENDING,
             request_type=req_type,
         )
         self._jobs[job_id] = descriptor
+        self._persist_job(descriptor)
+        self._cancellation_events[job_id] = asyncio.Event()
 
-        asyncio.create_task(
+        task = asyncio.create_task(
             self._run_evaluation_job_worker(
                 job_id=job_id,
                 manifest_request=manifest_request,
@@ -331,6 +368,7 @@ class EvaluationService:
                 broker=broker,
             )
         )
+        self._tasks[job_id] = task
         return descriptor
 
     async def _run_evaluation_job_worker(
@@ -355,65 +393,98 @@ class EvaluationService:
             broker.publish(job_id, event)
 
         try:
-            emit("evaluation.job.started", "Asynchronous evaluation job started", {"job_id": job_id})
+            # Guard execution with bounded concurrency semaphore
+            async with self._semaphore:
+                cancel_event = self._cancellation_events.get(job_id)
+                if cancel_event and cancel_event.is_set():
+                    desc = self._jobs.get(job_id)
+                    if desc:
+                        desc.status = EvaluationJobStatus.ABORTED
+                        desc.completed_at = datetime.now(timezone.utc)
+                        self._persist_job(desc)
+                    emit("evaluation.job.aborted", f"Job {job_id} was aborted before start", {"job_id": job_id}, level="warning")
+                    return
 
-            report: EvaluationReportDetail
-            if manifest_request is not None:
-                emit(
-                    "evaluation.stage.started",
-                    "Evaluating manifest configuration",
-                    {"manifest_path": manifest_request.manifest_path},
-                )
-                report = await self.evaluate_manifest(manifest_request)
-            elif run_request is not None:
-                emit(
-                    "evaluation.stage.started",
-                    f"Evaluating run {run_request.run_id}",
-                    {"run_id": run_request.run_id},
-                )
-                report = await self.evaluate_run(run_request)
-            else:
-                raise ValueError("Neither manifest_request nor run_request was provided.")
+                desc = self._jobs[job_id]
+                desc.status = EvaluationJobStatus.RUNNING
+                self._persist_job(desc)
 
-            # Emit stage completion telemetry
-            for level, results in report.results_by_level.items():
-                for res in results:
+                emit("evaluation.job.started", "Asynchronous evaluation job started", {"job_id": job_id})
+
+                report: EvaluationReportDetail
+                if manifest_request is not None:
                     emit(
-                        "evaluation.stage.completed",
-                        f"Stage completed: {res.phase_name or level}",
+                        "evaluation.stage.started",
+                        "Evaluating manifest configuration",
+                        {"manifest_path": manifest_request.manifest_path},
+                    )
+                    report = await self.evaluate_manifest(manifest_request)
+                elif run_request is not None:
+                    emit(
+                        "evaluation.stage.started",
+                        f"Evaluating run {run_request.run_id}",
+                        {"run_id": run_request.run_id},
+                    )
+                    report = await self.evaluate_run(run_request)
+                else:
+                    raise ValueError("Neither manifest_request nor run_request was provided.")
+
+                # Check if cancellation was requested during evaluation
+                if cancel_event and cancel_event.is_set():
+                    desc = self._jobs.get(job_id, desc)
+                    desc.status = EvaluationJobStatus.ABORTED
+                    desc.completed_at = datetime.now(timezone.utc)
+                    self._persist_job(desc)
+                    emit("evaluation.job.aborted", f"Job {job_id} was cancelled by user", {"job_id": job_id}, level="warning")
+                    return
+
+                # Emit stage completion telemetry
+                for level, results in report.results_by_level.items():
+                    for res in results:
+                        emit(
+                            "evaluation.stage.completed",
+                            f"Stage completed: {res.phase_name or level}",
+                            {
+                                "stage": level,
+                                "phase_name": res.phase_name,
+                                "metrics": [m.model_dump() for m in res.metrics],
+                                "outcome": res.outcome,
+                            },
+                        )
+
+                if report.retrieval_detail and report.retrieval_detail.num_queries > 0:
+                    emit(
+                        "evaluation.query.ranked",
+                        "Competency retrieval queries evaluated",
                         {
-                            "stage": level,
-                            "phase_name": res.phase_name,
-                            "metrics": [m.model_dump() for m in res.metrics],
-                            "outcome": res.outcome,
+                            "mrr": report.retrieval_detail.mrr,
+                            "hits_at_1": report.retrieval_detail.hits_at_1,
+                            "ndcg": report.retrieval_detail.ndcg,
+                            "num_queries": report.retrieval_detail.num_queries,
                         },
                     )
 
-            if report.retrieval_detail and report.retrieval_detail.num_queries > 0:
+                # Mark completed
+                desc.status = EvaluationJobStatus.COMPLETED
+                desc.completed_at = datetime.now(timezone.utc)
+                desc.report_id = report.evaluation_id
+                desc.report = report
+                self._persist_job(desc)
+
                 emit(
-                    "evaluation.query.ranked",
-                    "Competency retrieval queries evaluated",
-                    {
-                        "mrr": report.retrieval_detail.mrr,
-                        "hits_at_1": report.retrieval_detail.hits_at_1,
-                        "ndcg": report.retrieval_detail.ndcg,
-                        "num_queries": report.retrieval_detail.num_queries,
-                    },
+                    "evaluation.job.completed",
+                    f"Evaluation job completed with outcome: {report.outcome}",
+                    {"evaluation_id": report.evaluation_id, "outcome": report.outcome},
                 )
 
-            # Mark completed
-            desc = self._jobs[job_id]
-            desc.status = EvaluationJobStatus.COMPLETED
-            desc.completed_at = datetime.now(timezone.utc)
-            desc.report_id = report.evaluation_id
-            desc.report = report
-
-            emit(
-                "evaluation.job.completed",
-                f"Evaluation job completed with outcome: {report.outcome}",
-                {"evaluation_id": report.evaluation_id, "outcome": report.outcome},
-            )
-
+        except asyncio.CancelledError:
+            logger.info("Evaluation job %s cancelled", job_id)
+            desc = self._jobs.get(job_id)
+            if desc:
+                desc.status = EvaluationJobStatus.ABORTED
+                desc.completed_at = datetime.now(timezone.utc)
+                self._persist_job(desc)
+            emit("evaluation.job.aborted", f"Evaluation job {job_id} cancelled by user", {"job_id": job_id}, level="warning")
         except Exception as e:
             logger.error("Evaluation job %s failed: %s", job_id, e, exc_info=True)
             desc = self._jobs.get(job_id)
@@ -421,9 +492,79 @@ class EvaluationService:
                 desc.status = EvaluationJobStatus.FAILED
                 desc.completed_at = datetime.now(timezone.utc)
                 desc.error = str(e)
+                self._persist_job(desc)
             emit("evaluation.job.failed", f"Evaluation failed: {e}", {"error": str(e)}, level="error")
         finally:
             broker.close_run(job_id)
+
+    def cancel_evaluation_job(
+        self,
+        job_id: str,
+        broker: EventBroker | None = None,
+    ) -> CancelEvaluationJobResponse:
+        """Cancel an in-flight or queued evaluation job.
+
+        Parameters
+        ----------
+        job_id : str
+            Unique job identifier.
+        broker : EventBroker or None, optional
+            Event broker instance to publish cancellation telemetry.
+
+        Returns
+        -------
+        CancelEvaluationJobResponse
+            Confirmation response payload.
+
+        Raises
+        ------
+        KeyError
+            If the job is not found.
+        """
+        desc = self.get_job(job_id)
+        if not desc:
+            raise KeyError(f"Evaluation job '{job_id}' not found")
+
+        if desc.status in (EvaluationJobStatus.COMPLETED, EvaluationJobStatus.FAILED, EvaluationJobStatus.ABORTED):
+            return CancelEvaluationJobResponse(
+                job_id=job_id,
+                status=desc.status,
+                message=f"Evaluation job '{job_id}' is already in terminal state '{desc.status}'.",
+            )
+
+        desc.status = EvaluationJobStatus.ABORTED
+        desc.completed_at = datetime.now(timezone.utc)
+        self._persist_job(desc)
+
+        cancel_event = self._cancellation_events.get(job_id)
+        if cancel_event:
+            cancel_event.set()
+
+        task = self._tasks.get(job_id)
+        if task and not task.done():
+            task.cancel()
+
+        if broker:
+            broker.publish(
+                job_id,
+                StudioEvent(
+                    seq=1,
+                    run_id=job_id,
+                    ts=datetime.now(timezone.utc),
+                    kind="evaluation.job.aborted",
+                    level="warning",
+                    phase="Evaluation",
+                    message=f"Evaluation job '{job_id}' was cancelled by user.",
+                    payload={"job_id": job_id},
+                ),
+            )
+            broker.close_run(job_id)
+
+        return CancelEvaluationJobResponse(
+            job_id=job_id,
+            status=EvaluationJobStatus.ABORTED,
+            message=f"Evaluation job '{job_id}' successfully cancelled.",
+        )
 
     # -------------------------------------------------------------------------
     # Evaluation Workbench & Interactive Analytics (ISSUE-026 - ISSUE-033)

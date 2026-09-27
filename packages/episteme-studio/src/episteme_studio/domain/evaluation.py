@@ -368,10 +368,15 @@ class EvaluateRunRequest(BaseModel):
     queries_path: str | None = None
     strategy: str | None = None
     baseline: str | None = None
-    min_mcc: float = 1.0
-    min_pfs: float = 0.8
-    sim_threshold: float = 0.50
+    min_mcc: float = Field(default=1.0, ge=0.0, le=1.0)
+    min_pfs: float = Field(default=0.8, ge=0.0, le=1.0)
+    sim_threshold: float = Field(default=0.50, ge=0.0, le=1.0)
+    delta_star: float = Field(default=0.10, ge=0.0, le=0.50)
+    mode: str = Field(default="benchmark_alignment")
+    evaluate_retrieval: bool = False
     persist: bool = True
+    llm_model: str | None = None
+    embedding_model: str | None = None
 
 
 class CompareRunsRequest(BaseModel):
@@ -642,6 +647,7 @@ class EvaluationJobStatus(StrEnum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    ABORTED = "aborted"
 
 
 class EvaluationJobDescriptor(BaseModel):
@@ -675,6 +681,24 @@ class EvaluationJobDescriptor(BaseModel):
     report_id: str | None = None
     error: str | None = None
     report: EvaluationReportDetail | None = None
+
+
+class CancelEvaluationJobResponse(BaseModel):
+    """Response payload confirming cancellation of an evaluation job.
+
+    Parameters
+    ----------
+    job_id : str
+        Identifier of the evaluation job.
+    status : EvaluationJobStatus
+        Updated lifecycle state of the job.
+    message : str
+        Human-readable operational confirmation message.
+    """
+
+    job_id: str
+    status: EvaluationJobStatus
+    message: str
 
 
 class StartEvaluationJobRequest(BaseModel):
