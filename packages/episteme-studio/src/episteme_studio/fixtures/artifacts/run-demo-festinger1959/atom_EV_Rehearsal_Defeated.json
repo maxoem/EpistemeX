@@ -1,0 +1,28 @@
+{
+  "artifact_id": "atom_EV_Rehearsal_Defeated",
+  "identity_key": "atom_EV_Rehearsal_Defeated",
+  "kind": "theory_atom",
+  "run_id": "run-demo-festinger1959",
+  "phase_name": "Phase 4: Argument Mining",
+  "payload": {
+    "component_id": "str:EV_Rehearsal_Defeated",
+    "component_type": "Evidence",
+    "text": "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal",
+    "confidence": 1.0,
+    "source_chunk_id": "chunk_fc1959_rehearsal_defeated",
+    "text_anchor": {
+      "sourceDocId": "festinger_carlsmith_1959",
+      "chunkId": "chunk_fc1959_rehearsal_defeated",
+      "charStart": 30394,
+      "charEnd": 30608,
+      "verbatimQuote": "We are certainly justified in concluding that the Ss in the One Dollar condition did not improvise more nor act more convincingly. Hence, the alternative explanation discussed above cannot account for the findings."
+    }
+  },
+  "provenance": {
+    "source_path": "datasets/run-demo-festinger1959.cypher",
+    "notes": {
+      "generated": "demo_fixture"
+    }
+  },
+  "created_at": "2026-09-01T10:00:00Z"
+}

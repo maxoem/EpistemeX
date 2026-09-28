@@ -1,0 +1,23 @@
+{
+  "artifact_id": "chunk_fc1959_procedure_summary",
+  "identity_key": "chunk_fc1959_procedure_summary",
+  "kind": "chunk",
+  "run_id": "run-demo-festinger1959",
+  "phase_name": "Phase 1: Data Foundation",
+  "payload": {
+    "id": "chunk_fc1959_procedure_summary",
+    "text": "A laboratory experiment was designed to test these derivations. Subjects were subjected to a boring experience and then paid to tell someone that the experience had been interesting and enjoyable. The amount of money paid the subject was varied. The private opinions of the subjects concerning the experiences were then determined.",
+    "chunk_index": 4,
+    "char_start": 31652,
+    "char_end": 31983,
+    "confidence": 1.0,
+    "doc_id": "festinger_carlsmith_1959"
+  },
+  "provenance": {
+    "source_path": "datasets/run-demo-festinger1959.cypher",
+    "notes": {
+      "generated": "demo_fixture"
+    }
+  },
+  "created_at": "2026-09-01T10:00:00Z"
+}

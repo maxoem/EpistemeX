@@ -56,10 +56,22 @@ def get_fixture_cypher_dir() -> Path:
     return get_fixtures_dir() / "cypher"
 
 
+def get_fixture_reports_dir() -> Path:
+    """Resolve directory containing canned demo evaluation reports.
+
+    Returns
+    -------
+    Path
+        Path to packaged reports directory.
+    """
+    return get_fixtures_dir() / "reports"
+
+
 __all__ = [
     "DEMO_RUN_MANIFEST",
     "get_fixtures_dir",
     "get_fixture_runs_dir",
     "get_fixture_artifacts_dir",
     "get_fixture_cypher_dir",
+    "get_fixture_reports_dir",
 ]

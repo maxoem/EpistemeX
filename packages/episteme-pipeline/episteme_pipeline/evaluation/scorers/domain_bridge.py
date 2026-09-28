@@ -147,6 +147,22 @@ def theory_net_to_theory_graph(
                 else em.EpistemicStatus.NEUTRAL
             )
         )
+        anchor_dict = (
+            atom.text_anchor.model_dump()
+            if atom.text_anchor
+            else (atom.parameters.get("anchor") or atom.parameters.get("text_anchor"))
+        )
+        attrs = {
+            "formalAxiom": atom.text,
+            "formal_axiom": atom.text,
+            "plausibility": atom.plausibility,
+            "layer": "L4",
+        }
+        if anchor_dict:
+            attrs["anchor"] = anchor_dict
+            attrs["text_anchor"] = anchor_dict
+            attrs["Episteme:textAnchor"] = anchor_dict
+
         tg.add_node(
             node_id=atom.id,
             name=atom.text[:80] if atom.text else atom.id,
@@ -155,12 +171,7 @@ def theory_net_to_theory_graph(
             confidence=atom.confidence or 1.0,
             description=atom.text,
             provenance=[atom.source_chunk_id] if atom.source_chunk_id else [],
-            attributes={
-                "formalAxiom": atom.text,
-                "formal_axiom": atom.text,
-                "plausibility": atom.plausibility,
-                "layer": "L4",
-            },
+            attributes=attrs,
         )
 
     for rel in theory_net.relations:

@@ -1,0 +1,24 @@
+{
+  "artifact_id": "entity_TE_DissF6",
+  "identity_key": "entity_TE_DissF6",
+  "kind": "linked_entity",
+  "run_id": "run-demo-festinger1959",
+  "phase_name": "Phase 2: Entity & Local Relation Discovery",
+  "payload": {
+    "entity_id": "str:TE_DissF6",
+    "entity_type": "TheoryElement",
+    "canonical_name": "T(DissF6) - Festinger-Carlsmith Forced Compliance Reward Model",
+    "description": "Specialized theory-element model predicting magnitude of opinion change under varied incentive rewards.",
+    "confidence": 1.0,
+    "source_chunk_ids": [
+      "chunk_fc1959_ratio_law"
+    ]
+  },
+  "provenance": {
+    "source_path": "datasets/run-demo-festinger1959.cypher",
+    "notes": {
+      "generated": "demo_fixture"
+    }
+  },
+  "created_at": "2026-09-01T10:00:00Z"
+}

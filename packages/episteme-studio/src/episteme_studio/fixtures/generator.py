@@ -29,6 +29,7 @@ def generate_fixtures(base_dir: Path | None = None) -> None:
 
     _generate_physics_run(runs_dir, artifacts_dir)
     _generate_psychology_run(runs_dir, artifacts_dir)
+    _generate_festinger1959_run(runs_dir, artifacts_dir)
 
 
 def _write_envelope(
@@ -501,6 +502,365 @@ def _generate_psychology_run(runs_dir: Path, artifacts_dir: Path) -> None:
                     "Premise": "A",
                     "Claim": "A",
                     "EmpiricalSentence": "B",
+                },
+            },
+        },
+        "fingerprints": {},
+    }
+    (runs_dir / f"{run_id}.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+
+def _generate_festinger1959_run(runs_dir: Path, artifacts_dir: Path) -> None:
+    """Generate demonstration run manifest and artifact envelopes for Festinger & Carlsmith (1959).
+
+    Produces exact span groundings in `festinger_carlsmith_1959.md`, formal ratio axioms,
+    experimental corroboration models, and dialectical Janis-King rebuttal relationships.
+
+    Parameters
+    ----------
+    runs_dir : Path
+        Directory destination for run manifests.
+    artifacts_dir : Path
+        Directory destination for run artifact envelope bundles.
+    """
+    run_id = "run-demo-festinger1959"
+    run_art_dir = artifacts_dir / run_id
+    run_art_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Document (L1)
+    _write_envelope(
+        run_art_dir,
+        "doc_festinger1959",
+        "document",
+        {
+            "id": "festinger_carlsmith_1959",
+            "title": "Cognitive Consequences of Forced Compliance",
+            "filename": "festinger_carlsmith_1959.md",
+            "author": "Leon Festinger & James M. Carlsmith",
+            "year": 1959,
+            "journal": "Journal of Abnormal and Social Psychology",
+            "volume": 58,
+            "issue": 2,
+            "pages": "203-210",
+            "doi": "10.1037/h0041593",
+        },
+        run_id,
+        "Phase 1: Data Foundation",
+    )
+
+    # 2. Chunks (L1) with exact verified character offsets in datasets/festinger_carlsmith_1959.md
+    chunks = [
+        (
+            "chunk_fc1959_ratio_law",
+            1,
+            3723,
+            4072,
+            'In evaluating the total magnitude of dissonance, one must take account of both dissonances and consonances. Let us think of the sum of all the dissonances involving some particular cognition as "D" and the sum of all the consonances as "C." Then we might think of the total magnitude of dissonance as being a function of "D" divided by "D" plus "C."',
+        ),
+        (
+            "chunk_fc1959_inverse_reward_prediction",
+            2,
+            5565,
+            5703,
+            "The prediction [from 3 and 4 above] is that the larger the reward given to the subject, the smaller will be the subsequent opinion change.",
+        ),
+        (
+            "chunk_fc1959_corroboration_finding",
+            3,
+            23586,
+            23892,
+            "In short, when an S was induced, by offer of reward, to say something contrary to his private opinion, this private opinion tended to change so as to correspond more closely with what he had said. The greater the reward offered (beyond what was necessary to elicit the behavior) the smaller was the effect.",
+        ),
+        (
+            "chunk_fc1959_procedure_summary",
+            4,
+            31652,
+            31983,
+            "A laboratory experiment was designed to test these derivations. Subjects were subjected to a boring experience and then paid to tell someone that the experience had been interesting and enjoyable. The amount of money paid the subject was varied. The private opinions of the subjects concerning the experiences were then determined.",
+        ),
+        (
+            "chunk_fc1959_rehearsal_hypothesis",
+            5,
+            28025,
+            28417,
+            "Specifically, as applied to our results, this alternative explanation would maintain that perhaps, for some reason, the Ss in the One Dollar condition worked harder at telling the waiting girl that the tasks were fun and enjoyable. That is, in the One Dollar condition they may have rehearsed it more mentally, thought up more ways of saying it, may have said it more convincingly, and so on.",
+        ),
+        (
+            "chunk_fc1959_rehearsal_defeated",
+            6,
+            30394,
+            30608,
+            "We are certainly justified in concluding that the Ss in the One Dollar condition did not improvise more nor act more convincingly. Hence, the alternative explanation discussed above cannot account for the findings.",
+        ),
+    ]
+    for cid, idx, c_start, c_end, text in chunks:
+        _write_envelope(
+            run_art_dir,
+            cid,
+            "chunk",
+            {
+                "id": cid,
+                "text": text,
+                "chunk_index": idx,
+                "char_start": c_start,
+                "char_end": c_end,
+                "confidence": 1.0,
+                "doc_id": "festinger_carlsmith_1959",
+            },
+            run_id,
+            "Phase 1: Data Foundation",
+        )
+
+    # 3. Entities (L2)
+    entities = [
+        ("str:TE_DissF", "TheoryElement", "T(DissF) - Forced Compliance Domain Core", "Structuralist theory-element core for forced compliance cognitive dissonance."),
+        ("str:TE_DissF6", "TheoryElement", "T(DissF6) - Festinger-Carlsmith Forced Compliance Reward Model", "Specialized theory-element model predicting magnitude of opinion change under varied incentive rewards."),
+        ("str:MP_DissF6", "PotentialModel", "M_p(DissF6) - Potential Models of Forced Compliance", "Potential models structure M_p = <S, X, notX, Reward, Dissonance, Consonance, OpinionChange>."),
+        ("str:M_DissF6_RatioLaw", "ActualModel", "M(DissF6) - Dissonance Magnitude Ratio Law", "Actual model axiom defining dissonance magnitude as ratio D / (D + C)."),
+        ("str:M_DissF6_InverseRewardLaw", "ActualModel", "M(DissF6) - Inverse Reward Prediction Law", "Axiom stating negative partial derivative of opinion change with respect to magnitude of reward."),
+        ("str:M_DissF6_Corroboration", "ActualModel", "M(DissF6) - Experimental Corroboration Law", "Observed empirical model: opinion change in $1 condition exceeds $20 condition."),
+        ("str:I0_Carlsmith1959", "Paradigm", "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm", "Paradigm intended application using peg-turning spools and confederate interview."),
+        ("str:TE_Alternative_Rehearsal", "Hypothesis", "Hypothesis: Janis-King Mental Rehearsal Alternative Explanation", "Alternative incentive/rehearsal explanation positing greater cognitive rehearsal in $1 subjects."),
+        ("str:EV_Rehearsal_Defeated", "Evidence", "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal", "Empirical observer ratings demonstrating no difference in persuasiveness or rehearsal."),
+    ]
+    for eid, etype, name, desc in entities:
+        clean_eid = eid.replace("str:", "")
+        _write_envelope(
+            run_art_dir,
+            f"entity_{clean_eid}",
+            "linked_entity",
+            {
+                "entity_id": eid,
+                "entity_type": etype,
+                "canonical_name": name,
+                "description": desc,
+                "confidence": 1.0,
+                "source_chunk_ids": ["chunk_fc1959_ratio_law"],
+            },
+            run_id,
+            "Phase 2: Entity & Local Relation Discovery",
+        )
+
+    # 4. Theory Atoms (L3) with grounded TextAnchors
+    atoms = [
+        ("str:TE_DissF", "TheoryElement", "T(DissF) - Forced Compliance Domain Core", "chunk_fc1959_ratio_law", None),
+        (
+            "str:TE_DissF6",
+            "TheoryElement",
+            "T(DissF6) - Festinger-Carlsmith Forced Compliance Reward Model",
+            "chunk_fc1959_inverse_reward_prediction",
+            {
+                "sourceDocId": "festinger_carlsmith_1959",
+                "chunkId": "chunk_fc1959_inverse_reward_prediction",
+                "charStart": 5565,
+                "charEnd": 5703,
+                "verbatimQuote": "The prediction [from 3 and 4 above] is that the larger the reward given to the subject, the smaller will be the subsequent opinion change.",
+            },
+        ),
+        (
+            "str:MP_DissF6",
+            "PotentialModel",
+            "M_p(DissF6) = <S, X, notX, Reward, Dissonance, Consonance, OpinionChange>",
+            "chunk_fc1959_ratio_law",
+            {
+                "sourceDocId": "festinger_carlsmith_1959",
+                "chunkId": "chunk_fc1959_ratio_law",
+                "charStart": 3723,
+                "charEnd": 4072,
+                "verbatimQuote": 'In evaluating the total magnitude of dissonance, one must take account of both dissonances and consonances. Let us think of the sum of all the dissonances involving some particular cognition as "D" and the sum of all the consonances as "C." Then we might think of the total magnitude of dissonance as being a function of "D" divided by "D" plus "C."',
+            },
+        ),
+        (
+            "str:M_DissF6_RatioLaw",
+            "ActualModel",
+            "diss_magnitude = f(D / (D + C))",
+            "chunk_fc1959_ratio_law",
+            {
+                "sourceDocId": "festinger_carlsmith_1959",
+                "chunkId": "chunk_fc1959_ratio_law",
+                "charStart": 3723,
+                "charEnd": 4072,
+                "verbatimQuote": 'In evaluating the total magnitude of dissonance, one must take account of both dissonances and consonances. Let us think of the sum of all the dissonances involving some particular cognition as "D" and the sum of all the consonances as "C." Then we might think of the total magnitude of dissonance as being a function of "D" divided by "D" plus "C."',
+            },
+        ),
+        (
+            "str:M_DissF6_InverseRewardLaw",
+            "ActualModel",
+            "forall s in S: reward(s) > reward_min -> d(opinion_change)/d(reward) < 0",
+            "chunk_fc1959_inverse_reward_prediction",
+            {
+                "sourceDocId": "festinger_carlsmith_1959",
+                "chunkId": "chunk_fc1959_inverse_reward_prediction",
+                "charStart": 5565,
+                "charEnd": 5703,
+                "verbatimQuote": "The prediction [from 3 and 4 above] is that the larger the reward given to the subject, the smaller will be the subsequent opinion change.",
+            },
+        ),
+        (
+            "str:M_DissF6_Corroboration",
+            "ActualModel",
+            "opinion_change(s | reward=1) > opinion_change(s | reward=20) >= opinion_change(s | control)",
+            "chunk_fc1959_corroboration_finding",
+            {
+                "sourceDocId": "festinger_carlsmith_1959",
+                "chunkId": "chunk_fc1959_corroboration_finding",
+                "charStart": 23586,
+                "charEnd": 23892,
+                "verbatimQuote": "In short, when an S was induced, by offer of reward, to say something contrary to his private opinion, this private opinion tended to change so as to correspond more closely with what he had said. The greater the reward offered (beyond what was necessary to elicit the behavior) the smaller was the effect.",
+            },
+        ),
+        (
+            "str:I0_Carlsmith1959",
+            "Paradigm",
+            "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm",
+            "chunk_fc1959_procedure_summary",
+            {
+                "sourceDocId": "festinger_carlsmith_1959",
+                "chunkId": "chunk_fc1959_procedure_summary",
+                "charStart": 31652,
+                "charEnd": 31983,
+                "verbatimQuote": "A laboratory experiment was designed to test these derivations. Subjects were subjected to a boring experience and then paid to tell someone that the experience had been interesting and enjoyable. The amount of money paid the subject was varied. The private opinions of the subjects concerning the experiences were then determined.",
+            },
+        ),
+        (
+            "str:TE_Alternative_Rehearsal",
+            "Hypothesis",
+            "Hypothesis: Janis-King Mental Rehearsal Alternative Explanation",
+            "chunk_fc1959_rehearsal_hypothesis",
+            {
+                "sourceDocId": "festinger_carlsmith_1959",
+                "chunkId": "chunk_fc1959_rehearsal_hypothesis",
+                "charStart": 28025,
+                "charEnd": 28417,
+                "verbatimQuote": "Specifically, as applied to our results, this alternative explanation would maintain that perhaps, for some reason, the Ss in the One Dollar condition worked harder at telling the waiting girl that the tasks were fun and enjoyable. That is, in the One Dollar condition they may have rehearsed it more mentally, thought up more ways of saying it, may have said it more convincingly, and so on.",
+            },
+        ),
+        (
+            "str:EV_Rehearsal_Defeated",
+            "Evidence",
+            "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal",
+            "chunk_fc1959_rehearsal_defeated",
+            {
+                "sourceDocId": "festinger_carlsmith_1959",
+                "chunkId": "chunk_fc1959_rehearsal_defeated",
+                "charStart": 30394,
+                "charEnd": 30608,
+                "verbatimQuote": "We are certainly justified in concluding that the Ss in the One Dollar condition did not improvise more nor act more convincingly. Hence, the alternative explanation discussed above cannot account for the findings.",
+            },
+        ),
+    ]
+    for aid, atype, text, chunk_id, anchor in atoms:
+        clean_aid = aid.replace("str:", "")
+        payload: dict[str, Any] = {
+            "component_id": aid,
+            "component_type": atype,
+            "text": text,
+            "confidence": 1.0,
+            "source_chunk_id": chunk_id,
+        }
+        if anchor:
+            payload["text_anchor"] = anchor
+        _write_envelope(
+            run_art_dir,
+            f"atom_{clean_aid}",
+            "theory_atom",
+            payload,
+            run_id,
+            "Phase 4: Argument Mining",
+        )
+
+    # 5. Theory Relations (L3)
+    theory_relations = [
+        ("trel_fc_spec", "str:TE_DissF", "specializes", "str:TE_DissF6", 1.0),
+        ("trel_fc_mp", "str:TE_DissF6", "hasPotentialModel", "str:MP_DissF6", 1.0),
+        ("trel_fc_m1", "str:TE_DissF6", "hasActualModel", "str:M_DissF6_RatioLaw", 1.0),
+        ("trel_fc_m2", "str:TE_DissF6", "hasActualModel", "str:M_DissF6_InverseRewardLaw", 1.0),
+        ("trel_fc_m3", "str:TE_DissF6", "hasActualModel", "str:M_DissF6_Corroboration", 1.0),
+        ("trel_fc_i0", "str:TE_DissF6", "hasParadigm", "str:I0_Carlsmith1959", 1.0),
+        ("trel_fc_alt_att", "str:TE_Alternative_Rehearsal", "attacks", "str:TE_DissF6", -1.0),
+        ("trel_fc_ev_att", "str:EV_Rehearsal_Defeated", "attacks", "str:TE_Alternative_Rehearsal", -1.0),
+    ]
+    for trid, src, rtype, tgt, weight in theory_relations:
+        _write_envelope(
+            run_art_dir,
+            trid,
+            "theory_relation",
+            {
+                "relation_id": trid,
+                "source_component_id": src,
+                "relation_type": rtype,
+                "target_component_id": tgt,
+                "weight": weight,
+                "confidence": abs(weight),
+                "scope": "global",
+            },
+            run_id,
+            "Phase 5: Inter-Document Argument Web",
+        )
+
+    # 6. Run Manifest
+    manifest = {
+        "run_id": run_id,
+        "pipeline_version": "0.1.0",
+        "schema_version": "v1",
+        "status": "completed",
+        "created_at": "2026-09-02T14:00:00Z",
+        "started_at": "2026-09-02T14:00:05Z",
+        "completed_at": "2026-09-02T14:03:45Z",
+        "duration_seconds": 220.0,
+        "primary_input": "festinger_carlsmith_1959.md",
+        "input_sources": ["datasets/festinger_carlsmith_1959.md"],
+        "tags": ["demo", "psychology", "cognitive-dissonance", "festinger-carlsmith", "structuralism"],
+        "models": {
+            "llm_model": "anthropic/claude-3-5-sonnet",
+            "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            "reranker_model": "Alibaba-NLP/gte-reranker-modernbert-base",
+            "thinking_level": "high",
+        },
+        "phase_records": [
+            {"ordinal": 1, "phase_name": "Phase 1: Data Foundation", "status": "completed", "reused": False, "artifact_count": 7},
+            {"ordinal": 2, "phase_name": "Phase 2: Entity & Local Relation Discovery", "status": "completed", "reused": False, "artifact_count": 9},
+            {"ordinal": 3, "phase_name": "Phase 3: Global Relation Extraction", "status": "completed", "reused": False, "artifact_count": 0},
+            {"ordinal": 4, "phase_name": "Phase 3b: Latent Graph Consolidation", "status": "completed", "reused": False, "artifact_count": 3},
+            {"ordinal": 5, "phase_name": "Phase 4: Entity Maturation", "status": "completed", "reused": False, "artifact_count": 9},
+            {"ordinal": 6, "phase_name": "Phase 4: Argument Mining", "status": "completed", "reused": False, "artifact_count": 9},
+            {"ordinal": 7, "phase_name": "Phase 5: Inter-Document Argument Web", "status": "completed", "reused": False, "artifact_count": 8},
+            {"ordinal": 8, "phase_name": "Phase 6: TheoryNet Projection", "status": "completed", "reused": False, "artifact_count": 9},
+        ],
+        "artifact_counts_by_kind": {
+            "document": 1,
+            "chunk": 6,
+            "entity": 9,
+            "theory_atom": 9,
+            "theory_relation": 8,
+        },
+        "config_snapshot": {
+            "default_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            "models": {
+                "llm_model": "anthropic/claude-3-5-sonnet",
+                "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+                "reranker_model": "Alibaba-NLP/gte-reranker-modernbert-base",
+            },
+            "graph_schema": {
+                "version": "v1",
+                "node_types": ["TheoryElement", "PotentialModel", "ActualModel", "Paradigm", "Hypothesis", "Evidence"],
+                "relation_types": ["specializes", "hasPotentialModel", "hasActualModel", "hasParadigm", "attacks"],
+                "component_types": ["TheoryElement", "PotentialModel", "ActualModel", "Paradigm", "Hypothesis", "Evidence"],
+                "argument_relation_types": ["specializes", "hasPotentialModel", "hasActualModel", "hasParadigm", "attacks"],
+                "relation_polarities": {
+                    "specializes": 1,
+                    "hasPotentialModel": 1,
+                    "hasActualModel": 1,
+                    "hasParadigm": 1,
+                    "attacks": -1,
+                },
+                "component_partitions": {
+                    "TheoryElement": "A",
+                    "PotentialModel": "A",
+                    "ActualModel": "A",
+                    "Hypothesis": "A",
+                    "Paradigm": "B",
+                    "Evidence": "B",
                 },
             },
         },

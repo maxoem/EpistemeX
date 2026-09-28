@@ -1,0 +1,184 @@
+{
+  "evaluation_id": "eval_run-demo-festinger1959",
+  "run_ids": [
+    "run-demo-festinger1959"
+  ],
+  "dataset_ref": "/Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_festinger_carlsmith_1959.jsonld",
+  "dataset_type": "gold",
+  "outcome": "pass",
+  "created_at": "2026-09-28T10:56:53.050343Z",
+  "key_metrics": {
+    "mcc": 1.0,
+    "aor": 0.0,
+    "pfs": 0.9583,
+    "ag_iou": 1.0,
+    "edge_fidelity": 1.0,
+    "poset_f1": 1.0,
+    "poset_reachability_f1": 1.0,
+    "root_conformity": 1.0,
+    "is_dag": 1.0,
+    "polarity_accuracy": 1.0,
+    "polarity_conflict_rate": 0.0
+  },
+  "has_markdown": true,
+  "has_baseline": false,
+  "results_by_level": {
+    "stage": [
+      {
+        "run_id": "run-demo-festinger1959",
+        "level": "stage",
+        "phase_name": "Phase 6: TheoryNet Projection",
+        "dataset_ref": "/Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_festinger_carlsmith_1959.jsonld",
+        "outcome": "pass",
+        "metrics": [
+          {
+            "name": "mcc",
+            "value": 1.0,
+            "unit": "ratio",
+            "threshold": 1.0,
+            "passes_threshold": true
+          },
+          {
+            "name": "aor",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 0.0,
+            "passes_threshold": true
+          },
+          {
+            "name": "pfs",
+            "value": 0.9583,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": true
+          },
+          {
+            "name": "ag_iou",
+            "value": 1.0,
+            "unit": "ratio",
+            "threshold": 0.5,
+            "passes_threshold": true
+          },
+          {
+            "name": "edge_fidelity",
+            "value": 1.0,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": true
+          },
+          {
+            "name": "poset_f1",
+            "value": 1.0,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": true
+          },
+          {
+            "name": "poset_reachability_f1",
+            "value": 1.0,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": true
+          },
+          {
+            "name": "root_conformity",
+            "value": 1.0,
+            "unit": "bool",
+            "threshold": 1.0,
+            "passes_threshold": true
+          },
+          {
+            "name": "is_dag",
+            "value": 1.0,
+            "unit": "bool",
+            "threshold": 1.0,
+            "passes_threshold": true
+          }
+        ],
+        "notes": {
+          "markdown_report": "# Formal Structuralist Model Evaluation Report\n\n**Capability Subsumption ($G_{pred} \\succeq_{cap} G_{ref}$):** ✅ PASSED (Subsumes Capabilities)\n\n## Quantitative Benchmark Metrics\n- **Model Component Completeness (MCC):** 1.0000\n- **Axiomatic Omission Rate (AOR):** 0.0000 (Zero Omission ✅)\n- **Property Fidelity Score (PFS):** 0.9583\n- **Text Anchor Grounding IoU ($AG_{IoU}$):** 1.0000\n- **Relational Edge Fidelity:** 1.0000\n\n## Model Class Decomposition Breakdown\n| Model Class | Symbol | Reference Count | Predicted Count | Matched | Completeness |\n| :--- | :---: | :---: | :---: | :---: | :---: |\n| `potential_models` | $\\mathcal{M}_p$ | 1 | 1 | 1 | 100.00% |\n| `actual_models` | $\\mathcal{M}$ | 5 | 5 | 5 | 100.00% |\n| `partial_potential_models` | $\\mathcal{M}_{pp}$ | 0 | 0 | 0 | 100.00% |\n| `constraints` | $GC$ | 0 | 0 | 0 | 100.00% |\n| `paradigms` | $I_0$ | 1 | 1 | 1 | 100.00% |\n| `theory_elements` | $T$ | 2 | 2 | 2 | 100.00% |\n\n# Specialization Poset Hierarchy Evaluation Report\n\n- **DAG Property & Strict Partial Order:** ✅ PASSED (Acyclic DAG)\n- **Root Element Conformity ($B(TN) = \\{T_0\\}$):** ✅ PASSED (Root: `str:TE_DissF`)\n- **Hierarchical Model Inheritance Subsumption:** ✅ PASSED (100.00%)\n\n## Quantitative Benchmark Metrics\n- **Poset Transitive Reduction F1:** 1.0000 (Precision: 1.0000, Recall: 1.0000)\n- **Specialization Reachability F1:** 1.0000 (Precision: 1.0000, Recall: 1.0000)\n- **Specialization Edge Counts:** Predicted = 1, Reference = 1",
+          "subsumption_status": "subsumed",
+          "poset_markdown": "# Specialization Poset Hierarchy Evaluation Report\n\n- **DAG Property & Strict Partial Order:** ✅ PASSED (Acyclic DAG)\n- **Root Element Conformity ($B(TN) = \\{T_0\\}$):** ✅ PASSED (Root: `str:TE_DissF`)\n- **Hierarchical Model Inheritance Subsumption:** ✅ PASSED (100.00%)\n\n## Quantitative Benchmark Metrics\n- **Poset Transitive Reduction F1:** 1.0000 (Precision: 1.0000, Recall: 1.0000)\n- **Specialization Reachability F1:** 1.0000 (Precision: 1.0000, Recall: 1.0000)\n- **Specialization Edge Counts:** Predicted = 1, Reference = 1"
+        },
+        "evaluated_at": "2026-09-28T10:56:53.050283Z"
+      }
+    ]
+  },
+  "model_decomposition": [
+    {
+      "class_name": "potential_models",
+      "symbol": "\\mathcal{M}_p",
+      "reference_count": 1,
+      "predicted_count": 1,
+      "matched_count": 1,
+      "completeness": 1.0
+    },
+    {
+      "class_name": "actual_models",
+      "symbol": "\\mathcal{M}",
+      "reference_count": 5,
+      "predicted_count": 5,
+      "matched_count": 5,
+      "completeness": 1.0
+    },
+    {
+      "class_name": "partial_potential_models",
+      "symbol": "\\mathcal{M}_{pp}",
+      "reference_count": 0,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "completeness": 1.0
+    },
+    {
+      "class_name": "constraints",
+      "symbol": "GC",
+      "reference_count": 0,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "completeness": 1.0
+    },
+    {
+      "class_name": "paradigms",
+      "symbol": "I_0",
+      "reference_count": 1,
+      "predicted_count": 1,
+      "matched_count": 1,
+      "completeness": 1.0
+    },
+    {
+      "class_name": "theory_elements",
+      "symbol": "T",
+      "reference_count": 2,
+      "predicted_count": 2,
+      "matched_count": 2,
+      "completeness": 1.0
+    }
+  ],
+  "poset_detail": {
+    "is_dag": true,
+    "root_element": "str:TE_DissF",
+    "root_conformity": true,
+    "transitive_reduction_f1": 1.0,
+    "reachability_f1": 1.0,
+    "predicted_edge_count": 1,
+    "reference_edge_count": 1
+  },
+  "polarity_detail": {
+    "polarity_accuracy": 1.0,
+    "polarity_conflict_rate": 0.0,
+    "conflicting_pairs_count": 0,
+    "agreed_pairs_count": 8
+  },
+  "retrieval_detail": {
+    "mrr": 0.6626984126984127,
+    "hits_at_1": 0.5,
+    "hits_at_3": 0.8333333333333334,
+    "hits_at_10": 1.0,
+    "ndcg": 0.7440438478174651,
+    "num_queries": 6
+  },
+  "comparative_deltas": [],
+  "summary_markdown": "# Formal Structuralist Model Evaluation Report\n\n**Capability Subsumption ($G_{pred} \\succeq_{cap} G_{ref}$):** ✅ PASSED (Subsumes Capabilities)\n\n## Quantitative Benchmark Metrics\n- **Model Component Completeness (MCC):** 1.0000\n- **Axiomatic Omission Rate (AOR):** 0.0000 (Zero Omission ✅)\n- **Property Fidelity Score (PFS):** 0.9583\n- **Text Anchor Grounding IoU ($AG_{IoU}$):** 1.0000\n- **Relational Edge Fidelity:** 1.0000\n\n## Model Class Decomposition Breakdown\n| Model Class | Symbol | Reference Count | Predicted Count | Matched | Completeness |\n| :--- | :---: | :---: | :---: | :---: | :---: |\n| `potential_models` | $\\mathcal{M}_p$ | 1 | 1 | 1 | 100.00% |\n| `actual_models` | $\\mathcal{M}$ | 5 | 5 | 5 | 100.00% |\n| `partial_potential_models` | $\\mathcal{M}_{pp}$ | 0 | 0 | 0 | 100.00% |\n| `constraints` | $GC$ | 0 | 0 | 0 | 100.00% |\n| `paradigms` | $I_0$ | 1 | 1 | 1 | 100.00% |\n| `theory_elements` | $T$ | 2 | 2 | 2 | 100.00% |\n\n# Specialization Poset Hierarchy Evaluation Report\n\n- **DAG Property & Strict Partial Order:** ✅ PASSED (Acyclic DAG)\n- **Root Element Conformity ($B(TN) = \\{T_0\\}$):** ✅ PASSED (Root: `str:TE_DissF`)\n- **Hierarchical Model Inheritance Subsumption:** ✅ PASSED (100.00%)\n\n## Quantitative Benchmark Metrics\n- **Poset Transitive Reduction F1:** 1.0000 (Precision: 1.0000, Recall: 1.0000)\n- **Specialization Reachability F1:** 1.0000 (Precision: 1.0000, Recall: 1.0000)\n- **Specialization Edge Counts:** Predicted = 1, Reference = 1",
+  "omitted_components": [],
+  "violations": []
+}

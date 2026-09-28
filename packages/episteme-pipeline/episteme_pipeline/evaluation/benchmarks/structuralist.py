@@ -207,6 +207,9 @@ def load_structuralist_benchmark(
             ("hasParadigm", "hasParadigm"),
             ("hasIntendedApplication", "hasIntendedApplication"),
             ("presupposes", "presupposes"),
+            ("attacks", "attacks"),
+            ("supports", "supports"),
+            ("explains", "explains"),
         ]
 
         for rel_key, rel_label in standard_directed_relations:

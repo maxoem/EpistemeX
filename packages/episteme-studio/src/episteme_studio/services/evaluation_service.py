@@ -110,6 +110,7 @@ class EvaluationService:
         """
         adapter = EvaluationAdapter(
             reports_dir=settings.reports_dir,
+            include_fixtures=settings.demo_mode,
         )
         reader = ArtifactReader(
             runs_dir=settings.runs_dir,

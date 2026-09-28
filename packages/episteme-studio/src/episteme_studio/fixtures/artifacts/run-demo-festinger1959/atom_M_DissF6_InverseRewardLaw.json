@@ -1,0 +1,28 @@
+{
+  "artifact_id": "atom_M_DissF6_InverseRewardLaw",
+  "identity_key": "atom_M_DissF6_InverseRewardLaw",
+  "kind": "theory_atom",
+  "run_id": "run-demo-festinger1959",
+  "phase_name": "Phase 4: Argument Mining",
+  "payload": {
+    "component_id": "str:M_DissF6_InverseRewardLaw",
+    "component_type": "ActualModel",
+    "text": "forall s in S: reward(s) > reward_min -> d(opinion_change)/d(reward) < 0",
+    "confidence": 1.0,
+    "source_chunk_id": "chunk_fc1959_inverse_reward_prediction",
+    "text_anchor": {
+      "sourceDocId": "festinger_carlsmith_1959",
+      "chunkId": "chunk_fc1959_inverse_reward_prediction",
+      "charStart": 5565,
+      "charEnd": 5703,
+      "verbatimQuote": "The prediction [from 3 and 4 above] is that the larger the reward given to the subject, the smaller will be the subsequent opinion change."
+    }
+  },
+  "provenance": {
+    "source_path": "datasets/run-demo-festinger1959.cypher",
+    "notes": {
+      "generated": "demo_fixture"
+    }
+  },
+  "created_at": "2026-09-01T10:00:00Z"
+}

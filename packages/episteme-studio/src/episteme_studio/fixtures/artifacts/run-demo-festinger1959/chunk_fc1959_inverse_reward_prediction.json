@@ -1,0 +1,23 @@
+{
+  "artifact_id": "chunk_fc1959_inverse_reward_prediction",
+  "identity_key": "chunk_fc1959_inverse_reward_prediction",
+  "kind": "chunk",
+  "run_id": "run-demo-festinger1959",
+  "phase_name": "Phase 1: Data Foundation",
+  "payload": {
+    "id": "chunk_fc1959_inverse_reward_prediction",
+    "text": "The prediction [from 3 and 4 above] is that the larger the reward given to the subject, the smaller will be the subsequent opinion change.",
+    "chunk_index": 2,
+    "char_start": 5565,
+    "char_end": 5703,
+    "confidence": 1.0,
+    "doc_id": "festinger_carlsmith_1959"
+  },
+  "provenance": {
+    "source_path": "datasets/run-demo-festinger1959.cypher",
+    "notes": {
+      "generated": "demo_fixture"
+    }
+  },
+  "created_at": "2026-09-01T10:00:00Z"
+}

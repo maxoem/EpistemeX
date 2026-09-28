@@ -1,0 +1,197 @@
+{
+  "evaluation_id": "stress_run-demo-festinger1959",
+  "run_id": "run-demo-festinger1959",
+  "overall_rdf": 0.33,
+  "is_resilient": false,
+  "baseline_f1": 0.9,
+  "worst_case_f1": 0.603,
+  "breakdown_by_perturbation": {
+    "typo_insertion": [
+      {
+        "noise_level": 0.05,
+        "f1_score": 0.8618,
+        "mcc_score": 0.98,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.0424
+      },
+      {
+        "noise_level": 0.1,
+        "f1_score": 0.8235,
+        "mcc_score": 0.96,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.085
+      },
+      {
+        "noise_level": 0.15,
+        "f1_score": 0.7853,
+        "mcc_score": 0.94,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.1274
+      },
+      {
+        "noise_level": 0.2,
+        "f1_score": 0.747,
+        "mcc_score": 0.92,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.17
+      },
+      {
+        "noise_level": 0.3,
+        "f1_score": 0.6705,
+        "mcc_score": 0.88,
+        "poset_dag_valid": false,
+        "rdf_delta": 0.255
+      }
+    ],
+    "synonym_replacement": [
+      {
+        "noise_level": 0.05,
+        "f1_score": 0.8505,
+        "mcc_score": 0.98,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.055
+      },
+      {
+        "noise_level": 0.1,
+        "f1_score": 0.801,
+        "mcc_score": 0.96,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.11
+      },
+      {
+        "noise_level": 0.15,
+        "f1_score": 0.7515,
+        "mcc_score": 0.94,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.165
+      },
+      {
+        "noise_level": 0.2,
+        "f1_score": 0.702,
+        "mcc_score": 0.92,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.22
+      },
+      {
+        "noise_level": 0.3,
+        "f1_score": 0.603,
+        "mcc_score": 0.88,
+        "poset_dag_valid": false,
+        "rdf_delta": 0.33
+      }
+    ],
+    "sentence_shuffle": [
+      {
+        "noise_level": 0.05,
+        "f1_score": 0.8505,
+        "mcc_score": 0.98,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.055
+      },
+      {
+        "noise_level": 0.1,
+        "f1_score": 0.801,
+        "mcc_score": 0.96,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.11
+      },
+      {
+        "noise_level": 0.15,
+        "f1_score": 0.7515,
+        "mcc_score": 0.94,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.165
+      },
+      {
+        "noise_level": 0.2,
+        "f1_score": 0.702,
+        "mcc_score": 0.92,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.22
+      },
+      {
+        "noise_level": 0.3,
+        "f1_score": 0.603,
+        "mcc_score": 0.88,
+        "poset_dag_valid": false,
+        "rdf_delta": 0.33
+      }
+    ],
+    "composite": [
+      {
+        "noise_level": 0.05,
+        "f1_score": 0.8505,
+        "mcc_score": 0.98,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.055
+      },
+      {
+        "noise_level": 0.1,
+        "f1_score": 0.801,
+        "mcc_score": 0.96,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.11
+      },
+      {
+        "noise_level": 0.15,
+        "f1_score": 0.7515,
+        "mcc_score": 0.94,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.165
+      },
+      {
+        "noise_level": 0.2,
+        "f1_score": 0.702,
+        "mcc_score": 0.92,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.22
+      },
+      {
+        "noise_level": 0.3,
+        "f1_score": 0.603,
+        "mcc_score": 0.88,
+        "poset_dag_valid": false,
+        "rdf_delta": 0.33
+      }
+    ]
+  },
+  "chart_series": {
+    "noise_levels": [
+      0.05,
+      0.1,
+      0.15,
+      0.2,
+      0.3
+    ],
+    "series": {
+      "typo_insertion": [
+        0.8618,
+        0.8235,
+        0.7853,
+        0.747,
+        0.6705
+      ],
+      "synonym_replacement": [
+        0.8505,
+        0.801,
+        0.7515,
+        0.702,
+        0.603
+      ],
+      "sentence_shuffle": [
+        0.8505,
+        0.801,
+        0.7515,
+        0.702,
+        0.603
+      ],
+      "composite": [
+        0.8505,
+        0.801,
+        0.7515,
+        0.702,
+        0.603
+      ]
+    }
+  }
+}

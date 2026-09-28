@@ -1213,4 +1213,213 @@ class TestEvaluationWorkbenchEndpoints:
         assert parsed["evaluation_id"] == eval_id
 
 
+class TestStudioDemoModeEvaluation:
+    """Test suite validating studio --demo mode with Festinger & Carlsmith (1959) cognitive dissonance."""
+
+    @pytest.fixture
+    def demo_client(self, tmp_path: Path):
+        """Create a TestClient initialized in demo mode isolated to tmp_path."""
+        reports_dir = tmp_path / "reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        settings = StudioSettings(
+            demo_mode=True,
+            reports_dir=reports_dir,
+            token=None,
+        )
+        app = create_app(settings)
+        return TestClient(app)
+
+    def test_demo_mode_run_and_reports_discovery(self, demo_client: TestClient):
+        """Verify demo mode discovers run-demo-festinger1959 and canned evaluation reports."""
+        # 1. Runs endpoint discovers run-demo-festinger1959
+        runs_resp = demo_client.get("/api/runs")
+        assert runs_resp.status_code == 200
+        run_ids = [r["run_id"] for r in runs_resp.json()]
+        assert "run-demo-festinger1959" in run_ids
+
+        # 2. Evaluation reports discovery includes Festinger report
+        rep_resp = demo_client.get("/api/evaluation/reports")
+        assert rep_resp.status_code == 200
+        rep_eval_ids = [r["evaluation_id"] for r in rep_resp.json()]
+        assert any("festinger1959" in eid for eid in rep_eval_ids)
+
+        # 3. Linked evaluation on run endpoint
+        run_eval_resp = demo_client.get("/api/runs/run-demo-festinger1959/evaluation")
+        assert run_eval_resp.status_code == 200
+        run_eval = run_eval_resp.json()
+        assert run_eval is not None
+        assert run_eval["outcome"] == "pass"
+
+    def test_demo_evaluation_metrics_and_decomposition(self, demo_client: TestClient):
+        """Verify Festinger report achieves gold metrics and full Bourbaki model decomposition."""
+        resp = demo_client.get("/api/evaluation/reports/eval_run-demo-festinger1959")
+        assert resp.status_code == 200
+        detail = resp.json()
+
+        metrics = detail["key_metrics"]
+        assert metrics["mcc"] == 1.0
+        assert metrics["aor"] == 0.0
+        assert metrics["ag_iou"] == 1.0
+        assert metrics["edge_fidelity"] == 1.0
+        assert metrics["poset_f1"] == 1.0
+        assert metrics["root_conformity"] == 1.0
+
+        # Bourbaki model decomposition grid
+        decomp = {d["class_name"]: d for d in detail["model_decomposition"]}
+        assert "potential_models" in decomp
+        assert "actual_models" in decomp
+        assert "paradigms" in decomp
+        assert "theory_elements" in decomp
+        assert decomp["potential_models"]["completeness"] == 1.0
+        assert decomp["actual_models"]["completeness"] == 1.0
+
+        # Specialization Poset DAG
+        poset = detail["poset_detail"]
+        assert poset["is_dag"] is True
+        assert poset["root_conformity"] is True
+        assert poset["root_element"] == "str:TE_DissF"
+        assert poset["transitive_reduction_f1"] == 1.0
+
+        # Polarity Concordance
+        polarity = detail["polarity_detail"]
+        assert polarity is not None
+        assert polarity["polarity_accuracy"] == 1.0
+        assert polarity["polarity_conflict_rate"] == 0.0
+
+    def test_topological_canvas_overlay(self, demo_client: TestClient):
+        """Verify graph canvas overlay includes true positives, dialectical attacks, and summary counts."""
+        resp = demo_client.get("/api/evaluation/reports/eval_run-demo-festinger1959/graph-overlay")
+        assert resp.status_code == 200
+        overlay = resp.json()
+
+        assert len(overlay["nodes"]) == 9
+        assert len(overlay["edges"]) == 8
+
+        # Check attack edges are preserved
+        attack_edges = [e for e in overlay["edges"] if e["predicate"] == "attacks"]
+        assert len(attack_edges) == 2
+
+        # Check nodes have structuralist symbols
+        symbols = {n["id"]: n["symbol"] for n in overlay["nodes"]}
+        assert symbols["str:MP_DissF6"] == "Mp"
+        assert symbols["str:M_DissF6_RatioLaw"] == "M"
+        assert symbols["str:I0_Carlsmith1959"] == "I0"
+        assert symbols["str:TE_DissF"] == "T"
+
+    def test_hitl_adjudication_desk(self, demo_client: TestClient):
+        """Verify borderline candidate review queue and dynamic recalculation for Festinger."""
+        queue_resp = demo_client.get("/api/evaluation/reports/eval_run-demo-festinger1959/adjudication-queue")
+        assert queue_resp.status_code == 200
+        queue = queue_resp.json()
+        assert queue["total_candidates"] >= 3
+
+        # Submit adjudication decision
+        cand = queue["candidates"][0]
+        adj_payload = {
+            "items": [
+                {
+                    "candidate_id": cand["candidate_id"],
+                    "evaluation_id": "eval_run-demo-festinger1959",
+                    "predicted_edge": cand["predicted_edge"],
+                    "reference_edge": cand["reference_edge"],
+                    "decision": "true_positive",
+                    "notes": "Verified experimentally in Festinger & Carlsmith Table 1.",
+                }
+            ]
+        }
+        recalc_resp = demo_client.post(
+            "/api/evaluation/reports/eval_run-demo-festinger1959/adjudicate-and-recalculate",
+            json=adj_payload,
+        )
+        assert recalc_resp.status_code == 200
+        recalc = recalc_resp.json()
+        assert recalc["adjudicated_count"] == 1
+        assert "f1" in recalc["metric_deltas"]
+
+    def test_calibration_lab(self, demo_client: TestClient):
+        """Verify calibration report, reliability bins, and overconfidence errors."""
+        calib_resp = demo_client.get("/api/evaluation/reports/eval_run-demo-festinger1959/calibration")
+        assert calib_resp.status_code == 200
+        calib = calib_resp.json()
+
+        assert len(calib["bins"]) == 10
+        assert calib["expected_calibration_error"] >= 0.0
+        assert len(calib["high_confidence_hallucinations"]) >= 1
+
+        # Check domain-appropriate cognitive dissonance hallucinations
+        halluc_text = calib["high_confidence_hallucinations"][0]["descriptor"]
+        assert any(k in halluc_text for k in ("RatioLaw", "Bem", "Janis"))
+
+    def test_multimodal_document_grounding(self, demo_client: TestClient):
+        """Verify text anchor grounding with exact character offsets in festinger_carlsmith_1959.md."""
+        evidence_resp = demo_client.get(
+            "/api/evaluation/reports/eval_run-demo-festinger1959/evidence/str:M_DissF6_RatioLaw"
+        )
+        assert evidence_resp.status_code == 200
+        grounding = evidence_resp.json()
+
+        assert grounding["component_id"] == "str:M_DissF6_RatioLaw"
+        assert grounding["iou_score"] == 1.0
+        assert grounding["grounding_passed"] is True
+
+        pred = grounding["predicted_anchor"]
+        assert pred["doc_id"] == "festinger_carlsmith_1959.md"
+        assert pred["char_start"] == 3723
+        assert pred["char_end"] == 4072
+        assert "total magnitude of dissonance" in pred["verbatim_text"]
+        assert pred["formula_latex"] is not None
+
+    def test_competency_retrieval_diagnostics(self, demo_client: TestClient):
+        """Verify 6 competency queries breakdown and ranking metrics."""
+        diag_resp = demo_client.get("/api/evaluation/reports/eval_run-demo-festinger1959/retrieval-diagnostics")
+        assert diag_resp.status_code == 200
+        diag = diag_resp.json()
+
+        assert diag["total_queries"] == 6
+        assert diag["mrr"] == 1.0
+        assert diag["hits_at_1"] == 1.0
+        assert len(diag["queries"]) == 6
+        assert diag["queries"][0]["query_id"] == "fc_q01"
+        assert diag["queries"][0]["first_hit_rank"] == 1
+
+    def test_noise_robustness_stress_test(self, demo_client: TestClient):
+        """Verify noise robustness report retrieval and stress test execution."""
+        rob_resp = demo_client.get("/api/evaluation/reports/eval_run-demo-festinger1959/robustness")
+        assert rob_resp.status_code == 200
+        rob = rob_resp.json()
+
+        assert rob["overall_rdf"] >= 0.0
+        assert "typo_insertion" in rob["breakdown_by_perturbation"]
+
+        # Run synthetic stress test
+        stress_payload = {
+            "run_id": "run-demo-festinger1959",
+            "perturbation_types": ["typo_insertion", "synonym_replacement"],
+            "noise_levels": [0.05, 0.10, 0.20],
+        }
+        stress_resp = demo_client.post(
+            "/api/evaluation/stress-test",
+            json=stress_payload,
+        )
+        assert stress_resp.status_code == 201
+        stress_res = stress_resp.json()
+        assert len(stress_res["breakdown_by_perturbation"]) == 2
+
+    def test_multi_run_leaderboard(self, demo_client: TestClient):
+        """Verify multi-run benchmark leaderboard matrix and Pareto frontier calculation."""
+        board_payload = {
+            "sort_by": "f1",
+            "ascending": False,
+            "pareto_axes": ["f1", "ece"],
+        }
+        board_resp = demo_client.post("/api/evaluation/leaderboard", json=board_payload)
+        assert board_resp.status_code == 200
+        board = board_resp.json()
+
+        assert board["total_runs"] >= 2
+        assert len(board["entries"]) >= 2
+        assert len(board["pareto_frontier"]) >= 1
+        assert "Multi-Run Benchmark Leaderboard" in board["summary_markdown"]
+
+
 

@@ -1,0 +1,439 @@
+{
+  "evaluation_id": "eval_stnb_cpm_pilot_eval_01",
+  "run_ids": [
+    "stnb_cpm_pilot_eval_01",
+    "baseline_zero_shot_stnb_cpm_pilot_eval_01"
+  ],
+  "dataset_ref": "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld",
+  "dataset_type": "gold",
+  "schema_version": null,
+  "pipeline_version": null,
+  "results_by_level": {
+    "stage": [
+      {
+        "run_id": "stnb_cpm_pilot_eval_01",
+        "evaluation_level": "stage",
+        "phase_name": "Phase 6: TheoryNet Projection",
+        "dataset_ref": "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld",
+        "dataset_type": null,
+        "metrics": [
+          {
+            "name": "mcc",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 1.0,
+            "passes_threshold": false
+          },
+          {
+            "name": "aor",
+            "value": 1.0,
+            "unit": "ratio",
+            "threshold": 0.0,
+            "passes_threshold": false
+          },
+          {
+            "name": "pfs",
+            "value": 0.5,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": false
+          },
+          {
+            "name": "ag_iou",
+            "value": 1.0,
+            "unit": "ratio",
+            "threshold": 0.5,
+            "passes_threshold": true
+          },
+          {
+            "name": "edge_fidelity",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": false
+          },
+          {
+            "name": "poset_f1",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": false
+          },
+          {
+            "name": "poset_reachability_f1",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": false
+          },
+          {
+            "name": "root_conformity",
+            "value": 0.0,
+            "unit": "bool",
+            "threshold": 1.0,
+            "passes_threshold": false
+          },
+          {
+            "name": "is_dag",
+            "value": 1.0,
+            "unit": "bool",
+            "threshold": 1.0,
+            "passes_threshold": true
+          }
+        ],
+        "error_buckets": [
+          {
+            "bucket": "omitted_reference_components",
+            "count": 19,
+            "description": "str:T_CPM_Base, str:T_CPM_Grav, str:T_CPM_Harmonic, str:T_CPM_Free, str:Mp_CPM, str:Mp_Grav, str:Mp_Harmonic, str:Mpp_CPM, str:M_CPM_Newton1, str:M_CPM_Newton2, str:M_CPM_Newton3, str:M_CPM_Grav, str:M_CPM_Hooke, str:M_CPM_Free, str:GC_Mass, str:GC_Force, str:I0_PlanetaryOrbits, str:I0_TerrestrialFreeFall, str:I0_HarmonicSpring"
+          }
+        ],
+        "artifact_refs": [],
+        "notes": {
+          "markdown_report": "# Formal Structuralist Model Evaluation Report\n\n**Capability Subsumption ($G_{pred} \\succeq_{cap} G_{ref}$):** ❌ FAILED (Capability Deficit)\n\n## Quantitative Benchmark Metrics\n- **Model Component Completeness (MCC):** 0.0000\n- **Axiomatic Omission Rate (AOR):** 1.0000 (Laws Omitted ❌)\n- **Property Fidelity Score (PFS):** 0.5000\n- **Text Anchor Grounding IoU ($AG_{IoU}$):** 1.0000\n- **Relational Edge Fidelity:** 0.0000\n\n## Model Class Decomposition Breakdown\n| Model Class | Symbol | Reference Count | Predicted Count | Matched | Completeness |\n| :--- | :---: | :---: | :---: | :---: | :---: |\n| `potential_models` | $\\mathcal{M}_p$ | 3 | 0 | 0 | 0.00% |\n| `actual_models` | $\\mathcal{M}$ | 6 | 0 | 0 | 0.00% |\n| `partial_potential_models` | $\\mathcal{M}_{pp}$ | 1 | 0 | 0 | 0.00% |\n| `constraints` | $GC$ | 2 | 0 | 0 | 0.00% |\n| `paradigms` | $I_0$ | 3 | 0 | 0 | 0.00% |\n| `theory_elements` | $T$ | 4 | 0 | 0 | 0.00% |\n\n## Omitted Reference Components\n- ❌ Missing: `str:T_CPM_Base`\n- ❌ Missing: `str:T_CPM_Grav`\n- ❌ Missing: `str:T_CPM_Harmonic`\n- ❌ Missing: `str:T_CPM_Free`\n- ❌ Missing: `str:Mp_CPM`\n- ❌ Missing: `str:Mp_Grav`\n- ❌ Missing: `str:Mp_Harmonic`\n- ❌ Missing: `str:Mpp_CPM`\n- ❌ Missing: `str:M_CPM_Newton1`\n- ❌ Missing: `str:M_CPM_Newton2`\n- ❌ Missing: `str:M_CPM_Newton3`\n- ❌ Missing: `str:M_CPM_Grav`\n- ❌ Missing: `str:M_CPM_Hooke`\n- ❌ Missing: `str:M_CPM_Free`\n- ❌ Missing: `str:GC_Mass`\n- ❌ Missing: `str:GC_Force`\n- ❌ Missing: `str:I0_PlanetaryOrbits`\n- ❌ Missing: `str:I0_TerrestrialFreeFall`\n- ❌ Missing: `str:I0_HarmonicSpring`\n\n# Specialization Poset Hierarchy Evaluation Report\n\n- **DAG Property & Strict Partial Order:** ✅ PASSED (Acyclic DAG)\n- **Root Element Conformity ($B(TN) = \\{T_0\\}$):** ❌ FAILED (Root: `None`)\n- **Hierarchical Model Inheritance Subsumption:** ✅ PASSED (100.00%)\n\n## Quantitative Benchmark Metrics\n- **Poset Transitive Reduction F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Reachability F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Edge Counts:** Predicted = 0, Reference = 3",
+          "subsumption_status": "deficit",
+          "poset_markdown": "# Specialization Poset Hierarchy Evaluation Report\n\n- **DAG Property & Strict Partial Order:** ✅ PASSED (Acyclic DAG)\n- **Root Element Conformity ($B(TN) = \\{T_0\\}$):** ❌ FAILED (Root: `None`)\n- **Hierarchical Model Inheritance Subsumption:** ✅ PASSED (100.00%)\n\n## Quantitative Benchmark Metrics\n- **Poset Transitive Reduction F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Reachability F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Edge Counts:** Predicted = 0, Reference = 3"
+        },
+        "outcome": "fail",
+        "evaluated_at": "2026-09-26T15:18:33.214628Z",
+        "reliability_diagram": null,
+        "robustness_factor": null
+      }
+    ],
+    "downstream": [
+      {
+        "run_id": "stnb_cpm_pilot_eval_01",
+        "evaluation_level": "downstream",
+        "phase_name": "Extrinsic Retrieval Evaluation",
+        "dataset_ref": "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_queries.yaml",
+        "dataset_type": "gold",
+        "metrics": [
+          {
+            "name": "mrr",
+            "value": 0.0,
+            "unit": "",
+            "threshold": null,
+            "passes_threshold": null
+          },
+          {
+            "name": "hits@1",
+            "value": 0.0,
+            "unit": "",
+            "threshold": null,
+            "passes_threshold": null
+          },
+          {
+            "name": "hits@3",
+            "value": 0.0,
+            "unit": "",
+            "threshold": null,
+            "passes_threshold": null
+          },
+          {
+            "name": "hits@10",
+            "value": 0.0,
+            "unit": "",
+            "threshold": null,
+            "passes_threshold": null
+          },
+          {
+            "name": "ndcg",
+            "value": 0.0,
+            "unit": "",
+            "threshold": null,
+            "passes_threshold": null
+          }
+        ],
+        "error_buckets": [],
+        "artifact_refs": [],
+        "notes": {
+          "category": "extrinsic_retrieval",
+          "markdown_report": "## Extrinsic Retrieval Evaluation Report\n\n- **MRR:** 0.0000\n- **Hits@1:** 0.0000\n- **Hits@3:** 0.0000\n- **Hits@10:** 0.0000\n- **nDCG:** 0.0000\n"
+        },
+        "outcome": "warning",
+        "evaluated_at": "2026-09-26T15:18:33.216191Z",
+        "reliability_diagram": null,
+        "robustness_factor": null
+      }
+    ],
+    "baseline": [
+      {
+        "run_id": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+        "evaluation_level": "stage",
+        "phase_name": "Baseline: Single-Pass Zero-Shot LLM",
+        "dataset_ref": "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld",
+        "dataset_type": null,
+        "metrics": [
+          {
+            "name": "mcc",
+            "value": 0.0667,
+            "unit": "ratio",
+            "threshold": 1.0,
+            "passes_threshold": false
+          },
+          {
+            "name": "aor",
+            "value": 0.8333,
+            "unit": "ratio",
+            "threshold": 0.0,
+            "passes_threshold": false
+          },
+          {
+            "name": "pfs",
+            "value": 0.375,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": false
+          },
+          {
+            "name": "ag_iou",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 0.5,
+            "passes_threshold": false
+          },
+          {
+            "name": "edge_fidelity",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": false
+          },
+          {
+            "name": "poset_f1",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": false
+          },
+          {
+            "name": "poset_reachability_f1",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": false
+          },
+          {
+            "name": "root_conformity",
+            "value": 0.0,
+            "unit": "bool",
+            "threshold": 1.0,
+            "passes_threshold": false
+          },
+          {
+            "name": "is_dag",
+            "value": 1.0,
+            "unit": "bool",
+            "threshold": 1.0,
+            "passes_threshold": true
+          },
+          {
+            "name": "latency",
+            "value": 0.0015,
+            "unit": "seconds",
+            "threshold": null,
+            "passes_threshold": null
+          },
+          {
+            "name": "token_cost",
+            "value": 0.0,
+            "unit": "USD",
+            "threshold": null,
+            "passes_threshold": null
+          }
+        ],
+        "error_buckets": [
+          {
+            "bucket": "omitted_reference_components",
+            "count": 18,
+            "description": "str:T_CPM_Base, str:T_CPM_Grav, str:T_CPM_Harmonic, str:T_CPM_Free, str:Mp_CPM, str:Mp_Grav, str:Mp_Harmonic, str:Mpp_CPM, str:M_CPM_Newton1, str:M_CPM_Newton3, str:M_CPM_Grav, str:M_CPM_Hooke, str:M_CPM_Free, str:GC_Mass, str:GC_Force, str:I0_PlanetaryOrbits, str:I0_TerrestrialFreeFall, str:I0_HarmonicSpring"
+          }
+        ],
+        "artifact_refs": [],
+        "notes": {
+          "markdown_report": "# Formal Structuralist Model Evaluation Report\n\n**Capability Subsumption ($G_{pred} \\succeq_{cap} G_{ref}$):** ❌ FAILED (Capability Deficit)\n\n## Quantitative Benchmark Metrics\n- **Model Component Completeness (MCC):** 0.0667\n- **Axiomatic Omission Rate (AOR):** 0.8333 (Laws Omitted ❌)\n- **Property Fidelity Score (PFS):** 0.3750\n- **Text Anchor Grounding IoU ($AG_{IoU}$):** 0.0000\n- **Relational Edge Fidelity:** 0.0000\n\n## Model Class Decomposition Breakdown\n| Model Class | Symbol | Reference Count | Predicted Count | Matched | Completeness |\n| :--- | :---: | :---: | :---: | :---: | :---: |\n| `potential_models` | $\\mathcal{M}_p$ | 3 | 0 | 0 | 0.00% |\n| `actual_models` | $\\mathcal{M}$ | 6 | 1 | 1 | 16.67% |\n| `partial_potential_models` | $\\mathcal{M}_{pp}$ | 1 | 0 | 0 | 0.00% |\n| `constraints` | $GC$ | 2 | 0 | 0 | 0.00% |\n| `paradigms` | $I_0$ | 3 | 0 | 0 | 0.00% |\n| `theory_elements` | $T$ | 4 | 0 | 0 | 0.00% |\n\n## Omitted Reference Components\n- ❌ Missing: `str:T_CPM_Base`\n- ❌ Missing: `str:T_CPM_Grav`\n- ❌ Missing: `str:T_CPM_Harmonic`\n- ❌ Missing: `str:T_CPM_Free`\n- ❌ Missing: `str:Mp_CPM`\n- ❌ Missing: `str:Mp_Grav`\n- ❌ Missing: `str:Mp_Harmonic`\n- ❌ Missing: `str:Mpp_CPM`\n- ❌ Missing: `str:M_CPM_Newton1`\n- ❌ Missing: `str:M_CPM_Newton3`\n- ❌ Missing: `str:M_CPM_Grav`\n- ❌ Missing: `str:M_CPM_Hooke`\n- ❌ Missing: `str:M_CPM_Free`\n- ❌ Missing: `str:GC_Mass`\n- ❌ Missing: `str:GC_Force`\n- ❌ Missing: `str:I0_PlanetaryOrbits`\n- ❌ Missing: `str:I0_TerrestrialFreeFall`\n- ❌ Missing: `str:I0_HarmonicSpring`\n\n# Specialization Poset Hierarchy Evaluation Report\n\n- **DAG Property & Strict Partial Order:** ✅ PASSED (Acyclic DAG)\n- **Root Element Conformity ($B(TN) = \\{T_0\\}$):** ❌ FAILED (Root: `None`)\n- **Hierarchical Model Inheritance Subsumption:** ✅ PASSED (100.00%)\n\n## Quantitative Benchmark Metrics\n- **Poset Transitive Reduction F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Reachability F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Edge Counts:** Predicted = 0, Reference = 3",
+          "subsumption_status": "deficit",
+          "poset_markdown": "# Specialization Poset Hierarchy Evaluation Report\n\n- **DAG Property & Strict Partial Order:** ✅ PASSED (Acyclic DAG)\n- **Root Element Conformity ($B(TN) = \\{T_0\\}$):** ❌ FAILED (Root: `None`)\n- **Hierarchical Model Inheritance Subsumption:** ✅ PASSED (100.00%)\n\n## Quantitative Benchmark Metrics\n- **Poset Transitive Reduction F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Reachability F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Edge Counts:** Predicted = 0, Reference = 3"
+        },
+        "outcome": "fail",
+        "evaluated_at": "2026-09-26T15:18:33.217688Z",
+        "reliability_diagram": null,
+        "robustness_factor": null
+      }
+    ]
+  },
+  "pairwise_comparisons": [
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "ag_iou",
+      "value_a": 0.0,
+      "value_b": 1.0,
+      "axis": "method",
+      "delta": 1.0,
+      "winner": "b"
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "aor",
+      "value_a": 0.8333,
+      "value_b": 1.0,
+      "axis": "method",
+      "delta": 0.1667,
+      "winner": "a"
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "edge_fidelity",
+      "value_a": 0.0,
+      "value_b": 0.0,
+      "axis": "method",
+      "delta": 0.0,
+      "winner": null
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "f1",
+      "value_a": 0.0,
+      "value_b": 0.0,
+      "axis": "method",
+      "delta": 0.0,
+      "winner": null
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "hits@1",
+      "value_a": 0.0,
+      "value_b": 0.0,
+      "axis": "method",
+      "delta": 0.0,
+      "winner": null
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "hits@10",
+      "value_a": 0.0,
+      "value_b": 0.0,
+      "axis": "method",
+      "delta": 0.0,
+      "winner": null
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "hits@3",
+      "value_a": 0.0,
+      "value_b": 0.0,
+      "axis": "method",
+      "delta": 0.0,
+      "winner": null
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "is_dag",
+      "value_a": 1.0,
+      "value_b": 1.0,
+      "axis": "method",
+      "delta": 0.0,
+      "winner": null
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "latency",
+      "value_a": 0.0015,
+      "value_b": 0.0025,
+      "axis": "method",
+      "delta": 0.001,
+      "winner": "a"
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "mcc",
+      "value_a": 0.0667,
+      "value_b": 0.0,
+      "axis": "method",
+      "delta": -0.0667,
+      "winner": "a"
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "mrr",
+      "value_a": 0.0,
+      "value_b": 0.0,
+      "axis": "method",
+      "delta": 0.0,
+      "winner": null
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "ndcg",
+      "value_a": 0.0,
+      "value_b": 0.0,
+      "axis": "method",
+      "delta": 0.0,
+      "winner": null
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "pfs",
+      "value_a": 0.375,
+      "value_b": 0.5,
+      "axis": "method",
+      "delta": 0.125,
+      "winner": "b"
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "poset_f1",
+      "value_a": 0.0,
+      "value_b": 0.0,
+      "axis": "method",
+      "delta": 0.0,
+      "winner": null
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "poset_reachability_f1",
+      "value_a": 0.0,
+      "value_b": 0.0,
+      "axis": "method",
+      "delta": 0.0,
+      "winner": null
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "root_conformity",
+      "value_a": 0.0,
+      "value_b": 0.0,
+      "axis": "method",
+      "delta": 0.0,
+      "winner": null
+    },
+    {
+      "run_id_a": "baseline_zero_shot_stnb_cpm_pilot_eval_01",
+      "run_id_b": "stnb_cpm_pilot_eval_01",
+      "metric_name": "token_cost",
+      "value_a": 0.0,
+      "value_b": 0.0,
+      "axis": "method",
+      "delta": 0.0,
+      "winner": null
+    }
+  ],
+  "summary": "# Formal Structuralist Model Evaluation Report\n\n**Capability Subsumption ($G_{pred} \\succeq_{cap} G_{ref}$):** ❌ FAILED (Capability Deficit)\n\n## Quantitative Benchmark Metrics\n- **Model Component Completeness (MCC):** 0.0000\n- **Axiomatic Omission Rate (AOR):** 1.0000 (Laws Omitted ❌)\n- **Property Fidelity Score (PFS):** 0.5000\n- **Text Anchor Grounding IoU ($AG_{IoU}$):** 1.0000\n- **Relational Edge Fidelity:** 0.0000\n\n## Model Class Decomposition Breakdown\n| Model Class | Symbol | Reference Count | Predicted Count | Matched | Completeness |\n| :--- | :---: | :---: | :---: | :---: | :---: |\n| `potential_models` | $\\mathcal{M}_p$ | 3 | 0 | 0 | 0.00% |\n| `actual_models` | $\\mathcal{M}$ | 6 | 0 | 0 | 0.00% |\n| `partial_potential_models` | $\\mathcal{M}_{pp}$ | 1 | 0 | 0 | 0.00% |\n| `constraints` | $GC$ | 2 | 0 | 0 | 0.00% |\n| `paradigms` | $I_0$ | 3 | 0 | 0 | 0.00% |\n| `theory_elements` | $T$ | 4 | 0 | 0 | 0.00% |\n\n## Omitted Reference Components\n- ❌ Missing: `str:T_CPM_Base`\n- ❌ Missing: `str:T_CPM_Grav`\n- ❌ Missing: `str:T_CPM_Harmonic`\n- ❌ Missing: `str:T_CPM_Free`\n- ❌ Missing: `str:Mp_CPM`\n- ❌ Missing: `str:Mp_Grav`\n- ❌ Missing: `str:Mp_Harmonic`\n- ❌ Missing: `str:Mpp_CPM`\n- ❌ Missing: `str:M_CPM_Newton1`\n- ❌ Missing: `str:M_CPM_Newton2`\n- ❌ Missing: `str:M_CPM_Newton3`\n- ❌ Missing: `str:M_CPM_Grav`\n- ❌ Missing: `str:M_CPM_Hooke`\n- ❌ Missing: `str:M_CPM_Free`\n- ❌ Missing: `str:GC_Mass`\n- ❌ Missing: `str:GC_Force`\n- ❌ Missing: `str:I0_PlanetaryOrbits`\n- ❌ Missing: `str:I0_TerrestrialFreeFall`\n- ❌ Missing: `str:I0_HarmonicSpring`\n\n# Specialization Poset Hierarchy Evaluation Report\n\n- **DAG Property & Strict Partial Order:** ✅ PASSED (Acyclic DAG)\n- **Root Element Conformity ($B(TN) = \\{T_0\\}$):** ❌ FAILED (Root: `None`)\n- **Hierarchical Model Inheritance Subsumption:** ✅ PASSED (100.00%)\n\n## Quantitative Benchmark Metrics\n- **Poset Transitive Reduction F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Reachability F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Edge Counts:** Predicted = 0, Reference = 3\n\n## Extrinsic Retrieval Evaluation Report\n\n- **MRR:** 0.0000\n- **Hits@1:** 0.0000\n- **Hits@3:** 0.0000\n- **Hits@10:** 0.0000\n- **nDCG:** 0.0000\n\n\n## Comparative Baseline Evaluation: ZERO_SHOT vs Pipeline\n\n- **ΔF1:** +0.0000 (Pipeline: 0.0000 vs Baseline: 0.0000)\n- **ΔMRR:** +0.0000 (Pipeline: 0.0000 vs Baseline: 0.0000)\n- **Token Cost:** Pipeline $0.0000 vs Baseline $0.0000 (Δ $+0.0000)\n- **Latency:** Pipeline 0.0025s vs Baseline 0.0015s (Δ +0.0010s)\n\n### Side-by-Side Metrics (zero_shot)\n\n| Metric | Baseline (`baseline_zero_shot_stnb_cpm_pilot_eval_01`) | Pipeline (`stnb_cpm_pilot_eval_01`) | Delta | Winner |\n| :--- | :--- | :--- | :--- | :--- |\n| `ag_iou` | 0.0000 | 1.0000 | +1.0000 | Pipeline |\n| `aor` | 0.8333 | 1.0000 | +0.1667 | Baseline |\n| `edge_fidelity` | 0.0000 | 0.0000 | 0.0000 | Tie |\n| `f1` | 0.0000 | 0.0000 | 0.0000 | Tie |\n| `hits@1` | 0.0000 | 0.0000 | 0.0000 | Tie |\n| `hits@10` | 0.0000 | 0.0000 | 0.0000 | Tie |\n| `hits@3` | 0.0000 | 0.0000 | 0.0000 | Tie |\n| `is_dag` | 1.0000 | 1.0000 | 0.0000 | Tie |\n| `latency` | 0.0015 | 0.0025 | +0.0010 | Baseline |\n| `mcc` | 0.0667 | 0.0000 | -0.0667 | Baseline |\n| `mrr` | 0.0000 | 0.0000 | 0.0000 | Tie |\n| `ndcg` | 0.0000 | 0.0000 | 0.0000 | Tie |\n| `pfs` | 0.3750 | 0.5000 | +0.1250 | Pipeline |\n| `poset_f1` | 0.0000 | 0.0000 | 0.0000 | Tie |\n| `poset_reachability_f1` | 0.0000 | 0.0000 | 0.0000 | Tie |\n| `root_conformity` | 0.0000 | 0.0000 | 0.0000 | Tie |\n| `token_cost` | 0.0000 | 0.0000 | 0.0000 | Tie |",
+  "created_at": "2026-09-26T15:18:33.217778Z"
+}

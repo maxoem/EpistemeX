@@ -1,0 +1,177 @@
+{
+  "evaluation_id": "eval_run-demo-psychology",
+  "run_ids": [
+    "run-demo-psychology"
+  ],
+  "dataset_ref": "/Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld",
+  "dataset_type": "gold",
+  "outcome": "fail",
+  "created_at": "2026-09-27T13:37:14.838784Z",
+  "key_metrics": {
+    "mcc": 0.0,
+    "aor": 1.0,
+    "pfs": 0.5,
+    "ag_iou": 1.0,
+    "edge_fidelity": 0.0,
+    "poset_f1": 0.0,
+    "poset_reachability_f1": 0.0,
+    "root_conformity": 0.0,
+    "is_dag": 1.0
+  },
+  "has_markdown": true,
+  "has_baseline": false,
+  "results_by_level": {
+    "stage": [
+      {
+        "run_id": "run-demo-psychology",
+        "level": "stage",
+        "phase_name": "Phase 6: TheoryNet Projection",
+        "dataset_ref": "/Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld",
+        "outcome": "fail",
+        "metrics": [
+          {
+            "name": "mcc",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 1.0,
+            "passes_threshold": false
+          },
+          {
+            "name": "aor",
+            "value": 1.0,
+            "unit": "ratio",
+            "threshold": 0.0,
+            "passes_threshold": false
+          },
+          {
+            "name": "pfs",
+            "value": 0.5,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": false
+          },
+          {
+            "name": "ag_iou",
+            "value": 1.0,
+            "unit": "ratio",
+            "threshold": 0.5,
+            "passes_threshold": true
+          },
+          {
+            "name": "edge_fidelity",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": false
+          },
+          {
+            "name": "poset_f1",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": false
+          },
+          {
+            "name": "poset_reachability_f1",
+            "value": 0.0,
+            "unit": "ratio",
+            "threshold": 0.8,
+            "passes_threshold": false
+          },
+          {
+            "name": "root_conformity",
+            "value": 0.0,
+            "unit": "bool",
+            "threshold": 1.0,
+            "passes_threshold": false
+          },
+          {
+            "name": "is_dag",
+            "value": 1.0,
+            "unit": "bool",
+            "threshold": 1.0,
+            "passes_threshold": true
+          }
+        ],
+        "notes": {
+          "markdown_report": "# Formal Structuralist Model Evaluation Report\n\n**Capability Subsumption ($G_{pred} \\succeq_{cap} G_{ref}$):** ❌ FAILED (Capability Deficit)\n\n## Quantitative Benchmark Metrics\n- **Model Component Completeness (MCC):** 0.0000\n- **Axiomatic Omission Rate (AOR):** 1.0000 (Laws Omitted ❌)\n- **Property Fidelity Score (PFS):** 0.5000\n- **Text Anchor Grounding IoU ($AG_{IoU}$):** 1.0000\n- **Relational Edge Fidelity:** 0.0000\n\n## Model Class Decomposition Breakdown\n| Model Class | Symbol | Reference Count | Predicted Count | Matched | Completeness |\n| :--- | :---: | :---: | :---: | :---: | :---: |\n| `potential_models` | $\\mathcal{M}_p$ | 3 | 0 | 0 | 0.00% |\n| `actual_models` | $\\mathcal{M}$ | 6 | 11 | 0 | 0.00% |\n| `partial_potential_models` | $\\mathcal{M}_{pp}$ | 1 | 0 | 0 | 0.00% |\n| `constraints` | $GC$ | 2 | 0 | 0 | 0.00% |\n| `paradigms` | $I_0$ | 3 | 0 | 0 | 0.00% |\n| `theory_elements` | $T$ | 4 | 0 | 0 | 0.00% |\n\n## Omitted Reference Components\n- ❌ Missing: `str:T_CPM_Base`\n- ❌ Missing: `str:T_CPM_Grav`\n- ❌ Missing: `str:T_CPM_Harmonic`\n- ❌ Missing: `str:T_CPM_Free`\n- ❌ Missing: `str:Mp_CPM`\n- ❌ Missing: `str:Mp_Grav`\n- ❌ Missing: `str:Mp_Harmonic`\n- ❌ Missing: `str:Mpp_CPM`\n- ❌ Missing: `str:M_CPM_Newton1`\n- ❌ Missing: `str:M_CPM_Newton2`\n- ❌ Missing: `str:M_CPM_Newton3`\n- ❌ Missing: `str:M_CPM_Grav`\n- ❌ Missing: `str:M_CPM_Hooke`\n- ❌ Missing: `str:M_CPM_Free`\n- ❌ Missing: `str:GC_Mass`\n- ❌ Missing: `str:GC_Force`\n- ❌ Missing: `str:I0_PlanetaryOrbits`\n- ❌ Missing: `str:I0_TerrestrialFreeFall`\n- ❌ Missing: `str:I0_HarmonicSpring`\n\n# Specialization Poset Hierarchy Evaluation Report\n\n- **DAG Property & Strict Partial Order:** ✅ PASSED (Acyclic DAG)\n- **Root Element Conformity ($B(TN) = \\{T_0\\}$):** ❌ FAILED (Root: `None`)\n- **Hierarchical Model Inheritance Subsumption:** ✅ PASSED (100.00%)\n\n## Quantitative Benchmark Metrics\n- **Poset Transitive Reduction F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Reachability F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Edge Counts:** Predicted = 0, Reference = 3",
+          "subsumption_status": "deficit",
+          "poset_markdown": "# Specialization Poset Hierarchy Evaluation Report\n\n- **DAG Property & Strict Partial Order:** ✅ PASSED (Acyclic DAG)\n- **Root Element Conformity ($B(TN) = \\{T_0\\}$):** ❌ FAILED (Root: `None`)\n- **Hierarchical Model Inheritance Subsumption:** ✅ PASSED (100.00%)\n\n## Quantitative Benchmark Metrics\n- **Poset Transitive Reduction F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Reachability F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Edge Counts:** Predicted = 0, Reference = 3"
+        },
+        "evaluated_at": "2026-09-27T13:37:14.838730Z"
+      }
+    ]
+  },
+  "model_decomposition": [
+    {
+      "class_name": "potential_models",
+      "symbol": "\\mathcal{M}_p",
+      "reference_count": 3,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "completeness": 0.0
+    },
+    {
+      "class_name": "actual_models",
+      "symbol": "\\mathcal{M}",
+      "reference_count": 6,
+      "predicted_count": 11,
+      "matched_count": 0,
+      "completeness": 0.0
+    },
+    {
+      "class_name": "partial_potential_models",
+      "symbol": "\\mathcal{M}_{pp}",
+      "reference_count": 1,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "completeness": 0.0
+    },
+    {
+      "class_name": "constraints",
+      "symbol": "GC",
+      "reference_count": 2,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "completeness": 0.0
+    },
+    {
+      "class_name": "paradigms",
+      "symbol": "I_0",
+      "reference_count": 3,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "completeness": 0.0
+    },
+    {
+      "class_name": "theory_elements",
+      "symbol": "T",
+      "reference_count": 4,
+      "predicted_count": 0,
+      "matched_count": 0,
+      "completeness": 0.0
+    }
+  ],
+  "poset_detail": {
+    "is_dag": true,
+    "root_element": "None",
+    "root_conformity": false,
+    "transitive_reduction_f1": 0.0,
+    "reachability_f1": 0.0,
+    "predicted_edge_count": 0,
+    "reference_edge_count": 3
+  },
+  "polarity_detail": null,
+  "retrieval_detail": {
+    "mrr": 0.0,
+    "hits_at_1": 0.0,
+    "hits_at_3": 0.0,
+    "hits_at_10": 0.0,
+    "ndcg": 0.0,
+    "num_queries": 6
+  },
+  "comparative_deltas": [],
+  "summary_markdown": "# Formal Structuralist Model Evaluation Report\n\n**Capability Subsumption ($G_{pred} \\succeq_{cap} G_{ref}$):** ❌ FAILED (Capability Deficit)\n\n## Quantitative Benchmark Metrics\n- **Model Component Completeness (MCC):** 0.0000\n- **Axiomatic Omission Rate (AOR):** 1.0000 (Laws Omitted ❌)\n- **Property Fidelity Score (PFS):** 0.5000\n- **Text Anchor Grounding IoU ($AG_{IoU}$):** 1.0000\n- **Relational Edge Fidelity:** 0.0000\n\n## Model Class Decomposition Breakdown\n| Model Class | Symbol | Reference Count | Predicted Count | Matched | Completeness |\n| :--- | :---: | :---: | :---: | :---: | :---: |\n| `potential_models` | $\\mathcal{M}_p$ | 3 | 0 | 0 | 0.00% |\n| `actual_models` | $\\mathcal{M}$ | 6 | 11 | 0 | 0.00% |\n| `partial_potential_models` | $\\mathcal{M}_{pp}$ | 1 | 0 | 0 | 0.00% |\n| `constraints` | $GC$ | 2 | 0 | 0 | 0.00% |\n| `paradigms` | $I_0$ | 3 | 0 | 0 | 0.00% |\n| `theory_elements` | $T$ | 4 | 0 | 0 | 0.00% |\n\n## Omitted Reference Components\n- ❌ Missing: `str:T_CPM_Base`\n- ❌ Missing: `str:T_CPM_Grav`\n- ❌ Missing: `str:T_CPM_Harmonic`\n- ❌ Missing: `str:T_CPM_Free`\n- ❌ Missing: `str:Mp_CPM`\n- ❌ Missing: `str:Mp_Grav`\n- ❌ Missing: `str:Mp_Harmonic`\n- ❌ Missing: `str:Mpp_CPM`\n- ❌ Missing: `str:M_CPM_Newton1`\n- ❌ Missing: `str:M_CPM_Newton2`\n- ❌ Missing: `str:M_CPM_Newton3`\n- ❌ Missing: `str:M_CPM_Grav`\n- ❌ Missing: `str:M_CPM_Hooke`\n- ❌ Missing: `str:M_CPM_Free`\n- ❌ Missing: `str:GC_Mass`\n- ❌ Missing: `str:GC_Force`\n- ❌ Missing: `str:I0_PlanetaryOrbits`\n- ❌ Missing: `str:I0_TerrestrialFreeFall`\n- ❌ Missing: `str:I0_HarmonicSpring`\n\n# Specialization Poset Hierarchy Evaluation Report\n\n- **DAG Property & Strict Partial Order:** ✅ PASSED (Acyclic DAG)\n- **Root Element Conformity ($B(TN) = \\{T_0\\}$):** ❌ FAILED (Root: `None`)\n- **Hierarchical Model Inheritance Subsumption:** ✅ PASSED (100.00%)\n\n## Quantitative Benchmark Metrics\n- **Poset Transitive Reduction F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Reachability F1:** 0.0000 (Precision: 0.0000, Recall: 0.0000)\n- **Specialization Edge Counts:** Predicted = 0, Reference = 3",
+  "omitted_components": [],
+  "violations": []
+}
