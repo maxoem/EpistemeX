@@ -205,6 +205,7 @@ def load_structuralist_benchmark(
             ("hasPotentialModel", "hasPotentialModel"),
             ("hasPartialPotentialModel", "hasPartialPotentialModel"),
             ("hasParadigm", "hasParadigm"),
+            ("hasIntendedApplication", "hasIntendedApplication"),
             ("presupposes", "presupposes"),
         ]
 

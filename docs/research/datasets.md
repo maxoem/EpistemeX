@@ -59,7 +59,7 @@ graph TD
   Retrieval metrics:
 	- *Layer 1 & 2 (Extraction & Relations):* `SciERC`, `SciFact`.
 	- *Layer 3 (Argument Components):* `Arg-Microtexts`.
-	- *Layer 4 (TheoryNet & Architectonic Structure):* [Structuralist Theory-Net Benchmark (STNB)](structuralist_theory_benchmark.md). Evaluates formal model classes ($\mathcal{M}_p, \mathcal{M}, \mathcal{M}_{pp}$), constraints ($GC$), and specialization trees ($\alpha$). Ground truth pairs human-authored reconstructions (Balzer et al.) with a **Model-Assisted Human Verification (HITL)** protocol where candidate text anchors are model-proposed, double-blind audited, and adjudicated by domain scholars ($\alpha \ge 0.80$).
+	- *Layer 4 (TheoryNet & Architectonic Structure):* [Structuralist Theory-Net Benchmark (STNB)](structuralist_theory_benchmark.md). Evaluates formal model classes ($\mathcal{M}_p, \mathcal{M}, \mathcal{M}_{pp}$), constraints ($GC$), and specialization trees ($\alpha$). Ground truth pairs human-authored reconstructions (Balzer et al.) with a **Model-Assisted Human Verification (HITL)** protocol where candidate text anchors are model-proposed, double-blind audited, and adjudicated by domain scholars ($\alpha \ge 0.80$). Non-public-domain empirical literature (e.g., Festinger 1957, 1959) is distributed using the **Stand-Off Annotation Model (Pattern A)** with local verification via `scripts/fetch_stnb_corpora.py`.
 * **Silver Datasets:** Larger corpora used for triage, ablation studies, and broad sensitivity sweeps.
 * **Review Datasets:** Targeted passages where domain experts execute structured rubric assessments
   (`EvaluationRubric`).

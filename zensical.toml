@@ -1,6 +1,6 @@
 [project]
 site_name = "Episteme"
-site_url = "https://episteme.maoem.de"
+site_url = "https://docs.episteme.maoem.de"
 strict = false
 docs_dir = "docs"
 repo_name = "maoem/episteme"

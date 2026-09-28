@@ -300,6 +300,9 @@ class NodeType(str, Enum):
             "foundation": cls.AXIOM,
             "premise": cls.CLAIM,
             "auxiliary": cls.HYPOTHESIS,
+            "domain": cls.PARADIGM,
+            "intendedapplication": cls.PARADIGM,
+            "intended_application": cls.PARADIGM,
         }
         cleaned_simple = cleaned.lower().replace("-", "").replace("_", "").replace(" ", "")
         if cleaned_simple in alias_map:
@@ -424,6 +427,8 @@ class RelationType(str, Enum):
         Model decomposition link: TheoryElement -> GlobalConstraint (GC).
     HAS_PARADIGM : str
         Model decomposition link: TheoryElement -> Paradigm (I_0).
+    HAS_INTENDED_APPLICATION : str
+        Model decomposition link: TheoryElement -> Intended Application (I).
     EMPIRICALLY_EQUIVALENT : str
         Empirical equivalence across partial potential models.
     """
@@ -442,6 +447,7 @@ class RelationType(str, Enum):
     HAS_PARTIAL_POTENTIAL_MODEL = "has_partial_potential_model"
     HAS_CONSTRAINT = "has_constraint"
     HAS_PARADIGM = "has_paradigm"
+    HAS_INTENDED_APPLICATION = "has_intended_application"
     EMPIRICALLY_EQUIVALENT = "empirically_equivalent"
 
     def __eq__(self, other: object) -> bool:
@@ -475,6 +481,7 @@ class RelationType(str, Enum):
             RelationType.HAS_PARTIAL_POTENTIAL_MODEL,
             RelationType.HAS_CONSTRAINT,
             RelationType.HAS_PARADIGM,
+            RelationType.HAS_INTENDED_APPLICATION,
         }:
             return 0
         return 1
@@ -515,6 +522,8 @@ class RelationType(str, Enum):
             "haspartialpotentialmodel": cls.HAS_PARTIAL_POTENTIAL_MODEL,
             "hasconstraint": cls.HAS_CONSTRAINT,
             "hasparadigm": cls.HAS_PARADIGM,
+            "hasintendedapplication": cls.HAS_INTENDED_APPLICATION,
+            "has_intended_application": cls.HAS_INTENDED_APPLICATION,
             "reducesto": cls.REDUCES_TO,
             "cohereswith": cls.COHERES_WITH,
             "equivalentto": cls.EQUIVALENT_TO,

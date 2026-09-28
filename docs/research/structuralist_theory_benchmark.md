@@ -32,20 +32,20 @@ historical primary texts.
 | **Primary Tasks**               | Core Law Extraction, Specialization DAG Assembly, $T$-Theoreticity Discrimination, Intertheoretical Reduction, Diachronic Evolution Tracking |
 | **Ground-Truth Representation** | JSON-LD Graph Envelope with Token-Level Character Anchors                                                                                    |
 | **Evaluation Scaffolding**      | GM-GBS (`scorers/gm_gbs.py`), OEP (`scorers/oep.py`), Epistemic Metrics Suite (`epistemetrics`)                                              |
-| **License**                     | Creative Commons Attribution 4.0 International (CC-BY 4.0); Primary historical source texts reside in the Public Domain                      |
+| **License & Distribution**      | Creative Commons Attribution 4.0 International (CC-BY 4.0) for graph schemas, annotations, and formal structuralist models. Historical primary texts prior to 1929 (Newton, Freud, Wundt) reside in the Public Domain. Mid-20th-century texts under active copyright (e.g., Festinger & Carlsmith 1959) follow the **Stand-Off Annotation Model (Pattern A)**: public distribution includes only character offsets, structural DAGs, and brief Fair Use quotation snippets, with local acquisition verified via `scripts/fetch_stnb_corpora.py`. |
 
 ### Corpus Breakdown Portfolio
 
 Each benchmark entry pairs a formal structuralist reconstruction from scientific literature with clean, digitized
 historical primary texts:
 
-| Theory Reconstruction                        | Domain         | Primary Historical Source Text                                                  | Formal Monograph Reference              | Lang    | Annotated Units (Elements / Laws / Constraints) | Status         |
-|:---------------------------------------------|:---------------|:--------------------------------------------------------------------------------|:----------------------------------------|:--------|:------------------------------------------------|:---------------|
-| **Classical Particle Mechanics (CPM)**       | Physics        | Newton, *Philosophiae Naturalis Principia Mathematica* (1687)                   | Balzer, Moulines, & Sneed (1987, Ch. 2) | EN / LA | 8 elements, 12 laws, 3 constraints              | Active (Pilot) |
-| **Theory of the Unconscious**                | Psychoanalysis | Freud, *Das Unbewußte* (1915); *Jenseits des Lustprinzips* (1920)               | Balzer & Marcou (1989)                  | DE      | 5 elements, 7 laws, 2 constraints               | Curated        |
-| **Cognitive Dissonance Theory**              | Psychology     | Festinger, *A Theory of Cognitive Dissonance* (1957)                            | Balzer et al. (1987, Ch. 1)             | EN      | 4 elements, 6 laws, 2 constraints               | Curated        |
-| **Structural Psychology**                    | Psychology     | Wundt, *Grundriss der Psychologie* (1896)                                       | Westmeyer (1989)                        | DE      | 6 elements, 9 laws, 4 constraints               | Curated        |
-| **Simple Equilibrium Thermodynamics (SETH)** | Physics        | Carathéodory (1909); Giles, *Mathematical Foundations of Thermodynamics* (1964) | Balzer et al. (1987, Ch. 4)             | EN / DE | 7 elements, 11 laws, 5 constraints              | In Preparation |
+| Theory Reconstruction                        | Domain         | Primary Historical Source Text                                                  | Formal Monograph Reference                      | Lang    | Annotated Units (Elements / Laws / Constraints / Paradigms) | Status              |
+|:---------------------------------------------|:---------------|:--------------------------------------------------------------------------------|:------------------------------------------------|:--------|:------------------------------------------------------------|:--------------------|
+| **Classical Particle Mechanics (CPM)**       | Physics        | Newton, *Philosophiae Naturalis Principia Mathematica* (1687)                   | Balzer, Moulines, & Sneed (1987, Ch. 2)         | EN / LA | 8 elements, 12 laws, 3 constraints, 3 paradigms             | Active (Pilot)      |
+| **Theory of the Unconscious**                | Psychoanalysis | Freud, *Das Unbewußte* (1915); *Jenseits des Lustprinzips* (1920)               | Balzer & Marcou (1989)                          | DE      | 5 elements, 7 laws, 2 constraints                           | Curated             |
+| **Cognitive Dissonance Theory**              | Psychology     | Festinger (1957); Festinger & Carlsmith (1959, DOI: `10.1037/h0041593`)         | Balzer et al. (1987, Ch. 1); Westermann (2000)  | EN      | 12 elements, 6 laws, 1 constraint, 3 paradigms              | Curated (Pattern A) |
+| **Structural Psychology**                    | Psychology     | Wundt, *Grundriss der Psychologie* (1896)                                       | Westmeyer (1989)                                | DE      | 6 elements, 9 laws, 4 constraints                           | Curated             |
+| **Simple Equilibrium Thermodynamics (SETH)** | Physics        | Carathéodory (1909); Giles, *Mathematical Foundations of Thermodynamics* (1964) | Balzer et al. (1987, Ch. 4)                     | EN / DE | 7 elements, 11 laws, 5 constraints                          | In Preparation      |
 
 ---
 
@@ -208,6 +208,31 @@ Domain annotators map mathematical structures to textual spans according to five
   fragments are permitted only when an axiom is embedded in rhetorical discourse.
 * **Equations & Glosses:** When a governing equation is accompanied by explanatory natural language, both the formula
   and its definitional gloss are bound into a single `Episteme:textAnchor`.
+
+### Stand-Off Annotation Protocol & Copyright Compliance (Pattern A)
+
+To maintain absolute copyright compliance across diverse historical eras, STNB enforces a strict separation between
+the formal benchmark envelopes and the raw underlying literature:
+
+1. **Public Domain Corpora:** Historical primary sources published before 1929 (e.g., Newton 1687, Wundt 1896, Freud 1915,
+   Carathéodory 1909) are in the Public Domain worldwide. Clean, digitized texts are bundled directly within the repository
+   under `packages/episteme-pipeline/episteme_pipeline/evaluation/data/`.
+2. **Copyrighted 20th-Century Literature (Pattern A):** Landmark mid-20th-century empirical psychology literature (such as
+   Festinger 1957 and Festinger & Carlsmith 1959, published by the American Psychological Association, DOI: `10.1037/h0041593`)
+   is protected under active copyright law. In accordance with open science best practices (e.g., SQuAD, GLUE):
+   * **Public Distribution:** Only the JSON-LD ground-truth envelopes (`datasets/stnb_festinger_carlsmith_1959.jsonld`)
+     are tracked in Git. These files contain formal Bourbaki structural models, specialization DAG topologies, exact
+     0-indexed token/character offsets, and brief `verbatimQuote` proposition spans permitted under U.S. Fair Use
+     (17 U.S.C. § 107) and EU/German UrhG § 51 (*Großes wissenschaftliches Zitat*).
+   * **Exclusion of Raw Texts:** Full-text reproductions (`.md` / `.txt`) of copyrighted sources are strictly excluded
+     from Git tracking via `.gitignore` (`datasets/*.md`, `datasets/restricted/`).
+   * **Local Acquisition & Integrity Verification:** Researchers acquire lawful copies of the primary source texts
+     through their institutional library subscriptions and use the consolidated verification CLI to validate alignment:
+     ```bash
+     rtk python3 scripts/fetch_stnb_corpora.py --verify --corpus festinger_carlsmith_1959
+     ```
+     The verification tool validates the SHA-256 cryptographic digest of the local source text and guarantees 100%
+     boundary alignment of all benchmark character spans prior to evaluation execution.
 
 ---
 

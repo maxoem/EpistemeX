@@ -517,7 +517,7 @@ def _classify_model_components(
                 classes["partial_potential_models"].add(target)
             elif rel == RelationType.HAS_CONSTRAINT:
                 classes["constraints"].add(target)
-            elif rel == RelationType.HAS_PARADIGM:
+            elif rel in {RelationType.HAS_PARADIGM, RelationType.HAS_INTENDED_APPLICATION}:
                 classes["paradigms"].add(target)
 
     return classes
