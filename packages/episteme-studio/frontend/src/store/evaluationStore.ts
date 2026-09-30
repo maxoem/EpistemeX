@@ -12,6 +12,7 @@ import type {
   EvaluationNodeOverlay,
   EvaluationEdgeOverlay,
 } from "../api/types";
+import type { BourbakiSubElement } from "../panels/evaluation/inspector/epistemics/types";
 
 export interface OptimisticScalarDeltas {
   f1: number;
@@ -59,6 +60,8 @@ export interface EvaluationState {
   isAmbiguousDrawerOpen: boolean;
   cycleHighlightNodeIds: string[] | null;
   selectedGroundingComponentId: string | null;
+  selectedBourbakiElement: BourbakiSubElement | null;
+  theoryNetViewMode: "system" | "explorer";
 
   // HITL Staging Buffer (Deterministic, no auto-debounce race conditions)
   stagedAdjudications: Map<string, EdgeAdjudicationItem>;
@@ -93,6 +96,8 @@ export interface EvaluationState {
   setIsAmbiguousDrawerOpen: (open: boolean) => void;
   setCycleHighlightNodeIds: (nodeIds: string[] | null) => void;
   setSelectedGroundingComponentId: (id: string | null) => void;
+  setSelectedBourbakiElement: (element: BourbakiSubElement | null) => void;
+  setTheoryNetViewMode: (mode: "system" | "explorer") => void;
 
   // Staging Buffer Actions
   stageAdjudication: (candidateId: string, item: EdgeAdjudicationItem) => void;
@@ -147,6 +152,8 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
   isAmbiguousDrawerOpen: false,
   cycleHighlightNodeIds: null,
   selectedGroundingComponentId: null,
+  selectedBourbakiElement: null,
+  theoryNetViewMode: "explorer",
 
   stagedAdjudications: new Map<string, EdgeAdjudicationItem>(),
   optimisticScalarDeltas: INITIAL_OPTIMISTIC_DELTAS,
@@ -285,6 +292,10 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
 
   setSelectedGroundingComponentId: (id) => set({ selectedGroundingComponentId: id }),
 
+  setSelectedBourbakiElement: (element) => set({ selectedBourbakiElement: element }),
+
+  setTheoryNetViewMode: (mode) => set({ theoryNetViewMode: mode }),
+
   stageAdjudication: (candidateId, item) => {
     const current = get().stagedAdjudications;
     const nextMap = new Map(current);
@@ -398,6 +409,7 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
       isAmbiguousDrawerOpen: false,
       cycleHighlightNodeIds: null,
       selectedGroundingComponentId: null,
+      selectedBourbakiElement: null,
       stagedAdjudications: new Map(),
       optimisticScalarDeltas: INITIAL_OPTIMISTIC_DELTAS,
       isCommittingBatch: false,

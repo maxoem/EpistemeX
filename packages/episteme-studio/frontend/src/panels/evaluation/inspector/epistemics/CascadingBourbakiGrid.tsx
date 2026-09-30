@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   AlertTriangle,
   ChevronDown,
@@ -14,75 +14,44 @@ import {
 } from "lucide-react";
 import { useEvaluationStore } from "../../../../store/evaluationStore";
 import type { ModelDecompositionEntry } from "../../../../api/types";
+import type { BourbakiSubElement } from "./types";
+import { CLASS_METADATA, getBourbakiSubElements } from "./types";
 
-export interface BourbakiSubElement {
-  id: string;
-  name: string;
-  symbol: string;
-  classType: "Mp" | "M" | "Mpp" | "C" | "I";
-  parentAxiomId?: string;
-  reference_count: number;
-  predicted_count: number;
-  matched_count: number;
-  coverage: number;
-  status: "pass" | "root_cause_omission" | "cascade_masked_orphan" | "active";
-  rationale?: string;
+export interface CascadingBourbakiGridProps {
+  selectedElement?: BourbakiSubElement | null;
+  onSelectElement?: (el: BourbakiSubElement | null) => void;
+  onElementsCalculated?: (elements: BourbakiSubElement[]) => void;
 }
 
-const CLASS_METADATA: Record<
-  string,
-  { label: string; symbol: string; color: string; bg: string; border: string; description: string }
-> = {
-  Mp: {
-    label: "Potential Models",
-    symbol: "Mp",
-    color: "text-blue-500 dark:text-blue-400",
-    bg: "bg-blue-500/10",
-    border: "border-blue-500/30",
-    description: "Mathematical frame structures and foundational axioms of the theory.",
-  },
-  M: {
-    label: "Actual Models",
-    symbol: "M",
-    color: "text-emerald-500 dark:text-emerald-400",
-    bg: "bg-emerald-500/10",
-    border: "border-emerald-500/30",
-    description: "Core physical laws and domain axioms fulfilling the potential models.",
-  },
-  Mpp: {
-    label: "Partial Potential Models",
-    symbol: "Mpp",
-    color: "text-amber-500 dark:text-amber-400",
-    bg: "bg-amber-500/10",
-    border: "border-amber-500/30",
-    description: "Empirical basis and non-theoretical conceptual structures.",
-  },
-  C: {
-    label: "Constraints",
-    symbol: "C",
-    color: "text-purple-500 dark:text-purple-400",
-    bg: "bg-purple-500/10",
-    border: "border-purple-500/30",
-    description: "Cross-model constraints ensuring parameter consistency (e.g. constant masses).",
-  },
-  I: {
-    label: "Intended Applications",
-    symbol: "I",
-    color: "text-orange-500 dark:text-orange-400",
-    bg: "bg-orange-500/10",
-    border: "border-orange-500/30",
-    description: "Concrete empirical paradigms and target systems (e.g. planetary orbits, pendulums).",
-  },
-};
+export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
+  selectedElement: propSelectedElement,
+  onSelectElement: propOnSelectElement,
+  onElementsCalculated,
+}) => {
+  const {
+    activeReport,
+    stagedAdjudications,
+    optimisticScalarDeltas,
+    selectedBourbakiElement,
+    setSelectedBourbakiElement,
+  } = useEvaluationStore();
 
-export const CascadingBourbakiGrid: React.FC = () => {
-  const { activeReport, stagedAdjudications, optimisticScalarDeltas } = useEvaluationStore();
+  // If props are provided, use them; otherwise use store
+  const selectedElement =
+    propSelectedElement !== undefined ? propSelectedElement : selectedBourbakiElement;
+
+  const handleSelectElement = (el: BourbakiSubElement | null) => {
+    if (propOnSelectElement) {
+      propOnSelectElement(el);
+    } else {
+      setSelectedBourbakiElement(el);
+    }
+  };
 
   const [expandedClasses, setExpandedClasses] = useState<Set<string>>(
     new Set(["Mp", "M", "Mpp", "C", "I"])
   );
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "masked" | "omission">("all");
-  const [selectedElement, setSelectedElement] = useState<BourbakiSubElement | null>(null);
 
   const toggleClassExpand = (cls: string) => {
     setExpandedClasses((prev) => {
@@ -146,180 +115,16 @@ export const CascadingBourbakiGrid: React.FC = () => {
     return activeReport.model_decomposition;
   }, [activeReport]);
 
-  // Hierarchical elements with Conditional Cascade Masking
-  // Rule: If parent axiom in Mp fails (e.g. Axiom-02), downstream models in M and I are labeled [CASCADE_MASKED_ORPHAN]
+  // Hierarchical elements with Conditional Cascade Masking & theoretical models
   const subElements = useMemo(() => {
-    const omitted = activeReport?.omitted_components || [];
-    const hasMpOmission =
-      omitted.some((c) => c.toLowerCase().includes("axiom") || c.toLowerCase().includes("mp")) ||
-      (decompositionEntries.find((d) => d.symbol === "Mp" || d.class_name.includes("potential"))?.completeness ?? 1) < 1.0;
-
-    const list: BourbakiSubElement[] = [
-      // Mp Elements (Foundational Axioms)
-      {
-        id: "ax_01_space_metric",
-        name: "Axiom-01 (Spatiotemporal Kinematics)",
-        symbol: "Mp.1",
-        classType: "Mp",
-        reference_count: 1,
-        predicted_count: 1,
-        matched_count: 1,
-        coverage: 1.0,
-        status: "pass",
-        rationale: "Topology and metric spaces accurately grounded in primary text.",
-      },
-      {
-        id: "ax_02_dynamical_conservation",
-        name: "Axiom-02 (Conservation of Momentum/Force)",
-        symbol: "Mp.2",
-        classType: "Mp",
-        reference_count: 1,
-        predicted_count: 0,
-        matched_count: 0,
-        coverage: 0.0,
-        status: "root_cause_omission",
-        rationale: "Extraction failed to extract foundational conservation condition from Chapter II, §4.",
-      },
-      {
-        id: "ax_03_inertial_frames",
-        name: "Axiom-03 (Inertial Frame Equivalence)",
-        symbol: "Mp.3",
-        classType: "Mp",
-        reference_count: 1,
-        predicted_count: 1,
-        matched_count: 1,
-        coverage: 1.0,
-        status: "pass",
-        rationale: "Extracted and mapped to Galilean relativity schema.",
-      },
-
-      // M Elements (Actual Models)
-      {
-        id: "m_01_inertial_dynamics",
-        name: "Sub-Model 01-A (Inertial Force Equations)",
-        symbol: "M.1",
-        classType: "M",
-        parentAxiomId: "ax_01_space_metric",
-        reference_count: 1,
-        predicted_count: 1,
-        matched_count: 1,
-        coverage: 1.0,
-        status: "pass",
-        rationale: "F = m*a derived successfully from Spatiotemporal frame.",
-      },
-      {
-        id: "m_02_gravitational_law",
-        name: "Sub-Model 02-A (Gravitational Force Balance)",
-        symbol: "M.2",
-        classType: "M",
-        parentAxiomId: "ax_02_dynamical_conservation",
-        reference_count: 1,
-        predicted_count: 0,
-        matched_count: 0,
-        coverage: 0.0,
-        status: "cascade_masked_orphan",
-        rationale:
-          "Orphaned due to missing parent Axiom-02. Masked under Bourbaki cascade doctrine to prevent double-penalization.",
-      },
-      {
-        id: "m_03_harmonic_spring",
-        name: "Sub-Model 03-C (Hookean Elastic Restoring Force)",
-        symbol: "M.3",
-        classType: "M",
-        parentAxiomId: "ax_03_inertial_frames",
-        reference_count: 1,
-        predicted_count: 1,
-        matched_count: 1,
-        coverage: 1.0,
-        status: "pass",
-        rationale: "Linear oscillator laws mapped with correct parameters.",
-      },
-
-      // Mpp Elements (Partial Potential Models)
-      {
-        id: "mpp_01_kinematic_particles",
-        name: "Kinematic Positions & Velocities",
-        symbol: "Mpp.1",
-        classType: "Mpp",
-        reference_count: 1,
-        predicted_count: 1,
-        matched_count: 1,
-        coverage: 1.0,
-        status: "pass",
-        rationale: "Empirical observation base successfully matched to text tokens.",
-      },
-      {
-        id: "mpp_02_time_measurement",
-        name: "Chronometric Standard Clock Intervals",
-        symbol: "Mpp.2",
-        classType: "Mpp",
-        reference_count: 1,
-        predicted_count: 1,
-        matched_count: 1,
-        coverage: 1.0,
-        status: "pass",
-        rationale: "Temporal measure concepts verified.",
-      },
-
-      // C Elements (Constraints)
-      {
-        id: "c_01_mass_equality",
-        name: "Invariance of Gravitational & Inertial Mass",
-        symbol: "C.1",
-        classType: "C",
-        reference_count: 1,
-        predicted_count: 1,
-        matched_count: 1,
-        coverage: 1.0,
-        status: "pass",
-        rationale: "Equivalence constraint verified across multiple model instances.",
-      },
-
-      // I Elements (Intended Applications / Empirical Paradigms)
-      {
-        id: "i_01_planetary_orbits",
-        name: "Paradigm I-01 (Keplerian Planetary Orbits)",
-        symbol: "I.1",
-        classType: "I",
-        parentAxiomId: "ax_01_space_metric",
-        reference_count: 1,
-        predicted_count: 1,
-        matched_count: 1,
-        coverage: 1.0,
-        status: "pass",
-        rationale: "Solar system orbit paradigm grounded in historical corpus.",
-      },
-      {
-        id: "i_02_lunar_perturbation",
-        name: "Empirical Claim 08 (Lunar Perturbation & Tides)",
-        symbol: "I.2",
-        classType: "I",
-        parentAxiomId: "ax_02_dynamical_conservation",
-        reference_count: 1,
-        predicted_count: 0,
-        matched_count: 0,
-        coverage: 0.0,
-        status: "cascade_masked_orphan",
-        rationale:
-          "Dependent on Sub-Model 02-A (Gravitation). Masked under Bourbaki cascade doctrine.",
-      },
-      {
-        id: "i_03_terrestrial_free_fall",
-        name: "Paradigm I-03 (Terrestrial Free Fall in Vacuum)",
-        symbol: "I.3",
-        classType: "I",
-        parentAxiomId: "ax_03_inertial_frames",
-        reference_count: 1,
-        predicted_count: 1,
-        matched_count: 1,
-        coverage: 1.0,
-        status: "pass",
-        rationale: "Galilean inclined plane and tower drop experiments grounded.",
-      },
-    ];
-
-    return list;
+    return getBourbakiSubElements(activeReport, decompositionEntries);
   }, [activeReport, decompositionEntries]);
+
+  useEffect(() => {
+    if (onElementsCalculated) {
+      onElementsCalculated(subElements);
+    }
+  }, [subElements, onElementsCalculated]);
 
   // Filtered sub-elements
   const filteredSubElements = useMemo(() => {
@@ -342,7 +147,7 @@ export const CascadingBourbakiGrid: React.FC = () => {
           <h3 className="font-semibold text-app-heading">
             Bourbaki Structuralist Completeness
           </h3>
-          <span className="text-[11px] text-app-muted font-mono">
+          <span className="text-[11px] text-app-muted font-mono hidden md:inline">
             ⟨Mp → M → I⟩ Cascading Decomposition
           </span>
         </div>
@@ -361,7 +166,7 @@ export const CascadingBourbakiGrid: React.FC = () => {
               onClick={() => setStatusFilter(f.id as any)}
               className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
                 statusFilter === f.id
-                  ? "bg-blue-600 text-white"
+                  ? "bg-blue-600 text-white font-semibold"
                   : "text-app-muted hover:text-app-text hover:bg-app-subtle"
               }`}
             >
@@ -391,18 +196,17 @@ export const CascadingBourbakiGrid: React.FC = () => {
         </div>
       )}
 
-      {/* Main Table Grid Container */}
+      {/* Main Table Grid Container (Full vertical space, unencumbered by bottom drawer) */}
       <div className="flex-1 overflow-y-auto">
         <table className="w-full text-left border-collapse text-xs">
-          {/* Sticky Table Header */}
+          {/* Sticky Table Header (Lean 5-Column Schema) */}
           <thead className="sticky top-0 bg-app-surface/90 backdrop-blur-xs border-b border-app-border z-10">
             <tr className="text-app-muted text-[11px] font-medium tracking-wide">
-              <th className="py-2.5 px-4 font-semibold w-[42%]">Component Class / Axiom</th>
-              <th className="py-2.5 px-3 text-right font-mono tabular-nums w-[10%]">Ref</th>
-              <th className="py-2.5 px-3 text-right font-mono tabular-nums w-[10%]">Pred</th>
-              <th className="py-2.5 px-3 text-right font-mono tabular-nums w-[10%]">Match</th>
-              <th className="py-2.5 px-3 text-right font-mono tabular-nums w-[12%]">Coverage</th>
-              <th className="py-2.5 px-4 text-center font-semibold w-[16%]">Status</th>
+              <th className="py-2.5 px-4 font-medium w-[44%]">Component (Gold Entity)</th>
+              <th className="py-2.5 px-3 text-center tabular-nums font-medium w-[14%]">Match / Gold</th>
+              <th className="py-2.5 px-3 text-center tabular-nums font-medium w-[12%]">Impact (↓)</th>
+              <th className="py-2.5 px-3 text-center font-medium w-[14%]">Gold Polarity</th>
+              <th className="py-2.5 px-4 text-center font-medium w-[16%]">Verdict</th>
             </tr>
           </thead>
 
@@ -430,6 +234,10 @@ export const CascadingBourbakiGrid: React.FC = () => {
               const isExpanded = expandedClasses.has(clsKey);
               const classChildren = filteredSubElements.filter((el) => el.classType === clsKey);
               const coveragePct = Math.round(summary.completeness * 1000) / 10;
+              const categoryImpact = classChildren.reduce(
+                (sum, c) => sum + (c.dependents?.length || 0),
+                0
+              );
 
               return (
                 <React.Fragment key={clsKey}>
@@ -448,65 +256,73 @@ export const CascadingBourbakiGrid: React.FC = () => {
                           )}
                         </button>
                         <span
-                          className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold border ${meta.bg} ${meta.color} ${meta.border}`}
+                          className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-medium border ${meta.bg} ${meta.color} ${meta.border}`}
                         >
                           {meta.symbol}
                         </span>
-                        <span className="font-semibold text-app-heading">{meta.label}</span>
+                        <span className="font-medium text-app-heading">{meta.label}</span>
                         <span className="text-[11px] text-app-muted hidden sm:inline truncate max-w-xs">
                           — {meta.description}
                         </span>
                       </div>
                     </td>
 
-                    <td className="py-2.5 px-3 text-right font-mono tabular-nums text-app-muted">
-                      {summary.reference_count}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono tabular-nums text-app-muted">
-                      {summary.predicted_count}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono tabular-nums font-semibold text-app-text">
-                      {summary.matched_count}
-                    </td>
-
-                    <td className="py-2.5 px-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="w-12 h-1.5 bg-app-subtle rounded-full overflow-hidden shrink-0 hidden md:block">
-                          <div
-                            className={`h-full rounded-full ${
-                              coveragePct >= 90
-                                ? "bg-emerald-500"
-                                : coveragePct >= 70
-                                ? "bg-blue-500"
-                                : "bg-amber-500"
-                            }`}
-                            style={{ width: `${Math.min(100, coveragePct)}%` }}
-                          />
-                        </div>
-                        <span className="font-mono tabular-nums text-[11px] font-semibold">
-                          {coveragePct.toFixed(1)}%
-                        </span>
-                      </div>
+                    {/* Category Match / Gold */}
+                    <td className="py-2.5 px-3 text-center tabular-nums text-[11px]">
+                      <span className="font-medium text-app-heading">
+                        {summary.matched_count} / {summary.reference_count}
+                      </span>
+                      <span className="text-[10px] text-app-muted ml-1">
+                        ({coveragePct.toFixed(0)}%)
+                      </span>
                     </td>
 
-                    <td className="py-2.5 px-4 text-center">
-                      {summary.reference_count === 0 ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">
-                          CONFORMANT
-                        </span>
-                      ) : coveragePct >= 85 ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
-                          <CheckCircle2 className="w-3 h-3" />
-                          [PASS]
-                        </span>
-                      ) : coveragePct > 0 ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-amber-500/10 text-amber-500 border border-amber-500/30">
-                          PARTIAL
+                    {/* Category Impact */}
+                    <td className="py-2.5 px-3 text-center tabular-nums text-[11px]">
+                      {categoryImpact > 0 ? (
+                        <span className="font-medium text-purple-600 dark:text-purple-400">
+                          ↓ {categoryImpact}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-500/10 text-rose-500 border border-rose-500/30">
-                          <XCircle className="w-3 h-3" />
-                          [FAIL]
+                        <span className="text-app-muted/50">—</span>
+                      )}
+                    </td>
+
+                    {/* Category Polarity */}
+                    <td className="py-2.5 px-3 text-center text-[11px]">
+                      {classChildren.some(
+                        (c) => c.inferentialPolarity?.concordance === "CRITICAL_INVERSION"
+                      ) ? (
+                        <span className="inline-flex items-center gap-1 text-rose-500/90 dark:text-rose-400/90 font-medium">
+                          <AlertTriangle className="w-3 h-3" />
+                          Inverted
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400 font-medium">Agreed</span>
+                      )}
+                    </td>
+
+                    {/* Category Verdict */}
+                    <td className="py-2.5 px-4 text-center">
+                      {summary.reference_count === 0 ? (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0" />
+                          Conformant
+                        </span>
+                      ) : coveragePct >= 85 ? (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Pass
+                        </span>
+                      ) : coveragePct > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                          Partial
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-rose-500/90 dark:text-rose-400/90">
+                          <XCircle className="w-3.5 h-3.5" />
+                          Fail
                         </span>
                       )}
                     </td>
@@ -522,14 +338,14 @@ export const CascadingBourbakiGrid: React.FC = () => {
                       return (
                         <tr
                           key={el.id}
-                          onClick={() => setSelectedElement(el)}
-                          className={`cursor-pointer transition-colors border-l-2 ${
+                          onClick={() => handleSelectElement(el)}
+                          className={`cursor-pointer transition-colors border-l-3 ${
                             isSelected
-                              ? "bg-blue-600/10 border-blue-600 text-app-heading"
+                              ? "bg-blue-600/15 border-blue-600 text-app-heading font-medium"
                               : isMasked
                               ? "bg-app-bg text-app-muted/60 hover:bg-app-subtle border-transparent"
                               : isOmission
-                              ? "bg-rose-500/5 hover:bg-rose-500/10 border-rose-500 text-app-heading"
+                              ? "bg-rose-500/5 hover:bg-rose-500/10 border-rose-500/40 text-app-heading"
                               : "hover:bg-app-subtle border-transparent text-app-text"
                           }`}
                         >
@@ -540,67 +356,119 @@ export const CascadingBourbakiGrid: React.FC = () => {
                               )}
                               <span
                                 className={`font-mono text-[10px] font-medium ${
-                                  isMasked ? "text-app-muted" : "text-app-text"
+                                  isSelected
+                                    ? "text-blue-500 dark:text-blue-400"
+                                    : isMasked
+                                    ? "text-app-muted"
+                                    : "text-app-text"
                                 }`}
                               >
                                 {el.symbol}
                               </span>
                               <span
-                                className={`font-medium ${
+                                className={`font-normal text-app-text ${
                                   isMasked ? "line-through opacity-70" : ""
                                 }`}
                               >
                                 {el.name}
                               </span>
+                              {isSelected && (
+                                <span className="ml-auto text-[9px] px-1 py-0.2 rounded bg-blue-600 text-white font-medium tracking-wider">
+                                  INSPECTING
+                                </span>
+                              )}
                             </div>
                           </td>
 
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-app-muted">
-                            {el.reference_count}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-app-muted">
-                            {el.predicted_count}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-app-muted font-medium">
-                            {el.matched_count}
+                          {/* Match / Gold */}
+                          <td className="py-2 px-3 text-center tabular-nums text-[11px]">
+                            <span
+                              className={`font-medium ${
+                                el.matched_count >= el.reference_count
+                                  ? "text-app-heading"
+                                  : "text-rose-500/90 dark:text-rose-400/90"
+                              }`}
+                            >
+                              {el.matched_count} / {el.reference_count}
+                            </span>
+                            {el.predicted_count > el.matched_count && (
+                              <span
+                                className="text-[10px] text-amber-500 ml-1"
+                                title={`${
+                                  el.predicted_count - el.matched_count
+                                } extra predicted instances (over-generation)`}
+                              >
+                                (+{el.predicted_count - el.matched_count})
+                              </span>
+                            )}
                           </td>
 
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-[11px]">
-                            {(el.coverage * 100).toFixed(0)}%
+                          {/* Impact (↓) */}
+                          <td className="py-2 px-3 text-center tabular-nums text-[11px]">
+                            {el.dependents && el.dependents.length > 0 ? (
+                              <span
+                                className="font-medium text-purple-600 dark:text-purple-400"
+                                title={`${el.dependents.length} downstream gold components depend on this node`}
+                              >
+                                ↓ {el.dependents.length}
+                              </span>
+                            ) : (
+                              <span className="text-app-muted/40">—</span>
+                            )}
                           </td>
 
+                          {/* Gold Polarity */}
+                          <td className="py-2 px-3 text-center text-[11px]">
+                            {isOmission || (el.coverage === 0 && !el.inferentialPolarity) ? (
+                              <span className="text-app-muted/40">—</span>
+                            ) : el.inferentialPolarity?.concordance === "CRITICAL_INVERSION" ? (
+                              <span
+                                className="inline-flex items-center gap-1 text-rose-500/90 dark:text-rose-400/90 font-medium"
+                                title={`Predicted ${el.inferentialPolarity.predicate} conflicts with Gold ${el.inferentialPolarity.goldPredicate}`}
+                              >
+                                <AlertTriangle className="w-3 h-3" />
+                                Inverted
+                              </span>
+                            ) : (
+                              <span className="text-zinc-400 font-medium">Agreed</span>
+                            )}
+                          </td>
+
+                          {/* Verdict */}
                           <td className="py-2 px-4 text-center">
                             {isMasked ? (
                               <span
-                                title="Parent axiom failed in Mp. Dependent model masked under Bourbaki cascade doctrine to avoid duplicate penalization."
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-zinc-500/10 dark:bg-zinc-500/20 text-zinc-400 border border-zinc-500/30"
+                                title="Parent axiom failed in Mp. Dependent model masked under Bourbaki cascade doctrine."
+                                className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 font-medium"
                               >
-                                [CASCADE_MASKED]
+                                <span className="w-1.5 h-1.5 rounded-full border border-zinc-400 shrink-0" />
+                                Cascade Masked
                               </span>
                             ) : isOmission ? (
                               <span
                                 title="Root axiom missing in extraction! Causes downstream cascade masking."
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/10 text-rose-500 border border-rose-500/30"
+                                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-rose-500/90 dark:text-rose-400/90"
                               >
-                                <XCircle className="w-3 h-3" />
-                                [ROOT_OMISSION]
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 dark:bg-rose-500 shrink-0" />
+                                Root Omission
                               </span>
                             ) : el.coverage === 0 && el.reference_count > 0 ? (
                               <span
                                 title="Unmatched reference axiom."
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-500/10 text-rose-500 border border-rose-500/30"
+                                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-rose-500/90 dark:text-rose-400/90"
                               >
-                                <XCircle className="w-3 h-3" />
-                                [MISSING]
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 dark:bg-rose-500 shrink-0" />
+                                Missing
                               </span>
                             ) : el.coverage >= 0.85 || (el.matched_count > 0 && el.coverage > 0) ? (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
-                                <CheckCircle2 className="w-3 h-3" />
-                                [PASS]
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Pass
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-amber-500/10 text-amber-500 border border-amber-500/30">
-                                [PARTIAL]
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                                Partial
                               </span>
                             )}
                           </td>
@@ -613,33 +481,6 @@ export const CascadingBourbakiGrid: React.FC = () => {
           </tbody>
         </table>
       </div>
-
-      {/* Selected Element Insight Card at Bottom */}
-      {selectedElement && (
-        <div className="p-3 border-t border-app-border bg-app-surface/90 shrink-0 text-xs flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-app-heading">{selectedElement.name}</span>
-              <span className="font-mono text-[10px] text-app-muted">({selectedElement.id})</span>
-              {selectedElement.status === "cascade_masked_orphan" && (
-                <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-500/20 text-zinc-400">
-                  Conditional Cascade Mask Active
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-app-muted leading-relaxed">
-              {selectedElement.rationale}
-            </p>
-          </div>
-
-          <button
-            onClick={() => setSelectedElement(null)}
-            className="text-[11px] text-app-muted hover:text-app-text px-2 py-1 rounded hover:bg-app-subtle shrink-0"
-          >
-            Close
-          </button>
-        </div>
-      )}
     </div>
   );
 };

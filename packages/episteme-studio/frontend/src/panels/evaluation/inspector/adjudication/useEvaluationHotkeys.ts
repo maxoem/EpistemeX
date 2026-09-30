@@ -8,6 +8,7 @@ export interface EvaluationHotkeyHandlers {
   onNext?: () => void;
   onPrev?: () => void;
   onCommit?: () => void;
+  onToggleExpand?: () => void;
   enabled?: boolean;
 }
 
@@ -24,6 +25,7 @@ export function useEvaluationHotkeys({
   onNext,
   onPrev,
   onCommit,
+  onToggleExpand,
   enabled = true,
 }: EvaluationHotkeyHandlers) {
   useEffect(() => {
@@ -111,9 +113,18 @@ export function useEvaluationHotkeys({
         }
         return;
       }
+
+      // Expand / Collapse Proposition Accordion: Space or 'x'
+      if (e.key === " " || e.key === "x" || e.key === "X") {
+        if (onToggleExpand) {
+          e.preventDefault();
+          onToggleExpand();
+        }
+        return;
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onAccept, onReject, onOpenAlias, onUndo, onNext, onPrev, onCommit, enabled]);
+  }, [onAccept, onReject, onOpenAlias, onUndo, onNext, onPrev, onCommit, onToggleExpand, enabled]);
 }

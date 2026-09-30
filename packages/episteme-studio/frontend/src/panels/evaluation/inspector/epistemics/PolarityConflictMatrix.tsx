@@ -39,6 +39,17 @@ export const PolarityConflictMatrix: React.FC = () => {
   } = useEvaluationStore();
 
   const [selectedConflict, setSelectedConflict] = useState<PolarityConflictItem | null>(null);
+  const [expandedQuotes, setExpandedQuotes] = useState<Set<string>>(new Set());
+
+  const toggleQuote = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedQuotes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const polarityDetail: PolarityConcordanceDetail = useMemo(() => {
     if (activeReport?.polarity_detail) {
@@ -283,17 +294,32 @@ export const PolarityConflictMatrix: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Verbatim Quote */}
-                <div className="text-xs text-app-muted bg-app-surface/60 p-2.5 rounded border border-app-border/40 flex items-start gap-2">
-                  <Quote className="w-3.5 h-3.5 text-amber-500/70 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="italic text-[11px] text-app-text leading-relaxed">
-                      "{conflict.sourceQuote}"
-                    </p>
-                    <span className="text-[10px] font-mono text-app-muted block">
-                      — {conflict.citation}
+                {/* Dialectical Corpus Grounding Citation (Collapsible to prevent cramped cards) */}
+                <div className="text-xs rounded bg-app-surface/60 border border-app-border/40 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={(e) => toggleQuote(conflict.id, e)}
+                    className="w-full px-2.5 py-1.5 flex items-center justify-between text-[11px] text-app-muted hover:text-app-text hover:bg-app-subtle transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-1.5 truncate">
+                      <Quote className="w-3 h-3 text-amber-500/80 shrink-0" />
+                      <span className="font-medium truncate text-app-text">Citation: {conflict.citation}</span>
+                    </div>
+                    <span className="text-[10px] text-blue-500 font-mono shrink-0 ml-2">
+                      {expandedQuotes.has(conflict.id) ? "Hide Excerpt ▲" : "View Excerpt ▼"}
                     </span>
-                  </div>
+                  </button>
+
+                  {expandedQuotes.has(conflict.id) && (
+                    <div className="p-2.5 pt-1 border-t border-app-border/30 bg-app-bg/50 space-y-1">
+                      <p className="italic text-[11px] text-app-text leading-relaxed">
+                        "{conflict.sourceQuote}"
+                      </p>
+                      <span className="text-[10px] font-mono text-app-muted block text-right">
+                        — {conflict.citation}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Action Footer */}

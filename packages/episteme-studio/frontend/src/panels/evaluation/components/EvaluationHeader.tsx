@@ -1,8 +1,6 @@
 import React, { useState } from "react";
 import {
   BookOpen,
-  CheckCircle2,
-  Clock,
   Download,
   Filter,
   Layers,
@@ -10,8 +8,6 @@ import {
   Play,
   Sliders,
   Sparkles,
-  TriangleAlert,
-  XCircle,
   Wrench,
   Eye,
   EyeOff,
@@ -20,7 +16,7 @@ import { useEvaluationStore } from "../../../store/evaluationStore";
 import { ExportReportModal } from "./ExportReportModal";
 import { ExecuteEvaluationModal } from "./ExecuteEvaluationModal";
 import { openPhasePromptInExecution } from "./ActionableHookPill";
-import type { EvaluationOutcome, EvaluationSubTab } from "../../../api/types";
+import type { EvaluationSubTab } from "../../../api/types";
 
 export interface EvaluationHeaderProps {
   onOpenConfigEditor?: () => void;
@@ -29,7 +25,7 @@ export interface EvaluationHeaderProps {
 const SUB_TABS: Array<{ id: EvaluationSubTab; label: string; icon: React.ElementType }> = [
   { id: "canvas", label: "Topological Canvas", icon: Network },
   { id: "epistemics", label: "Epistemic TheoryNet", icon: Layers },
-  { id: "adjudication", label: "Adjudication Queue", icon: Sliders },
+  { id: "adjudication", label: "Adjudication Workspace", icon: Sliders },
   { id: "calibration", label: "Calibration Lab", icon: Sparkles },
   { id: "grounding", label: "Document Grounding", icon: BookOpen },
   { id: "retrieval", label: "Retrieval & Stress", icon: Filter },
@@ -49,56 +45,22 @@ export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ onOpenConfig
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isExecuteModalOpen, setIsExecuteModalOpen] = useState(false);
 
-  const renderOutcomeBadge = (outcome: EvaluationOutcome | string) => {
-    switch (outcome?.toLowerCase()) {
-      case "pass":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-            PASS
-          </span>
-        );
-      case "fail":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30">
-            <XCircle className="w-3.5 h-3.5 text-rose-500" />
-            FAIL
-          </span>
-        );
-      case "warning":
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-            <TriangleAlert className="w-3.5 h-3.5 text-amber-500" />
-            WARN
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-500/10 text-zinc-500 dark:text-zinc-400 border border-zinc-500/30">
-            <Clock className="w-3.5 h-3.5 text-zinc-400" />
-            {outcome ? outcome.toUpperCase() : "UNKNOWN"}
-          </span>
-        );
-    }
-  };
-
   const METRIC_LABELS: Record<string, string> = {
-    f1: "Macro F₁",
+    f1: "F₁",
     macro_f1: "Macro F₁",
-    delta_star: "Tenability δ*",
-    tenability: "Tenability δ*",
+    delta_star: "δ*",
+    tenability: "Tenability",
     ece: "ECE",
     mrr: "MRR",
-    mcc: "Coverage (MCC)",
-    pfs: "Fidelity (PFS)",
-    ag_iou: "Align IoU",
-    edge_fidelity: "Edge Fidelity",
+    mcc: "MCC",
+    pfs: "PFS",
+    ag_iou: "IoU",
+    edge_fidelity: "Fidelity",
     poset_f1: "Hierarchy F₁",
-    poset_reachability_f1: "Reachability F₁",
-    polarity_accuracy: "Polarity Acc",
-    polarity_conflict_rate: "Polarity Conflict",
-    precision: "Precision",
-    recall: "Recall",
+    poset_reachability_f1: "Reach F₁",
+    polarity_accuracy: "Polarity",
+    precision: "Prec",
+    recall: "Rec",
   };
 
   const stagedCount = stagedAdjudications.size;
@@ -128,7 +90,6 @@ export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ onOpenConfig
     if (!activeReport?.key_metrics) return [];
     const km = activeReport.key_metrics;
 
-    // Preferred key order: prioritized canonical metrics if present
     const preferredOrder = [
       "f1",
       "macro_f1",
@@ -139,8 +100,6 @@ export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ onOpenConfig
       "ag_iou",
       "edge_fidelity",
       "poset_f1",
-      "ece",
-      "mrr",
     ];
 
     const selectedKeys: string[] = [];
@@ -150,16 +109,15 @@ export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ onOpenConfig
           selectedKeys.push(key);
         }
       }
-      if (selectedKeys.length >= 4) break;
+      if (selectedKeys.length >= 3) break;
     }
 
-    // Fall back to other available numeric metrics if fewer than 4 found
-    if (selectedKeys.length < 4) {
+    if (selectedKeys.length < 3) {
       for (const [key, val] of Object.entries(km)) {
         if (!selectedKeys.includes(key) && typeof val === "number") {
           selectedKeys.push(key);
         }
-        if (selectedKeys.length >= 4) break;
+        if (selectedKeys.length >= 3) break;
       }
     }
 
@@ -173,81 +131,84 @@ export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ onOpenConfig
 
   return (
     <>
-      <div className="shrink-0 border-b border-app-border bg-app-surface select-none">
-        {/* Row 1: Fixed 48px Header */}
-        <div className="h-12 px-4 flex items-center justify-between border-b border-app-border/60">
-          {/* Breadcrumbs & Outcome Pill */}
-          <div className="flex items-center gap-3 min-w-0">
-            {activeReport ? (
-              renderOutcomeBadge(activeReport.outcome)
-            ) : (
-              <span className="text-xs text-app-muted">No Run Selected</span>
-            )}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* Single Consolidated Sub-Nav & Metrology Header (Clean 38px)         */}
+      {/* Eliminated redundant breadcrumb bar repeating run name & status      */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      <div className="h-10 px-3 border-b border-app-border bg-app-surface flex items-center justify-between gap-3 shrink-0 select-none overflow-x-auto text-xs">
+        {/* Left: Sub-Nav Tab Group */}
+        <div className="flex items-center gap-1 shrink-0">
+          {SUB_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeSubTab === tab.id;
+            const badge =
+              tab.id === "adjudication" && stagedCount > 0
+                ? stagedCount
+                : null;
 
-            <div className="flex items-center gap-2 truncate">
-              <span className="font-mono text-xs text-app-muted">Evaluation</span>
-              <span className="text-app-muted">/</span>
-              {activeReport?.dataset_ref && (
-                <>
-                  <span
-                    className="text-xs font-mono text-app-muted truncate max-w-[140px]"
-                    title={activeReport.dataset_ref}
-                  >
-                    {activeReport.dataset_ref.split("/").pop() || activeReport.dataset_ref}
-                  </span>
-                  <span className="text-app-muted">/</span>
-                </>
-              )}
-              <h1
-                className="text-xs font-mono font-semibold text-app-heading truncate max-w-sm"
-                title={activeReport ? activeReport.evaluation_id : ""}
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSubTab(tab.id)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                  isActive
+                    ? "bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400 font-medium"
+                    : "text-app-muted hover:text-app-text hover:bg-app-subtle"
+                }`}
               >
-                {activeReport ? activeReport.evaluation_id : "Select an Evaluation Run"}
-              </h1>
-            </div>
-          </div>
+                <Icon className="w-3.5 h-3.5" />
+                <span>{tab.label}</span>
+                {badge && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] tabular-nums font-medium bg-amber-500/20 text-amber-500">
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-          {/* Center-Right: Dynamic KPI Strip with Tabular Numerals */}
+        {/* Right: Consolidated KPIs & Quick Actions */}
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Dynamic KPI Strip */}
           {activeReport && displayMetrics.length > 0 && showKpiStrip && (
-            <div className="hidden md:flex items-center gap-4 text-xs font-mono tabular-nums animate-in fade-in duration-100">
+            <div className="hidden lg:flex items-center gap-3 text-xs tabular-nums">
               {displayMetrics.map((m, idx) => (
-                <React.Fragment key={m.key}>
-                  {idx > 0 && <div className="h-5 w-px bg-app-border" />}
-                  <div className="flex flex-col items-end">
-                    <span className="text-[10px] uppercase text-app-muted font-sans font-semibold">
-                      {m.label}
-                    </span>
-                    <span className="text-xs font-semibold text-app-text">
-                      {m.value.toFixed(3)}
-                      {m.delta !== 0 && (
-                        <span className="ml-1 text-[10px] font-normal text-emerald-500">
-                          ({m.delta > 0 ? "+" : ""}
-                          {m.delta.toFixed(3)})
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                </React.Fragment>
+                <div key={m.key} className="flex items-center gap-1.5">
+                  {idx > 0 && <span className="text-app-border">·</span>}
+                  <span className="text-[10px] uppercase text-app-muted font-sans font-medium">
+                    {m.label}:
+                  </span>
+                  <span className="font-medium text-app-text">
+                    {m.value.toFixed(3)}
+                    {m.delta !== 0 && (
+                      <span className="ml-1 text-[10px] font-normal text-emerald-500">
+                        ({m.delta > 0 ? "+" : ""}{m.delta.toFixed(3)})
+                      </span>
+                    )}
+                  </span>
+                </div>
               ))}
             </div>
           )}
 
-          {/* Action Bar */}
-          <div className="flex items-center gap-2 pl-2">
-            {activeReport && displayMetrics.length > 0 && (
-              <button
-                onClick={toggleKpiStrip}
-                className={`p-1.5 rounded text-xs font-medium border transition-colors cursor-pointer ${
-                  showKpiStrip
-                    ? "bg-app-bg text-app-muted hover:text-app-text border-app-border"
-                    : "bg-blue-500/10 text-blue-500 border-blue-500/30"
-                }`}
-                title={showKpiStrip ? "Hide Header KPIs to reduce distraction" : "Show Header KPIs"}
-              >
-                {showKpiStrip ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
-            )}
+          {/* KPI toggle */}
+          {activeReport && displayMetrics.length > 0 && (
+            <button
+              onClick={toggleKpiStrip}
+              className={`p-1 rounded text-xs border transition-colors cursor-pointer ${
+                showKpiStrip
+                  ? "bg-app-bg text-app-muted hover:text-app-text border-app-border"
+                  : "bg-blue-500/10 text-blue-500 border-blue-500/30"
+              }`}
+              title={showKpiStrip ? "Hide Header KPIs" : "Show Header KPIs"}
+            >
+              {showKpiStrip ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            </button>
+          )}
 
+          {/* Action buttons */}
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => {
                 if (activeReport?.run_ids?.[0]) {
@@ -255,22 +216,21 @@ export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ onOpenConfig
                 }
                 setActiveMode("execute");
               }}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer"
               title="Navigate to dedicated On-Demand Evaluation Studio"
             >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Run Evaluation</span>
+              <Play className="w-3 h-3 fill-current" />
+              <span>Run</span>
             </button>
 
             {activeReport && (
               <>
                 <button
                   onClick={() => setIsExportModalOpen(true)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-app-text border border-app-border transition-colors cursor-pointer"
-                  title="Export report in LaTeX, JSON-LD, or Markdown"
+                  className="p-1 rounded bg-app-bg hover:bg-app-subtle text-app-text border border-app-border transition-colors cursor-pointer"
+                  title="Export Report"
                 >
                   <Download className="w-3.5 h-3.5 text-blue-500" />
-                  <span className="hidden sm:inline">Export Report</span>
                 </button>
 
                 <button
@@ -284,57 +244,14 @@ export const EvaluationHeader: React.FC<EvaluationHeaderProps> = ({ onOpenConfig
                       });
                     }
                   }}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-app-muted hover:text-app-text border border-app-border transition-colors cursor-pointer"
-                  title="Tune prompts or parameters in ConfigEditor"
+                  className="p-1 rounded bg-app-bg hover:bg-app-subtle text-app-muted hover:text-app-text border border-app-border transition-colors cursor-pointer"
+                  title="Tune Prompt in ConfigEditor"
                 >
                   <Wrench className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Tune Prompt</span>
                 </button>
               </>
             )}
           </div>
-        </div>
-
-        {/* Row 2: Fixed 40px Zero-Box Segmented Sub-Nav */}
-        <div className="h-10 px-4 flex items-center justify-between border-t border-app-border/40 overflow-x-auto">
-          <div className="flex items-center gap-1">
-            {SUB_TABS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeSubTab === tab.id;
-              const badge =
-                tab.id === "adjudication" && stagedCount > 0
-                  ? stagedCount
-                  : null;
-
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveSubTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-                    isActive
-                      ? "bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400 font-semibold"
-                      : "text-app-muted hover:text-app-text hover:bg-app-subtle"
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{tab.label}</span>
-                  {badge && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-semibold bg-amber-500/20 text-amber-500">
-                      {badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Staged Adjudications Indicator if any */}
-          {stagedCount > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse font-mono">
-              <span className="font-semibold">{stagedCount}</span>
-              <span>Staged for Commit (⌘⏎)</span>
-            </div>
-          )}
         </div>
       </div>
 

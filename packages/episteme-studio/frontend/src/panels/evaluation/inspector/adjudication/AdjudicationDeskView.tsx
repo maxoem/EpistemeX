@@ -1,10 +1,4 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  Sliders,
-  Sparkles,
-  Send,
-  Loader2,
-} from "lucide-react";
 import { useEvaluationStore } from "../../../../store/evaluationStore";
 import { api } from "../../../../api/client";
 import type {
@@ -13,10 +7,10 @@ import type {
 } from "../../../../api/types";
 import { useAdjudicationStaging } from "./useAdjudicationStaging";
 import { useEvaluationHotkeys } from "./useEvaluationHotkeys";
-import { AdjudicationQueueList } from "./AdjudicationQueueList";
-import { AdjudicationTriadCard } from "./AdjudicationTriadCard";
+import { AdjudicationTableView } from "./AdjudicationTableView";
 import { AdjudicationInspectorRail } from "./AdjudicationInspectorRail";
 import { SchemaAliasOmnibar } from "./SchemaAliasOmnibar";
+import { ResizablePanel } from "../../../ResizablePanel";
 
 export const AdjudicationDeskView: React.FC = () => {
   const { activeReport } = useEvaluationStore();
@@ -30,6 +24,7 @@ export const AdjudicationDeskView: React.FC = () => {
   const [maxSim, setMaxSim] = useState(0.95);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
   // Schema Alias Omnibar state & Export settings
   const [isAliasModalOpen, setIsAliasModalOpen] = useState(false);
@@ -109,12 +104,24 @@ export const AdjudicationDeskView: React.FC = () => {
     setSelectedIndex((prev) => (prev > 0 ? prev - 1 : 0));
   }, []);
 
-  // Action handlers
+  // Toggle row accordion expansion (keystroke-triggered or click)
+  const handleToggleExpand = useCallback(() => {
+    if (!activeCandidate) return;
+    setExpandedRowId((prev) =>
+      prev === activeCandidate.candidate_id ? null : activeCandidate.candidate_id
+    );
+  }, [activeCandidate]);
+
+  const handleToggleExpandRow = useCallback((id: string) => {
+    setExpandedRowId((prev) => (prev === id ? null : id));
+  }, []);
+
+  // Action handlers (with automatic advance to the next candidate edge)
   const handleAccept = useCallback(() => {
     if (!activeCandidate) return;
     const rat = candidateRationale[activeCandidate.candidate_id];
     stageDecision(activeCandidate, "true_positive", null, rat);
-    // Auto advance to next candidate for rapid keyboard triage
+    // Auto advance focus to the next candidate edge for rapid keyboard triage
     handleNext();
   }, [activeCandidate, candidateRationale, stageDecision, handleNext]);
 
@@ -144,12 +151,11 @@ export const AdjudicationDeskView: React.FC = () => {
     if (stagedCount === 0 || isCommittingBatch) return;
     const res = await commitBatch(exportPath ? exportPath : null);
     if (res) {
-      // Refresh the queue after commit
       fetchQueue();
     }
   }, [stagedCount, isCommittingBatch, commitBatch, exportPath, fetchQueue]);
 
-  // Wire Hotkeys
+  // Wire Hotkeys: [A], [R], [S], [U], [j], [k], [Space], [⌘⏎]
   useEvaluationHotkeys({
     onAccept: handleAccept,
     onReject: handleReject,
@@ -158,75 +164,20 @@ export const AdjudicationDeskView: React.FC = () => {
     onNext: handleNext,
     onPrev: handlePrev,
     onCommit: handleCommit,
+    onToggleExpand: handleToggleExpand,
     enabled: !isAliasModalOpen,
   });
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-app-bg select-none">
-      {/* 44px Contextual Top Toolbar */}
-      <div className="h-11 px-4 border-b border-app-border bg-app-surface flex items-center justify-between gap-4 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-app-heading font-sans">
-            <Sliders className="w-4 h-4 text-blue-500" />
-            <span>HITL Adjudication Desk</span>
-          </div>
-
-          <div className="h-4 w-px bg-app-border" />
-
-          {/* Uncertainty Band Display */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-[11px] text-app-muted font-sans">Uncertainty Band τ:</span>
-            <span
-              className="font-mono text-xs font-medium text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20"
-              style={{ fontFeatureSettings: '"tnum" 1' }}
-            >
-              [{minSim.toFixed(2)} - {maxSim.toFixed(2)}]
-            </span>
-          </div>
-        </div>
-
-        {/* Center / Right: Staging status & Commit Action */}
-        <div className="flex items-center gap-3">
-          {/* Optimistic Delta Preview */}
-          {stagedCount > 0 && (
-            <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-mono tabular-nums">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
-              <span>
-                {stagedCount} Staged ({optimisticScalarDeltas.f1 >= 0 ? "+" : ""}
-                {optimisticScalarDeltas.f1.toFixed(3)} F₁)
-              </span>
-            </div>
-          )}
-
-          {/* Explicit Batch Commit Button */}
-          <button
-            type="button"
-            onClick={handleCommit}
-            disabled={stagedCount === 0 || isCommittingBatch}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-              stagedCount > 0
-                ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer ring-1 ring-blue-500/20"
-                : "bg-app-subtle text-app-muted border border-app-border cursor-not-allowed opacity-60"
-            }`}
-            title="Explicitly commit all staged adjudications and recompute metrics (Cmd+Enter)"
-          >
-            {isCommittingBatch ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Send className="w-3.5 h-3.5" />
-            )}
-            <span>Commit Batch ({stagedCount})</span>
-            <kbd className="hidden sm:inline-block px-1 py-0.2 rounded text-[10px] font-mono bg-black/20">
-              ⌘⏎
-            </kbd>
-          </button>
-        </div>
-      </div>
-
-      {/* Main 3-Pane Body: Three-Rail Scientific Cockpit (design.md Section 2) */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* Main Horizontally Integrated Workspace (2-Column Architecture)     */}
+      {/* Pane 1: Continuous Proposition Table with Consolidated Action Bar   */}
+      {/* Pane 2: Cursor Draggable Resizable Right Diagnostic Inspector       */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Pane 1: Left Navigation Queue List (300px) */}
-        <AdjudicationQueueList
+        {/* Pane 1: Center Fluid Adjudication Table with Integrated Header Toolbar */}
+        <AdjudicationTableView
           candidates={filteredCandidates}
           selectedIndex={selectedIndex}
           onSelectIndex={setSelectedIndex}
@@ -240,90 +191,47 @@ export const AdjudicationDeskView: React.FC = () => {
             adjudicated: queueResponse?.adjudicated_count ?? 0,
             all: queueResponse?.total_candidates ?? 0,
           }}
-        />
-
-        {/* Pane 2: Center Execution Inspector - Adjudication Triad View (Fluid) */}
-        <AdjudicationTriadCard
-          candidate={activeCandidate}
-          stagedItem={currentStagedItem}
-          rationale={activeCandidate ? candidateRationale[activeCandidate.candidate_id] || "" : ""}
-          onChangeRationale={(val) => {
-            if (activeCandidate) {
-              setCandidateRationale((prev) => ({
-                ...prev,
-                [activeCandidate.candidate_id]: val,
-              }));
-            }
-          }}
+          minSim={minSim}
+          maxSim={maxSim}
+          rationaleMap={candidateRationale}
+          onChangeRationale={(id, val) =>
+            setCandidateRationale((prev) => ({ ...prev, [id]: val }))
+          }
           onAccept={handleAccept}
           onReject={handleReject}
           onOpenAlias={handleOpenAlias}
           onUndo={undoLastDecision}
-        />
-
-        {/* Pane 3: Right Diagnostic Rail - Encapsulated Sub-Tabbed Evidence & Safeguards (340px) */}
-        <AdjudicationInspectorRail
-          candidate={activeCandidate}
-          stagedItem={currentStagedItem}
-          onOpenAlias={handleOpenAlias}
-          exportPath={exportPath}
-          onChangeExportPath={setExportPath}
+          expandedRowId={expandedRowId}
+          onToggleExpandRow={handleToggleExpandRow}
           stagedCount={stagedCount}
+          optimisticF1Delta={optimisticScalarDeltas.f1}
+          isCommittingBatch={isCommittingBatch}
+          onCommitBatch={handleCommit}
+          onRefresh={fetchQueue}
+          isLoading={isLoading}
+          localMessage={localMessage}
         />
+
+        {/* Pane 2: Draggable Resizable Right Diagnostic Inspector Rail */}
+        <ResizablePanel
+          side="right"
+          storageKey="episteme-adjudication-inspector-width"
+          defaultWidth={420}
+          minWidth={320}
+          maxWidth={850}
+          collapsible={false}
+          className="h-full !bg-app-surface"
+        >
+          <AdjudicationInspectorRail
+            candidate={activeCandidate}
+            stagedItem={currentStagedItem}
+            onOpenAlias={handleOpenAlias}
+            exportPath={exportPath}
+            onChangeExportPath={setExportPath}
+            stagedCount={stagedCount}
+          />
+        </ResizablePanel>
       </div>
-
-      {/* Bottom Hotkey Helper Bar (Fixed 32px) */}
-      <footer className="h-8 px-4 border-t border-app-border bg-app-surface flex items-center justify-between text-[11px] text-app-muted font-mono shrink-0">
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 rounded bg-app-bg border border-app-border text-app-text">
-              j
-            </kbd>
-            <kbd className="px-1 py-0.5 rounded bg-app-bg border border-app-border text-app-text">
-              k
-            </kbd>
-            <span className="font-sans">Navigate</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-500 font-bold border border-emerald-500/30">
-              A
-            </kbd>
-            <span className="font-sans">True Positive</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 rounded bg-rose-500/20 text-rose-500 font-bold border border-rose-500/30">
-              R
-            </kbd>
-            <span className="font-sans">False Positive</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 rounded bg-violet-500/20 text-violet-500 font-bold border border-violet-500/30">
-              S
-            </kbd>
-            <span className="font-sans">Schema Alias</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 rounded bg-app-bg border border-app-border text-app-text">
-              U
-            </kbd>
-            <span className="font-sans">Undo</span>
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {localMessage && (
-            <span className="text-emerald-500 font-sans font-medium animate-pulse">
-              {localMessage}
-            </span>
-          )}
-          <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 rounded bg-blue-500/20 text-blue-500 font-bold border border-blue-500/30">
-              ⌘⏎
-            </kbd>
-            <span className="font-sans">Commit Batch</span>
-          </span>
-        </div>
-      </footer>
 
       {/* Schema Alias cmdk Omnibar Modal */}
       <SchemaAliasOmnibar

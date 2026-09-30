@@ -21,6 +21,7 @@ import {
   XCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  ChevronDown,
 } from "lucide-react";
 import { useEvaluationStore } from "../../store/evaluationStore";
 import { ResizablePanel } from "../ResizablePanel";
@@ -60,9 +61,12 @@ export const EvaluationWorkspace: React.FC = () => {
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
-      return localStorage.getItem("episteme-eval-left-sidebar-width-collapsed") === "true";
+      const stored = localStorage.getItem("episteme-eval-left-sidebar-width-collapsed");
+      if (stored !== null) return stored === "true";
+      // Default to collapsed for focused evaluation to maximize horizontal screen real estate
+      return true;
     } catch {
-      return false;
+      return true;
     }
   });
 
@@ -115,28 +119,28 @@ export const EvaluationWorkspace: React.FC = () => {
     switch (outcome.toLowerCase()) {
       case "pass":
         return (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-500 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-500/30">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400 border border-emerald-500/25">
             <CheckCircle2 className="w-3 h-3" />
             PASS
           </span>
         );
       case "fail":
         return (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-500 dark:bg-rose-500/20 dark:text-rose-400 border border-rose-500/30">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-500/90 dark:bg-rose-500/15 dark:text-rose-400/90 border border-rose-500/25">
             <XCircle className="w-3 h-3" />
             FAIL
           </span>
         );
       case "warning":
         return (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-500/30">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400 border border-amber-500/25">
             <TriangleAlert className="w-3 h-3" />
             WARN
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-500/10 text-zinc-500 dark:bg-zinc-500/20 dark:text-zinc-400 border border-zinc-500/30">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-500/10 text-zinc-500 dark:bg-zinc-500/15 dark:text-zinc-400 border border-zinc-500/25">
             <Clock className="w-3 h-3" />
             {outcome.toUpperCase()}
           </span>
@@ -174,7 +178,7 @@ export const EvaluationWorkspace: React.FC = () => {
               onClick={() => setActiveMode("catalog")}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                 activeMode === "catalog"
-                  ? "bg-app-surface text-app-heading border border-app-border/80 font-semibold"
+                  ? "bg-app-surface text-app-heading border border-app-border/80 font-medium"
                   : "text-app-muted hover:text-app-text hover:bg-app-subtle"
               }`}
             >
@@ -185,7 +189,7 @@ export const EvaluationWorkspace: React.FC = () => {
               onClick={() => setActiveMode("leaderboard")}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                 activeMode === "leaderboard"
-                  ? "bg-app-surface text-app-heading border border-app-border/80 font-semibold"
+                  ? "bg-app-surface text-app-heading border border-app-border/80 font-medium"
                   : "text-app-muted hover:text-app-text hover:bg-app-subtle"
               }`}
             >
@@ -196,7 +200,7 @@ export const EvaluationWorkspace: React.FC = () => {
               onClick={() => setActiveMode("inspector")}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                 activeMode === "inspector"
-                  ? "bg-app-surface text-app-heading border border-app-border/80 font-semibold"
+                  ? "bg-app-surface text-app-heading border border-app-border/80 font-medium"
                   : "text-app-muted hover:text-app-text hover:bg-app-subtle"
               }`}
             >
@@ -207,7 +211,7 @@ export const EvaluationWorkspace: React.FC = () => {
               onClick={() => setActiveMode("longitudinal")}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                 activeMode === "longitudinal"
-                  ? "bg-app-surface text-app-heading border border-app-border/80 font-semibold"
+                  ? "bg-app-surface text-app-heading border border-app-border/80 font-medium"
                   : "text-app-muted hover:text-app-text hover:bg-app-subtle"
               }`}
             >
@@ -218,7 +222,7 @@ export const EvaluationWorkspace: React.FC = () => {
               onClick={() => setActiveMode("execute")}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                 activeMode === "execute"
-                  ? "bg-app-surface text-app-heading border border-app-border/80 font-semibold"
+                  ? "bg-app-surface text-app-heading border border-app-border/80 font-medium"
                   : "text-app-muted hover:text-app-text hover:bg-app-subtle"
               }`}
             >
@@ -228,12 +232,30 @@ export const EvaluationWorkspace: React.FC = () => {
           </div>
         </div>
 
-        {/* Center / Run Context */}
-        <div className="flex items-center gap-2 text-app-muted truncate max-w-md">
-          {activeMode === "inspector" && activeReport ? (
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-app-muted">Active Run:</span>
-              <span className="font-mono font-semibold text-app-text truncate">{activeReport.evaluation_id}</span>
+        {/* Center / Run Contextual Dropdown */}
+        <div className="flex items-center gap-2 truncate max-w-lg">
+          {activeMode === "inspector" && reports.length > 0 ? (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-app-muted font-medium shrink-0">Evaluation Run:</span>
+              <div className="relative flex items-center">
+                <select
+                  value={activeReportId || ""}
+                  onChange={(e) => setActiveReportId(e.target.value)}
+                  className="h-7 pl-2.5 pr-7 py-0.5 rounded bg-app-bg border border-app-border text-xs font-medium text-app-heading focus:outline-none focus:border-blue-500 cursor-pointer appearance-none max-w-[260px] truncate"
+                  title="Switch Active Evaluation Run"
+                >
+                  {reports.map((r) => {
+                    const f1 = r.key_metrics?.f1 ?? r.key_metrics?.macro_f1;
+                    return (
+                      <option key={r.evaluation_id} value={r.evaluation_id}>
+                        {r.evaluation_id} ({r.outcome.toUpperCase()}{f1 !== undefined ? ` · F₁ ${f1.toFixed(3)}` : ""})
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 absolute right-2 text-app-muted pointer-events-none" />
+              </div>
+              {activeReport && renderOutcomeBadge(activeReport.outcome)}
             </div>
           ) : (
             <span className="text-xs text-app-muted font-medium">Evaluation Workbench</span>
@@ -243,11 +265,11 @@ export const EvaluationWorkspace: React.FC = () => {
         {/* Right status & action tools */}
         <div className="flex items-center gap-2">
           {stagedCount > 0 && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] bg-amber-500/10 text-amber-500 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-500/30 animate-pulse">
-              <span className="font-semibold">{stagedCount}</span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] bg-amber-500/10 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400 border border-amber-500/30">
+              <span className="font-medium">{stagedCount}</span>
               <span>Staged (⌘⏎ commit)</span>
               {optimisticScalarDeltas.f1 !== 0 && (
-                <span className="font-mono tabular-nums text-[10px]">
+                <span className="tabular-nums text-[10px]">
                   ({optimisticScalarDeltas.f1 > 0 ? "+" : ""}
                   {optimisticScalarDeltas.f1.toFixed(3)} F₁)
                 </span>
@@ -356,8 +378,8 @@ export const EvaluationWorkspace: React.FC = () => {
                         }`}
                       >
                         <div className="flex items-center justify-between gap-1 mb-1">
-                          <span className="font-semibold text-xs truncate">{b.name}</span>
-                          <span className="text-[10px] font-mono px-1.5 py-0.2 bg-app-surface text-app-muted rounded border border-app-border">
+                          <span className="font-medium text-xs truncate">{b.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.2 bg-app-surface text-app-muted rounded border border-app-border font-medium">
                             {b.task_type}
                           </span>
                         </div>
@@ -392,7 +414,7 @@ export const EvaluationWorkspace: React.FC = () => {
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className="font-mono text-[11px] font-semibold truncate">
+                        <span className="font-mono text-[11px] font-medium truncate">
                           {r.evaluation_id}
                         </span>
                         {renderOutcomeBadge(r.outcome)}
@@ -403,7 +425,7 @@ export const EvaluationWorkspace: React.FC = () => {
                           {r.dataset_ref || "Default Gold"}
                         </span>
                         {f1 !== undefined && (
-                          <span className="font-mono tabular-nums text-app-text font-medium">
+                          <span className="tabular-nums text-app-text font-medium">
                             F₁ {f1.toFixed(3)}
                           </span>
                         )}

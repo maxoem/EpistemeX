@@ -107,3 +107,42 @@ test("HITL Staging: undo stack behavior", () => {
   assert.equal(useEvaluationStore.getState().stagedAdjudications.has("cand_A"), true);
   assert.equal(useEvaluationStore.getState().stagedAdjudications.has("cand_B"), false);
 });
+
+test("HITL Adjudication: differential proposition formatting and sentence generation", () => {
+  // Test predicate formatting
+  const rawPred = "immanently_critiques";
+  const formattedPred = rawPred.replace(/_/g, " ").replace(/\band\b/g, "&");
+  assert.equal(formattedPred, "immanently critiques");
+
+  // Test natural language sentence builder
+  const formatNaturalSentence = (s: string, p: string, o: string) => {
+    const clean = (val: string) => val.replace(/^str:|^pred:|^gold:/, "");
+    const cleanedPred = p.replace(/_/g, " ").replace(/\band\b/g, "&");
+    return `${clean(s)} ${cleanedPred} ${clean(o)}.`;
+  };
+
+  const predSentence = formatNaturalSentence(
+    "pred:Hegel's Dialectic",
+    "immanently_critiques",
+    "pred:Kantian Dualism"
+  );
+  assert.equal(predSentence, "Hegel's Dialectic immanently critiques Kantian Dualism.");
+
+  const goldSentence = formatNaturalSentence(
+    "gold:The Dialectical Progression",
+    "overcomes",
+    "gold:Transcendental Dualism"
+  );
+  assert.equal(goldSentence, "The Dialectical Progression overcomes Transcendental Dualism.");
+
+  // Test differential detection
+  const p1: string = "immanently_critiques";
+  const p2: string = "overcomes";
+  const hasPredicateDiff = p1 !== p2;
+  assert.equal(hasPredicateDiff, true);
+
+  const s1: string = "Hegel's Dialectic";
+  const s2: string = "The Dialectical Progression";
+  const hasSourceDiff = s1 !== s2;
+  assert.equal(hasSourceDiff, true);
+});
