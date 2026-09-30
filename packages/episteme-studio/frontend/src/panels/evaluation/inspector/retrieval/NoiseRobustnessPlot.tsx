@@ -377,7 +377,7 @@ export const NoiseRobustnessPlot: React.FC<NoiseRobustnessPlotProps> = ({ runId 
             <button
               onClick={handleTriggerStressTest}
               disabled={isSweeping}
-              className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-2xs disabled:opacity-50 ml-2"
+              className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer disabled:opacity-50 ml-2"
             >
               {isSweeping ? (
                 <>

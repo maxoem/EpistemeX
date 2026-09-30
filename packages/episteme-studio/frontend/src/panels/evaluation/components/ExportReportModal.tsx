@@ -187,8 +187,8 @@ created_at,${rep.created_at}`;
   const lines = currentContent ? currentContent.split("\n") : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-      <div className="w-full max-w-3xl bg-app-surface border border-app-border rounded-lg shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-150">
+      <div className="w-full max-w-3xl bg-app-surface border border-app-border rounded-lg flex flex-col max-h-[85vh] overflow-hidden">
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-app-border flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
@@ -217,7 +217,7 @@ created_at,${rep.created_at}`;
               onClick={() => setActiveFormat("latex")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
                 activeFormat === "latex"
-                  ? "bg-blue-600 text-white shadow-xs"
+                  ? "bg-blue-600 text-white font-semibold"
                   : "text-app-muted hover:text-app-text hover:bg-app-subtle"
               }`}
             >
@@ -229,7 +229,7 @@ created_at,${rep.created_at}`;
               onClick={() => setActiveFormat("jsonld")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
                 activeFormat === "jsonld"
-                  ? "bg-blue-600 text-white shadow-xs"
+                  ? "bg-blue-600 text-white font-semibold"
                   : "text-app-muted hover:text-app-text hover:bg-app-subtle"
               }`}
             >
@@ -241,7 +241,7 @@ created_at,${rep.created_at}`;
               onClick={() => setActiveFormat("csv")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
                 activeFormat === "csv"
-                  ? "bg-blue-600 text-white shadow-xs"
+                  ? "bg-blue-600 text-white font-semibold"
                   : "text-app-muted hover:text-app-text hover:bg-app-subtle"
               }`}
             >
@@ -288,7 +288,7 @@ created_at,${rep.created_at}`;
               type="button"
               onClick={handleCopy}
               disabled={isLoading || !currentContent}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-app-surface hover:bg-app-subtle text-app-text border border-app-border transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-app-surface hover:bg-app-subtle text-app-text border border-app-border transition-colors disabled:opacity-50 cursor-pointer"
             >
               {copied ? (
                 <>
@@ -306,7 +306,7 @@ created_at,${rep.created_at}`;
               type="button"
               onClick={handleDownload}
               disabled={isLoading || !currentContent}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download File</span>

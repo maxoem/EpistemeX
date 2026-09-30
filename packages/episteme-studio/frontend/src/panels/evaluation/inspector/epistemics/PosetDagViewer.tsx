@@ -130,12 +130,12 @@ export const PosetDagViewer: React.FC = () => {
       </div>
 
       {/* Main Body */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Poset Invariant KPI Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="flex-1 overflow-y-auto divide-y divide-app-border">
+        {/* Poset Invariant KPI Strip: Edge-to-edge 4-column summary */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-app-border bg-app-surface/40">
           {/* Root Element Conformity */}
-          <div className="p-3 rounded-lg border border-app-border bg-app-surface/60 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-semibold text-app-muted">
+          <div className="p-4 flex flex-col justify-between">
+            <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
               Root B(TN) = {"{T₀}"}
             </span>
             <div className="mt-2 flex items-center justify-between">
@@ -153,8 +153,8 @@ export const PosetDagViewer: React.FC = () => {
           </div>
 
           {/* Transitive Reduction F1 */}
-          <div className="p-3 rounded-lg border border-app-border bg-app-surface/60 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-semibold text-app-muted">
+          <div className="p-4 flex flex-col justify-between">
+            <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
               Transitive Red. F₁
             </span>
             <div className="mt-2 flex items-baseline justify-between">
@@ -166,8 +166,8 @@ export const PosetDagViewer: React.FC = () => {
           </div>
 
           {/* Transitive Reachability F1 */}
-          <div className="p-3 rounded-lg border border-app-border bg-app-surface/60 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-semibold text-app-muted">
+          <div className="p-4 flex flex-col justify-between">
+            <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
               Reachability F₁
             </span>
             <div className="mt-2 flex items-baseline justify-between">
@@ -179,8 +179,8 @@ export const PosetDagViewer: React.FC = () => {
           </div>
 
           {/* Edge Count Alignment */}
-          <div className="p-3 rounded-lg border border-app-border bg-app-surface/60 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-semibold text-app-muted">
+          <div className="p-4 flex flex-col justify-between">
+            <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
               Poset Edges
             </span>
             <div className="mt-2 flex items-baseline justify-between">
@@ -204,11 +204,11 @@ export const PosetDagViewer: React.FC = () => {
 
         {/* Cyclical Edge Violations Section */}
         {detectedCycles.length > 0 ? (
-          <div className="p-3.5 rounded-lg border border-rose-500/30 bg-rose-500/5 space-y-3">
+          <div className="p-4 bg-rose-500/5 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <RotateCw className="w-4 h-4 text-rose-500 animate-spin" />
-                <span className="text-xs font-bold text-rose-500 uppercase tracking-wide">
+                <span className="text-xs font-bold text-rose-500 uppercase tracking-wide font-sans">
                   Circular Dependency Violations ({detectedCycles.length})
                 </span>
               </div>
@@ -226,7 +226,7 @@ export const PosetDagViewer: React.FC = () => {
               {detectedCycles.map((cycle) => (
                 <div
                   key={cycle.id}
-                  className="p-3 rounded border border-rose-500/20 bg-app-bg/80 space-y-2.5"
+                  className="p-3 rounded border border-rose-500/20 bg-app-bg space-y-2.5"
                 >
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     {/* Cycle Path Chain */}
@@ -274,11 +274,11 @@ export const PosetDagViewer: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="p-3.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex items-center justify-between">
+          <div className="p-4 bg-emerald-500/5 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
               <div>
-                <h4 className="text-xs font-semibold text-emerald-500">
+                <h4 className="text-xs font-semibold text-emerald-500 font-sans">
                   Strict DAG Acyclicity Preserved
                 </h4>
                 <p className="text-[11px] text-app-muted">
@@ -295,7 +295,7 @@ export const PosetDagViewer: React.FC = () => {
                   description: "Simulated demonstration cycle",
                 })
               }
-              className="text-[10px] text-app-muted hover:text-app-text px-2 py-1 rounded border border-app-border hover:bg-app-subtle transition-colors"
+              className="text-[10px] text-app-muted hover:text-app-text px-2 py-1 rounded border border-app-border hover:bg-app-subtle transition-colors cursor-pointer"
             >
               Simulate Cycle
             </button>
@@ -303,9 +303,9 @@ export const PosetDagViewer: React.FC = () => {
         )}
 
         {/* Poset Specialization DAG Visual Architecture */}
-        <div className="p-3.5 rounded-lg border border-app-border bg-app-surface/40 space-y-2">
+        <div className="p-4 space-y-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-app-heading">
+            <span className="font-semibold text-app-heading font-sans">
               Poset Specialization Hierarchy Tree
             </span>
             <span className="text-[10px] text-app-muted font-mono">

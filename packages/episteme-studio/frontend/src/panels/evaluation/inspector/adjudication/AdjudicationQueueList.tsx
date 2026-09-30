@@ -97,30 +97,30 @@ export const AdjudicationQueueList: React.FC<AdjudicationQueueListProps> = ({
         <div className="grid grid-cols-3 gap-1 p-0.5 rounded-lg bg-app-bg border border-app-border text-[11px] font-medium text-center">
           <button
             onClick={() => onChangeFilterStatus("pending")}
-            className={`py-1 rounded-md transition-colors ${
+            className={`py-1 rounded-md transition-colors cursor-pointer ${
               filterStatus === "pending"
-                ? "bg-app-surface text-app-text font-semibold shadow-2xs"
-                : "text-app-muted hover:text-app-text"
+                ? "bg-app-surface text-app-text font-semibold border border-app-border/80"
+                : "text-app-muted hover:text-app-text hover:bg-app-subtle/50"
             }`}
           >
             Pending ({counts.pending})
           </button>
           <button
             onClick={() => onChangeFilterStatus("adjudicated")}
-            className={`py-1 rounded-md transition-colors ${
+            className={`py-1 rounded-md transition-colors cursor-pointer ${
               filterStatus === "adjudicated"
-                ? "bg-app-surface text-app-text font-semibold shadow-2xs"
-                : "text-app-muted hover:text-app-text"
+                ? "bg-app-surface text-app-text font-semibold border border-app-border/80"
+                : "text-app-muted hover:text-app-text hover:bg-app-subtle/50"
             }`}
           >
             Adjudicated ({counts.adjudicated})
           </button>
           <button
             onClick={() => onChangeFilterStatus("all")}
-            className={`py-1 rounded-md transition-colors ${
+            className={`py-1 rounded-md transition-colors cursor-pointer ${
               filterStatus === "all"
-                ? "bg-app-surface text-app-text font-semibold shadow-2xs"
-                : "text-app-muted hover:text-app-text"
+                ? "bg-app-surface text-app-text font-semibold border border-app-border/80"
+                : "text-app-muted hover:text-app-text hover:bg-app-subtle/50"
             }`}
           >
             All ({counts.all})
@@ -167,7 +167,7 @@ export const AdjudicationQueueList: React.FC<AdjudicationQueueListProps> = ({
                 onClick={() => onSelectIndex(idx)}
                 className={`p-2.5 cursor-pointer transition-colors relative border-l-2 text-xs ${
                   isSelected
-                    ? "bg-blue-500/10 border-blue-500 text-app-text"
+                    ? "bg-app-subtle border-blue-600 text-app-heading font-medium"
                     : "border-transparent hover:bg-app-subtle/70 text-app-muted hover:text-app-text"
                 }`}
               >
@@ -190,7 +190,13 @@ export const AdjudicationQueueList: React.FC<AdjudicationQueueListProps> = ({
                 {/* Row 2: Triple Representation */}
                 <div className="space-y-0.5 font-mono text-[11px] leading-tight">
                   <div className="text-app-text font-medium truncate">{predSource}</div>
-                  <div className="text-amber-600 dark:text-amber-400 font-semibold truncate flex items-center gap-1 pl-1">
+                  <div className={`font-semibold truncate flex items-center gap-1 pl-1 ${
+                    /undermine|attack|refute|disprove|oppose/i.test(predPred)
+                      ? "text-rose-600 dark:text-rose-400"
+                      : /validate|support|prove|corroborat|entail/i.test(predPred)
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-app-text font-medium"
+                  }`}>
                     <ArrowRight className="w-2.5 h-2.5 shrink-0 opacity-60" />
                     <span>{predPred}</span>
                   </div>

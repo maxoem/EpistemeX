@@ -46,7 +46,7 @@ export const CanvasEvaluationHud: React.FC<CanvasEvaluationHudProps> = ({
   ];
 
   return (
-    <div className="w-[230px] bg-app-surface/90 dark:bg-app-surface/95 backdrop-blur-md border border-app-border rounded-lg shadow-xl p-3 text-xs select-none space-y-3.5 transition-all">
+    <div className="w-[230px] bg-app-surface/90 dark:bg-app-surface/95 backdrop-blur-md border border-app-border rounded-lg p-3 text-xs select-none space-y-3.5 transition-all">
       {/* HUD Header */}
       <div className="flex items-center justify-between border-b border-app-border/60 pb-2">
         <span className="font-semibold text-app-heading flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
@@ -229,7 +229,7 @@ export const CanvasEvaluationHud: React.FC<CanvasEvaluationHudProps> = ({
           </p>
           <button
             onClick={() => setIsAmbiguousDrawerOpen(true)}
-            className="w-full mt-1 px-2 py-1 rounded text-[11px] font-medium bg-violet-600 hover:bg-violet-700 text-white transition-colors shadow-2xs text-center"
+            className="w-full mt-1 px-2 py-1 rounded text-[11px] font-medium bg-violet-600 hover:bg-violet-700 text-white transition-colors cursor-pointer text-center"
           >
             Resolve Drawer
           </button>

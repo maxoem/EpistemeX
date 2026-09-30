@@ -116,7 +116,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
   };
 
   return (
-    <div className="w-[360px] bg-app-surface border-l border-app-border flex flex-col h-full select-none overflow-hidden shrink-0 z-10 shadow-lg">
+    <div className="w-[360px] bg-app-surface border-l border-app-border flex flex-col h-full select-none overflow-hidden shrink-0 z-10">
       {/* Quad Header */}
       <div className="h-11 px-4 border-b border-app-border flex items-center justify-between bg-app-surface/90 shrink-0">
         <div className="flex items-center gap-2">
@@ -128,7 +128,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
         {selectedOverlayItem && (
           <button
             onClick={() => setSelectedOverlayItem(null)}
-            className="p-1 rounded text-app-muted hover:text-app-text hover:bg-app-subtle transition-colors"
+            className="p-1 rounded text-app-muted hover:text-app-text hover:bg-app-subtle transition-colors cursor-pointer"
             title="Deselect item"
           >
             <X className="w-3.5 h-3.5" />
@@ -302,7 +302,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                 <div className="space-y-2 pt-2">
                   <button
                     onClick={() => handleJumpToBBox(edge.id)}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-2xs"
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
                   >
                     <BookOpen className="w-3.5 h-3.5" />
                     <span>Jump to Document BBox</span>
@@ -311,7 +311,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                   {edge.alignment_status !== "true_positive" && !edge.is_ghost && (
                     <button
                       onClick={() => handleStageForAdjudication(edge)}
-                      className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-amber-600 dark:text-amber-400 border border-amber-500/30 transition-colors shadow-2xs"
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-amber-600 dark:text-amber-400 border border-amber-500/30 transition-colors cursor-pointer"
                     >
                       <Sliders className="w-3.5 h-3.5" />
                       <span>Stage for Adjudication</span>
@@ -321,7 +321,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                   {onOpenPredicateInEngine && (
                     <button
                       onClick={() => onOpenPredicateInEngine(edge.predicate)}
-                      className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-app-muted hover:text-app-text border border-app-border transition-colors shadow-2xs"
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-app-muted hover:text-app-text border border-app-border transition-colors cursor-pointer"
                     >
                       <Wrench className="w-3.5 h-3.5 text-app-muted" />
                       <span>Inspect Predicate in Engine</span>
@@ -431,7 +431,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                 <div className="space-y-2 pt-2">
                   <button
                     onClick={() => handleJumpToBBox(node.id)}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-2xs"
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
                   >
                     <BookOpen className="w-3.5 h-3.5" />
                     <span>Jump to Document BBox</span>

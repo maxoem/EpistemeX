@@ -453,7 +453,7 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
           <button
             onClick={() => handleComputeTrajectory(currentPreset)}
             disabled={isLoading}
-            className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50 cursor-pointer"
           >
             <Play className={`w-3 h-3 fill-current ${isLoading ? "animate-spin" : ""}`} />
             <span>Re-Compute Trajectory</span>
@@ -470,13 +470,13 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* KPI Strip */}
+      <div className="flex-1 overflow-y-auto divide-y divide-app-border">
+        {/* KPI Strip: Edge-to-edge 5-column summary */}
         {trajectoryData && (
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-app-border bg-app-surface/40">
             {/* Degeneration Index */}
-            <div className="p-3 rounded-lg border border-app-border bg-app-surface/60 flex flex-col justify-between">
-              <span className="text-[10px] uppercase font-semibold text-app-muted">
+            <div className="p-4 flex flex-col justify-between">
+              <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
                 Degeneration Index (DI)
               </span>
               <div className="mt-2 flex items-baseline justify-between">
@@ -494,8 +494,8 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
             </div>
 
             {/* Programme Status */}
-            <div className="p-3 rounded-lg border border-app-border bg-app-surface/60 flex flex-col justify-between">
-              <span className="text-[10px] uppercase font-semibold text-app-muted">
+            <div className="p-4 flex flex-col justify-between">
+              <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
                 Research Programme Status
               </span>
               <div className="mt-2 flex items-center justify-between">
@@ -514,8 +514,8 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
             </div>
 
             {/* Hard-Core Invariance */}
-            <div className="p-3 rounded-lg border border-app-border bg-app-surface/60 flex flex-col justify-between">
-              <span className="text-[10px] uppercase font-semibold text-app-muted">
+            <div className="p-4 flex flex-col justify-between">
+              <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
                 Hard-Core Invariance
               </span>
               <div className="mt-2 flex items-center justify-between">
@@ -534,8 +534,8 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
             </div>
 
             {/* Protective Belt Growth */}
-            <div className="p-3 rounded-lg border border-app-border bg-app-surface/60 flex flex-col justify-between">
-              <span className="text-[10px] uppercase font-semibold text-app-muted">
+            <div className="p-4 flex flex-col justify-between">
+              <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
                 Δ Auxiliary Hypotheses
               </span>
               <div className="mt-2 flex items-baseline justify-between">
@@ -547,8 +547,8 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
             </div>
 
             {/* Empirical Content Growth */}
-            <div className="p-3 rounded-lg border border-app-border bg-app-surface/60 flex flex-col justify-between">
-              <span className="text-[10px] uppercase font-semibold text-app-muted">
+            <div className="p-4 flex flex-col justify-between">
+              <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
                 Δ Empirical Content
               </span>
               <div className="mt-2 flex items-baseline justify-between">
@@ -562,11 +562,11 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
         )}
 
         {/* ECharts Lakatosian Trajectory Canvas (Height 320px) */}
-        <div className="p-4 rounded-lg border border-app-border bg-app-surface/40 space-y-2">
+        <div className="p-6 space-y-2 bg-app-bg">
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
               <Scale className="w-4 h-4 text-emerald-500" />
-              <span className="font-semibold text-app-heading">
+              <span className="font-semibold text-app-heading font-sans">
                 Degeneration Index (DI) Trajectory Curve & Empirical Expansion
               </span>
             </div>
@@ -580,9 +580,9 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
 
         {/* Step-by-Step Historical Progression Data Grid */}
         {trajectoryData && (
-          <div className="p-4 rounded-lg border border-app-border bg-app-surface/40 space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-app-heading">
+          <div className="space-y-0 bg-app-bg">
+            <div className="h-10 px-6 border-b border-app-border bg-app-surface/60 flex items-center justify-between text-xs">
+              <span className="font-semibold text-app-heading font-sans">
                 Step-by-Step Historical Progression Breakdown
               </span>
               <span className="text-[11px] text-app-muted font-mono">
@@ -590,39 +590,39 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
               </span>
             </div>
 
-            <div className="overflow-x-auto border border-app-border rounded-lg bg-app-bg">
+            <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="bg-app-surface border-b border-app-border text-[11px] text-app-muted">
-                  <tr>
-                    <th className="py-2 px-4 font-semibold">Transition Step</th>
-                    <th className="py-2 px-3 text-right font-mono tabular-nums">Δ Auxiliary (Belt)</th>
-                    <th className="py-2 px-3 text-right font-mono tabular-nums">Δ Empirical Facts</th>
-                    <th className="py-2 px-3 text-right font-mono tabular-nums">Anomalies Detected</th>
-                    <th className="py-2 px-3 text-right font-mono tabular-nums">Step DI</th>
-                    <th className="py-2 px-4 text-center font-semibold">Verdict</th>
+                  <tr className="h-8">
+                    <th className="px-6 font-semibold">Transition Step</th>
+                    <th className="px-3 text-right font-mono tabular-nums">Δ Auxiliary (Belt)</th>
+                    <th className="px-3 text-right font-mono tabular-nums">Δ Empirical Facts</th>
+                    <th className="px-3 text-right font-mono tabular-nums">Anomalies Detected</th>
+                    <th className="px-3 text-right font-mono tabular-nums">Step DI</th>
+                    <th className="px-6 text-center font-semibold">Verdict</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-app-border">
+                <tbody className="divide-y divide-app-border/40 font-mono text-[11px]">
                   {trajectoryData.trajectory.map((step, idx) => {
                     const isStepProgressive = step.step_degeneration_index < 1.0;
                     return (
-                      <tr key={idx} className="hover:bg-app-subtle transition-colors">
-                        <td className="py-2.5 px-4 font-mono font-semibold text-app-heading">
+                      <tr key={idx} className="h-10 hover:bg-app-subtle transition-colors">
+                        <td className="px-6 font-semibold text-app-heading font-mono">
                           {step.step}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono tabular-nums text-amber-500 font-medium">
+                        <td className="px-3 text-right tabular-nums text-amber-500 font-medium">
                           +{step.delta_auxiliary}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono tabular-nums text-blue-500 font-medium">
+                        <td className="px-3 text-right tabular-nums text-blue-500 font-medium">
                           +{step.delta_empirical}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono tabular-nums text-app-muted">
+                        <td className="px-3 text-right tabular-nums text-app-muted">
                           {step.anomalies_count}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold">
+                        <td className="px-3 text-right tabular-nums font-bold">
                           {step.step_degeneration_index.toFixed(3)}
                         </td>
-                        <td className="py-2.5 px-4 text-center">
+                        <td className="px-6 text-center">
                           {isStepProgressive ? (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
                               [PROGRESSIVE]

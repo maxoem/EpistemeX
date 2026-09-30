@@ -36,12 +36,12 @@ export const RetrievalStressView: React.FC<RetrievalStressViewProps> = ({ onOpen
         </div>
 
         {/* Segmented Layout Mode Pills */}
-        <div className="flex items-center gap-1 bg-app-subtle p-0.5 rounded border border-app-border/60 text-[10px]">
+        <div className="flex items-center gap-1 bg-app-bg dark:bg-[#111827] p-0.5 rounded border border-app-border/60 text-[10px]">
           <button
             onClick={() => setLayoutMode("split")}
-            className={`px-2 py-0.5 rounded font-medium transition-colors ${
+            className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
               layoutMode === "split"
-                ? "bg-app-surface text-app-text shadow-2xs font-semibold"
+                ? "bg-app-surface text-app-heading font-semibold border border-app-border/80"
                 : "text-app-muted hover:text-app-text"
             }`}
           >
@@ -49,9 +49,9 @@ export const RetrievalStressView: React.FC<RetrievalStressViewProps> = ({ onOpen
           </button>
           <button
             onClick={() => setLayoutMode("competency")}
-            className={`px-2 py-0.5 rounded font-medium transition-colors ${
+            className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
               layoutMode === "competency"
-                ? "bg-app-surface text-app-text shadow-2xs font-semibold"
+                ? "bg-app-surface text-app-heading font-semibold border border-app-border/80"
                 : "text-app-muted hover:text-app-text"
             }`}
           >
@@ -59,9 +59,9 @@ export const RetrievalStressView: React.FC<RetrievalStressViewProps> = ({ onOpen
           </button>
           <button
             onClick={() => setLayoutMode("robustness")}
-            className={`px-2 py-0.5 rounded font-medium transition-colors ${
+            className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
               layoutMode === "robustness"
-                ? "bg-app-surface text-app-text shadow-2xs font-semibold"
+                ? "bg-app-surface text-app-heading font-semibold border border-app-border/80"
                 : "text-app-muted hover:text-app-text"
             }`}
           >

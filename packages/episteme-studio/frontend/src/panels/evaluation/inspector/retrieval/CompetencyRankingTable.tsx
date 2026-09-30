@@ -414,17 +414,17 @@ export const CompetencyRankingTable: React.FC<CompetencyRankingTableProps> = ({ 
                       </td>
                     </tr>
 
-                    {/* Expanded Diagnosis Sub-Card */}
+                    {/* Expanded Diagnosis Sub-Panel */}
                     {isExpanded && (
-                      <tr className="bg-app-bg/80 border-b border-app-border">
-                        <td colSpan={7} className="p-4">
-                          <div className="rounded-md border border-app-border bg-app-surface p-4 space-y-4 shadow-sm">
+                      <tr className="bg-app-subtle/20 border-b border-app-border">
+                        <td colSpan={7} className="p-4 pl-11">
+                          <div className="space-y-4">
                             {/* Failure Rationale Banner if applicable */}
                             {query.failure_mode && (
-                              <div className="p-3 rounded bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs flex items-start gap-2">
+                              <div className="p-3 rounded bg-rose-500/10 border-l-2 border-rose-500 text-rose-600 dark:text-rose-400 text-xs flex items-start gap-2">
                                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                                 <div>
-                                  <div className="font-semibold">Retrieval Breakdown Root Cause:</div>
+                                  <div className="font-semibold font-sans">Retrieval Breakdown Root Cause:</div>
                                   <div className="leading-relaxed mt-0.5 font-serif italic">
                                     {query.failure_mode}
                                   </div>
@@ -435,10 +435,10 @@ export const CompetencyRankingTable: React.FC<CompetencyRankingTableProps> = ({ 
                             {/* Dual Diagnosis Columns: Expected Gold vs Retrieved Candidates */}
                             <div className="grid grid-cols-2 gap-4">
                               {/* Left Column: Expected Gold Nodes */}
-                              <div className="p-3 rounded bg-app-bg border border-app-border space-y-2">
-                                <div className="text-[10px] uppercase font-semibold text-app-muted tracking-wider flex items-center justify-between">
+                              <div className="p-3.5 rounded bg-app-surface/60 border border-app-border/80 space-y-2">
+                                <div className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider flex items-center justify-between">
                                   <span>Expected Gold Subgraph Nodes</span>
-                                  <span className="text-emerald-600 dark:text-emerald-400">
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-mono">
                                     {query.expected_gold_nodes.length} targets
                                   </span>
                                 </div>
@@ -458,10 +458,10 @@ export const CompetencyRankingTable: React.FC<CompetencyRankingTableProps> = ({ 
                               </div>
 
                               {/* Right Column: Retrieved Candidates */}
-                              <div className="p-3 rounded bg-app-bg border border-app-border space-y-2">
-                                <div className="text-[10px] uppercase font-semibold text-app-muted tracking-wider flex items-center justify-between">
+                              <div className="p-3.5 rounded bg-app-surface/60 border border-app-border/80 space-y-2">
+                                <div className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider flex items-center justify-between">
                                   <span>Retrieved Top-Ranked Candidates</span>
-                                  <span>{query.retrieved_candidates.length} returned</span>
+                                  <span className="font-mono text-app-muted">{query.retrieved_candidates.length} returned</span>
                                 </div>
                                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                                   {query.retrieved_candidates.map((cand, idx) => (
@@ -470,7 +470,7 @@ export const CompetencyRankingTable: React.FC<CompetencyRankingTableProps> = ({ 
                                       className={`p-1.5 rounded border text-[11px] flex items-center justify-between ${
                                         cand.is_gold_target
                                           ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                                          : "bg-app-surface border-app-border text-app-text"
+                                          : "bg-app-bg border-app-border/60 text-app-text"
                                       }`}
                                     >
                                       <div className="flex items-center gap-2 truncate">
@@ -506,7 +506,7 @@ export const CompetencyRankingTable: React.FC<CompetencyRankingTableProps> = ({ 
                                   e.stopPropagation();
                                   handleIsolatePathOnCanvas(query);
                                 }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-2xs"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
                               >
                                 <Network className="w-3.5 h-3.5" />
                                 <span>Isolate Traversal Path on Canvas</span>

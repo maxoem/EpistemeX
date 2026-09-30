@@ -287,7 +287,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
               </p>
             </div>
 
-            <div className="p-5 rounded-lg border border-app-border bg-app-surface shadow-xs">
+            <div className="p-4 rounded-md border border-app-border bg-app-surface/60">
               <JobProgressStepper
                 jobId={activeJobId}
                 status={jobHook.status}
@@ -322,7 +322,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
                   <button
                     type="button"
                     onClick={() => handleOpenReport(jobHook.reportId!)}
-                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-xs cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                     <span>Navigate to Report Inspector</span>
@@ -357,7 +357,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
                   onClick={() => setMode("benchmark_alignment")}
                   className={`p-3.5 rounded-lg border text-left transition-all cursor-pointer ${
                     mode === "benchmark_alignment"
-                      ? "bg-blue-500/10 border-blue-500/70 shadow-xs ring-1 ring-blue-500/20"
+                      ? "bg-blue-500/10 border-blue-500/70 ring-1 ring-blue-500/20"
                       : "bg-app-subtle/50 hover:bg-app-subtle border-app-border"
                   }`}
                 >
@@ -381,7 +381,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
                   onClick={() => setMode("structuralist")}
                   className={`p-3.5 rounded-lg border text-left transition-all cursor-pointer ${
                     mode === "structuralist"
-                      ? "bg-emerald-500/10 border-emerald-500/70 shadow-xs ring-1 ring-emerald-500/20"
+                      ? "bg-emerald-500/10 border-emerald-500/70 ring-1 ring-emerald-500/20"
                       : "bg-app-subtle/50 hover:bg-app-subtle border-app-border"
                   }`}
                 >
@@ -405,7 +405,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
                   onClick={() => setMode("competency_retrieval")}
                   className={`p-3.5 rounded-lg border text-left transition-all cursor-pointer ${
                     mode === "competency_retrieval"
-                      ? "bg-purple-500/10 border-purple-500/70 shadow-xs ring-1 ring-purple-500/20"
+                      ? "bg-purple-500/10 border-purple-500/70 ring-1 ring-purple-500/20"
                       : "bg-app-subtle/50 hover:bg-app-subtle border-app-border"
                   }`}
                 >
@@ -429,7 +429,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
                   onClick={() => setMode("stress_test")}
                   className={`p-3.5 rounded-lg border text-left transition-all cursor-pointer ${
                     mode === "stress_test"
-                      ? "bg-amber-500/10 border-amber-500/70 shadow-xs ring-1 ring-amber-500/20"
+                      ? "bg-amber-500/10 border-amber-500/70 ring-1 ring-amber-500/20"
                       : "bg-app-subtle/50 hover:bg-app-subtle border-app-border"
                   }`}
                 >
@@ -555,7 +555,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
                     onClick={() => setModelSource("inherit")}
                     className={`h-6 px-3 rounded text-[11px] transition-all cursor-pointer ${
                       modelSource === "inherit"
-                        ? "bg-app-surface font-semibold text-app-heading shadow-xs border border-app-border/80"
+                        ? "bg-app-surface font-semibold text-app-heading border border-app-border/80"
                         : "text-app-muted hover:text-app-heading hover:bg-app-hover/50"
                     }`}
                   >
@@ -566,7 +566,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
                     onClick={() => setModelSource("custom")}
                     className={`h-6 px-3 rounded text-[11px] transition-all cursor-pointer ${
                       modelSource === "custom"
-                        ? "bg-app-surface font-semibold text-app-heading shadow-xs border border-app-border/80"
+                        ? "bg-app-surface font-semibold text-app-heading border border-app-border/80"
                         : "text-app-muted hover:text-app-heading hover:bg-app-hover/50"
                     }`}
                   >
@@ -576,11 +576,11 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
               </div>
 
               {modelSource === "inherit" ? (
-                <div className="p-3.5 rounded-lg border border-app-border/80 bg-app-subtle/30 flex items-center justify-between gap-3">
+                <div className="p-3.5 rounded bg-app-subtle/30 border-l-2 border-blue-500 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <Brain className="w-4 h-4 text-blue-500 shrink-0" />
                     <div>
-                      <h5 className="font-semibold text-xs text-app-heading">
+                      <h5 className="font-semibold text-xs text-app-heading font-sans">
                         Inherited from Target Run {selectedRun ? `(${selectedRun.run_id})` : ""}
                       </h5>
                       <div className="flex items-center gap-3 mt-1 text-[11px] font-mono text-app-muted flex-wrap">
@@ -818,11 +818,11 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
             </div>
 
             {/* 5. Downstream Competency Retrieval Notice Card */}
-            <div className="p-3.5 rounded-lg border border-app-border/80 bg-app-subtle/30 flex items-center justify-between gap-3">
+            <div className="p-3.5 rounded bg-app-subtle/30 border-l-2 border-blue-500 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <Activity className="w-4 h-4 text-blue-500 shrink-0" />
                 <div>
-                  <h5 className="font-semibold text-xs text-app-heading">
+                  <h5 className="font-semibold text-xs text-app-heading font-sans">
                     Downstream Competency Query Retrieval Scoring
                   </h5>
                   <p className="text-[11px] text-app-muted mt-0.5">
@@ -838,7 +838,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
                   onChange={(e) => setEvaluateRetrieval(e.target.checked)}
                   className="w-4 h-4 rounded border-app-border accent-blue-600 cursor-pointer"
                 />
-                <span className="text-xs font-medium text-app-heading">Enable</span>
+                <span className="text-xs font-medium text-app-heading font-sans">Enable</span>
               </label>
             </div>
 
@@ -882,7 +882,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
                           onClick={() => setStrategy(strat)}
                           className={`h-6 px-3 rounded text-[11px] transition-all cursor-pointer ${
                             strategy === strat
-                              ? "bg-app-surface font-semibold text-app-heading shadow-xs border border-app-border/80"
+                              ? "bg-app-surface font-semibold text-app-heading border border-app-border/80"
                               : "text-app-muted hover:text-app-heading hover:bg-app-hover/50"
                           }`}
                         >
@@ -985,7 +985,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
                   type="button"
                   onClick={handleExecute}
                   disabled={isSubmitting || !runId.trim()}
-                  className="flex items-center gap-2 px-5 py-2 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-xs transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-5 py-2 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />

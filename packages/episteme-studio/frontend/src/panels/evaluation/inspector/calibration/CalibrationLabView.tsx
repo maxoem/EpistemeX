@@ -302,58 +302,35 @@ export const CalibrationLabView: React.FC<CalibrationLabViewProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto bg-app-bg p-4 space-y-4 select-none">
-      {/* 1. Calibration Lab KPI Header */}
-      <div className="p-3.5 rounded-lg bg-app-surface border border-app-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-xs font-semibold text-app-heading">
-                Confidence Calibration &amp; Uncertainty Diagnostics
-              </h3>
-              {renderEceBadge()}
-            </div>
-            <p className="text-[11px] text-app-muted mt-0.5">
-              Assesses alignment between extraction probability distributions and true empirical accuracy
-            </p>
-          </div>
+      {/* 1. Calibration Lab KPI Header (Streamlined compact bar) */}
+      <div className="px-3.5 py-2 rounded-md bg-app-surface border border-app-border flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-2.5">
+          <Sparkles className="w-4 h-4 text-blue-500 shrink-0" />
+          <h3 className="text-xs font-semibold text-app-heading font-sans">
+            Confidence Calibration &amp; Uncertainty Diagnostics
+          </h3>
+          {renderEceBadge()}
         </div>
 
         {/* Telemetry Strip with Tabular Numerals */}
-        <div className="flex items-center gap-4 text-xs font-mono tabular-nums shrink-0">
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] uppercase font-sans text-app-muted font-semibold">
-              Expected Cal. Error (ECE)
-            </span>
+        <div className="flex items-center gap-3 text-xs font-mono tabular-nums shrink-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-app-muted font-sans font-medium">ECE:</span>
             <span className="text-xs font-semibold text-app-text">{ece.toFixed(4)}</span>
           </div>
-
-          <div className="h-6 w-px bg-app-border" />
-
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] uppercase font-sans text-app-muted font-semibold">
-              Maximum Cal. Error (MCE)
-            </span>
+          <div className="h-4 w-px bg-app-border" />
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-app-muted font-sans font-medium">MCE:</span>
             <span className="text-xs font-semibold text-amber-500">{mce.toFixed(4)}</span>
           </div>
-
-          <div className="h-6 w-px bg-app-border" />
-
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] uppercase font-sans text-app-muted font-semibold">
-              Brier Score
-            </span>
+          <div className="h-4 w-px bg-app-border" />
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-app-muted font-sans font-medium">Brier:</span>
             <span className="text-xs font-semibold text-app-text">{brier.toFixed(4)}</span>
           </div>
-
-          <div className="h-6 w-px bg-app-border" />
-
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] uppercase font-sans text-app-muted font-semibold">
-              Sample Count
-            </span>
+          <div className="h-4 w-px bg-app-border" />
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-app-muted font-sans font-medium">Samples:</span>
             <span className="text-xs font-semibold text-app-text">{sampleCount}</span>
           </div>
         </div>

@@ -81,13 +81,13 @@ export const OverconfidenceTable: React.FC<OverconfidenceTableProps> = ({
       {/* Table Container */}
       <div className="flex-1 overflow-y-auto min-h-0">
         <table className="w-full text-left text-xs border-collapse">
-          <thead className="bg-app-bg text-[10px] text-app-muted uppercase font-semibold sticky top-0 border-b border-app-border/80 tracking-wider">
-            <tr>
-              <th className="py-2 px-3">Assertion ID</th>
-              <th className="py-2 px-2 text-right">Conf</th>
-              <th className="py-2 px-2">Type</th>
-              <th className="py-2 px-3">Descriptor</th>
-              <th className="py-2 px-2 text-center">Status</th>
+          <thead className="sticky top-0 bg-app-surface border-b border-app-border text-[11px] text-app-muted font-medium select-none z-10">
+            <tr className="h-8">
+              <th className="px-3">Assertion ID</th>
+              <th className="px-2 text-right">Conf</th>
+              <th className="px-2">Type</th>
+              <th className="px-3">Descriptor</th>
+              <th className="px-2 text-center">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-app-border/40 font-mono text-[11px]">
@@ -105,9 +105,9 @@ export const OverconfidenceTable: React.FC<OverconfidenceTableProps> = ({
                   <tr
                     key={item.assertion_id}
                     onClick={() => setSelectedId(item.assertion_id)}
-                    className={`cursor-pointer transition-colors ${
+                    className={`h-10 cursor-pointer transition-colors ${
                       isSelected
-                        ? "bg-rose-500/10 text-app-text font-semibold"
+                        ? "border-l-2 border-rose-500 bg-rose-500/10 text-app-heading font-medium"
                         : "hover:bg-app-subtle text-app-muted hover:text-app-text"
                     }`}
                   >
@@ -148,7 +148,7 @@ export const OverconfidenceTable: React.FC<OverconfidenceTableProps> = ({
             </span>
           </div>
 
-          <div className="p-2.5 rounded bg-app-surface border border-app-border/80 font-mono text-xs text-app-text">
+          <div className="py-2 px-3 rounded-md bg-app-surface border border-app-border font-mono text-xs text-app-text">
             {selectedItem.descriptor}
           </div>
 
@@ -157,9 +157,9 @@ export const OverconfidenceTable: React.FC<OverconfidenceTableProps> = ({
               <span className="text-[10px] text-app-muted uppercase font-semibold">
                 Source Context / Text Grounding:
               </span>
-              <p className="text-xs text-app-muted italic bg-app-surface/60 p-2 rounded border border-app-border/40 font-serif leading-relaxed">
+              <blockquote className="text-xs text-app-muted italic bg-app-surface/60 p-2.5 rounded border-l-2 border-blue-500 font-serif leading-relaxed">
                 &ldquo;{selectedItem.evidence_text}&rdquo;
-              </p>
+              </blockquote>
             </div>
           )}
 
@@ -168,9 +168,9 @@ export const OverconfidenceTable: React.FC<OverconfidenceTableProps> = ({
               <span className="text-[10px] text-app-muted uppercase font-semibold">
                 Failure Mode Rationale:
               </span>
-              <p className="text-xs text-rose-600 dark:text-rose-400 bg-rose-500/10 p-2 rounded border border-rose-500/25 leading-relaxed font-sans">
+              <div className="text-xs text-rose-600 dark:text-rose-400 bg-rose-500/10 p-2.5 rounded border-l-2 border-rose-500 leading-relaxed font-sans">
                 {selectedItem.rationale}
-              </p>
+              </div>
             </div>
           )}
 

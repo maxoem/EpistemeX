@@ -212,77 +212,81 @@ export const PreFlightLinterRail: React.FC<PreFlightLinterRailProps> = ({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5 text-xs">
-            {/* Strict DAG Acyclicity */}
-            <div className="p-2 rounded bg-app-surface border border-app-border flex items-center justify-between">
-              <div className="flex flex-col">
-                <span className="text-[11px] font-medium text-app-heading">DAG Acyclicity</span>
-                <span className="text-[10px] text-app-muted">Strict No-Cycle</span>
+          <div className="border border-app-border rounded-md overflow-hidden bg-app-surface/50 divide-y divide-app-border text-xs">
+            <div className="grid grid-cols-2 divide-x divide-app-border">
+              {/* Strict DAG Acyclicity */}
+              <div className="p-2 flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-medium text-app-heading">DAG Acyclicity</span>
+                  <span className="text-[10px] text-app-muted">Strict No-Cycle</span>
+                </div>
+                {validationResult?.is_dag ? (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
+                    <CheckCircle2 className="w-3 h-3" /> PASS
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-rose-500 font-mono">
+                    <AlertCircle className="w-3 h-3" /> FAIL
+                  </span>
+                )}
               </div>
-              {validationResult?.is_dag ? (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
-                  <CheckCircle2 className="w-3 h-3" /> PASS
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-rose-500 font-mono">
-                  <AlertCircle className="w-3 h-3" /> FAIL
-                </span>
-              )}
+
+              {/* Root Element Conformity B(TN) = {T0} */}
+              <div className="p-2 flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-medium text-app-heading">Root Conformity</span>
+                  <span className="text-[10px] font-mono text-app-muted truncate max-w-[80px]">
+                    {validationResult?.root_element || "B(TN)={T₀}"}
+                  </span>
+                </div>
+                {validationResult?.root_element ? (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
+                    <CheckCircle2 className="w-3 h-3" /> PASS
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-500 font-mono">
+                    <AlertTriangle className="w-3 h-3" /> WARN
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Root Element Conformity B(TN) = {T0} */}
-            <div className="p-2 rounded bg-app-surface border border-app-border flex items-center justify-between">
-              <div className="flex flex-col">
-                <span className="text-[11px] font-medium text-app-heading">Root Conformity</span>
-                <span className="text-[10px] font-mono text-app-muted truncate max-w-[80px]">
-                  {validationResult?.root_element || "B(TN)={T₀}"}
-                </span>
+            <div className="grid grid-cols-2 divide-x divide-app-border">
+              {/* Dangling Edges Check */}
+              <div className="p-2 flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-medium text-app-heading">Dangling Edges</span>
+                  <span className="text-[10px] text-app-muted">No Orphan Preds</span>
+                </div>
+                {validationResult &&
+                !validationResult.issues.some((i) => i.rule_id === "DANGLING_EDGE") ? (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
+                    <CheckCircle2 className="w-3 h-3" /> PASS
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-rose-500 font-mono">
+                    <AlertCircle className="w-3 h-3" /> FAIL
+                  </span>
+                )}
               </div>
-              {validationResult?.root_element ? (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
-                  <CheckCircle2 className="w-3 h-3" /> PASS
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-500 font-mono">
-                  <AlertTriangle className="w-3 h-3" /> WARN
-                </span>
-              )}
-            </div>
 
-            {/* Dangling Edges Check */}
-            <div className="p-2 rounded bg-app-surface border border-app-border flex items-center justify-between">
-              <div className="flex flex-col">
-                <span className="text-[11px] font-medium text-app-heading">Dangling Edges</span>
-                <span className="text-[10px] text-app-muted">No Orphan Preds</span>
+              {/* Grounding Integrity */}
+              <div className="p-2 flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-medium text-app-heading">ADU Grounding</span>
+                  <span className="text-[10px] text-app-muted">PDF BBox Ratio</span>
+                </div>
+                {validationResult &&
+                !validationResult.issues.some((i) => i.rule_id === "WEAK_GROUNDING") ? (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
+                    <CheckCircle2 className="w-3 h-3" /> PASS
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-500 font-mono">
+                    <AlertTriangle className="w-3 h-3" /> WARN
+                  </span>
+                )}
               </div>
-              {validationResult &&
-              !validationResult.issues.some((i) => i.rule_id === "DANGLING_EDGE") ? (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
-                  <CheckCircle2 className="w-3 h-3" /> PASS
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-rose-500 font-mono">
-                  <AlertCircle className="w-3 h-3" /> FAIL
-                </span>
-              )}
-            </div>
-
-            {/* Grounding Integrity */}
-            <div className="p-2 rounded bg-app-surface border border-app-border flex items-center justify-between">
-              <div className="flex flex-col">
-                <span className="text-[11px] font-medium text-app-heading">ADU Grounding</span>
-                <span className="text-[10px] text-app-muted">PDF BBox Ratio</span>
-              </div>
-              {validationResult &&
-              !validationResult.issues.some((i) => i.rule_id === "WEAK_GROUNDING") ? (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
-                  <CheckCircle2 className="w-3 h-3" /> PASS
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-500 font-mono">
-                  <AlertTriangle className="w-3 h-3" /> WARN
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -368,7 +372,7 @@ export const PreFlightLinterRail: React.FC<PreFlightLinterRailProps> = ({
             >
               <Copy className="w-3.5 h-3.5" />
               {copyFeedback && (
-                <span className="absolute -top-7 right-0 bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded shadow-xs animate-in fade-in">
+                <span className="absolute -top-7 right-0 bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded border border-blue-400/30 animate-in fade-in">
                   Copied!
                 </span>
               )}

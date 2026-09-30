@@ -234,12 +234,12 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
         {/* Right: Layer Toggles & Zoom Controls */}
         <div className="flex items-center gap-3 text-xs">
           {/* Layer Visibility Toggles */}
-          <div className="flex items-center gap-1 bg-app-subtle p-0.5 rounded border border-app-border/60">
+          <div className="flex items-center gap-1 bg-app-bg dark:bg-[#111827] p-0.5 rounded border border-app-border/60">
             <button
               onClick={() => setShowPredictedBBox(!showPredictedBBox)}
-              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
                 showPredictedBBox
-                  ? "bg-blue-600 text-white shadow-2xs"
+                  ? "bg-blue-600 text-white font-semibold"
                   : "text-app-muted hover:text-app-text"
               }`}
               title="Toggle Predicted Bounding Box"
@@ -248,9 +248,9 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
             </button>
             <button
               onClick={() => setShowReferenceBBox(!showReferenceBBox)}
-              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
                 showReferenceBBox
-                  ? "bg-emerald-600 text-white shadow-2xs"
+                  ? "bg-emerald-600 text-white font-semibold"
                   : "text-app-muted hover:text-app-text"
               }`}
               title="Toggle Gold Reference Bounding Box"
@@ -259,9 +259,9 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
             </button>
             <button
               onClick={() => setShowSplines(!showSplines)}
-              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
                 showSplines
-                  ? "bg-amber-600 text-white shadow-2xs"
+                  ? "bg-amber-600 text-white font-semibold"
                   : "text-app-muted hover:text-app-text"
               }`}
               title="Toggle Multi-Page Spline Connectors"
@@ -273,12 +273,12 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
           <div className="h-4 w-px bg-app-border" />
 
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 bg-app-subtle p-0.5 rounded border border-app-border/60 text-[10px]">
+          <div className="flex items-center gap-1 bg-app-bg dark:bg-[#111827] p-0.5 rounded border border-app-border/60 text-[10px]">
             <button
               onClick={() => setViewMode("continuous")}
-              className={`px-2 py-0.5 rounded font-medium transition-colors ${
+              className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
                 viewMode === "continuous"
-                  ? "bg-app-surface text-app-text shadow-2xs"
+                  ? "bg-app-surface text-app-heading font-semibold border border-app-border/80"
                   : "text-app-muted hover:text-app-text"
               }`}
             >
@@ -286,9 +286,9 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
             </button>
             <button
               onClick={() => setViewMode("single")}
-              className={`px-2 py-0.5 rounded font-medium transition-colors ${
+              className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
                 viewMode === "single"
-                  ? "bg-app-surface text-app-text shadow-2xs"
+                  ? "bg-app-surface text-app-heading font-semibold border border-app-border/80"
                   : "text-app-muted hover:text-app-text"
               }`}
             >
@@ -433,10 +433,10 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
                 if (el) pageRefs.current.set(pageNum, el);
                 else pageRefs.current.delete(pageNum);
               }}
-              className={`relative bg-white dark:bg-[#151518] border rounded shadow-md transition-shadow duration-200 ${
+              className={`relative bg-white dark:bg-[#151518] border rounded transition-colors duration-200 ${
                 isTargetPage
-                  ? "border-blue-500/60 ring-2 ring-blue-500/10 shadow-blue-500/5"
-                  : "border-app-border/80 shadow-black/5"
+                  ? "border-blue-500 ring-1 ring-blue-500/20"
+                  : "border-app-border/80"
               }`}
               style={{
                 width: `${pageDim.width}px`,
@@ -583,7 +583,7 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
                       width={Math.max(160, predLocal.width)}
                       height={20}
                     >
-                      <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-t text-[9px] font-mono font-semibold bg-blue-600 text-white shadow-2xs">
+                      <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-t text-[9px] font-mono font-semibold bg-blue-600 text-white">
                         <Sparkles className="w-2.5 h-2.5" />
                         <span>PREDICTED ANCHOR</span>
                         {activeEvidence && (
@@ -617,7 +617,7 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
                       width={Math.max(140, refLocal.width)}
                       height={20}
                     >
-                      <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-b text-[9px] font-mono font-semibold bg-emerald-600 text-white shadow-2xs">
+                      <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-b text-[9px] font-mono font-semibold bg-emerald-600 text-white">
                         <BookOpen className="w-2.5 h-2.5" />
                         <span>GOLD REFERENCE</span>
                       </div>

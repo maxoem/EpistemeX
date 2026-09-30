@@ -197,7 +197,7 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
   return (
     <div className="flex-1 flex h-full overflow-hidden bg-app-bg select-none">
       {/* Left Diagnostic Pane (380px Fixed) */}
-      <div className="w-[380px] bg-app-surface border-r border-app-border flex flex-col h-full overflow-hidden shrink-0 z-10 shadow-lg">
+      <div className="w-[380px] bg-app-surface border-r border-app-border flex flex-col h-full overflow-hidden shrink-0 z-10">
         {/* Pane Header */}
         <div className="h-11 px-4 border-b border-app-border flex items-center justify-between bg-app-surface/90 shrink-0">
           <div className="flex items-center gap-2">
@@ -234,13 +234,13 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
         </div>
 
         {/* Diagnostic Scroll Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto divide-y divide-app-border">
           {evidenceData && (
             <>
-              {/* Card 1: Atom Details & Alignment Grounding IoU */}
-              <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-3">
+              {/* Section 1: Atom Details & Alignment Grounding IoU */}
+              <div className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-semibold text-app-muted tracking-wider">
+                  <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
                     Construct Grounding IoU
                   </span>
                   {evidenceData.grounding_passed ? (
@@ -257,7 +257,7 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-xs font-semibold text-app-heading">
+                  <div className="text-xs font-semibold text-app-heading font-sans">
                     {evidenceData.label}
                   </div>
                   <div className="text-[11px] font-mono text-app-muted break-all">
@@ -266,14 +266,14 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2 rounded bg-app-surface border border-app-border/60">
-                    <span className="text-[10px] text-app-muted block">AG_IoU Score</span>
+                  <div className="p-2.5 rounded bg-app-subtle/30 border border-app-border/60">
+                    <span className="text-[10px] text-app-muted block font-sans">AG_IoU Score</span>
                     <span className="font-mono tabular-nums font-semibold text-emerald-600 dark:text-emerald-400 text-sm">
                       {evidenceData.iou_score.toFixed(3)}
                     </span>
                   </div>
-                  <div className="p-2 rounded bg-app-surface border border-app-border/60">
-                    <span className="text-[10px] text-app-muted block">Anchor Page</span>
+                  <div className="p-2.5 rounded bg-app-subtle/30 border border-app-border/60">
+                    <span className="text-[10px] text-app-muted block font-sans">Anchor Page</span>
                     <span className="font-mono tabular-nums font-semibold text-app-text text-sm">
                       Page {evidenceData.predicted_anchor?.bbox?.page || selectedPage}
                     </span>
@@ -281,12 +281,12 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                 </div>
               </div>
 
-              {/* Card 2: Side-by-Side LaTeX Formula Verifier */}
+              {/* Section 2: Side-by-Side LaTeX Formula Verifier */}
               {(evidenceData.predicted_anchor?.formula_latex ||
                 evidenceData.reference_anchor?.formula_latex) && (
-                <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-3">
+                <div className="p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-semibold text-app-muted tracking-wider">
+                    <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
                       LaTeX Formula Verifier
                     </span>
                     {formulaCheck.isEquivalent ? (
@@ -311,7 +311,7 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                           onClick={() =>
                             handleCopyFormula(evidenceData.predicted_anchor!.formula_latex!)
                           }
-                          className="hover:text-app-text p-0.5"
+                          className="hover:text-app-text p-0.5 cursor-pointer"
                           title="Copy Extracted LaTeX"
                         >
                           {copiedFormula ? (
@@ -322,7 +322,7 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                         </button>
                       )}
                     </div>
-                    <div className="p-2.5 rounded bg-blue-500/5 border border-blue-500/20 text-center font-mono text-sm text-blue-600 dark:text-blue-400 select-all overflow-x-auto">
+                    <div className="p-2.5 rounded bg-blue-500/5 border border-blue-500/20 text-center font-mono text-xs text-blue-600 dark:text-blue-400 select-all overflow-x-auto">
                       {evidenceData.predicted_anchor?.formula_latex || "N/A"}
                     </div>
                   </div>
@@ -332,7 +332,7 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                     <div className="text-[10px] text-app-muted">
                       Gold Reference Equation:
                     </div>
-                    <div className="p-2.5 rounded bg-emerald-500/5 border border-emerald-500/20 text-center font-mono text-sm text-emerald-600 dark:text-emerald-400 select-all overflow-x-auto">
+                    <div className="p-2.5 rounded bg-emerald-500/5 border border-emerald-500/20 text-center font-mono text-xs text-emerald-600 dark:text-emerald-400 select-all overflow-x-auto">
                       {evidenceData.reference_anchor?.formula_latex || "N/A"}
                     </div>
                   </div>
@@ -345,9 +345,9 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                 </div>
               )}
 
-              {/* Card 3: Multi-Page Span Array Coordinates */}
-              <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-2">
-                <div className="text-[10px] uppercase font-semibold text-app-muted tracking-wider">
+              {/* Section 3: Multi-Page Span Array Coordinates */}
+              <div className="p-4 space-y-2">
+                <div className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
                   Multi-Page Span Array (Continuous Coordinates)
                 </div>
 
@@ -357,11 +357,11 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                     evidenceData.predicted_anchor.spans.map((span, idx) => (
                       <div
                         key={idx}
-                        className="p-1.5 rounded bg-app-surface border border-app-border/60 flex items-center justify-between text-[11px]"
+                        className="p-2 rounded bg-app-subtle/30 border border-app-border/60 flex items-center justify-between text-[11px]"
                       >
                         <span className="font-semibold text-app-text">Span {idx + 1}</span>
                         <span className="text-app-muted">Page {span.page}</span>
-                        <span className="text-blue-600 dark:text-blue-400">
+                        <span className="text-blue-600 dark:text-blue-400 font-mono">
                           [{span.bbox.map((v) => v.toFixed(2)).join(", ")}]
                         </span>
                         {span.is_continuation && (
@@ -372,12 +372,12 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                       </div>
                     ))
                   ) : evidenceData.predicted_anchor?.bbox ? (
-                    <div className="p-1.5 rounded bg-app-surface border border-app-border/60 flex items-center justify-between text-[11px]">
+                    <div className="p-2 rounded bg-app-subtle/30 border border-app-border/60 flex items-center justify-between text-[11px]">
                       <span className="font-semibold text-app-text">Primary BBox</span>
                       <span className="text-app-muted">
                         Page {evidenceData.predicted_anchor.bbox.page}
                       </span>
-                      <span className="text-blue-600 dark:text-blue-400">
+                      <span className="text-blue-600 dark:text-blue-400 font-mono">
                         [
                         {[
                           evidenceData.predicted_anchor.bbox.x0,
@@ -396,12 +396,12 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                 </div>
               </div>
 
-              {/* Card 4: Primary Source Passage Grounding Quote */}
-              <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-2">
-                <div className="text-[10px] uppercase font-semibold text-app-muted tracking-wider">
+              {/* Section 4: Primary Source Passage Grounding Quote */}
+              <div className="p-4 space-y-2">
+                <div className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
                   Verbatim Grounding Passage
                 </div>
-                <blockquote className="p-2.5 rounded bg-app-surface border-l-2 border-blue-500 text-[11px] font-serif italic text-app-text leading-relaxed">
+                <blockquote className="p-3 rounded bg-app-subtle/30 border-l-2 border-blue-500 text-[11px] font-serif italic text-app-text leading-relaxed">
                   "{evidenceData.predicted_anchor?.verbatim_text ||
                     evidenceData.reference_anchor?.verbatim_text ||
                     'Mutationem motus proportionalem esse vi motrici impressae...'}"
@@ -416,10 +416,10 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
               </div>
 
               {/* Action Buttons */}
-              <div className="space-y-2 pt-2">
+              <div className="p-4 pt-3">
                 <button
                   onClick={handleInspectOnCanvas}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-2xs"
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
                 >
                   <Layers className="w-3.5 h-3.5" />
                   <span>Inspect on Topological Canvas (Sub-View 3.1)</span>

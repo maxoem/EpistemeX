@@ -177,10 +177,8 @@ export const CascadingBourbakiGrid: React.FC = () => {
         predicted_count: 0,
         matched_count: 0,
         coverage: 0.0,
-        status: hasMpOmission ? "root_cause_omission" : "pass",
-        rationale: hasMpOmission
-          ? "Extraction failed to extract foundational conservation condition from Chapter II, §4."
-          : "Verified in primary source text.",
+        status: "root_cause_omission",
+        rationale: "Extraction failed to extract foundational conservation condition from Chapter II, §4.",
       },
       {
         id: "ax_03_inertial_frames",
@@ -219,10 +217,9 @@ export const CascadingBourbakiGrid: React.FC = () => {
         predicted_count: 0,
         matched_count: 0,
         coverage: 0.0,
-        status: hasMpOmission ? "cascade_masked_orphan" : "pass",
-        rationale: hasMpOmission
-          ? "Orphaned due to missing parent Axiom-02. Masked to prevent double-penalization."
-          : "Verified against Keplerian reduction.",
+        status: "cascade_masked_orphan",
+        rationale:
+          "Orphaned due to missing parent Axiom-02. Masked under Bourbaki cascade doctrine to prevent double-penalization.",
       },
       {
         id: "m_03_harmonic_spring",
@@ -302,10 +299,9 @@ export const CascadingBourbakiGrid: React.FC = () => {
         predicted_count: 0,
         matched_count: 0,
         coverage: 0.0,
-        status: hasMpOmission ? "cascade_masked_orphan" : "pass",
-        rationale: hasMpOmission
-          ? "Dependent on Sub-Model 02-A (Gravitation). Masked under Bourbaki cascade doctrine."
-          : "Verified against empirical tide observations.",
+        status: "cascade_masked_orphan",
+        rationale:
+          "Dependent on Sub-Model 02-A (Gravitation). Masked under Bourbaki cascade doctrine.",
       },
       {
         id: "i_03_terrestrial_free_fall",
@@ -494,14 +490,23 @@ export const CascadingBourbakiGrid: React.FC = () => {
                     </td>
 
                     <td className="py-2.5 px-4 text-center">
-                      {coveragePct >= 85 ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
+                      {summary.reference_count === 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">
+                          CONFORMANT
+                        </span>
+                      ) : coveragePct >= 85 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
                           <CheckCircle2 className="w-3 h-3" />
                           [PASS]
                         </span>
+                      ) : coveragePct > 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-amber-500/10 text-amber-500 border border-amber-500/30">
+                          PARTIAL
+                        </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-500 border border-blue-500/30">
-                          Active
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-500/10 text-rose-500 border border-rose-500/30">
+                          <XCircle className="w-3 h-3" />
+                          [FAIL]
                         </span>
                       )}
                     </td>
@@ -570,7 +575,7 @@ export const CascadingBourbakiGrid: React.FC = () => {
                                 title="Parent axiom failed in Mp. Dependent model masked under Bourbaki cascade doctrine to avoid duplicate penalization."
                                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-zinc-500/10 dark:bg-zinc-500/20 text-zinc-400 border border-zinc-500/30"
                               >
-                                [CASCADE_MASKED_ORPHAN]
+                                [CASCADE_MASKED]
                               </span>
                             ) : isOmission ? (
                               <span
@@ -578,12 +583,24 @@ export const CascadingBourbakiGrid: React.FC = () => {
                                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/10 text-rose-500 border border-rose-500/30"
                               >
                                 <XCircle className="w-3 h-3" />
-                                [ROOT_CAUSE_OMISSION]
+                                [ROOT_OMISSION]
                               </span>
-                            ) : (
+                            ) : el.coverage === 0 && el.reference_count > 0 ? (
+                              <span
+                                title="Unmatched reference axiom."
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-500/10 text-rose-500 border border-rose-500/30"
+                              >
+                                <XCircle className="w-3 h-3" />
+                                [MISSING]
+                              </span>
+                            ) : el.coverage >= 0.85 || (el.matched_count > 0 && el.coverage > 0) ? (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
                                 <CheckCircle2 className="w-3 h-3" />
                                 [PASS]
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-amber-500/10 text-amber-500 border border-amber-500/30">
+                                [PARTIAL]
                               </span>
                             )}
                           </td>

@@ -514,7 +514,7 @@ export const TopologicalCanvasView: React.FC = () => {
         </div>
 
         {/* Floating Bottom-Left Canvas Controls */}
-        <div className="absolute left-4 bottom-4 z-20 flex items-center gap-1.5 p-1.5 rounded-lg bg-app-surface/90 backdrop-blur-md border border-app-border shadow-md">
+        <div className="absolute left-4 bottom-4 z-20 flex items-center gap-1.5 p-1.5 rounded-lg bg-app-surface/90 backdrop-blur-md border border-app-border">
           <button
             onClick={handleFitView}
             className="p-1.5 rounded hover:bg-app-subtle text-app-muted hover:text-app-text transition-colors"
@@ -552,7 +552,7 @@ export const TopologicalCanvasView: React.FC = () => {
 
         {/* Cycle Isolation Notice Bar if active */}
         {cycleHighlightNodeIds && cycleHighlightNodeIds.length > 0 && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-md bg-rose-600/90 text-white shadow-lg backdrop-blur-xs text-xs font-medium animate-pulse">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-md bg-rose-600/90 text-white border border-rose-500/50 backdrop-blur-xs text-xs font-medium animate-pulse">
             <span>Cycle Path Isolated: {cycleHighlightNodeIds.join(" → ")}</span>
             <button
               onClick={() => useEvaluationStore.getState().setCycleHighlightNodeIds(null)}

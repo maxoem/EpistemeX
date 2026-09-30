@@ -132,7 +132,7 @@ export const ActionableHookPill: React.FC<ActionableHookPillProps> = ({
       type="button"
       onClick={handleClick}
       title={config.title}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium border transition-colors cursor-pointer shadow-2xs ${config.bg} ${className}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium border transition-colors cursor-pointer ${config.bg} ${className}`}
     >
       <Icon className="w-3.5 h-3.5 shrink-0" />
       <span>{displayLabel}</span>

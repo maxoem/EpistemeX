@@ -280,7 +280,7 @@ export const LeaderboardPage: React.FC = () => {
           {/* Launch Longitudinal Trajectory Action Trigger */}
           <button
             onClick={() => setActiveMode("longitudinal")}
-            className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-app-surface hover:bg-app-subtle text-app-text border border-app-border transition-colors shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-app-surface hover:bg-app-subtle text-app-text border border-app-border transition-colors cursor-pointer"
             title="Launch diachronic multi-run Lakatosian degeneration analysis"
           >
             <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
@@ -290,7 +290,7 @@ export const LeaderboardPage: React.FC = () => {
           {/* Fast Evaluate Run Modal Trigger */}
           <button
             onClick={() => setIsEvaluateModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs"
+            className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
           >
             <Play className="w-3 h-3 fill-current" />
             <span>+ Fast Evaluate Run</span>

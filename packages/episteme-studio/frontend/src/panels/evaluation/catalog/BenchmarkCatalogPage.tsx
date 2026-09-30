@@ -97,14 +97,14 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={handleClone}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-app-surface text-app-text border border-app-border hover:bg-app-subtle transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-app-surface text-app-text border border-app-border hover:bg-app-subtle transition-colors cursor-pointer"
                 >
                   <Copy className="w-3.5 h-3.5 text-app-muted" />
                   <span>Clone Benchmark</span>
                 </button>
                 <button
                   onClick={() => setIsPromoteModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white transition-colors shadow-xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white transition-colors cursor-pointer"
                 >
                   <Award className="w-3.5 h-3.5" />
                   <span>+ Promote from Run</span>
@@ -120,19 +120,19 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
             )}
 
             {/* Structural Invariants Summary */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-app-muted">
-                  Bourbaki Structural Invariants
+                <h3 className="text-xs font-semibold text-app-muted">
+                  Bourbaki structural invariants
                 </h3>
                 <span className="text-[11px] font-mono text-app-muted">
                   Formal Quintuple ⟨Mp, M, Mpp, C, I⟩
                 </span>
               </div>
 
-              <div className="grid grid-cols-5 gap-2.5 text-xs">
+              <div className="border border-app-border rounded-md overflow-hidden bg-app-surface/40 divide-x divide-app-border grid grid-cols-5 text-xs">
                 {/* Mp: Potential Models */}
-                <div className="p-3 rounded bg-app-surface border border-app-border space-y-1">
+                <div className="p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-semibold text-blue-500">Mp</span>
                     <span className="text-[10px] text-app-muted">Potential Models</span>
@@ -146,7 +146,7 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
                 </div>
 
                 {/* M: Actual Models */}
-                <div className="p-3 rounded bg-app-surface border border-app-border space-y-1">
+                <div className="p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-semibold text-emerald-500">M</span>
                     <span className="text-[10px] text-app-muted">Actual Models</span>
@@ -160,7 +160,7 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
                 </div>
 
                 {/* Mpp: Partial Potential */}
-                <div className="p-3 rounded bg-app-surface border border-app-border space-y-1">
+                <div className="p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-semibold text-purple-500">Mpp</span>
                     <span className="text-[10px] text-app-muted">Partial Pot.</span>
@@ -174,7 +174,7 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
                 </div>
 
                 {/* C: Constraints */}
-                <div className="p-3 rounded bg-app-surface border border-app-border space-y-1">
+                <div className="p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-semibold text-amber-500">C</span>
                     <span className="text-[10px] text-app-muted">Constraints</span>
@@ -188,7 +188,7 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
                 </div>
 
                 {/* I: Intended Applications */}
-                <div className="p-3 rounded bg-app-surface border border-app-border space-y-1">
+                <div className="p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-semibold text-rose-500">I</span>
                     <span className="text-[10px] text-app-muted">Intended App.</span>
@@ -204,12 +204,12 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
             </div>
 
             {/* Poset Specialization Hierarchy SVG Preview */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Network className="w-4 h-4 text-blue-500" />
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-app-heading">
-                    Poset Specialization Graph Preview
+                  <h3 className="text-xs font-semibold text-app-heading">
+                    Poset specialization graph preview
                   </h3>
                 </div>
                 <span className="text-[11px] font-mono text-app-muted">
@@ -217,7 +217,7 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
                 </span>
               </div>
 
-              <div className="p-4 rounded-lg bg-app-surface border border-app-border flex flex-col items-center justify-center min-h-[190px]">
+              <div className="p-4 rounded-md bg-app-surface/30 border border-app-border flex flex-col items-center justify-center min-h-[190px]">
                 <svg
                   className="w-full max-w-xl h-36 overflow-visible select-none"
                   viewBox="0 0 540 140"
@@ -412,25 +412,25 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
 
             {/* Primary Source Anchor & Provenance */}
             <div className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-app-muted">
-                Primary Source Grounding Provenance
+              <h3 className="text-xs font-semibold text-app-muted">
+                Primary source grounding provenance
               </h3>
-              <div className="p-3.5 rounded bg-app-surface border border-app-border space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-app-muted">Bound Treatise Document:</span>
+              <div className="rounded-md bg-app-surface/40 border border-app-border divide-y divide-app-border text-xs">
+                <div className="p-3 flex items-center justify-between">
+                  <span className="text-app-muted">Bound Treatise Document</span>
                   <span className="font-mono text-app-text font-medium">
                     doc_carnap_aufbau_de_1928.pdf (240 pp.)
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-app-muted">Gold Standard Path:</span>
+                <div className="p-3 flex items-center justify-between">
+                  <span className="text-app-muted">Gold Standard Path</span>
                   <span className="font-mono text-app-muted text-[11px] truncate max-w-md">
                     {activeBenchmark.gold_standard_path}
                   </span>
                 </div>
                 {activeBenchmark.queries_path && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-app-muted">Competency Queries Path:</span>
+                  <div className="p-3 flex items-center justify-between">
+                    <span className="text-app-muted">Competency Queries Path</span>
                     <span className="font-mono text-app-muted text-[11px] truncate max-w-md">
                       {activeBenchmark.queries_path}
                     </span>

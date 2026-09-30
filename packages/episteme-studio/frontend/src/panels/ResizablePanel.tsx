@@ -12,6 +12,8 @@ interface ResizablePanelProps {
   collapseThreshold?: number;
   showFooter?: boolean;
   className?: string;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export const ResizablePanel: React.FC<ResizablePanelProps> = ({
@@ -25,10 +27,12 @@ export const ResizablePanel: React.FC<ResizablePanelProps> = ({
   collapseThreshold = 140,
   showFooter = false,
   className = "",
+  collapsed: externalCollapsed,
+  onToggleCollapse,
 }) => {
   const isLeft = side === "left";
 
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+  const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
     if (!collapsible || !storageKey) return false;
     try {
       const savedCollapsed = localStorage.getItem(`${storageKey}-collapsed`);
@@ -40,6 +44,27 @@ export const ResizablePanel: React.FC<ResizablePanelProps> = ({
     }
     return false;
   });
+
+  const isCollapsed = externalCollapsed !== undefined ? externalCollapsed : internalCollapsed;
+  const setIsCollapsed = useCallback(
+    (valOrFn: boolean | ((prev: boolean) => boolean)) => {
+      setInternalCollapsed((prev) => {
+        const next = typeof valOrFn === "function" ? valOrFn(prev) : valOrFn;
+        if (storageKey) {
+          try {
+            localStorage.setItem(`${storageKey}-collapsed`, String(next));
+          } catch {
+            // ignore
+          }
+        }
+        return next;
+      });
+      if (onToggleCollapse) {
+        onToggleCollapse();
+      }
+    },
+    [storageKey, onToggleCollapse]
+  );
 
   const [width, setWidth] = useState<number>(() => {
     if (!storageKey) return defaultWidth;
@@ -79,21 +104,18 @@ export const ResizablePanel: React.FC<ResizablePanelProps> = ({
 
   const toggleCollapse = useCallback(() => {
     if (!collapsible) return;
+    if (onToggleCollapse) {
+      onToggleCollapse();
+      return;
+    }
     setIsCollapsed((prev) => {
       const next = !prev;
-      try {
-        if (storageKey) {
-          localStorage.setItem(`${storageKey}-collapsed`, String(next));
-        }
-      } catch {
-        // ignore
-      }
       if (!next && width < minWidth) {
         setWidth(lastExpandedWidthRef.current || defaultWidth);
       }
       return next;
     });
-  }, [collapsible, storageKey, width, minWidth, defaultWidth]);
+  }, [collapsible, onToggleCollapse, setIsCollapsed, width, minWidth, defaultWidth]);
 
   useEffect(() => {
     if (!isDragging) return;

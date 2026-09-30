@@ -121,8 +121,8 @@ export const ExecuteEvaluationModal: React.FC<ExecuteEvaluationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-      <div className="bg-app-surface border border-app-border rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+      <div className="bg-app-surface border border-app-border rounded-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
         <div className="px-5 py-3.5 border-b border-app-border flex items-center justify-between shrink-0 bg-app-subtle">
           <div className="flex items-center gap-2.5">
@@ -197,9 +197,9 @@ export const ExecuteEvaluationModal: React.FC<ExecuteEvaluationModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setMode("benchmark_alignment")}
-                    className={`p-3 rounded-lg border text-left transition-all ${
+                    className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
                       mode === "benchmark_alignment"
-                        ? "bg-blue-500/10 border-blue-500/60 shadow-xs"
+                        ? "bg-blue-500/10 border-blue-500/60 ring-1 ring-blue-500/20"
                         : "bg-app-subtle border-app-border hover:border-app-border/80"
                     }`}
                   >
@@ -215,9 +215,9 @@ export const ExecuteEvaluationModal: React.FC<ExecuteEvaluationModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setMode("structuralist")}
-                    className={`p-3 rounded-lg border text-left transition-all ${
+                    className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
                       mode === "structuralist"
-                        ? "bg-blue-500/10 border-blue-500/60 shadow-xs"
+                        ? "bg-blue-500/10 border-blue-500/60 ring-1 ring-blue-500/20"
                         : "bg-app-subtle border-app-border hover:border-app-border/80"
                     }`}
                   >
@@ -233,9 +233,9 @@ export const ExecuteEvaluationModal: React.FC<ExecuteEvaluationModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setMode("competency_retrieval")}
-                    className={`p-3 rounded-lg border text-left transition-all ${
+                    className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
                       mode === "competency_retrieval"
-                        ? "bg-blue-500/10 border-blue-500/60 shadow-xs"
+                        ? "bg-blue-500/10 border-blue-500/60 ring-1 ring-blue-500/20"
                         : "bg-app-subtle border-app-border hover:border-app-border/80"
                     }`}
                   >
@@ -251,9 +251,9 @@ export const ExecuteEvaluationModal: React.FC<ExecuteEvaluationModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setMode("stress_test")}
-                    className={`p-3 rounded-lg border text-left transition-all ${
+                    className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
                       mode === "stress_test"
-                        ? "bg-blue-500/10 border-blue-500/60 shadow-xs"
+                        ? "bg-blue-500/10 border-blue-500/60 ring-1 ring-blue-500/20"
                         : "bg-app-subtle border-app-border hover:border-app-border/80"
                     }`}
                   >
@@ -422,7 +422,7 @@ export const ExecuteEvaluationModal: React.FC<ExecuteEvaluationModalProps> = ({
               type="button"
               onClick={handleExecute}
               disabled={isSubmitting || !runId.trim()}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-xs transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
               <span>{isSubmitting ? "Dispatching..." : "Execute Evaluation"}</span>

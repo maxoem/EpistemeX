@@ -120,14 +120,14 @@ export const ThresholdOptimizerBar: React.FC<ThresholdOptimizerBarProps> = ({
           step={0.01}
           value={threshold}
           onChange={(e) => setThreshold(parseFloat(e.target.value))}
-          className="w-full accent-blue-600 h-1.5 bg-app-bg rounded-lg cursor-pointer"
+          className="w-full precision-slider"
         />
 
-        <div className="flex justify-between text-[10px] font-mono text-app-muted">
-          <span>0.50 (Permissive)</span>
-          <span>0.75</span>
-          <span>0.85</span>
-          <span>0.99 (Ultra-Conservative)</span>
+        <div className="relative h-4 text-[10px] font-mono text-app-muted">
+          <span className="absolute left-0">0.50 (Permissive)</span>
+          <span className="absolute -translate-x-1/2" style={{ left: "51.0%" }}>0.75</span>
+          <span className="absolute -translate-x-1/2" style={{ left: "71.4%" }}>0.85</span>
+          <span className="absolute right-0">0.99 (Ultra-Conservative)</span>
         </div>
       </div>
 
@@ -138,10 +138,10 @@ export const ThresholdOptimizerBar: React.FC<ThresholdOptimizerBarProps> = ({
             Projected Precision
           </span>
           <div className="flex items-baseline justify-between mt-1">
-            <span className="font-mono text-xs font-semibold tabular-nums text-emerald-500">
+            <span className="font-mono text-xs font-semibold tabular-nums text-app-text">
               {projections.precision.toFixed(1)}%
             </span>
-            <span className="text-[10px] font-mono text-app-muted">
+            <span className={`text-[10px] font-mono ${projections.precision >= baselinePrecision * 100 ? "text-emerald-500" : "text-rose-500"}`}>
               ({projections.precision >= baselinePrecision * 100 ? "+" : ""}
               {(projections.precision - baselinePrecision * 100).toFixed(1)}%)
             </span>
@@ -153,10 +153,10 @@ export const ThresholdOptimizerBar: React.FC<ThresholdOptimizerBarProps> = ({
             Projected Recall
           </span>
           <div className="flex items-baseline justify-between mt-1">
-            <span className="font-mono text-xs font-semibold tabular-nums text-blue-500">
+            <span className="font-mono text-xs font-semibold tabular-nums text-app-text">
               {projections.recall.toFixed(1)}%
             </span>
-            <span className="text-[10px] font-mono text-app-muted">
+            <span className={`text-[10px] font-mono ${projections.recall >= baselineRecall * 100 ? "text-emerald-500" : "text-amber-500"}`}>
               ({projections.recall >= baselineRecall * 100 ? "+" : ""}
               {(projections.recall - baselineRecall * 100).toFixed(1)}%)
             </span>
@@ -198,7 +198,7 @@ export const ThresholdOptimizerBar: React.FC<ThresholdOptimizerBarProps> = ({
           {onApplyThreshold && (
             <button
               onClick={() => onApplyThreshold(threshold)}
-              className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium transition-colors shadow-2xs"
+              className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium transition-colors cursor-pointer"
             >
               Apply τ
             </button>

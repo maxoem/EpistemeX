@@ -174,7 +174,7 @@ export const AmbiguousAliasDrawer: React.FC<AmbiguousAliasDrawerProps> = ({
   };
 
   return (
-    <div className="absolute right-0 top-0 bottom-0 w-[420px] bg-app-surface/98 backdrop-blur-md border-l border-app-border shadow-2xl z-30 flex flex-col select-none animate-in slide-in-from-right duration-200">
+    <div className="absolute right-0 top-0 bottom-0 w-[420px] bg-app-surface/98 backdrop-blur-md border-l border-app-border z-30 flex flex-col select-none animate-in slide-in-from-right duration-200">
       {/* Drawer Header */}
       <div className="h-12 px-4 border-b border-app-border flex items-center justify-between bg-app-surface shrink-0">
         <div className="flex items-center gap-2">
@@ -188,7 +188,7 @@ export const AmbiguousAliasDrawer: React.FC<AmbiguousAliasDrawerProps> = ({
         </div>
         <button
           onClick={() => setIsAmbiguousDrawerOpen(false)}
-          className="p-1 rounded text-app-muted hover:text-app-text hover:bg-app-subtle transition-colors"
+          className="p-1 rounded text-app-muted hover:text-app-text hover:bg-app-subtle transition-colors cursor-pointer"
           title="Close drawer"
         >
           <X className="w-4 h-4" />
@@ -208,7 +208,7 @@ export const AmbiguousAliasDrawer: React.FC<AmbiguousAliasDrawerProps> = ({
           <button
             onClick={handleApproveHighConfidence}
             disabled={pendingCount === 0}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium bg-violet-600 hover:bg-violet-700 text-white transition-colors disabled:opacity-50 shadow-2xs"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium bg-violet-600 hover:bg-violet-700 text-white transition-colors disabled:opacity-50 cursor-pointer"
           >
             <CheckCheck className="w-3.5 h-3.5" />
             <span>Approve All High-Conf (&ge; 0.85)</span>
@@ -217,21 +217,21 @@ export const AmbiguousAliasDrawer: React.FC<AmbiguousAliasDrawerProps> = ({
       </div>
 
       {/* Candidate List */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="flex-1 overflow-y-auto divide-y divide-app-border">
         {items.map((cand) => (
           <div
             key={cand.id}
-            className={`p-3 rounded-lg border transition-all space-y-2.5 ${
+            className={`p-4 transition-colors space-y-2.5 ${
               cand.decision === "approved"
-                ? "bg-emerald-500/5 border-emerald-500/30"
+                ? "bg-emerald-500/5 border-l-2 border-emerald-500"
                 : cand.decision === "rejected"
-                ? "bg-rose-500/5 border-rose-500/30"
-                : "bg-app-bg border-app-border hover:border-violet-500/40"
+                ? "bg-rose-500/5 border-l-2 border-rose-500"
+                : "bg-app-surface/30 hover:bg-app-subtle/50 border-l-2 border-transparent"
             }`}
           >
             {/* Top row: Status and Similarity Pill */}
             <div className="flex items-center justify-between text-xs">
-              <span className="font-mono text-[10px] text-app-muted px-1.5 py-0.2 rounded bg-app-surface border border-app-border">
+              <span className="font-mono text-[10px] text-app-muted px-1.5 py-0.2 rounded bg-app-subtle">
                 {cand.class_name}
               </span>
               <span className="font-mono text-[11px] tabular-nums font-semibold px-2 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
@@ -292,7 +292,7 @@ export const AmbiguousAliasDrawer: React.FC<AmbiguousAliasDrawerProps> = ({
                   </button>
                   <button
                     onClick={() => handleDecision(cand.id, "approved")}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-2xs"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer"
                   >
                     <Check className="w-3 h-3" />
                     <span>Accept Merge</span>

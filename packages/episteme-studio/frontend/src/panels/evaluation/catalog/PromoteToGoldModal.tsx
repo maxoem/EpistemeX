@@ -113,7 +113,7 @@ export const PromoteToGoldModal: React.FC<PromoteToGoldModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs select-none p-4">
-      <div className="w-full max-w-lg bg-app-surface border border-app-border rounded-lg shadow-2xl flex flex-col overflow-hidden text-app-text animate-in zoom-in-95 duration-150 font-sans">
+      <div className="w-full max-w-lg bg-app-surface border border-app-border rounded-lg flex flex-col overflow-hidden text-app-text animate-in zoom-in-95 duration-150 font-sans">
         {/* Header */}
         <div className="h-12 px-4 border-b border-app-border flex items-center justify-between shrink-0 bg-app-bg/50">
           <div className="flex items-center gap-2">
@@ -285,7 +285,7 @@ export const PromoteToGoldModal: React.FC<PromoteToGoldModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting || !benchmarkId || !benchmarkName}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50 transition-colors shadow-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50 transition-colors cursor-pointer"
             >
               <Award className="w-3.5 h-3.5" />
               <span>{isSubmitting ? "Promoting..." : "Freeze & Register Gold"}</span>

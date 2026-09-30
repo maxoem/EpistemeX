@@ -19,6 +19,8 @@ import {
   TrendingUp,
   TriangleAlert,
   XCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { useEvaluationStore } from "../../store/evaluationStore";
 import { ResizablePanel } from "../ResizablePanel";
@@ -56,6 +58,25 @@ export const EvaluationWorkspace: React.FC = () => {
   const [outcomeFilter, setOutcomeFilter] = useState<string>("all");
   const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("episteme-eval-left-sidebar-width-collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("episteme-eval-left-sidebar-width-collapsed", String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     fetchReports();
@@ -129,79 +150,93 @@ export const EvaluationWorkspace: React.FC = () => {
     <div className="flex flex-col h-full w-full bg-app-bg text-app-text select-none overflow-hidden font-sans">
       {/* 44px Fixed Contextual Action Bar */}
       <div className="h-11 px-4 border-b border-app-border bg-app-surface shrink-0 flex items-center justify-between text-xs">
-        {/* Mode Selector Tabs */}
-        <div className="flex items-center gap-1 bg-app-bg p-0.5 rounded-md border border-app-border">
-          <button
-            onClick={() => setActiveMode("catalog")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-              activeMode === "catalog"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "text-app-muted hover:text-app-text hover:bg-app-subtle"
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Benchmark Catalog</span>
-          </button>
-          <button
-            onClick={() => setActiveMode("leaderboard")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-              activeMode === "leaderboard"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "text-app-muted hover:text-app-text hover:bg-app-subtle"
-            }`}
-          >
-            <BarChart2 className="w-3.5 h-3.5" />
-            <span>Leaderboard Studio</span>
-          </button>
-          <button
-            onClick={() => setActiveMode("inspector")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-              activeMode === "inspector"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "text-app-muted hover:text-app-text hover:bg-app-subtle"
-            }`}
-          >
-            <Activity className="w-3.5 h-3.5" />
-            <span>Run Inspector</span>
-          </button>
-          <button
-            onClick={() => setActiveMode("longitudinal")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-              activeMode === "longitudinal"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "text-app-muted hover:text-app-text hover:bg-app-subtle"
-            }`}
-          >
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>Longitudinal Studio</span>
-          </button>
-          <button
-            onClick={() => setActiveMode("execute")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-              activeMode === "execute"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "text-app-muted hover:text-app-text hover:bg-app-subtle"
-            }`}
-          >
-            <Play className="w-3.5 h-3.5" />
-            <span>Execute Evaluation</span>
-          </button>
+        <div className="flex items-center gap-2">
+          {activeMode !== "leaderboard" &&
+            activeMode !== "longitudinal" &&
+            activeMode !== "execute" && (
+            <button
+              onClick={toggleSidebar}
+              className={`p-1.5 rounded-md border transition-colors cursor-pointer ${
+                isSidebarCollapsed
+                  ? "bg-blue-500/10 border-blue-500/30 text-blue-500 hover:bg-blue-500/20"
+                  : "bg-app-bg border-app-border text-app-muted hover:text-app-text hover:bg-app-subtle"
+              }`}
+              title={isSidebarCollapsed ? "Expand Runs Sidebar" : "Collapse Runs Sidebar to Focus"}
+              aria-label="Toggle sidebar"
+            >
+              {isSidebarCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-3.5 h-3.5" />}
+            </button>
+          )}
+
+          {/* Mode Selector Tabs */}
+          <div className="flex items-center gap-1 bg-app-bg dark:bg-[#111827] p-0.5 rounded-md border border-app-border">
+            <button
+              onClick={() => setActiveMode("catalog")}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                activeMode === "catalog"
+                  ? "bg-app-surface text-app-heading border border-app-border/80 font-semibold"
+                  : "text-app-muted hover:text-app-text hover:bg-app-subtle"
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Benchmark Catalog</span>
+            </button>
+            <button
+              onClick={() => setActiveMode("leaderboard")}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                activeMode === "leaderboard"
+                  ? "bg-app-surface text-app-heading border border-app-border/80 font-semibold"
+                  : "text-app-muted hover:text-app-text hover:bg-app-subtle"
+              }`}
+            >
+              <BarChart2 className="w-3.5 h-3.5" />
+              <span>Leaderboard Studio</span>
+            </button>
+            <button
+              onClick={() => setActiveMode("inspector")}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                activeMode === "inspector"
+                  ? "bg-app-surface text-app-heading border border-app-border/80 font-semibold"
+                  : "text-app-muted hover:text-app-text hover:bg-app-subtle"
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>Run Inspector</span>
+            </button>
+            <button
+              onClick={() => setActiveMode("longitudinal")}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                activeMode === "longitudinal"
+                  ? "bg-app-surface text-app-heading border border-app-border/80 font-semibold"
+                  : "text-app-muted hover:text-app-text hover:bg-app-subtle"
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Longitudinal Studio</span>
+            </button>
+            <button
+              onClick={() => setActiveMode("execute")}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                activeMode === "execute"
+                  ? "bg-app-surface text-app-heading border border-app-border/80 font-semibold"
+                  : "text-app-muted hover:text-app-text hover:bg-app-subtle"
+              }`}
+            >
+              <Play className="w-3.5 h-3.5" />
+              <span>Execute Evaluation</span>
+            </button>
+          </div>
         </div>
 
-        {/* Center / Breadcrumb info */}
+        {/* Center / Run Context */}
         <div className="flex items-center gap-2 text-app-muted truncate max-w-md">
-          <span className="font-mono text-[11px]">Evaluation</span>
-          <span>/</span>
-          <span className="truncate text-app-text font-medium text-[12px]">
-            {activeReport?.dataset_ref || selectedBenchmarkId || "All Benchmarks"}
-          </span>
-          {activeReportId && (
-            <>
-              <span>/</span>
-              <span className="font-mono text-[11px] text-blue-500 dark:text-blue-400 truncate">
-                {activeReportId}
-              </span>
-            </>
+          {activeMode === "inspector" && activeReport ? (
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-app-muted">Active Run:</span>
+              <span className="font-mono font-semibold text-app-text truncate">{activeReport.evaluation_id}</span>
+            </div>
+          ) : (
+            <span className="text-xs text-app-muted font-medium">Evaluation Workbench</span>
           )}
         </div>
 
@@ -249,24 +284,36 @@ export const EvaluationWorkspace: React.FC = () => {
             collapsible={true}
             collapseThreshold={120}
             showFooter={false}
+            collapsed={isSidebarCollapsed}
+            onToggleCollapse={toggleSidebar}
             className="!bg-[#F8FAFC] dark:!bg-app-rail !border-r !border-[#E2E8F0] dark:!border-app-border flex flex-col"
           >
             <div className="flex flex-col h-full overflow-hidden">
               {/* Search & Filter Header */}
             <div className="p-2.5 border-b border-app-border space-y-2 shrink-0">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-app-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder={
-                    activeMode === "catalog"
-                      ? "Search benchmarks..."
-                      : "Search evaluation runs..."
-                  }
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-app-bg text-app-text pl-8 pr-2.5 py-1 text-xs rounded border border-app-border focus:border-blue-500 focus:outline-hidden"
-                />
+              <div className="flex items-center gap-1.5">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 text-app-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder={
+                      activeMode === "catalog"
+                        ? "Search benchmarks..."
+                        : "Search evaluation runs..."
+                    }
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-app-bg text-app-text pl-8 pr-2.5 py-1 text-xs rounded border border-app-border focus:border-blue-500 focus:outline-hidden"
+                  />
+                </div>
+                <button
+                  onClick={toggleSidebar}
+                  className="p-1 rounded text-app-muted hover:text-app-text hover:bg-app-subtle transition-colors cursor-pointer"
+                  title="Collapse sidebar"
+                  aria-label="Collapse sidebar"
+                >
+                  <PanelLeftClose className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               {activeMode !== "catalog" && (
@@ -302,10 +349,10 @@ export const EvaluationWorkspace: React.FC = () => {
                       <div
                         key={b.id}
                         onClick={() => setSelectedBenchmarkId(b.id)}
-                        className={`p-2.5 cursor-pointer transition-colors ${
+                        className={`p-2.5 cursor-pointer transition-colors border-l-2 ${
                           isSelected
-                            ? "bg-blue-600/10 dark:bg-blue-500/15 border-l-2 border-blue-600 text-app-heading"
-                            : "hover:bg-app-subtle text-app-text"
+                            ? "bg-app-subtle border-blue-600 text-app-heading font-medium"
+                            : "border-transparent hover:bg-app-subtle text-app-text"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-1 mb-1">
@@ -338,10 +385,10 @@ export const EvaluationWorkspace: React.FC = () => {
                           setActiveMode("inspector");
                         }
                       }}
-                      className={`p-2.5 cursor-pointer transition-colors ${
+                      className={`p-2.5 cursor-pointer transition-colors border-l-2 ${
                         isSelected
-                          ? "bg-blue-600/10 dark:bg-blue-500/15 border-l-2 border-blue-600 text-app-heading"
-                          : "hover:bg-app-subtle text-app-text"
+                          ? "bg-app-subtle border-blue-600 text-app-heading font-medium"
+                          : "border-transparent hover:bg-app-subtle text-app-text"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1 mb-1">
@@ -372,14 +419,14 @@ export const EvaluationWorkspace: React.FC = () => {
               <div className="p-2 border-t border-app-border space-y-1.5 shrink-0 bg-app-surface/60">
                 <button
                   onClick={() => setIsPromoteModalOpen(true)}
-                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white transition-colors shadow-xs"
+                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white transition-colors cursor-pointer"
                 >
                   <Award className="w-3.5 h-3.5" />
                   <span>+ Promote from Run</span>
                 </button>
                 <button
                   onClick={() => setIsRegisterModalOpen(true)}
-                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-app-surface hover:bg-app-subtle text-app-text border border-app-border transition-colors"
+                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-app-surface hover:bg-app-subtle text-app-text border border-app-border transition-colors cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5 text-app-muted" />
                   <span>+ Register Benchmark</span>

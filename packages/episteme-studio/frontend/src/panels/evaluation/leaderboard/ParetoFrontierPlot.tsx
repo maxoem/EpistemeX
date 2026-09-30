@@ -402,7 +402,7 @@ export const ParetoFrontierPlot: React.FC<ParetoFrontierPlotProps> = ({
         {/* Legend Indicator */}
         <div className="flex items-center gap-3 text-[11px] text-app-muted">
           <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-xs shadow-blue-500/50" />
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-blue-500/20" />
             <span>Pareto Optimal ({paretoPoints.length})</span>
           </div>
           <div className="flex items-center gap-1">

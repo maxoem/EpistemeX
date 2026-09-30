@@ -1,24 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Sliders,
-  CheckCircle2,
-  XCircle,
-  GitMerge,
-  RotateCcw,
   Sparkles,
   Send,
   Loader2,
-  BookOpen,
-  Quote,
-  ShieldCheck,
-  FileCode,
-  ArrowRight,
-  ExternalLink,
 } from "lucide-react";
 import { useEvaluationStore } from "../../../../store/evaluationStore";
 import { api } from "../../../../api/client";
 import type {
-  AdjudicationDecision,
   AdjudicationQueueItem,
   AdjudicationQueueResponse,
 } from "../../../../api/types";
@@ -26,6 +15,7 @@ import { useAdjudicationStaging } from "./useAdjudicationStaging";
 import { useEvaluationHotkeys } from "./useEvaluationHotkeys";
 import { AdjudicationQueueList } from "./AdjudicationQueueList";
 import { AdjudicationTriadCard } from "./AdjudicationTriadCard";
+import { AdjudicationInspectorRail } from "./AdjudicationInspectorRail";
 import { SchemaAliasOmnibar } from "./SchemaAliasOmnibar";
 
 export const AdjudicationDeskView: React.FC = () => {
@@ -41,7 +31,7 @@ export const AdjudicationDeskView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Schema Alias Omnibar state
+  // Schema Alias Omnibar state & Export settings
   const [isAliasModalOpen, setIsAliasModalOpen] = useState(false);
   const [candidateRationale, setCandidateRationale] = useState<Record<string, string>>({});
   const [exportPath, setExportPath] = useState("");
@@ -176,17 +166,20 @@ export const AdjudicationDeskView: React.FC = () => {
       {/* 44px Contextual Top Toolbar */}
       <div className="h-11 px-4 border-b border-app-border bg-app-surface flex items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-app-heading">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-app-heading font-sans">
             <Sliders className="w-4 h-4 text-blue-500" />
             <span>HITL Adjudication Desk</span>
           </div>
 
           <div className="h-4 w-px bg-app-border" />
 
-          {/* Uncertainty Band Slider */}
+          {/* Uncertainty Band Display */}
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-[11px] text-app-muted">Uncertainty Band τ:</span>
-            <span className="font-mono text-xs font-medium text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
+            <span className="text-[11px] text-app-muted font-sans">Uncertainty Band τ:</span>
+            <span
+              className="font-mono text-xs font-medium text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20"
+              style={{ fontFeatureSettings: '"tnum" 1' }}
+            >
               [{minSim.toFixed(2)} - {maxSim.toFixed(2)}]
             </span>
           </div>
@@ -207,11 +200,12 @@ export const AdjudicationDeskView: React.FC = () => {
 
           {/* Explicit Batch Commit Button */}
           <button
+            type="button"
             onClick={handleCommit}
             disabled={stagedCount === 0 || isCommittingBatch}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-all shadow-2xs ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
               stagedCount > 0
-                ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer ring-2 ring-blue-500/20"
+                ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer ring-1 ring-blue-500/20"
                 : "bg-app-subtle text-app-muted border border-app-border cursor-not-allowed opacity-60"
             }`}
             title="Explicitly commit all staged adjudications and recompute metrics (Cmd+Enter)"
@@ -229,9 +223,9 @@ export const AdjudicationDeskView: React.FC = () => {
         </div>
       </div>
 
-      {/* Main 3-Pane Body */}
+      {/* Main 3-Pane Body: Three-Rail Scientific Cockpit (design.md Section 2) */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Pane 1: Queue List (300px) */}
+        {/* Pane 1: Left Navigation Queue List (300px) */}
         <AdjudicationQueueList
           candidates={filteredCandidates}
           selectedIndex={selectedIndex}
@@ -248,7 +242,7 @@ export const AdjudicationDeskView: React.FC = () => {
           }}
         />
 
-        {/* Pane 2: Adjudication Triad View (Fluid) */}
+        {/* Pane 2: Center Execution Inspector - Adjudication Triad View (Fluid) */}
         <AdjudicationTriadCard
           candidate={activeCandidate}
           stagedItem={currentStagedItem}
@@ -267,105 +261,15 @@ export const AdjudicationDeskView: React.FC = () => {
           onUndo={undoLastDecision}
         />
 
-        {/* Pane 3: Evidence & Schema Aliasing Pane (360px) */}
-        <aside className="w-[360px] shrink-0 border-l border-app-border bg-app-surface flex flex-col h-full overflow-y-auto p-4 space-y-4 select-none">
-          {/* Section 1: Primary Source Text Evidence */}
-          <div className="p-3.5 rounded-lg bg-app-bg border border-app-border space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-app-heading">
-              <Quote className="w-4 h-4 text-blue-500" />
-              <span>Primary Source Evidence</span>
-            </div>
-
-            {activeCandidate?.evidence_snippet ? (
-              <div className="p-2.5 rounded bg-app-surface border border-app-border/70 text-xs italic text-app-text leading-relaxed font-serif">
-                &ldquo;{activeCandidate.evidence_snippet}&rdquo;
-              </div>
-            ) : (
-              <div className="p-3 rounded bg-app-surface border border-dashed border-app-border text-center text-xs text-app-muted font-sans">
-                No verbatim text snippet attached for this candidate relation.
-              </div>
-            )}
-
-            <div className="flex items-center justify-between text-[11px] text-app-muted font-mono pt-1">
-              <span>Grounding Quality:</span>
-              <span className="text-emerald-500 font-semibold">High Acuity (L1)</span>
-            </div>
-          </div>
-
-          {/* Section 2: Schema Aliasing Quick Tool */}
-          <div className="p-3.5 rounded-lg bg-app-bg border border-app-border space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-app-heading">
-                <GitMerge className="w-4 h-4 text-violet-500" />
-                <span>Ontology Schema Aliasing</span>
-              </div>
-              <button
-                onClick={handleOpenAlias}
-                className="text-[11px] font-mono text-violet-500 hover:text-violet-400 font-medium"
-              >
-                [S] Omnibar
-              </button>
-            </div>
-
-            <p className="text-[11px] text-app-muted leading-relaxed">
-              If the predicted relation expresses a valid scientific relationship with minor
-              vocabulary divergence, map it to a canonical ontology predicate to accept as TP.
-            </p>
-
-            {currentStagedItem?.decision === "schema_alias" && currentStagedItem.alias_target ? (
-              <div className="p-2.5 rounded bg-violet-500/10 border border-violet-500/30 text-xs font-mono space-y-1">
-                <span className="text-[10px] text-app-muted uppercase font-sans block">
-                  Active Alias Target:
-                </span>
-                <span className="font-semibold text-violet-600 dark:text-violet-400 block truncate">
-                  {currentStagedItem.alias_target}
-                </span>
-              </div>
-            ) : (
-              <button
-                onClick={handleOpenAlias}
-                className="w-full py-1.5 px-3 rounded-md bg-violet-600/10 hover:bg-violet-600/20 text-violet-600 dark:text-violet-400 border border-violet-500/30 text-xs font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                <GitMerge className="w-3.5 h-3.5" />
-                <span>Map to Canonical Ontology</span>
-              </button>
-            )}
-          </div>
-
-          {/* Section 3: Gold Standard Export Options */}
-          <div className="p-3.5 rounded-lg bg-app-bg border border-app-border space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-app-heading">
-              <FileCode className="w-4 h-4 text-app-muted" />
-              <span>Export Adjudicated Dataset</span>
-            </div>
-
-            <p className="text-[11px] text-app-muted leading-relaxed">
-              Optionally persist approved edge annotations to an immutable gold standard file for
-              future regression testing.
-            </p>
-
-            <input
-              type="text"
-              value={exportPath}
-              onChange={(e) => setExportPath(e.target.value)}
-              placeholder="e.g. data/gold/adjudicated_v1.json"
-              className="w-full px-2.5 py-1.5 text-xs rounded bg-app-surface border border-app-border focus:border-blue-500 focus:outline-hidden text-app-text placeholder-app-muted font-mono"
-            />
-          </div>
-
-          {/* Section 4: Telemetry & Safety Invariants */}
-          <div className="p-3 rounded-lg bg-app-subtle/50 border border-app-border text-[11px] space-y-1.5 text-app-muted">
-            <div className="flex items-center gap-1.5 text-app-text font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
-              <span>Formal Epistemic Safeguards</span>
-            </div>
-            <p className="leading-relaxed">
-              Adjudications are held in a deterministic client buffer. Pressing [A], [R], or [S]
-              applies local previews without sending uncommitted network requests. Explicit commit
-              (⌘⏎) triggers server-side recalculation of Poset DAG integrity and Bourbaki coverage.
-            </p>
-          </div>
-        </aside>
+        {/* Pane 3: Right Diagnostic Rail - Encapsulated Sub-Tabbed Evidence & Safeguards (340px) */}
+        <AdjudicationInspectorRail
+          candidate={activeCandidate}
+          stagedItem={currentStagedItem}
+          onOpenAlias={handleOpenAlias}
+          exportPath={exportPath}
+          onChangeExportPath={setExportPath}
+          stagedCount={stagedCount}
+        />
       </div>
 
       {/* Bottom Hotkey Helper Bar (Fixed 32px) */}
@@ -378,31 +282,31 @@ export const AdjudicationDeskView: React.FC = () => {
             <kbd className="px-1 py-0.5 rounded bg-app-bg border border-app-border text-app-text">
               k
             </kbd>
-            <span>Navigate</span>
+            <span className="font-sans">Navigate</span>
           </span>
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-500 font-bold border border-emerald-500/30">
               A
             </kbd>
-            <span>True Positive</span>
+            <span className="font-sans">True Positive</span>
           </span>
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.5 rounded bg-rose-500/20 text-rose-500 font-bold border border-rose-500/30">
               R
             </kbd>
-            <span>False Positive</span>
+            <span className="font-sans">False Positive</span>
           </span>
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.5 rounded bg-violet-500/20 text-violet-500 font-bold border border-violet-500/30">
               S
             </kbd>
-            <span>Schema Alias</span>
+            <span className="font-sans">Schema Alias</span>
           </span>
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.5 rounded bg-app-bg border border-app-border text-app-text">
               U
             </kbd>
-            <span>Undo</span>
+            <span className="font-sans">Undo</span>
           </span>
         </div>
 
@@ -416,7 +320,7 @@ export const AdjudicationDeskView: React.FC = () => {
             <kbd className="px-1 py-0.5 rounded bg-blue-500/20 text-blue-500 font-bold border border-blue-500/30">
               ⌘⏎
             </kbd>
-            <span>Commit Batch</span>
+            <span className="font-sans">Commit Batch</span>
           </span>
         </div>
       </footer>

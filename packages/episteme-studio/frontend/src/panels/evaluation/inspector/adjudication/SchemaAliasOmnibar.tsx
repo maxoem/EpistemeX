@@ -71,7 +71,7 @@ export const SchemaAliasOmnibar: React.FC<SchemaAliasOmnibarProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-app-surface border border-app-border rounded-xl shadow-2xl overflow-hidden flex flex-col"
+        className="w-full max-w-lg bg-app-surface border border-app-border rounded-xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
         data-hotkey-ignore="true"
       >

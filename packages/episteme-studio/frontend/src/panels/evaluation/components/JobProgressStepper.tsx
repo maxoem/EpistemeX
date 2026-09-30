@@ -152,27 +152,27 @@ export const JobProgressStepper: React.FC<JobProgressStepperProps> = ({
       </div>
 
       {/* Multi-Stage Visual Stepper */}
-      <div className="space-y-2 py-1">
+      <div className="border border-app-border rounded-md overflow-hidden divide-y divide-app-border bg-app-surface/30">
         {STAGES.map((s, idx) => {
           const stageState = getStageStatus(idx);
           const Icon = s.icon;
           return (
             <div
               key={s.id}
-              className={`flex items-center gap-3 p-2.5 rounded-md border text-xs transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2 text-xs transition-colors ${
                 stageState === "active"
-                  ? "bg-blue-500/5 border-blue-500/40 text-blue-500 dark:text-blue-400 font-medium"
+                  ? "bg-blue-500/10 text-blue-500 dark:text-blue-400 font-medium border-l-2 border-blue-500"
                   : stageState === "completed"
-                  ? "bg-emerald-500/5 border-emerald-500/30 text-app-text"
+                  ? "bg-transparent text-app-text border-l-2 border-emerald-500/60"
                   : stageState === "failed"
-                  ? "bg-rose-500/5 border-rose-500/30 text-rose-500 font-medium"
+                  ? "bg-rose-500/10 text-rose-500 font-medium border-l-2 border-rose-500"
                   : stageState === "aborted"
-                  ? "bg-zinc-500/5 border-zinc-500/30 text-app-muted"
-                  : "bg-transparent border-transparent text-app-muted opacity-60"
+                  ? "bg-zinc-500/5 text-app-muted border-l-2 border-zinc-500"
+                  : "bg-transparent text-app-muted opacity-60 border-l-2 border-transparent"
               }`}
             >
               <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold ${
+                className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-semibold ${
                   stageState === "active"
                     ? "bg-blue-500 text-white"
                     : stageState === "completed"
@@ -185,7 +185,7 @@ export const JobProgressStepper: React.FC<JobProgressStepperProps> = ({
                 }`}
               >
                 {stageState === "completed" ? (
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-3.5 h-3.5" />
                 ) : (
                   <span>{idx + 1}</span>
                 )}
@@ -195,7 +195,7 @@ export const JobProgressStepper: React.FC<JobProgressStepperProps> = ({
                 <span className="truncate">{s.label}</span>
               </div>
 
-              <Icon className="w-4 h-4 shrink-0 opacity-80" />
+              <Icon className="w-3.5 h-3.5 shrink-0 opacity-80" />
             </div>
           );
         })}
@@ -283,7 +283,7 @@ export const JobProgressStepper: React.FC<JobProgressStepperProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenReport(reportId)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-xs transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>View Full Report</span>

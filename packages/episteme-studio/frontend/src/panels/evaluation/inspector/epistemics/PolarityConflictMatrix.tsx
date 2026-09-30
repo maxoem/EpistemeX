@@ -159,11 +159,11 @@ export const PolarityConflictMatrix: React.FC = () => {
       </div>
 
       {/* Main Body */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* KPI Strip */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="p-3 rounded-lg border border-app-border bg-app-surface/60 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-semibold text-app-muted">
+      <div className="flex-1 overflow-y-auto divide-y divide-app-border">
+        {/* KPI Strip: Edge-to-edge 3-column summary */}
+        <div className="grid grid-cols-3 divide-x divide-app-border bg-app-surface/40">
+          <div className="p-4 flex flex-col justify-between">
+            <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
               Polarity Accuracy
             </span>
             <div className="mt-2 flex items-baseline justify-between">
@@ -176,8 +176,8 @@ export const PolarityConflictMatrix: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-semibold text-amber-500">
+          <div className="p-4 flex flex-col justify-between bg-amber-500/5">
+            <span className="text-[10px] uppercase font-semibold text-amber-500 font-sans tracking-wider">
               Conflict Rate
             </span>
             <div className="mt-2 flex items-baseline justify-between">
@@ -190,8 +190,8 @@ export const PolarityConflictMatrix: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-3 rounded-lg border border-app-border bg-app-surface/60 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-semibold text-app-muted">
+          <div className="p-4 flex flex-col justify-between">
+            <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
               Evaluated Pairs
             </span>
             <div className="mt-2 flex items-baseline justify-between">
@@ -204,7 +204,7 @@ export const PolarityConflictMatrix: React.FC = () => {
         </div>
 
         {/* Severity Banner */}
-        <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-600 dark:text-amber-400 space-y-1">
+        <div className="p-4 bg-amber-500/10 text-xs text-amber-600 dark:text-amber-400 space-y-1">
           <div className="flex items-center gap-2 font-semibold">
             <Flame className="w-4 h-4 text-amber-500" />
             <span>Severe Argument Inversion Audit</span>
@@ -217,8 +217,8 @@ export const PolarityConflictMatrix: React.FC = () => {
         </div>
 
         {/* Conflict List */}
-        <div className="space-y-2.5">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-app-muted">
+        <div className="p-4 space-y-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-app-muted font-sans">
             Inverted Polarity Pairs ({conflictItems.length})
           </div>
 
@@ -229,10 +229,10 @@ export const PolarityConflictMatrix: React.FC = () => {
               <div
                 key={conflict.id}
                 onClick={() => setSelectedConflict(conflict)}
-                className={`p-3.5 rounded-lg border transition-all cursor-pointer space-y-2.5 ${
+                className={`p-4 rounded-md border transition-all cursor-pointer space-y-3 ${
                   isSelected
-                    ? "border-amber-500 bg-amber-500/10 dark:bg-amber-500/15 shadow-sm"
-                    : "border-app-border bg-app-surface/40 hover:bg-app-subtle hover:border-amber-500/50"
+                    ? "border-l-2 border-amber-500 bg-amber-500/10 dark:bg-amber-500/15"
+                    : "border-app-border bg-app-surface/30 hover:bg-app-subtle hover:border-amber-500/50"
                 }`}
               >
                 {/* Header: Nodes & Predicate Inversion */}
@@ -260,19 +260,23 @@ export const PolarityConflictMatrix: React.FC = () => {
                 <div className="flex items-center gap-3 p-2 rounded bg-app-bg text-xs border border-app-border/60">
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] text-app-muted font-medium">Predicted:</span>
-                    <span className="font-mono font-bold text-rose-500 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20">
+                    <span className="font-mono font-semibold text-app-text px-2 py-0.5 rounded bg-app-surface border border-app-border">
                       {conflict.predictedPredicate}
                     </span>
                   </div>
 
-                  <span className="text-app-muted text-xs">vs.</span>
+                  <span className="text-app-muted text-xs">≠</span>
 
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] text-app-muted font-medium">Gold Standard:</span>
-                    <span className="font-mono font-bold text-emerald-500 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                    <span className="font-mono font-semibold text-app-text px-2 py-0.5 rounded bg-app-surface border border-app-border">
                       {conflict.goldPredicate}
                     </span>
                   </div>
+
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-500/10 text-rose-500 border border-rose-500/25">
+                    Inverted
+                  </span>
 
                   <div className="ml-auto text-[11px] font-mono text-app-muted">
                     Cosine Sim: {conflict.similarity.toFixed(2)}
