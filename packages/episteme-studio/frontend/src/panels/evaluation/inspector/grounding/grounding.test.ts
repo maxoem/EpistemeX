@@ -182,3 +182,44 @@ test("coordinateScaling: LaTeX formula normalization and equivalence verifier", 
   assert.equal(resMismatch.isEquivalent, false);
   assert.equal(resMismatch.equivalenceType, "mismatch");
 });
+
+test("coordinateScaling: Tier 1 Global Continuous Container supports custom basePage offset", () => {
+  const pageDim = { width: 760, height: 1040 };
+  const pageGap = 24;
+
+  // Box on Page 204 with document starting at Page 201
+  const box: BoundingBoxCoordinates = {
+    page: 204,
+    x0: 0.15,
+    y0: 0.38,
+    x1: 0.85,
+    y1: 0.52,
+  };
+
+  // 3 pages preceding page 204 (pages 201, 202, 203)
+  // accumulatedHeight = 3 * (1040 + 24) = 3192
+  // top_global = 3192 + 0.38 * 1040 = 3192 + 395.2 = 3587.2
+  const g = computeGlobalBoundingBox(box, () => pageDim, pageGap, 201);
+  assert.equal(g.top_global, 3587.2);
+  assert.equal(g.left_global, 0.15 * 760);
+  assert.equal(g.width, 0.70 * 760);
+
+  // Spline across page 204 and page 205
+  const span1: TextSpanCoordinates = {
+    page: 204,
+    bbox: [0.15, 0.38, 0.85, 0.52],
+  };
+  const span2: TextSpanCoordinates = {
+    page: 205,
+    bbox: [0.12, 0.05, 0.82, 0.18],
+    is_continuation: true,
+  };
+
+  const spline = computeBezierSplineAcrossPages(span1, span2, () => pageDim, pageGap, 201);
+  assert.ok(spline.pathData.startsWith("M "));
+  assert.ok(spline.targetPoint.y > spline.sourcePoint.y);
+  // Source y is at bottom of span 1: 3192 + 0.52 * 1040 = 3732.8
+  assert.equal(spline.sourcePoint.y, 3732.8);
+  // Target y is at top of span 2 on page 205: 4 * (1040 + 24) + 0.05 * 1040 = 4256 + 52 = 4308
+  assert.equal(spline.targetPoint.y, 4308);
+});

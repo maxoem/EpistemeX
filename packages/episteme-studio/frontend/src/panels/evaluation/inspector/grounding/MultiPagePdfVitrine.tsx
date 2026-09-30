@@ -41,6 +41,7 @@ export interface MultiPagePdfVitrineProps {
   selectedPage?: number;
   onPageChange?: (page: number) => void;
   documentTitle?: string;
+  startPage?: number;
   totalPages?: number;
   highlightComponentId?: string;
 }
@@ -54,6 +55,7 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
   selectedPage = 14,
   onPageChange,
   documentTitle = "principia_1687_edition.pdf",
+  startPage = 1,
   totalPages = 24,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -67,12 +69,15 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
   const [showSplines, setShowSplines] = useState<boolean>(true);
   const [currentPage, setCurrentPage] = useState<number>(selectedPage);
 
-  // Sync internal page with props
+  // Sync internal page with props and auto-scroll in continuous mode
   useEffect(() => {
-    if (selectedPage && selectedPage !== currentPage) {
+    if (selectedPage) {
       setCurrentPage(selectedPage);
       if (viewMode === "continuous") {
-        scrollToPage(selectedPage);
+        const timer = setTimeout(() => {
+          scrollToPage(selectedPage);
+        }, 50);
+        return () => clearTimeout(timer);
       }
     }
   }, [selectedPage, viewMode]);
@@ -90,20 +95,19 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
     if (viewMode === "single") {
       return [currentPage];
     }
-    // Continuous view: show a generous sliding window of pages around active target
-    const start = Math.max(1, currentPage - 3);
-    const end = Math.min(totalPages, currentPage + 5);
     const pages: number[] = [];
-    for (let p = start; p <= end; p++) {
+    const minP = Math.min(startPage, currentPage);
+    const maxP = Math.max(totalPages, currentPage);
+    for (let p = minP; p <= maxP; p++) {
       pages.push(p);
     }
     return pages;
-  }, [viewMode, currentPage, totalPages]);
+  }, [viewMode, currentPage, startPage, totalPages]);
 
-  // Scroll smoothly to a target page or global coordinate
+  // Scroll smoothly to a target page
   const scrollToPage = (pageNum: number) => {
     const pageEl = pageRefs.current.get(pageNum);
-    if (pageEl && containerRef.current) {
+    if (pageEl) {
       pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
@@ -112,13 +116,62 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
   const handleCenterOnBBox = () => {
     if (!activeEvidence?.predicted_anchor?.bbox || !containerRef.current) return;
     const bbox = activeEvidence.predicted_anchor.bbox;
-    const globalCoords = computeGlobalBoundingBox(bbox, () => pageDim, PAGE_GAP);
+    const pageEl = pageRefs.current.get(bbox.page);
 
-    containerRef.current.scrollTo({
-      top: Math.max(0, globalCoords.top_global - 80),
-      behavior: "smooth",
-    });
+    if (pageEl) {
+      const pageTop = pageEl.offsetTop;
+      const localBoxTop = bbox.y0 * pageDim.height;
+      containerRef.current.scrollTo({
+        top: Math.max(0, pageTop + localBoxTop - 80),
+        behavior: "smooth",
+      });
+    } else {
+      const globalCoords = computeGlobalBoundingBox(bbox, () => pageDim, PAGE_GAP, startPage);
+      containerRef.current.scrollTo({
+        top: Math.max(0, globalCoords.top_global - 80),
+        behavior: "smooth",
+      });
+    }
   };
+
+  // Active page tracking while scrolling in continuous mode
+  useEffect(() => {
+    if (viewMode !== "continuous") return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const handleScroll = () => {
+      const containerTop = container.scrollTop;
+      let visiblePage = currentPage;
+      let minDistance = Infinity;
+
+      pageRefs.current.forEach((el, pageNum) => {
+        const pageTop = el.offsetTop;
+        const dist = Math.abs(pageTop - containerTop - 40);
+        if (dist < minDistance) {
+          minDistance = dist;
+          visiblePage = pageNum;
+        }
+      });
+
+      if (visiblePage !== currentPage) {
+        setCurrentPage(visiblePage);
+        onPageChange?.(visiblePage);
+      }
+    };
+
+    const onScroll = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleScroll, 80);
+    };
+
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", onScroll);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [viewMode, currentPage, onPageChange]);
 
   // Compute active multi-page spans and splines
   const multiPageSpans = useMemo<{
@@ -164,12 +217,13 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
         span1,
         span2,
         () => pageDim,
-        PAGE_GAP
+        PAGE_GAP,
+        startPage
       );
     } catch {
       return null;
     }
-  }, [multiPageSpans, showSplines, viewMode, pageDim]);
+  }, [multiPageSpans, showSplines, viewMode, pageDim, startPage]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-app-bg select-none relative">
@@ -190,11 +244,14 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
           <div className="flex items-center gap-1 text-xs">
             <button
               onClick={() => {
-                const next = Math.max(1, currentPage - 1);
+                const next = Math.max(startPage, currentPage - 1);
                 setCurrentPage(next);
                 onPageChange?.(next);
+                if (viewMode === "continuous") {
+                  scrollToPage(next);
+                }
               }}
-              disabled={currentPage <= 1}
+              disabled={currentPage <= startPage}
               className="p-1 rounded text-app-muted hover:text-app-text hover:bg-app-subtle disabled:opacity-40 disabled:hover:bg-transparent"
               title="Previous Page"
             >
@@ -210,6 +267,9 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
                 const next = Math.min(totalPages, currentPage + 1);
                 setCurrentPage(next);
                 onPageChange?.(next);
+                if (viewMode === "continuous") {
+                  scrollToPage(next);
+                }
               }}
               disabled={currentPage >= totalPages}
               className="p-1 rounded text-app-muted hover:text-app-text hover:bg-app-subtle disabled:opacity-40 disabled:hover:bg-transparent"
@@ -275,7 +335,10 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
           {/* View Mode Toggle */}
           <div className="flex items-center gap-1 bg-app-bg dark:bg-[#111827] p-0.5 rounded border border-app-border/60 text-[10px]">
             <button
-              onClick={() => setViewMode("continuous")}
+              onClick={() => {
+                setViewMode("continuous");
+                setTimeout(() => scrollToPage(currentPage), 50);
+              }}
               className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
                 viewMode === "continuous"
                   ? "bg-app-surface text-app-heading font-semibold border border-app-border/80"
@@ -336,325 +399,315 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
       {/* Main Continuous Document Container */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto p-8 flex flex-col items-center relative space-y-6"
+        className="flex-1 overflow-auto p-8 flex justify-center relative bg-app-bg"
         style={{ scrollBehavior: "smooth" }}
       >
-        {/* Global Spline Overlay Layer (Continuous Bézier curves connecting page cards) */}
-        {splineConnection && (
-          <svg
-            className="absolute top-0 left-0 w-full pointer-events-none z-15"
-            style={{
-              height: `${(pageDim.height + PAGE_GAP) * (totalPages + 1)}px`,
-            }}
-          >
-            <defs>
-              <linearGradient id="splineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.8" />
-                <stop offset="50%" stopColor="#F59E0B" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="#10B981" stopOpacity="0.8" />
-              </linearGradient>
-              <filter id="splineGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="3" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-              </filter>
-            </defs>
-
-            {/* Glowing cubic Bézier curve */}
-            <path
-              d={splineConnection.pathData}
-              fill="none"
-              stroke="url(#splineGradient)"
-              strokeWidth={3}
-              strokeDasharray="6 4"
-              filter="url(#splineGlow)"
-              className="animate-pulse"
-            />
-
-            {/* Anchor exit and entry markers */}
-            <circle
-              cx={splineConnection.sourcePoint.x}
-              cy={splineConnection.sourcePoint.y}
-              r={4}
-              fill="#3B82F6"
-              stroke="#ffffff"
-              strokeWidth={1.5}
-            />
-            <circle
-              cx={splineConnection.targetPoint.x}
-              cy={splineConnection.targetPoint.y}
-              r={4}
-              fill="#10B981"
-              stroke="#ffffff"
-              strokeWidth={1.5}
-            />
-          </svg>
-        )}
-
-        {/* Page Cards Rendering */}
-        {pageNumbers.map((pageNum) => {
-          const isTargetPage =
-            activeEvidence?.predicted_anchor?.bbox?.page === pageNum ||
-            activeEvidence?.reference_anchor?.bbox?.page === pageNum;
-
-          // Local page boxes
-          const predLocal =
-            showPredictedBBox &&
-            activeEvidence?.predicted_anchor?.bbox?.page === pageNum
-              ? computeLocalBoundingBox(activeEvidence.predicted_anchor.bbox, pageDim)
-              : null;
-
-          const refLocal =
-            showReferenceBBox &&
-            activeEvidence?.reference_anchor?.bbox?.page === pageNum
-              ? computeLocalBoundingBox(activeEvidence.reference_anchor.bbox, pageDim)
-              : null;
-
-          // Continuation span on next page
-          const continuationLocal =
-            showSplines &&
-            multiPageSpans &&
-            multiPageSpans.span2.page === pageNum
-              ? computeLocalBoundingBox(
-                  {
-                    page: pageNum,
-                    x0: multiPageSpans.span2.bbox[0],
-                    y0: multiPageSpans.span2.bbox[1],
-                    x1: multiPageSpans.span2.bbox[2],
-                    y1: multiPageSpans.span2.bbox[3],
-                  },
-                  pageDim
-                )
-              : null;
-
-          return (
-            <div
-              key={pageNum}
-              ref={(el) => {
-                if (el) pageRefs.current.set(pageNum, el);
-                else pageRefs.current.delete(pageNum);
-              }}
-              className={`relative bg-white dark:bg-[#151518] border rounded transition-colors duration-200 ${
-                isTargetPage
-                  ? "border-blue-500 ring-1 ring-blue-500/20"
-                  : "border-app-border/80"
-              }`}
+        {/* Continuous Page Column with exact page width and relative positioning */}
+        <div
+          className="relative flex flex-col items-center"
+          style={{
+            width: `${pageDim.width}px`,
+            gap: `${PAGE_GAP}px`,
+          }}
+        >
+          {/* Global Spline Overlay Layer (Continuous Bézier curves connecting page cards) */}
+          {splineConnection && (
+            <svg
+              className="absolute top-0 left-0 pointer-events-none z-20"
               style={{
                 width: `${pageDim.width}px`,
-                height: `${pageDim.height}px`,
-                minWidth: `${pageDim.width}px`,
-                minHeight: `${pageDim.height}px`,
+                height: `${pageNumbers.length * pageDim.height + Math.max(0, pageNumbers.length - 1) * PAGE_GAP}px`,
               }}
             >
-              {/* Page Physical Header */}
-              <div className="absolute top-0 left-0 right-0 h-9 px-6 flex items-center justify-between border-b border-app-border/40 text-[10px] text-app-muted select-none">
-                <span className="font-serif italic tracking-wide">
-                  PHILOSOPHIAE NATURALIS PRINCIPIA MATHEMATICA
-                </span>
-                <span className="font-mono tabular-nums font-medium">Page {pageNum}</span>
-              </div>
+              <defs>
+                <linearGradient id="splineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.8" />
+                  <stop offset="50%" stopColor="#F59E0B" stopOpacity="0.9" />
+                  <stop offset="100%" stopColor="#10B981" stopOpacity="0.8" />
+                </linearGradient>
+                <filter id="splineGlow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="3" result="blur" />
+                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+              </defs>
 
-              {/* Simulated Academic Typesetting Layout */}
+              {/* Glowing cubic Bézier curve */}
+              <path
+                d={splineConnection.pathData}
+                fill="none"
+                stroke="url(#splineGradient)"
+                strokeWidth={3}
+                strokeDasharray="6 4"
+                filter="url(#splineGlow)"
+                className="animate-pulse"
+              />
+
+              {/* Anchor exit and entry markers */}
+              <circle
+                cx={splineConnection.sourcePoint.x}
+                cy={splineConnection.sourcePoint.y}
+                r={4}
+                fill="#3B82F6"
+                stroke="#ffffff"
+                strokeWidth={1.5}
+              />
+              <circle
+                cx={splineConnection.targetPoint.x}
+                cy={splineConnection.targetPoint.y}
+                r={4}
+                fill="#10B981"
+                stroke="#ffffff"
+                strokeWidth={1.5}
+              />
+            </svg>
+          )}
+
+          {/* Page Cards Rendering */}
+          {pageNumbers.map((pageNum) => {
+            const isTargetPage =
+              activeEvidence?.predicted_anchor?.bbox?.page === pageNum ||
+              activeEvidence?.reference_anchor?.bbox?.page === pageNum;
+            const isContinuationPage =
+              multiPageSpans?.span2?.page === pageNum;
+
+            // Local page boxes
+            const predLocal =
+              showPredictedBBox &&
+              activeEvidence?.predicted_anchor?.bbox?.page === pageNum
+                ? computeLocalBoundingBox(activeEvidence.predicted_anchor.bbox, pageDim)
+                : null;
+
+            const refLocal =
+              showReferenceBBox &&
+              activeEvidence?.reference_anchor?.bbox?.page === pageNum
+                ? computeLocalBoundingBox(activeEvidence.reference_anchor.bbox, pageDim)
+                : null;
+
+            // Continuation span on next page
+            const continuationLocal =
+              showSplines &&
+              multiPageSpans &&
+              multiPageSpans.span2.page === pageNum
+                ? computeLocalBoundingBox(
+                    {
+                      page: pageNum,
+                      x0: multiPageSpans.span2.bbox[0],
+                      y0: multiPageSpans.span2.bbox[1],
+                      x1: multiPageSpans.span2.bbox[2],
+                      y1: multiPageSpans.span2.bbox[3],
+                    },
+                    pageDim
+                  )
+                : null;
+
+            const docUpper = documentTitle.replace(/\.(pdf|md)$/i, "").toUpperCase().replace(/_/g, " ");
+
+            return (
               <div
-                className="w-full h-full pt-12 pb-10 px-10 flex flex-col justify-between text-app-text select-text"
-                style={{ fontSize: `${Math.round(11 * zoomLevel)}px` }}
+                key={pageNum}
+                ref={(el) => {
+                  if (el) pageRefs.current.set(pageNum, el);
+                  else pageRefs.current.delete(pageNum);
+                }}
+                className={`relative bg-white dark:bg-[#151518] border rounded transition-colors duration-200 shadow-sm ${
+                  isTargetPage
+                    ? "border-blue-500 ring-1 ring-blue-500/20"
+                    : "border-app-border/80"
+                }`}
+                style={{
+                  width: `${pageDim.width}px`,
+                  height: `${pageDim.height}px`,
+                  minWidth: `${pageDim.width}px`,
+                  minHeight: `${pageDim.height}px`,
+                }}
               >
-                {/* Academic Content Texture */}
-                <div className="space-y-4 text-justify font-serif leading-relaxed text-zinc-800 dark:text-zinc-200">
-                  {pageNum === 14 ? (
-                    <>
-                      <div className="text-center font-bold tracking-wider uppercase text-sm mb-4">
-                        Axiomata sive Leges Motus
-                      </div>
+                {/* Page Physical Header */}
+                <div className="absolute top-0 left-0 right-0 h-9 px-6 flex items-center justify-between border-b border-app-border/40 text-[10px] text-app-muted select-none">
+                  <span className="font-serif italic tracking-wide truncate max-w-[420px]">
+                    {docUpper}
+                  </span>
+                  <span className="font-mono tabular-nums font-medium shrink-0">Page {pageNum}</span>
+                </div>
 
-                      <p className="indent-4">
-                        <strong className="font-sans font-semibold">Lex. I.</strong> Corpus omne
-                        perseverare in statu suo quiescendi vel movendi uniformiter in directum, nisi
-                        quatenus a viribus impressis cogitur statum illum mutare.
-                      </p>
-
-                      <div className="p-3 my-2 rounded bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 font-sans">
-                        <div className="font-semibold text-xs text-blue-600 dark:text-blue-400 mb-1">
-                          Lex. II. (Fundamental Law of Force & Acceleration)
+                {/* Simulated Academic Typesetting Layout */}
+                <div
+                  className="w-full h-full pt-12 pb-10 px-10 flex flex-col justify-between text-app-text select-text"
+                  style={{ fontSize: `${Math.round(11 * zoomLevel)}px` }}
+                >
+                  {/* Academic Content Texture */}
+                  <div className="space-y-4 text-justify font-serif leading-relaxed text-zinc-800 dark:text-zinc-200">
+                    {isTargetPage ? (
+                      <>
+                        <div className="text-center font-bold tracking-wider uppercase text-sm mb-4 text-app-heading">
+                          {activeEvidence?.label || `Construct Grounding · Page ${pageNum}`}
                         </div>
-                        <p className="font-serif italic leading-relaxed text-[11px]">
-                          "Mutationem motus proportionalem esse vi motrici impressae, & fieri secundum
-                          lineam rectam qua vis illa imprimitur."
+
+                        <p className="indent-4">
+                          In evaluating the theoretical framework and foundational propositions grounded within this primary source document, the formal assertion under consideration specifies explicit empirical or mathematical constraints:
                         </p>
-                        <div className="mt-2 text-center font-mono text-sm py-1 bg-white dark:bg-black/40 rounded border border-zinc-200 dark:border-zinc-800">
-                          {activeEvidence?.predicted_anchor?.formula_latex || "F = \\frac{dp}{dt} = m\\vec{a}"}
+
+                        <div className="p-3 my-2 rounded bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 font-sans">
+                          <div className="font-semibold text-xs text-blue-600 dark:text-blue-400 mb-1">
+                            {activeEvidence?.component_type?.toUpperCase() || "CONSTRUCT"} PROPOSITION
+                          </div>
+                          <p className="font-serif italic leading-relaxed text-[11px] text-app-text">
+                            "{activeEvidence?.predicted_anchor?.verbatim_text ||
+                              activeEvidence?.reference_anchor?.verbatim_text ||
+                              "Mutationem motus proportionalem esse vi motrici impressae, & fieri secundum lineam rectam qua vis illa imprimitur."}"
+                          </p>
+                          {activeEvidence?.predicted_anchor?.formula_latex && (
+                            <div className="mt-2 text-center font-mono text-sm py-1 bg-white dark:bg-black/40 rounded border border-zinc-200 dark:border-zinc-800 text-blue-600 dark:text-blue-400 select-all overflow-x-auto">
+                              {activeEvidence.predicted_anchor.formula_latex}
+                            </div>
+                          )}
                         </div>
-                      </div>
 
-                      <p className="indent-4">
-                        Si vis aliqua motum quemvis generet, dupla duplum, tripla triplum generabit,
-                        sive simul & semel, sive gradatim & successive impressa fuerit. Et hic motus
-                        quoniam in eandem semper plagam cum vi generatrice dirigitur, si corpus antea
-                        movebatur, motui ejus vel conspiranti additur, vel contrario subducitur.
-                      </p>
+                        <p className="indent-4">
+                          The empirical and mathematical consistency of this formulation is corroborated by direct derivation from the underlying model postulates, fulfilling the structuralist requirement of empirical tenability across the designated domain of intended applications.
+                        </p>
+                      </>
+                    ) : isContinuationPage ? (
+                      <>
+                        <div className="text-center font-bold tracking-wider uppercase text-sm mb-4 text-app-heading">
+                          {docUpper} (CONTINUATIO)
+                        </div>
 
-                      <p className="indent-4">
-                        Majoribus enim viribus impressis celeritas augetur secundum proportionem
-                        temporis & spatii directam, unde demonstratur theorema de motu composito...
-                      </p>
-                    </>
-                  ) : pageNum === 15 ? (
-                    <>
-                      <div className="text-center font-bold tracking-wider uppercase text-sm mb-4">
-                        De Motu Corporum (Continuatio)
-                      </div>
+                        <div className="p-2 mb-3 rounded bg-amber-500/5 border border-amber-500/20 text-[10px] font-mono text-amber-600 dark:text-amber-400">
+                          [Multi-Page Argument Continuation from Page {activeEvidence?.predicted_anchor?.bbox?.page || pageNum - 1}]
+                        </div>
 
-                      <div className="p-2 mb-3 rounded bg-amber-500/5 border border-amber-500/20 text-[10px] font-mono text-amber-600 dark:text-amber-400">
-                        [Multi-Page Argument Continuation from Page 14]
-                      </div>
+                        <p className="indent-4">
+                          ...quod quidem ex secunda lege sponte fluit: nam quantitas motus oritur ex velocitate & materia conjunctim; & vis motrix impressa ex motu genito & tempore simul sumptis.
+                        </p>
 
-                      <p className="indent-4">
-                        ...quod quidem ex secunda lege sponte fluit: nam quantitas motus oritur ex
-                        velocitate & materia conjunctim; & vis motrix impressa ex motu genito &
-                        tempore simul sumptis.
-                      </p>
+                        <p className="indent-4">
+                          Actioni contrariam semper & aequalem esse reactionem: sive corporum duorum actiones in se mutuo semper esse aequales & in partes contrarias dirigi. Quicquid premit vel trahit alterum, tantundem ab eo premitur vel trahitur.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-semibold text-xs tracking-wider text-zinc-600 dark:text-zinc-400 mb-2">
+                          SECTIO {pageNum} · PROPOSITIO {pageNum * 2 - 1}
+                        </div>
+                        <p className="indent-4">
+                          Quantitas materiae est mensura ejusdem orta ex illius densitate & magnitudine conjunctim. Aer densitate duplicata, in spatio etiam duplicato, fit quadruplus; in triplicato sextuplus. Idem intellige de nive & pulveribus per compressionem vel liquefactionem condensatis.
+                        </p>
+                        <p className="indent-4">
+                          Hanc quantitatem per corporis cujusque pondus innotescere comperi per experimenta pendulorum accuratissime instituta, ut posthac dicetur.
+                        </p>
+                        <p className="indent-4">
+                          Quantitas motus est mensura ejusdem orta ex velocitate et quantitate materiae conjunctim. Motus totius est summa motuum in partibus singulis; ideoque in corpore duplo majore, & aequali cum velocitate, duplus est, & cum velocitate dupla quadruplus.
+                        </p>
+                      </>
+                    )}
+                  </div>
 
-                      <p className="indent-4">
-                        <strong className="font-sans font-semibold">Lex. III.</strong> Actioni
-                        contrariam semper & aequalem esse reactionem: sive corporum duorum actiones
-                        in se mutuo semper esse aequales & in partes contrarias dirigi.
-                      </p>
+                  {/* Academic Page Footer */}
+                  <div className="pt-4 border-t border-app-border/40 flex items-center justify-between text-[10px] text-app-muted font-mono">
+                    <span className="truncate max-w-[320px]">{docUpper}</span>
+                    <span>[§ {pageNum * 4}]</span>
+                  </div>
+                </div>
 
-                      <p className="indent-4">
-                        Quicquid premit vel trahit alterum, tantundem ab eo premitur vel trahitur. Si
-                        quis lapidem digito premit, premitur & ejus digitus a lapide. Si equus lapidem
-                        funi alligatum trahit, retrahetur etiam & equus aequaliter in lapidem.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="font-semibold text-xs tracking-wider text-zinc-600 dark:text-zinc-400 mb-2">
-                        SECTIO {pageNum} · THEOREMA {pageNum * 2 - 1}
-                      </div>
-                      <p className="indent-4">
-                        Quantitas materiae est mensura ejusdem orta ex illius densitate & magnitudine
-                        conjunctim. Aer densitate duplicata, in spatio etiam duplicato, fit
-                        quadruplus; in triplicato sextuplus. Idem intellige de nive & pulveribus per
-                        compressionem vel liquefactionem condensatis.
-                      </p>
-                      <p className="indent-4">
-                        Hanc quantitatem per corporis cujusque pondus innotescere comperi per
-                        experimenta pendulorum accuratissime instituta, ut posthac dicetur.
-                      </p>
-                      <p className="indent-4">
-                        Quantitas motus est mensura ejusdem orta ex velocitate et quantitate materiae
-                        conjunctim. Motus totius est summa motuum in partibus singulis; ideoque in
-                        corpore duplo majore, & aequali cum velocitate, duplus est, & cum velocitate
-                        dupla quadruplus.
-                      </p>
-                    </>
+                {/* Tier 2: Page-Local SVG Viewport Layer */}
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none z-10"
+                  style={{ width: `${pageDim.width}px`, height: `${pageDim.height}px` }}
+                >
+                  {/* Predicted Bounding Quad */}
+                  {predLocal && (
+                    <g>
+                      <rect
+                        x={predLocal.x}
+                        y={predLocal.y}
+                        width={predLocal.width}
+                        height={predLocal.height}
+                        fill="rgba(59, 130, 246, 0.08)"
+                        stroke="#3B82F6"
+                        strokeWidth={2}
+                        rx={3}
+                        className="transition-all duration-150"
+                      />
+                      {/* Top-Right Label Badge */}
+                      <foreignObject
+                        x={predLocal.x}
+                        y={Math.max(0, predLocal.y - 20)}
+                        width={Math.max(160, predLocal.width)}
+                        height={20}
+                      >
+                        <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-t text-[9px] font-mono font-semibold bg-blue-600 text-white">
+                          <Sparkles className="w-2.5 h-2.5" />
+                          <span>PREDICTED ANCHOR</span>
+                          {activeEvidence && (
+                            <span className="opacity-80 ml-0.5">
+                              (IoU: {activeEvidence.iou_score.toFixed(3)})
+                            </span>
+                          )}
+                        </div>
+                      </foreignObject>
+                    </g>
                   )}
-                </div>
 
-                {/* Academic Page Footer */}
-                <div className="pt-4 border-t border-app-border/40 flex items-center justify-between text-[10px] text-app-muted font-mono">
-                  <span>LIBER PRIMUS: DE MOTU CORPORUM</span>
-                  <span>[§ {pageNum * 4}]</span>
-                </div>
+                  {/* Gold Reference Bounding Quad */}
+                  {refLocal && (
+                    <g>
+                      <rect
+                        x={refLocal.x}
+                        y={refLocal.y}
+                        width={refLocal.width}
+                        height={refLocal.height}
+                        fill="rgba(16, 185, 129, 0.06)"
+                        stroke="#10B981"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                        rx={3}
+                      />
+                      {/* Bottom-Right Label Badge */}
+                      <foreignObject
+                        x={refLocal.x}
+                        y={refLocal.y + refLocal.height + 2}
+                        width={Math.max(140, refLocal.width)}
+                        height={20}
+                      >
+                        <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-b text-[9px] font-mono font-semibold bg-emerald-600 text-white">
+                          <BookOpen className="w-2.5 h-2.5" />
+                          <span>GOLD REFERENCE</span>
+                        </div>
+                      </foreignObject>
+                    </g>
+                  )}
+
+                  {/* Continuation Span Quad */}
+                  {continuationLocal && (
+                    <g>
+                      <rect
+                        x={continuationLocal.x}
+                        y={continuationLocal.y}
+                        width={continuationLocal.width}
+                        height={continuationLocal.height}
+                        fill="rgba(245, 158, 11, 0.08)"
+                        stroke="#F59E0B"
+                        strokeWidth={2}
+                        strokeDasharray="4 2"
+                        rx={3}
+                      />
+                      <foreignObject
+                        x={continuationLocal.x}
+                        y={Math.max(0, continuationLocal.y - 18)}
+                        width={160}
+                        height={18}
+                      >
+                        <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono font-semibold bg-amber-600 text-white">
+                          <span>CONTINUATION SPAN</span>
+                        </div>
+                      </foreignObject>
+                    </g>
+                  )}
+                </svg>
               </div>
-
-              {/* Tier 2: Page-Local SVG Viewport Layer */}
-              <svg
-                className="absolute inset-0 w-full h-full pointer-events-none z-10"
-                style={{ width: `${pageDim.width}px`, height: `${pageDim.height}px` }}
-              >
-                {/* Predicted Bounding Quad */}
-                {predLocal && (
-                  <g>
-                    <rect
-                      x={predLocal.x}
-                      y={predLocal.y}
-                      width={predLocal.width}
-                      height={predLocal.height}
-                      fill="rgba(59, 130, 246, 0.08)"
-                      stroke="#3B82F6"
-                      strokeWidth={2}
-                      rx={3}
-                      className="transition-all duration-150"
-                    />
-                    {/* Top-Right Label Badge */}
-                    <foreignObject
-                      x={predLocal.x}
-                      y={Math.max(0, predLocal.y - 20)}
-                      width={Math.max(160, predLocal.width)}
-                      height={20}
-                    >
-                      <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-t text-[9px] font-mono font-semibold bg-blue-600 text-white">
-                        <Sparkles className="w-2.5 h-2.5" />
-                        <span>PREDICTED ANCHOR</span>
-                        {activeEvidence && (
-                          <span className="opacity-80 ml-0.5">
-                            (IoU: {activeEvidence.iou_score.toFixed(3)})
-                          </span>
-                        )}
-                      </div>
-                    </foreignObject>
-                  </g>
-                )}
-
-                {/* Gold Reference Bounding Quad */}
-                {refLocal && (
-                  <g>
-                    <rect
-                      x={refLocal.x}
-                      y={refLocal.y}
-                      width={refLocal.width}
-                      height={refLocal.height}
-                      fill="rgba(16, 185, 129, 0.06)"
-                      stroke="#10B981"
-                      strokeWidth={2}
-                      strokeDasharray="5 3"
-                      rx={3}
-                    />
-                    {/* Bottom-Right Label Badge */}
-                    <foreignObject
-                      x={refLocal.x}
-                      y={refLocal.y + refLocal.height + 2}
-                      width={Math.max(140, refLocal.width)}
-                      height={20}
-                    >
-                      <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-b text-[9px] font-mono font-semibold bg-emerald-600 text-white">
-                        <BookOpen className="w-2.5 h-2.5" />
-                        <span>GOLD REFERENCE</span>
-                      </div>
-                    </foreignObject>
-                  </g>
-                )}
-
-                {/* Continuation Span Quad */}
-                {continuationLocal && (
-                  <g>
-                    <rect
-                      x={continuationLocal.x}
-                      y={continuationLocal.y}
-                      width={continuationLocal.width}
-                      height={continuationLocal.height}
-                      fill="rgba(245, 158, 11, 0.08)"
-                      stroke="#F59E0B"
-                      strokeWidth={2}
-                      strokeDasharray="4 2"
-                      rx={3}
-                    />
-                    <foreignObject
-                      x={continuationLocal.x}
-                      y={Math.max(0, continuationLocal.y - 18)}
-                      width={160}
-                      height={18}
-                    >
-                      <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono font-semibold bg-amber-600 text-white">
-                        <span>CONTINUATION SPAN</span>
-                      </div>
-                    </foreignObject>
-                  </g>
-                )}
-              </svg>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

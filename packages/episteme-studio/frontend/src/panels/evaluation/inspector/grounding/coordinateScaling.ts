@@ -81,7 +81,8 @@ export function computeGlobalBoundingBox(
     | PageDimension[]
     | Record<number, PageDimension>
     | ((page: number) => PageDimension),
-  pageGap = 24
+  pageGap = 24,
+  basePage = 1
 ): ScaledGlobalBoundingBox {
   const getDim = (p: number): PageDimension => {
     if (typeof pageDimensions === "function") {
@@ -93,10 +94,10 @@ export function computeGlobalBoundingBox(
     return pageDimensions[p] || { width: 800, height: 1131 };
   };
 
-  const targetPage = Math.max(1, bbox.page);
+  const targetPage = Math.max(basePage, bbox.page);
   let accumulatedHeight = 0;
 
-  for (let i = 1; i < targetPage; i++) {
+  for (let i = basePage; i < targetPage; i++) {
     const dim = getDim(i);
     accumulatedHeight += dim.height + pageGap;
   }
@@ -200,13 +201,15 @@ export function computeBezierSplineAcrossPages(
     | PageDimension[]
     | Record<number, PageDimension>
     | ((page: number) => PageDimension),
-  pageGap = 24
+  pageGap = 24,
+  basePage?: number
 ): MultiPageSplineConnection {
   const srcBox = "bbox" in sourceSpan ? spanToBoundingBox(sourceSpan) : sourceSpan;
   const tgtBox = "bbox" in targetSpan ? spanToBoundingBox(targetSpan) : targetSpan;
 
-  const srcGlobal = computeGlobalBoundingBox(srcBox, pageDimensions, pageGap);
-  const tgtGlobal = computeGlobalBoundingBox(tgtBox, pageDimensions, pageGap);
+  const effectiveBase = basePage ?? Math.min(srcBox.page, tgtBox.page);
+  const srcGlobal = computeGlobalBoundingBox(srcBox, pageDimensions, pageGap, effectiveBase);
+  const tgtGlobal = computeGlobalBoundingBox(tgtBox, pageDimensions, pageGap, effectiveBase);
 
   // Exit point at center-bottom of source bounding box
   const p0 = {
