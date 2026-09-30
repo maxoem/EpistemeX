@@ -1,0 +1,49 @@
+/* Local & GDPR-compliant typography declarations */
+
+/* Inter (Interface & Body) */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../fonts/Inter/Inter-VariableFont_opsz,wght.ttf') format('truetype-variations'),
+       url('../fonts/Inter/Inter-VariableFont_opsz,wght.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../fonts/Inter/Inter-Italic-VariableFont_opsz,wght.ttf') format('truetype-variations'),
+       url('../fonts/Inter/Inter-Italic-VariableFont_opsz,wght.ttf') format('truetype');
+}
+
+/* JetBrains Mono (Code, Telemetry, Machine Keys) */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('../fonts/JetBrains_Mono/JetBrainsMono-VariableFont_wght.ttf') format('truetype-variations'),
+       url('../fonts/JetBrains_Mono/JetBrainsMono-VariableFont_wght.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: italic;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('../fonts/JetBrains_Mono/JetBrainsMono-Italic-VariableFont_wght.ttf') format('truetype-variations'),
+       url('../fonts/JetBrains_Mono/JetBrainsMono-Italic-VariableFont_wght.ttf') format('truetype');
+}
+
+/* Manrope (Headings & Hero) */
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('../fonts/Manrope/Manrope-VariableFont_wght.ttf') format('truetype-variations'),
+       url('../fonts/Manrope/Manrope-VariableFont_wght.ttf') format('truetype');
+}

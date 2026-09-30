@@ -9,6 +9,7 @@ repo_url = "https://github.com/maxoehm/episteme"
 
 
 extra_css = [
+    "stylesheets/fonts.css",
     "stylesheets/extra.css"
 ]
 
