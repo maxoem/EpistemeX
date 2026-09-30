@@ -1,18 +1,27 @@
 import React, { useState, useMemo } from "react";
-import { Sliders, Sparkles, AlertCircle, CheckCircle2, TrendingUp } from "lucide-react";
+import { Sliders, Sparkles, Check, ArrowRight } from "lucide-react";
 
 export interface ThresholdOptimizerBarProps {
   baselinePrecision?: number;
   baselineRecall?: number;
   totalTriples?: number;
   onApplyThreshold?: (threshold: number) => void;
+  className?: string;
 }
 
+/**
+ * Interactive Confidence Threshold Optimizer (τ).
+ *
+ * Implements mathematical trade-off projections between precision, recall,
+ * and filtered extraction candidates. Conforms to design.md §10 (Scientific
+ * Structural Telemetry Tables rather than generic SaaS metric cards).
+ */
 export const ThresholdOptimizerBar: React.FC<ThresholdOptimizerBarProps> = ({
   baselinePrecision = 0.88,
   baselineRecall = 0.85,
   totalTriples = 340,
   onApplyThreshold,
+  className = "",
 }) => {
   const [threshold, setThreshold] = useState<number>(0.82);
 
@@ -33,11 +42,13 @@ export const ThresholdOptimizerBar: React.FC<ThresholdOptimizerBarProps> = ({
 
     // Filtered out stats
     const discardedValidPercent = Math.max(0, (1 - recall / baselineRecall) * 100);
-    const discardedValidCount = Math.round((discardedValidPercent / 100) * totalTriples * baselineRecall);
+    const discardedValidCount = Math.round(
+      (discardedValidPercent / 100) * totalTriples * baselineRecall
+    );
 
     const filteredHallucinationsPercent = Math.min(
       95,
-      Math.max(10, (shift * 75) + 15)
+      Math.max(10, shift * 75 + 15)
     );
 
     return {
@@ -50,65 +61,47 @@ export const ThresholdOptimizerBar: React.FC<ThresholdOptimizerBarProps> = ({
     };
   }, [threshold, baselinePrecision, baselineRecall, totalTriples]);
 
+  const presets = [
+    { label: "Recall (0.65)", value: 0.65 },
+    { label: "Balanced (0.82)", value: 0.82 },
+    { label: "Precision (0.92)", value: 0.92 },
+  ];
+
   return (
-    <div className="p-3.5 bg-app-surface border border-app-border rounded-lg select-none shrink-0 space-y-3">
-      {/* Header and Presets */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-blue-500/10 text-blue-500">
-            <Sliders className="w-3.5 h-3.5" />
-          </div>
-          <div>
-            <h4 className="text-xs font-semibold text-app-heading">
-              Interactive Confidence Threshold Optimizer (τ)
-            </h4>
-            <p className="text-[11px] text-app-muted">
-              Project trade-offs between precision, recall, and discarded triples
-            </p>
-          </div>
+    <div className={`space-y-3 font-sans select-none ${className}`}>
+      {/* Header & Preset Track */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <Sliders className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+          <h4 className="type-caption font-semibold text-app-heading uppercase tracking-wider">
+            Threshold Optimizer (τ)
+          </h4>
         </div>
 
-        {/* Preset Buttons */}
-        <div className="flex items-center gap-1.5 text-[11px]">
-          <span className="text-app-muted font-sans mr-1 hidden md:inline">Presets:</span>
-          <button
-            onClick={() => setThreshold(0.65)}
-            className={`px-2 py-0.5 rounded border transition-colors ${
-              threshold === 0.65
-                ? "bg-blue-600 text-white border-blue-600 font-semibold"
-                : "bg-app-bg text-app-muted hover:text-app-text border-app-border"
-            }`}
-          >
-            High Recall (0.65)
-          </button>
-          <button
-            onClick={() => setThreshold(0.82)}
-            className={`px-2 py-0.5 rounded border transition-colors ${
-              threshold === 0.82
-                ? "bg-blue-600 text-white border-blue-600 font-semibold"
-                : "bg-app-bg text-app-muted hover:text-app-text border-app-border"
-            }`}
-          >
-            Balanced F₁ (0.82)
-          </button>
-          <button
-            onClick={() => setThreshold(0.92)}
-            className={`px-2 py-0.5 rounded border transition-colors ${
-              threshold === 0.92
-                ? "bg-blue-600 text-white border-blue-600 font-semibold"
-                : "bg-app-bg text-app-muted hover:text-app-text border-app-border"
-            }`}
-          >
-            High Precision (0.92)
-          </button>
+        {/* Segmented Pill Track (design.md Segmented Control) */}
+        <div className="flex items-center gap-0.5 bg-app-bg p-0.5 rounded border border-app-border text-[10px]">
+          {presets.map((p) => (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => setThreshold(p.value)}
+              className={`px-1.5 py-0.5 rounded transition-colors cursor-pointer ${
+                Math.abs(threshold - p.value) < 0.005
+                  ? "bg-app-surface text-app-heading font-medium border border-app-border/80"
+                  : "text-app-muted hover:text-app-text"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Slider Control */}
-      <div className="space-y-1.5 pt-1">
-        <div className="flex items-center justify-between text-xs font-mono">
-          <span className="text-app-muted font-sans text-[11px]">Extraction Threshold:</span>
-          <span className="font-semibold text-blue-500 tabular-nums bg-blue-500/10 px-2 py-0.5 rounded">
+      {/* Slider & Value Display */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="type-caption text-app-muted">Cutoff Parameter:</span>
+          <span className="type-mono font-semibold tabular-nums text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded">
             τ = {threshold.toFixed(2)}
           </span>
         </div>
@@ -120,91 +113,102 @@ export const ThresholdOptimizerBar: React.FC<ThresholdOptimizerBarProps> = ({
           step={0.01}
           value={threshold}
           onChange={(e) => setThreshold(parseFloat(e.target.value))}
-          className="w-full precision-slider"
+          className="w-full precision-slider cursor-pointer accent-blue-600"
         />
 
-        <div className="relative h-4 text-[10px] font-mono text-app-muted">
-          <span className="absolute left-0">0.50 (Permissive)</span>
-          <span className="absolute -translate-x-1/2" style={{ left: "51.0%" }}>0.75</span>
-          <span className="absolute -translate-x-1/2" style={{ left: "71.4%" }}>0.85</span>
-          <span className="absolute right-0">0.99 (Ultra-Conservative)</span>
+        <div className="flex items-center justify-between text-[10px] type-mono text-app-muted px-0.5">
+          <span>0.50 (Permissive)</span>
+          <span>0.75</span>
+          <span>0.85</span>
+          <span>0.99 (Strict)</span>
         </div>
       </div>
 
-      {/* Projected Metrics Readout */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-1">
-        <div className="p-2 rounded bg-app-bg border border-app-border">
-          <span className="text-[10px] text-app-muted uppercase font-sans block">
-            Projected Precision
-          </span>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="font-mono text-xs font-semibold tabular-nums text-app-text">
-              {projections.precision.toFixed(1)}%
-            </span>
-            <span className={`text-[10px] font-mono ${projections.precision >= baselinePrecision * 100 ? "text-emerald-500" : "text-rose-500"}`}>
-              ({projections.precision >= baselinePrecision * 100 ? "+" : ""}
-              {(projections.precision - baselinePrecision * 100).toFixed(1)}%)
-            </span>
-          </div>
+      {/* Scientific Structural Telemetry Table (design.md §10) */}
+      <div className="rounded border border-app-border bg-app-bg overflow-hidden text-xs">
+        <div className="px-3 py-1.5 bg-app-surface border-b border-app-border flex items-center justify-between text-[10px] text-app-muted uppercase font-semibold tracking-wider">
+          <span>Projected Epistemic Invariants</span>
+          <span className="type-mono">N={totalTriples}</span>
         </div>
 
-        <div className="p-2 rounded bg-app-bg border border-app-border">
-          <span className="text-[10px] text-app-muted uppercase font-sans block">
-            Projected Recall
-          </span>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="font-mono text-xs font-semibold tabular-nums text-app-text">
-              {projections.recall.toFixed(1)}%
-            </span>
-            <span className={`text-[10px] font-mono ${projections.recall >= baselineRecall * 100 ? "text-emerald-500" : "text-amber-500"}`}>
-              ({projections.recall >= baselineRecall * 100 ? "+" : ""}
-              {(projections.recall - baselineRecall * 100).toFixed(1)}%)
-            </span>
+        <div className="divide-y divide-app-border font-sans">
+          {/* Row 1: Projected Precision */}
+          <div className="px-3 py-1.5 flex items-center justify-between">
+            <span className="type-caption text-app-muted">Projected Precision</span>
+            <div className="flex items-center gap-1.5">
+              <span className="type-mono font-semibold tabular-nums text-app-heading">
+                {projections.precision.toFixed(1)}%
+              </span>
+              <span
+                className={`text-[10px] type-mono tabular-nums ${
+                  projections.precision >= baselinePrecision * 100
+                    ? "text-emerald-500"
+                    : "text-rose-500"
+                }`}
+              >
+                ({projections.precision >= baselinePrecision * 100 ? "+" : ""}
+                {(projections.precision - baselinePrecision * 100).toFixed(1)}%)
+              </span>
+            </div>
           </div>
-        </div>
 
-        <div className="p-2 rounded bg-app-bg border border-app-border">
-          <span className="text-[10px] text-app-muted uppercase font-sans block">
-            Projected Macro F₁
-          </span>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="font-mono text-xs font-semibold tabular-nums text-app-text">
+          {/* Row 2: Projected Recall */}
+          <div className="px-3 py-1.5 flex items-center justify-between">
+            <span className="type-caption text-app-muted">Projected Recall</span>
+            <div className="flex items-center gap-1.5">
+              <span className="type-mono font-semibold tabular-nums text-app-heading">
+                {projections.recall.toFixed(1)}%
+              </span>
+              <span
+                className={`text-[10px] type-mono tabular-nums ${
+                  projections.recall >= baselineRecall * 100
+                    ? "text-emerald-500"
+                    : "text-amber-500"
+                }`}
+              >
+                ({projections.recall >= baselineRecall * 100 ? "+" : ""}
+                {(projections.recall - baselineRecall * 100).toFixed(1)}%)
+              </span>
+            </div>
+          </div>
+
+          {/* Row 3: Macro F1 */}
+          <div className="px-3 py-1.5 flex items-center justify-between">
+            <span className="type-caption text-app-muted">Projected Macro F₁</span>
+            <span className="type-mono font-semibold tabular-nums text-blue-500">
               {(projections.f1 / 100).toFixed(3)}
             </span>
-            <span className="text-[10px] font-mono text-emerald-500">Optimal</span>
           </div>
-        </div>
 
-        <div className="p-2 rounded bg-app-bg border border-app-border">
-          <span className="text-[10px] text-app-muted uppercase font-sans block">
-            Discarded Valid Triples
-          </span>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="font-mono text-xs font-semibold tabular-nums text-amber-500">
+          {/* Row 4: Discarded Valid Triples */}
+          <div className="px-3 py-1.5 flex items-center justify-between">
+            <span className="type-caption text-app-muted">Discarded Valid Triples</span>
+            <span className="type-mono tabular-nums text-amber-500">
               {projections.discardedValidCount} ({projections.discardedValidPercent.toFixed(1)}%)
             </span>
           </div>
-        </div>
 
-        <div className="p-2 rounded bg-app-bg border border-app-border col-span-2 sm:col-span-1 flex items-center justify-between">
-          <div>
-            <span className="text-[10px] text-app-muted uppercase font-sans block">
-              Filtered Errors
-            </span>
-            <span className="font-mono text-xs font-semibold tabular-nums text-emerald-500">
+          {/* Row 5: Filtered Errors */}
+          <div className="px-3 py-1.5 flex items-center justify-between">
+            <span className="type-caption text-app-muted">Filtered Errors</span>
+            <span className="type-mono font-semibold tabular-nums text-emerald-500">
               ~{projections.filteredHallucinationsPercent.toFixed(0)}%
             </span>
           </div>
-          {onApplyThreshold && (
-            <button
-              onClick={() => onApplyThreshold(threshold)}
-              className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium transition-colors cursor-pointer"
-            >
-              Apply τ
-            </button>
-          )}
         </div>
       </div>
+
+      {/* Apply Action */}
+      {onApplyThreshold && (
+        <button
+          type="button"
+          onClick={() => onApplyThreshold(threshold)}
+          className="w-full py-1.5 px-3 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+        >
+          <span>Apply Threshold (τ = {threshold.toFixed(2)}) to Pipeline</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   );
 };

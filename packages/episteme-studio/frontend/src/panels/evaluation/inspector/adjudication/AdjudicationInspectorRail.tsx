@@ -1,19 +1,11 @@
 import React, { useState } from "react";
 import {
-  Quote,
-  GitMerge,
-  ShieldCheck,
   FileCode,
-  Sparkles,
-  ArrowRight,
-  ExternalLink,
-  CheckCircle2,
+  GitMerge,
   Info,
+  Layers,
   ChevronDown,
   ChevronRight,
-  Activity,
-  Sliders,
-  Layers,
 } from "lucide-react";
 import type {
   AdjudicationQueueItem,
@@ -62,7 +54,6 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
       {/* 1. Rail Docked Header (44px) */}
       <div className="h-11 px-4 border-b border-app-border bg-app-surface flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <Activity className="w-4 h-4 text-blue-500 shrink-0" />
           <h2 className="text-xs font-semibold text-app-heading tracking-tight truncate font-sans">
             Diagnostic Inspector
           </h2>
@@ -95,14 +86,10 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
             <div className="p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <Quote className="w-3.5 h-3.5 text-blue-500" />
                   <h3 className="text-xs font-semibold text-app-heading font-sans">
                     Literature Provenance
                   </h3>
                 </div>
-                <span className="px-1.5 py-0.5 rounded font-mono text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/20">
-                  Intra-Chunk Grounding
-                </span>
               </div>
 
               {/* Chunk Tag & Token Metrology */}
@@ -116,7 +103,7 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
               {/* Verbatim Excerpt with Highlighted Spans */}
               {candidate.evidence_snippet ? (
                 <div className="space-y-2">
-                  <blockquote className="p-3.5 rounded-md bg-app-subtle/50 border-l-2 border-blue-500 text-xs italic text-app-heading leading-relaxed font-serif">
+                  <blockquote className="p-3.5 rounded-md bg-app-subtle/50 border-l-2 border-blue-500 text-xs italic text-app-heading leading-relaxed">
                     &ldquo;
                     {candidate.evidence_snippet
                       .split(/(\([^)]+\)|derivations|experiment|progressively|critiques|manifestation)/gi)
@@ -180,7 +167,6 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
             <div className="p-4 space-y-2.5">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold text-app-heading font-sans flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-500" />
                   <span>Comparative Graph Overlay</span>
                 </h3>
                 <span className="text-[10px] font-mono text-app-muted">
@@ -217,7 +203,6 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
                     <ChevronRight className="w-3.5 h-3.5 text-app-muted" />
                   )}
                   <div className="flex items-center gap-1.5">
-                    <GitMerge className="w-3.5 h-3.5 text-violet-500" />
                     <span className="font-semibold text-app-heading font-sans">
                       Ontology Schema Aliasing
                     </span>
@@ -228,9 +213,6 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
                   {hasAlias && (
                     <span className="w-2 h-2 rounded-full bg-violet-500" title="Alias active" />
                   )}
-                  <span className="text-[10px] font-mono text-violet-500 font-medium">
-                    [S] Omnibar
-                  </span>
                 </div>
               </button>
 
@@ -240,14 +222,14 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
                     Map candidate vocabulary drift to canonical ontology predicates without modifying extraction pipeline logic.
                   </p>
 
-                  <div className="p-2.5 rounded bg-app-surface border border-app-border space-y-1.5 text-xs font-mono">
-                    <div className="flex items-center justify-between">
+                  <div className="bg-app-subtle/50 divide-y divide-app-border-subtle rounded-md text-xs font-mono">
+                    <div className="flex items-center justify-between px-2.5 py-2">
                       <span className="text-[10px] text-app-muted font-sans">Predicted Predicate:</span>
                       <span className="font-semibold text-amber-500 bg-amber-500/10 px-1.5 py-0.2 rounded text-[10px]">
                         {formatPredicate(candidate.predicted_edge?.predicate || "None")}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between px-2.5 py-2">
                       <span className="text-[10px] text-app-muted font-sans">Reference Gold Target:</span>
                       <span className="font-semibold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.2 rounded text-[10px]">
                         {candidate.reference_edge?.predicate
@@ -305,7 +287,6 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
                     <ChevronRight className="w-3.5 h-3.5 text-app-muted" />
                   )}
                   <div className="flex items-center gap-1.5">
-                    <Sliders className="w-3.5 h-3.5 text-amber-500" />
                     <span className="font-semibold text-app-heading font-sans">
                       Semantic Similarity Decomposition
                     </span>
@@ -321,7 +302,7 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
                 <div className="px-4 py-3 bg-app-bg space-y-2 animate-in fade-in duration-100">
                   <div className="grid grid-cols-3 gap-2">
                     {/* Head Sim */}
-                    <div className="p-2 rounded bg-app-surface border border-app-border space-y-1">
+                    <div className="p-2 rounded bg-app-subtle/50 space-y-1">
                       <div className="flex items-center justify-between text-[10px] font-mono text-app-muted">
                         <span>Head Entity</span>
                         <span className="text-emerald-500 font-semibold">{headSim.toFixed(2)}</span>
@@ -332,7 +313,7 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
                     </div>
 
                     {/* Predicate Sim */}
-                    <div className="p-2 rounded bg-app-surface border border-app-border space-y-1">
+                    <div className="p-2 rounded bg-app-subtle/50 space-y-1">
                       <div className="flex items-center justify-between text-[10px] font-mono text-app-muted">
                         <span>Predicate</span>
                         <span className="text-amber-500 font-semibold">{predSim.toFixed(2)}</span>
@@ -343,7 +324,7 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
                     </div>
 
                     {/* Tail Sim */}
-                    <div className="p-2 rounded bg-app-surface border border-app-border space-y-1">
+                    <div className="p-2 rounded bg-app-subtle/50 space-y-1">
                       <div className="flex items-center justify-between text-[10px] font-mono text-app-muted">
                         <span>Tail Entity</span>
                         <span className="text-emerald-500 font-semibold">{tailSim.toFixed(2)}</span>
@@ -371,7 +352,6 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
                     <ChevronRight className="w-3.5 h-3.5 text-app-muted" />
                   )}
                   <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                     <span className="font-semibold text-app-heading font-sans">
                       Safeguards & Gold Export
                     </span>
@@ -405,7 +385,7 @@ export const AdjudicationInspectorRail: React.FC<AdjudicationInspectorRailProps>
                   </div>
 
                   {/* Buffer Telemetry */}
-                  <div className="p-2.5 rounded bg-app-surface border border-app-border font-mono text-[11px] space-y-1">
+                  <div className="p-2.5 rounded bg-app-subtle/50 font-mono text-[11px] space-y-1">
                     <div className="flex justify-between">
                       <span className="text-app-muted">Staged Decisions:</span>
                       <span className="text-app-text font-semibold tabular-nums">{stagedCount}</span>

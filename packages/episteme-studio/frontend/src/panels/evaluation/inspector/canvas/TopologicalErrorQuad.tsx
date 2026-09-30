@@ -155,33 +155,33 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
 
             {/* Canvas Error Summary Vitrine */}
             {graphOverlay && (
-              <div className="w-full mt-4 p-3 rounded-md bg-app-bg border border-app-border space-y-2 text-left">
+            <div className="w-full mt-4 border-t border-app-border pt-3 space-y-2 text-left">
                 <div className="text-[10px] font-semibold uppercase text-app-muted tracking-wider">
                   Graph Alignment Telemetry
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="p-2 rounded bg-app-surface border border-app-border/60">
+                  <div className="p-2 rounded bg-app-subtle/40">
                     <span className="text-[10px] text-app-muted block">True Positives</span>
                     <span className="font-mono tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">
                       {(graphOverlay.summary_counts?.tp_nodes ?? 0) +
                         (graphOverlay.summary_counts?.tp_edges ?? 0)}
                     </span>
                   </div>
-                  <div className="p-2 rounded bg-app-surface border border-app-border/60">
+                  <div className="p-2 rounded bg-app-subtle/40">
                     <span className="text-[10px] text-app-muted block">Hallucinations (FP)</span>
                     <span className="font-mono tabular-nums font-semibold text-rose-600 dark:text-rose-400">
                       {(graphOverlay.summary_counts?.fp_nodes ?? 0) +
                         (graphOverlay.summary_counts?.fp_edges ?? 0)}
                     </span>
                   </div>
-                  <div className="p-2 rounded bg-app-surface border border-app-border/60">
+                  <div className="p-2 rounded bg-app-subtle/40">
                     <span className="text-[10px] text-app-muted block">Omissions (FN Ghosts)</span>
                     <span className="font-mono tabular-nums font-semibold text-zinc-500 dark:text-zinc-400">
                       {(graphOverlay.summary_counts?.fn_nodes ?? 0) +
                         (graphOverlay.summary_counts?.fn_edges ?? 0)}
                     </span>
                   </div>
-                  <div className="p-2 rounded bg-app-surface border border-app-border/60">
+                  <div className="p-2 rounded bg-app-subtle/40">
                     <span className="text-[10px] text-app-muted block">Polarity Conflicts</span>
                     <span className="font-mono tabular-nums font-semibold text-amber-600 dark:text-amber-400">
                       {graphOverlay.summary_counts?.conflict_edges ?? 0}
@@ -200,7 +200,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
             const isConflict = edge.alignment_status === "polarity_conflict";
 
             return (
-              <div className="space-y-4">
+                <div className="divide-y divide-app-border/60">
                 {/* Element Type Pill & Status Badge */}
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-app-bg border border-app-border text-app-muted">
@@ -210,7 +210,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                 </div>
 
                 {/* Quad Pillar 1: Predicted Construct Triple */}
-                <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-2">
+                <div className="py-3 space-y-2">
                   <div className="text-[10px] uppercase font-semibold text-app-muted tracking-wider">
                     Pillar 1: Predicted Relational Triple
                   </div>
@@ -233,7 +233,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                 </div>
 
                 {/* Quad Pillar 2: Gold Reference Match */}
-                <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-2">
+                <div className="py-3 space-y-2">
                   <div className="text-[10px] uppercase font-semibold text-app-muted tracking-wider">
                     Pillar 2: Gold Reference Match
                   </div>
@@ -264,18 +264,18 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                 </div>
 
                 {/* Quad Pillar 3: Semantic Alignment Metrics */}
-                <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-2">
+                <div className="py-3 space-y-2">
                   <div className="text-[10px] uppercase font-semibold text-app-muted tracking-wider">
                     Pillar 3: Alignment & Confidence Metrics
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2 rounded bg-app-surface border border-app-border/60">
+                    <div className="p-2 rounded bg-app-subtle/40">
                       <span className="text-[10px] text-app-muted block">Similarity (&tau;)</span>
                       <span className="font-mono tabular-nums font-semibold text-app-text">
                         {edge.similarity_score.toFixed(3)}
                       </span>
                     </div>
-                    <div className="p-2 rounded bg-app-surface border border-app-border/60">
+                    <div className="p-2 rounded bg-app-subtle/40">
                       <span className="text-[10px] text-app-muted block">LLM Confidence</span>
                       <span className="font-mono tabular-nums font-semibold text-app-text">
                         {edge.similarity_score > 0 ? (edge.similarity_score * 0.95).toFixed(3) : "0.000"}
@@ -285,14 +285,14 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                 </div>
 
                 {/* Quad Pillar 4: Verbatim Grounding Quote */}
-                <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-2">
+                <div className="py-3 space-y-2">
                   <div className="flex items-center justify-between text-[10px] uppercase font-semibold text-app-muted tracking-wider">
                     <span className="flex items-center gap-1">
                       <Quote className="w-3 h-3 text-blue-500" />
                       Pillar 4: Verbatim Grounding Quote
                     </span>
                   </div>
-                  <blockquote className="p-2.5 rounded bg-app-surface border-l-2 border-blue-500 text-[11px] italic text-app-text leading-relaxed font-serif">
+                  <blockquote className="pl-2.5 border-l-2 border-blue-500 text-[11px] italic text-app-text leading-relaxed">
                     {edge.evidence_snippet ||
                       `"The relation between ${sourceLabel} and ${targetLabel} constitutes a foundational epistemic derivation in the primary treatise..."`}
                   </blockquote>
@@ -336,7 +336,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
           (() => {
             const node = selectedOverlayItem.item as EvaluationNodeOverlay;
             return (
-              <div className="space-y-4">
+                <div className="divide-y divide-app-border/60">
                 {/* Element Type Pill & Status Badge */}
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-app-bg border border-app-border text-app-muted">
@@ -346,7 +346,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                 </div>
 
                 {/* Pillar 1: Extracted Concept / Entity */}
-                <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-2">
+                <div className="py-3 space-y-2">
                   <div className="text-[10px] uppercase font-semibold text-app-muted tracking-wider">
                     Pillar 1: Concept Construct
                   </div>
@@ -366,7 +366,7 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                 </div>
 
                 {/* Pillar 2: Reference Standard Mapping */}
-                <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-2">
+                <div className="py-3 space-y-2">
                   <div className="text-[10px] uppercase font-semibold text-app-muted tracking-wider">
                     Pillar 2: Gold Reference Match
                   </div>
@@ -391,18 +391,18 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                 </div>
 
                 {/* Pillar 3: Semantic Alignment Metrics */}
-                <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-2">
+                <div className="py-3 space-y-2">
                   <div className="text-[10px] uppercase font-semibold text-app-muted tracking-wider">
                     Pillar 3: Alignment & Similarity
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2 rounded bg-app-surface border border-app-border/60">
+                    <div className="p-2 rounded bg-app-subtle/40">
                       <span className="text-[10px] text-app-muted block">Similarity (&tau;)</span>
                       <span className="font-mono tabular-nums font-semibold text-app-text">
                         {node.similarity_score.toFixed(3)}
                       </span>
                     </div>
-                    <div className="p-2 rounded bg-app-surface border border-app-border/60">
+                    <div className="p-2 rounded bg-app-subtle/40">
                       <span className="text-[10px] text-app-muted block">Ghost Synthesized</span>
                       <span className="font-mono font-semibold text-app-text">
                         {node.is_ghost ? "YES (Omission)" : "NO (Extracted)"}
@@ -412,16 +412,16 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                 </div>
 
                 {/* Pillar 4: Properties & Grounding */}
-                <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-2">
+                <div className="py-3 space-y-2">
                   <div className="text-[10px] uppercase font-semibold text-app-muted tracking-wider">
                     Pillar 4: Grounding & Properties
                   </div>
                   {node.properties && Object.keys(node.properties).length > 0 ? (
-                    <pre className="p-2 rounded bg-app-surface text-[10px] font-mono text-app-muted overflow-x-auto whitespace-pre-wrap">
+                    <pre className="p-2 rounded bg-app-subtle/40 text-[10px] font-mono text-app-muted overflow-x-auto whitespace-pre-wrap">
                       {JSON.stringify(node.properties, null, 2)}
                     </pre>
                   ) : (
-                    <blockquote className="p-2 rounded bg-app-surface border-l-2 border-blue-500 text-[11px] italic text-app-text leading-relaxed font-serif">
+                    <blockquote className="pl-2 border-l-2 border-blue-500 text-[11px] italic text-app-text leading-relaxed">
                       {`"${node.label} operates as an axiomatic component grounded in primary literature..."`}
                     </blockquote>
                   )}

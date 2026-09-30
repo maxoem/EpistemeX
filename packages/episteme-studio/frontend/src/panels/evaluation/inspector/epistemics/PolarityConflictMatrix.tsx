@@ -1,17 +1,11 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   AlertTriangle,
   ArrowRight,
-  CheckCircle2,
-  ExternalLink,
-  Flame,
-  Network,
-  Quote,
   Scale,
-  ShieldAlert,
-  Sliders,
-  Sparkles,
-  Zap,
+  Quote,
+  Network,
+  ShieldCheck,
 } from "lucide-react";
 import { useEvaluationStore } from "../../../../store/evaluationStore";
 import { ActionableHookPill } from "../../components/ActionableHookPill";
@@ -30,6 +24,14 @@ export interface PolarityConflictItem {
   edgeId?: string;
 }
 
+/**
+ * Lens 3: Inferential Polarity Concordance (SUPPORTS vs ATTACKS Dialectics).
+ *
+ * Implements design.md §9 (Headless Linear Data Grid) & §11 (Keyboard Triage):
+ * - Fixed 40px (h-10) data rows with 2px left border in primary blue (#2563EB)
+ * - Docked Master-Detail: Fluid center data grid + Right diagnostic citation rail
+ * - Instant j/k keyboard triage across dialectical conflicts
+ */
 export const PolarityConflictMatrix: React.FC = () => {
   const {
     activeReport,
@@ -38,18 +40,7 @@ export const PolarityConflictMatrix: React.FC = () => {
     graphOverlay,
   } = useEvaluationStore();
 
-  const [selectedConflict, setSelectedConflict] = useState<PolarityConflictItem | null>(null);
-  const [expandedQuotes, setExpandedQuotes] = useState<Set<string>>(new Set());
-
-  const toggleQuote = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExpandedQuotes((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const polarityDetail: PolarityConcordanceDetail = useMemo(() => {
     if (activeReport?.polarity_detail) {
@@ -63,9 +54,7 @@ export const PolarityConflictMatrix: React.FC = () => {
     };
   }, [activeReport]);
 
-  // Extract or synthesize severe inferential polarity conflicts
   const conflictItems: PolarityConflictItem[] = useMemo(() => {
-    // Check if graphOverlay has edges with alignment_status === "polarity_conflict"
     const overlayEdges = graphOverlay?.edges?.filter(
       (e) => e.alignment_status === "polarity_conflict"
     );
@@ -87,7 +76,6 @@ export const PolarityConflictMatrix: React.FC = () => {
       }));
     }
 
-    // Default canonical instances representing the roadmap specification
     return [
       {
         id: "conf_01",
@@ -128,8 +116,56 @@ export const PolarityConflictMatrix: React.FC = () => {
     ];
   }, [graphOverlay]);
 
+  useEffect(() => {
+    if (conflictItems.length > 0 && !selectedId) {
+      setSelectedId(conflictItems[0].id);
+    }
+  }, [conflictItems, selectedId]);
+
+  const selectedConflict = useMemo(() => {
+    return conflictItems.find((c) => c.id === selectedId) || conflictItems[0] || null;
+  }, [conflictItems, selectedId]);
+
+  const activeIndex = useMemo(() => {
+    if (!selectedId) return 0;
+    const idx = conflictItems.findIndex((c) => c.id === selectedId);
+    return idx >= 0 ? idx : 0;
+  }, [conflictItems, selectedId]);
+
+  // Keyboard Triage (§11)
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        if (activeIndex < conflictItems.length - 1) {
+          setSelectedId(conflictItems[activeIndex + 1].id);
+        }
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (activeIndex > 0) {
+          setSelectedId(conflictItems[activeIndex - 1].id);
+        }
+      }
+    },
+    [activeIndex, conflictItems]
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
+
   const handleInspectOnCanvas = (conflict: PolarityConflictItem) => {
-    // If matching edge exists in graphOverlay, select it
     if (graphOverlay?.edges) {
       const match = graphOverlay.edges.find(
         (e) =>
@@ -147,204 +183,201 @@ export const PolarityConflictMatrix: React.FC = () => {
   const conflictPct = Math.round(polarityDetail.polarity_conflict_rate * 1000) / 10;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-app-bg text-app-text select-none font-sans">
-      {/* 40px Header Toolbar */}
-      <div className="h-10 px-4 border-b border-app-border bg-app-surface shrink-0 flex items-center justify-between text-xs">
+    <div className="flex-1 flex flex-col h-full w-full overflow-hidden bg-app-bg text-app-text select-none font-sans">
+      {/* 44px Action Bar */}
+      <div className="h-11 px-4 border-b border-app-border bg-app-surface shrink-0 flex items-center justify-between text-xs gap-3">
         <div className="flex items-center gap-2">
-          <Scale className="w-4 h-4 text-amber-500" />
-          <h3 className="font-semibold text-app-heading">
+          <Scale className="w-3.5 h-3.5 text-amber-500" />
+          <h3 className="type-caption font-semibold text-app-heading uppercase tracking-wider">
             Inferential Polarity Concordance
           </h3>
-          <span className="text-[11px] text-app-muted font-mono hidden sm:inline">
+          <span className="type-mono text-[11px] text-app-muted hidden sm:inline">
             (SUPPORTS vs. ATTACKS Dialectics)
           </span>
         </div>
 
-        {/* Polarity Accuracy Score */}
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-app-muted">Concordance:</span>
-          <span className="font-mono tabular-nums text-xs font-bold text-emerald-500">
-            {accuracyPct.toFixed(1)}%
-          </span>
+        {/* Telemetry Strip */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="type-caption text-app-muted">Concordance:</span>
+            <span className="type-mono font-semibold tabular-nums text-emerald-500">
+              {accuracyPct.toFixed(1)}%
+            </span>
+          </div>
+          <span className="text-app-border">·</span>
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="type-caption text-app-muted">Conflict Rate:</span>
+            <span className="type-mono font-semibold tabular-nums text-amber-500">
+              {conflictPct.toFixed(1)}% ({polarityDetail.conflicting_pairs_count} pairs)
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Main Body */}
-      <div className="flex-1 overflow-y-auto divide-y divide-app-border">
-        {/* KPI Strip: Edge-to-edge 3-column summary */}
-        <div className="grid grid-cols-3 divide-x divide-app-border bg-app-surface/40">
-          <div className="p-4 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
-              Polarity Accuracy
-            </span>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-base font-bold font-mono tabular-nums text-emerald-500">
-                {accuracyPct.toFixed(1)}%
-              </span>
-              <span className="text-[10px] text-app-muted font-mono">
-                {polarityDetail.agreed_pairs_count} Agreed
-              </span>
-            </div>
+      {/* Main Split: Center Stage Grid + Right Diagnostic Rail */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Center Stage: Headless Linear Data Grid */}
+        <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="sticky top-0 bg-app-surface border-b border-app-border text-[11px] text-app-muted font-semibold tracking-[0.05em] uppercase z-10">
+                <tr className="h-9">
+                  <th className="px-4 w-[28%]">Source Proposition</th>
+                  <th className="px-4 w-[28%]">Target Proposition</th>
+                  <th className="px-3 text-center w-[14%]">Predicted</th>
+                  <th className="px-3 text-center w-[14%]">Gold Standard</th>
+                  <th className="px-3 text-center w-[16%]">Severity</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-app-border font-sans text-xs">
+                {conflictItems.map((conflict) => {
+                  const isSelected = conflict.id === selectedId;
+
+                  return (
+                    <tr
+                      key={conflict.id}
+                      onClick={() => setSelectedId(conflict.id)}
+                      className={`h-10 cursor-pointer transition-colors ${
+                        isSelected
+                          ? "bg-app-subtle border-l-2 border-blue-600 text-app-heading font-medium"
+                          : "border-l-2 border-transparent hover:bg-app-subtle/50 text-app-text"
+                      }`}
+                    >
+                      <td className="px-4 truncate max-w-[200px] text-app-heading font-medium">
+                        {conflict.sourceNode}
+                      </td>
+                      <td className="px-4 truncate max-w-[200px] text-app-heading font-medium">
+                        {conflict.targetNode}
+                      </td>
+                      <td className="px-3 text-center type-mono text-[11px] font-semibold text-app-heading">
+                        {conflict.predictedPredicate}
+                      </td>
+                      <td className="px-3 text-center type-mono text-[11px] font-semibold text-rose-500">
+                        {conflict.goldPredicate}
+                      </td>
+                      <td className="px-3 text-center">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] type-mono font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/25">
+                          CRITICAL INVERSION
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
-          <div className="p-4 flex flex-col justify-between bg-amber-500/5">
-            <span className="text-[10px] uppercase font-semibold text-amber-500 font-sans tracking-wider">
-              Conflict Rate
+          {/* Grid Footer */}
+          <div className="h-8 px-4 border-t border-app-border bg-app-surface/60 shrink-0 flex items-center justify-between text-[11px] text-app-muted">
+            <span>
+              Showing <strong className="type-mono text-app-heading">{conflictItems.length}</strong> polarity conflicts
             </span>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-base font-bold font-mono tabular-nums text-amber-500">
-                {conflictPct.toFixed(1)}%
-              </span>
-              <span className="text-[10px] text-amber-500 font-mono">
-                {polarityDetail.conflicting_pairs_count} Conflicts
-              </span>
-            </div>
-          </div>
-
-          <div className="p-4 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
-              Evaluated Pairs
+            <span className="hidden sm:inline text-app-muted/70">
+              Use <kbd className="px-1 py-0.5 rounded bg-app-bg border border-app-border text-[10px] type-mono">j</kbd> /{" "}
+              <kbd className="px-1 py-0.5 rounded bg-app-bg border border-app-border text-[10px] type-mono">k</kbd> to step through conflicts
             </span>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-base font-bold font-mono tabular-nums text-app-heading">
-                {polarityDetail.agreed_pairs_count + polarityDetail.conflicting_pairs_count}
-              </span>
-              <span className="text-[10px] text-app-muted font-mono">Dialectical Edges</span>
-            </div>
           </div>
         </div>
 
-        {/* Severity Banner */}
-        <div className="p-4 bg-amber-500/10 text-xs text-amber-600 dark:text-amber-400 space-y-1">
-          <div className="flex items-center gap-2 font-semibold">
-            <Flame className="w-4 h-4 text-amber-500" />
-            <span>Severe Argument Inversion Audit</span>
-          </div>
-          <p className="text-[11px] text-app-muted leading-relaxed">
-            Confusing supportive entailment (<code>SUPPORTS</code> / <code>PROVES</code>) with
-            dialectical counter-argument (<code>ATTACKS</code> / <code>REFUTES</code>) produces false
-            consensus in controversial scientific debates.
-          </p>
-        </div>
-
-        {/* Conflict List */}
-        <div className="p-4 space-y-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-app-muted font-sans">
-            Inverted Polarity Pairs ({conflictItems.length})
+        {/* Right Diagnostic Rail for Polarity Conflict */}
+        <div className="w-[420px] border-l border-app-border bg-app-surface flex flex-col h-full shrink-0 overflow-y-auto">
+          <div className="h-10 px-4 border-b border-app-border flex items-center justify-between text-[11px] text-app-muted uppercase font-semibold tracking-wider bg-app-surface/80">
+            <span>Dialectical Inversion Diagnostic</span>
+            {selectedConflict && (
+              <span className="type-mono text-[11px] text-rose-500 font-semibold">
+                Sim: {selectedConflict.similarity.toFixed(2)}
+              </span>
+            )}
           </div>
 
-          {conflictItems.map((conflict) => {
-            const isSelected = selectedConflict?.id === conflict.id;
-
-            return (
-              <div
-                key={conflict.id}
-                onClick={() => setSelectedConflict(conflict)}
-                className={`p-4 rounded-md border transition-all cursor-pointer space-y-3 ${
-                  isSelected
-                    ? "border-l-2 border-amber-500 bg-amber-500/10 dark:bg-amber-500/15"
-                    : "border-app-border bg-app-surface/30 hover:bg-app-subtle hover:border-amber-500/50"
-                }`}
-              >
-                {/* Header: Nodes & Predicate Inversion */}
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-semibold text-app-heading truncate max-w-[180px]">
-                      {conflict.sourceNode}
-                    </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-app-muted shrink-0" />
-                    <span className="font-semibold text-app-heading truncate max-w-[180px]">
-                      {conflict.targetNode}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/10 text-rose-500 border border-rose-500/30">
-                      {conflict.severity === "CRITICAL_INVERSION"
-                        ? "CRITICAL INVERSION"
-                        : "MISALIGNED"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Predicate Comparison */}
-                <div className="flex items-center gap-3 p-2 rounded bg-app-bg text-xs border border-app-border/60">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-app-muted font-medium">Predicted:</span>
-                    <span className="font-mono font-semibold text-app-text px-2 py-0.5 rounded bg-app-surface border border-app-border">
-                      {conflict.predictedPredicate}
-                    </span>
-                  </div>
-
-                  <span className="text-app-muted text-xs">≠</span>
-
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-app-muted font-medium">Gold Standard:</span>
-                    <span className="font-mono font-semibold text-app-text px-2 py-0.5 rounded bg-app-surface border border-app-border">
-                      {conflict.goldPredicate}
-                    </span>
-                  </div>
-
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-500/10 text-rose-500 border border-rose-500/25">
-                    Inverted
+          {selectedConflict ? (
+            <div className="p-4 space-y-4 text-xs font-sans">
+              {/* Conflict Pair Description */}
+              <div className="p-3 rounded bg-app-bg border border-app-border space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="type-caption text-[10px] uppercase font-semibold text-app-muted">
+                    Dialectical Conflict Relation
                   </span>
-
-                  <div className="ml-auto text-[11px] font-mono text-app-muted">
-                    Cosine Sim: {conflict.similarity.toFixed(2)}
-                  </div>
+                  <span className="type-mono text-[10px] text-rose-500 font-bold">
+                    INVERTED
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-app-heading font-medium truncate max-w-[160px]">
+                    {selectedConflict.sourceNode}
+                  </span>
+                  <ArrowRight className="w-3.5 h-3.5 text-app-muted shrink-0" />
+                  <span className="text-app-heading font-medium truncate max-w-[160px]">
+                    {selectedConflict.targetNode}
+                  </span>
                 </div>
 
-                {/* Dialectical Corpus Grounding Citation (Collapsible to prevent cramped cards) */}
-                <div className="text-xs rounded bg-app-surface/60 border border-app-border/40 overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={(e) => toggleQuote(conflict.id, e)}
-                    className="w-full px-2.5 py-1.5 flex items-center justify-between text-[11px] text-app-muted hover:text-app-text hover:bg-app-subtle transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-center gap-1.5 truncate">
-                      <Quote className="w-3 h-3 text-amber-500/80 shrink-0" />
-                      <span className="font-medium truncate text-app-text">Citation: {conflict.citation}</span>
-                    </div>
-                    <span className="text-[10px] text-blue-500 font-mono shrink-0 ml-2">
-                      {expandedQuotes.has(conflict.id) ? "Hide Excerpt ▲" : "View Excerpt ▼"}
+                <div className="flex items-center gap-3 pt-1 text-xs border-t border-app-border/40">
+                  <div>
+                    <span className="type-caption text-[10px] text-app-muted block">Predicted:</span>
+                    <span className="type-mono font-semibold text-app-heading">
+                      {selectedConflict.predictedPredicate}
                     </span>
-                  </button>
-
-                  {expandedQuotes.has(conflict.id) && (
-                    <div className="p-2.5 pt-1 border-t border-app-border/30 bg-app-bg/50 space-y-1">
-                      <p className="italic text-[11px] text-app-text leading-relaxed">
-                        "{conflict.sourceQuote}"
-                      </p>
-                      <span className="text-[10px] font-mono text-app-muted block text-right">
-                        — {conflict.citation}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Action Footer */}
-                <div className="flex items-center justify-end gap-2 pt-1 border-t border-app-border/30">
-                  <ActionableHookPill
-                    type="argument_polarity"
-                    relationId={conflict.predictedPredicate}
-                    sourceNode={conflict.sourceNode}
-                    targetNode={conflict.targetNode}
-                    label="Configure in Engine"
-                  />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleInspectOnCanvas(conflict);
-                    }}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 transition-colors"
-                  >
-                    <Network className="w-3 h-3" />
-                    <span>Inspect on Canvas</span>
-                  </button>
+                  </div>
+                  <span className="text-app-muted font-bold">≠</span>
+                  <div>
+                    <span className="type-caption text-[10px] text-app-muted block">Gold Standard:</span>
+                    <span className="type-mono font-semibold text-rose-500">
+                      {selectedConflict.goldPredicate}
+                    </span>
+                  </div>
                 </div>
               </div>
-            );
-          })}
+
+              {/* Corpus Grounding Citation */}
+              <div className="space-y-1">
+                <span className="type-caption uppercase font-semibold text-app-muted text-[10px] block">
+                  Grounding Evidence &amp; Citation
+                </span>
+                <blockquote className="italic text-xs text-app-heading leading-relaxed bg-app-bg p-3 rounded border-l-2 border-amber-500 font-serif">
+                  &ldquo;{selectedConflict.sourceQuote}&rdquo;
+                </blockquote>
+                <span className="type-caption text-[10px] text-app-muted block text-right">
+                  — {selectedConflict.citation}
+                </span>
+              </div>
+
+              {/* Argumentative Impact Rationale */}
+              <div className="p-3 rounded bg-rose-500/10 border-l-2 border-rose-500 space-y-1">
+                <span className="type-caption font-semibold text-rose-600 dark:text-rose-400 text-[10px] uppercase block">
+                  Dialectical Analysis
+                </span>
+                <p className="type-body text-[11px] text-rose-600 dark:text-rose-300 leading-relaxed">
+                  Confusing supportive entailment with counter-argument inverts the dialectical polarity of the debate, producing an erroneous consensus.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex items-center justify-between gap-2 border-t border-app-border">
+                <ActionableHookPill
+                  type="argument_polarity"
+                  relationId={selectedConflict.predictedPredicate}
+                  sourceNode={selectedConflict.sourceNode}
+                  targetNode={selectedConflict.targetNode}
+                  label="Tuning Hook"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => handleInspectOnCanvas(selectedConflict)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
+                >
+                  <Network className="w-3.5 h-3.5" />
+                  <span>Inspect on Canvas</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-app-muted">
+              <ShieldCheck className="w-8 h-8 text-emerald-500 opacity-80 mb-2" />
+              <p className="type-body text-xs">No conflict selected.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

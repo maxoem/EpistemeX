@@ -294,7 +294,7 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
         {/* Right: Layer Toggles & Zoom Controls */}
         <div className="flex items-center gap-3 text-xs">
           {/* Layer Visibility Toggles */}
-          <div className="flex items-center gap-1 bg-app-bg dark:bg-[#111827] p-0.5 rounded border border-app-border/60">
+          <div className="flex items-center gap-1 bg-app-bg p-0.5 rounded border border-app-border/60">
             <button
               onClick={() => setShowPredictedBBox(!showPredictedBBox)}
               className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
@@ -333,7 +333,7 @@ export const MultiPagePdfVitrine: React.FC<MultiPagePdfVitrineProps> = ({
           <div className="h-4 w-px bg-app-border" />
 
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 bg-app-bg dark:bg-[#111827] p-0.5 rounded border border-app-border/60 text-[10px]">
+          <div className="flex items-center gap-1 bg-app-bg p-0.5 rounded border border-app-border/60 text-[10px]">
             <button
               onClick={() => {
                 setViewMode("continuous");

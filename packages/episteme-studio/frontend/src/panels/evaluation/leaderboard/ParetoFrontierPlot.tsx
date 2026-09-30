@@ -406,7 +406,7 @@ export const ParetoFrontierPlot: React.FC<ParetoFrontierPlotProps> = ({
             <span>Pareto Optimal ({paretoPoints.length})</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-600" />
+            <span className="w-2 h-2 rounded-full bg-app-muted" />
             <span>Dominated ({dominatedPoints.length})</span>
           </div>
         </div>

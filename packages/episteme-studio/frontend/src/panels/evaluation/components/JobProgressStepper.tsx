@@ -113,13 +113,11 @@ export const JobProgressStepper: React.FC<JobProgressStepperProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="border border-app-border rounded-md overflow-hidden bg-app-bg divide-y divide-app-border">
       {/* Top Header Card */}
-      <div className="flex items-center justify-between p-3 rounded-lg bg-app-subtle border border-app-border">
+        <div className="flex items-center justify-between p-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded bg-app-surface border border-app-border text-blue-500">
-            <Sparkles className="w-5 h-5" />
-          </div>
+          <Sparkles className="w-5 h-5 text-blue-500" />
           <div>
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs font-semibold text-app-text">{jobId}</span>
@@ -136,23 +134,25 @@ export const JobProgressStepper: React.FC<JobProgressStepperProps> = ({
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full bg-app-subtle rounded-full h-2 overflow-hidden border border-app-border">
-        <div
-          className={`h-full transition-all duration-300 ${
-            status === "failed"
-              ? "bg-rose-500"
-              : status === "aborted"
-              ? "bg-zinc-500"
-              : status === "completed"
-              ? "bg-emerald-500"
-              : "bg-blue-600"
-          }`}
-          style={{ width: `${Math.max(5, progress)}%` }}
-        />
+      <div className="px-3 py-2.5">
+        <div className="w-full bg-app-subtle rounded-full h-2 overflow-hidden border border-app-border">
+          <div
+            className={`h-full transition-all duration-300 ${
+              status === "failed"
+                ? "bg-rose-500"
+                : status === "aborted"
+                ? "bg-zinc-500"
+                : status === "completed"
+                ? "bg-emerald-500"
+                : "bg-blue-600"
+            }`}
+            style={{ width: `${Math.max(5, progress)}%` }}
+          />
+        </div>
       </div>
 
       {/* Multi-Stage Visual Stepper */}
-      <div className="border border-app-border rounded-md overflow-hidden divide-y divide-app-border bg-app-surface/30">
+      <div className="divide-y divide-app-border">
         {STAGES.map((s, idx) => {
           const stageState = getStageStatus(idx);
           const Icon = s.icon;
@@ -223,11 +223,11 @@ export const JobProgressStepper: React.FC<JobProgressStepperProps> = ({
       )}
 
       {/* Telemetry Stream Collapsible Log */}
-      <div className="border border-app-border rounded-md overflow-hidden bg-app-surface">
+      <div>
         <button
           type="button"
           onClick={() => setShowLogs(!showLogs)}
-          className="w-full px-3 py-2 text-xs flex items-center justify-between text-app-muted hover:text-app-text bg-app-subtle transition-colors"
+          className="w-full px-3 py-2 text-xs flex items-center justify-between text-app-muted hover:text-app-text hover:bg-app-subtle transition-colors"
         >
           <div className="flex items-center gap-2">
             <Terminal className="w-3.5 h-3.5" />
@@ -237,13 +237,13 @@ export const JobProgressStepper: React.FC<JobProgressStepperProps> = ({
         </button>
 
         {showLogs && (
-          <div className="p-2.5 max-h-48 overflow-y-auto font-mono text-[11px] space-y-1.5 bg-black/80 text-zinc-300 dark:bg-black/90 select-text">
+          <div className="p-2.5 max-h-48 overflow-y-auto font-mono text-[11px] space-y-1.5 bg-app-bg text-app-muted select-text">
             {events.length === 0 ? (
-              <span className="text-zinc-500 italic">Awaiting telemetry stream...</span>
+              <span className="text-app-muted/60 italic">Awaiting telemetry stream...</span>
             ) : (
               events.map((ev, i) => (
                 <div key={i} className="flex items-start gap-2">
-                  <span className="text-zinc-500 shrink-0">#{ev.seq}</span>
+                  <span className="text-app-muted/60 shrink-0">#{ev.seq}</span>
                   <span
                     className={
                       ev.level === "error"
@@ -264,7 +264,7 @@ export const JobProgressStepper: React.FC<JobProgressStepperProps> = ({
       </div>
 
       {/* Action Footer */}
-      <div className="pt-2 flex items-center justify-between border-t border-app-border">
+      <div className="px-3 py-3 flex items-center justify-between">
         {(status === "running" || status === "pending") && onCancel && (
           <button
             type="button"

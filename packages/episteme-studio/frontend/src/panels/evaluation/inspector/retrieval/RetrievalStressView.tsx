@@ -36,7 +36,7 @@ export const RetrievalStressView: React.FC<RetrievalStressViewProps> = ({ onOpen
         </div>
 
         {/* Segmented Layout Mode Pills */}
-        <div className="flex items-center gap-1 bg-app-bg dark:bg-[#111827] p-0.5 rounded border border-app-border/60 text-[10px]">
+        <div className="flex items-center gap-1 bg-app-bg p-0.5 rounded border border-app-border/60 text-[10px]">
           <button
             onClick={() => setLayoutMode("split")}
             className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${

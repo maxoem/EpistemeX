@@ -234,10 +234,10 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
   const completedRuns = runs.filter((r) => r.status === "completed");
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 sm:p-8 lg:p-10 select-text bg-app-bg text-app-text">
-      <div className="max-w-4xl w-full mx-auto space-y-6">
+    <div className="flex-1 overflow-y-auto select-text bg-app-bg text-app-text">
+      <div className="divide-y divide-app-border">
         {/* Title & Description Strip */}
-        <div className="pb-5 border-b border-app-border/80">
+        <div className="px-6 sm:px-8 py-5 bg-app-surface border-b border-app-border/60">
           <div className="flex items-center justify-between gap-2">
             <div>
               <h3 className="type-h1 text-app-heading">
@@ -269,7 +269,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
 
         {/* Active Job Progress View */}
         {activeJobId ? (
-          <div className="space-y-5 animate-in fade-in duration-200">
+          <div className="px-6 sm:px-8 py-6 space-y-5 animate-in fade-in duration-200">
             <div className="p-4 rounded-lg bg-blue-500/5 border border-blue-500/20">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -287,7 +287,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
               </p>
             </div>
 
-            <div className="p-4 rounded-md border border-app-border bg-app-surface/60">
+            <div>
               <JobProgressStepper
                 jobId={activeJobId}
                 status={jobHook.status}
@@ -333,7 +333,7 @@ export const ExecuteEvaluationPage: React.FC<ExecuteEvaluationPageProps> = ({
           </div>
         ) : (
           /* Configuration Wizard Form */
-          <div className="space-y-6">
+          <div className="px-6 sm:px-8 py-6 space-y-6">
             {submitError && (
               <div className="p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs flex items-center gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />

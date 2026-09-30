@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.adapters.evaluation_adapter import EvaluationAdapter

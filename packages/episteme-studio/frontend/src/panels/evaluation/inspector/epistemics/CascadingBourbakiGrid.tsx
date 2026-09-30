@@ -1,13 +1,11 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
-  Database,
   Filter,
   Layers,
   ShieldAlert,
-  Sparkles,
   CheckCircle2,
   XCircle,
   Link2,
@@ -23,6 +21,15 @@ export interface CascadingBourbakiGridProps {
   onElementsCalculated?: (elements: BourbakiSubElement[]) => void;
 }
 
+/**
+ * Headless Linear-Style Data Grid for Bourbaki Structuralist Completeness.
+ *
+ * Implements design.md §9 & §11:
+ * - Fixed 40px (h-10) table rows
+ * - Active selection: solid 2px left border in primary blue (#2563EB) + bg-app-subtle
+ * - Strict typography roles: JetBrains Mono for symbols/IDs, Inter for labels, tabular-nums for ratios
+ * - Full keyboard triage (j/k and arrow keys step through sub-element rows)
+ */
 export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
   selectedElement: propSelectedElement,
   onSelectElement: propOnSelectElement,
@@ -36,17 +43,19 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
     setSelectedBourbakiElement,
   } = useEvaluationStore();
 
-  // If props are provided, use them; otherwise use store
   const selectedElement =
     propSelectedElement !== undefined ? propSelectedElement : selectedBourbakiElement;
 
-  const handleSelectElement = (el: BourbakiSubElement | null) => {
-    if (propOnSelectElement) {
-      propOnSelectElement(el);
-    } else {
-      setSelectedBourbakiElement(el);
-    }
-  };
+  const handleSelectElement = useCallback(
+    (el: BourbakiSubElement | null) => {
+      if (propOnSelectElement) {
+        propOnSelectElement(el);
+      } else {
+        setSelectedBourbakiElement(el);
+      }
+    },
+    [propOnSelectElement, setSelectedBourbakiElement]
+  );
 
   const [expandedClasses, setExpandedClasses] = useState<Set<string>>(
     new Set(["Mp", "M", "Mpp", "C", "I"])
@@ -68,7 +77,6 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
   // Normalize model decomposition entries from activeReport
   const decompositionEntries = useMemo(() => {
     if (!activeReport?.model_decomposition || activeReport.model_decomposition.length === 0) {
-      // Fallback synthetic summary if not seeded
       return [
         {
           class_name: "potential_models",
@@ -115,7 +123,7 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
     return activeReport.model_decomposition;
   }, [activeReport]);
 
-  // Hierarchical elements with Conditional Cascade Masking & theoretical models
+  // Hierarchical elements with Conditional Cascade Masking
   const subElements = useMemo(() => {
     return getBourbakiSubElements(activeReport, decompositionEntries);
   }, [activeReport, decompositionEntries]);
@@ -136,38 +144,89 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
     });
   }, [subElements, statusFilter]);
 
+  // Flattened visible elements list for j/k keyboard triage
+  const visibleSubElements = useMemo(() => {
+    const list: BourbakiSubElement[] = [];
+    for (const clsKey of ["Mp", "M", "Mpp", "C", "I"]) {
+      if (expandedClasses.has(clsKey)) {
+        const children = filteredSubElements.filter((el) => el.classType === clsKey);
+        list.push(...children);
+      }
+    }
+    return list;
+  }, [expandedClasses, filteredSubElements]);
+
+  // Keyboard Triage (§11)
+  const activeIndex = useMemo(() => {
+    if (!selectedElement) return -1;
+    return visibleSubElements.findIndex((el) => el.id === selectedElement.id);
+  }, [visibleSubElements, selectedElement]);
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        if (visibleSubElements.length === 0) return;
+        const nextIndex = activeIndex < visibleSubElements.length - 1 ? activeIndex + 1 : 0;
+        handleSelectElement(visibleSubElements[nextIndex]);
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (visibleSubElements.length === 0) return;
+        const prevIndex = activeIndex > 0 ? activeIndex - 1 : visibleSubElements.length - 1;
+        handleSelectElement(visibleSubElements[prevIndex]);
+      }
+    },
+    [activeIndex, visibleSubElements, handleSelectElement]
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
+
   const stagedCount = stagedAdjudications.size;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-app-bg text-app-text select-none font-sans">
-      {/* 40px Header Toolbar */}
-      <div className="h-10 px-4 border-b border-app-border bg-app-surface shrink-0 flex items-center justify-between text-xs">
+    <div className="flex-1 flex flex-col h-full w-full overflow-hidden bg-app-bg text-app-text select-none font-sans">
+      {/* 44px Contextual Sub-Bar (design.md §8: Breadcrumbs, Scope pills, Filter pills) */}
+      <div className="h-11 px-4 border-b border-app-border bg-app-surface shrink-0 flex items-center justify-between text-xs gap-3">
         <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-blue-500" />
-          <h3 className="font-semibold text-app-heading">
-            Bourbaki Structuralist Completeness
+          <Layers className="w-3.5 h-3.5 text-blue-500" />
+          <h3 className="type-caption font-semibold text-app-heading uppercase tracking-wider">
+            Bourbaki Decomposition Grid
           </h3>
-          <span className="text-[11px] text-app-muted font-mono hidden md:inline">
-            ⟨Mp → M → I⟩ Cascading Decomposition
+          <span className="type-mono text-[11px] text-app-muted hidden md:inline">
+            ⟨Mp → M → I⟩
           </span>
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1">
-          <Filter className="w-3 h-3 text-app-muted mr-1" />
+        {/* Filter Pills (Segmented Pill Track) */}
+        <div className="flex items-center gap-1 bg-app-bg p-0.5 rounded border border-app-border text-[11px]">
+          <Filter className="w-3 h-3 text-app-muted ml-1 mr-0.5" />
           {[
-            { id: "all", label: "All Items" },
+            { id: "all", label: "All Nodes" },
             { id: "active", label: "Verified" },
             { id: "masked", label: "Cascade Masked" },
             { id: "omission", label: "Root Omissions" },
           ].map((f) => (
             <button
               key={f.id}
+              type="button"
               onClick={() => setStatusFilter(f.id as any)}
-              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
                 statusFilter === f.id
-                  ? "bg-blue-600 text-white font-semibold"
-                  : "text-app-muted hover:text-app-text hover:bg-app-subtle"
+                  ? "bg-app-surface text-app-heading font-medium border border-app-border/80"
+                  : "text-app-muted hover:text-app-text"
               }`}
             >
               {f.label}
@@ -176,41 +235,39 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
         </div>
       </div>
 
-      {/* Staging Buffer Status Notice */}
+      {/* Staging Buffer Notice */}
       {stagedCount > 0 && (
-        <div className="px-4 py-2 bg-amber-500/10 dark:bg-amber-500/15 border-b border-amber-500/30 flex items-center justify-between text-xs text-amber-600 dark:text-amber-400">
+        <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between text-xs text-amber-600 dark:text-amber-400">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500" />
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
             <span>
-              <strong>{stagedCount} Staged Adjudications</strong> pending batch commit (⌘⏎).
-              Structural DAG topology and reachability invariants remain frozen until explicit
-              server synchronization.
+              <strong>{stagedCount} Staged Adjudications</strong> pending commit (⌘⏎).
             </span>
           </div>
           {optimisticScalarDeltas.f1 !== 0 && (
-            <span className="font-mono tabular-nums text-[11px] font-semibold bg-amber-500/20 px-2 py-0.5 rounded">
-              ΔF₁ Preview: {optimisticScalarDeltas.f1 > 0 ? "+" : ""}
+            <span className="type-mono tabular-nums text-[11px] font-semibold bg-amber-500/20 px-2 py-0.5 rounded">
+              ΔF₁: {optimisticScalarDeltas.f1 > 0 ? "+" : ""}
               {optimisticScalarDeltas.f1.toFixed(3)}
             </span>
           )}
         </div>
       )}
 
-      {/* Main Table Grid Container (Full vertical space, unencumbered by bottom drawer) */}
-      <div className="flex-1 overflow-y-auto">
-        <table className="w-full text-left border-collapse text-xs">
-          {/* Sticky Table Header (Lean 5-Column Schema) */}
-          <thead className="sticky top-0 bg-app-surface/90 backdrop-blur-xs border-b border-app-border z-10">
-            <tr className="text-app-muted text-[11px] font-medium tracking-wide">
-              <th className="py-2.5 px-4 font-medium w-[44%]">Component (Gold Entity)</th>
-              <th className="py-2.5 px-3 text-center tabular-nums font-medium w-[14%]">Match / Gold</th>
-              <th className="py-2.5 px-3 text-center tabular-nums font-medium w-[12%]">Impact (↓)</th>
-              <th className="py-2.5 px-3 text-center font-medium w-[14%]">Gold Polarity</th>
-              <th className="py-2.5 px-4 text-center font-medium w-[16%]">Verdict</th>
+      {/* Edge-to-Edge Data Table */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <table className="w-full text-left text-xs border-collapse">
+          {/* Sticky Table Header (design.md §9: surface-light/dark, border-b 1px, Inter 11px uppercase tracking-[0.05em]) */}
+          <thead className="sticky top-0 bg-app-surface border-b border-app-border text-[11px] text-app-muted font-semibold tracking-[0.05em] uppercase z-10">
+            <tr className="h-9">
+              <th className="px-4 font-semibold w-[44%]">Structural Component</th>
+              <th className="px-3 text-center tabular-nums font-semibold w-[14%]">Match / Gold</th>
+              <th className="px-3 text-center tabular-nums font-semibold w-[12%]">Impact (↓)</th>
+              <th className="px-3 text-center font-semibold w-[14%]">Gold Polarity</th>
+              <th className="px-4 text-center font-semibold w-[16%]">Verdict</th>
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-app-border">
+          <tbody className="divide-y divide-app-border font-sans">
             {["Mp", "M", "Mpp", "C", "I"].map((clsKey) => {
               const meta = CLASS_METADATA[clsKey];
               const summary = decompositionEntries.find(
@@ -241,35 +298,35 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
 
               return (
                 <React.Fragment key={clsKey}>
-                  {/* Category Class Row */}
+                  {/* Category Class Row (Fixed 40px h-10) */}
                   <tr
                     onClick={() => toggleClassExpand(clsKey)}
-                    className="hover:bg-app-subtle cursor-pointer transition-colors bg-app-surface/40 group font-medium"
+                    className="h-10 hover:bg-app-subtle cursor-pointer transition-colors bg-app-surface/50 font-medium"
                   >
-                    <td className="py-2.5 px-4">
+                    <td className="px-4">
                       <div className="flex items-center gap-2">
-                        <button className="text-app-muted group-hover:text-app-text transition-colors">
+                        <span className="text-app-muted">
                           {isExpanded ? (
                             <ChevronDown className="w-3.5 h-3.5" />
                           ) : (
                             <ChevronRight className="w-3.5 h-3.5" />
                           )}
-                        </button>
+                        </span>
                         <span
-                          className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-medium border ${meta.bg} ${meta.color} ${meta.border}`}
+                          className={`px-1.5 py-0.5 rounded type-mono text-[10px] font-semibold border ${meta.bg} ${meta.color} ${meta.border}`}
                         >
                           {meta.symbol}
                         </span>
-                        <span className="font-medium text-app-heading">{meta.label}</span>
-                        <span className="text-[11px] text-app-muted hidden sm:inline truncate max-w-xs">
+                        <span className="font-semibold text-app-heading text-xs">{meta.label}</span>
+                        <span className="type-caption text-app-muted hidden sm:inline truncate max-w-xs">
                           — {meta.description}
                         </span>
                       </div>
                     </td>
 
                     {/* Category Match / Gold */}
-                    <td className="py-2.5 px-3 text-center tabular-nums text-[11px]">
-                      <span className="font-medium text-app-heading">
+                    <td className="px-3 text-center type-mono tabular-nums text-xs">
+                      <span className="font-semibold text-app-heading">
                         {summary.matched_count} / {summary.reference_count}
                       </span>
                       <span className="text-[10px] text-app-muted ml-1">
@@ -278,9 +335,9 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
                     </td>
 
                     {/* Category Impact */}
-                    <td className="py-2.5 px-3 text-center tabular-nums text-[11px]">
+                    <td className="px-3 text-center type-mono tabular-nums text-xs">
                       {categoryImpact > 0 ? (
-                        <span className="font-medium text-purple-600 dark:text-purple-400">
+                        <span className="font-semibold text-purple-600 dark:text-purple-400">
                           ↓ {categoryImpact}
                         </span>
                       ) : (
@@ -289,38 +346,37 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
                     </td>
 
                     {/* Category Polarity */}
-                    <td className="py-2.5 px-3 text-center text-[11px]">
+                    <td className="px-3 text-center text-xs">
                       {classChildren.some(
                         (c) => c.inferentialPolarity?.concordance === "CRITICAL_INVERSION"
                       ) ? (
-                        <span className="inline-flex items-center gap-1 text-rose-500/90 dark:text-rose-400/90 font-medium">
+                        <span className="inline-flex items-center gap-1 text-rose-500 font-medium text-[11px]">
                           <AlertTriangle className="w-3 h-3" />
                           Inverted
                         </span>
                       ) : (
-                        <span className="text-zinc-400 font-medium">Agreed</span>
+                        <span className="text-app-muted font-medium text-[11px]">Agreed</span>
                       )}
                     </td>
 
                     {/* Category Verdict */}
-                    <td className="py-2.5 px-4 text-center">
+                    <td className="px-4 text-center">
                       {summary.reference_count === 0 ? (
                         <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400">
-                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0" />
                           Conformant
                         </span>
                       ) : coveragePct >= 85 ? (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           Pass
                         </span>
                       ) : coveragePct > 0 ? (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                           Partial
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-rose-500/90 dark:text-rose-400/90">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-rose-500">
                           <XCircle className="w-3.5 h-3.5" />
                           Fail
                         </span>
@@ -328,7 +384,7 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
                     </td>
                   </tr>
 
-                  {/* Hierarchical Sub-Elements */}
+                  {/* Hierarchical Sub-Elements (Fixed 40px h-10) */}
                   {isExpanded &&
                     classChildren.map((el) => {
                       const isSelected = selectedElement?.id === el.id;
@@ -339,54 +395,41 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
                         <tr
                           key={el.id}
                           onClick={() => handleSelectElement(el)}
-                          className={`cursor-pointer transition-colors border-l-3 ${
+                          className={`h-10 cursor-pointer transition-colors ${
                             isSelected
-                              ? "bg-blue-600/15 border-blue-600 text-app-heading font-medium"
+                              ? "bg-app-subtle border-l-2 border-blue-600 text-app-heading font-medium"
                               : isMasked
-                              ? "bg-app-bg text-app-muted/60 hover:bg-app-subtle border-transparent"
+                              ? "border-l-2 border-transparent text-app-muted/60 hover:bg-app-subtle/50"
                               : isOmission
-                              ? "bg-rose-500/5 hover:bg-rose-500/10 border-rose-500/40 text-app-heading"
-                              : "hover:bg-app-subtle border-transparent text-app-text"
+                              ? "border-l-2 border-rose-500/50 bg-rose-500/5 hover:bg-rose-500/10 text-app-heading"
+                              : "border-l-2 border-transparent hover:bg-app-subtle/50 text-app-text"
                           }`}
                         >
-                          <td className="py-2 pl-10 pr-4">
+                          <td className="px-4 pl-9">
                             <div className="flex items-center gap-2">
                               {el.parentAxiomId && (
                                 <Link2 className="w-3 h-3 text-app-muted/60 shrink-0" />
                               )}
-                              <span
-                                className={`font-mono text-[10px] font-medium ${
-                                  isSelected
-                                    ? "text-blue-500 dark:text-blue-400"
-                                    : isMasked
-                                    ? "text-app-muted"
-                                    : "text-app-text"
-                                }`}
-                              >
+                              <span className="type-mono text-[11px] font-semibold text-app-heading shrink-0">
                                 {el.symbol}
                               </span>
                               <span
-                                className={`font-normal text-app-text ${
+                                className={`type-body text-xs text-app-heading truncate ${
                                   isMasked ? "line-through opacity-70" : ""
                                 }`}
                               >
                                 {el.name}
                               </span>
-                              {isSelected && (
-                                <span className="ml-auto text-[9px] px-1 py-0.2 rounded bg-blue-600 text-white font-medium tracking-wider">
-                                  INSPECTING
-                                </span>
-                              )}
                             </div>
                           </td>
 
                           {/* Match / Gold */}
-                          <td className="py-2 px-3 text-center tabular-nums text-[11px]">
+                          <td className="px-3 text-center type-mono tabular-nums text-xs">
                             <span
-                              className={`font-medium ${
+                              className={`font-semibold ${
                                 el.matched_count >= el.reference_count
                                   ? "text-app-heading"
-                                  : "text-rose-500/90 dark:text-rose-400/90"
+                                  : "text-rose-500"
                               }`}
                             >
                               {el.matched_count} / {el.reference_count}
@@ -396,7 +439,7 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
                                 className="text-[10px] text-amber-500 ml-1"
                                 title={`${
                                   el.predicted_count - el.matched_count
-                                } extra predicted instances (over-generation)`}
+                                } extra predicted instances`}
                               >
                                 (+{el.predicted_count - el.matched_count})
                               </span>
@@ -404,12 +447,9 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
                           </td>
 
                           {/* Impact (↓) */}
-                          <td className="py-2 px-3 text-center tabular-nums text-[11px]">
+                          <td className="px-3 text-center type-mono tabular-nums text-xs">
                             {el.dependents && el.dependents.length > 0 ? (
-                              <span
-                                className="font-medium text-purple-600 dark:text-purple-400"
-                                title={`${el.dependents.length} downstream gold components depend on this node`}
-                              >
+                              <span className="font-semibold text-purple-600 dark:text-purple-400">
                                 ↓ {el.dependents.length}
                               </span>
                             ) : (
@@ -418,55 +458,42 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
                           </td>
 
                           {/* Gold Polarity */}
-                          <td className="py-2 px-3 text-center text-[11px]">
+                          <td className="px-3 text-center text-xs">
                             {isOmission || (el.coverage === 0 && !el.inferentialPolarity) ? (
                               <span className="text-app-muted/40">—</span>
                             ) : el.inferentialPolarity?.concordance === "CRITICAL_INVERSION" ? (
-                              <span
-                                className="inline-flex items-center gap-1 text-rose-500/90 dark:text-rose-400/90 font-medium"
-                                title={`Predicted ${el.inferentialPolarity.predicate} conflicts with Gold ${el.inferentialPolarity.goldPredicate}`}
-                              >
+                              <span className="inline-flex items-center gap-1 text-rose-500 font-semibold text-[11px]">
                                 <AlertTriangle className="w-3 h-3" />
                                 Inverted
                               </span>
                             ) : (
-                              <span className="text-zinc-400 font-medium">Agreed</span>
+                              <span className="text-app-muted font-medium text-[11px]">Agreed</span>
                             )}
                           </td>
 
                           {/* Verdict */}
-                          <td className="py-2 px-4 text-center">
+                          <td className="px-4 text-center">
                             {isMasked ? (
-                              <span
-                                title="Parent axiom failed in Mp. Dependent model masked under Bourbaki cascade doctrine."
-                                className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 font-medium"
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full border border-zinc-400 shrink-0" />
-                                Cascade Masked
+                              <span className="inline-flex items-center gap-1.5 text-[11px] text-app-muted font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full border border-app-muted shrink-0" />
+                                Masked
                               </span>
                             ) : isOmission ? (
-                              <span
-                                title="Root axiom missing in extraction! Causes downstream cascade masking."
-                                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-rose-500/90 dark:text-rose-400/90"
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 dark:bg-rose-500 shrink-0" />
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-rose-500">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
                                 Root Omission
                               </span>
                             ) : el.coverage === 0 && el.reference_count > 0 ? (
-                              <span
-                                title="Unmatched reference axiom."
-                                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-rose-500/90 dark:text-rose-400/90"
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 dark:bg-rose-500 shrink-0" />
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-rose-500">
                                 Missing
                               </span>
                             ) : el.coverage >= 0.85 || (el.matched_count > 0 && el.coverage > 0) ? (
-                              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 Pass
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                                 Partial
                               </span>
@@ -480,6 +507,17 @@ export const CascadingBourbakiGrid: React.FC<CascadingBourbakiGridProps> = ({
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Footer Instructions */}
+      <div className="h-8 px-4 border-t border-app-border bg-app-surface/60 shrink-0 flex items-center justify-between text-[11px] text-app-muted">
+        <span>
+          Showing <strong className="type-mono text-app-heading">{visibleSubElements.length}</strong> active sub-elements
+        </span>
+        <span className="hidden sm:inline text-app-muted/70">
+          Use <kbd className="px-1 py-0.5 rounded bg-app-bg border border-app-border text-[10px] type-mono">j</kbd> /{" "}
+          <kbd className="px-1 py-0.5 rounded bg-app-bg border border-app-border text-[10px] type-mono">k</kbd> to step through nodes
+        </span>
       </div>
     </div>
   );

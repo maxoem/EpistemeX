@@ -167,7 +167,7 @@ export const PreFlightLinterRail: React.FC<PreFlightLinterRailProps> = ({
 
   return (
     <div
-      className={`w-[380px] shrink-0 border-l border-app-border bg-[#F8FAFC] dark:bg-app-rail flex flex-col h-full overflow-hidden select-none font-sans ${className}`}
+      className={`w-[380px] shrink-0 border-l border-app-border bg-app-rail flex flex-col h-full overflow-hidden select-none font-sans ${className}`}
     >
       {/* 44px Fixed Rail Header */}
       <div className="h-11 px-3.5 border-b border-app-border bg-app-surface shrink-0 flex items-center justify-between">

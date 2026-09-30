@@ -67,11 +67,11 @@ export const SchemaAliasOmnibar: React.FC<SchemaAliasOmnibarProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-100"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-app-rail/80 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-100"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-app-surface border border-app-border rounded-xl overflow-hidden flex flex-col"
+        className="w-full max-w-lg bg-app-surface border border-app-border rounded-lg overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
         data-hotkey-ignore="true"
       >

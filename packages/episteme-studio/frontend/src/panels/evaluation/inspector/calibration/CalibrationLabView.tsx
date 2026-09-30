@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import * as echarts from "echarts/core";
 import { BarChart, LineChart } from "echarts/charts";
 import {
@@ -12,19 +12,19 @@ import {
   Sparkles,
   CheckCircle2,
   AlertTriangle,
-  XCircle,
-  HelpCircle,
   RefreshCw,
-  Sliders,
-  Layers,
   Loader2,
+  Search,
+  PanelRightClose,
+  Sliders,
 } from "lucide-react";
 import { useEvaluationStore } from "../../../../store/evaluationStore";
 import { useThemeStore } from "../../../../store/themeStore";
 import { api } from "../../../../api/client";
 import type { CalibrationReportDetail } from "../../../../api/types";
 import { OverconfidenceTable } from "./OverconfidenceTable";
-import { ThresholdOptimizerBar } from "./ThresholdOptimizerBar";
+import { CalibrationDiagnosticRail } from "./CalibrationDiagnosticRail";
+import { ResizablePanel } from "../../../ResizablePanel";
 
 echarts.use([
   BarChart,
@@ -40,6 +40,14 @@ export interface CalibrationLabViewProps {
   onOpenConfigEditor?: () => void;
 }
 
+/**
+ * Sub-View 3.4: Confidence Calibration & Reliability Lab.
+ *
+ * Implements the Persistent Three-Rail Scientific Cockpit (design.md §Layout):
+ * - Fixed 44px Contextual Action Bar with operational state and invariant telemetry
+ * - Fluid Center Stage: Top 10-Bin Reliability Diagram vitrine + Bottom Linear Data Grid
+ * - Right Diagnostic Rail (380px resizable): Threshold Optimizer (τ) + Assertion failure context
+ */
 export const CalibrationLabView: React.FC<CalibrationLabViewProps> = ({
   onOpenConfigEditor,
 }) => {
@@ -53,28 +61,60 @@ export const CalibrationLabView: React.FC<CalibrationLabViewProps> = ({
 
   const [calibrationData, setCalibrationData] = useState<CalibrationReportDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [minConfidence, setMinConfidence] = useState(0.85);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedAssertionId, setSelectedAssertionId] = useState<string | null>(null);
+
+  // Right Rail Collapsed State
+  const [isRightRailCollapsed, setIsRightRailCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("episteme-calibration-rail-collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleRightRail = useCallback(() => {
+    setIsRightRailCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("episteme-calibration-rail-collapsed", String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
 
   // Fetch calibration report from API
-  const fetchCalibration = async () => {
-    if (!evaluationId) return;
+  const fetchCalibration = useCallback(async () => {
+    if (!evaluationId) {
+      setCalibrationData(null);
+      return;
+    }
     setIsLoading(true);
+    setError(null);
     try {
       const data = await api.getCalibrationReport(evaluationId, {
-        min_confidence: minConfidence,
+        min_confidence: 0.85,
         limit: 50,
       });
       setCalibrationData(data);
+      if (data?.high_confidence_hallucinations?.length) {
+        setSelectedAssertionId(data.high_confidence_hallucinations[0].assertion_id);
+      }
     } catch (err) {
       console.error("Failed to fetch calibration report:", err);
+      setError("Failed to load calibration report. Verify the evaluation run exists and has samples.");
+      setCalibrationData(null);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [evaluationId]);
 
   useEffect(() => {
     fetchCalibration();
-  }, [evaluationId, minConfidence]);
+  }, [fetchCalibration]);
 
   // Render ECharts 10-bin Reliability Diagram
   useEffect(() => {
@@ -92,13 +132,10 @@ export const CalibrationLabView: React.FC<CalibrationLabViewProps> = ({
     }
 
     const bins = calibrationData.bins;
-    const categories = bins.map((b) => `${(b.bin_lower).toFixed(1)}-${(b.bin_upper).toFixed(1)}`);
+    const categories = bins.map((b) => `${b.bin_lower.toFixed(1)}-${b.bin_upper.toFixed(1)}`);
     const accuracies = bins.map((b) => b.empirical_accuracy);
     const confidences = bins.map((b) => b.mean_confidence);
     const gaps = bins.map((b) => b.calibration_gap);
-    const sampleCounts = bins.map((b) => b.sample_count);
-
-    // Diagonal perfect calibration reference line data points [0, 0.1, 0.2, ... 1.0]
     const diagonal = confidences;
 
     const option: echarts.EChartsCoreOption = {
@@ -150,7 +187,7 @@ export const CalibrationLabView: React.FC<CalibrationLabViewProps> = ({
         },
       },
       legend: {
-        top: 6,
+        top: 4,
         right: 12,
         textStyle: {
           color: isDark ? "#a1a1aa" : "#475569",
@@ -161,17 +198,14 @@ export const CalibrationLabView: React.FC<CalibrationLabViewProps> = ({
         itemHeight: 8,
       },
       grid: {
-        top: 40,
-        left: 48,
-        right: 24,
-        bottom: 36,
+        top: 28,
+        left: 42,
+        right: 20,
+        bottom: 24,
       },
       xAxis: {
         type: "category",
         data: categories,
-        name: "Confidence Bin",
-        nameLocation: "middle",
-        nameGap: 24,
         nameTextStyle: {
           color: isDark ? "#71717a" : "#64748b",
           fontSize: 10,
@@ -191,12 +225,6 @@ export const CalibrationLabView: React.FC<CalibrationLabViewProps> = ({
         min: 0,
         max: 1.0,
         interval: 0.2,
-        name: "Empirical Accuracy",
-        nameTextStyle: {
-          color: isDark ? "#71717a" : "#64748b",
-          fontSize: 10,
-          fontFamily: "Inter, sans-serif",
-        },
         splitLine: {
           lineStyle: {
             color: isDark ? "rgba(255, 255, 255, 0.05)" : "#f1f5f9",
@@ -214,20 +242,20 @@ export const CalibrationLabView: React.FC<CalibrationLabViewProps> = ({
           name: "Empirical Accuracy",
           type: "bar",
           data: accuracies,
-          barWidth: "48%",
+          barWidth: "44%",
           itemStyle: {
             color: "#10b981",
-            borderRadius: [3, 3, 0, 0],
+            borderRadius: [2, 2, 0, 0],
           },
         },
         {
           name: "Calibration Gap",
           type: "bar",
           data: gaps,
-          barWidth: "48%",
+          barWidth: "44%",
           itemStyle: {
             color: "rgba(248, 113, 113, 0.45)",
-            borderRadius: [3, 3, 0, 0],
+            borderRadius: [2, 2, 0, 0],
           },
         },
         {
@@ -237,10 +265,10 @@ export const CalibrationLabView: React.FC<CalibrationLabViewProps> = ({
           lineStyle: {
             color: isDark ? "#60a5fa" : "#2563eb",
             type: "dashed",
-            width: 2,
+            width: 1.5,
           },
           symbol: "circle",
-          symbolSize: 5,
+          symbolSize: 4,
           itemStyle: {
             color: isDark ? "#60a5fa" : "#2563eb",
           },
@@ -260,7 +288,6 @@ export const CalibrationLabView: React.FC<CalibrationLabViewProps> = ({
     };
   }, [calibrationData, isDark]);
 
-  // Clean up on component unmount
   useEffect(() => {
     return () => {
       if (chartInstanceRef.current) {
@@ -270,132 +297,208 @@ export const CalibrationLabView: React.FC<CalibrationLabViewProps> = ({
     };
   }, []);
 
-  const ece = calibrationData?.expected_calibration_error ?? 0.038;
-  const mce = calibrationData?.maximum_calibration_error ?? 0.082;
-  const brier = calibrationData?.brier_score ?? 0.041;
-  const sampleCount = calibrationData?.num_samples ?? 420;
+  const hasData = calibrationData != null;
+  const ece = calibrationData?.expected_calibration_error ?? null;
+  const mce = calibrationData?.maximum_calibration_error ?? null;
+  const brier = calibrationData?.brier_score ?? null;
+  const sampleCount = calibrationData?.num_samples ?? null;
+  const isWellCalibrated = calibrationData?.is_well_calibrated ?? false;
 
-  const renderEceBadge = () => {
-    if (ece <= 0.05) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-          Well Calibrated (ECE ≤ 0.05)
-        </span>
-      );
-    }
-    if (ece <= 0.15) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-          Moderate Miscalibration
-        </span>
-      );
-    }
+  const formatMetric = (value: number | null, digits = 4) =>
+    value == null ? "—" : value.toFixed(digits);
+
+  const selectedAssertion = useMemo(() => {
+    if (!calibrationData?.high_confidence_hallucinations) return null;
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30">
-        <XCircle className="w-3.5 h-3.5 text-rose-500" />
-        Poorly Calibrated (Overconfident)
-      </span>
+      calibrationData.high_confidence_hallucinations.find(
+        (a) => a.assertion_id === selectedAssertionId
+      ) ||
+      calibrationData.high_confidence_hallucinations[0] ||
+      null
     );
-  };
+  }, [calibrationData?.high_confidence_hallucinations, selectedAssertionId]);
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-app-bg p-4 space-y-4 select-none">
-      {/* 1. Calibration Lab KPI Header (Streamlined compact bar) */}
-      <div className="px-3.5 py-2 rounded-md bg-app-surface border border-app-border flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <Sparkles className="w-4 h-4 text-blue-500 shrink-0" />
-          <h3 className="text-xs font-semibold text-app-heading font-sans">
-            Confidence Calibration &amp; Uncertainty Diagnostics
-          </h3>
-          {renderEceBadge()}
+    <div className="flex-1 flex flex-col h-full w-full overflow-hidden bg-app-bg text-app-text select-none font-sans">
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* 1. Contextual Action Bar (44px, docked edge-to-edge border-b)       */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      <div className="h-11 px-4 border-b border-app-border bg-app-surface shrink-0 flex items-center justify-between text-xs gap-3">
+        {/* Left: Breadcrumbs & Operational State */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-blue-500 shrink-0" />
+            <h2 className="type-caption font-semibold text-app-heading uppercase tracking-wider">
+              Confidence Calibration &amp; Uncertainty Lab
+            </h2>
+          </div>
+
+          {/* Operational State Badge */}
+          {hasData &&
+            (isWellCalibrated ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                Well Calibrated
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                Miscalibrated
+              </span>
+            ))}
+
+          {/* Sample count pill */}
+          <span className="text-[11px] type-mono text-app-muted border border-app-border px-1.5 py-0.5 rounded bg-app-bg">
+            {calibrationData?.high_confidence_hallucinations?.length ?? 0} Flagged
+          </span>
         </div>
 
-        {/* Telemetry Strip with Tabular Numerals */}
-        <div className="flex items-center gap-3 text-xs font-mono tabular-nums shrink-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-app-muted font-sans font-medium">ECE:</span>
-            <span className="text-xs font-semibold text-app-text">{ece.toFixed(4)}</span>
-          </div>
-          <div className="h-4 w-px bg-app-border" />
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-app-muted font-sans font-medium">MCE:</span>
-            <span className="text-xs font-semibold text-amber-500">{mce.toFixed(4)}</span>
-          </div>
-          <div className="h-4 w-px bg-app-border" />
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-app-muted font-sans font-medium">Brier:</span>
-            <span className="text-xs font-semibold text-app-text">{brier.toFixed(4)}</span>
-          </div>
-          <div className="h-4 w-px bg-app-border" />
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-app-muted font-sans font-medium">Samples:</span>
-            <span className="text-xs font-semibold text-app-text">{sampleCount}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Main 50/50 Split Grid: 10-Bin Reliability Diagram vs. Overconfident Hallucinations */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-[420px]">
-        {/* Left Column: 10-Bin Reliability Diagram */}
-        <div className="flex flex-col h-full bg-app-surface border border-app-border rounded-lg overflow-hidden p-3.5 select-none space-y-2">
-          <div className="flex items-center justify-between border-b border-app-border/60 pb-2 shrink-0">
-            <div>
-              <h4 className="text-xs font-semibold text-app-heading">
-                10-Bin Reliability Diagram
-              </h4>
-              <p className="text-[11px] text-app-muted">
-                Mean Predicted Confidence vs. Empirical Verification Rate
-              </p>
-            </div>
-
-            <button
-              onClick={fetchCalibration}
-              className="p-1 rounded text-app-muted hover:text-app-text hover:bg-app-subtle transition-colors"
-              title="Refresh Calibration Metrics"
-            >
-              {isLoading ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="w-3.5 h-3.5" />
-              )}
-            </button>
-          </div>
-
-          {/* ECharts Container */}
-          <div className="flex-1 w-full min-h-[320px] relative">
-            <div ref={chartRef} className="w-full h-full" />
-            {isLoading && (
-              <div className="absolute inset-0 bg-app-surface/60 backdrop-blur-2xs flex items-center justify-center">
-                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-              </div>
-            )}
-          </div>
-
-          {/* Theoretical Note */}
-          <div className="pt-2 border-t border-app-border/60 text-[11px] text-app-muted leading-relaxed font-sans">
-            <span className="font-semibold text-app-text">Calibration Gap Interpretation:</span>{" "}
-            Bars below the diagonal indicate model overconfidence (P(correct) &gt; acc),
-            a known hazard in scientific extraction. Shaded red area highlights miscalibration gap.
-          </div>
-        </div>
-
-        {/* Right Column: Overconfidence Hallucination Table */}
-        <div className="flex flex-col h-full min-h-[420px]">
-          <OverconfidenceTable
-            assertions={calibrationData?.high_confidence_hallucinations || []}
-            onOpenConfigEditor={onOpenConfigEditor}
+        {/* Center: Search Filter */}
+        <div className="hidden md:flex items-center max-w-xs w-full relative">
+          <Search className="w-3.5 h-3.5 text-app-muted absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Filter assertions or predicates..."
+            className="w-full pl-8 pr-2.5 py-1 text-xs rounded bg-app-bg border border-app-border focus:border-blue-500 focus:outline-hidden text-app-text placeholder-app-muted"
           />
         </div>
+
+        {/* Right: Key Telemetry Strip & Toggles */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="hidden lg:flex items-center gap-2.5 text-xs">
+            <div className="flex items-center gap-1">
+              <span className="type-caption text-app-muted">ECE:</span>
+              <span className="type-mono font-semibold tabular-nums text-app-text">
+                {formatMetric(ece)}
+              </span>
+            </div>
+            <span className="text-app-border">·</span>
+            <div className="flex items-center gap-1">
+              <span className="type-caption text-app-muted">MCE:</span>
+              <span className="type-mono font-semibold tabular-nums text-app-text">
+                {formatMetric(mce)}
+              </span>
+            </div>
+            <span className="text-app-border">·</span>
+            <div className="flex items-center gap-1">
+              <span className="type-caption text-app-muted">Brier:</span>
+              <span className="type-mono font-semibold tabular-nums text-app-text">
+                {formatMetric(brier)}
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={fetchCalibration}
+            className="p-1.5 rounded text-app-muted hover:text-app-text hover:bg-app-subtle transition-colors cursor-pointer"
+            title="Refresh Calibration Metrics"
+          >
+            {isLoading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleRightRail}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs border transition-colors cursor-pointer ${
+              isRightRailCollapsed
+                ? "bg-blue-500/10 border-blue-500/30 text-blue-500 hover:bg-blue-500/20"
+                : "bg-app-bg border-app-border text-app-muted hover:text-app-text hover:bg-app-subtle"
+            }`}
+            title={isRightRailCollapsed ? "Expand Diagnostic Rail" : "Collapse Diagnostic Rail"}
+          >
+            <PanelRightClose className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">
+              {isRightRailCollapsed ? "Diagnostic Rail" : "Collapse"}
+            </span>
+          </button>
+        </div>
       </div>
 
-      {/* 3. Interactive Threshold Slider (Task 4.6) */}
-      <ThresholdOptimizerBar
-        baselinePrecision={activeReport?.key_metrics?.precision ?? 0.88}
-        baselineRecall={activeReport?.key_metrics?.recall ?? 0.85}
-        totalTriples={sampleCount}
-      />
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* 2. Workspace: Fluid Center Stage + Right Diagnostic Rail            */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Center Stage: Split between Reliability Diagram & Assertion Table */}
+        <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+          {/* Top Stage Vitrine: 10-Bin Reliability Diagram (220px fixed) */}
+          <div className="h-[220px] border-b border-app-border bg-app-surface/30 shrink-0 flex flex-col overflow-hidden">
+            {/* Diagram Micro-Bar */}
+            <div className="h-7 px-4 border-b border-app-border/60 bg-app-surface/50 flex items-center justify-between text-[11px] text-app-muted">
+              <span className="font-semibold text-app-heading">
+                10-Bin Empirical Reliability Diagram
+              </span>
+              <span className="type-caption">
+                Bars below diagonal indicate model overconfidence (P(correct) &gt; acc)
+              </span>
+            </div>
+
+            {/* ECharts Area */}
+            <div className="flex-1 w-full h-full relative">
+              <div ref={chartRef} className="w-full h-full" />
+              {!isLoading && error && (
+                <div className="absolute inset-0 bg-app-surface/60 flex items-center justify-center p-4">
+                  <p className="type-caption text-app-muted text-center">{error}</p>
+                </div>
+              )}
+              {!isLoading && !error && !hasData && (
+                <div className="absolute inset-0 bg-app-surface/60 flex items-center justify-center p-4">
+                  <p className="type-caption text-app-muted text-center">
+                    No calibration data available for this evaluation run.
+                  </p>
+                </div>
+              )}
+              {isLoading && (
+                <div className="absolute inset-0 bg-app-surface/60 backdrop-blur-2xs flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom Stage: Linear Data Grid for Overconfident Assertions */}
+          <div className="flex-1 overflow-hidden min-h-0">
+            <OverconfidenceTable
+              assertions={calibrationData?.high_confidence_hallucinations || []}
+              selectedId={selectedAssertionId}
+              onSelectId={(id) => {
+                setSelectedAssertionId(id);
+                if (isRightRailCollapsed) setIsRightRailCollapsed(false);
+              }}
+              searchQuery={searchQuery}
+            />
+          </div>
+        </div>
+
+        {/* Right Diagnostic Rail (Cursor Resizable, 420px default) */}
+        <ResizablePanel
+          side="right"
+          storageKey="episteme-calibration-rail-width"
+          defaultWidth={420}
+          minWidth={340}
+          maxWidth={640}
+          collapsible={true}
+          collapseThreshold={140}
+          collapsed={isRightRailCollapsed}
+          onToggleCollapse={toggleRightRail}
+          className="!border-l !border-app-border flex flex-col h-full bg-app-surface"
+        >
+          <CalibrationDiagnosticRail
+            selectedAssertion={selectedAssertion}
+            baselinePrecision={activeReport?.key_metrics?.precision ?? 0.88}
+            baselineRecall={activeReport?.key_metrics?.recall ?? 0.85}
+            totalTriples={sampleCount ?? undefined}
+            onOpenConfigEditor={onOpenConfigEditor}
+            onClose={() => setIsRightRailCollapsed(true)}
+          />
+        </ResizablePanel>
+      </div>
     </div>
   );
 };

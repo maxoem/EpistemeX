@@ -372,7 +372,7 @@ export const AdjudicationTriadCard: React.FC<AdjudicationTriadCardProps> = ({
             onClick={onAccept}
             className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all cursor-pointer ${
               activeDecision === "true_positive"
-                ? "bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-500/40"
+                ? "bg-emerald-600 text-white ring-1 ring-emerald-500/40"
                 : "bg-app-surface hover:bg-emerald-500/5 hover:border-emerald-500/40 text-app-text border border-app-border"
             }`}
           >
@@ -391,7 +391,7 @@ export const AdjudicationTriadCard: React.FC<AdjudicationTriadCardProps> = ({
             onClick={onReject}
             className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all cursor-pointer ${
               activeDecision === "false_positive"
-                ? "bg-rose-600 text-white shadow-xs ring-1 ring-rose-500/40"
+                ? "bg-rose-600 text-white ring-1 ring-rose-500/40"
                 : "bg-app-surface hover:bg-rose-500/5 hover:border-rose-500/40 text-app-text border border-app-border"
             }`}
           >
@@ -410,7 +410,7 @@ export const AdjudicationTriadCard: React.FC<AdjudicationTriadCardProps> = ({
             onClick={onOpenAlias}
             className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all cursor-pointer ${
               activeDecision === "schema_alias"
-                ? "bg-violet-600 text-white shadow-xs ring-1 ring-violet-500/40"
+                ? "bg-violet-600 text-white ring-1 ring-violet-500/40"
                 : "bg-app-surface hover:bg-violet-500/5 hover:border-violet-500/40 text-app-text border border-app-border"
             }`}
           >

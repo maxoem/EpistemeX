@@ -425,7 +425,7 @@ export const CompetencyRankingTable: React.FC<CompetencyRankingTableProps> = ({ 
                                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                                 <div>
                                   <div className="font-semibold font-sans">Retrieval Breakdown Root Cause:</div>
-                                  <div className="leading-relaxed mt-0.5 font-serif italic">
+                                  <div className="py-2 leading-relaxed">
                                     {query.failure_mode}
                                   </div>
                                 </div>
@@ -435,18 +435,18 @@ export const CompetencyRankingTable: React.FC<CompetencyRankingTableProps> = ({ 
                             {/* Dual Diagnosis Columns: Expected Gold vs Retrieved Candidates */}
                             <div className="grid grid-cols-2 gap-4">
                               {/* Left Column: Expected Gold Nodes */}
-                              <div className="p-3.5 rounded bg-app-surface/60 border border-app-border/80 space-y-2">
+                              <div className="p-3 rounded bg-app-subtle/30 space-y-2">
                                 <div className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider flex items-center justify-between">
                                   <span>Expected Gold Subgraph Nodes</span>
                                   <span className="text-emerald-600 dark:text-emerald-400 font-mono">
                                     {query.expected_gold_nodes.length} targets
                                   </span>
                                 </div>
-                                <div className="space-y-1.5">
+                                <div className="divide-y divide-app-border/60">
                                   {query.expected_gold_nodes.map((nodeId, idx) => (
                                     <div
                                       key={idx}
-                                      className="p-1.5 rounded bg-emerald-500/5 border border-emerald-500/20 text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center justify-between"
+                                      className="py-1.5 text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center justify-between"
                                     >
                                       <span className="truncate">{nodeId}</span>
                                       <span className="text-[9px] uppercase px-1 rounded bg-emerald-500/20">
@@ -458,19 +458,19 @@ export const CompetencyRankingTable: React.FC<CompetencyRankingTableProps> = ({ 
                               </div>
 
                               {/* Right Column: Retrieved Candidates */}
-                              <div className="p-3.5 rounded bg-app-surface/60 border border-app-border/80 space-y-2">
+                              <div className="p-3 rounded bg-app-subtle/30 space-y-2">
                                 <div className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider flex items-center justify-between">
                                   <span>Retrieved Top-Ranked Candidates</span>
                                   <span className="font-mono text-app-muted">{query.retrieved_candidates.length} returned</span>
                                 </div>
-                                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                <div className="divide-y divide-app-border/60 max-h-48 overflow-y-auto pr-1">
                                   {query.retrieved_candidates.map((cand, idx) => (
                                     <div
                                       key={idx}
-                                      className={`p-1.5 rounded border text-[11px] flex items-center justify-between ${
+                                      className={`py-2 text-[11px] flex items-center justify-between border-l-2 ${
                                         cand.is_gold_target
-                                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                                          : "bg-app-bg border-app-border/60 text-app-text"
+                                          ? "border-emerald-500/60 text-emerald-600 dark:text-emerald-400"
+                                          : "border-transparent text-app-text"
                                       }`}
                                     >
                                       <div className="flex items-center gap-2 truncate">

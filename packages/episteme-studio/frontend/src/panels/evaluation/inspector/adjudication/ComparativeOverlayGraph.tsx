@@ -216,11 +216,6 @@ export const ComparativeOverlayGraph: React.FC<ComparativeOverlayGraphProps> = (
             >
               <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#10b981" />
             </marker>
-
-            {/* Drop Shadow Filter */}
-            <filter id="node-pill-shadow" x="-10%" y="-20%" width="120%" height="150%">
-              <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.15" />
-            </filter>
           </defs>
 
           {/* Background Grid Pattern */}
@@ -261,7 +256,6 @@ export const ComparativeOverlayGraph: React.FC<ComparativeOverlayGraphProps> = (
                     className="text-app-surface"
                     stroke={predEdgeColor}
                     strokeWidth="1.5"
-                    filter="url(#node-pill-shadow)"
                   />
                   <text
                     x="0"
@@ -334,7 +328,6 @@ export const ComparativeOverlayGraph: React.FC<ComparativeOverlayGraphProps> = (
                     stroke="#10b981"
                     strokeWidth="1.5"
                     strokeDasharray="4,2"
-                    filter="url(#node-pill-shadow)"
                   />
                   <text
                     x="0"
@@ -401,7 +394,6 @@ export const ComparativeOverlayGraph: React.FC<ComparativeOverlayGraphProps> = (
           {/* 3. NODE: Subject Entity Pill (Full Multi-Line Text) */}
           <g
             transform={`translate(${subX}, ${subY})`}
-            filter="url(#node-pill-shadow)"
             className="cursor-pointer"
             onMouseEnter={() =>
               setHoveredEntity({ label: predSource, role: "Subject Concept", raw: rawPredSource })
@@ -458,7 +450,6 @@ export const ComparativeOverlayGraph: React.FC<ComparativeOverlayGraphProps> = (
           {/* 4. NODE: Target Entity Pill (Full Multi-Line Text) */}
           <g
             transform={`translate(${objX}, ${objY})`}
-            filter="url(#node-pill-shadow)"
             className="cursor-pointer"
             onMouseEnter={() =>
               setHoveredEntity({ label: predTarget, role: "Target Object", raw: rawPredTarget })

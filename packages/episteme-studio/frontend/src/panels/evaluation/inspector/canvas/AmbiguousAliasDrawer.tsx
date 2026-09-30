@@ -259,7 +259,7 @@ export const AmbiguousAliasDrawer: React.FC<AmbiguousAliasDrawerProps> = ({
 
             {/* Evidence quote */}
             {cand.evidence_snippet && (
-              <blockquote className="p-2 rounded bg-app-surface text-[10px] italic text-app-muted leading-relaxed font-serif border-l-2 border-violet-400">
+              <blockquote className="pl-2 text-[10px] italic text-app-muted leading-relaxed border-l-2 border-violet-400">
                 "{cand.evidence_snippet}"
               </blockquote>
             )}

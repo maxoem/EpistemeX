@@ -9,7 +9,6 @@ import {
   RefreshCw,
   Search,
   Send,
-  Sparkles,
   X,
   XCircle,
 } from "lucide-react";
@@ -240,7 +239,6 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
 
           {stagedCount > 0 && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-mono tabular-nums">
-              <Sparkles className="w-3 h-3 text-emerald-500 shrink-0" />
               <span>
                 {stagedCount} Staged
                 {optimisticF1Delta !== 0 && (
@@ -271,7 +269,7 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
               disabled={stagedCount === 0 || isCommittingBatch}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-all ${
                 stagedCount > 0
-                  ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs"
+                  ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
                   : "bg-app-subtle text-app-muted border border-app-border cursor-not-allowed opacity-60"
               }`}
               title="Commit all staged decisions (Cmd+Enter)"
@@ -282,7 +280,7 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
                 <Send className="w-3 h-3" />
               )}
               <span>Commit ({stagedCount})</span>
-              <kbd className="hidden sm:inline-block px-1 py-0.2 rounded text-[9px] font-mono bg-black/20">
+              <kbd className="hidden sm:inline-block px-1 py-0.2 rounded text-[9px] font-mono bg-app-bg/40 border border-app-border/40">
                 ⌘⏎
               </kbd>
             </button>
@@ -294,7 +292,7 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
       {/* 2. Intelligent Auto-Balanced Table Header Row                      */}
       {/* Generous proportional space for Epistemic Function column           */}
       {/* ─────────────────────────────────────────────────────────────────── */}
-      <div className="h-8 px-4 border-b border-app-border bg-app-surface text-[10px] font-mono uppercase tracking-wider text-app-muted flex items-center justify-between shrink-0 select-none">
+      <div className="h-8 px-4 border-b border-app-border bg-app-surface text-[11px] font-sans font-semibold uppercase tracking-[0.05em] text-app-muted flex items-center justify-between shrink-0 select-none">
         <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
           <span className="w-6 shrink-0 text-center">#</span>
           <span className="flex-1 min-w-[170px] truncate">Subject Concept</span>
@@ -369,10 +367,10 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
               <div
                 key={candidate.candidate_id}
                 ref={isSelected ? selectedRowRef : undefined}
-                className={`group flex flex-col transition-all select-none text-xs ${
+                className={`group flex flex-col transition-colors select-none text-xs border-l-2 ${
                   isSelected
-                    ? "bg-blue-500/[0.08] dark:bg-blue-500/[0.14] border-l-[5px] border-l-blue-600 dark:border-l-blue-400 border-y border-blue-500/25 shadow-xs z-10"
-                    : "border-l-[5px] border-l-transparent hover:bg-app-subtle/50"
+                    ? "bg-blue-500/[0.06] dark:bg-blue-500/[0.12] border-l-blue-500"
+                    : "border-l-transparent hover:bg-app-subtle/50"
                 }`}
               >
                 {/* Main Horizontal Proposition Row with Proportional Layout */}
@@ -394,7 +392,7 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
                       }}
                       className={`w-6 h-6 flex items-center justify-center rounded shrink-0 cursor-pointer transition-colors ${
                         isSelected
-                          ? "bg-blue-600 text-white font-bold shadow-xs"
+                          ? "bg-blue-600 text-white font-bold"
                           : "text-app-muted hover:text-app-text hover:bg-app-subtle"
                       }`}
                       title={isExpanded ? "Collapse proposition sentence (Space)" : "Expand proposition sentence (Space)"}
@@ -442,7 +440,7 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
                           <div className="flex flex-col items-center gap-1 py-1">
                             {/* Predicted Predicate in subtle red container */}
                             <div
-                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/25 font-mono text-[11px] font-semibold tracking-tight shadow-2xs"
+                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/25 font-mono text-[11px] font-semibold tracking-tight"
                               title={`Predicted Pipeline Operator: ${predPredicate}`}
                             >
                               <span className="text-[9px] uppercase tracking-wider font-sans font-bold text-rose-500/70">
@@ -453,7 +451,7 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
 
                             {/* Gold Standard Predicate directly below in green container */}
                             <div
-                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 font-mono text-[11px] font-semibold tracking-tight shadow-2xs"
+                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 font-mono text-[11px] font-semibold tracking-tight"
                               title={`Reference Gold Target: ${refPredicate}`}
                             >
                               <span className="text-[9px] uppercase tracking-wider font-sans font-bold text-emerald-500/70">
@@ -582,10 +580,9 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
                 {/* Natural Language Two-Line Comparison Proposition Format       */}
                 {/* ───────────────────────────────────────────────────────────── */}
                 {isExpanded && (
-                  <div className="px-6 py-3.5 bg-app-surface/95 border-t border-app-border/80 space-y-3 animate-in fade-in duration-100">
+                  <div className="px-6 py-4 bg-app-surface border-t border-app-border-subtle space-y-3 animate-in fade-in duration-100">
                     <div className="flex items-center justify-between text-[11px] text-app-muted">
                       <span className="font-semibold text-app-heading font-sans flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-blue-500" />
                         <span>Natural Language Proposition Alignment</span>
                       </span>
                       <span className="font-mono text-[10px] text-app-muted">
@@ -594,13 +591,13 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
                     </div>
 
                     {/* Two-Line Clean Comparison */}
-                    <div className="p-3 rounded-md bg-app-bg border border-app-border space-y-2 text-xs font-serif leading-relaxed">
+                    <div className="bg-app-subtle/40 divide-y divide-app-border-subtle rounded-md text-xs font-sans leading-relaxed">
                       {/* Line 1: Predicted Proposition */}
-                      <div className="flex items-start gap-2.5">
-                        <span className="font-sans font-mono text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                      <div className="flex items-start gap-2.5 px-3 py-2.5">
+                        <span className="font-mono text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
                           Predicted
                         </span>
-                        <div className="flex-1 font-serif text-[12.5px] text-app-heading">
+                        <div className="flex-1 font-sans text-[12.5px] text-app-heading">
                           &ldquo;
                           {formatNaturalSentence(
                             candidate.predicted_edge?.source,
@@ -609,17 +606,17 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
                           )}
                           &rdquo;
                         </div>
-                        <span className="font-mono text-[10px] text-app-muted font-sans shrink-0">
+                        <span className="font-mono text-[10px] text-app-muted shrink-0">
                           {(candidate.confidence * 100).toFixed(1)}% conf
                         </span>
                       </div>
 
                       {/* Line 2: Reference Gold Proposition */}
-                      <div className="flex items-start gap-2.5 pt-1.5 border-t border-app-border/50">
-                        <span className="font-sans font-mono text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                      <div className="flex items-start gap-2.5 px-3 py-2.5">
+                        <span className="font-mono text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                           Reference
                         </span>
-                        <div className="flex-1 font-serif text-[12.5px] text-app-heading">
+                        <div className="flex-1 font-sans text-[12.5px] text-app-heading">
                           {hasRef ? (
                             <span>
                               &ldquo;
@@ -637,7 +634,7 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
                           )}
                         </div>
                         {hasRef && (
-                          <span className="font-mono text-[10px] text-amber-500 font-sans font-semibold shrink-0">
+                          <span className="font-mono text-[10px] text-amber-500 font-semibold shrink-0">
                             τ {candidate.similarity_score.toFixed(3)}
                           </span>
                         )}
@@ -645,22 +642,22 @@ export const AdjudicationTableView: React.FC<AdjudicationTableViewProps> = ({
                     </div>
 
                     {/* Vector Similarity Telemetry Mini-Strip */}
-                    <div className="grid grid-cols-4 gap-2 text-[10px] font-mono">
-                      <div className="p-2 rounded bg-app-bg border border-app-border flex items-center justify-between">
+                    <div className="grid grid-cols-4 text-[10px] font-mono bg-app-surface divide-x divide-app-border/60 rounded-md overflow-hidden">
+                      <div className="px-2.5 py-1.5 flex items-center justify-between">
                         <span className="text-app-muted">Head Sim:</span>
-                        <span className="text-app-text font-semibold">{headSim.toFixed(2)}</span>
+                        <span className="text-app-text font-semibold tabular-nums">{headSim.toFixed(2)}</span>
                       </div>
-                      <div className="p-2 rounded bg-app-bg border border-app-border flex items-center justify-between">
+                      <div className="px-2.5 py-1.5 flex items-center justify-between">
                         <span className="text-app-muted">Pred Sim:</span>
-                        <span className="text-app-text font-semibold">{predSim.toFixed(2)}</span>
+                        <span className="text-app-text font-semibold tabular-nums">{predSim.toFixed(2)}</span>
                       </div>
-                      <div className="p-2 rounded bg-app-bg border border-app-border flex items-center justify-between">
+                      <div className="px-2.5 py-1.5 flex items-center justify-between">
                         <span className="text-app-muted">Tail Sim:</span>
-                        <span className="text-app-text font-semibold">{tailSim.toFixed(2)}</span>
+                        <span className="text-app-text font-semibold tabular-nums">{tailSim.toFixed(2)}</span>
                       </div>
-                      <div className="p-2 rounded bg-app-bg border border-app-border flex items-center justify-between">
+                      <div className="px-2.5 py-1.5 flex items-center justify-between">
                         <span className="text-app-muted">Soft τ:</span>
-                        <span className="text-amber-500 font-bold">{overallSim.toFixed(3)}</span>
+                        <span className="text-amber-500 font-bold tabular-nums">{overallSim.toFixed(3)}</span>
                       </div>
                     </div>
 

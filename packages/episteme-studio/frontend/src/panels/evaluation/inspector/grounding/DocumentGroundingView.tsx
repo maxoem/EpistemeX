@@ -307,13 +307,13 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2.5 rounded bg-app-subtle/30 border border-app-border/60">
+                  <div className="p-2.5 rounded bg-app-subtle/30">
                     <span className="text-[10px] text-app-muted block font-sans">AG_IoU Score</span>
                     <span className="font-mono tabular-nums font-semibold text-emerald-600 dark:text-emerald-400 text-sm">
                       {evidenceData.iou_score.toFixed(3)}
                     </span>
                   </div>
-                  <div className="p-2.5 rounded bg-app-subtle/30 border border-app-border/60">
+                  <div className="p-2.5 rounded bg-app-subtle/30">
                     <span className="text-[10px] text-app-muted block font-sans">Anchor Page</span>
                     <span className="font-mono tabular-nums font-semibold text-app-text text-sm">
                       Page {evidenceData.predicted_anchor?.bbox?.page || selectedPage}
@@ -392,13 +392,13 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                   Multi-Page Span Array (Continuous Coordinates)
                 </div>
 
-                <div className="space-y-1.5 text-xs font-mono">
+                <div className="divide-y divide-app-border/60 text-xs font-mono">
                   {evidenceData.predicted_anchor?.spans &&
                   evidenceData.predicted_anchor.spans.length > 0 ? (
                     evidenceData.predicted_anchor.spans.map((span, idx) => (
                       <div
                         key={idx}
-                        className="p-2 rounded bg-app-subtle/30 border border-app-border/60 flex items-center justify-between text-[11px]"
+                        className="py-2 flex items-center justify-between text-[11px]"
                       >
                         <span className="font-semibold text-app-text">Span {idx + 1}</span>
                         <span className="text-app-muted">Page {span.page}</span>
@@ -413,7 +413,7 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                       </div>
                     ))
                   ) : evidenceData.predicted_anchor?.bbox ? (
-                    <div className="p-2 rounded bg-app-subtle/30 border border-app-border/60 flex items-center justify-between text-[11px]">
+                    <div className="py-2 flex items-center justify-between text-[11px]">
                       <span className="font-semibold text-app-text">Primary BBox</span>
                       <span className="text-app-muted">
                         Page {evidenceData.predicted_anchor.bbox.page}
@@ -442,7 +442,7 @@ export const DocumentGroundingView: React.FC<DocumentGroundingViewProps> = ({ on
                 <div className="text-[10px] uppercase font-semibold text-app-muted font-sans tracking-wider">
                   Verbatim Grounding Passage
                 </div>
-                <blockquote className="p-3 rounded bg-app-subtle/30 border-l-2 border-blue-500 text-[11px] font-serif italic text-app-text leading-relaxed">
+                <blockquote className="p-3 rounded bg-app-subtle/30 border-l-2 border-blue-500 text-[11px] italic text-app-text leading-relaxed">
                   "{evidenceData.predicted_anchor?.verbatim_text ||
                     evidenceData.reference_anchor?.verbatim_text ||
                     'Mutationem motus proportionalem esse vi motrici impressae...'}"

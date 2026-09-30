@@ -173,7 +173,7 @@ export const EvaluationWorkspace: React.FC = () => {
           )}
 
           {/* Mode Selector Tabs */}
-          <div className="flex items-center gap-1 bg-app-bg dark:bg-[#111827] p-0.5 rounded-md border border-app-border">
+          <div className="flex items-center gap-1 bg-app-bg p-0.5 rounded-md border border-app-border">
             <button
               onClick={() => setActiveMode("catalog")}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
@@ -308,7 +308,7 @@ export const EvaluationWorkspace: React.FC = () => {
             showFooter={false}
             collapsed={isSidebarCollapsed}
             onToggleCollapse={toggleSidebar}
-            className="!bg-[#F8FAFC] dark:!bg-app-rail !border-r !border-[#E2E8F0] dark:!border-app-border flex flex-col"
+            className="!bg-app-rail !border-r !border-app-border flex flex-col"
           >
             <div className="flex flex-col h-full overflow-hidden">
               {/* Search & Filter Header */}

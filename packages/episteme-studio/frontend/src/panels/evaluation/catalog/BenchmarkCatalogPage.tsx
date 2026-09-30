@@ -78,7 +78,7 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 text-xs text-app-muted">
-                  <span className="font-mono text-[11px] text-blue-500">
+                  <span className="font-mono text-[11px] text-app-muted">
                     id: {activeBenchmark.id}
                   </span>
                   <span>·</span>
@@ -415,21 +415,21 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
               <h3 className="text-xs font-semibold text-app-muted">
                 Primary source grounding provenance
               </h3>
-              <div className="rounded-md bg-app-surface/40 border border-app-border divide-y divide-app-border text-xs">
-                <div className="p-3 flex items-center justify-between">
+              <div className="divide-y divide-app-border/60 border-t border-app-border/60 text-xs">
+                <div className="py-2.5 flex items-center justify-between">
                   <span className="text-app-muted">Bound Treatise Document</span>
                   <span className="font-mono text-app-text font-medium">
                     doc_carnap_aufbau_de_1928.pdf (240 pp.)
                   </span>
                 </div>
-                <div className="p-3 flex items-center justify-between">
+                <div className="py-2.5 flex items-center justify-between">
                   <span className="text-app-muted">Gold Standard Path</span>
                   <span className="font-mono text-app-muted text-[11px] truncate max-w-md">
                     {activeBenchmark.gold_standard_path}
                   </span>
                 </div>
                 {activeBenchmark.queries_path && (
-                  <div className="p-3 flex items-center justify-between">
+                  <div className="py-2.5 flex items-center justify-between">
                     <span className="text-app-muted">Competency Queries Path</span>
                     <span className="font-mono text-app-muted text-[11px] truncate max-w-md">
                       {activeBenchmark.queries_path}
