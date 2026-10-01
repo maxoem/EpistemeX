@@ -483,3 +483,84 @@ Cluster Observations:
 4. Output strictly valid JSON matching the schema.
 """
 
+
+# ---------------------------------------------------------------------------
+# Decision Engine Prompts & Rubrics (System 1 Gating & Classification)
+# ---------------------------------------------------------------------------
+
+DECISION_EPISTEMIC_RELEVANCE_QUESTION = """\
+Is this text chunk substantively relevant to philosophical, theoretical, or scientific arguments and concepts, as opposed to metadata, index, bibliography, acknowledgments, or administrative boilerplate?
+"""
+
+DECISION_EPISTEMIC_RELEVANCE_CRITERIA = {
+    "relevant": (
+        "Substantive content containing philosophical, theoretical, or scientific claims, "
+        "premises, arguments, definitions, or conceptual analysis."
+    ),
+    "non_relevant": (
+        "Bibliographic references, table of contents, index, copyright notices, "
+        "author biographies, publication metadata, or administrative boilerplate text."
+    ),
+}
+
+DECISION_ACC_QUESTION = """\
+What is the functional argumentative component type of the following text unit?
+"""
+
+DECISION_ACC_CRITERIA = {
+    "CLAIM": (
+        "A central proposition, thesis, conclusion, or assertion put forward by an author "
+        "that requires justification or evidence."
+    ),
+    "PREMISE": (
+        "A statement, piece of evidence, reason, or assumption offered in support of "
+        "or in opposition to a claim."
+    ),
+    "CONCLUSION": (
+        "A statement derived logically from one or more premises within a reasoning chain."
+    ),
+    "MAJOR_CLAIM": (
+        "The overarching, primary thesis or contention of the entire philosophical text or work."
+    ),
+    "NONE": (
+        "Non-argumentative, expository, narrative, or background discourse without "
+        "an inferential argumentative role."
+    ),
+}
+
+DECISION_ARC_QUESTION = """\
+What argumentative or dialectical relation holds from the source proposition to the target proposition?
+"""
+
+DECISION_ARC_CRITERIA = {
+    "SUPPORTS": (
+        "The source proposition provides evidence, justification, entailment, or logical backing "
+        "for the target proposition."
+    ),
+    "ATTACKS": (
+        "The source proposition directly refutes, contradicts, or rebuts the target proposition."
+    ),
+    "UNDERCUTS": (
+        "The source proposition challenges the inferential link, premise applicability, or relevance "
+        "between the target and its premises without necessarily denying the target directly."
+    ),
+    "NEUTRAL": (
+        "No inferential, supporting, or defeating relation holds between source and target."
+    ),
+}
+
+DECISION_BOUNDARY_QUESTION = """\
+Does the current text segment mark a semantic or argumentative boundary indicating a shift in topic, argument branch, or structural section?
+"""
+
+DECISION_BOUNDARY_CRITERIA = {
+    "BOUNDARY": (
+        "A clear transition, topical break, conclusion of a proof or argument branch, "
+        "or shift to a new dialectical context."
+    ),
+    "CONTINUATION": (
+        "The text continues the active argument, elaboration, or logical deduction of "
+        "the current context."
+    ),
+}
+

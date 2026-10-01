@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from enum import Enum
 from typing import Any, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from episteme_pipeline.prompts.default_prompts import (
     ACC_DIRECT_PROMPT, ACC_REASONING_PROMPT, ACC_FORMAT_PROMPT,
@@ -323,6 +323,39 @@ class ExecutionConfig(BaseModel):
     artifacts_dir: str = ".pipeline_artifacts"
 
 
+class DecisionEngineConfig(BaseModel):
+    """Configuration for the System 1 Decision Engine (e.g. TypeSafe Jev / Laya).
+
+    Attributes
+    ----------
+    provider : str, default "none"
+        Provider backend identifier ("none", "laya", "transformers", "mock").
+    api_key : SecretStr or None, default None
+        Optional API key or secret token for remote decision services.
+    endpoint_url : str or None, default None
+        Optional HTTP/gRPC endpoint for remote decision services.
+    timeout_seconds : float, default 2.0
+        Per-decision inference timeout in seconds.
+    default_confidence_threshold : float, default 0.85
+        Default empirical accuracy threshold for fast-exit routing.
+    conformal_alpha : float, default 0.05
+        Significance level for conformal prediction sets (guaranteeing 1 - alpha coverage).
+    stochastic_audit_rate : float, default 0.02
+        Proportion of fast-exit decisions randomly escalated to System 2 to audit calibration drift.
+    fallback_to_llm : bool, default True
+        Whether to fall back to generative LLM execution if the decision engine fails or has low confidence.
+    """
+
+    provider: str = "none"
+    api_key: SecretStr | None = None
+    endpoint_url: str | None = None
+    timeout_seconds: float = 2.0
+    default_confidence_threshold: float = 0.85
+    conformal_alpha: float = 0.05
+    stochastic_audit_rate: float = 0.02
+    fallback_to_llm: bool = True
+
+
 class PipelineConfig(BaseModel):
     """
     Top-level pipeline configuration. Each phase receives only its sub-config.
@@ -344,6 +377,7 @@ class PipelineConfig(BaseModel):
     phase6: Phase6Config = Field(default_factory=Phase6Config)
     theoretical_enrichment: TheoreticalEnrichmentConfig = Field(default_factory=TheoreticalEnrichmentConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
+    decision_engine: DecisionEngineConfig | None = Field(default=None)
 
     @classmethod
     def from_env(cls, **overrides: Any) -> "PipelineConfig":

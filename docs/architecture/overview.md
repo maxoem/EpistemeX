@@ -34,6 +34,7 @@ Every external capability is decoupled from business logic via abstract protocol
 | **LLM Inference** | `StructuredLLM` / `BaseLLM` | `LiteLLM` / `LlamaIndex` | Multi-provider router supporting OpenAI, Anthropic, Ollama, vLLM |
 | **Embedding Model** | `EmbeddingModel` | `LiteLLMEmbedding` / LlamaIndex | Normalized async text and batch vector embeddings |
 | **Reranking & Scoring** | `CrossEncoder` / `RelationReranker` | `SentenceTransformerCrossEncoderReranker` | PyTorch / HuggingFace joint-attention candidate relation scoring |
+| **Decision Engine** | `DecisionEngine` | `LayaDecisionEngine` / `MockJevDecisionEngine` | Sub-second System 1 classification, calibrated confidence scoring, conformal prediction sets, and categorical decision gating |
 | **Prompt Management** | `PromptProvider` | `LangfusePromptProvider` | Remote prompt versioning, label resolution (`production`), auto-sync (with `DefaultPromptProvider` fallback) |
 | **Observability & Tracing** | `EventEmitter` / `Observer` | `LangfuseObserver` | Distributed LLM call tracing, token/cost analysis, latency tracking |
 
@@ -107,6 +108,13 @@ flowchart TD
 
 - Enforces entity types, relationship taxonomy, property constraints, and validation rules applied during extraction and
   alignment fusion.
+
+### System 1 Decision Engine Subsystem (`pipeline/protocols/decision.py`, `pipeline/decision/`)
+
+- Implements a Dual-Process Neuro-Symbolic Architecture (System 1 fast gating + System 2 generative synthesis).
+- Encapsulated via the abstract `DecisionEngine` protocol providing three core primitives: `evaluate_noul` (binary gating), `evaluate_choice` (categorical selection with conformal prediction sets), and `evaluate_score` (ordered scale evaluation).
+- Returns strictly typed `DecisionScore` and `DecisionNoulResult` contracts decoupling softmax class probabilities from empirical accuracy calibration.
+- Normalised at the composition root (`Pipeline.for_task`) via `ensure_decision_engine`, providing an optional, zero-regression dependency.
 
 ---
 

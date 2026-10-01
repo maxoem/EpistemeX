@@ -25,6 +25,14 @@ from episteme_pipeline.prompts.default_prompts import (
     ARC_DIRECT_PROMPT,
     ARC_FORMAT_PROMPT,
     ARC_REASONING_PROMPT,
+    DECISION_ACC_CRITERIA,
+    DECISION_ACC_QUESTION,
+    DECISION_ARC_CRITERIA,
+    DECISION_ARC_QUESTION,
+    DECISION_BOUNDARY_CRITERIA,
+    DECISION_BOUNDARY_QUESTION,
+    DECISION_EPISTEMIC_RELEVANCE_CRITERIA,
+    DECISION_EPISTEMIC_RELEVANCE_QUESTION,
     ENTITY_LINKING_PROMPT,
     ENTITY_SYNTHESIS_PROMPT,
     GLOBAL_RELATION_DIRECT_PROMPT,
@@ -104,6 +112,8 @@ class DefaultPromptProvider:
                 direct_template=ACC_DIRECT_PROMPT,
                 reasoning_template=ACC_REASONING_PROMPT,
                 format_template=ACC_FORMAT_PROMPT,
+                decision_template=DECISION_ACC_QUESTION,
+                decision_criteria=DECISION_ACC_CRITERIA,
                 name="acc_classification",
                 provider="default",
             ),
@@ -111,7 +121,21 @@ class DefaultPromptProvider:
                 direct_template=ARC_DIRECT_PROMPT,
                 reasoning_template=ARC_REASONING_PROMPT,
                 format_template=ARC_FORMAT_PROMPT,
+                decision_template=DECISION_ARC_QUESTION,
+                decision_criteria=DECISION_ARC_CRITERIA,
                 name="arc_classification",
+                provider="default",
+            ),
+            "decision_epistemic_relevance": StructuredPromptBundle(
+                direct_template=DECISION_EPISTEMIC_RELEVANCE_QUESTION,
+                decision_criteria=DECISION_EPISTEMIC_RELEVANCE_CRITERIA,
+                name="decision_epistemic_relevance",
+                provider="default",
+            ),
+            "decision_boundary": StructuredPromptBundle(
+                direct_template=DECISION_BOUNDARY_QUESTION,
+                decision_criteria=DECISION_BOUNDARY_CRITERIA,
+                name="decision_boundary",
                 provider="default",
             ),
         }
@@ -125,6 +149,13 @@ class DefaultPromptProvider:
             "adu": "adu_segmentation",
             "acc": "acc_classification",
             "arc": "arc_classification",
+            "decision_acc": "acc_classification",
+            "acc_decision": "acc_classification",
+            "decision_arc": "arc_classification",
+            "arc_decision": "arc_classification",
+            "decision_relevance": "decision_epistemic_relevance",
+            "epistemic_relevance": "decision_epistemic_relevance",
+            "boundary": "decision_boundary",
         }
 
     def _normalize_name(self, prompt_name: str) -> str:
@@ -416,6 +447,15 @@ class LangfusePromptProvider:
                 commit_message=commit_message or f"Gleaning prompt for {name}",
             )
 
+        if bundle.decision_template:
+            self.create_prompt(
+                name=f"{name}_decision",
+                template=bundle.decision_template,
+                labels=labels,
+                tags=tags,
+                commit_message=commit_message or f"Decision prompt for {name}",
+            )
+
         version = getattr(direct_obj, "version", bundle.version)
         return bundle.model_copy(
             update={
@@ -463,6 +503,8 @@ class LangfusePromptProvider:
             "adu_segmentation",
             "acc_classification",
             "arc_classification",
+            "decision_epistemic_relevance",
+            "decision_boundary",
         ]
 
         if client is None or not hasattr(client, "create_prompt"):
@@ -590,7 +632,7 @@ class LangfusePromptProvider:
         if not isinstance(metadata, dict):
             metadata = {"raw_config": metadata}
 
-        # Check for multi-pass companions in Langfuse (e.g., ner_reasoning)
+        # Check for multi-pass companions in Langfuse (e.g., ner_reasoning, decision)
         reasoning_text = self._extract_template_text(
             self._fetch_langfuse_prompt(f"{prompt_name}_reasoning", label_or_version)
         )
@@ -600,9 +642,13 @@ class LangfusePromptProvider:
         gleaning_text = self._extract_template_text(
             self._fetch_langfuse_prompt(f"{prompt_name}_gleaning", label_or_version)
         )
+        decision_text = self._extract_template_text(
+            self._fetch_langfuse_prompt(f"{prompt_name}_decision", label_or_version)
+        )
+        decision_criteria = metadata.get("decision_criteria") if isinstance(metadata, dict) else None
 
         # If companion templates are not in Langfuse, inspect if fallback provides them
-        if not reasoning_text or not format_text:
+        if not reasoning_text or not format_text or not decision_text or not decision_criteria:
             try:
                 fallback_bundle = self.fallback.get_bundle(prompt_name, label_or_version)
                 if not reasoning_text:
@@ -611,6 +657,10 @@ class LangfusePromptProvider:
                     format_text = fallback_bundle.format_template
                 if not gleaning_text:
                     gleaning_text = fallback_bundle.gleaning_template
+                if not decision_text:
+                    decision_text = fallback_bundle.decision_template
+                if not decision_criteria:
+                    decision_criteria = fallback_bundle.decision_criteria
             except Exception:
                 pass
 
@@ -619,6 +669,8 @@ class LangfusePromptProvider:
             reasoning_template=reasoning_text,
             format_template=format_text,
             gleaning_template=gleaning_text,
+            decision_template=decision_text,
+            decision_criteria=decision_criteria,
             name=name,
             version=version,
             label=active_label,

@@ -20,6 +20,15 @@ Controls overall pipeline execution behavior and artifact management.
       show_root_heading: false
       show_root_toc_entry: false
 
+## Decision Engine Configuration
+
+Controls System 1 calibrated decision engine routing, provider selection, confidence thresholds, and conformal prediction coverage.
+
+::: episteme_pipeline.config.DecisionEngineConfig
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
 ## Phase-Specific Configurations
 
 ### Phase 1 Configuration

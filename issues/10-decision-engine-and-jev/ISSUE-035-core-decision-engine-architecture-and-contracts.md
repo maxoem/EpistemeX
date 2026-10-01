@@ -6,7 +6,7 @@
 | **Component(s)** | `packages/episteme-pipeline` (`pipeline/protocols/decision.py`, `pipeline/config.py`, `pipeline/pipeline.py`) |
 | **Roadmap Horizon** | **Horizon 2** (Scalability & Low Latency Inference) |
 | **Priority** | High |
-| **Status** | Open |
+| **Status** | Completed |
 | **Source Ref** | `docs/roadmap.md` (§ Horizon 2 JevClassifier), `docs/architecture/overview.md` |
 
 ---
@@ -74,13 +74,13 @@ To integrate TypeSafe's Jev (and similar non-generative, typed System 1 models) 
 ---
 
 ## 3. Acceptance Criteria
-- [ ] `DecisionEngine` protocol and Pydantic return contracts defined in `protocols/decision.py`.
-- [ ] Pipeline executes identically to master when `decision_engine=None` (zero regressions for existing test suites).
-- [ ] `StructuredPromptBundle` in `prompts/models.py` supports decision templates and criteria definitions.
-- [ ] `DefaultPromptProvider` and `LangfusePromptProvider` in `prompts/providers.py` fetch and synchronize decision prompts.
-- [ ] Static type conformance tests verify that mock and concrete implementations satisfy `DecisionEngine`.
-- [ ] `PipelineConfig` accepts `decision_engine` configuration block with serializable defaults.
-- [ ] `Pipeline.for_task` normalizes and wires `decision_engine` via dependency injection without breaking existing tasks.
+- [x] `DecisionEngine` protocol and Pydantic return contracts defined in `protocols/decision.py`.
+- [x] Pipeline executes identically to master when `decision_engine=None` (zero regressions for existing test suites).
+- [x] `StructuredPromptBundle` in `prompts/models.py` supports decision templates and criteria definitions.
+- [x] `DefaultPromptProvider` and `LangfusePromptProvider` in `prompts/providers.py` fetch and synchronize decision prompts.
+- [x] Static type conformance tests verify that mock and concrete implementations satisfy `DecisionEngine`.
+- [x] `PipelineConfig` accepts `decision_engine` configuration block with serializable defaults.
+- [x] `Pipeline.for_task` normalizes and wires `decision_engine` via dependency injection without breaking existing tasks.
 
 ---
 

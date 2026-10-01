@@ -23,6 +23,10 @@ class StructuredPromptBundle(BaseModel):
         Format conversion prompt template (NL-to-Format pass 2).
     gleaning_template : str or None, optional
         Secondary extraction pass template for missed mentions/triples.
+    decision_template : str or None, optional
+        Decision question or rubric template for System 1 decision engine.
+    decision_criteria : dict or list or None, optional
+        Rubric criteria definitions or categorical option explanations.
     name : str or None, optional
         Canonical prompt name in prompt store (e.g. 'ner_extraction').
     version : int or str or None, optional
@@ -39,6 +43,8 @@ class StructuredPromptBundle(BaseModel):
     reasoning_template: str | None = None
     format_template: str | None = None
     gleaning_template: str | None = None
+    decision_template: str | None = None
+    decision_criteria: dict[str, str] | list[str] | None = None
     name: str | None = None
     version: int | str | None = None
     label: str | None = None

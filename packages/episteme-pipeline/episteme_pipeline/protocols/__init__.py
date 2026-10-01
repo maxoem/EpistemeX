@@ -22,6 +22,12 @@ from episteme_pipeline.protocols.fusion import ArgumentClustering, InstanceFusio
 from episteme_pipeline.protocols.graph_store import EntityGraph, FusionGraph, GraphReader, GraphWriter, PhaseCheckpointStore, ProcessingGraph, ProjectionGraph
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.protocols.memory import EvictionSignal, WorkingMemoryState
+from episteme_pipeline.protocols.decision import (
+    DecisionEngine,
+    DecisionNoulResult,
+    DecisionScore,
+    ensure_decision_engine,
+)
 
 
 __all__ = [
@@ -56,4 +62,8 @@ __all__ = [
     "GlobalStructuralAnchor",
     "EvictionSignal",
     "WorkingMemoryState",
+    "DecisionEngine",
+    "DecisionScore",
+    "DecisionNoulResult",
+    "ensure_decision_engine",
 ]

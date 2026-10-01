@@ -14,7 +14,6 @@ import logging
 from collections import defaultdict
 
 import networkx as nx
-from graspologic.partition import hierarchical_leiden
 
 from episteme_pipeline.protocols.fusion import TheoryFusion
 from episteme_pipeline.protocols.graph_store import FusionGraph
@@ -84,6 +83,14 @@ class LeidenTheoryClustering(TheoryFusion):
 
         # Run Hierarchical Leiden
         logger.info("Phase 5: Running Hierarchical Leiden...")
+        try:
+            from graspologic.partition import hierarchical_leiden
+        except ImportError as exc:
+            raise ImportError(
+                "graspologic is required for Hierarchical Leiden clustering: "
+                "pip install graspologic"
+            ) from exc
+
         # graspologic hierarchical_leiden returns a list of Partition objects
         # We'll use the dict representation mapping node -> community ID
         partitions = hierarchical_leiden(G, max_cluster_size=self.max_cluster_size)

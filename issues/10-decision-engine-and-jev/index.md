@@ -1,6 +1,6 @@
 # TypeSafe Jev & Decision Engine Integration Initiative
 
-This directory contains the engineering specifications, contract designs, component adapters, and implementation roadmap for integrating **TypeSafe Jev** and the **System 1 Decision Engine** architecture across the entire **Episteme** lifecycle (`episteme-pipeline`, `epistemetrics`, and `episteme-studio`).
+This directory contains the engineering specifications, contract designs, component adapters, and implementation roadmap for integrating **Laya Jev** and the **System 1 Decision Engine** architecture across the entire **Episteme** lifecycle (`episteme-pipeline`, `epistemetrics`, and `episteme-studio`).
 
 ---
 
@@ -18,7 +18,7 @@ This architectural shift drastically reduces latency ($5\times–15\times$ speed
 
 | Issue ID | Title | Target Component(s) | Priority | Stage | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| [**ISSUE-035**](ISSUE-035-core-decision-engine-architecture-and-contracts.md) | **Core Decision Engine Architecture, Contracts & Composition Root** | `pipeline/protocols/decision.py`, `pipeline/pipeline.py`, `pipeline/config.py` | High | Stage 1 | `Open` |
+| [**ISSUE-035**](ISSUE-035-core-decision-engine-architecture-and-contracts.md) | **Core Decision Engine Architecture, Contracts & Composition Root** | `pipeline/protocols/decision.py`, `pipeline/pipeline.py`, `pipeline/config.py` | High | Stage 1 | `Completed` |
 | [**ISSUE-036**](ISSUE-036-typesafe-jev-client-and-decision-adapter.md) | **TypeSafe Jev Client Implementation & System 1 Adapter** | `pipeline/decision/jev_client.py`, `pipeline/decision/mock.py` | High | Stage 2 | `Open` |
 | [**ISSUE-037**](ISSUE-037-decision-observability-events-and-langfuse-tracing.md) | **Decision Engine Observability, Domain Events & Langfuse Tracing** | `pipeline/events/`, `pipeline/decision/observable.py` | Critical | Stage 2 | `Open` |
 | [**ISSUE-038**](ISSUE-038-phase3-candidate-gating-and-relation-reranking.md) | **Phase 3 Candidate Pair Gating & Jev Relation Reranker** | `pipeline/phases/phase3_global_relations/`, `pipeline/config.py` | High | Stage 3 | `Open` |

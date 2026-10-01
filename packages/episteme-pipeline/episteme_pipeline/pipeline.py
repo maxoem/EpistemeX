@@ -101,6 +101,7 @@ class Pipeline:
         projection_graph: Any,
         checkpoint_store: Any,
         event_emitter: EventEmitter | None = None,
+        decision_engine: Any | None = None,
     ) -> None:
         self.phases = phases
         self.config = config
@@ -108,6 +109,7 @@ class Pipeline:
         self.projection_graph = projection_graph
         self.checkpoint_store = checkpoint_store
         self.event_emitter = event_emitter or NoOpEventEmitter()
+        self.decision_engine = decision_engine
         # Stores
         self._manifest_store = JsonRunManifestStore(self.config.execution.runs_dir)
         self._artifact_store = JsonArtifactStore(self.config.execution.artifacts_dir)
@@ -173,6 +175,7 @@ class Pipeline:
         extra_phases: list[PhaseRunner] | None = None,
         post_processors: list[PhaseRunner] | None = None,
         working_memory_manager: Any | None = None,
+        decision_engine: Any | None = None,
     ) -> "Pipeline":
         """Create a pipeline for a specific task.
 
@@ -206,6 +209,11 @@ class Pipeline:
             following the core pipeline phases.
         working_memory_manager
             Optional custom EpisodicWorkingMemoryManager to inject into Phase 2.
+        decision_engine
+            Optional System 1 DecisionEngine implementation (e.g. TypeSafe Jev
+            or Laya adapter). Normalised once here via ``ensure_decision_engine``.
+            When None (the default), pipeline phases execute baseline generative
+            LLM or CrossEncoder routines without modification.
         """
         if task not in _SUPPORTED_TASKS:
             raise ValueError(
@@ -227,6 +235,10 @@ class Pipeline:
 
         emitter = event_emitter or NoOpEventEmitter()
         embedding_model = ensure_embedding_model(embedding_model)
+
+        from episteme_pipeline.protocols.decision import ensure_decision_engine
+
+        decision_engine = ensure_decision_engine(decision_engine)
 
         # Wrap the LLM once, here, so the disk cache lands under the configured
         # runs_dir instead of the hardcoded repo-root default (F-10). Every
@@ -345,6 +357,7 @@ class Pipeline:
             projection_graph=projection_graph,
             checkpoint_store=checkpoint_store,
             event_emitter=emitter,
+            decision_engine=decision_engine,
         )
 
     async def _hydrate_previous_collection(
