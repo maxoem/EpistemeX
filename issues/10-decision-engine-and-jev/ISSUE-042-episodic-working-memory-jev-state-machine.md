@@ -32,15 +32,16 @@ Currently, two key operations in Episodic Working Memory suffer from generative 
 1. **Jev Semantic Eviction Evaluator (`pipeline/phases/phase2_entity_discovery/working_memory.py`)**:
    - Extend `EpisodicEvictionHandler` to accept an optional injected `DecisionEngine`.
    - Method `async def evaluate_semantic_boundary(chunk: L1Chunk, current_state: WorkingMemoryState, anchor: GlobalStructuralAnchor | None, prompt_bundle: StructuredPromptBundle | None = None) -> tuple[bool, float]`:
-     - Formulates state from the current chunk, section path, and active argument branch.
+     - Formulates state from the current chunk, section path, and active argument branch (budgeted $\le 800$ tokens).
      - Asks Jev `Noul` using question template sourced from `prompt_bundle.decision_template` (managed in Langfuse) or default: `"Does this text chunk conclude the current semantic argument episode or mark a thematic transition to a new section/claim?"`
-     - If $P(\text{semantic\_boundary}) \ge \tau_{\text{eviction}}$, emits `EvictionSignal(boundary_detected=True, boundary_type="semantic")`.
+     - If $P(\text{semantic\_boundary}) \ge \tau_{\text{eviction}}$, emits `EvictionSignal(boundary_detected=True, boundary_type="semantic")`, returning `(True, result.empirical_accuracy)`.
+   - **Scope Clarification**: STM eviction is explicitly designed for short-term RAM state during sequential chunk reading; long-term cross-document entity and theory consolidation is managed by downstream Phase 3b and Phase 5.
 2. **Jev Local Reference Resolver (`pipeline/phases/phase2_entity_discovery/working_memory.py`)**:
    - Add `async def resolve_reference(reference_phrase: str, chunk_sentence: str, active_entities: list[str], prompt_bundle: StructuredPromptBundle | None = None) -> tuple[str | None, float]`:
      - If `active_entities` is non-empty, calls Jev `Choice`:
        - `state`: Local sentence containing the demonstrative/pronoun + definitions of active entities.
        - `options`: `active_entities + ["UNRESOLVED"]`.
-     - Returns the resolved canonical entity name if confidence $\ge \tau_{\text{resolution}}$, or `None` if unresolved.
+     - Returns `(matched_entity, result.empirical_accuracy)` if $\text{empirical\_accuracy} \ge \tau_{\text{resolution}}$, or `None` if unresolved.
 3. **Salience-Driven Working Memory Retention**:
    - Replace naive FIFO list slicing (`[-15:]`) with an optional Jev `Score` or relevance ranking, retaining foundational concepts in STM across the episode.
 

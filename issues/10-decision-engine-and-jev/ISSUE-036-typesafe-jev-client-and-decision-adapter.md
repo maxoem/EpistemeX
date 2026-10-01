@@ -16,31 +16,41 @@ TypeSafe AI's Jev model is a non-generative, typed System 1 model that evaluates
 
 To integrate Jev into Episteme, we need a robust, production-grade client adapter that implements the `DecisionEngine` protocol (`ISSUE-035`), handles supports asynchronous execution, manages timeouts, and provides a deterministic in-memory mock for local unit tests.
 
-Our implementation will use the open source alternative LAYA (see JEV-LAYA-MODEL.md for implementation and usage details). The `LayaDecisionEngine` should support/implement:
+Our primary local engine implementation will use the open source model LAYA (see [`JEV-LAYA-MODEL.md`](JEV-LAYA-MODEL.md) for architectural and runtime details). The `DecisionEngine` provider suite must implement:
 
-- Integrate with our observability principles (events/langfuse)
-- 
+1. **Dual-Confidence Output Mapping**:
+   - Accurately map Laya's outputs: `result["answers"][key]` categorical softmax distribution $\rightarrow$ `class_probability` and `selected_option`; and `result["action"]["act_probability"]` calibrated empirical accuracy $\rightarrow$ `empirical_accuracy`.
+2. **Cross-Platform Execution & Fallbacks**:
+   - `LayaDecisionEngine`: High-performance Apple Silicon MLX inference ($7–15\text{ms}$) on macOS.
+   - `TransformersDecisionEngine`: PyTorch/ONNX fallback for Linux/CUDA CI/CD environments where MLX is unavailable, loading the equivalent Hugging Face `ModernBERT` / `mmBERT` checkpoints.
+   - `MockJevDecisionEngine`: In-memory deterministic mock for instant unit tests without downloading weights.
+3. **Context Length Guards & Candidate Shortlisting**:
+   - ModernBERT context window is 512 / 1,024 tokens. When candidate sets are large (e.g. in Phase 2 Entity Linking), automatically leverage `predict_shortlist` to prevent token truncation across option criteria.
+4. **Observability Integration**:
+   - Seamless integration with domain events and Langfuse spans via `ObservableDecisionEngine` (`ISSUE-037`).
 
 ---
 
 ## 2. Technical & Architectural Specification
 
 ### What to Add
-1. **Concrete Jev Client (`pipeline/decision/jev_client.py`)**:
-   - `class JevDecisionEngine`: Implements `DecisionEngine` protocol.
-   - Support the three Jev primitives:
-     - `evaluate_noul(state, question)`: Maps to Jev `Noul` primitive, returning calibrated probability float.
-     - `evaluate_choice(state, question, options)`: Maps to Jev `Choice` primitive, returning structured `DecisionScore` with selected option and full per-option probability mapping.
-     - `evaluate_score(state, question, levels)`: Maps to Jev `Score` primitive, returning ordinal score and level distributions.
-   - Batch request capability: Support sending multiple questions against a single state block in one parallel HTTP roundtrip.
-   - Error handling: Graceful handling of network timeouts, rate limits ($429$), and API errors, raising `DecisionEngineError` with contextual diagnostic data.
+1. **Concrete Local Client (`pipeline/decision/jev_client.py`)**:
+   - `class LayaDecisionEngine`: Implements `DecisionEngine` protocol via `laya_mlx`.
+   - `class TransformersDecisionEngine`: Fallback implementation using Hugging Face `transformers` / `optimum`.
+   - Support the three core primitives:
+     - `evaluate_noul(state, question)`: Maps to Jev `Noul`, returning `DecisionNoulResult(probability=p, empirical_accuracy=act_p, passed=...)`.
+     - `evaluate_choice(state, question, options, alpha=None)`: Maps to Jev `Choice`. Populates `DecisionScore` with `class_probability`, `empirical_accuracy` (`action.act_probability`), full categorical distribution, and conformal prediction set $C(X)$ when `alpha` is specified.
+     - `evaluate_score(state, question, levels)`: Maps to Jev `Score`, returning expected level and level probabilities.
+   - Batch request capability: Support sending multiple questions against a single state block in one forward pass (`batch_size=16` default).
+   - Dynamic shortlisting: Use `predict_shortlist` for choice sets with $>5$ options to prevent exceeding ModernBERT's 1,024 token budget.
+   - Error handling: Graceful handling of token overflows, device memory exhaustion, and runtime timeouts, raising `DecisionEngineError`.
 2. **Deterministic Mock Engine (`pipeline/decision/mock.py`)**:
    - `class MockJevDecisionEngine`: In-memory implementation for deterministic testing.
    - Allows registering rule-based or fixture-based responses for specific question patterns and state substrings.
-   - Simulates realistic calibrated probability distributions and latencies ($5–15\text{ms}$).
+   - Emits realistic `class_probability`, `empirical_accuracy`, and prediction sets with simulated latencies ($5–15\text{ms}$).
 
 ### What to Change
-- Register `LayaDecisionEngine` and `MockJevDecisionEngine` in `ensure_decision_engine` (`pipeline/protocols/decision.py`) so strings like `"jev"` or `"mock"` instantiate the corresponding class automatically.
+- Register `LayaDecisionEngine`, `TransformersDecisionEngine`, and `MockJevDecisionEngine` in `ensure_decision_engine` (`pipeline/protocols/decision.py`) with automatic platform detection (MLX on macOS arm64, Transformers on Linux).
 
 ### What to Remove
 - No removals; purely additive provider module.

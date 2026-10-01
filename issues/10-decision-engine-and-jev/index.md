@@ -29,6 +29,7 @@ This architectural shift drastically reduces latency ($5\times–15\times$ speed
 | [**ISSUE-043**](ISSUE-043-dense-entity-linking-and-ooo-gating.md) | **Dense Entity Linking: Jev Candidate Disambiguation & Out-of-Ontology Gating** | `pipeline/phases/phase2_entity_discovery/sota_entity_linker.py`, `pipeline/config.py` | High | Stage 3 | `Open` |
 | [**ISSUE-044**](ISSUE-044-phase1-epistemic-relevance-and-noise-gating.md) | **Phase 1 Data Foundation: Epistemic Ingestion Relevance & Noise Gating** | `pipeline/phases/phase1_foundation/chunker.py`, `pipeline/config.py` | Medium | Stage 3 | `Open` |
 | [**ISSUE-045**](ISSUE-045-phase3b-consolidation-merge-verification.md) | **Phase 3b Latent Graph Consolidation: Borderline Cluster Merge & Canonical Election** | `pipeline/phases/phase3b_consolidation/`, `pipeline/config.py` | Medium | Stage 4 | `Open` |
+| [**ISSUE-046**](ISSUE-046-phase5-global-theory-fusion-gating.md) | **Phase 5 Global Theory Fusion Gating & Conformal Prediction Calibration** | `pipeline/phases/phase5_fusion/`, `pipeline/decision/conformal.py`, `pipeline/config.py` | High | Stage 4 | `Open` |
 
 ---
 
@@ -58,6 +59,7 @@ flowchart TD
     subgraph Stage4 ["Stage 4: Dynamic Gating & Graph Consolidation"]
         I40["ISSUE-040<br/>Actor-Critic Gleaning Gating Oracle<br/>(Phase 2 Entities & Phase 4 Claims)"]
         I45["ISSUE-045<br/>Phase 3b Latent Graph Consolidation<br/>Borderline Cluster Merge & Canonical Election"]
+        I46["ISSUE-046<br/>Phase 5 Global Theory Fusion Gate<br/>& Conformal Prediction Calibration"]
     end
 
     subgraph Stage5 ["Stage 5: Epistemic Graph Projection & QBAF"]
@@ -77,15 +79,30 @@ flowchart TD
     I39 --> I40
     I38 --> I45
     I43 --> I45
-    I39 --> I41
+    I45 --> I46
+    I39 --> I46
+    I46 --> I41
     I40 --> I41
     I45 --> I41
 ```
 
+### Key Architectural Tenets
+
+1. **Dual Confidence Metrics**:
+   - Explicitly decouple **Class Probability** $P(Y = c \mid X)$ (softmax distribution) from **Empirical Accuracy / Action Probability** $P(\text{correct} \mid \text{temperature bucket})$ (`action.act_probability`).
+2. **Conformal Prediction Sets**:
+   - Replace brittle point-estimate scalar thresholds with distribution-free conformal prediction sets $C(X) \subseteq \mathcal{Y}$ guaranteeing $P(Y \in C(X)) \ge 1 - \alpha$ ($95\%$ coverage). Singletons trigger fast-exit; multi-class sets escalate to System 2 or human review.
+3. **Stochastic False-Negative Auditing**:
+   - Implement a mandatory stochastic audit rate ($2\%$) routing randomly sampled fast-exits to System 2 to detect calibration drift and prevent dropping unorthodox philosophical formulations.
+4. **Epistemic Confidence vs. Logical Modality**:
+   - Decouple model extraction accuracy $P(\text{correct})$ from propositional modal strength $M(\phi)$ (necessity vs. possibility) before injecting edge weights into QBAF gradual semantics.
+5. **Cross-Platform Portability**:
+   - Local Apple Silicon MLX inference (`laya-mlx`) with seamless fallback to Hugging Face ModernBERT/ONNX for Linux/CUDA CI/CD environments, backed by deterministic in-memory mocks.
+
 ### Execution Stages Breakdown
 
 #### Stage 1: Architectural Foundation (`ISSUE-035`)
-- **Objective**: Establish the abstract `DecisionEngine` protocol, Pydantic score/choice models, configuration blocks, and composition root wiring.
+- **Objective**: Establish the abstract `DecisionEngine` protocol, Pydantic score/choice models (supporting dual confidence), configuration blocks, and composition root wiring.
 - **Why First**: Decouples all subsequent work from any single provider and ensures zero breaking changes for existing pipeline runners when `decision_engine=None`.
 
 #### Stage 2: Client Implementation & Observability (`ISSUE-036` & `ISSUE-037`)
@@ -94,19 +111,20 @@ flowchart TD
 
 #### Stage 3: Extraction, Memory & Disambiguation Adapters (`ISSUE-044`, `ISSUE-042`, `ISSUE-043`, `ISSUE-038`, `ISSUE-039`)
 - **Objective**: Deploy Jev across early-to-mid pipeline phases:
-  - **Phase 1 Ingestion (`ISSUE-044`)**: Filter non-substantive text chunks (bibliographies, boilerplate) before extraction.
+  - **Phase 1 Ingestion (`ISSUE-044`)**: Filter non-substantive text chunks (bibliographies, boilerplate) before extraction, with 2% stochastic audit.
   - **Episodic Working Memory (`ISSUE-042`)**: Offload semantic boundary eviction ($B_i \in \{0, 1\}$) and local demonstrative reference resolution from the generative NER prompt to Jev.
-  - **Phase 2 Entity Linking (`ISSUE-043`)**: Disambiguate MIPS candidates and resolve Out-of-Ontology ($e_{\text{new}}$) decisions.
-  - **Phase 3 Global Relations (`ISSUE-038`)**: Rerank relation candidates and prune the $O(N^2)$ Cartesian product before LLM triple decoding.
-  - **Phase 4b Argument Mining (`ISSUE-039`)**: Deploy `CascadingACCClassifier` and `CascadingARCClassifier` to resolve $75\%–85\%$ of components/stances via fast-exit.
+  - **Phase 2 Entity Linking (`ISSUE-043`)**: Disambiguate MIPS candidates and resolve dynamic Out-of-Ontology ($e_{\text{new}}$) decisions with candidate shortlist guarding.
+  - **Phase 3 Global Relations (`ISSUE-038`)**: Rerank relation candidates and prune the $O(N^2)$ Cartesian product before LLM triple decoding while preserving topological paths.
+  - **Phase 4b Argument Mining (`ISSUE-039`)**: Deploy `CascadingACCClassifier` and `CascadingARCClassifier` to resolve $75\%–85\%$ of components/stances via fast-exit, supporting multiplex stances.
 
-#### Stage 4: Dynamic Gating & Graph Consolidation (`ISSUE-040` & `ISSUE-045`)
+#### Stage 4: Dynamic Gating & Graph Consolidation (`ISSUE-040`, `ISSUE-045`, `ISSUE-046`)
 - **Objective**: 
   - **Actor-Critic Gleaning (`ISSUE-040`)**: Replace introspective LLM boolean checks with an external Jev `Noul` stopping critic ($P(\text{unextracted}) > \tau$).
   - **Latent Graph Consolidation (`ISSUE-045`)**: Protect against over-merging by verifying borderline vector clusters and electing standard canonical entities in Phase 3b.
+  - **Phase 5 Global Theory Fusion (`ISSUE-046`)**: Semantically verify inter-document theory equivalence and cluster partitions before committing long-term graph links, integrating conformal prediction sets.
 
 #### Stage 5: Epistemic TheoryNet & QBAF Calibration (`ISSUE-041`)
-- **Objective**: Flow calibrated probabilities through Phase 6 Neo4j Cypher projections and directly into `epistemetrics` gradual argumentation semantics solvers ($\tau$).
+- **Objective**: Flow calibrated probabilities through Phase 6 Neo4j Cypher projections and directly into `epistemetrics` gradual argumentation semantics solvers ($\tau$), properly modulated by propositional modal strength.
 
 ---
 

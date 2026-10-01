@@ -29,21 +29,30 @@ TypeSafe Jev's `Choice` primitive directly evaluates a candidate set against the
 1. **Jev Entity Disambiguator (`pipeline/phases/phase2_entity_discovery/sota_entity_linker.py`)**:
    - `class JevEntityLinker`:
      - Accepts injected `DecisionEngine`.
-     - Method `async def link_mention(mention_envelope: str, candidates: list[L2Entity]) -> tuple[L2Entity | None, float, bool]`:
-       - If `candidates` is empty, immediately declare Out-of-Ontology.
-       - Formulates Jev `Choice` query:
-         - `state`: Mention span, local sentence envelope $T_n$, and candidate descriptions $G_k$.
-         - `options`: `[c.name for c in candidates] + ["OUT_OF_ONTOLOGY"]`.
-       - Returns `(matched_entity, confidence, is_out_of_ontology)`.
+     - Method `async def link_mention(mention_envelope: str, candidates: list[L2Entity], alpha: float = 0.05) -> tuple[L2Entity | None, float, float, bool]`:
+       - If `candidates` is empty, immediately declare Out-of-Ontology ($e_{\text{new}}$).
+       - **Candidate Shortlisting Guard**: If $|candidates| > 5$, execute `predict_shortlist` using the bi-encoder embedding to narrow candidates to top-5, preventing token overflow across ModernBERT's 1,024 token budget.
+       - **Dynamic In-Context Options (Zero-Retraining Architecture)**:
+         - Formulates Jev `Choice` query:
+           - `state`: Mention span and local sentence envelope $T_n$.
+           - `options`: `{c.name: c.description for c in candidates} | {"OUT_OF_ONTOLOGY": "Novel entity not represented in candidates"}`.
+         - *Note on continuous learning*: Candidate options are dynamic prompt strings retrieved via MIPS from the live Neo4j store. When an $e_{\text{new}}$ is minted, it is committed to the graph and its vector added to MIPS index. In subsequent chapters, it is dynamically retrieved into the candidate options—**requiring zero neural weight retraining**.
+       - Evaluates decision using conformal prediction:
+         - If $C(X) = \{\text{"OUT\_OF\_ONTOLOGY"}\}$, declare Out-of-Ontology ($e_{\text{new}}$).
+         - If $C(X) = \{c_k\}$, cleanly link to canonical candidate $c_k$.
+         - If $|C(X)| > 1$ (ambiguous candidate set), escalate to System 2 / Cross-Encoder.
+       - Returns `(matched_entity, class_probability, empirical_accuracy, is_out_of_ontology)`.
 2. **Configuration Support (`pipeline/config.py`)**:
    - Add to `Phase2Config`:
      - `entity_linking_mode: str = "cross_encoder"` (`"cross_encoder"` | `"jev"` | `"cascading"`)
      - `jev_ooo_threshold: float = 0.75`
+     - `conformal_linking_alpha: float = 0.05`
+     - `max_linking_candidates: int = 5`
 
 ### What to Change
 1. **`SOTAEntityLinker`**:
    - Support substituting or cascading the local PyTorch cross-encoder with `JevEntityLinker`.
-   - In cascading mode: use Jev for fast disambiguation ($70–120\text{ms}$); escalate to cross-encoder/LLM only when Jev confidence is borderline.
+   - In cascading mode: use Jev for fast disambiguation ($70–120\text{ms}$); escalate to cross-encoder/LLM only when Jev prediction set contains multiple candidates.
 
 ### What to Remove
 - Remove arbitrary sigmoid normalization heuristics on uncalibrated cross-encoder logits when Jev linking is selected.

@@ -26,15 +26,17 @@ Using Jev's sub-second `Noul` evaluator at the conclusion of Phase 1 chunking al
 
 ### What to Add
 1. **Epistemic Chunk Filter (`pipeline/phases/phase1_foundation/chunker.py`)**:
-   - Add `async def evaluate_chunk_epistemic_relevance(chunk: L1Chunk, decision_engine: DecisionEngine, prompt_bundle: StructuredPromptBundle | None = None) -> tuple[bool, float]`:
+   - Add `async def evaluate_chunk_epistemic_relevance(chunk: L1Chunk, decision_engine: DecisionEngine, prompt_bundle: StructuredPromptBundle | None = None, audit_rate: float = 0.02) -> tuple[bool, float]`:
      - Evaluates Jev `Noul` using question template from `prompt_bundle.decision_template` (managed in Langfuse) or default: `"Does this text passage contain substantive scientific, theoretical, or philosophical discourse, rather than administrative boilerplate, bibliographic citations, index entries, or publication metadata?"`
-     - Returns `(is_epistemic, confidence)`.
+     - Returns `(is_epistemic, result.empirical_accuracy)`.
+     - **Stochastic False-Negative Audit**: With probability `audit_rate` ($2\%$), chunks flagged as non-epistemic are forwarded to System 2 verification or logged with `audit_sample: true` to Langfuse to detect and prevent dropping unconventional philosophical theses in prefaces or introductions.
 2. **Chunk Metadata Attributes (`pipeline/contracts/domain.py`)**:
    - Add `is_epistemic: bool = True` and `epistemic_relevance_score: float | None = None` to `L1Chunk` metadata.
 3. **Configuration Options (`pipeline/config.py`)**:
    - Extend `Phase1Config` with:
      - `enable_epistemic_gating: bool = False` (defaults to False for zero regression)
      - `epistemic_relevance_threshold: float = 0.50`
+     - `epistemic_audit_rate: float = 0.02`
      - `drop_non_epistemic_chunks: bool = False` (if False, tags chunk with `is_epistemic=False` so downstream runners can skip without losing provenance).
 
 ### What to Change

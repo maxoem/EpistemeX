@@ -29,15 +29,17 @@ By decoupling the *Actor* (generative LLM extractor) from the *Critic* (external
 1. **`JevGleaningGate` (`pipeline/decision/gleaning.py`)**:
    - `class JevGleaningGate`:
      - Accepts injected `DecisionEngine` and optional `StructuredPromptBundle` from `PromptProvider`.
-     - Method `async def should_glean(chunk_text: str, current_extractions: list[Any], pass_count: int, max_passes: int, threshold: float = 0.65) -> tuple[bool, float]`:
-       - Serializes `chunk_text` and current extracted entities/claims into a clean state block.
+     - Method `async def should_glean(chunk_text: str, current_extractions: list[Any], pass_count: int, max_passes: int, threshold: float = 0.65, audit_rate: float = 0.02) -> tuple[bool, float]`:
+       - **Context Length Budgeting**: Compresses `chunk_text` and current extracted entity/claim names to fit within ModernBERT's 1,024 token limit.
        - Asks Jev `Noul` using question template from `bundle.decision_template` (managed in Langfuse) or default: `"Does the source text contain salient theoretical assertions, definitions, or argument components that are missing from the current extraction list?"`
-       - Returns `(True, probability)` if $P(\text{unextracted}) \ge \text{threshold}$ and $\text{pass\_count} < \text{max\_passes}$.
+       - Returns `(True, result.empirical_accuracy)` if $P(\text{unextracted}) \ge \text{threshold}$ and $\text{pass\_count} < \text{max\_passes}$.
+       - **Stochastic Gleaning Audit**: With probability `audit_rate` ($2\%$), forces an extra gleaning pass even when the critic predicts no unextracted items, tracking false-negative critic errors in Langfuse.
        - Emits a `DecisionGatingTriggered` domain event with gating statistics and Langfuse prompt tracking metadata.
 2. **Gleaning Configuration (`pipeline/config.py`)**:
    - Extend `Phase2Config` and `Phase4Config` with:
      - `enable_jev_gleaning_gate: bool = False` (defaults to False for complete backward compatibility!)
      - `gleaning_confidence_threshold: float = 0.65`
+     - `gleaning_audit_rate: float = 0.02`
      - `max_gleaning_passes: int = 3`
 
 ### What to Change

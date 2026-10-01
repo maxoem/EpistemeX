@@ -36,26 +36,31 @@ Currently, telemetry observers (such as `LangfuseObserver`) track embedding gene
      - `prompt_version: int | str | None` (from `StructuredPromptBundle.version`)
      - `prompt_label: str | None` (e.g. `'production'`)
      - `selected_value: str | int | bool | float`
-     - `confidence: float`
+     - `class_probability: float` (Categorical peak probability)
+     - `empirical_accuracy: float` (Calibrated probability of correctness / `act_probability`)
      - `probabilities: dict[str, float] | None`
+     - `prediction_set: list[str] | None` (Conformal prediction set)
+     - `is_stochastic_audit: bool` (True if this evaluation was randomly routed for validation)
      - `duration_seconds: float`
      - `tokens_saved_estimate: int` (heuristic based on bypassed LLM prompt + completion)
    - `DecisionGatingTriggered(DomainEvent)`:
-     - `gate_name: str` (e.g. `"gleaning_check"`, `"acc_triage"`, `"cartesian_pair_filter"`)
-     - `action_taken: str` (`"fast_exit"` | `"escalated_to_llm"` | `"loop_terminated"`)
-     - `confidence: float`
+     - `gate_name: str` (e.g. `"gleaning_check"`, `"acc_triage"`, `"cartesian_pair_filter"`, `"fusion_gate"`)
+     - `action_taken: str` (`"fast_exit"` | `"escalated_to_llm"` | `"stochastic_audit"` | `"loop_terminated"`)
+     - `empirical_accuracy: float`
      - `threshold: float`
+     - `prediction_set_size: int | None`
 2. **Observable Decorator (`pipeline/decision/observable.py`)**:
    - `class ObservableDecisionEngine`: Decorates any `DecisionEngine` instance.
    - Measures execution duration via `time.perf_counter()`.
    - Emits `DecisionEvaluationStarted` and `DecisionEvaluationCompleted` events to the active `EventEmitter`.
    - Passes all method calls through to the inner engine.
-3. **Langfuse Telemetry Observer Hook (`pipeline/events/langfuse_observer.py`)**:
+3. **Langfuse Telemetry Observer & Active Learning Queue Hook (`pipeline/events/langfuse_observer.py`)**:
    - Register event handlers for `DecisionEvaluationCompleted` and `DecisionGatingTriggered`.
    - Record decision invocations as specialized spans/observations in the active Langfuse trace.
    - Bind the span directly to the managed Langfuse prompt (using `prompt_name` and `prompt_version`) to track prompt effectiveness and regression in Langfuse UI.
-   - Attach metadata tags: `system_1: true`, `primitive`, `calibrated_confidence`, `tokens_saved`.
-   - Track decision distribution across runs (measuring fast-exit ratio vs. LLM escalation ratio).
+   - Attach metadata tags: `system_1: true`, `primitive`, `class_probability`, `empirical_accuracy`, `prediction_set`, `tokens_saved`.
+   - **Active Learning Queue Hook**: When $|C(X)| > 1$ or high entropy ($0.40 \le P \le 0.60$), tag span with `active_learning_candidate: true` and push the item to a Langfuse Dataset for domain expert review and future fine-tuning.
+   - Track decision distribution across runs (measuring fast-exit ratio vs. LLM escalation vs. audit ratio).
 
 ### What to Change
 - In `ensure_decision_engine` (`pipeline/protocols/decision.py`), automatically wrap any raw decision engine with `ObservableDecisionEngine` unless it is already wrapped.

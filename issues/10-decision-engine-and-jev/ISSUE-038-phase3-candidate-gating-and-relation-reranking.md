@@ -27,14 +27,17 @@ The local `CrossEncoder` requires substantial GPU/CPU resources and produces sco
    - Subclass `RelationReranker` ABC.
    - Accepts an injected `DecisionEngine`.
    - Formulates state from contextual subgraph envelopes of `entity_a` and `entity_b`.
-   - Evaluates a typed question (e.g. via `evaluate_score` or `evaluate_choice` over relation plausibility levels).
-   - Returns calibrated float probability in $[0, 1]$.
+   - **Context Window Guard**: Enforces strict token budgeting on subgraph envelopes ($T_{\text{budget}} \le 800$ tokens) to keep total input well within ModernBERT's 1,024 token ceiling.
+   - Evaluates a typed question (via `evaluate_score` or `evaluate_choice` over relation plausibility levels).
+   - Returns calibrated `empirical_accuracy` and `class_probability` in $[0, 1]$.
 2. **Fast Cartesian Pair Pre-Gating (`pipeline/phases/phase3_global_relations/extractor.py`)**:
    - Add `async def filter_candidate_pairs(pairs: list[CandidatePair]) -> list[CandidatePair]`.
    - Uses Jev `Noul` (`"Is there a direct theoretical or semantic relationship between {entity_a} and {entity_b}?"`).
-   - Prunes candidate pairs where $P(\text{has\_relation}) < \tau_{\text{rel\_gate}}$ prior to building dense LLM prompt contexts.
+   - Prunes candidate pairs where $P(\text{has\_relation}) < \tau_{\text{rel\_gate}}$ (or where conformal prediction set excludes positive relation) prior to building dense LLM prompt contexts.
+   - **Topological Transitivity Preservation**: Clarify that pruning unlinked candidate pairs does *not* break multi-hop arguments ($A \rightarrow B \rightarrow C$). In Knowledge Graphs, transitivity is topological; pruning spurious direct shortcut edges ($A \rightarrow C$) prevents graph densification while preserving multi-hop paths.
+   - **Stochastic Audit Pass**: Routes 2% of pruned pairs into telemetry to evaluate and prevent false-negative edge pruning.
 3. **Phase Configuration Flags (`pipeline/config.py`)**:
-   - Extend `Phase3Config` with `use_jev_reranker: bool = False`, `use_jev_pair_gating: bool = False`, and `pair_gating_threshold: float = 0.60`.
+   - Extend `Phase3Config` with `use_jev_reranker: bool = False`, `use_jev_pair_gating: bool = False`, `pair_gating_threshold: float = 0.60`, and `pair_gating_audit_rate: float = 0.02`.
 
 ### What to Change
 1. **`DenseRetrievalGlobalRelationExtractor`**:

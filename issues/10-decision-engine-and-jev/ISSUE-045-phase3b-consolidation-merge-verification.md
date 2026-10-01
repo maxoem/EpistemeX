@@ -29,12 +29,12 @@ TypeSafe Jev provides the ideal decision oracle to verify borderline clusters an
 
 ### What to Add
 1. **Jev Borderline Cluster Verifier (`pipeline/phases/phase3b_consolidation/clustering.py`)**:
-   - Add `async def verify_borderline_pair(entity_a: L2Entity, entity_b: L2Entity, decision_engine: DecisionEngine) -> tuple[str, float]`:
+   - Add `async def verify_borderline_pair(entity_a: L2Entity, entity_b: L2Entity, decision_engine: DecisionEngine, alpha: float = 0.05) -> tuple[str, float]`:
      - Calls Jev `Choice`:
-       - `state`: Names, descriptions, and 1-hop relation signatures of both entities.
+       - `state`: Names, descriptions, and salient 1-hop relation signatures of both entities (budgeted to $\le 800$ tokens to fit within ModernBERT 1,024 limit).
        - `options`: `["IDENTICAL_MERGE", "HIERARCHICAL_SUBSUMPTION", "DISTINCT_SEPARATE"]`.
-     - Returns the selected relationship and confidence score.
-     - Clusters are only merged in Union-Find if Jev confirms `IDENTICAL_MERGE` with $\text{confidence} \ge \tau_{\text{merge}}$.
+     - Returns selected relationship and `empirical_accuracy`.
+     - **Conformal Merge Guard**: Entities are only merged in Union-Find if the conformal prediction set $C(X)$ is strictly singleton $\{\text{"IDENTICAL\_MERGE"}\}$ (or $\text{empirical\_accuracy} \ge \tau_{\text{merge}}$). If the prediction set contains multiple labels (e.g. `{"IDENTICAL_MERGE", "HIERARCHICAL_SUBSUMPTION"}`), merging is aborted to prevent collapsing hierarchical distinctions.
 2. **Jev Canonical Representative Election**:
    - Add `async def elect_canonical_representative(cluster_entities: list[L2Entity], decision_engine: DecisionEngine) -> L2Entity`:
      - Uses Jev `Choice` over candidate entity names in the cluster to select the most standard, canonical academic surface form.
@@ -44,6 +44,7 @@ TypeSafe Jev provides the ideal decision oracle to verify borderline clusters an
      - `borderline_similarity_lower: float = 0.75`
      - `borderline_similarity_upper: float = 0.88`
      - `merge_confidence_threshold: float = 0.80`
+     - `conformal_merge_alpha: float = 0.05`
 
 ### What to Change
 1. **`Phase3bLatentConsolidationRunner`**:

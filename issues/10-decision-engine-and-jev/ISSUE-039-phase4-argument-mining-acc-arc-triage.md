@@ -28,21 +28,27 @@ Introducing Jev-based typed classifiers with a **Confidence-Gated Cascading Tria
    - Accepts injected `DecisionEngine` and optional `StructuredPromptBundle` (sourced via `PromptProvider` / Langfuse).
    - Formulates question and criteria dynamically from `bundle.decision_template` and `bundle.decision_criteria`.
    - Uses Jev `Choice` primitive over argument component schema (`["CLAIM", "PREMISE", "CONCLUSION", "MAJOR_CLAIM"]`).
-   - Maps classified components to `TheoryAtom` instances, attaching calibrated confidence scores to atom metadata.
+   - Maps classified components to `TheoryAtom` instances, attaching `class_probability` and `empirical_accuracy` to atom metadata.
 2. **`JevARCClassifier` (`pipeline/phases/phase4_argument_mining/classifiers.py`)**:
    - Subclass `ARCClassifier` ABC.
    - Accepts injected `DecisionEngine` and prompt bundle sourced from Langfuse prompt management.
-   - Evaluates defeasible relation stance between argument component pairs using Jev `Choice` over `["SUPPORTS", "ATTACKS", "UNDERCUTS", "NEUTRAL"]`.
+   - **Bipolar & Multiplex Stance Support**:
+     - Standard mode (`arc_mode="cascading"`): Evaluates stance using Jev `Choice` over `["SUPPORTS", "ATTACKS", "UNDERCUTS", "NEUTRAL"]`.
+     - Multiplex mode (`arc_mode="multiplex"`): Evaluates parallel independent Jev `Noul` questions (`is_support`, `is_attack`, `is_undercut`), allowing compound dialectical relations to project multiple distinct typed edges into TheoryNet.
    - Emits `TheoryRelation` instances with calibrated probabilities stored on edge attributes.
 3. **Cascading Triage Composite (`CascadingACCClassifier`, `CascadingARCClassifier`)**:
    - Decorates both a `fast_engine: DecisionEngine` and an `llm_classifier: ACCClassifier` / `ARCClassifier`.
-   - Fast-exits if $\max(P) \ge \tau_{\text{confidence}}$ and entropy $H(P) \le \epsilon$.
+   - **Fast-Exit Condition**: Fast-exits if conformal prediction set is a singleton ($|C(X)| = 1$) or empirical accuracy satisfies $\text{empirical\_accuracy} \ge \tau_{\text{confidence}}$ and entropy $H(P) \le \epsilon$.
+   - **Stochastic False-Negative Audit**: With probability $p_{\text{audit}} = 0.02$ (2%), fast-exit candidates are randomly escalated to the LLM classifier for continuous calibration drift monitoring and false-negative detection.
+   - **Active Learning Queue Hook**: When prediction set contains multiple classes ($|C(X)| > 1$) or high entropy ($0.40 \le P \le 0.60$), tags telemetry with `active_learning: true` for Langfuse dataset curation.
    - If confidence is below threshold, escalates to the LLM classifier, passing Jev's probability distribution as an explicit prior in the prompt.
 4. **Configuration Controls (`pipeline/config.py`)**:
    - Extend `Phase4Config` with:
      - `acc_mode: str = "llm_only"` (`"llm_only"` | `"cascading"` | `"jev_only"`) - defaults to `"llm_only"` for zero-regression baseline!
-     - `arc_mode: str = "llm_only"`
+     - `arc_mode: str = "llm_only"` (`"llm_only"` | `"cascading"` | `"jev_only"` | `"multiplex"`)
      - `triage_confidence_threshold: float = 0.85`
+     - `conformal_alpha: float = 0.05`
+     - `stochastic_audit_rate: float = 0.02`
      - `pass_priors_to_llm: bool = True`
 
 ### What to Change
