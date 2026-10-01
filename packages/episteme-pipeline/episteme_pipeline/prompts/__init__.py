@@ -22,6 +22,7 @@ from episteme_pipeline.prompts.default_prompts import (
     NER_FORMAT_PROMPT,
     NER_GLEANING_PROMPT,
     NER_REASONING_PROMPT,
+    PAIR_GATING_DECISION_PROMPT,
 )
 
 __all__ = [
@@ -46,4 +47,5 @@ __all__ = [
     "NER_FORMAT_PROMPT",
     "NER_GLEANING_PROMPT",
     "NER_REASONING_PROMPT",
+    "PAIR_GATING_DECISION_PROMPT",
 ]

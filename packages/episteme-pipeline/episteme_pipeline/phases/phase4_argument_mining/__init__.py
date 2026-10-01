@@ -87,14 +87,40 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         acc_classifier: ACCClassifier | None = None,
         arc_classifier: ARCClassifier | None = None,
         global_extractor: GlobalRelationExtractor | None = None,
+        decision_engine: Any | None = None,
     ) -> None:
+        """Initialize Phase 4 Argument Mining runner.
+
+        Parameters
+        ----------
+        config : Phase4Config
+            Phase 4 configuration parameters.
+        schema : SchemaConfig
+            Schema taxonomy containing allowable component and relation types.
+        llm : Any
+            Language model instance.
+        embedding_model : Any
+            Embedding model for semantic similarity or candidate blocking.
+        graph_store : ProcessingGraph
+            Active graph store for reading and writing components and relations.
+        adu_segmenter : ADUSegmenter or None, default None
+            Optional segmenter override. If omitted, constructed per chunk.
+        acc_classifier : ACCClassifier or None, default None
+            Optional component classifier override.
+        arc_classifier : ARCClassifier or None, default None
+            Optional relation classifier override.
+        global_extractor : GlobalRelationExtractor or None, default None
+            Optional global relation extractor used for graph context.
+        decision_engine : Any or None, default None
+            Optional calibrated decision engine for System 1 triage or cascading.
+        """
         self.config = config
         self.schema = schema
         self.llm = llm
         self.embedding_model = embedding_model
         self.graph_store = graph_store
-        # adu_segmenter and acc_classifier are chunk-scoped; they're created
-        # per-chunk in _process_chunk if not injected.
+        self.global_extractor = global_extractor
+        self.decision_engine = decision_engine
         self._adu_segmenter_override = adu_segmenter
         self._acc_classifier_override = acc_classifier
         self.arc_classifier = arc_classifier or (
@@ -111,7 +137,6 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             if global_extractor is not None
             else None
         )
-        self.global_extractor = global_extractor
 
     @property
     def event_emitter(self) -> EventEmitter:

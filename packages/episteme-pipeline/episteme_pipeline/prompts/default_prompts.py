@@ -210,6 +210,8 @@ Output strictly valid JSON:
 }}
 """
 
+PAIR_GATING_DECISION_PROMPT = """Is there a direct theoretical or semantic relationship between {entity_a} and {entity_b}?"""
+
 # ---------------------------------------------------------------------------
 # Phase 4 — ADU Segmentation
 # ---------------------------------------------------------------------------

@@ -23,7 +23,12 @@ class FakeCrossEncoder:
         """Initialize the fake model."""
         self.calls = []
 
-    def predict(self, pairs: list[tuple[str, str]], activation_fn: Any) -> list[float]:
+    def predict(
+        self,
+        pairs: list[tuple[str, str]],
+        activation_fn: Any,
+        **kwargs: Any,
+    ) -> list[float]:
         """Record the predict call and return a stable score.
 
         Parameters
@@ -191,4 +196,74 @@ def test_cross_encoder_reranker_cache_key_differentiates_hf_configs() -> None:
     )
 
     assert key1 != key2
+
+
+@pytest.mark.asyncio
+async def test_jev_relation_reranker_default_prompt() -> None:
+    """Verify JevRelationReranker uses PAIR_GATING_DECISION_PROMPT by default."""
+    from unittest.mock import AsyncMock, MagicMock
+    from episteme_pipeline.phases.phase3_global_relations.rerankers import JevRelationReranker
+    from episteme_pipeline.prompts.default_prompts import PAIR_GATING_DECISION_PROMPT
+    from episteme_pipeline.protocols.decision import DecisionNoulResult
+
+    mock_engine = MagicMock()
+    mock_engine.evaluate_noul = AsyncMock(
+        return_value=DecisionNoulResult(probability=0.85, passed=True, empirical_accuracy=0.80)
+    )
+
+    reranker = JevRelationReranker(mock_engine)
+    assert reranker.decision_template == PAIR_GATING_DECISION_PROMPT
+
+    entity_a = L2Entity(id="a", label="Concept", name="Entity A")
+    entity_b = L2Entity(id="b", label="Concept", name="Entity B")
+    env = SubGraph(center_id="x", nodes=[], triples=[], depth=0)
+
+    score = await reranker.score_relation(entity_a, env, entity_b, env)
+    assert score == 0.85
+    mock_engine.evaluate_noul.assert_called_once()
+    assert (
+        mock_engine.evaluate_noul.call_args.kwargs["question"]
+        == "Is there a direct theoretical or semantic relationship between Entity A and Entity B?"
+    )
+
+
+@pytest.mark.asyncio
+async def test_jev_relation_reranker_custom_prompt() -> None:
+    """Verify JevRelationReranker respects custom decision_template in prompt bundle."""
+    from unittest.mock import AsyncMock, MagicMock
+    from episteme_pipeline.phases.phase3_global_relations.rerankers import JevRelationReranker
+    from episteme_pipeline.prompts.models import StructuredPromptBundle
+    from episteme_pipeline.protocols.decision import DecisionNoulResult
+
+    mock_engine = MagicMock()
+    mock_engine.evaluate_noul = AsyncMock(
+        return_value=DecisionNoulResult(probability=0.90, passed=True, empirical_accuracy=0.88)
+    )
+
+    bundle = StructuredPromptBundle(
+        direct_template="Direct",
+        decision_template="Are {entity_a} and {entity_b} connected?",
+    )
+    reranker = JevRelationReranker(mock_engine, prompts=bundle)
+    assert reranker.decision_template == "Are {entity_a} and {entity_b} connected?"
+
+    entity_a = L2Entity(id="a", label="Concept", name="Kant")
+    entity_b = L2Entity(id="b", label="Concept", name="Hume")
+    env = SubGraph(center_id="x", nodes=[], triples=[], depth=0)
+
+    await reranker.score_relation(entity_a, env, entity_b, env)
+    assert mock_engine.evaluate_noul.call_args.kwargs["question"] == "Are Kant and Hume connected?"
+
+
+def test_jev_relation_reranker_missing_prompt_fails() -> None:
+    """Verify JevRelationReranker raises ValueError if decision template is empty."""
+    from unittest.mock import MagicMock
+    import pytest
+    from episteme_pipeline.phases.phase3_global_relations.rerankers import JevRelationReranker
+    from episteme_pipeline.prompts.models import StructuredPromptBundle
+
+    bundle = StructuredPromptBundle(direct_template="Direct", decision_template="")
+    with pytest.raises(ValueError, match="No decision prompt configured for JevRelationReranker"):
+        JevRelationReranker(MagicMock(), prompts=bundle)
+
 

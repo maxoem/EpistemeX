@@ -166,6 +166,7 @@ class Pipeline:
         llm: Any,
         relation_reranker: RelationReranker | None = None,
         cross_encoder: CrossEncoder | None = None,
+        entity_linker: Any | None = None,
         embedding_model: EmbeddingModel | Any = None,
         config: PipelineConfig,
         graph_reader: Any,
@@ -176,6 +177,8 @@ class Pipeline:
         post_processors: list[PhaseRunner] | None = None,
         working_memory_manager: Any | None = None,
         decision_engine: Any | None = None,
+        acc_classifier: Any | None = None,
+        arc_classifier: Any | None = None,
     ) -> "Pipeline":
         """Create a pipeline for a specific task.
 
@@ -195,6 +198,11 @@ class Pipeline:
             linking). These are two different contracts; if one object
             implements both, pass it to both parameters explicitly rather than
             relying on the coincidence.
+        entity_linker
+            Optional pre-constructed EntityLinker instance (e.g. JevEntityLinker,
+            DenseEntityLinker, or CascadingEntityLinker) to inject into Phase 2.
+            If omitted, defaults to DenseEntityLinker with the supplied cross_encoder
+            and embedding_model.
         embedding_model
             Any embedding model — a llama-index ``BaseEmbedding``, a
             sentence-transformers model, or a custom object. It is normalised
@@ -239,6 +247,10 @@ class Pipeline:
         from episteme_pipeline.protocols.decision import ensure_decision_engine
         from episteme_pipeline.decision.observable import ObservableDecisionEngine
 
+        if decision_engine is None and getattr(config, "decision_engine", None) and getattr(config.decision_engine, "provider", "none") == "auto":
+            from episteme_pipeline.decision.jev_client import AutoDecisionEngine
+            decision_engine = AutoDecisionEngine()
+
         decision_engine = ensure_decision_engine(decision_engine)
         if decision_engine is not None and not isinstance(decision_engine, ObservableDecisionEngine):
             stochastic_rate = getattr(config.decision_engine, "stochastic_audit_rate", 0.0) if config.decision_engine else 0.0
@@ -263,7 +275,13 @@ class Pipeline:
                 cache_dir=default_cache_dir(config.execution.runs_dir),
             )
 
-        if relation_reranker is None and cross_encoder is not None:
+        if getattr(config.phase3, "use_jev_reranker", False) and decision_engine is not None:
+            from episteme_pipeline.phases.phase3_global_relations.rerankers import JevRelationReranker
+            relation_reranker = JevRelationReranker(
+                decision_engine,
+                prompts=config.phase3.global_relation_prompts,
+            )
+        elif relation_reranker is None and cross_encoder is not None:
             relation_reranker = CrossEncoderRelationReranker(cross_encoder)
         if relation_reranker is None:
             raise ValueError(
@@ -273,8 +291,9 @@ class Pipeline:
             )
 
         global_extractor = DenseRetrievalGlobalRelationExtractor(
-            llm, embedding_model, relation_reranker, config.phase3
+            llm, embedding_model, relation_reranker, config.phase3, decision_engine=decision_engine
         )
+
         phases: list[Any] = [
             Phase1Runner(
                 config.phase1,
@@ -290,8 +309,9 @@ class Pipeline:
                 graph_store=checkpoint_store,
                 cross_encoder=cross_encoder,
                 working_memory_manager=working_memory_manager,
+                decision_engine=decision_engine,
+                entity_linker=entity_linker,
             ),
-
             Phase3Runner(
                 config.phase3,
                 config.graph_schema,
@@ -321,6 +341,9 @@ class Pipeline:
                 # when the extractor is present. Phase 3 and Phase 4 share the
                 # same instance so retrieval caches and the reranker are reused.
                 global_extractor=global_extractor,
+                acc_classifier=acc_classifier,
+                arc_classifier=arc_classifier,
+                decision_engine=decision_engine,
             ),
             Phase5ArgumentWebRunner(
                 config.phase5,

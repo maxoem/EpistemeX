@@ -247,7 +247,7 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
                 embedding=embedding,
                 metadata={
                     **prov,
-                    "_create_props": created
+                    "_create_props": created,
                 }
             )
             chunks.append(chunk)

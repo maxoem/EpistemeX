@@ -39,12 +39,14 @@ from llama_index.core import PromptTemplate
 
 from episteme_pipeline.config import Phase3Config
 from episteme_pipeline.contracts.domain import L2Entity, L2Triple, SubGraph, CandidatePair
+from episteme_pipeline.prompts.default_prompts import PAIR_GATING_DECISION_PROMPT
 from episteme_pipeline.llm import ensure_structured_llm
 from episteme_pipeline.phases.phase3_global_relations.models import GlobalRelationOutput
 from episteme_pipeline.phases.phase3_global_relations.rerankers import (
     build_relation_reranker_inputs,
     summarize_reranker_text_pair,
 )
+from episteme_pipeline.protocols import DecisionEngine
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor, RelationReranker, EmbeddingModel
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.protocols.tracing import TraceSink, NoOpTraceSink
@@ -186,6 +188,7 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         envelope_overflow_handler: EnvelopeOverflowHandler | None = None,
         # Kept for backward compatibility
         trace_sink: Optional[TraceSink] = None,
+        decision_engine: DecisionEngine | None = None,
     ) -> None:
         self.llm = ensure_structured_llm(llm)
         self.embedding_model = embedding_model
@@ -193,6 +196,7 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         self.config = config
         self.envelope_overflow_handler = envelope_overflow_handler
         self.trace_sink = trace_sink or NoOpTraceSink()
+        self.decision_engine = decision_engine
 
     @property
     def event_emitter(self) -> EventEmitter:
@@ -233,7 +237,7 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
                 "entities": [_entity_summary(e) for e in entities],
                 "threshold": self.config.dense_similarity_threshold,
             },
-            enabled=getattr(self.config, "trace_dense_retrieval", False),
+            enabled=self.config.trace_dense_retrieval,
         ) as span:
             candidates = await self._generate_dense_candidates(entities)
             span.update(
@@ -394,12 +398,68 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
             phase="phase3_dense"
         ))
         
-        # Filter candidates by threshold
+        # Filter candidates by dense similarity threshold
         filtered_candidates = [
             c for c in candidates if c.score >= self.config.dense_similarity_threshold
         ]
         
-        return filtered_candidates
+        # Apply Jev pair gating if enabled
+        return await self.filter_candidate_pairs(filtered_candidates)
+
+    async def filter_candidate_pairs(self, pairs: list[CandidatePair]) -> list[CandidatePair]:
+        """Fast Cartesian pair pre-gating using Decision Engine.
+
+        Filters candidate entity pairs using fast binary decision evaluation
+        before heavy cross-encoder reranking or LLM extraction.
+
+        Parameters
+        ----------
+        pairs : list of CandidatePair
+            The candidate entity pairs to filter.
+
+        Returns
+        -------
+        list of CandidatePair
+            The filtered candidate pairs surviving gating or stochastic audit.
+        """
+        if not self.config.use_jev_pair_gating or not self.decision_engine:
+            return pairs
+
+        prompts = getattr(self.config, "global_relation_prompts", None)
+        if prompts is not None:
+            template = prompts.decision_template
+        else:
+            template = PAIR_GATING_DECISION_PROMPT
+
+        if not template or not template.strip():
+            raise ValueError(
+                "No decision prompt configured for DenseRetrievalGlobalRelationExtractor pair gating."
+            )
+        template = template.strip()
+
+        import random
+        gated_pairs = []
+        
+        for pair in pairs:
+            entity_a = pair.entity_a
+            entity_b = pair.entity_b
+            
+            question = template.format(entity_a=entity_a.name, entity_b=entity_b.name)
+            context = f"Entity A: {entity_a.description or entity_a.name}\nEntity B: {entity_b.description or entity_b.name}"
+            
+            decision = await self.decision_engine.evaluate_noul(
+                state=context,
+                question=question,
+            )
+            
+            is_related = decision.passed
+            threshold = self.config.pair_gating_threshold
+            p_has_relation = decision.probability if is_related else (1.0 - decision.probability)
+            
+            if p_has_relation >= threshold or (not is_related and random.random() < self.config.pair_gating_audit_rate):
+                gated_pairs.append(pair)
+            
+        return gated_pairs
 
     async def _extract_pair(
         self,
@@ -455,7 +515,7 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
                     "reranker_payload": initial_reranker_payload,
                     "threshold": self.config.reranker_threshold,
                 },
-                enabled=getattr(self.config, "trace_dense_retrieval", False),
+                enabled=self.config.trace_dense_retrieval,
             ) as span:
                 recovery_attempts: list[dict[str, object]] = []
                 retry_index = 0
@@ -579,7 +639,7 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
                 ),
                 reranker_payload=(
                     _reranker_trace_payload(entity_a, env_a, entity_b, env_b)
-                    if getattr(self.config, "trace_dense_retrieval", False)
+                    if self.config.trace_dense_retrieval
                     else None
                 ),
                 recovery_attempts=recovery_attempts,
@@ -615,7 +675,7 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
                 input={
                     "merged_envelope": _merged_envelope_summary(env_a, env_b),
                 },
-                enabled=getattr(self.config, "trace_dense_retrieval", False),
+                enabled=self.config.trace_dense_retrieval,
             ) as span:
                 raw: GlobalRelationOutput = await self.llm.predict_structured(
                     GlobalRelationOutput,

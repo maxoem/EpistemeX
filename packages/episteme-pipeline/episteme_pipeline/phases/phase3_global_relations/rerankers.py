@@ -7,6 +7,8 @@ from collections.abc import Callable
 from typing import Any
 
 from episteme_pipeline.contracts.domain import L2Entity, SubGraph
+from episteme_pipeline.prompts.default_prompts import PAIR_GATING_DECISION_PROMPT
+from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.protocols.extractors import CrossEncoder, RelationReranker, normalize_scores
 from episteme_pipeline.utils import format_envelope
 
@@ -438,3 +440,61 @@ def _qwen_reranker_prompts() -> dict[str, str]:
             "Query and the Instruct provided."
         )
     }
+
+class JevRelationReranker(RelationReranker):
+    """Relation reranker backed by the TypeSafe Jev Decision Engine.
+
+    Evaluates relation plausibility and returns the empirical accuracy score.
+
+    Parameters
+    ----------
+    decision_engine : Any
+        The calibrated decision engine instance.
+    prompts : StructuredPromptBundle or None, default None
+        Optional prompt bundle carrying the decision question template.
+    """
+
+    def __init__(
+        self,
+        decision_engine: Any,
+        prompts: StructuredPromptBundle | None = None,
+    ) -> None:
+        self.decision_engine = decision_engine
+        self.prompts = prompts
+        if prompts is not None:
+            template = prompts.decision_template
+        else:
+            template = PAIR_GATING_DECISION_PROMPT
+
+        if not template or not template.strip():
+            raise ValueError("No decision prompt configured for JevRelationReranker.")
+        self.decision_template = template.strip()
+
+    async def score_relation(
+        self,
+        entity_a: L2Entity,
+        env_a: SubGraph,
+        entity_b: L2Entity,
+        env_b: SubGraph,
+    ) -> float:
+        # Context window guard - limit tokens to < 800 (or characters approx 3200)
+        # Using a simple character truncation for envelope
+        query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
+        
+        # Simple truncation to stay within budget
+        if len(query) > 1600:
+            query = query[:1600] + "..."
+        if len(doc_text) > 1600:
+            doc_text = doc_text[:1600] + "..."
+
+        context = f"Entity A:\n{query}\n\nEntity B:\n{doc_text}"
+        question = self.decision_template.format(entity_a=entity_a.name, entity_b=entity_b.name)
+
+        decision = await self.decision_engine.evaluate_noul(
+            state=context,
+            question=question,
+        )
+        
+        # return calibrated probability or empirical accuracy
+        return decision.probability if decision.passed else (1.0 - decision.probability) * 0.1
+

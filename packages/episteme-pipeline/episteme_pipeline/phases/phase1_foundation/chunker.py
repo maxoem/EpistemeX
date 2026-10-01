@@ -30,9 +30,12 @@ except LookupError:
 
 
 def _count_tokens(text: str) -> int:
-    """Accurate token counting using tiktoken cl100k_base (OpenAI default)."""
-    enc = tiktoken.get_encoding("cl100k_base")
-    return len(enc.encode(text, disallowed_special=()))
+    """Accurate token counting using tiktoken cl100k_base with word-count fallback."""
+    try:
+        enc = tiktoken.get_encoding("cl100k_base")
+        return len(enc.encode(text, disallowed_special=()))
+    except Exception:
+        return max(1, int(len(text.split()) * 1.35))
 
 
 
@@ -89,7 +92,10 @@ def chunk_section(
     for para in paragraphs:
         if _count_tokens(para) > max_tokens:
             # Paragraph too big, split into sentences
-            sentences = nltk.sent_tokenize(para)
+            try:
+                sentences = nltk.sent_tokenize(para)
+            except Exception:
+                sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', para) if s.strip()]
             units.extend(sentences)
         else:
             units.append(para)

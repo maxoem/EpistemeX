@@ -13,6 +13,9 @@ from episteme_pipeline.prompts.default_prompts import (
     GLOBAL_RELATION_DIRECT_PROMPT, GLOBAL_RELATION_REASONING_PROMPT, GLOBAL_RELATION_FORMAT_PROMPT,
     NER_DIRECT_PROMPT, NER_REASONING_PROMPT, NER_FORMAT_PROMPT, NER_GLEANING_PROMPT,
     ENTITY_SYNTHESIS_PROMPT,
+    PAIR_GATING_DECISION_PROMPT,
+    DECISION_ACC_QUESTION, DECISION_ACC_CRITERIA,
+    DECISION_ARC_QUESTION, DECISION_ARC_CRITERIA,
 )
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
@@ -142,6 +145,8 @@ class Phase2Config(BaseModel):
         name="entity_linking",
     ))
     max_gleanings: int = 0
+    jev_ooo_threshold: float = 0.75
+    conformal_linking_alpha: float = 0.05
 
 
 
@@ -154,12 +159,17 @@ class Phase3Config(BaseModel):
         direct_template=GLOBAL_RELATION_DIRECT_PROMPT,
         reasoning_template=GLOBAL_RELATION_REASONING_PROMPT,
         format_template=GLOBAL_RELATION_FORMAT_PROMPT,
+        decision_template=PAIR_GATING_DECISION_PROMPT,
         name="global_relation",
     ))
     global_relation_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
     dense_similarity_threshold: float = 0.5
     reranker_threshold: float = 0.6
     trace_dense_retrieval: bool = True
+    use_jev_reranker: bool = False
+    use_jev_pair_gating: bool = False
+    pair_gating_threshold: float = 0.60
+    pair_gating_audit_rate: float = 0.02
 
 
 class Phase3bConfig(BaseModel):
@@ -219,6 +229,8 @@ class Phase4Config(BaseModel):
         direct_template=ACC_DIRECT_PROMPT,
         reasoning_template=ACC_REASONING_PROMPT,
         format_template=ACC_FORMAT_PROMPT,
+        decision_template=DECISION_ACC_QUESTION,
+        decision_criteria=DECISION_ACC_CRITERIA,
         name="acc_classification",
     ))
     acc_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
@@ -226,6 +238,8 @@ class Phase4Config(BaseModel):
         direct_template=ARC_DIRECT_PROMPT,
         reasoning_template=ARC_REASONING_PROMPT,
         format_template=ARC_FORMAT_PROMPT,
+        decision_template=DECISION_ARC_QUESTION,
+        decision_criteria=DECISION_ARC_CRITERIA,
         name="arc_classification",
     ))
     arc_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
@@ -235,6 +249,10 @@ class Phase4Config(BaseModel):
     arc_use_priority_rank: bool = False
     adu_markup_open: str = "<AC"
     adu_markup_close: str = ">"
+    triage_confidence_threshold: float = 0.85
+    conformal_alpha: float = 0.05
+    stochastic_audit_rate: float = 0.02
+    pass_priors_to_llm: bool = True
 
 
 class Phase5Config(BaseModel):

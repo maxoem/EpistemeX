@@ -39,7 +39,12 @@ from episteme_pipeline.contracts.domain import (
 from episteme_pipeline.events import ProgressStarted, ProgressAdvanced, ProgressCompleted
 from episteme_pipeline.phases.phase2_entity_discovery.entity_linker import NameEntityLinker
 from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import DenseEntityLinker
+from episteme_pipeline.phases.phase2_entity_discovery.jev_entity_linker import (
+    CascadingEntityLinker,
+    JevEntityLinker,
+)
 from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import LLMNERExtractor
+from episteme_pipeline.protocols import DecisionEngine
 from episteme_pipeline.protocols.extractors import EntityLinker, NERExtractor, CrossEncoder, EmbeddingModel
 from episteme_pipeline.phases.chunk_selection import select_pending_chunks
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
@@ -89,12 +94,14 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         entity_linker: EntityLinker | None = None,
         working_memory_manager: EpisodicWorkingMemoryManager | None = None,
         cross_encoder: CrossEncoder | None = None,
+        decision_engine: DecisionEngine | None = None,
     ) -> None:
         self.config = config
         self.schema = schema
         self.llm = llm
         self.embedding_model = embedding_model
         self.graph_store = graph_store
+        self.decision_engine = decision_engine
         self.ner_extractor = ner_extractor or LLMNERExtractor(
             llm, 
             max_gleanings=config.max_gleanings,

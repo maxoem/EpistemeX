@@ -71,9 +71,18 @@ from episteme_pipeline.protocols import (
     PhaseRunner,
     TheoryFusion,
 )
+from episteme_pipeline.phases.phase2_entity_discovery import (
+    CascadingEntityLinker,
+    DenseEntityLinker,
+    JevEntityLinker,
+)
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
 
 __all__ = [
+    # Linkers
+    "DenseEntityLinker",
+    "JevEntityLinker",
+    "CascadingEntityLinker",
     # Orchestration
     "Pipeline",
     "PipelineConfig",

@@ -99,6 +99,14 @@ class StubLinkingEntityLinker(EntityLinker):
 
 
 @pytest.fixture
+def schema() -> SchemaConfig:
+    return SchemaConfig(
+        node_types=["PERSON", "KONZEPT", "Person", "Concept"],
+        relation_types=["IMPLIZIERT", "IMPLIES"],
+    )
+
+
+@pytest.fixture
 def two_chunks() -> list[L1Chunk]:
     return [
         L1Chunk(id="chunk_0001", text="Kant discussed space.", source_doc_id="doc1", sequence_index=0, token_count=4),
@@ -132,7 +140,10 @@ def make_context() -> ArtifactExecutionContext:
 
 def make_runner(graph_store, ner_extractor=None, entity_linker=None, schema=None):
     config = Phase2Config(batch_size=10)
-    schema = schema or SchemaConfig()
+    schema = schema or SchemaConfig(
+        node_types=["PERSON", "KONZEPT", "Person", "Concept"],
+        relation_types=["IMPLIZIERT", "IMPLIES"],
+    )
     return Phase2Runner(
         config=config,
         schema=schema,

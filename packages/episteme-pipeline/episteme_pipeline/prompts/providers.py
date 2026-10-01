@@ -42,6 +42,7 @@ from episteme_pipeline.prompts.default_prompts import (
     NER_FORMAT_PROMPT,
     NER_GLEANING_PROMPT,
     NER_REASONING_PROMPT,
+    PAIR_GATING_DECISION_PROMPT,
 )
 from episteme_pipeline.protocols.prompts import PromptProvider
 
@@ -95,7 +96,14 @@ class DefaultPromptProvider:
                 direct_template=GLOBAL_RELATION_DIRECT_PROMPT,
                 reasoning_template=GLOBAL_RELATION_REASONING_PROMPT,
                 format_template=GLOBAL_RELATION_FORMAT_PROMPT,
+                decision_template=PAIR_GATING_DECISION_PROMPT,
                 name="global_relation",
+                provider="default",
+            ),
+            "decision_pair_gating": StructuredPromptBundle(
+                direct_template=PAIR_GATING_DECISION_PROMPT,
+                decision_template=PAIR_GATING_DECISION_PROMPT,
+                name="decision_pair_gating",
                 provider="default",
             ),
             "entity_synthesis": StructuredPromptBundle(
@@ -144,6 +152,9 @@ class DefaultPromptProvider:
             "ner": "ner_extraction",
             "linking": "entity_linking",
             "global_relations": "global_relation",
+            "pair_gating": "decision_pair_gating",
+            "decision_pair_gating": "decision_pair_gating",
+            "pair_gating_decision": "decision_pair_gating",
             "synthesis": "entity_synthesis",
             "maturation": "entity_synthesis",
             "adu": "adu_segmentation",
@@ -505,6 +516,7 @@ class LangfusePromptProvider:
             "arc_classification",
             "decision_epistemic_relevance",
             "decision_boundary",
+            "decision_pair_gating",
         ]
 
         if client is None or not hasattr(client, "create_prompt"):
