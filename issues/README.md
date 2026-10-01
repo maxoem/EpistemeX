@@ -26,7 +26,8 @@ issues/
 ├── 06-discovery-and-querying/                 # Hybrid search, LBD Swanson linking & schema design
 ├── 07-evaluation-harness/                     # Benchmark integrity, alignment & hallucination scoring
 ├── 08-pipeline-enhancements/                  # Macro community synthesis & chunking hygiene
-└── 09-evaluation-workbench/                   # User analytics, coupled views & Studio API endpoints
+├── 09-evaluation-workbench/                   # User analytics, coupled views & Studio API endpoints
+└── 10-decision-engine-and-jev/                # TypeSafe Jev, System 1 decision engine & dynamic gating
 ```
 
 ---
@@ -69,3 +70,15 @@ issues/
 | [**ISSUE-032**](09-evaluation-workbench/ISSUE-032-competency-query-retrieval-diagnostics.md)           | Downstream Competency Retrieval Per-Query Diagnostics       | 09-Evaluation Workbench  | `episteme-studio`                       | Horizon 1       | Medium   | `Open`        |
 | [**ISSUE-033**](09-evaluation-workbench/ISSUE-033-benchmark-catalog-management-and-validation.md)      | Custom Benchmark Registration, Pre-Flight Linter & Export   | 09-Evaluation Workbench  | `episteme-studio`                       | Horizon 1 & 2   | Medium   | `Open`        |
 | [**ISSUE-034**](09-evaluation-workbench/ISSUE-034-on-demand-evaluation-execution-and-streaming-job-runner.md) | On-Demand Evaluation Execution & Streaming Job Orchestrator | 09-Evaluation Workbench  | `episteme-studio` / `episteme-pipeline` | Horizon 1       | High     | `Completed`   |
+| [**ISSUE-035**](10-decision-engine-and-jev/ISSUE-035-core-decision-engine-architecture-and-contracts.md) | Core Decision Engine Architecture, Contracts & Composition Root | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | High     | `Open`        |
+| [**ISSUE-036**](10-decision-engine-and-jev/ISSUE-036-typesafe-jev-client-and-decision-adapter.md)       | TypeSafe Jev Client Implementation & System 1 Adapter       | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | High     | `Open`        |
+| [**ISSUE-037**](10-decision-engine-and-jev/ISSUE-037-decision-observability-events-and-langfuse-tracing.md) | Decision Engine Observability, Domain Events & Langfuse Tracing | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | Critical | `Open`        |
+| [**ISSUE-038**](10-decision-engine-and-jev/ISSUE-038-phase3-candidate-gating-and-relation-reranking.md) | Phase 3 Candidate Pair Gating & Jev Relation Reranker       | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | High     | `Open`        |
+| [**ISSUE-039**](10-decision-engine-and-jev/ISSUE-039-phase4-argument-mining-acc-arc-triage.md)          | Phase 4b Argument Mining: Jev ACC & ARC Triage Classifiers  | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | High     | `Open`        |
+| [**ISSUE-040**](10-decision-engine-and-jev/ISSUE-040-gleaning-and-extraction-stopping-gate.md)          | Objective Gleaning Gating via Jev Actor-Critic Stopping Oracle | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | Medium   | `Open`        |
+| [**ISSUE-041**](10-decision-engine-and-jev/ISSUE-041-theorynet-calibrated-weights-and-qbaf-propagation.md) | TheoryNet Projection & QBAF Calibrated Probability Propagation | 10-Decision Engine & Jev | `episteme-pipeline` / `epistemetrics`   | Horizon 2       | High     | `Open`        |
+| [**ISSUE-042**](10-decision-engine-and-jev/ISSUE-042-episodic-working-memory-jev-state-machine.md)          | Episodic Working Memory: Jev Semantic Boundary Eviction & Reference Resolution | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | High     | `Open`        |
+| [**ISSUE-043**](10-decision-engine-and-jev/ISSUE-043-dense-entity-linking-and-ooo-gating.md)                | Dense Entity Linking: Jev Candidate Disambiguation & Out-of-Ontology Gating | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | High     | `Open`        |
+| [**ISSUE-044**](10-decision-engine-and-jev/ISSUE-044-phase1-epistemic-relevance-and-noise-gating.md)       | Phase 1 Data Foundation: Epistemic Ingestion Relevance & Noise Gating | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | Medium   | `Open`        |
+| [**ISSUE-045**](10-decision-engine-and-jev/ISSUE-045-phase3b-consolidation-merge-verification.md)          | Phase 3b Latent Graph Consolidation: Borderline Cluster Merge & Canonical Election | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | Medium   | `Open`        |
+
