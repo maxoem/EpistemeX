@@ -6,7 +6,7 @@
 | **Component(s)** | `packages/episteme-pipeline` (`pipeline/decision/jev_client.py`, `pipeline/decision/mock.py`) |
 | **Roadmap Horizon** | **Horizon 2** (Scalability & Low Latency Inference) |
 | **Priority** | High |
-| **Status** | Open |
+| **Status** | Completed |
 | **Source Ref** | `docs/roadmap.md` (§ JevClassifier), TypeSafe AI Jev Technical Spec |
 
 ---
@@ -58,11 +58,11 @@ Our primary local engine implementation will use the open source model LAYA (see
 ---
 
 ## 3. Acceptance Criteria
-- [ ] `LayaDecisionEngine` implements all methods of `DecisionEngine` (`evaluate_noul`, `evaluate_choice`, `evaluate_score`).
-- [ ] Parallel multi-question batching against a single state object is supported.
-- [ ] Network failures, rate limits, token limits and timeouts are caught and converted to standardized exceptions without crashing the pipeline.
-- [ ] `MockJevDecisionEngine` allows full deterministic testing of pipeline phases without network calls, loading the hf model or API keys.
-- [ ] Unit test suite covering authentication, payload serialization, response parsing, and error conditions.
+- [x] `LayaDecisionEngine` implements all methods of `DecisionEngine` (`evaluate_noul`, `evaluate_choice`, `evaluate_score`).
+- [x] Parallel multi-question batching against a single state object is supported.
+- [x] Network failures, rate limits, token limits and timeouts are caught and converted to standardized exceptions without crashing the pipeline.
+- [x] `MockJevDecisionEngine` allows full deterministic testing of pipeline phases without network calls, loading the hf model or API keys.
+- [x] Unit test suite covering authentication, payload serialization, response parsing, and error conditions.
 
 ---
 

@@ -160,7 +160,7 @@ def test_ensure_decision_engine_normalizer() -> None:
     # None passes through cleanly
     assert ensure_decision_engine(None) is None
 
-    # Conforming engine is returned directly
+    # Conforming engine is passed through
     valid = ConformingMockDecisionEngine()
     assert ensure_decision_engine(valid) is valid
 
@@ -320,7 +320,9 @@ def test_pipeline_for_task_decision_engine_injection() -> None:
         checkpoint_store=mock_ckpt,
         decision_engine=engine,
     )
-    assert pipeline.decision_engine is engine
+    from episteme_pipeline.decision.observable import ObservableDecisionEngine
+    assert isinstance(pipeline.decision_engine, ObservableDecisionEngine)
+    assert pipeline.decision_engine.inner is engine
 
     # Pass None (default behavior)
     pipeline_none = Pipeline.for_task(

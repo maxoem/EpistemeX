@@ -660,6 +660,108 @@ class ValidationViolationDetected(BaseEvent):
     description: str
 
 
+# Decision engine & System 1 events
+class DecisionEvaluationStarted(BaseEvent):
+    """Event emitted when a System 1 decision engine evaluation begins.
+
+    Attributes
+    ----------
+    engine_name : str
+        Identifier or class name of the decision engine.
+    primitive : str
+        Decision primitive kind ("noul", "choice", "score").
+    question : str
+        Evaluation question or proposition text.
+    state_hash : str
+        Stable SHA-256 hash of the input state block.
+    state_character_count : int
+        Character length of the serialized state block.
+    """
+
+    engine_name: str
+    primitive: str
+    question: str
+    state_hash: str
+    state_character_count: int
+
+
+class DecisionEvaluationCompleted(BaseEvent):
+    """Event emitted when a System 1 decision engine evaluation completes.
+
+    Attributes
+    ----------
+    engine_name : str
+        Identifier or class name of the decision engine.
+    primitive : str
+        Decision primitive kind ("noul", "choice", "score").
+    question : str
+        Evaluation question or proposition text.
+    prompt_name : str, optional
+        Name of the prompt bundle if resolved via prompt management.
+    prompt_version : str or int, optional
+        Version of the prompt bundle.
+    prompt_label : str, optional
+        Deployment label of the prompt (e.g., 'production').
+    selected_value : Any
+        Evaluation output value (selected option, boolean passed, or score level).
+    class_probability : float
+        Softmax probability P(y=c|x) of the selected option.
+    empirical_accuracy : float
+        Calibrated empirical accuracy frequency (Laya action.act_probability).
+    probabilities : dict of str to float, optional
+        Categorical probability distribution.
+    prediction_set : list of str, optional
+        Conformal prediction set guaranteeing 1 - alpha coverage.
+    is_stochastic_audit : bool
+        Whether this evaluation was randomly routed for System 2 validation.
+    duration_seconds : float
+        Inference latency in seconds.
+    tokens_saved_estimate : int
+        Estimated generative LLM tokens saved by System 1 fast-exit.
+    """
+
+    engine_name: str
+    primitive: str
+    question: str
+    prompt_name: Optional[str] = None
+    prompt_version: Optional[str | int] = None
+    prompt_label: Optional[str] = None
+    selected_value: Any = None
+    class_probability: float = 0.0
+    empirical_accuracy: float = 0.0
+    probabilities: Optional[dict[str, float]] = None
+    prediction_set: Optional[list[str]] = None
+    is_stochastic_audit: bool = False
+    duration_seconds: float = 0.0
+    tokens_saved_estimate: int = 0
+
+
+class DecisionGatingTriggered(BaseEvent):
+    """Event emitted when dynamic decision gating or fast-exit routing triggers.
+
+    Attributes
+    ----------
+    gate_name : str
+        Name of the gating checkpoint (e.g., 'gleaning_check', 'acc_triage',
+        'cartesian_pair_filter', 'fusion_gate').
+    action_taken : str
+        Action triggered ('fast_exit', 'escalated_to_llm', 'stochastic_audit',
+        'loop_terminated').
+    empirical_accuracy : float
+        Empirical accuracy estimate of the underlying decision.
+    threshold : float
+        Decision threshold used to gate the action.
+    prediction_set_size : int, optional
+        Size of the conformal prediction set at gating time.
+    """
+
+    gate_name: str
+    action_taken: str
+    empirical_accuracy: float
+    threshold: float
+    prediction_set_size: Optional[int] = None
+
+
 # Type union for event handling
 PipelineEvent = (
     EntityProcessed |
@@ -670,7 +772,8 @@ PipelineEvent = (
     EntityLinkingCandidatesRetrieved | EntityLinkingReranked | EntityMaturationSynthesized |
     EnvelopeInjectionAttempted | EnvelopeInjectionFailed |
     ProgressStarted | ProgressAdvanced | ProgressCompleted |
-    EvaluationCompleted | EvaluationScoreLogged | ValidationViolationDetected
+    EvaluationCompleted | EvaluationScoreLogged | ValidationViolationDetected |
+    DecisionEvaluationStarted | DecisionEvaluationCompleted | DecisionGatingTriggered
 )
 
 

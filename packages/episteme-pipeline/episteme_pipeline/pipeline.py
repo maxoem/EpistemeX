@@ -211,7 +211,7 @@ class Pipeline:
             Optional custom EpisodicWorkingMemoryManager to inject into Phase 2.
         decision_engine
             Optional System 1 DecisionEngine implementation (e.g. TypeSafe Jev
-            or Laya adapter). Normalised once here via ``ensure_decision_engine``.
+            or Laya adapter). Normalised once here via ``resolve_decision_engine``.
             When None (the default), pipeline phases execute baseline generative
             LLM or CrossEncoder routines without modification.
         """
@@ -237,8 +237,15 @@ class Pipeline:
         embedding_model = ensure_embedding_model(embedding_model)
 
         from episteme_pipeline.protocols.decision import ensure_decision_engine
+        from episteme_pipeline.decision.observable import ObservableDecisionEngine
 
         decision_engine = ensure_decision_engine(decision_engine)
+        if decision_engine is not None and not isinstance(decision_engine, ObservableDecisionEngine):
+            stochastic_rate = getattr(config.decision_engine, "stochastic_audit_rate", 0.0) if config.decision_engine else 0.0
+            decision_engine = ObservableDecisionEngine(
+                inner=decision_engine,
+                stochastic_audit_rate=stochastic_rate,
+            )
 
         # Wrap the LLM once, here, so the disk cache lands under the configured
         # runs_dir instead of the hardcoded repo-root default (F-10). Every

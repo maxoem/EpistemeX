@@ -28,6 +28,8 @@ from .models import (
     EmbeddingGenerationCompleted,
     EvaluationCompleted,
     EvaluationScoreLogged,
+    DecisionEvaluationCompleted,
+    DecisionGatingTriggered,
 )
 
 logger = logging.getLogger(__name__)
@@ -86,6 +88,8 @@ class LangfuseObserver(EventObserver):
                 self._handle_lifecycle_event(event, trace_context_arg)
             elif isinstance(event, (LLMGenerationCompleted, EmbeddingGenerationCompleted)):
                 self._handle_generation_event(event, trace_context_arg)
+            elif isinstance(event, (DecisionEvaluationCompleted, DecisionGatingTriggered)):
+                self._handle_decision_event(event, trace_context_arg)
             elif isinstance(event, (EvaluationCompleted, EvaluationScoreLogged)):
                 self._handle_evaluation_event(event, trace_id, trace_context_arg)
             elif isinstance(event, LLMDurationMeasured):
@@ -228,6 +232,86 @@ class LangfuseObserver(EventObserver):
                         "operation": event.operation,
                     }
                 ),
+            )
+            observation.end()
+
+    def _handle_decision_event(
+        self,
+        event: DecisionEvaluationCompleted | DecisionGatingTriggered,
+        trace_context: Optional[dict[str, str]],
+    ) -> None:
+        """Handle discrete decision engine evaluations and dynamic gating events.
+
+        Parameters
+        ----------
+        event : DecisionEvaluationCompleted or DecisionGatingTriggered
+            The decision event to log.
+        trace_context : dict of str to str or None
+            Active distributed trace context.
+        """
+        if isinstance(event, DecisionEvaluationCompleted):
+            is_active_learning = (
+                (event.prediction_set is not None and len(event.prediction_set) > 1)
+                or (0.40 <= event.class_probability <= 0.60)
+            )
+
+            observation = self.client.start_observation(
+                as_type="generation",
+                name=f"decision.{event.primitive}",
+                trace_context=trace_context,
+                model=event.engine_name,
+                input={"question": event.question, "primitive": event.primitive},
+                output={
+                    "selected_value": event.selected_value,
+                    "class_probability": event.class_probability,
+                    "empirical_accuracy": event.empirical_accuracy,
+                    "probabilities": event.probabilities,
+                    "prediction_set": event.prediction_set,
+                },
+                usage_details={
+                    "input": event.tokens_saved_estimate,
+                    "output": 0,
+                    "total": event.tokens_saved_estimate,
+                },
+                metadata=_drop_none(
+                    {
+                        "system_1": True,
+                        "primitive": event.primitive,
+                        "class_probability": event.class_probability,
+                        "empirical_accuracy": event.empirical_accuracy,
+                        "prediction_set": event.prediction_set,
+                        "tokens_saved_estimate": event.tokens_saved_estimate,
+                        "is_stochastic_audit": event.is_stochastic_audit,
+                        "duration_seconds": event.duration_seconds,
+                        "active_learning_candidate": is_active_learning,
+                        "prompt_name": event.prompt_name,
+                        "prompt_version": event.prompt_version,
+                        "prompt_label": event.prompt_label,
+                    }
+                ),
+            )
+            observation.end()
+
+
+        elif isinstance(event, DecisionGatingTriggered):
+            observation = self.client.start_observation(
+                as_type="span",
+                name=f"decision.gate.{event.gate_name}",
+                trace_context=trace_context,
+                input={
+                    "gate_name": event.gate_name,
+                    "threshold": event.threshold,
+                },
+                output={
+                    "action_taken": event.action_taken,
+                    "empirical_accuracy": event.empirical_accuracy,
+                    "prediction_set_size": event.prediction_set_size,
+                },
+                metadata={
+                    "system_1": True,
+                    "action_taken": event.action_taken,
+                    "threshold": event.threshold,
+                },
             )
             observation.end()
 

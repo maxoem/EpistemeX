@@ -78,6 +78,16 @@ Events capturing detailed latency, prompt/completion tokens, and model parameter
 | `LLMGenerationCompleted` | LLM Client Facades | `model_name: str`<br/>`prompt: Any`<br/>`output_text: str`<br/>`total_tokens: int`<br/>`duration_seconds: float`<br/>`cached: bool`<br/>`model_parameters: dict \| None` | Comprehensive generation record forwarded to observability backends (e.g., Langfuse). |
 | `EmbeddingGenerationCompleted` | Embedding Models | `model_name: str`<br/>`text_count: int`<br/>`total_characters: int`<br/>`total_tokens: int`<br/>`duration_seconds: float`<br/>`cached: bool` | Batch vector embedding generation completed. |
 
+##Decision Engine & System 1 Events
+
+Events emitted during non-generative, typed classification, sub-second routing, and dynamic flow gating (TypeSafe Jev / Laya).
+
+| Event Class | Emitted In / Phase | Key Attributes | Description |
+|:---|:---|:---|:---|
+| `DecisionEvaluationStarted` | Decision Engine Subsystem | `engine_name: str`<br/>`primitive: str`<br/>`question: str`<br/>`state_hash: str`<br/>`state_character_count: int` | Emitted when a System 1 decision evaluation begins over an input state block. |
+| `DecisionEvaluationCompleted` | Decision Engine Subsystem | `engine_name: str`<br/>`primitive: str`<br/>`selected_value: Any`<br/>`class_probability: float`<br/>`empirical_accuracy: float`<br/>`prediction_set: list[str] \| None`<br/>`is_stochastic_audit: bool`<br/>`duration_seconds: float`<br/>`tokens_saved_estimate: int` | Emitted when a System 1 decision completes, capturing calibrated confidence, conformal prediction set, duration, and token savings. |
+| `DecisionGatingTriggered` | Phase Gate Adapters | `gate_name: str`<br/>`action_taken: str`<br/>`empirical_accuracy: float`<br/>`threshold: float`<br/>`prediction_set_size: int \| None` | Emitted when a dynamic gate triggers a routing decision (`fast_exit`, `escalated_to_llm`, `stochastic_audit`, `loop_terminated`). |
+
 ##Progress, Evaluation & Validation Events
 
 Events tracking progress indicators, epistemic metrics, and schema violation warnings.
@@ -200,6 +210,22 @@ class TripleCounterObserver(EventObserver):
             # Observers must isolate exceptions so the pipeline is not interrupted
             logger.warning(f"Error in TripleCounterObserver: {e}")
 ```
+
+##Decision Engine Observability & Langfuse Tracing
+
+System 1 decision evaluations (via TypeSafe Jev / Laya) are transparently instrumented through `ObservableDecisionEngine`:
+
+1. **Span & Generation Observations**:
+   Each `evaluate_choice`, `evaluate_noul`, or `evaluate_score` call produces a `decision.{primitive}` generation observation attached to the current Langfuse trace.
+   - **Model & Metadata**: Tagged with `system_1: True`, the specific checkpoint, calibrated `class_probability`, `empirical_accuracy`, and `duration_seconds`.
+   - **Prompt Management Linking**: Automatically carries `prompt_name`, `prompt_version`, and `prompt_label` to evaluate rubric performance in the Langfuse UI.
+   - **Token Accounting**: Computes `tokens_saved_estimate` (heuristic bypassed prompt + completion tokens) recorded under `usage_details`.
+
+2. **Active Learning Queue Hook**:
+   When an evaluation exhibits high epistemic uncertainty—either producing a multi-class conformal prediction set ($|C(X)| > 1$) or intermediate entropy ($0.40 \le P \le 0.60$)—`LangfuseObserver` flags the observation with `active_learning_candidate: True` and writes an entry into the Langfuse Dataset `decision_engine_active_learning` for human review and offline distillation.
+
+3. **Dynamic Gating Telemetry**:
+   Dynamic fast-exits and System 2 escalations emit `DecisionGatingTriggered`, recorded as `decision.gate.{gate_name}` spans documenting whether an item was fast-exited, escalated to an LLM, or randomly audited.
 
 ---
 

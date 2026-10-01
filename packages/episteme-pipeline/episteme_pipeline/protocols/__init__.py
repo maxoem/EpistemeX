@@ -28,6 +28,7 @@ from episteme_pipeline.protocols.decision import (
     DecisionScore,
     ensure_decision_engine,
 )
+from episteme_pipeline.decision.observable import ObservableDecisionEngine
 
 
 __all__ = [
@@ -65,5 +66,6 @@ __all__ = [
     "DecisionEngine",
     "DecisionScore",
     "DecisionNoulResult",
+    "ObservableDecisionEngine",
     "ensure_decision_engine",
 ]

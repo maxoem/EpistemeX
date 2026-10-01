@@ -6,7 +6,7 @@
 | **Component(s)** | `packages/episteme-pipeline` (`pipeline/events/models.py`, `pipeline/decision/observable.py`, `pipeline/events/langfuse_observer.py`) |
 | **Roadmap Horizon** | **Horizon 2** (Scalability & Observability) |
 | **Priority** | Critical |
-| **Status** | Open |
+| **Status** | Completed |
 | **Source Ref** | `docs/observability/events.md`, `pipeline/protocols/extractors.py` (`ObservableEmbeddingModel`) |
 
 ---
@@ -71,11 +71,11 @@ Currently, telemetry observers (such as `LangfuseObserver`) track embedding gene
 ---
 
 ## 3. Acceptance Criteria
-- [ ] `DecisionEvaluationStarted`, `DecisionEvaluationCompleted`, and `DecisionGatingTriggered` domain events defined and validated in `pipeline/events/models.py`.
-- [ ] `ObservableDecisionEngine` transparently wraps `DecisionEngine` instances and emits events with precise duration and confidence scores.
-- [ ] `LangfuseObserver` intercepts decision events and attaches structured spans and tags to distributed trace trees.
-- [ ] Token savings metrics are computed and exported to telemetry.
-- [ ] Deterministic unit tests verify event emission without requiring active Langfuse servers.
+- [x] `DecisionEvaluationStarted`, `DecisionEvaluationCompleted`, and `DecisionGatingTriggered` domain events defined and validated in `pipeline/events/models.py`.
+- [x] `ObservableDecisionEngine` transparently wraps `DecisionEngine` instances and emits events with precise duration and confidence scores.
+- [x] `LangfuseObserver` intercepts decision events and attaches structured spans and tags to distributed trace trees.
+- [x] Token savings metrics are computed and exported to telemetry.
+- [x] Deterministic unit tests verify event emission without requiring active Langfuse servers.
 
 ---
 

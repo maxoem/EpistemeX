@@ -19,8 +19,8 @@ This architectural shift drastically reduces latency ($5\times–15\times$ speed
 | Issue ID | Title | Target Component(s) | Priority | Stage | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | [**ISSUE-035**](ISSUE-035-core-decision-engine-architecture-and-contracts.md) | **Core Decision Engine Architecture, Contracts & Composition Root** | `pipeline/protocols/decision.py`, `pipeline/pipeline.py`, `pipeline/config.py` | High | Stage 1 | `Completed` |
-| [**ISSUE-036**](ISSUE-036-typesafe-jev-client-and-decision-adapter.md) | **TypeSafe Jev Client Implementation & System 1 Adapter** | `pipeline/decision/jev_client.py`, `pipeline/decision/mock.py` | High | Stage 2 | `Open` |
-| [**ISSUE-037**](ISSUE-037-decision-observability-events-and-langfuse-tracing.md) | **Decision Engine Observability, Domain Events & Langfuse Tracing** | `pipeline/events/`, `pipeline/decision/observable.py` | Critical | Stage 2 | `Open` |
+| [**ISSUE-036**](ISSUE-036-typesafe-jev-client-and-decision-adapter.md) | **TypeSafe Jev Client Implementation & System 1 Adapter** | `pipeline/decision/jev_client.py`, `pipeline/decision/mock.py` | High | Stage 2 | `Completed` |
+| [**ISSUE-037**](ISSUE-037-decision-observability-events-and-langfuse-tracing.md) | **Decision Engine Observability, Domain Events & Langfuse Tracing** | `pipeline/events/`, `pipeline/decision/observable.py` | Critical | Stage 2 | `Completed` |
 | [**ISSUE-038**](ISSUE-038-phase3-candidate-gating-and-relation-reranking.md) | **Phase 3 Candidate Pair Gating & Jev Relation Reranker** | `pipeline/phases/phase3_global_relations/`, `pipeline/config.py` | High | Stage 3 | `Open` |
 | [**ISSUE-039**](ISSUE-039-phase4-argument-mining-acc-arc-triage.md) | **Phase 4b Argument Mining: Jev ACC & ARC Triage Classifiers** | `pipeline/phases/phase4_argument_mining/`, `pipeline/config.py` | High | Stage 3 | `Open` |
 | [**ISSUE-040**](ISSUE-040-gleaning-and-extraction-stopping-gate.md) | **Objective Gleaning Gating via Jev Actor-Critic Stopping Oracle** | `pipeline/decision/gleaning.py`, `pipeline/phases/phase2/`, `pipeline/phases/phase4/` | Medium | Stage 4 | `Open` |
