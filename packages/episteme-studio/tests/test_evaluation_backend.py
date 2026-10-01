@@ -297,6 +297,22 @@ class TestEvaluationAPI:
         assert bm_resp.status_code == 200
         bms = bm_resp.json()
         assert any(b["id"] == "stnb_cpm_pilot" for b in bms)
+        cpm = next(b for b in bms if b["id"] == "stnb_cpm_pilot")
+        assert cpm["domain"] == "Classical Mechanics"
+        assert cpm["level"] == 4
+        assert "splits" in cpm
+
+        # Test preview endpoint for structuralist benchmark
+        prev_resp = client.get("/api/evaluation/benchmarks/stnb_cpm_pilot/preview?limit=10")
+        assert prev_resp.status_code == 200
+        prev_data = prev_resp.json()
+        assert prev_data["benchmark_id"] == "stnb_cpm_pilot"
+        assert prev_data["format"] in ["jsonld", "json"]
+        assert len(prev_data["columns"]) > 0
+
+        # Test preview endpoint 404 for unknown benchmark
+        unknown_resp = client.get("/api/evaluation/benchmarks/non_existent_bm_123/preview")
+        assert unknown_resp.status_code == 404
 
         man_resp = client.get("/api/evaluation/manifests")
         assert man_resp.status_code == 200

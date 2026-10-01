@@ -24,6 +24,7 @@ from episteme_studio.domain.evaluation import (
     AdjudicationRequest,
     AdjudicationResponse,
     BenchmarkDescriptor,
+    BenchmarkPreviewResponse,
     BenchmarkValidationResult,
     CalibrationReportDetail,
     CancelEvaluationJobResponse,
@@ -251,6 +252,23 @@ class EvaluationService:
             Discovered benchmark descriptors.
         """
         return self.adapter.discover_benchmarks()
+
+    def get_benchmark_preview(self, benchmark_id: str, limit: int = 50) -> BenchmarkPreviewResponse:
+        """Fetch tabular preview records for a benchmark in Hugging Face style.
+
+        Parameters
+        ----------
+        benchmark_id : str
+            Benchmark identifier.
+        limit : int, default 50
+            Maximum number of records to return.
+
+        Returns
+        -------
+        BenchmarkPreviewResponse
+            Preview dataset rows and metadata.
+        """
+        return self.adapter.get_benchmark_preview(benchmark_id=benchmark_id, limit=limit)
 
     def list_manifests(self) -> list[dict[str, Any]]:
         """List available declarative evaluation YAML manifests.

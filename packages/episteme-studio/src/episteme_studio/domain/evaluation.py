@@ -305,8 +305,251 @@ class EvaluationReportDetail(EvaluationReportSummary):
     violations: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class BenchmarkSplitResource(BaseModel):
+    """Resource specification for a benchmark split or file artifact.
+
+    Parameters
+    ----------
+    name : str
+        Split name (e.g., 'gold', 'queries', 'corpus', 'train', 'test').
+    path : str
+        Filesystem path to the artifact.
+    format : str
+        File format extension (e.g., 'jsonld', 'yaml', 'jsonl', 'csv', 'pdf').
+    item_count : int or None, optional
+        Number of items or records in this split.
+    size_bytes : int or None, optional
+        File size in bytes.
+    """
+
+    name: str
+    path: str
+    format: str
+    item_count: int | None = None
+    size_bytes: int | None = None
+
+
+class BourbakiInvariantsSummary(BaseModel):
+    """Formal structuralist Bourbaki quintuple and topological invariants summary.
+
+    Parameters
+    ----------
+    mp_count : int, default 0
+        Potential models count (Mp).
+    m_count : int, default 0
+        Actual models count (M).
+    mpp_count : int, default 0
+        Partial potential models count (Mpp).
+    c_count : int, default 0
+        Constraints count (C).
+    i_count : int, default 0
+        Intended applications count (I).
+    total_atoms : int, default 0
+        Total theory atoms.
+    total_relations : int, default 0
+        Total theoretical relations.
+    is_dag : bool, default True
+        Strict DAG acyclicity.
+    root_elements : list of str, optional
+        Identified root theory atoms B(TN).
+    specialization_depth : int, default 0
+        Maximum depth of specialization poset hierarchy.
+    """
+
+    mp_count: int = 0
+    m_count: int = 0
+    mpp_count: int = 0
+    c_count: int = 0
+    i_count: int = 0
+    total_atoms: int = 0
+    total_relations: int = 0
+    is_dag: bool = True
+    root_elements: list[str] = Field(default_factory=list)
+    specialization_depth: int = 0
+
+
+class PosetPreviewNode(BaseModel):
+    """Node in poset hierarchy preview.
+
+    Parameters
+    ----------
+    id : str
+        Atom or concept ID.
+    label : str
+        Human-readable label.
+    class_name : str
+        Formal Bourbaki class name (e.g. 'Mp', 'M', 'Mpp', 'I').
+    level : int, default 0
+        Topological hierarchy level from root.
+    """
+
+    id: str
+    label: str
+    class_name: str
+    level: int = 0
+
+
+class PosetPreviewEdge(BaseModel):
+    """Edge in poset hierarchy preview.
+
+    Parameters
+    ----------
+    source : str
+        Source atom ID.
+    target : str
+        Target atom ID.
+    predicate : str, default 'specializes'
+        Relational predicate.
+    """
+
+    source: str
+    target: str
+    predicate: str = "specializes"
+
+
+class PosetPreviewGraph(BaseModel):
+    """Poset graph preview representation.
+
+    Parameters
+    ----------
+    nodes : list of PosetPreviewNode
+        Poset preview nodes.
+    edges : list of PosetPreviewEdge
+        Poset preview edges.
+    """
+
+    nodes: list[PosetPreviewNode] = Field(default_factory=list)
+    edges: list[PosetPreviewEdge] = Field(default_factory=list)
+
+
+class StructuralistSpecialization(BaseModel):
+    """Domain specialization payload for Bourbaki Structuralist Theory-Nets.
+
+    Parameters
+    ----------
+    formal_framework : str, default 'bourbaki'
+        Theoretical reconstruction paradigm ('bourbaki', 'balzer', 'sneed').
+    invariants : BourbakiInvariantsSummary
+        Computed Bourbaki invariants quintuple and graph stats.
+    poset_preview : PosetPreviewGraph
+        Poset specialization DAG preview nodes and edges.
+    bound_document_id : str or None, optional
+        Primary treatise filename or document identifier.
+    bound_document_pages : int or None, optional
+        Page count of bound treatise.
+    annotated_bbox_count : int, default 0
+        Number of character/bbox grounding annotations.
+    """
+
+    formal_framework: str = "bourbaki"
+    invariants: BourbakiInvariantsSummary = Field(default_factory=BourbakiInvariantsSummary)
+    poset_preview: PosetPreviewGraph = Field(default_factory=PosetPreviewGraph)
+    bound_document_id: str | None = None
+    bound_document_pages: int | None = None
+    annotated_bbox_count: int = 0
+
+
+class RetrievalSpecialization(BaseModel):
+    """Domain specialization payload for Competency Retrieval Benchmarks.
+
+    Parameters
+    ----------
+    query_count : int, default 0
+        Total competency queries.
+    query_categories : list of str
+        Extracted query categories or intents.
+    target_metrics : list of str
+        Standard recommended metrics ('mrr', 'hits@1', 'hits@10', 'ndcg@10').
+    sample_queries : list of dict of str to Any
+        Sample competency queries for preview.
+    """
+
+    query_count: int = 0
+    query_categories: list[str] = Field(default_factory=list)
+    target_metrics: list[str] = Field(default_factory=lambda: ["mrr", "hits@1", "hits@10", "ndcg@10"])
+    sample_queries: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ExtractionSpecialization(BaseModel):
+    """Domain specialization payload for Scientific Information Extraction (SciERC).
+
+    Parameters
+    ----------
+    entity_types : list of str
+        Entity taxonomy types.
+    relation_types : list of str
+        Relation taxonomy types.
+    document_count : int, default 0
+        Total documents.
+    sentence_count : int, default 0
+        Total sentences or snippets.
+    """
+
+    entity_types: list[str] = Field(default_factory=list)
+    relation_types: list[str] = Field(default_factory=list)
+    document_count: int = 0
+    sentence_count: int = 0
+
+
+class BenchmarkPreviewRecord(BaseModel):
+    """Single record in the Hugging Face-style data viewer.
+
+    Parameters
+    ----------
+    record_id : str
+        Unique identifier for the record.
+    type : str
+        Record type ('atom', 'relation', 'query', 'entity', 'triple', 'sentence').
+    class_or_category : str
+        Taxonomy class, model type, or relation predicate.
+    label_or_text : str
+        Human-readable textual representation.
+    source_doc : str or None, optional
+        Bound document identifier.
+    page : int or None, optional
+        Document page number if grounded.
+    bbox : list of float or None, optional
+        Bounding box [ymin, xmin, ymax, xmax].
+    extra : dict of str to Any
+        Additional contextual attributes.
+    """
+
+    record_id: str
+    type: str
+    class_or_category: str
+    label_or_text: str
+    source_doc: str | None = None
+    page: int | None = None
+    bbox: list[float] | None = None
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class BenchmarkPreviewResponse(BaseModel):
+    """Tabular preview payload for Hugging Face-style data inspection.
+
+    Parameters
+    ----------
+    benchmark_id : str
+        Benchmark identifier.
+    total_records : int
+        Total number of records available.
+    columns : list of str
+        Column names for the data grid.
+    records : list of BenchmarkPreviewRecord
+        Sample preview rows.
+    format : str
+        Source format ('jsonld', 'yaml', 'jsonl').
+    """
+
+    benchmark_id: str
+    total_records: int
+    columns: list[str]
+    records: list[BenchmarkPreviewRecord]
+    format: str
+
+
 class BenchmarkDescriptor(BaseModel):
-    """Catalog entry describing an available gold-standard benchmark.
+    """Catalog entry describing an available evaluation benchmark.
 
     Parameters
     ----------
@@ -324,6 +567,26 @@ class BenchmarkDescriptor(BaseModel):
         Filesystem path to competency retrieval queries YAML if available.
     available : bool, default True
         Whether the benchmark files exist on the current filesystem.
+    version : str, default '1.0.0'
+        Dataset revision or release version.
+    domain : str, default 'General Science'
+        Scientific discipline (e.g. 'Physics', 'Psychology', 'Philosophy', 'CS').
+    level : int, default 4
+        Episteme evaluation level (1: Intrinsic, 2: Extrinsic, 3: Ref-Free, 4: TheoryNet).
+    splits : dict of str to BenchmarkSplitResource
+        Available data splits (e.g. 'gold', 'queries', 'corpus').
+    target_metrics : list of str
+        Recommended evaluation metrics for this benchmark.
+    license : str, default 'Open Data'
+        Data licensing or attribution terms.
+    citation : str or None, optional
+        Formal BibTeX or scientific publication reference.
+    structuralist_details : StructuralistSpecialization or None, optional
+        Bourbaki structural invariants and poset hierarchy if task_type is 'structuralist'.
+    retrieval_details : RetrievalSpecialization or None, optional
+        Competency query details if task_type is 'retrieval'.
+    extraction_details : ExtractionSpecialization or None, optional
+        Entity/relation taxonomy details if task_type is 'extraction'.
     """
 
     id: str
@@ -333,6 +596,16 @@ class BenchmarkDescriptor(BaseModel):
     gold_standard_path: str
     queries_path: str | None = None
     available: bool = True
+    version: str = "1.0.0"
+    domain: str = "General Science"
+    level: int = 4
+    splits: dict[str, BenchmarkSplitResource] = Field(default_factory=dict)
+    target_metrics: list[str] = Field(default_factory=list)
+    license: str = "Open Data"
+    citation: str | None = None
+    structuralist_details: StructuralistSpecialization | None = None
+    retrieval_details: RetrievalSpecialization | None = None
+    extraction_details: ExtractionSpecialization | None = None
 
 
 class EvaluateRunRequest(BaseModel):

@@ -635,6 +635,92 @@ export interface EvaluationReportDetail extends EvaluationReportSummary {
   violations: Record<string, any>[];
 }
 
+export interface BenchmarkSplitResource {
+  name: string;
+  path: string;
+  format: string;
+  item_count?: number | null;
+  size_bytes?: number | null;
+}
+
+export interface BourbakiInvariantsSummary {
+  mp_count: number;
+  m_count: number;
+  mpp_count: number;
+  c_count: number;
+  i_count: number;
+  total_atoms: number;
+  total_relations: number;
+  is_dag: boolean;
+  root_elements: string[];
+  specialization_depth: number;
+}
+
+export interface PosetPreviewNode {
+  id: string;
+  label: string;
+  class_name: string;
+  level: number;
+}
+
+export interface PosetPreviewEdge {
+  source: string;
+  target: string;
+  predicate: string;
+}
+
+export interface PosetPreviewGraph {
+  nodes: PosetPreviewNode[];
+  edges: PosetPreviewEdge[];
+}
+
+export interface StructuralistSpecialization {
+  formal_framework: string;
+  invariants: BourbakiInvariantsSummary;
+  poset_preview: PosetPreviewGraph;
+  bound_document_id?: string | null;
+  bound_document_pages?: number | null;
+  annotated_bbox_count: number;
+}
+
+export interface RetrievalSpecialization {
+  query_count: number;
+  query_categories: string[];
+  target_metrics: string[];
+  sample_queries: Array<{
+    id: string;
+    text: string;
+    category?: string;
+    target_nodes?: string[];
+  }>;
+}
+
+export interface ExtractionSpecialization {
+  entity_types: string[];
+  relation_types: string[];
+  document_count: number;
+  sentence_count: number;
+}
+
+export interface BenchmarkPreviewRecord {
+  record_id: string;
+  type: string;
+  class_or_category: string;
+  label_or_text: string;
+  source_doc?: string | null;
+  page?: number | null;
+  bbox?: number[] | null;
+  extra?: Record<string, any>;
+}
+
+export interface BenchmarkPreviewResponse {
+  benchmark_id: string;
+  total_records: number;
+  columns: string[];
+  records: BenchmarkPreviewRecord[];
+  format: string;
+}
+
 export interface BenchmarkDescriptor {
   id: string;
   name: string;
@@ -643,6 +729,16 @@ export interface BenchmarkDescriptor {
   gold_standard_path: string;
   queries_path?: string | null;
   available: boolean;
+  version?: string;
+  domain?: string;
+  level?: number;
+  splits?: Record<string, BenchmarkSplitResource>;
+  target_metrics?: string[];
+  license?: string;
+  citation?: string | null;
+  structuralist_details?: StructuralistSpecialization | null;
+  retrieval_details?: RetrievalSpecialization | null;
+  extraction_details?: ExtractionSpecialization | null;
 }
 
 export interface EvaluateRunRequest {

@@ -41,6 +41,7 @@ import type {
   CompareRunsRequest,
   ComparativeEvaluationResponse,
   BenchmarkDescriptor,
+  BenchmarkPreviewResponse,
   RegisterBenchmarkRequest,
   BenchmarkValidationResult,
   DynamicsTrajectoryRequest,
@@ -438,6 +439,16 @@ export const api = {
 
   async listBenchmarks(): Promise<BenchmarkDescriptor[]> {
     const res = await fetch(`${BASE_URL}/api/evaluation/benchmarks`);
+    return handleResponse(res);
+  },
+
+  async getBenchmarkPreview(
+    benchmarkId: string,
+    limit: number = 50
+  ): Promise<BenchmarkPreviewResponse> {
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/benchmarks/${encodeURIComponent(benchmarkId)}/preview?limit=${limit}`
+    );
     return handleResponse(res);
   },
 

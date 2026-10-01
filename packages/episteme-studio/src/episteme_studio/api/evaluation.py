@@ -19,6 +19,7 @@ from episteme_studio.domain.evaluation import (
     AdjudicationRequest,
     AdjudicationResponse,
     BenchmarkDescriptor,
+    BenchmarkPreviewResponse,
     BenchmarkValidationResult,
     CalibrationReportDetail,
     CancelEvaluationJobResponse,
@@ -219,6 +220,34 @@ async def list_benchmarks(
         Registered and discovered benchmark descriptors.
     """
     return service.list_benchmarks()
+
+
+@router.get("/benchmarks/{benchmark_id}/preview", response_model=BenchmarkPreviewResponse)
+async def get_benchmark_preview(
+    benchmark_id: str,
+    limit: int = 50,
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> BenchmarkPreviewResponse:
+    """Fetch tabular preview records for a benchmark in Hugging Face style.
+
+    Parameters
+    ----------
+    benchmark_id : str
+        Benchmark identifier.
+    limit : int, default 50
+        Maximum records to fetch.
+    service : EvaluationService
+        Injected evaluation service.
+
+    Returns
+    -------
+    BenchmarkPreviewResponse
+        Dataset rows and schema preview.
+    """
+    try:
+        return service.get_benchmark_preview(benchmark_id=benchmark_id, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.get("/manifests", response_model=list[dict[str, Any]])
