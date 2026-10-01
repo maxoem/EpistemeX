@@ -26,6 +26,7 @@ interface AppShellProps {
   children: React.ReactNode;
   activeTab: "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation";
   setActiveTab: (tab: "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation") => void;
+  contextSelector?: React.ReactNode;
 }
 
 const NAV_TABS = [
@@ -67,7 +68,12 @@ const NAV_TABS = [
   },
 ];
 
-export const AppShell: React.FC<AppShellProps> = ({ children, activeTab, setActiveTab }) => {
+export const AppShell: React.FC<AppShellProps> = ({
+  children,
+  activeTab,
+  setActiveTab,
+  contextSelector,
+}) => {
   const { capabilities, selectedRunDetail, searchableNodes, setFocusedNodeId } = useRunsStore();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCredsModalOpen, setIsCredsModalOpen] = useState(false);
@@ -147,8 +153,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activeTab, setActi
           />
         </div>
 
-        {/* Right: The Unified Context (4px status dot + Primary · Researcher) */}
-        <div className="flex items-center justify-end shrink-0">
+        {/* Right: The Unified Context & Global State Selectors */}
+        <div className="flex items-center justify-end shrink-0 gap-3">
+          {contextSelector && (
+            <div className="flex items-center">{contextSelector}</div>
+          )}
           <ConnectionProvenancePill
             onOpenCreds={() => setIsCredsModalOpen(true)}
             onOpenSettings={() => setIsSettingsOpen(true)}

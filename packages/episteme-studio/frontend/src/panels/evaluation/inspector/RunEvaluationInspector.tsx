@@ -9,7 +9,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useEvaluationStore } from "../../../store/evaluationStore";
-import { EvaluationHeader } from "../components/EvaluationHeader";
 import { TopologicalCanvasView } from "./canvas/TopologicalCanvasView";
 import { EpistemicTheoryNetView } from "./epistemics/EpistemicTheoryNetView";
 import { AdjudicationDeskView } from "./adjudication/AdjudicationDeskView";
@@ -43,9 +42,6 @@ export const RunEvaluationInspector: React.FC<RunEvaluationInspectorProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-app-bg select-none">
-      {/* 2.1 Run Evaluation Inspector Header (Row 1: 48px Header + Row 2: 40px Zero-Box Segmented Sub-Nav) */}
-      <EvaluationHeader onOpenConfigEditor={onOpenConfigEditor} />
-
       {/* Sub-View Content Body */}
       <div className="flex-1 overflow-hidden relative">
         {activeSubTab === "canvas" ? (
