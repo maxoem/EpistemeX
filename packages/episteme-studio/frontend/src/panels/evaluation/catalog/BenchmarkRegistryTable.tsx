@@ -1,13 +1,12 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
-  Award,
   BookOpen,
   ChevronRight,
   Copy,
   Play,
   Plus,
-  Search,
 } from "lucide-react";
+import { useEvaluationStore } from "../../../store/evaluationStore";
 import type { BenchmarkDescriptor } from "../../../api/types";
 
 interface BenchmarkRegistryTableProps {
@@ -16,8 +15,8 @@ interface BenchmarkRegistryTableProps {
   onSelectBenchmark: (id: string) => void;
   onInspectBenchmark: (id: string) => void;
   onEvaluateBenchmark: (benchmark: BenchmarkDescriptor) => void;
-  onRegisterClick: () => void;
-  onPromoteClick: () => void;
+  onRegisterClick?: () => void;
+  onPromoteClick?: () => void;
 }
 
 export const BenchmarkRegistryTable: React.FC<BenchmarkRegistryTableProps> = ({
@@ -29,18 +28,17 @@ export const BenchmarkRegistryTable: React.FC<BenchmarkRegistryTableProps> = ({
   onRegisterClick,
   onPromoteClick,
 }) => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [taskFilter, setTaskFilter] = useState<string>("all");
+  const { catalogSearchQuery, catalogTaskFilter } = useEvaluationStore();
   const [copyFeedbackId, setCopyFeedbackId] = useState<string | null>(null);
 
-  // Filter benchmarks
+  // Filter benchmarks based on store catalog filters
   const filteredBenchmarks = useMemo(() => {
     return benchmarks.filter((b) => {
-      if (taskFilter !== "all" && b.task_type.toLowerCase() !== taskFilter.toLowerCase()) {
+      if (catalogTaskFilter !== "all" && b.task_type.toLowerCase() !== catalogTaskFilter.toLowerCase()) {
         return false;
       }
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase();
+      if (!catalogSearchQuery.trim()) return true;
+      const q = catalogSearchQuery.toLowerCase();
       return (
         b.name.toLowerCase().includes(q) ||
         b.id.toLowerCase().includes(q) ||
@@ -48,7 +46,7 @@ export const BenchmarkRegistryTable: React.FC<BenchmarkRegistryTableProps> = ({
         (b.description && b.description.toLowerCase().includes(q))
       );
     });
-  }, [benchmarks, searchQuery, taskFilter]);
+  }, [benchmarks, catalogSearchQuery, catalogTaskFilter]);
 
   // Keyboard triage (design.md §11: j/k navigation, Enter to inspect)
   useEffect(() => {
@@ -97,108 +95,7 @@ export const BenchmarkRegistryTable: React.FC<BenchmarkRegistryTableProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-app-bg text-app-text font-sans overflow-hidden">
-      {/* ─────────────────────────────────────────────────────────────────── */}
-      {/* 44px Contextual Action Bar (design.md §8)                           */}
-      {/* ─────────────────────────────────────────────────────────────────── */}
-      <div className="h-11 px-4 border-b border-app-border bg-app-surface shrink-0 flex items-center justify-between gap-3 select-none">
-        {/* Left: Breadcrumbs & Telemetry Scope Count */}
-        <div className="flex items-center gap-2.5 shrink-0">
-          <div className="flex items-center gap-1.5 text-xs text-app-muted font-sans">
-            <span>Evaluation</span>
-            <span>/</span>
-            <span className="font-display font-medium text-app-heading text-sm">
-              Benchmark Catalog
-            </span>
-          </div>
-          <span className="px-2 py-0.5 rounded text-[11px] font-sans font-medium tabular-nums bg-app-subtle border border-app-border text-app-muted">
-            {benchmarks.length} registered
-          </span>
-          <span className="hidden lg:inline text-[11px] font-sans text-app-muted/60">
-            [j] [k] to navigate · [Enter] to inspect
-          </span>
-        </div>
-
-        {/* Center: Search & Filter Toolbar */}
-        <div className="flex items-center gap-2 flex-1 max-w-xl justify-end">
-          {/* Fast Search Input */}
-          <div className="relative flex-1 max-w-xs">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-app-muted" />
-            <input
-              type="text"
-              placeholder="Filter benchmarks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-2.5 py-1 text-xs font-sans rounded bg-app-bg border border-app-border text-app-text placeholder:text-app-muted/60 focus:outline-hidden focus:border-blue-500"
-            />
-          </div>
-
-          {/* Task Category Filter */}
-          <div className="flex items-center border border-app-border rounded overflow-hidden text-xs font-sans bg-app-bg">
-            <button
-              onClick={() => setTaskFilter("all")}
-              className={`px-2.5 py-1 transition-colors cursor-pointer ${
-                taskFilter === "all"
-                  ? "bg-app-subtle text-app-heading font-medium"
-                  : "text-app-muted hover:text-app-text"
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setTaskFilter("structuralist")}
-              className={`px-2.5 py-1 transition-colors border-l border-app-border cursor-pointer ${
-                taskFilter === "structuralist"
-                  ? "bg-app-subtle text-app-heading font-medium"
-                  : "text-app-muted hover:text-app-text"
-              }`}
-            >
-              TheoryNet
-            </button>
-            <button
-              onClick={() => setTaskFilter("retrieval")}
-              className={`px-2.5 py-1 transition-colors border-l border-app-border cursor-pointer ${
-                taskFilter === "retrieval"
-                  ? "bg-app-subtle text-app-heading font-medium"
-                  : "text-app-muted hover:text-app-text"
-              }`}
-            >
-              Retrieval
-            </button>
-            <button
-              onClick={() => setTaskFilter("extraction")}
-              className={`px-2.5 py-1 transition-colors border-l border-app-border cursor-pointer ${
-                taskFilter === "extraction"
-                  ? "bg-app-subtle text-app-heading font-medium"
-                  : "text-app-muted hover:text-app-text"
-              }`}
-            >
-              Extraction
-            </button>
-          </div>
-        </div>
-
-        {/* Right: Primary Contextual Actions */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={onPromoteClick}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-sans font-medium bg-app-surface text-app-text border border-app-border hover:bg-app-subtle transition-colors cursor-pointer"
-          >
-            <Award className="w-3.5 h-3.5 text-app-muted" />
-            <span>Promote from Run</span>
-          </button>
-          <button
-            onClick={onRegisterClick}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-sans font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Register Benchmark</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────────── */}
-      {/* Edge-to-Edge Data Grid (design.md §9 Headless Linear-Style Grid)     */}
-      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* Edge-to-Edge Data Grid (design.md §9 Headless Linear-Style Grid) */}
       <div className="flex-1 overflow-y-auto">
         <table className="w-full text-left border-collapse select-none font-sans">
           {/* Table Header: Inter 11px, weight 600, uppercase, tracking-[0.05em] */}

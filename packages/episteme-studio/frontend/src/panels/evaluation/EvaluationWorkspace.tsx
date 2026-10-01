@@ -22,8 +22,6 @@ import { LeaderboardPage } from "./leaderboard/LeaderboardPage";
 import { RunEvaluationInspector } from "./inspector/RunEvaluationInspector";
 import { LongitudinalTrajectoryStudio } from "./longitudinal/LongitudinalTrajectoryStudio";
 import { ExecuteEvaluationPage } from "./execution/ExecuteEvaluationPage";
-import { PromoteToGoldModal } from "./catalog/PromoteToGoldModal";
-import { RegisterBenchmarkModal } from "./catalog/RegisterBenchmarkModal";
 
 export const EvaluationWorkspace: React.FC = () => {
   const {
@@ -38,9 +36,6 @@ export const EvaluationWorkspace: React.FC = () => {
     fetchBenchmarks,
     stagedAdjudications,
   } = useEvaluationStore();
-
-  const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
-  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 
   // Expanded sidebar by default to present robust L-shaped spatial hierarchy
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -243,28 +238,6 @@ export const EvaluationWorkspace: React.FC = () => {
           sections={navSections}
           collapsed={false}
           onToggleCollapse={toggleSidebar}
-          footerContent={
-            activeMode === "catalog" ? (
-              <div className="space-y-1.5">
-                <button
-                  type="button"
-                  onClick={() => setIsPromoteModalOpen(true)}
-                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white transition-colors cursor-pointer"
-                >
-                  <Award className="w-3.5 h-3.5" />
-                  <span>+ Promote from Run</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsRegisterModalOpen(true)}
-                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-app-surface hover:bg-app-subtle text-app-text border border-app-border transition-colors cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5 text-app-muted" />
-                  <span>+ Register Benchmark</span>
-                </button>
-              </div>
-            ) : undefined
-          }
         />
       </ResizablePanel>
 
@@ -293,16 +266,6 @@ export const EvaluationWorkspace: React.FC = () => {
           )}
         </div>
       </div>
-
-      {/* Auxiliary Modals for Promotion / Registration */}
-      <PromoteToGoldModal
-        isOpen={isPromoteModalOpen}
-        onClose={() => setIsPromoteModalOpen(false)}
-      />
-      <RegisterBenchmarkModal
-        isOpen={isRegisterModalOpen}
-        onClose={() => setIsRegisterModalOpen(false)}
-      />
     </div>
   );
 };

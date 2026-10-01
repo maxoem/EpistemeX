@@ -8,7 +8,7 @@ test("evaluationStore: initial state adheres to Phase 0 contracts", () => {
   store.resetStore();
 
   const state = useEvaluationStore.getState();
-  assert.equal(state.activeMode, "inspector");
+  assert.equal(state.activeMode, "catalog");
   assert.equal(state.activeSubTab, "canvas");
   assert.equal(state.activeReport, null);
   assert.equal(state.activeReportId, null);

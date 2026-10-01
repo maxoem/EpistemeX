@@ -13,6 +13,9 @@ import {
   Clock,
   Award,
   Plus,
+  Search,
+  Copy,
+  FileCode,
 } from "lucide-react";
 import { useEvaluationStore } from "../../../store/evaluationStore";
 import { WorkspaceContextBar, BreadcrumbItem } from "../../../shell/navigation";
@@ -68,12 +71,35 @@ export const EvaluationContextBar: React.FC<EvaluationContextBarProps> = ({
     optimisticScalarDeltas,
     setTargetRunId,
     isLoading,
+    catalogViewMode,
+    setCatalogViewMode,
+    catalogSearchQuery,
+    setCatalogSearchQuery,
+    catalogTaskFilter,
+    setCatalogTaskFilter,
+    isPromoteModalOpen,
+    setIsPromoteModalOpen,
+    isRegisterModalOpen,
+    setIsRegisterModalOpen,
+    isLinterRailOpen,
+    setIsLinterRailOpen,
   } = useEvaluationStore();
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isExecuteModalOpen, setIsExecuteModalOpen] = useState(false);
-  const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
-  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [copyCodeFeedback, setCopyCodeFeedback] = useState(false);
+
+  const activeBenchmark = useMemo(() => {
+    if (!benchmarks.length) return undefined;
+    if (!selectedBenchmarkId) return benchmarks[0];
+    return benchmarks.find((b) => b.id === selectedBenchmarkId) || benchmarks[0];
+  }, [benchmarks, selectedBenchmarkId]);
+
+  const handleCopyCli = (benchmarkId: string) => {
+    navigator.clipboard.writeText(`episteme eval --benchmark ${benchmarkId}`);
+    setCopyCodeFeedback(true);
+    setTimeout(() => setCopyCodeFeedback(false), 2000);
+  };
 
   const [showKpiStrip, setShowKpiStrip] = useState(() => {
     try {
@@ -191,21 +217,44 @@ export const EvaluationContextBar: React.FC<EvaluationContextBarProps> = ({
     }
   };
 
-  // Breadcrumbs based on activeMode and activeSubTab
+  // Breadcrumbs based on activeMode, catalogViewMode, and activeSubTab
   const breadcrumbs: BreadcrumbItem[] = useMemo(() => {
     const crumbs: BreadcrumbItem[] = [
       {
         label: "Evaluation",
-        onClick: () => setActiveMode("catalog"),
-      },
-      {
-        label: MODE_TITLES[activeMode] || "Workspace",
-        onClick:
-          activeMode === "inspector"
-            ? () => setActiveMode("inspector")
-            : undefined,
+        onClick: () => {
+          setActiveMode("catalog");
+          setCatalogViewMode("table");
+        },
       },
     ];
+
+    if (activeMode === "catalog") {
+      if (catalogViewMode === "detail" && activeBenchmark) {
+        crumbs.push({
+          label: "Benchmark Catalog",
+          onClick: () => setCatalogViewMode("table"),
+        });
+        crumbs.push({
+          label: activeBenchmark.name,
+          active: true,
+        });
+      } else {
+        crumbs.push({
+          label: "Benchmark Catalog",
+          active: true,
+        });
+      }
+      return crumbs;
+    }
+
+    crumbs.push({
+      label: MODE_TITLES[activeMode] || "Workspace",
+      onClick:
+        activeMode === "inspector"
+          ? () => setActiveMode("inspector")
+          : undefined,
+    });
 
     if (activeMode === "inspector" && activeSubTab) {
       crumbs.push({
@@ -214,7 +263,14 @@ export const EvaluationContextBar: React.FC<EvaluationContextBarProps> = ({
     }
 
     return crumbs;
-  }, [activeMode, activeSubTab, setActiveMode]);
+  }, [
+    activeMode,
+    activeSubTab,
+    catalogViewMode,
+    activeBenchmark,
+    setActiveMode,
+    setCatalogViewMode,
+  ]);
 
   // Context Selector: Controls what dataset/run is being queried
   const contextSelector = useMemo(() => {
@@ -249,41 +305,82 @@ export const EvaluationContextBar: React.FC<EvaluationContextBarProps> = ({
       );
     }
 
-    if (activeMode === "catalog" && benchmarks.length > 0) {
-      return (
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-app-muted font-medium shrink-0">
-            Benchmark:
-          </span>
-          <div className="relative flex items-center">
-            <select
-              value={selectedBenchmarkId || ""}
-              onChange={(e) => setSelectedBenchmarkId(e.target.value)}
-              className="h-7 pl-2.5 pr-7 py-0.5 rounded bg-app-bg border border-app-border text-xs font-medium text-app-heading focus:outline-none focus:border-blue-500 cursor-pointer appearance-none max-w-[260px] truncate"
-              title="Select Active Benchmark"
-            >
-              {benchmarks.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.task_type})
-                </option>
+    if (activeMode === "catalog") {
+      if (catalogViewMode === "table") {
+        return (
+          <div className="flex items-center gap-2.5 font-sans">
+            <span className="hidden sm:inline-flex px-2 py-0.5 rounded text-[11px] font-sans font-medium tabular-nums bg-app-subtle border border-app-border text-app-muted">
+              {benchmarks.length} registered
+            </span>
+
+            {/* Fast Search Input */}
+            <div className="relative flex items-center">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-app-muted pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Filter benchmarks..."
+                value={catalogSearchQuery}
+                onChange={(e) => setCatalogSearchQuery(e.target.value)}
+                className="w-36 sm:w-48 lg:w-56 pl-8 pr-2.5 py-1 text-xs font-sans rounded bg-app-bg border border-app-border text-app-text placeholder:text-app-muted/60 focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+
+            {/* Task Category Filter */}
+            <div className="hidden md:flex items-center border border-app-border rounded overflow-hidden text-xs font-sans bg-app-bg">
+              {[
+                { id: "all", label: "All" },
+                { id: "structuralist", label: "TheoryNet" },
+                { id: "retrieval", label: "Retrieval" },
+                { id: "extraction", label: "Extraction" },
+              ].map((tab, idx) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setCatalogTaskFilter(tab.id)}
+                  className={`px-2.5 py-1 transition-colors cursor-pointer ${
+                    idx > 0 ? "border-l border-app-border" : ""
+                  } ${
+                    catalogTaskFilter === tab.id
+                      ? "bg-app-subtle text-app-heading font-medium"
+                      : "text-app-muted hover:text-app-text"
+                  }`}
+                >
+                  {tab.label}
+                </button>
               ))}
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 absolute right-2 text-app-muted pointer-events-none" />
+            </div>
           </div>
-        </div>
-      );
+        );
+      }
+
+      if (activeBenchmark) {
+        return (
+          <div className="hidden sm:flex items-center gap-2 text-xs font-sans text-app-muted">
+            <span className="font-mono text-[11px] text-app-muted">id: {activeBenchmark.id}</span>
+            <span>·</span>
+            <span className="capitalize">{activeBenchmark.task_type} Task</span>
+            <span>·</span>
+            <span>Level {activeBenchmark.level || (activeBenchmark.task_type === "structuralist" ? 4 : 2)}</span>
+          </div>
+        );
+      }
+
+      return null;
     }
 
     return null;
   }, [
     activeMode,
+    catalogViewMode,
+    benchmarks,
+    catalogSearchQuery,
+    catalogTaskFilter,
+    activeBenchmark,
+    setCatalogSearchQuery,
+    setCatalogTaskFilter,
     reports,
     activeReportId,
     activeReport,
     setActiveReportId,
-    benchmarks,
-    selectedBenchmarkId,
-    setSelectedBenchmarkId,
   ]);
 
   // Metrics KPI Strip
@@ -406,25 +503,76 @@ export const EvaluationContextBar: React.FC<EvaluationContextBarProps> = ({
           </>
         )}
 
-        {activeMode === "catalog" && (
+        {activeMode === "catalog" && catalogViewMode === "table" && (
           <>
             <button
               type="button"
               onClick={() => setIsPromoteModalOpen(true)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white transition-colors cursor-pointer"
-              title="Promote pipeline run to gold benchmark"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-sans font-medium bg-app-surface text-app-text border border-app-border hover:bg-app-subtle transition-colors cursor-pointer"
+              title="Promote verified pipeline run to gold benchmark"
             >
-              <Award className="w-3 h-3" />
-              <span>Promote</span>
+              <Award className="w-3.5 h-3.5 text-app-muted" />
+              <span>Promote from Run</span>
             </button>
             <button
               type="button"
               onClick={() => setIsRegisterModalOpen(true)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-app-bg hover:bg-app-subtle text-app-text border border-app-border transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-sans font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
               title="Register new benchmark specification"
             >
-              <Plus className="w-3 h-3 text-app-muted" />
-              <span>Register</span>
+              <Plus className="w-3.5 h-3.5" />
+              <span>Register Benchmark</span>
+            </button>
+          </>
+        )}
+
+        {activeMode === "catalog" && catalogViewMode === "detail" && activeBenchmark && (
+          <>
+            <button
+              type="button"
+              onClick={() => handleCopyCli(activeBenchmark.id)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-sans font-medium bg-app-surface text-app-text border border-app-border hover:bg-app-subtle transition-colors cursor-pointer"
+              title="Copy CLI evaluation command"
+            >
+              <Copy className="w-3.5 h-3.5 text-app-muted" />
+              <span>{copyCodeFeedback ? "Copied" : "CLI Snippet"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsPromoteModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-sans font-medium bg-app-surface text-app-text border border-app-border hover:bg-app-subtle transition-colors cursor-pointer"
+              title="Promote verified pipeline run to gold benchmark"
+            >
+              <Award className="w-3.5 h-3.5 text-app-muted" />
+              <span>Promote Run</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedBenchmarkId(activeBenchmark.id);
+                setTargetRunId(activeBenchmark.id);
+                setActiveMode("execute");
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-sans font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
+              title="Evaluate run against benchmark"
+            >
+              <Play className="w-3.5 h-3.5" />
+              <span>Evaluate Run</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsLinterRailOpen(!isLinterRailOpen)}
+              className={`p-1 rounded text-xs border transition-colors cursor-pointer ${
+                isLinterRailOpen
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-app-surface text-app-muted hover:text-app-text border-app-border hover:bg-app-subtle"
+              }`}
+              title={isLinterRailOpen ? "Close Pre-Flight Linter Rail" : "Open Pre-Flight Linter Rail"}
+            >
+              <FileCode className="w-3.5 h-3.5" />
             </button>
           </>
         )}
@@ -447,9 +595,17 @@ export const EvaluationContextBar: React.FC<EvaluationContextBarProps> = ({
     );
   }, [
     activeMode,
-    activeReport,
+    catalogViewMode,
+    activeBenchmark,
+    copyCodeFeedback,
+    isLinterRailOpen,
+    setIsPromoteModalOpen,
+    setIsRegisterModalOpen,
+    setSelectedBenchmarkId,
     setTargetRunId,
     setActiveMode,
+    setIsLinterRailOpen,
+    activeReport,
     onOpenConfigEditor,
     fetchReports,
     fetchBenchmarks,

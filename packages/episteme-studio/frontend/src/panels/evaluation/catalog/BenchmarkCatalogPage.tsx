@@ -1,9 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import { useEvaluationStore } from "../../../store/evaluationStore";
 import { BenchmarkRegistryTable } from "./BenchmarkRegistryTable";
 import { BenchmarkDetailView } from "./BenchmarkDetailView";
-import { PromoteToGoldModal } from "./PromoteToGoldModal";
-import { RegisterBenchmarkModal } from "./RegisterBenchmarkModal";
 import type { BenchmarkDescriptor } from "../../../api/types";
 
 interface BenchmarkCatalogPageProps {
@@ -18,11 +16,11 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
     selectedBenchmarkId,
     setSelectedBenchmarkId,
     setActiveMode,
+    catalogViewMode,
+    setCatalogViewMode,
+    setIsPromoteModalOpen,
+    setIsRegisterModalOpen,
   } = useEvaluationStore();
-
-  const [viewMode, setViewMode] = useState<"table" | "detail">("table");
-  const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
-  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 
   // Active selected benchmark
   const activeBenchmark: BenchmarkDescriptor | undefined = useMemo(() => {
@@ -37,7 +35,7 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
 
   const handleInspectBenchmark = (id: string) => {
     setSelectedBenchmarkId(id);
-    setViewMode("detail");
+    setCatalogViewMode("detail");
   };
 
   const handleEvaluateBenchmark = (benchmark: BenchmarkDescriptor) => {
@@ -51,7 +49,7 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
 
   return (
     <div className="flex-1 flex h-full w-full overflow-hidden bg-app-bg text-app-text font-sans">
-      {viewMode === "table" ? (
+      {catalogViewMode === "table" ? (
         <BenchmarkRegistryTable
           benchmarks={benchmarks}
           selectedBenchmarkId={selectedBenchmarkId || (benchmarks[0]?.id ?? null)}
@@ -64,7 +62,7 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
       ) : activeBenchmark ? (
         <BenchmarkDetailView
           benchmark={activeBenchmark}
-          onBackToRegistry={() => setViewMode("table")}
+          onBackToRegistry={() => setCatalogViewMode("table")}
           onEvaluateBenchmark={handleEvaluateBenchmark}
           onPromoteClick={() => setIsPromoteModalOpen(true)}
         />
@@ -79,17 +77,6 @@ export const BenchmarkCatalogPage: React.FC<BenchmarkCatalogPageProps> = ({
           onPromoteClick={() => setIsPromoteModalOpen(true)}
         />
       )}
-
-      {/* Auxiliary Modals */}
-      <PromoteToGoldModal
-        isOpen={isPromoteModalOpen}
-        onClose={() => setIsPromoteModalOpen(false)}
-      />
-
-      <RegisterBenchmarkModal
-        isOpen={isRegisterModalOpen}
-        onClose={() => setIsRegisterModalOpen(false)}
-      />
     </div>
   );
 };

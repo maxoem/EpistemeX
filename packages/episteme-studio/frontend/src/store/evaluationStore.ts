@@ -46,6 +46,14 @@ export interface EvaluationState {
   benchmarks: BenchmarkDescriptor[];
   selectedBenchmarkId: string | null;
 
+  // Catalog View & Modal State
+  catalogViewMode: "table" | "detail";
+  catalogSearchQuery: string;
+  catalogTaskFilter: string;
+  isPromoteModalOpen: boolean;
+  isRegisterModalOpen: boolean;
+  isLinterRailOpen: boolean;
+
   // Evaluation Execution Target
   targetRunId: string | null;
 
@@ -79,6 +87,14 @@ export interface EvaluationState {
   setActiveReport: (report: EvaluationReportDetail | null) => void;
   setSelectedBenchmarkId: (id: string | null) => void;
   setTargetRunId: (id: string | null) => void;
+
+  // Catalog Actions
+  setCatalogViewMode: (mode: "table" | "detail") => void;
+  setCatalogSearchQuery: (query: string) => void;
+  setCatalogTaskFilter: (filter: string) => void;
+  setIsPromoteModalOpen: (open: boolean) => void;
+  setIsRegisterModalOpen: (open: boolean) => void;
+  setIsLinterRailOpen: (open: boolean) => void;
 
   // Data Fetching
   fetchReports: (params?: { run_id?: string; outcome?: string }) => Promise<void>;
@@ -130,7 +146,7 @@ const DEFAULT_ALIGNMENT_FILTERS: CanvasAlignmentFilters = {
 const DEFAULT_BOURBAKI_CLASSES = new Set<string>(["Mp", "M", "Mpp", "C", "I"]);
 
 export const useEvaluationStore = create<EvaluationState>((set, get) => ({
-  activeMode: "inspector",
+  activeMode: "catalog",
   activeSubTab: "canvas",
 
   reports: [],
@@ -140,6 +156,14 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
   benchmarks: [],
   selectedBenchmarkId: null,
   targetRunId: null,
+
+  // Catalog View & Modal State
+  catalogViewMode: "table",
+  catalogSearchQuery: "",
+  catalogTaskFilter: "all",
+  isPromoteModalOpen: false,
+  isRegisterModalOpen: false,
+  isLinterRailOpen: false,
 
   // Graph Overlay & Canvas State (Phase 2)
   graphOverlay: null,
@@ -165,6 +189,18 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
   setActiveMode: (mode) => set({ activeMode: mode }),
 
   setActiveSubTab: (tab) => set({ activeSubTab: tab }),
+
+  setCatalogViewMode: (mode) => set({ catalogViewMode: mode }),
+
+  setCatalogSearchQuery: (query) => set({ catalogSearchQuery: query }),
+
+  setCatalogTaskFilter: (filter) => set({ catalogTaskFilter: filter }),
+
+  setIsPromoteModalOpen: (open) => set({ isPromoteModalOpen: open }),
+
+  setIsRegisterModalOpen: (open) => set({ isRegisterModalOpen: open }),
+
+  setIsLinterRailOpen: (open) => set({ isLinterRailOpen: open }),
 
   setActiveReportId: (id) => {
     set({
@@ -404,6 +440,12 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
       activeReportId: null,
       activeReport: null,
       targetRunId: null,
+      catalogViewMode: "table",
+      catalogSearchQuery: "",
+      catalogTaskFilter: "all",
+      isPromoteModalOpen: false,
+      isRegisterModalOpen: false,
+      isLinterRailOpen: false,
       graphOverlay: null,
       selectedOverlayItem: null,
       isAmbiguousDrawerOpen: false,
