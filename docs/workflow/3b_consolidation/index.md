@@ -82,11 +82,23 @@ duplicates. For each cluster:
 
 The following parameters are configured under `Phase3bConfig` in `pipeline/config.py`:
 
-| Parameter                    | Type    | Default | Description                                                 |
-|:-----------------------------|:--------|:--------|:------------------------------------------------------------|
-| `enabled`                    | `bool`  | `True`  | Whether to execute the latent consolidation sweep.          |
-| `dense_similarity_threshold` | `float` | `0.85`  | Minimum cosine similarity between entity textual envelopes. |
-| `relation_overlap_threshold` | `float` | `0.8`   | Minimum Jaccard similarity of 1-hop relation signatures.    |
+| Parameter                         | Type                                | Default   | Description                                                        |
+|:----------------------------------|:------------------------------------|:----------|:-------------------------------------------------------------------|
+| `enabled`                         | `bool`                              | `True`    | Whether to execute the latent consolidation sweep.                 |
+| `dense_similarity_threshold`      | `float`                             | `0.85`    | Minimum cosine similarity between entity textual envelopes.        |
+| `relation_overlap_threshold`      | `float`                             | `0.8`     | Minimum Jaccard similarity of 1-hop relation signatures.           |
+| `verification`                    | `ConsolidationVerificationConfig`   | `default` | Encapsulated verification sub-config for calibrated merge checks.  |
+| `verification.enabled`            | `bool`                              | `False`   | Enables System 1 Jev Choice verification for borderline pairs.     |
+| `verification.similarity_lower`   | `float`                             | `0.75`    | Lower cosine similarity bound for borderline verification band.    |
+| `verification.similarity_upper`   | `float`                             | `0.88`    | Upper cosine similarity bound for borderline verification band.    |
+| `verification.confidence_threshold` | `float`                           | `0.80`    | Empirical accuracy threshold required to confirm borderline merge. |
+| `verification.conformal_alpha`    | `float`                             | `0.05`    | Significance level for conformal prediction merge sets.            |
+
+### Borderline Cluster Verification & Canonical Election (ISSUE-045)
+
+When `verification.enabled` is active with an injected `DecisionEngine`:
+1. **Borderline Band Guard ($0.75 \le \text{cosine} \le 0.88$)**: Candidate entity pairs in this ambiguous band are evaluated via Jev `Choice` over `["IDENTICAL_MERGE", "HIERARCHICAL_SUBSUMPTION", "DISTINCT_SEPARATE"]`. Merging into Union-Find sets requires the conformal prediction set to be strictly singleton `{"IDENTICAL_MERGE"}` (or empirical accuracy $\ge 0.80$), protecting hierarchical and antonymous distinctions.
+2. **Canonical Surface Form Election**: Rather than solely relying on mention counts, Jev `Choice` elects the standard scholarly academic terminology from candidate entities.
 
 ## Phase Contract
 
@@ -104,7 +116,7 @@ The following parameters are configured under `Phase3bConfig` in `pipeline/confi
 - Entities with different labels (e.g., `Concept` vs. `Person`) are never merged.
 - If both entities have no relations, the Jaccard overlap evaluates to `0.0` (two isolated nodes are not automatically
   merged).
-- The elected canonical node is always the one with the maximum count of `source_chunk_ids`.
+- Borderline pairs require singleton conformal approval when Jev cluster verification is active.
 
 ## Related Sections
 

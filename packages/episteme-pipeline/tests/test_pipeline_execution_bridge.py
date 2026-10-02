@@ -55,7 +55,7 @@ class StubPhase2:
         triple = L2Triple(subject_id="entity-1", predicate="MENTIONS", object_id="entity-1", confidence=1.0, scope="local", source_chunk_id="chunk-1")
         mention = build_entity_mention_artifact(entity, "chunk-1", run_id=context.run_id, phase_name=self.name, method="test.phase2")
         linked = build_linked_entity_artifact(entity, [mention.artifact_id], run_id=context.run_id, phase_name=self.name, method="test.phase2")
-        relation = build_local_relation_artifact(triple, 0, run_id=context.run_id, phase_name=self.name, method="test.phase2")
+        relation = build_local_relation_artifact(triple, run_id=context.run_id, phase_name=self.name, method="test.phase2")
         return ArtifactCollection([mention, linked, relation])
 
 
@@ -68,6 +68,7 @@ class StubPhase3:
 
 class StubPhase3First:
     name = "Phase 3: Global Relation Extraction"
+    input_view = Phase2ArtifactsView
 
     def __init__(self) -> None:
         self.received_input = None

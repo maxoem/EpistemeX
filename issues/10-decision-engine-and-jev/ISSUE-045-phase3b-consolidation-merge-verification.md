@@ -6,7 +6,7 @@
 | **Component(s)** | `packages/episteme-pipeline` (`pipeline/phases/phase3b_consolidation/runner.py`, `pipeline/phases/phase3b_consolidation/clustering.py`, `pipeline/config.py`) |
 | **Roadmap Horizon** | **Horizon 2** (Knowledge Graph Fusion & Topological Invariance) |
 | **Priority** | Medium |
-| **Status** | Open |
+| **Status** | Completed |
 | **Source Ref** | `docs/workflow/3b_consolidation/index.md`, ADR 0005 (`0005-two-pass-fusion-strategy.md`) |
 
 ---
@@ -56,10 +56,10 @@ TypeSafe Jev provides the ideal decision oracle to verify borderline clusters an
 ---
 
 ## 3. Acceptance Criteria
-- [ ] Entities in the borderline similarity band are verified via Jev `Choice` in $<150\text{ms}$.
-- [ ] Antonymous and hierarchically distinct concepts with high vector proximity are protected from incorrect merges.
-- [ ] The elected canonical entity name consistently matches the standard scholarly designation.
-- [ ] Deterministic unit tests verify that borderline distinct pairs remain separate in the final graph.
+- [x] Entities in the borderline similarity band are verified via Jev `Choice` in $<150\text{ms}$.
+- [x] Antonymous and hierarchically distinct concepts with high vector proximity are protected from incorrect merges.
+- [x] The elected canonical entity name consistently matches the standard scholarly designation.
+- [x] Deterministic unit tests verify that borderline distinct pairs remain separate in the final graph.
 
 ---
 

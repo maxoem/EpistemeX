@@ -29,6 +29,10 @@ See [Formal Graph Schema (TheoryNet)](../../concepts/formal_graph_model.md) and 
 - **Span Demarcation**: Prompts the LLM with chunk text to identify argumentative discourse spans, wrapping them in
   explicit markup tags (e.g. `<AC1>...</AC1>`).
 - **Clean Skipping**: If no argumentative content is found in a chunk, it is skipped cleanly.
+- **Actor-Critic Gleaning Gating**: When `enable_jev_gleaning_gate` is enabled, [`JevGleaningGate`](file:///Users/max.oehmichen/PycharmProjects/episteme/packages/episteme-pipeline/episteme_pipeline/decision/gleaning.py)
+  evaluates whether the extracted ADU spans and theoretical assertions completely cover the source chunk. If missed
+  claims remain and $\text{empirical\_accuracy} \ge \tau_{\text{glean}}$, an additional gleaning pass is executed up to
+  `max_gleaning_passes`. A 2% stochastic audit rate routes stopped chunks for false-negative evaluation.
 
 ### 2. Component Classification & Local Relations (`LLMACCClassifier`)
 
@@ -89,6 +93,7 @@ Configuration is managed via `Phase4Config` in `pipeline/config.py`:
 | `arc_use_priority_rank`            | `bool`                       | `False`        | Whether to prioritize pairing by component type hierarchy.                |
 | `acc_decoding_strategy`            | `StructuredDecodingStrategy` | `NL_TO_FORMAT` | Decoding strategy for ACC classification.                                 |
 | `arc_decoding_strategy`            | `StructuredDecodingStrategy` | `NL_TO_FORMAT` | Decoding strategy for ARC classification.                                 |
+| `gleaning`                         | `GleaningConfig`             | `default`      | Encapsulated gleaning config (`enabled`, `confidence_threshold`, `audit_rate`, `max_passes`). |
 
 ## Phase Contract
 

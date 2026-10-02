@@ -9,6 +9,8 @@ including :class:`LayaDecisionEngine` for local Apple Silicon MLX inference,
 publishing.
 """
 
+from episteme_pipeline.decision.conformal import ConformalCalibrator
+from episteme_pipeline.decision.gleaning import JevGleaningGate
 from episteme_pipeline.decision.jev_client import (
     DecisionEngineError,
     LayaDecisionEngine,
@@ -21,7 +23,9 @@ from episteme_pipeline.decision.mock import (
 from episteme_pipeline.decision.observable import ObservableDecisionEngine
 
 __all__ = [
+    "ConformalCalibrator",
     "DecisionEngineError",
+    "JevGleaningGate",
     "LayaDecisionEngine",
     "TransformersDecisionEngine",
     "MockJevDecisionEngine",

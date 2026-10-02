@@ -46,7 +46,7 @@ class StubPhase2:
         from episteme_pipeline.artifacts.builders import build_entity_mention_artifact, build_linked_entity_artifact, build_local_relation_artifact
         mention = build_entity_mention_artifact(entity, "chunk-1", run_id=context.run_id, phase_name=self.name, method="test.phase2")
         linked = build_linked_entity_artifact(entity, [mention.artifact_id], run_id=context.run_id, phase_name=self.name, method="test.phase2")
-        relation = build_local_relation_artifact(triple, 0, run_id=context.run_id, phase_name=self.name, method="test.phase2")
+        relation = build_local_relation_artifact(triple, run_id=context.run_id, phase_name=self.name, method="test.phase2")
         return ArtifactCollection([mention, linked, relation])
 
 

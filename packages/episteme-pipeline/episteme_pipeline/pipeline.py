@@ -179,6 +179,7 @@ class Pipeline:
         decision_engine: Any | None = None,
         acc_classifier: Any | None = None,
         arc_classifier: Any | None = None,
+        ner_extractor: Any | None = None,
     ) -> "Pipeline":
         """Create a pipeline for a specific task.
 
@@ -311,6 +312,7 @@ class Pipeline:
                 working_memory_manager=working_memory_manager,
                 decision_engine=decision_engine,
                 entity_linker=entity_linker,
+                ner_extractor=ner_extractor,
             ),
             Phase3Runner(
                 config.phase3,
@@ -324,6 +326,7 @@ class Pipeline:
                 config.phase3b,
                 embedding_model=embedding_model,
                 graph_store=graph_reader,
+                decision_engine=decision_engine,
             ),
             Phase4EntityMaturationRunner(
                 config.phase4_maturation,
@@ -349,6 +352,7 @@ class Pipeline:
                 config.phase5,
                 embedding_model=embedding_model,
                 graph_store=graph_reader,
+                decision_engine=decision_engine,
             ),
             Phase6Runner(
                 cast(Any, config.phase6),

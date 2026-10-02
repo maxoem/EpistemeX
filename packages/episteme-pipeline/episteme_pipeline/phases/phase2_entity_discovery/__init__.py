@@ -102,11 +102,11 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         self.embedding_model = embedding_model
         self.graph_store = graph_store
         self.decision_engine = decision_engine
-        self.ner_extractor = ner_extractor or LLMNERExtractor(
-            llm, 
-            max_gleanings=config.max_gleanings,
-            prompts=config.ner_prompts,
-            strategy=config.ner_decoding_strategy,
+
+        self.ner_extractor = ner_extractor or LLMNERExtractor.from_config(
+            llm=llm,
+            config=config,
+            decision_engine=decision_engine,
         )
         self.cross_encoder = cross_encoder
         self.entity_linker = entity_linker or DenseEntityLinker(

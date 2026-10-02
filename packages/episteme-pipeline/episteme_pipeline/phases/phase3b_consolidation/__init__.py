@@ -2,14 +2,18 @@
 
 from episteme_pipeline.config import Phase3bConfig
 from episteme_pipeline.artifacts.builders import build_canonicalization_artifact
+from episteme_pipeline.phases.phase3b_consolidation.clustering import (
+    elect_canonical_representative,
+    verify_borderline_pair,
+)
 from episteme_pipeline.phases.phase3b_consolidation.consolidation import LatentGraphConsolidation
+from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.fusion import InstanceFusion
 from episteme_pipeline.protocols.graph_store import FusionGraph
 from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext, Phase3ArtifactsView
 from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.events.models import ProgressCompleted, ProgressStarted
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
-
 
 
 class Phase3bLatentConsolidationRunner(PhaseRunner[Phase3ArtifactsView]):
@@ -29,6 +33,7 @@ class Phase3bLatentConsolidationRunner(PhaseRunner[Phase3ArtifactsView]):
         embedding_model,
         graph_store: FusionGraph,
         instance_fusion: InstanceFusion | None = None,
+        decision_engine: DecisionEngine | None = None,
     ) -> None:
         """Initialize the Phase 3b runner.
 
@@ -42,6 +47,9 @@ class Phase3bLatentConsolidationRunner(PhaseRunner[Phase3ArtifactsView]):
             The graph database store to interact with the constructed graph.
         instance_fusion : InstanceFusion, optional
             An optional custom InstanceFusion implementation. Defaults to LatentGraphConsolidation.
+        decision_engine : DecisionEngine, optional
+            Calibrated decision engine for System 1 borderline pair verification
+            and canonical representative election.
         """
         self.config = config
         self.graph_store = graph_store
@@ -49,10 +57,11 @@ class Phase3bLatentConsolidationRunner(PhaseRunner[Phase3ArtifactsView]):
         # phase whose embedding model is invisible to invalidation is reused
         # across a model change (O-15).
         self.embedding_model = embedding_model
-        self.instance_fusion = instance_fusion or LatentGraphConsolidation(
+        self.decision_engine = decision_engine
+        self.instance_fusion = instance_fusion or LatentGraphConsolidation.from_config(
+            config=config,
             embedding_model=embedding_model,
-            dense_similarity_threshold=config.dense_similarity_threshold,
-            relation_overlap_threshold=config.relation_overlap_threshold,
+            decision_engine=decision_engine,
         )
 
     @property

@@ -6,7 +6,7 @@
 | **Component(s)** | `packages/episteme-pipeline` (`pipeline/phases/phase5_fusion/argument_web.py`, `pipeline/phases/phase5_fusion/argument_clustering.py`, `pipeline/config.py`, `pipeline/decision/conformal.py`) |
 | **Roadmap Horizon** | **Horizon 2** (Global Theory Fusion & Distribution-Free Calibration) |
 | **Priority** | High |
-| **Status** | Open |
+| **Status** | Completed |
 | **Source Ref** | `docs/workflow/5_theory_fusion/index.md`, `pipeline/protocols/fusion.py`, ADR 0005 |
 
 ---
@@ -69,11 +69,11 @@ By integrating the **Decision Engine** into Phase 5 and introducing **Conformal 
 ---
 
 ## 3. Acceptance Criteria
-- [ ] `ConformalCalibrator` computes distribution-free prediction sets with $1 - \alpha$ coverage.
-- [ ] Singleton prediction sets ($|C(x)| = 1$) trigger fast-exit; multi-class sets escalate to System 2 or active learning.
-- [ ] Phase 5 filters out spurious inter-document merges between competing or distinct philosophical frameworks.
-- [ ] 2% stochastic audit samples are emitted to Langfuse to detect false negative theory splits.
-- [ ] Unit tests with `MockJevDecisionEngine` verify cluster gating and conformal prediction set generation.
+- [x] `ConformalCalibrator` computes distribution-free prediction sets with $1 - \alpha$ coverage.
+- [x] Singleton prediction sets ($|C(x)| = 1$) trigger fast-exit; multi-class sets escalate to System 2 or active learning.
+- [x] Phase 5 filters out spurious inter-document merges between competing or distinct philosophical frameworks.
+- [x] 2% stochastic audit samples are emitted to Langfuse to detect false negative theory splits.
+- [x] Unit tests with `MockJevDecisionEngine` verify cluster gating and conformal prediction set generation.
 
 ---
 

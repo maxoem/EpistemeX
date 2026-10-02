@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from enum import Enum
 from typing import Any, Literal
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, model_validator
 
 from episteme_pipeline.prompts.default_prompts import (
     ACC_DIRECT_PROMPT, ACC_REASONING_PROMPT, ACC_FORMAT_PROMPT,
@@ -16,6 +16,7 @@ from episteme_pipeline.prompts.default_prompts import (
     PAIR_GATING_DECISION_PROMPT,
     DECISION_ACC_QUESTION, DECISION_ACC_CRITERIA,
     DECISION_ARC_QUESTION, DECISION_ARC_CRITERIA,
+    DECISION_GLEANING_QUESTION,
 )
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
@@ -125,6 +126,29 @@ class Phase1Config(BaseModel):
     provenance_enabled: bool = True
 
 
+class GleaningConfig(BaseModel):
+    """Configuration for iterative extraction gleaning passes.
+
+    Parameters
+    ----------
+    enabled : bool, default False
+        Whether the objective Jev Actor-Critic gleaning stopping oracle is enabled.
+    confidence_threshold : float, default 0.65
+        Minimum confidence / empirical accuracy threshold P(unextracted) required to
+        trigger an additional extraction pass.
+    audit_rate : float, default 0.02
+        Stochastic false-negative audit rate (e.g. 2%) forcing an extra pass on stopped
+        extractions to monitor calibration.
+    max_passes : int, default 3
+        Maximum allowed gleaning iterations.
+    """
+
+    enabled: bool = False
+    confidence_threshold: float = 0.65
+    audit_rate: float = 0.02
+    max_passes: int = 3
+
+
 class Phase2Config(BaseModel):
     top_k_linking_candidates: int = 10
     linking_confidence_threshold: float = 0.85
@@ -136,6 +160,7 @@ class Phase2Config(BaseModel):
         reasoning_template=NER_REASONING_PROMPT,
         format_template=NER_FORMAT_PROMPT,
         gleaning_template=NER_GLEANING_PROMPT,
+        decision_template=DECISION_GLEANING_QUESTION,
         name="ner_extraction",
     ))
     ner_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
@@ -147,6 +172,7 @@ class Phase2Config(BaseModel):
     max_gleanings: int = 0
     jev_ooo_threshold: float = 0.75
     conformal_linking_alpha: float = 0.05
+    gleaning: GleaningConfig = Field(default_factory=GleaningConfig)
 
 
 
@@ -172,11 +198,37 @@ class Phase3Config(BaseModel):
     pair_gating_audit_rate: float = 0.02
 
 
+class ConsolidationVerificationConfig(BaseModel):
+    """Configuration for calibrated Phase 3b cluster verification.
+
+    Parameters
+    ----------
+    enabled : bool, default False
+        Whether Jev decision verification is enabled for borderline pairs.
+    similarity_lower : float, default 0.75
+        Lower bound of the borderline vector similarity band.
+    similarity_upper : float, default 0.88
+        Upper bound of the borderline vector similarity band.
+    confidence_threshold : float, default 0.80
+        Empirical accuracy threshold required to confirm a borderline merge.
+    conformal_alpha : float, default 0.05
+        Conformal significance level for borderline merge prediction sets.
+    """
+
+    enabled: bool = False
+    similarity_lower: float = 0.75
+    similarity_upper: float = 0.88
+    confidence_threshold: float = 0.80
+    conformal_alpha: float = 0.05
+
+
 class Phase3bConfig(BaseModel):
     """Configuration for Phase 3b: Latent Graph Consolidation.
 
     Attributes
     ----------
+    enabled : bool, default True
+        Whether Phase 3b latent consolidation is enabled.
     dense_similarity_threshold : float, default 0.85
         The minimum cosine similarity between L2 entity embeddings to consider
         them candidates for consolidation.
@@ -184,10 +236,14 @@ class Phase3bConfig(BaseModel):
         The minimum Jaccard similarity of Phase 3 relation edges required to
         commit a SAME_AS edge between candidates. A conservative default
         ensures distinct but related entities are not incorrectly merged.
+    verification : ConsolidationVerificationConfig
+        Sub-configuration for calibrated borderline pair and cluster verification.
     """
+
     enabled: bool = True
     dense_similarity_threshold: float = 0.85
     relation_overlap_threshold: float = 0.8
+    verification: ConsolidationVerificationConfig = Field(default_factory=ConsolidationVerificationConfig)
 
 
 class Phase4EntityMaturationConfig(BaseModel):
@@ -253,13 +309,38 @@ class Phase4Config(BaseModel):
     conformal_alpha: float = 0.05
     stochastic_audit_rate: float = 0.02
     pass_priors_to_llm: bool = True
+    gleaning: GleaningConfig = Field(default_factory=GleaningConfig)
+
+
+class FusionGatingConfig(BaseModel):
+    """Configuration for calibrated Phase 5 theory fusion gating.
+
+    Parameters
+    ----------
+    enabled : bool, default False
+        Whether inter-document theory fusion gating is enabled.
+    confidence_threshold : float, default 0.85
+        Calibrated empirical accuracy threshold for approving inter-document fusion.
+    conformal_alpha : float, default 0.05
+        Conformal error significance level for prediction set coverage.
+    audit_rate : float, default 0.02
+        Stochastic false-negative audit rate (e.g. 2%).
+    """
+
+    enabled: bool = False
+    confidence_threshold: float = 0.85
+    conformal_alpha: float = 0.05
+    audit_rate: float = 0.02
 
 
 class Phase5Config(BaseModel):
+    """Configuration for Phase 5: Argument Web & Theory Fusion."""
+
     argument_clustering_enabled: bool = True
     theory_fusion_enabled: bool = False
     fusion_similarity_threshold: float = 0.85
     cluster_layer: Literal["theory_atoms", "l2_entities", "both"] = "theory_atoms"
+    gating: FusionGatingConfig = Field(default_factory=FusionGatingConfig)
 
 
 class Phase6Config(BaseModel):

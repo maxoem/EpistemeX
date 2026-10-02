@@ -31,6 +31,10 @@ Phase 1 → Phase 2 → Phase 3 → [Phase 3b] → [Phase 4 Maturation] → Phas
 - Runs `LatentGraphConsolidation` — non-generative, fast mathematical sweep over dense vector embeddings combined with
   Jaccard overlap of 1-hop relation signatures.
 - Input: `Phase3ArtifactsView`; output: `Canonicalization` artifacts.
+- Semantic Merge Protection: Pairs falling within the borderline similarity band ($[0.75, 0.88)$) are gated via
+  [`verify_borderline_pair`](file:///Users/max.oehmichen/PycharmProjects/episteme/packages/episteme-pipeline/episteme_pipeline/phases/phase3b_consolidation/clustering.py)
+  using Jev `Choice` with a conformal singleton guard (`IDENTICAL_MERGE`), protecting distinct or hierarchical concepts
+  from catastrophic over-merging.
 - Result: Knowledge Graph L2 entity duplicates are unified into canonical nodes before argument components are
   extracted.
 
@@ -42,6 +46,10 @@ Phase 1 → Phase 2 → Phase 3 → [Phase 3b] → [Phase 4 Maturation] → Phas
 
 - Runs `EmbeddingArgumentClustering` — groups semantically equivalent L3 argument components.
 - Runs `TheoryFusion` / `LeidenTheoryClustering` if enabled.
+- Semantic Theory Fusion Gate: Inter-document community partitions and argument clusters are validated via
+  [`verify_inter_document_cluster`](file:///Users/max.oehmichen/PycharmProjects/episteme/packages/episteme-pipeline/episteme_pipeline/phases/phase5_fusion/argument_clustering.py)
+  backed by distribution-free [`ConformalCalibrator`](file:///Users/max.oehmichen/PycharmProjects/episteme/packages/episteme-pipeline/episteme_pipeline/decision/conformal.py)
+  prediction sets, fast-exiting unambiguous singletons and routing high-entropy clusters to active learning / System 2.
 - Input: `Phase4ArtifactsView`; output: Phase 5b fusion-decision artifacts.
 
 ## Alternatives considered

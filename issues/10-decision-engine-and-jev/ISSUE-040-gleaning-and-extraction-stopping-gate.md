@@ -6,7 +6,7 @@
 | **Component(s)** | `packages/episteme-pipeline` (`pipeline/decision/gleaning.py`, `pipeline/phases/phase2_entity_discovery/`, `pipeline/phases/phase4_argument_mining/`, `pipeline/config.py`) |
 | **Roadmap Horizon** | **Horizon 2** (Scalability & Dynamic Gating) |
 | **Priority** | Medium |
-| **Status** | Open |
+| **Status** | Completed |
 | **Source Ref** | `docs/roadmap.md` (§ AOP Decision Points & Dynamic Gating) |
 
 ---
@@ -55,11 +55,11 @@ By decoupling the *Actor* (generative LLM extractor) from the *Critic* (external
 ---
 
 ## 3. Acceptance Criteria
-- [ ] `JevGleaningGate` objectively evaluates extraction completeness using Jev `Noul` in $<150\text{ms}$.
-- [ ] Gleaning stops immediately when $P(\text{unextracted}) < \text{threshold}$, eliminating redundant LLM passes.
-- [ ] Multi-pass extraction triggers reliably on dense text chunks containing overlooked propositions.
-- [ ] Gating events are recorded in Langfuse traces to monitor gleaning distribution across documents.
-- [ ] Unit tests verify stopping conditions across zero, single, and multi-pass scenarios.
+- [x] `JevGleaningGate` objectively evaluates extraction completeness using Jev `Noul` in $<150\text{ms}$.
+- [x] Gleaning stops immediately when $P(\text{unextracted}) < \text{threshold}$, eliminating redundant LLM passes.
+- [x] Multi-pass extraction triggers reliably on dense text chunks containing overlooked propositions.
+- [x] Gating events are recorded in Langfuse traces to monitor gleaning distribution across documents.
+- [x] Unit tests verify stopping conditions across zero, single, and multi-pass scenarios.
 
 ---
 

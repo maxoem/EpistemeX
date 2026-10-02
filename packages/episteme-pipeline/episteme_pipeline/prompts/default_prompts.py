@@ -566,3 +566,49 @@ DECISION_BOUNDARY_CRITERIA = {
     ),
 }
 
+DECISION_GLEANING_QUESTION = """\
+Does the source text contain salient theoretical assertions, definitions, or argument components that are missing from the current extraction list?
+"""
+
+DECISION_BORDERLINE_MERGE_QUESTION = """\
+What is the ontological relationship between the following two concepts?
+"""
+
+DECISION_BORDERLINE_MERGE_CRITERIA = {
+    "IDENTICAL_MERGE": (
+        "The two entities refer to the identical underlying philosophical concept or term "
+        "and should be merged into a single canonical node."
+    ),
+    "HIERARCHICAL_SUBSUMPTION": (
+        "One entity is a subspecies, subconcept, or hierarchical variant of the other "
+        "and must remain structurally distinct."
+    ),
+    "DISTINCT_SEPARATE": (
+        "The entities are conceptually distinct, contrasting, or independent concepts "
+        "and must not be merged."
+    ),
+}
+
+DECISION_CANONICAL_ELECTION_QUESTION = """\
+Which of the following candidate entity names is the standard canonical scholarly designation?
+"""
+
+DECISION_THEORY_FUSION_QUESTION = """\
+Determine whether the theoretical constructs from different document contexts are semantically equivalent for knowledge graph fusion:
+"""
+
+DECISION_THEORY_FUSION_CRITERIA = {
+    "EQUIVALENT_FUSION": (
+        "The constructs express the same underlying theory, core thesis, or foundational framework "
+        "across documents and should be fused."
+    ),
+    "COMPETING_THEORIES": (
+        "The constructs represent competing, rival, or mutually incompatible philosophical theories "
+        "and must remain separate in the knowledge graph."
+    ),
+    "DISTINCT_APPLICATIONS": (
+        "The constructs represent distinct contextual applications or disparate concepts "
+        "and must not be collapsed into a single macro-cluster."
+    ),
+}
+

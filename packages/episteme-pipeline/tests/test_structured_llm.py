@@ -150,7 +150,10 @@ async def test_llm_ner_extractor_recovers_wrapped_assistant_json() -> None:
     entities, triples, *_ = await extractor.extract(
         chunk_id="chunk_1",
         chunk_text="ignored",
-        schema=SchemaConfig(node_types=["AXIOM", "KONZEPT"]),
+        schema=SchemaConfig(
+            node_types=["AXIOM", "KONZEPT"],
+            relation_types=["TEIL_VON", "BEHANDELT_THEMA"],
+        ),
     )
 
 

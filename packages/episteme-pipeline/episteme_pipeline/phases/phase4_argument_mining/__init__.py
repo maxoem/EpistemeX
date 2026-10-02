@@ -35,6 +35,7 @@ from episteme_pipeline.contracts.domain import (
     TheoryAtom,
     TheoryRelation,
 )
+from episteme_pipeline.decision.gleaning import GleaningStoppingOracle, JevGleaningGate
 from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import LLMACCClassifier
 from episteme_pipeline.phases.phase4_argument_mining.adu_segmenter import LLMADUSegmenter
 from episteme_pipeline.phases.phase4_argument_mining.arc_classifier import TAGARCClassifier
@@ -88,6 +89,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         arc_classifier: ARCClassifier | None = None,
         global_extractor: GlobalRelationExtractor | None = None,
         decision_engine: Any | None = None,
+        stopping_oracle: GleaningStoppingOracle | None = None,
     ) -> None:
         """Initialize Phase 4 Argument Mining runner.
 
@@ -113,6 +115,8 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             Optional global relation extractor used for graph context.
         decision_engine : Any or None, default None
             Optional calibrated decision engine for System 1 triage or cascading.
+        stopping_oracle : GleaningStoppingOracle or None, default None
+            Stopping oracle for actor-critic gleaning passes.
         """
         self.config = config
         self.schema = schema
@@ -123,6 +127,11 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         self.decision_engine = decision_engine
         self._adu_segmenter_override = adu_segmenter
         self._acc_classifier_override = acc_classifier
+        self.stopping_oracle = stopping_oracle or JevGleaningGate.create(
+            decision_engine=decision_engine,
+            config=config.gleaning,
+            prompts=config.acc_prompts,
+        )
         self.arc_classifier = arc_classifier or (
             TAGARCClassifier(
                 llm=llm,
@@ -137,6 +146,10 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             if global_extractor is not None
             else None
         )
+
+    @property
+    def gleaning_gate(self) -> GleaningStoppingOracle:
+        return self.stopping_oracle
 
     @property
     def event_emitter(self) -> EventEmitter:
@@ -166,9 +179,8 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 )
             )
 
-        # Process and checkpoint in batches of config.batch_size (defaulting to 50 if missing)
-        batch_size = getattr(self.config, "batch_size", 50)
-        
+        batch_size = self.config.batch_size
+
         for batch_idx, chunk_batch in enumerate(batched(chunks, batch_size)):
             logger.info(f"Mining arguments for chunk batch {batch_idx + 1}...")
             tasks = [self._process_chunk(chunk.id, chunk.text) for chunk in chunk_batch]
@@ -358,6 +370,54 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 r for r in local_relations
                 if r.source_id in valid_component_ids and r.target_id in valid_component_ids
             ]
+
+        # Step 3: Optional Actor-Critic Gleaning Refinement
+        pass_count = 0
+        while True:
+            should_continue, _ = await self.stopping_oracle.should_glean(
+                chunk_text=chunk_text,
+                current_extractions=components,
+                pass_count=pass_count,
+            )
+            if not should_continue:
+                break
+            pass_count += 1
+
+            prior_components_text = "\n".join([f"- {c.text}" for c in components])
+            refinement_input = (
+                f"{chunk_text}\n\n"
+                f"Previously identified argument components:\n{prior_components_text}\n"
+                f"Please identify any additional missed Argumentative Discourse Units."
+            )
+            refine_tagged_text, new_adu_ids = await segmenter.segment(
+                f"{chunk_id}_refine_{pass_count}", refinement_input
+            )
+            if not new_adu_ids:
+                break
+
+            new_components, new_rels = await classifier.classify(
+                chunk_id=chunk_id,
+                tagged_text=refine_tagged_text,
+                adu_ids=new_adu_ids,
+                schema=self.schema,
+                chunk_entities=chunk_entities,
+            )
+            if not new_components:
+                break
+
+            existing_ids = {c.id for c in components}
+            added_any = False
+            for nc in new_components:
+                if nc.id not in existing_ids:
+                    components.append(nc)
+                    existing_ids.add(nc.id)
+                    added_any = True
+            for nr in new_rels:
+                if nr.source_id in existing_ids and nr.target_id in existing_ids:
+                    local_relations.append(nr)
+
+            if not added_any:
+                break
 
         if not components:
             return [], [], chunk_id
