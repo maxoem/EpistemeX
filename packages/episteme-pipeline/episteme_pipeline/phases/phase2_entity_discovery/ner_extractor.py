@@ -33,6 +33,7 @@ from episteme_pipeline.prompts import (
 )
 from episteme_pipeline.phases.phase2_entity_discovery.models import NERExtractionOutput
 from episteme_pipeline.phases.phase2_entity_discovery.mention_context_injector import DefaultMentionContextInjector
+from episteme_pipeline.protocols.decision import GleaningStoppingOracle
 from episteme_pipeline.protocols.extractors import NERExtractor
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
@@ -57,10 +58,24 @@ DEFAULT_NER_PROMPTS = StructuredPromptBundle(
 
 
 class LLMNERExtractor(NERExtractor):
-    """
-    Default NERExtractor using LlamaIndex LLM structured prediction.
+    """Default NERExtractor using LlamaIndex LLM structured prediction.
 
     Accepts any LlamaIndex BaseLLM (LiteLLM, OpenAI, Ollama, etc.).
+
+    Parameters
+    ----------
+    llm : Any
+        Underlying LLM instance.
+    prompts : StructuredPromptBundle or None, default None
+        Prompt bundle for direct, reasoning, format, and gleaning templates.
+    max_gleanings : int, default 0
+        Maximum extraction iterations if no dynamic stopping oracle is supplied.
+    mention_context_injector : Any, default None
+        Textual context injector for mentions.
+    strategy : Any, default "direct_constrained"
+        Decoding strategy.
+    stopping_oracle : GleaningStoppingOracle or None, default None
+        Stopping oracle evaluating whether additional passes are warranted.
     """
 
     def __init__(
@@ -70,12 +85,64 @@ class LLMNERExtractor(NERExtractor):
         max_gleanings: int = 0, 
         mention_context_injector: Any = None,
         strategy: Any = "direct_constrained",
+        stopping_oracle: GleaningStoppingOracle | None = None,
     ) -> None:
         self.llm = ensure_structured_llm(llm)
         self.max_gleanings = max_gleanings
         self.mention_context_injector = mention_context_injector or DefaultMentionContextInjector()
         self.prompts = prompts or DEFAULT_NER_PROMPTS
         self.strategy = strategy
+
+        if stopping_oracle is not None:
+            self.stopping_oracle = stopping_oracle
+        else:
+            from episteme_pipeline.decision.gleaning import FixedPassGleaningOracle
+            self.stopping_oracle = FixedPassGleaningOracle(max_passes=max_gleanings)
+
+    @classmethod
+    def from_config(
+        cls,
+        llm: Any,
+        config: Any,
+        decision_engine: Any | None = None,
+        mention_context_injector: Any = None,
+    ) -> LLMNERExtractor:
+        """Construct LLMNERExtractor with dependencies wired from Phase2Config.
+
+        Parameters
+        ----------
+        llm : Any
+            LlamaIndex BaseLLM instance.
+        config : Phase2Config
+            Phase 2 configuration.
+        decision_engine : Any or None, default None
+            Optional decision engine for stopping oracle.
+        mention_context_injector : Any, default None
+            Optional custom mention context injector.
+
+        Returns
+        -------
+        LLMNERExtractor
+            Configured extractor instance.
+        """
+        from episteme_pipeline.decision.gleaning import JevGleaningGate
+
+        stopping_oracle = JevGleaningGate.create(
+            decision_engine=decision_engine,
+            config=config.gleaning,
+            prompts=config.ner_prompts,
+        )
+
+        max_gleanings = config.gleaning.max_passes if config.gleaning.enabled else config.max_gleanings
+
+        return cls(
+            llm=llm,
+            prompts=config.ner_prompts,
+            max_gleanings=max_gleanings,
+            mention_context_injector=mention_context_injector,
+            strategy=config.ner_decoding_strategy,
+            stopping_oracle=stopping_oracle,
+        )
 
     async def extract(
         self,
@@ -113,23 +180,31 @@ class LLMNERExtractor(NERExtractor):
                 boundary_detected = raw.working_memory.boundary_detected
                 transitional_summary = raw.working_memory.transitional_summary
 
-            # Gleanings loop using injected prompt bundle template
-            if self.max_gleanings > 0:
-                gleaning_prompt = self.prompts.gleaning_template or NER_GLEANING_PROMPT
-                for _ in range(self.max_gleanings):
-                    prior_text = ", ".join([e.name for e in all_raw_entities])
-                    raw_glean: NERExtractionOutput = await self.llm.predict_structured(
-                        NERExtractionOutput,
-                        gleaning_prompt,
-                        chunk_text=chunk_text,
-                        prior_extractions=prior_text,
-                    )
-                    raw_glean = raw_glean.validate_references()
-                    if not raw_glean.entities and not raw_glean.triples:
-                        break  # model found nothing new
-                    
-                    all_raw_entities.extend(raw_glean.entities)
-                    all_raw_triples.extend(raw_glean.triples)
+            # Unified gleanings loop via stopping oracle
+            gleaning_prompt = self.prompts.gleaning_template or NER_GLEANING_PROMPT
+            pass_count = 0
+            while True:
+                should_continue, _ = await self.stopping_oracle.should_glean(
+                    chunk_text=chunk_text,
+                    current_extractions=all_raw_entities,
+                    pass_count=pass_count,
+                )
+                if not should_continue:
+                    break
+                pass_count += 1
+                prior_text = ", ".join([e.name for e in all_raw_entities])
+                raw_glean: NERExtractionOutput = await self.llm.predict_structured(
+                    NERExtractionOutput,
+                    gleaning_prompt,
+                    chunk_text=chunk_text,
+                    prior_extractions=prior_text,
+                )
+                raw_glean = raw_glean.validate_references()
+                if not raw_glean.entities and not raw_glean.triples:
+                    break  # model found nothing new
+
+                all_raw_entities.extend(raw_glean.entities)
+                all_raw_triples.extend(raw_glean.triples)
 
         except Exception as exc:
             logger.warning(

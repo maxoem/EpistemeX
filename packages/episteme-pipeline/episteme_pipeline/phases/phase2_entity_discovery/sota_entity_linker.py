@@ -154,22 +154,28 @@ class DenseEntityLinker(EntityLinker):
         else:
             self.embedding_model = ensure_embedding_model(embedding_model)
 
-        if cross_encoder is None:
-            from episteme_pipeline.phases.phase3_global_relations.rerankers import SentenceTransformerCrossEncoderReranker
-            from episteme_pipeline.config import PipelineConfig
-
-            self.cross_encoder: CrossEncoder = SentenceTransformerCrossEncoderReranker(
-                model_name=PipelineConfig().default_reranker_model
-            )
-        else:
-            self.cross_encoder = cross_encoder
-
+        self._cross_encoder = cross_encoder
         self.tau = tau
         self.top_k = top_k
         # Candidate envelope cache
         # Key: entity.id
         # Value: (bi-encoder_text, bi-encoder_vector)
         self._candidate_cache: dict[str, tuple[str, list[float]]] = {}
+
+    @property
+    def cross_encoder(self) -> CrossEncoder:
+        if self._cross_encoder is None:
+            from episteme_pipeline.phases.phase3_global_relations.rerankers import SentenceTransformerCrossEncoderReranker
+            from episteme_pipeline.config import PipelineConfig
+
+            self._cross_encoder = SentenceTransformerCrossEncoderReranker(
+                model_name=PipelineConfig().default_reranker_model
+            )
+        return self._cross_encoder
+
+    @cross_encoder.setter
+    def cross_encoder(self, val: CrossEncoder | None) -> None:
+        self._cross_encoder = val
 
     @property
     def event_emitter(self) -> EventEmitter:

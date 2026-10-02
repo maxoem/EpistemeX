@@ -159,6 +159,40 @@ class DecisionEngine(Protocol):
         ...
 
 
+@runtime_checkable
+class GleaningStoppingOracle(Protocol):
+    """Protocol for evaluating whether an iterative extraction pass should continue.
+
+    Decouples the extraction Actor (generative LLM) from the stopping Critic
+    (Jev Noul evaluator or fixed-pass bounds).
+    """
+
+    async def should_glean(
+        self,
+        chunk_text: str,
+        current_extractions: list[Any],
+        pass_count: int,
+    ) -> tuple[bool, float]:
+        """Evaluate if extraction should continue for an additional pass.
+
+        Parameters
+        ----------
+        chunk_text : str
+            Source chunk text being extracted.
+        current_extractions : list of Any
+            Entities or claims discovered in prior passes.
+        pass_count : int
+            Current iteration pass index (0-indexed).
+
+        Returns
+        -------
+        tuple of (bool, float)
+            Tuple containing boolean decision (True = continue, False = stop)
+            and calibrated confidence / empirical accuracy score.
+        """
+        ...
+
+
 def ensure_decision_engine(engine: Any | None) -> DecisionEngine | None:
     """Normalise an optional user-supplied object into a DecisionEngine.
 
