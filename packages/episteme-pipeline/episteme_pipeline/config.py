@@ -169,7 +169,6 @@ class Phase2Config(BaseModel):
         direct_template=ENTITY_LINKING_PROMPT,
         name="entity_linking",
     ))
-    max_gleanings: int = 0
     jev_ooo_threshold: float = 0.75
     conformal_linking_alpha: float = 0.05
     gleaning: GleaningConfig = Field(default_factory=GleaningConfig)
@@ -220,6 +219,8 @@ class ConsolidationVerificationConfig(BaseModel):
     similarity_upper: float = 0.88
     confidence_threshold: float = 0.80
     conformal_alpha: float = 0.05
+    borderline_merge_prompts: StructuredPromptBundle | None = None
+    canonical_election_prompts: StructuredPromptBundle | None = None
 
 
 class Phase3bConfig(BaseModel):
@@ -331,6 +332,7 @@ class FusionGatingConfig(BaseModel):
     confidence_threshold: float = 0.85
     conformal_alpha: float = 0.05
     audit_rate: float = 0.02
+    prompt_bundle: StructuredPromptBundle | None = None
 
 
 class Phase5Config(BaseModel):

@@ -9,6 +9,7 @@ from typing import Any
 from episteme_pipeline.contracts.domain import L2Entity, SubGraph
 from episteme_pipeline.prompts.default_prompts import PAIR_GATING_DECISION_PROMPT
 from episteme_pipeline.prompts.models import StructuredPromptBundle
+from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.extractors import CrossEncoder, RelationReranker, normalize_scores
 from episteme_pipeline.utils import format_envelope
 
@@ -448,7 +449,7 @@ class JevRelationReranker(RelationReranker):
 
     Parameters
     ----------
-    decision_engine : Any
+    decision_engine : DecisionEngine
         The calibrated decision engine instance.
     prompts : StructuredPromptBundle or None, default None
         Optional prompt bundle carrying the decision question template.
@@ -456,7 +457,7 @@ class JevRelationReranker(RelationReranker):
 
     def __init__(
         self,
-        decision_engine: Any,
+        decision_engine: DecisionEngine,
         prompts: StructuredPromptBundle | None = None,
     ) -> None:
         self.decision_engine = decision_engine

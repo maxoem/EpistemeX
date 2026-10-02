@@ -36,6 +36,7 @@ from episteme_pipeline.contracts.domain import (
     TheoryRelation,
 )
 from episteme_pipeline.decision.gleaning import GleaningStoppingOracle, JevGleaningGate
+from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import LLMACCClassifier
 from episteme_pipeline.phases.phase4_argument_mining.adu_segmenter import LLMADUSegmenter
 from episteme_pipeline.phases.phase4_argument_mining.arc_classifier import TAGARCClassifier
@@ -88,7 +89,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         acc_classifier: ACCClassifier | None = None,
         arc_classifier: ARCClassifier | None = None,
         global_extractor: GlobalRelationExtractor | None = None,
-        decision_engine: Any | None = None,
+        decision_engine: DecisionEngine | None = None,
         stopping_oracle: GleaningStoppingOracle | None = None,
     ) -> None:
         """Initialize Phase 4 Argument Mining runner.
@@ -113,7 +114,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             Optional relation classifier override.
         global_extractor : GlobalRelationExtractor or None, default None
             Optional global relation extractor used for graph context.
-        decision_engine : Any or None, default None
+        decision_engine : DecisionEngine or None, default None
             Optional calibrated decision engine for System 1 triage or cascading.
         stopping_oracle : GleaningStoppingOracle or None, default None
             Stopping oracle for actor-critic gleaning passes.

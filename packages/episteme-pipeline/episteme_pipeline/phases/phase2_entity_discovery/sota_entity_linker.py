@@ -154,16 +154,7 @@ class DenseEntityLinker(EntityLinker):
         else:
             self.embedding_model = ensure_embedding_model(embedding_model)
 
-        if cross_encoder is None:
-            from episteme_pipeline.phases.phase3_global_relations.rerankers import SentenceTransformerCrossEncoderReranker
-            from episteme_pipeline.config import PipelineConfig
-
-            self.cross_encoder: CrossEncoder = SentenceTransformerCrossEncoderReranker(
-                model_name=PipelineConfig().default_reranker_model
-            )
-        else:
-            self.cross_encoder = cross_encoder
-
+        self.cross_encoder: CrossEncoder | None = cross_encoder
         self.tau = tau
         self.top_k = top_k
         # Candidate envelope cache

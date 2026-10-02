@@ -34,6 +34,7 @@ from episteme_pipeline.observability.logging import run_folder_logger
 from episteme_pipeline.phases.phase3_global_relations.dense_retrieval_extractor import (
     DenseRetrievalGlobalRelationExtractor,
 )
+from episteme_pipeline.protocols.decision import DecisionEngine, ensure_decision_engine
 from episteme_pipeline.protocols.extractors import (
     CrossEncoder,
     EmbeddingModel,
@@ -101,7 +102,7 @@ class Pipeline:
         projection_graph: Any,
         checkpoint_store: Any,
         event_emitter: EventEmitter | None = None,
-        decision_engine: Any | None = None,
+        decision_engine: DecisionEngine | None = None,
     ) -> None:
         self.phases = phases
         self.config = config
@@ -176,7 +177,7 @@ class Pipeline:
         extra_phases: list[PhaseRunner] | None = None,
         post_processors: list[PhaseRunner] | None = None,
         working_memory_manager: Any | None = None,
-        decision_engine: Any | None = None,
+        decision_engine: DecisionEngine | None = None,
         acc_classifier: Any | None = None,
         arc_classifier: Any | None = None,
         ner_extractor: Any | None = None,
@@ -245,7 +246,6 @@ class Pipeline:
         emitter = event_emitter or NoOpEventEmitter()
         embedding_model = ensure_embedding_model(embedding_model)
 
-        from episteme_pipeline.protocols.decision import ensure_decision_engine
         from episteme_pipeline.decision.observable import ObservableDecisionEngine
 
         if decision_engine is None and getattr(config, "decision_engine", None) and getattr(config.decision_engine, "provider", "none") == "auto":

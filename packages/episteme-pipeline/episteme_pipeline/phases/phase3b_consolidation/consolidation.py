@@ -13,7 +13,11 @@ from collections import defaultdict
 
 import numpy as np
 
-from episteme_pipeline.contracts.domain import L2Entity
+from episteme_pipeline.phases.phase3b_consolidation.clustering import (
+    BorderlinePairVerifier,
+    CanonicalRepresentativeElector,
+)
+from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.fusion import InstanceFusion
 from episteme_pipeline.protocols.graph_store import FusionGraph
 
@@ -67,6 +71,19 @@ class LatentGraphConsolidation(InstanceFusion):
         The minimum cosine similarity required to consider two nodes as duplicates.
     relation_overlap_threshold : float, default 0.8
         The minimum Jaccard similarity threshold for 1-hop relation edge overlap.
+    decision_engine : DecisionEngine or None, default None
+        Optional calibrated decision engine for borderline pair verification and
+        canonical representative election.
+    enable_jev_cluster_verification : bool, default False
+        Whether to enable Jev decision engine verification for borderline pairs.
+    borderline_similarity_lower : float, default 0.75
+        Lower bound of the borderline vector similarity band.
+    borderline_similarity_upper : float, default 0.88
+        Upper bound of the borderline vector similarity band.
+    merge_confidence_threshold : float, default 0.80
+        Empirical accuracy threshold required to confirm a borderline merge.
+    conformal_merge_alpha : float, default 0.05
+        Conformal significance level for borderline merge prediction sets.
     """
 
     def __init__(
@@ -74,10 +91,80 @@ class LatentGraphConsolidation(InstanceFusion):
         embedding_model=None,
         dense_similarity_threshold: float = 0.85,
         relation_overlap_threshold: float = 0.8,
+        borderline_similarity_lower: float = 0.75,
+        borderline_similarity_upper: float = 0.88,
+        verifier: BorderlinePairVerifier | None = None,
+        canonical_elector: CanonicalRepresentativeElector | None = None,
+        decision_engine: DecisionEngine | None = None,
+        enable_jev_cluster_verification: bool = False,
+        merge_confidence_threshold: float = 0.80,
+        conformal_merge_alpha: float = 0.05,
     ) -> None:
         self.embedding_model = embedding_model
         self.dense_similarity_threshold = dense_similarity_threshold
         self.relation_overlap_threshold = relation_overlap_threshold
+        self.borderline_similarity_lower = borderline_similarity_lower
+        self.borderline_similarity_upper = borderline_similarity_upper
+
+        if verifier is not None:
+            self.verifier = verifier
+        elif enable_jev_cluster_verification and decision_engine is not None:
+            self.verifier = BorderlinePairVerifier(
+                decision_engine=decision_engine,
+                confidence_threshold=merge_confidence_threshold,
+                conformal_alpha=conformal_merge_alpha,
+            )
+        else:
+            self.verifier = None
+
+        if canonical_elector is not None:
+            self.canonical_elector = canonical_elector
+        elif enable_jev_cluster_verification and decision_engine is not None:
+            self.canonical_elector = CanonicalRepresentativeElector(decision_engine=decision_engine)
+        else:
+            self.canonical_elector = CanonicalRepresentativeElector()
+
+    @classmethod
+    def from_config(
+        cls,
+        config: Any,
+        embedding_model=None,
+        decision_engine: DecisionEngine | None = None,
+    ) -> LatentGraphConsolidation:
+        """Construct LatentGraphConsolidation from Phase3bConfig and decision engine.
+
+        Parameters
+        ----------
+        config : Phase3bConfig
+            Phase 3b configuration.
+        embedding_model : object, optional
+            Embedding model for projecting textual envelopes into vector space.
+        decision_engine : DecisionEngine or None, default None
+            Calibrated decision engine for borderline verification and canonical election.
+
+        Returns
+        -------
+        LatentGraphConsolidation
+            Wired instance.
+        """
+        verifier = None
+        canonical_elector = None
+        if config.verification.enabled and decision_engine is not None:
+            verifier = BorderlinePairVerifier.from_config(config.verification, decision_engine)
+            canonical_elector = CanonicalRepresentativeElector(
+                decision_engine=decision_engine,
+                prompt_bundle=getattr(config.verification, "canonical_election_prompts", None),
+            )
+
+        return cls(
+            embedding_model=embedding_model,
+            dense_similarity_threshold=config.dense_similarity_threshold,
+            relation_overlap_threshold=config.relation_overlap_threshold,
+            borderline_similarity_lower=config.verification.similarity_lower,
+            borderline_similarity_upper=config.verification.similarity_upper,
+            verifier=verifier,
+            canonical_elector=canonical_elector,
+        )
 
     async def _get_relations_for_entity(self, entity_id: str, graph_store: FusionGraph) -> set[str]:
         """Fetch the relation signatures for a given entity.
@@ -170,37 +257,57 @@ class LatentGraphConsolidation(InstanceFusion):
         n = len(entities)
         edges = []
 
-        # 2. Find candidates passing dense threshold
+        definite_threshold = (
+            self.borderline_similarity_upper
+            if self.verifier is not None
+            else self.dense_similarity_threshold
+        )
+
+        # 2. Find candidates passing definite threshold or borderline verification
         for i in range(n):
             for j in range(i + 1, n):
                 # Only compare entities of the same label
                 if entities[i].label != entities[j].label:
                     continue
-                
-                if sim_matrix[i, j] >= self.dense_similarity_threshold:
-                    # 3. Check structural overlap
+
+                sim = float(sim_matrix[i, j])
+
+                if sim >= definite_threshold:
                     rel_i = await self._get_relations_for_entity(entities[i].id, graph_store)
                     rel_j = await self._get_relations_for_entity(entities[j].id, graph_store)
-                    
-                    overlap = self._jaccard(rel_i, rel_j)
-                    if overlap >= self.relation_overlap_threshold:
+                    if self._jaccard(rel_i, rel_j) >= self.relation_overlap_threshold:
+                        edges.append((i, j))
+                elif self.verifier is not None and sim >= self.borderline_similarity_lower:
+                    rel_i = await self._get_relations_for_entity(entities[i].id, graph_store)
+                    rel_j = await self._get_relations_for_entity(entities[j].id, graph_store)
+                    selected, emp_acc, pred_set = await self.verifier.verify(
+                        entities[i],
+                        entities[j],
+                        relation_signatures_a=rel_i,
+                        relation_signatures_b=rel_j,
+                    )
+                    is_singleton = (pred_set == ["IDENTICAL_MERGE"])
+                    is_high_conf = (
+                        selected == "IDENTICAL_MERGE"
+                        and emp_acc >= self.verifier.confidence_threshold
+                    )
+                    if is_singleton or is_high_conf:
                         edges.append((i, j))
 
         # 4. Cluster connected components
         clusters = _union_find_components(n, edges)
 
-        # 5. Build fused map (map all to the most grounded entity in cluster)
+        # 5. Build fused map
         fused_map: dict[str, str] = {}
         for cluster in clusters:
             if len(cluster) < 2:
                 continue
-            
-            # Elect canonical: most grounded (most source chunks)
+
             cluster_entities = [entities[idx] for idx in cluster]
-            cluster_entities.sort(key=lambda e: len(e.source_chunk_ids), reverse=True)
-            canonical = cluster_entities[0]
-            
-            for e in cluster_entities[1:]:
-                fused_map[e.id] = canonical.id
-                
+            canonical = await self.canonical_elector.elect(cluster_entities)
+
+            for e in cluster_entities:
+                if e.id != canonical.id:
+                    fused_map[e.id] = canonical.id
+
         return fused_map

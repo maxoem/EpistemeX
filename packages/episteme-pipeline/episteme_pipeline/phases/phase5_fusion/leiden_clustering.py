@@ -12,27 +12,102 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from typing import TYPE_CHECKING, Any
 
 import networkx as nx
 
+from episteme_pipeline.contracts.domain import L2Entity, L2Triple, TheoryAtom, TheoryRelation
+from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.fusion import TheoryFusion
 from episteme_pipeline.protocols.graph_store import FusionGraph
+
+if TYPE_CHECKING:
+    from episteme_pipeline.config import Phase5Config
+    from episteme_pipeline.phases.phase5_fusion.argument_clustering import InterDocumentClusterVerifier
 
 logger = logging.getLogger(__name__)
 
 
+def _extract_node_spec(node: Any, default_type: str) -> tuple[str, str]:
+    """Extract node identifier and label type."""
+    if isinstance(node, L2Entity):
+        return node.id, node.label
+    if isinstance(node, TheoryAtom):
+        return node.id, node.component_type
+    node_id = str(node.id) if hasattr(node, "id") else str(node)
+    return node_id, default_type
+
+
+def _extract_edge_spec(edge: Any) -> tuple[str, str, float] | None:
+    """Extract edge endpoints and confidence weight without unsafe reflection."""
+    if isinstance(edge, L2Triple):
+        conf = edge.confidence if edge.confidence is not None else 1.0
+        return edge.subject_id, edge.object_id, conf
+    if isinstance(edge, TheoryRelation):
+        conf = edge.confidence if edge.confidence is not None else 1.0
+        return edge.source_id, edge.target_id, conf
+    return None
+
+
 class LeidenTheoryClustering(TheoryFusion):
-    """
-    Applies Hierarchical Leiden community detection to the entity graph.
+    """Applies Hierarchical Leiden community detection to the entity graph.
+
+    Parameters
+    ----------
+    max_cluster_size : int, default 100
+        Maximum size of clusters produced by hierarchical Leiden.
+    cluster_layer : str, default "theory_atoms"
+        Target graph layer to cluster ("theory_atoms", "l2_entities", or "both").
+    cluster_verifier : InterDocumentClusterVerifier or None, default None
+        Optional inter-document cluster verifier for gating candidate communities.
     """
 
     def __init__(
         self,
         max_cluster_size: int = 100,
-        cluster_layer: str = "theory_atoms"
+        cluster_layer: str = "theory_atoms",
+        cluster_verifier: InterDocumentClusterVerifier | None = None,
+        **kwargs: Any,
     ) -> None:
         self.max_cluster_size = max_cluster_size
         self.cluster_layer = cluster_layer
+        self.cluster_verifier = cluster_verifier
+
+    @classmethod
+    def from_config(
+        cls,
+        config: Phase5Config,
+        decision_engine: DecisionEngine | None = None,
+        cluster_verifier: InterDocumentClusterVerifier | None = None,
+    ) -> LeidenTheoryClustering:
+        """Construct LeidenTheoryClustering from Phase5Config and decision engine.
+
+        Parameters
+        ----------
+        config : Phase5Config
+            Phase 5 configuration parameters.
+        decision_engine : DecisionEngine or None, default None
+            Calibrated decision engine for cluster verification.
+        cluster_verifier : InterDocumentClusterVerifier or None, default None
+            Optional pre-configured cluster verifier.
+
+        Returns
+        -------
+        LeidenTheoryClustering
+            Configured LeidenTheoryClustering instance.
+        """
+        if cluster_verifier is None and config.gating.enabled and decision_engine is not None:
+            from episteme_pipeline.phases.phase5_fusion.argument_clustering import InterDocumentClusterVerifier
+
+            cluster_verifier = InterDocumentClusterVerifier.from_config(
+                config.gating,
+                decision_engine,
+            )
+        return cls(
+            max_cluster_size=getattr(config, "max_cluster_size", 100),
+            cluster_layer=config.cluster_layer,
+            cluster_verifier=cluster_verifier,
+        )
 
     async def fuse(self, graph_store: FusionGraph) -> None:
         if self.cluster_layer in ("l2_entities", "both"):
@@ -49,8 +124,6 @@ class LeidenTheoryClustering(TheoryFusion):
             atoms = await graph_store.get_theory_atoms()
             relations = await graph_store.get_all_theory_relations()
             if atoms and relations:
-                # Map TheoryAtoms and TheoryRelations to generic interface
-                # Or just adapt the logic
                 await self._run_leiden_for_nodes(graph_store, atoms, relations, "TheoryAtom")
             else:
                 logger.info("Phase 5: Theory graph is empty, skipping Leiden clustering for TheoryAtoms.")
@@ -58,28 +131,30 @@ class LeidenTheoryClustering(TheoryFusion):
     async def _run_leiden_for_nodes(self, graph_store: FusionGraph, nodes, edges, node_type: str) -> None:
         # Build NetworkX Graph
         G = nx.Graph()
-        
+
         # Add nodes
         for n in nodes:
-            # handle both L2Entity and TheoryAtom
-            label = getattr(n, "label", getattr(n, "component_type", node_type))
-            G.add_node(n.id, label=label)
-            
+            nid, label = _extract_node_spec(n, node_type)
+            G.add_node(nid, label=label)
+
         # Add edges (undirected for standard Leiden)
         for e in edges:
-            subj_id = getattr(e, "subject_id", getattr(e, "source_id", None))
-            obj_id = getattr(e, "object_id", getattr(e, "target_id", None))
-            if subj_id is None or obj_id is None:
+            spec = _extract_edge_spec(e)
+            if spec is None:
                 continue
-                
-            conf = e.confidence if hasattr(e, "confidence") and e.confidence is not None else 1.0
-            
-            if G.has_edge(subj_id, obj_id):
-                G[subj_id][obj_id]["weight"] += conf
-            else:
-                G.add_edge(subj_id, obj_id, weight=conf)
+            subj_id, obj_id, conf_val = spec
 
-        logger.info(f"Phase 5: NetworkX graph for {node_type} built with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges.")
+            if G.has_edge(subj_id, obj_id):
+                G[subj_id][obj_id]["weight"] += conf_val
+            else:
+                G.add_edge(subj_id, obj_id, weight=conf_val)
+
+        logger.info(
+            "Phase 5: NetworkX graph for %s built with %d nodes and %d edges.",
+            node_type,
+            G.number_of_nodes(),
+            G.number_of_edges(),
+        )
 
         # Run Hierarchical Leiden
         logger.info("Phase 5: Running Hierarchical Leiden...")
@@ -91,37 +166,43 @@ class LeidenTheoryClustering(TheoryFusion):
                 "pip install graspologic"
             ) from exc
 
-        # graspologic hierarchical_leiden returns a list of Partition objects
-        # We'll use the dict representation mapping node -> community ID
         partitions = hierarchical_leiden(G, max_cluster_size=self.max_cluster_size)
-        
-        # Partitions usually have a format like: list of HierarchicalCluster(node, cluster, level)
-        # Or a list of namedtuples. We'll group by level and cluster ID.
-        
+
         communities_by_level = defaultdict(lambda: defaultdict(list))
-        
         for p in partitions:
-            # p usually has .node, .cluster, .level
             communities_by_level[p.level][p.cluster].append(p.node)
-            
-        logger.info(f"Phase 5: Leiden clustering found {len(communities_by_level)} levels of hierarchy.")
+
+        logger.info("Phase 5: Leiden clustering found %d levels of hierarchy.", len(communities_by_level))
 
         # Upsert communities to Graph Store
         total_communities = 0
         communities_to_upsert = []
+        node_map = {n.id: n for n in nodes}
+
         for level, clusters in communities_by_level.items():
             for cluster_id, node_ids in clusters.items():
+                if self.cluster_verifier is not None and len(node_ids) > 1:
+                    cluster_nodes = [node_map[nid] for nid in node_ids if nid in node_map]
+                    if not await self.cluster_verifier.should_fuse(cluster_nodes):
+                        logger.info(
+                            "Phase 5: Leiden community %s (level %s) rejected by fusion gate",
+                            cluster_id,
+                            level,
+                        )
+                        continue
+
                 comm_id = f"community_{node_type.lower()}_{level}_{cluster_id}"
                 communities_to_upsert.append({
                     "community_id": comm_id,
                     "level": level,
-                    "entity_ids": node_ids
+                    "entity_ids": node_ids,
                 })
                 total_communities += 1
-                
+
         if communities_to_upsert:
             from itertools import batched
+
             for batch in batched(communities_to_upsert, 500):
                 await graph_store.upsert_communities(list(batch))
-                
-        logger.info(f"Phase 5: Stored {total_communities} Community nodes for {node_type}.")
+
+        logger.info("Phase 5: Stored %d Community nodes for %s.", total_communities, node_type)

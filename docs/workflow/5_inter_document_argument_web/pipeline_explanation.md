@@ -32,9 +32,15 @@ enabling cross-document argument analysis and Theoriennetz (TF) community detect
    0.85) are merged via union-find. Only clusters of size $\ge 2$ are retained.
 5. **Cluster Output & Representative Election**: Each cluster is returned as a list of component IDs. The component with
    the highest mean similarity to cluster peers is elected as the cluster representative.
-6. **Theory-Level Fusion (Optional)**: `LeidenTheoryClustering` builds a global NetworkX graph of entities and
+6. **Calibrated Fusion Gating (`InterDocumentClusterVerifier`)**: When `Phase5Config.gating.enabled = True`, candidate
+   macro-clusters are evaluated by `InterDocumentClusterVerifier` using `ConformalCalibrator`. Distribution-free conformal
+   prediction sets $C(X)$ guarantee $P(Y \in C(X)) \ge 1 - \alpha$ (95% coverage at $\alpha=0.05$). Singleton sets
+   `{"EQUIVALENT_FUSION"}` fast-exit in sub-second inference; multi-class sets are rejected from merging and queued for
+   active learning review in Langfuse.
+7. **Theory-Level Fusion (Optional)**: `LeidenTheoryClustering` builds a global NetworkX graph of entities and
    relations, applies modularity optimization via Hierarchical Leiden, and writes community assignments back to the
-   graph store. Activation requires `Phase5Config.theory_fusion_enabled = True`.
+   graph store. When fusion gating is enabled, Leiden community candidates must also pass `cluster_verifier` approval before
+   being committed to the graph. Activation requires `Phase5Config.theory_fusion_enabled = True`.
 
 ## Phase Data Flow
 

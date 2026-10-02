@@ -92,13 +92,24 @@ The following parameters are configured under `Phase3bConfig` in `pipeline/confi
 | `verification.similarity_lower`   | `float`                             | `0.75`    | Lower cosine similarity bound for borderline verification band.    |
 | `verification.similarity_upper`   | `float`                             | `0.88`    | Upper cosine similarity bound for borderline verification band.    |
 | `verification.confidence_threshold` | `float`                           | `0.80`    | Empirical accuracy threshold required to confirm borderline merge. |
-| `verification.conformal_alpha`    | `float`                             | `0.05`    | Significance level for conformal prediction merge sets.            |
+| `verification.conformal_alpha`    | `float`                             | `0.05`    | Significance level defining error budget ($1 - \alpha \ge 95\%$ coverage). |
+| `verification.borderline_merge_prompts` | `StructuredPromptBundle \| None` | `default` | Versioned prompt bundle defining question, rubric, and context format. |
+| `verification.canonical_election_prompts` | `StructuredPromptBundle \| None` | `default` | Versioned prompt bundle for canonical academic surface form election. |
 
-### Borderline Cluster Verification & Canonical Election (ISSUE-045)
+### Borderline Cluster Verification & Conformal Calibration (ISSUE-045, ISSUE-046)
 
 When `verification.enabled` is active with an injected `DecisionEngine`:
-1. **Borderline Band Guard ($0.75 \le \text{cosine} \le 0.88$)**: Candidate entity pairs in this ambiguous band are evaluated via Jev `Choice` over `["IDENTICAL_MERGE", "HIERARCHICAL_SUBSUMPTION", "DISTINCT_SEPARATE"]`. Merging into Union-Find sets requires the conformal prediction set to be strictly singleton `{"IDENTICAL_MERGE"}` (or empirical accuracy $\ge 0.80$), protecting hierarchical and antonymous distinctions.
-2. **Canonical Surface Form Election**: Rather than solely relying on mention counts, Jev `Choice` elects the standard scholarly academic terminology from candidate entities.
+
+1. **Borderline Band Guard ($0.75 \le \text{cosine} \le 0.88$)**: Candidate entity pairs in this ambiguous band are evaluated via Jev `Choice` over `["IDENTICAL_MERGE", "HIERARCHICAL_SUBSUMPTION", "DISTINCT_SEPARATE"]`.
+2. **Distribution-Free Conformal Prediction Sets**: Rather than relying on fragile scalar probability thresholds (which suffer from softmax miscalibration and distributional shift), the decision engine computes a conformal prediction set $C(X) \subseteq \mathcal{Y}$ satisfying finite-sample coverage guarantees:
+   $$P(Y \in C(X)) \ge 1 - \alpha$$
+   For $\alpha = 0.05$, the true ontological relationship is guaranteed to be contained in $C(X)$ with at least 95% probability.
+3. **Automated Triage Routing**:
+   - **Singleton Set ($|C(X)| = 1$)**: High epistemic confidence. If $C(X) = \{\text{IDENTICAL\_MERGE}\}$, the merge is approved immediately in sub-10ms with zero LLM token consumption. If $C(X) = \{\text{DISTINCT\_SEPARATE}\}$ or $\{\text{HIERARCHICAL\_SUBSUMPTION}\}$, the entities are safely preserved as distinct nodes.
+   - **Multi-Class Set ($|C(X)| > 1$)**: Epistemic ambiguity (e.g., $C(X) = \{\text{IDENTICAL\_MERGE}, \text{HIERARCHICAL\_SUBSUMPTION}\}$). Merging is strictly aborted to prevent catastrophic ontological conflation.
+   - **Empty Set ($|C(X)| = \emptyset$)**: Out-of-distribution anomaly. Merging is aborted.
+4. **Canonical Surface Form Election**: Rather than solely relying on mention counts, Jev `Choice` elects the standard scholarly academic terminology from candidate entities using the versioned `decision_canonical_election` prompt bundle.
+5. **Prompt Governance**: Decision questions, rubrics, and the context formatting string (`Name: {name}\nType: {type}\nEnvelope: {envelope}\n1-Hop Relational Neighborhood: {relations}`) are encapsulated in `StructuredPromptBundle` and managed centrally via `PromptProvider` (with remote versioning and Langfuse tracking).
 
 ## Phase Contract
 

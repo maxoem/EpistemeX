@@ -29,10 +29,15 @@ from episteme_pipeline.prompts.default_prompts import (
     DECISION_ACC_QUESTION,
     DECISION_ARC_CRITERIA,
     DECISION_ARC_QUESTION,
+    DECISION_BORDERLINE_MERGE_CRITERIA,
+    DECISION_BORDERLINE_MERGE_QUESTION,
     DECISION_BOUNDARY_CRITERIA,
     DECISION_BOUNDARY_QUESTION,
+    DECISION_CANONICAL_ELECTION_QUESTION,
     DECISION_EPISTEMIC_RELEVANCE_CRITERIA,
     DECISION_EPISTEMIC_RELEVANCE_QUESTION,
+    DECISION_THEORY_FUSION_CRITERIA,
+    DECISION_THEORY_FUSION_QUESTION,
     ENTITY_LINKING_PROMPT,
     ENTITY_SYNTHESIS_PROMPT,
     GLOBAL_RELATION_DIRECT_PROMPT,
@@ -146,6 +151,26 @@ class DefaultPromptProvider:
                 name="decision_boundary",
                 provider="default",
             ),
+            "decision_borderline_merge": StructuredPromptBundle(
+                direct_template="Name: {name}\nType: {type}\nEnvelope: {envelope}\n1-Hop Relational Neighborhood: {relations}",
+                decision_template=DECISION_BORDERLINE_MERGE_QUESTION,
+                decision_criteria=DECISION_BORDERLINE_MERGE_CRITERIA,
+                name="decision_borderline_merge",
+                provider="default",
+            ),
+            "decision_canonical_election": StructuredPromptBundle(
+                direct_template="Name: {name}. Context: {context}",
+                decision_template=DECISION_CANONICAL_ELECTION_QUESTION,
+                name="decision_canonical_election",
+                provider="default",
+            ),
+            "decision_theory_fusion": StructuredPromptBundle(
+                direct_template="Cluster Size: {cluster_node_count}\nMembers: {cluster_members}",
+                decision_template=DECISION_THEORY_FUSION_QUESTION,
+                decision_criteria=DECISION_THEORY_FUSION_CRITERIA,
+                name="decision_theory_fusion",
+                provider="default",
+            ),
         }
         # Add common aliases
         self._aliases = {
@@ -167,6 +192,12 @@ class DefaultPromptProvider:
             "decision_relevance": "decision_epistemic_relevance",
             "epistemic_relevance": "decision_epistemic_relevance",
             "boundary": "decision_boundary",
+            "borderline_merge": "decision_borderline_merge",
+            "decision_borderline_merge": "decision_borderline_merge",
+            "canonical_election": "decision_canonical_election",
+            "decision_canonical_election": "decision_canonical_election",
+            "theory_fusion": "decision_theory_fusion",
+            "decision_theory_fusion": "decision_theory_fusion",
         }
 
     def _normalize_name(self, prompt_name: str) -> str:
@@ -253,6 +284,10 @@ class DefaultPromptProvider:
         config.phase4.adu_segmentation_prompt_template = config.phase4.adu_segmentation_prompts.direct_template
         config.phase4.acc_prompts = self.get_bundle("acc_classification", label_or_version)
         config.phase4.arc_prompts = self.get_bundle("arc_classification", label_or_version)
+
+        config.phase3b.verification.borderline_merge_prompts = self.get_bundle("decision_borderline_merge", label_or_version)
+        config.phase3b.verification.canonical_election_prompts = self.get_bundle("decision_canonical_election", label_or_version)
+        config.phase5.gating.prompt_bundle = self.get_bundle("decision_theory_fusion", label_or_version)
 
         return config
 
@@ -736,6 +771,10 @@ class LangfusePromptProvider:
         config.phase4.acc_prompts = self.get_bundle("acc_classification", label_or_version)
         config.phase4.arc_prompts = self.get_bundle("arc_classification", label_or_version)
 
+        config.phase3b.verification.borderline_merge_prompts = self.get_bundle("decision_borderline_merge", label_or_version)
+        config.phase3b.verification.canonical_election_prompts = self.get_bundle("decision_canonical_election", label_or_version)
+        config.phase5.gating.prompt_bundle = self.get_bundle("decision_theory_fusion", label_or_version)
+
         return config
 
 
@@ -802,5 +841,9 @@ class FilePromptProvider:
         config.phase4.adu_segmentation_prompt_template = config.phase4.adu_segmentation_prompts.direct_template
         config.phase4.acc_prompts = self.get_bundle("acc_classification", label_or_version)
         config.phase4.arc_prompts = self.get_bundle("arc_classification", label_or_version)
+
+        config.phase3b.verification.borderline_merge_prompts = self.get_bundle("decision_borderline_merge", label_or_version)
+        config.phase3b.verification.canonical_election_prompts = self.get_bundle("decision_canonical_election", label_or_version)
+        config.phase5.gating.prompt_bundle = self.get_bundle("decision_theory_fusion", label_or_version)
 
         return config

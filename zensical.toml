@@ -168,7 +168,6 @@ nav = [
             { "Artifact Run Model" = "architecture/artifact_run_model.md" },
             { "Invalidation & Resume Graph" = "architecture/invalidation_and_resume.md" },
             { "Constrained Decoding Engine" = "architecture/constrained_decoding.md" },
-            { "Conformal Prediction Calibration" = "architecture/conformal_prediction.md" },
             { "Runtime & Complexity Analysis" = "architecture/runtime_analysis.md" },
             { "Cross-Cutting Concerns" = "architecture/cross_cutting_concerns.md" }
         ] },
