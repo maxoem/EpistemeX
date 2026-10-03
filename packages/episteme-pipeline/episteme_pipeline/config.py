@@ -273,6 +273,28 @@ class Phase4EntityMaturationConfig(BaseModel):
 
 
 
+class ModalResolverConfig(BaseModel):
+    """Configuration for authorial propositional modal strength estimation.
+
+    Parameters
+    ----------
+    mode : Literal["guardrail", "convex", "structural_only", "engine_only"], default "guardrail"
+        Integration mode for combining structuralist syntax with linguistic scoring:
+        - "guardrail": Clips decision engine score within structuralist syntax bounds.
+        - "convex": Computes weighted average between structural prior and engine score.
+        - "structural_only": Strictly evaluates structuralist syntax.
+        - "engine_only": Strictly evaluates decision engine score.
+    fusion_alpha : float, default 0.50
+        Relative weight of structuralist syntax in convex fusion mode (in [0.0, 1.0]).
+    default_base_score : float, default 0.60
+        Default modal certainty fallback when attributes are absent.
+    """
+
+    mode: Literal["guardrail", "convex", "structural_only", "engine_only"] = "guardrail"
+    fusion_alpha: float = 0.50
+    default_base_score: float = 0.60
+
+
 class Phase4Config(BaseModel):
     adu_segmentation_prompt_template: str = ADU_SEGMENTATION_PROMPT
     adu_segmentation_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
@@ -282,6 +304,7 @@ class Phase4Config(BaseModel):
     adu_confidence_threshold: float = 0.0
     acc_confidence_threshold: float = 0.0
     batch_size: int = 10
+    modal_resolver: ModalResolverConfig = Field(default_factory=lambda: ModalResolverConfig())
     acc_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
         direct_template=ACC_DIRECT_PROMPT,
         reasoning_template=ACC_REASONING_PROMPT,
@@ -346,7 +369,43 @@ class Phase5Config(BaseModel):
 
 
 class Phase6Config(BaseModel):
+    """Configuration for Phase 6: TheoryNet Materialization & Projection.
+
+    Attributes
+    ----------
+    enabled : bool, default True
+        Whether Phase 6 TheoryNet materialization is executed.
+    admissibility_threshold : float, default 0.0
+        Calibrated empirical accuracy threshold (tau_admissibility) for filtering or
+        flagging theoretical relations. Edges with empirical_accuracy below this
+        threshold are pruned or assigned low tenability.
+    prune_inadmissible : bool, default False
+        Whether to discard inadmissible edges instead of retaining them with
+        flagged tenability.
+    iterations : int, default 20
+        Maximum iteration limit for QBAF gradual semantics equilibrium solving.
+    tolerance : float, default 1e-4
+        Numerical convergence threshold epsilon for justification degrees.
+    semantics_model : str, default "quadratic"
+        Iterative semantics model ('quadratic', 'euler', 'categorizer', or 'linear').
+    admissibility_mode : Literal["hard", "soft"], default "hard"
+        Bivariate gating mode (normative hard database pruning vs. continuous sigmoidal relaxation).
+    tau_p : float, default 0.0
+        Perception stance probability threshold.
+    tau_c : float, default 0.0
+        Perception calibration confidence threshold.
+    """
+
     enabled: bool = True
+    admissibility_threshold: float = 0.0
+    prune_inadmissible: bool = False
+    iterations: int = 20
+    tolerance: float = 1e-4
+    semantics_model: str = "quadratic"
+    admissibility_mode: Literal["hard", "soft"] = "hard"
+    tau_p: float = 0.0
+    tau_c: float = 0.0
+    modal_resolver: ModalResolverConfig = Field(default_factory=lambda: ModalResolverConfig())
 
 
 class TheoreticalEnrichmentConfig(BaseModel):
@@ -445,6 +504,16 @@ class DecisionEngineConfig(BaseModel):
         Proportion of fast-exit decisions randomly escalated to System 2 to audit calibration drift.
     fallback_to_llm : bool, default True
         Whether to fall back to generative LLM execution if the decision engine fails or has low confidence.
+    model_checkpoint : str, default "aac6fef/laya-mlx"
+        Local weight directory or Hugging Face repository identifier.
+    device : str, default "auto"
+        Target hardware compute accelerator ('auto', 'mps', 'mlx', 'cuda', 'cpu').
+    fast_exit_threshold : float, default 0.92
+        Calibrated score threshold for immediate System 1 exit without generative LLM.
+    uncertainty_threshold : float, default 0.55
+        Uncertainty cutoff below which execution escalates to generative LLM reasoning.
+    phase_gates : dict of str to bool, optional
+        Per-phase gating enablement toggles.
     """
 
     provider: str = "none"
@@ -455,6 +524,20 @@ class DecisionEngineConfig(BaseModel):
     conformal_alpha: float = 0.05
     stochastic_audit_rate: float = 0.02
     fallback_to_llm: bool = True
+    model_checkpoint: str = "aac6fef/laya-mlx"
+    device: str = "auto"
+    fast_exit_threshold: float = 0.92
+    uncertainty_threshold: float = 0.55
+    phase_gates: dict[str, bool] = Field(
+        default_factory=lambda: {
+            "phase2_entity_discovery": True,
+            "phase3_global_relations": True,
+            "phase4_argument_mining": True,
+            "phase4_entity_maturation": True,
+            "phase5_fusion": True,
+            "phase6_theorynet": True,
+        }
+    )
 
 
 class PipelineConfig(BaseModel):
@@ -479,6 +562,7 @@ class PipelineConfig(BaseModel):
     theoretical_enrichment: TheoreticalEnrichmentConfig = Field(default_factory=TheoreticalEnrichmentConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     decision_engine: DecisionEngineConfig | None = Field(default=None)
+    modal_resolver: ModalResolverConfig = Field(default_factory=ModalResolverConfig)
 
     @classmethod
     def from_env(cls, **overrides: Any) -> "PipelineConfig":

@@ -241,6 +241,15 @@ class Phase4ArtifactsView:
                         confidence=payload.confidence,
                         scope=payload.scope,
                         weight=payload.weight,
+                        class_probability=payload.class_probability,
+                        empirical_accuracy=payload.empirical_accuracy,
+                        modal_strength=payload.modal_strength,
+                        effective_weight=payload.effective_weight,
+                        decision_engine_provider=payload.decision_engine_provider,
+                        tenability=payload.tenability,
+                        calibrated_confidence=payload.calibrated_confidence,
+                        weight_support=payload.weight_support,
+                        weight_attack=payload.weight_attack,
                     )
                 )
         return cls(theory_atoms=components, theory_relations=relations)

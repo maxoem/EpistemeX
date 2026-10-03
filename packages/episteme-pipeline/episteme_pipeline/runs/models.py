@@ -58,6 +58,7 @@ class RunManifest(BaseModel):
     phase_records: list[RunPhaseRecord] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     parent_run_id: str | None = None
+    decision_metrics: dict[str, object] | None = None
 
 
 class ResumePoint(BaseModel):

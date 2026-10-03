@@ -12,7 +12,10 @@ from episteme_studio.api.deps import (
     get_settings,
 )
 from episteme_studio.domain.evaluation import (
+    ActiveLearningExportResponse,
+    BorderlineDecisionItem,
     CalibrationReportDetail,
+    DecisionAdjudicationRequest,
     EvaluationGraphOverlay,
     EvaluationReportDetail,
     GroundingEvaluationDetail,
@@ -405,4 +408,80 @@ async def get_run_component_evidence(
         Multi-modal evidence anchors and IoU score.
     """
     return eval_service.get_evidence_detail(evaluation_id=run_id, component_id=component_id)
+
+
+@router.get("/{run_id}/decisions/borderline", response_model=list[BorderlineDecisionItem])
+async def get_run_borderline_decisions(
+    run_id: str,
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> list[BorderlineDecisionItem]:
+    """Retrieve borderline, high-entropy, or divergent decisions for a run.
+
+    Parameters
+    ----------
+    run_id : str
+        Pipeline run identifier.
+    eval_service : EvaluationService
+        Injected evaluation service.
+
+    Returns
+    -------
+    list of BorderlineDecisionItem
+        Curatable discrete decisions.
+    """
+    return eval_service.get_borderline_decisions(run_id=run_id)
+
+
+@router.post("/{run_id}/decisions/{decision_id}/adjudicate", response_model=BorderlineDecisionItem)
+async def adjudicate_run_decision(
+    run_id: str,
+    decision_id: str,
+    request: DecisionAdjudicationRequest,
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> BorderlineDecisionItem:
+    """Submit human adjudication for a borderline decision item.
+
+    Parameters
+    ----------
+    run_id : str
+        Pipeline run identifier.
+    decision_id : str
+        Target decision identifier.
+    request : DecisionAdjudicationRequest
+        Curator verdict payload.
+    eval_service : EvaluationService
+        Injected evaluation service.
+
+    Returns
+    -------
+    BorderlineDecisionItem
+        Updated decision item with recorded adjudication.
+    """
+    return eval_service.adjudicate_decision(run_id=run_id, decision_id=decision_id, request=request)
+
+
+@router.post("/{run_id}/decisions/export-active-learning", response_model=ActiveLearningExportResponse)
+async def export_run_active_learning(
+    run_id: str,
+    dataset_name: str | None = Query(None, description="Optional dataset identifier"),
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> ActiveLearningExportResponse:
+    """Export curated borderline decisions as an active learning dataset.
+
+    Parameters
+    ----------
+    run_id : str
+        Pipeline run identifier.
+    dataset_name : str or None, optional
+        Target dataset name.
+    eval_service : EvaluationService
+        Injected evaluation service.
+
+    Returns
+    -------
+    ActiveLearningExportResponse
+        Export metadata and payload.
+    """
+    return eval_service.export_active_learning(run_id=run_id, dataset_name=dataset_name)
+
 

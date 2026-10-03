@@ -42,6 +42,10 @@ _EVENT_KIND_MAP: dict[str, str] = {
     "TheoreticalParametersProjected": "theory.parameters_projected",
     "TenabilityEvaluationCompleted": "theory.tenability_completed",
     "TenabilityAnomalyDetected": "theory.anomaly_detected",
+    "DecisionEvaluationStarted": "decision.started",
+    "DecisionEvaluationCompleted": "decision.completed",
+    "DecisionGatingTriggered": "decision.gating_triggered",
+    "ModalStrengthResolved": "modal.resolved",
     "TerminalOutput": "terminal.output",
 }
 
@@ -174,6 +178,23 @@ def to_studio_event(
         elif raw_type == "ProgressCompleted":
             task = event_data.get("task_name") or "task"
             message = f"Subtask completed: {task}"
+        elif raw_type == "DecisionEvaluationCompleted":
+            prim = event_data.get("primitive", "decision")
+            sel = event_data.get("selected_value")
+            acc = float(event_data.get("empirical_accuracy", 0.0) or 0.0)
+            dur = float(event_data.get("duration_seconds", 0.0) or 0.0)
+            message = f"Decision {prim}: {sel} (acc={acc:.1%}, {dur*1000:.1f}ms)"
+        elif raw_type == "DecisionGatingTriggered":
+            gate = event_data.get("gate_name", "gate")
+            act = event_data.get("action_taken", "action")
+            message = f"Gating [{gate}]: {act}"
+        elif raw_type == "ModalStrengthResolved":
+            atom_id = event_data.get("atom_id", "atom")
+            m_val = float(event_data.get("modal_strength", 0.0) or 0.0)
+            res_type = event_data.get("resolver_type", "resolver")
+            scope = event_data.get("scope_type") or "none"
+            clamped_str = " (clamped)" if event_data.get("clamped") else ""
+            message = f"Modality resolved [{atom_id}]: M(φ)={m_val:.3f} via {res_type} [scope={scope}]{clamped_str}"
         elif "description" in event_data and event_data["description"]:
             message = str(event_data["description"])
         elif "phase_name" in event_data:

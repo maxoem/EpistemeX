@@ -224,7 +224,7 @@ export const RunDetailView: React.FC<RunDetailViewProps> = ({
   const [activeTriple, setActiveTriple] = useState<StageTripleItem | null>(null);
   const [selectedPredicate, setSelectedPredicate] = useState<PredicateSchemaRow | null>(null);
   const [selectionNonce, setSelectionNonce] = useState<number>(0);
-  const [inspectorRailTab, setInspectorRailTab] = useState<"assertion" | "predicate" | "invariants" | "telemetry">(
+  const [inspectorRailTab, setInspectorRailTab] = useState<"assertion" | "predicate" | "invariants" | "telemetry" | "decisions">(
     "assertion"
   );
 

@@ -306,6 +306,60 @@ export const EdgeInspectorPanel: React.FC<EdgeInspectorPanelProps> = ({
               </div>
             </div>
 
+            {/* Dual-Process Decision Calibration & QBAF Inferential Metrics */}
+            <div className="space-y-1.5 p-2.5 rounded-lg border border-app-border bg-app-surface/50">
+              <div className="pb-1 border-b border-app-border flex items-center justify-between">
+                <span className="text-xs font-semibold text-app-heading flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Decision Calibration & QBAF
+                </span>
+                {edge.decision_tier && (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    {edge.decision_tier}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-app-muted block">Empirical Acc (P)</span>
+                  <span className="font-semibold text-emerald-500">
+                    {edge.empirical_accuracy !== null && edge.empirical_accuracy !== undefined
+                      ? `${(edge.empirical_accuracy * 100).toFixed(1)}%`
+                      : "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-app-muted block">Inferential Force (I)</span>
+                  <span className="font-semibold text-app-heading">
+                    {edge.inferential_force !== null && edge.inferential_force !== undefined
+                      ? edge.inferential_force.toFixed(3)
+                      : "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-app-muted block">Active Weight (W_ji)</span>
+                  <span className="text-app-text">
+                    {edge.active_weight !== null && edge.active_weight !== undefined
+                      ? edge.active_weight.toFixed(3)
+                      : "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-app-muted block">Admissibility</span>
+                  <span className={edge.is_admissible === false ? "text-amber-500" : "text-emerald-500"}>
+                    {edge.is_admissible !== undefined ? (edge.is_admissible ? "Admissible" : "Filtered") : "Admissible"}
+                  </span>
+                </div>
+                {edge.conformal_set_size !== null && edge.conformal_set_size !== undefined && (
+                  <div className="col-span-2">
+                    <span className="text-[9px] uppercase tracking-wider text-app-muted block">Conformal Set Size</span>
+                    <span className="text-blue-400">|C(x)| = {edge.conformal_set_size}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Relational Endpoints: Flat list style */}
             <div className="space-y-1.5">
               <div className="pb-1 border-b border-app-border">

@@ -115,6 +115,20 @@ class InMemoryGraphStore(ProcessingGraph):
     async def upsert_theory_atom(self, component: TheoryAtom) -> None:
         self._theory_atoms[component.id] = component
 
+    async def upsert_argument_component(self, component: TheoryAtom) -> None:
+        self._theory_atoms[component.id] = component
+
+    async def upsert_argument_components(self, components: list[TheoryAtom]) -> None:
+        for c in components:
+            await self.upsert_argument_component(c)
+
+    async def upsert_theory_relation(self, relation: TheoryRelation) -> None:
+        self._relations.append((relation.source_id, relation.relation_type, relation.target_id, relation.to_graph_properties()))
+
+    async def upsert_theory_relations(self, relations: list[TheoryRelation]) -> None:
+        for r in relations:
+            await self.upsert_theory_relation(r)
+
     async def get_theory_atoms(self) -> list[TheoryAtom]:
         return list(self._theory_atoms.values())
 

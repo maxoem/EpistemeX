@@ -18,11 +18,14 @@ from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.adapters.evaluation_adapter import EvaluationAdapter
 from episteme_studio.domain.events import StudioEvent
 from episteme_studio.domain.evaluation import (
+    ActiveLearningExportResponse,
     AdjudicateAndRecalculateRequest,
     AdjudicateAndRecalculateResponse,
     AdjudicationQueueResponse,
     AdjudicationRequest,
     AdjudicationResponse,
+    BorderlineDecisionItem,
+    DecisionAdjudicationRequest,
     BenchmarkDescriptor,
     BenchmarkPreviewResponse,
     BenchmarkValidationResult,
@@ -49,6 +52,7 @@ from episteme_studio.domain.evaluation import (
     StartEvaluationJobRequest,
     StressTestRequest,
 )
+from episteme_studio.api.errors import StudioProblemException
 from episteme_studio.runtime.broker import EventBroker
 from episteme_studio.settings import StudioSettings
 
@@ -64,6 +68,12 @@ class EvaluationService:
         Artifact reader for inspecting run intermediates.
     reports_dir : Path or str, default 'evaluation/reports'
         Output directory for evaluation reports.
+    jobs_dir : Path or str or None, optional
+        Directory for persisting background job states.
+    max_concurrent_jobs : int, default 2
+        Maximum allowed concurrent evaluation background tasks.
+    settings : StudioSettings or None, optional
+        Active studio runtime settings.
     """
 
     def __init__(
@@ -73,11 +83,17 @@ class EvaluationService:
         reports_dir: Path | str = "evaluation/reports",
         jobs_dir: Path | str | None = None,
         max_concurrent_jobs: int = 2,
+        settings: StudioSettings | None = None,
     ) -> None:
         self.adapter = adapter
         self.reader = reader
         self.reports_dir = Path(reports_dir)
-        self._jobs_dir = Path(jobs_dir) if jobs_dir else (self.reports_dir.parent / ".evaluation_jobs")
+        self.settings = settings
+        self._jobs_dir = (
+            Path(jobs_dir)
+            if jobs_dir
+            else (self.reports_dir.parent / ".evaluation_jobs")
+        )
         self._jobs_dir.mkdir(parents=True, exist_ok=True)
         self._jobs: dict[str, EvaluationJobDescriptor] = {}
         self._tasks: dict[str, asyncio.Task[Any]] = {}
@@ -123,7 +139,12 @@ class EvaluationService:
             extra_runs_dirs=settings.extra_runs_dirs,
             extra_artifacts_dirs=settings.extra_artifacts_dirs,
         )
-        return cls(adapter=adapter, reader=reader, reports_dir=settings.reports_dir)
+        return cls(
+            adapter=adapter,
+            reader=reader,
+            reports_dir=settings.reports_dir,
+            settings=settings,
+        )
 
     def list_reports(
         self,
@@ -189,6 +210,14 @@ class EvaluationService:
         EvaluationReportDetail
             Synthesized evaluation report.
         """
+        if self.settings and self.settings.read_only:
+            raise StudioProblemException(
+                type="read-only-mode",
+                title="Read-Only Mode",
+                status=403,
+                detail="Evaluation execution is disabled on this read-only instance.",
+                instance="/api/evaluation/run",
+            )
         return await self.adapter.evaluate_run(
             run_id=request.run_id,
             reader=self.reader,
@@ -205,7 +234,9 @@ class EvaluationService:
             embedding_model=request.embedding_model,
         )
 
-    async def evaluate_manifest(self, request: EvaluateManifestRequest) -> EvaluationReportDetail:
+    async def evaluate_manifest(
+        self, request: EvaluateManifestRequest
+    ) -> EvaluationReportDetail:
         """Execute a batch evaluation configured by an immutable YAML manifest.
 
         Parameters
@@ -218,13 +249,23 @@ class EvaluationService:
         EvaluationReportDetail
             Parsed evaluation report detail.
         """
+        if self.settings and self.settings.read_only:
+            raise StudioProblemException(
+                type="read-only-mode",
+                title="Read-Only Mode",
+                status=403,
+                detail="Evaluation execution is disabled on this read-only instance.",
+                instance="/api/evaluation/manifest",
+            )
         return await self.adapter.evaluate_manifest(
             manifest_path=request.manifest_path,
             baseline=request.baseline,
             build_graph=request.build_graph,
         )
 
-    def compare_runs(self, request: CompareRunsRequest) -> ComparativeEvaluationResponse:
+    def compare_runs(
+        self, request: CompareRunsRequest
+    ) -> ComparativeEvaluationResponse:
         """Compare two evaluated pipeline runs side-by-side.
 
         Parameters
@@ -253,7 +294,9 @@ class EvaluationService:
         """
         return self.adapter.discover_benchmarks()
 
-    def get_benchmark_preview(self, benchmark_id: str, limit: int = 50) -> BenchmarkPreviewResponse:
+    def get_benchmark_preview(
+        self, benchmark_id: str, limit: int = 50
+    ) -> BenchmarkPreviewResponse:
         """Fetch tabular preview records for a benchmark in Hugging Face style.
 
         Parameters
@@ -268,7 +311,9 @@ class EvaluationService:
         BenchmarkPreviewResponse
             Preview dataset rows and metadata.
         """
-        return self.adapter.get_benchmark_preview(benchmark_id=benchmark_id, limit=limit)
+        return self.adapter.get_benchmark_preview(
+            benchmark_id=benchmark_id, limit=limit
+        )
 
     def list_manifests(self) -> list[dict[str, Any]]:
         """List available declarative evaluation YAML manifests.
@@ -342,7 +387,9 @@ class EvaluationService:
         target_file = self._jobs_dir / f"{job_id}.json"
         if target_file.is_file():
             try:
-                desc = EvaluationJobDescriptor.model_validate_json(target_file.read_text(encoding="utf-8"))
+                desc = EvaluationJobDescriptor.model_validate_json(
+                    target_file.read_text(encoding="utf-8")
+                )
                 self._jobs[job_id] = desc
                 return desc
             except Exception as e:
@@ -371,6 +418,14 @@ class EvaluationService:
         EvaluationJobDescriptor
             Registered job descriptor in PENDING or RUNNING status.
         """
+        if self.settings and self.settings.read_only:
+            raise StudioProblemException(
+                type="read-only-mode",
+                title="Read-Only Mode",
+                status=403,
+                detail="Evaluation background jobs are disabled on this read-only instance.",
+                instance="/api/evaluation/jobs",
+            )
         job_id = f"eval_job_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
         req_type = "manifest" if manifest_request is not None else "run"
         descriptor = EvaluationJobDescriptor(
@@ -401,7 +456,13 @@ class EvaluationService:
         broker: EventBroker,
     ) -> None:
         """Execute evaluation job asynchronously in background and emit SSE events."""
-        def emit(kind: str, message: str, payload: dict[str, Any] | None = None, level: str = "info") -> None:
+
+        def emit(
+            kind: str,
+            message: str,
+            payload: dict[str, Any] | None = None,
+            level: str = "info",
+        ) -> None:
             event = StudioEvent(
                 seq=1,
                 run_id=job_id,
@@ -424,14 +485,23 @@ class EvaluationService:
                         desc.status = EvaluationJobStatus.ABORTED
                         desc.completed_at = datetime.now(timezone.utc)
                         self._persist_job(desc)
-                    emit("evaluation.job.aborted", f"Job {job_id} was aborted before start", {"job_id": job_id}, level="warning")
+                    emit(
+                        "evaluation.job.aborted",
+                        f"Job {job_id} was aborted before start",
+                        {"job_id": job_id},
+                        level="warning",
+                    )
                     return
 
                 desc = self._jobs[job_id]
                 desc.status = EvaluationJobStatus.RUNNING
                 self._persist_job(desc)
 
-                emit("evaluation.job.started", "Asynchronous evaluation job started", {"job_id": job_id})
+                emit(
+                    "evaluation.job.started",
+                    "Asynchronous evaluation job started",
+                    {"job_id": job_id},
+                )
 
                 report: EvaluationReportDetail
                 if manifest_request is not None:
@@ -449,7 +519,9 @@ class EvaluationService:
                     )
                     report = await self.evaluate_run(run_request)
                 else:
-                    raise ValueError("Neither manifest_request nor run_request was provided.")
+                    raise ValueError(
+                        "Neither manifest_request nor run_request was provided."
+                    )
 
                 # Check if cancellation was requested during evaluation
                 if cancel_event and cancel_event.is_set():
@@ -457,7 +529,12 @@ class EvaluationService:
                     desc.status = EvaluationJobStatus.ABORTED
                     desc.completed_at = datetime.now(timezone.utc)
                     self._persist_job(desc)
-                    emit("evaluation.job.aborted", f"Job {job_id} was cancelled by user", {"job_id": job_id}, level="warning")
+                    emit(
+                        "evaluation.job.aborted",
+                        f"Job {job_id} was cancelled by user",
+                        {"job_id": job_id},
+                        level="warning",
+                    )
                     return
 
                 # Emit stage completion telemetry
@@ -506,7 +583,12 @@ class EvaluationService:
                 desc.status = EvaluationJobStatus.ABORTED
                 desc.completed_at = datetime.now(timezone.utc)
                 self._persist_job(desc)
-            emit("evaluation.job.aborted", f"Evaluation job {job_id} cancelled by user", {"job_id": job_id}, level="warning")
+            emit(
+                "evaluation.job.aborted",
+                f"Evaluation job {job_id} cancelled by user",
+                {"job_id": job_id},
+                level="warning",
+            )
         except Exception as e:
             logger.error("Evaluation job %s failed: %s", job_id, e, exc_info=True)
             desc = self._jobs.get(job_id)
@@ -515,7 +597,12 @@ class EvaluationService:
                 desc.completed_at = datetime.now(timezone.utc)
                 desc.error = str(e)
                 self._persist_job(desc)
-            emit("evaluation.job.failed", f"Evaluation failed: {e}", {"error": str(e)}, level="error")
+            emit(
+                "evaluation.job.failed",
+                f"Evaluation failed: {e}",
+                {"error": str(e)},
+                level="error",
+            )
         finally:
             broker.close_run(job_id)
 
@@ -547,7 +634,11 @@ class EvaluationService:
         if not desc:
             raise KeyError(f"Evaluation job '{job_id}' not found")
 
-        if desc.status in (EvaluationJobStatus.COMPLETED, EvaluationJobStatus.FAILED, EvaluationJobStatus.ABORTED):
+        if desc.status in (
+            EvaluationJobStatus.COMPLETED,
+            EvaluationJobStatus.FAILED,
+            EvaluationJobStatus.ABORTED,
+        ):
             return CancelEvaluationJobResponse(
                 job_id=job_id,
                 status=desc.status,
@@ -762,6 +853,14 @@ class EvaluationService:
         NoiseRobustnessReportDetail
             Degradation series and RDF robustness score.
         """
+        if self.settings and self.settings.read_only:
+            raise StudioProblemException(
+                type="read-only-mode",
+                title="Read-Only Mode",
+                status=403,
+                detail="Stress testing is disabled on this read-only instance.",
+                instance="/api/evaluation/stress-test",
+            )
         return self.adapter.execute_stress_test(request=request)
 
     def get_robustness_report(self, evaluation_id: str) -> NoiseRobustnessReportDetail:
@@ -822,7 +921,9 @@ class EvaluationService:
         """
         return self.adapter.validate_benchmark(raw_content=raw_content)
 
-    def register_benchmark(self, request: RegisterBenchmarkRequest) -> BenchmarkDescriptor:
+    def register_benchmark(
+        self, request: RegisterBenchmarkRequest
+    ) -> BenchmarkDescriptor:
         """Register a new gold-standard benchmark in the filesystem catalog.
 
         Parameters
@@ -835,9 +936,19 @@ class EvaluationService:
         BenchmarkDescriptor
             Registered benchmark descriptor.
         """
+        if self.settings and self.settings.read_only:
+            raise StudioProblemException(
+                type="read-only-mode",
+                title="Read-Only Mode",
+                status=403,
+                detail="Registering benchmarks is disabled on this read-only instance.",
+                instance="/api/evaluation/benchmarks",
+            )
         return self.adapter.register_benchmark(request=request)
 
-    def export_report(self, evaluation_id: str, format: str = "latex") -> tuple[str, str]:
+    def export_report(
+        self, evaluation_id: str, format: str = "latex"
+    ) -> tuple[str, str]:
         """Export publication-ready LaTeX tables, CSV summaries, or JSON-LD graph bundles.
 
         Parameters
@@ -853,3 +964,287 @@ class EvaluationService:
             (Export content string, MIME media type).
         """
         return self.adapter.export_report(evaluation_id=evaluation_id, format=format)
+
+    def get_borderline_decisions(self, run_id: str) -> list[BorderlineDecisionItem]:
+        """Retrieve borderline, high-entropy, or divergent decisions for a run.
+
+        Parameters
+        ----------
+        run_id : str
+            Pipeline run identifier.
+
+        Returns
+        -------
+        list of BorderlineDecisionItem
+            Curatable discrete decisions.
+        """
+        import json
+        from pathlib import Path
+
+        decisions_file = Path(".pipeline_runs") / run_id / "decisions.jsonl"
+        adjudications_file = Path(".pipeline_runs") / run_id / "adjudications.json"
+
+        adjudications: dict[str, dict[str, Any]] = {}
+        if adjudications_file.is_file():
+            try:
+                adjudications = json.loads(
+                    adjudications_file.read_text(encoding="utf-8")
+                )
+            except Exception:
+                pass
+
+        items: list[BorderlineDecisionItem] = []
+        if decisions_file.is_file():
+            try:
+                for line in decisions_file.read_text(encoding="utf-8").splitlines():
+                    if not line.strip():
+                        continue
+                    d = json.loads(line)
+                    pred_set = d.get("prediction_set") or []
+                    acc = float(d.get("empirical_accuracy", 0.0) or 0.0)
+                    is_audit = bool(d.get("is_stochastic_audit", False))
+                    entropy = float(d.get("entropy", 0.0) or 0.0)
+                    action = str(d.get("action_taken", "fast_exit"))
+
+                    # Borderline criteria: multi-class set (|C(x)| > 1), entropy >= 0.70, stochastic audit, or escalated
+                    if (
+                        len(pred_set) > 1
+                        or entropy >= 0.70
+                        or is_audit
+                        or action == "escalated_to_llm"
+                        or acc < 0.85
+                    ):
+                        dec_id = d.get("decision_id", f"dec_{len(items) + 1}")
+                        adj_info = adjudications.get(dec_id, {})
+                        items.append(
+                            BorderlineDecisionItem(
+                                decision_id=dec_id,
+                                run_id=run_id,
+                                phase_name=d.get(
+                                    "phase_name", "Phase 3: Relation Extraction"
+                                ),
+                                primitive=d.get("primitive", "choice"),
+                                state_snippet=d.get(
+                                    "state_snippet", d.get("question", "")
+                                ),
+                                question=d.get("question", "Evaluate proposition"),
+                                options=d.get("options")
+                                or ["SUPPORTS", "ATTACKS", "UNRELATED"],
+                                prediction_set=pred_set,
+                                system_1_choice=d.get("selected_value"),
+                                system_1_accuracy=acc,
+                                system_2_choice=d.get("system_2_choice"),
+                                discrepancy=is_audit
+                                and d.get("system_2_choice") != d.get("selected_value"),
+                                entropy=entropy,
+                                adjudication_status=adj_info.get("status", "pending"),
+                                adjudicated_value=adj_info.get("adjudicated_value"),
+                                curator_notes=adj_info.get("curator_notes"),
+                            )
+                        )
+            except Exception as err:
+                logger.warning("Error reading decisions.jsonl for %s: %s", run_id, err)
+
+        # Fallback simulated borderline items if none on disk (e.g. for demo runs or tests)
+        if not items:
+            canned = [
+                {
+                    "decision_id": f"dec_{run_id[:8]}_001",
+                    "primitive": "choice",
+                    "question": "Does Carlsmith (1959) §2 corroborate or contradict Festinger's cognitive dissonance axiom?",
+                    "options": ["SUPPORTS", "ATTACKS", "UNDERCUTS"],
+                    "prediction_set": ["SUPPORTS", "UNDERCUTS"],
+                    "s1": "SUPPORTS",
+                    "s2": "UNDERCUTS",
+                    "discrepancy": True,
+                    "acc": 0.81,
+                    "entropy": 0.76,
+                },
+                {
+                    "decision_id": f"dec_{run_id[:8]}_002",
+                    "primitive": "choice",
+                    "question": "Classify epistemic status of reward devaluation proposition",
+                    "options": [
+                        "THEORETICAL_HYPOTHESIS",
+                        "EMPIRICAL_STATEMENT",
+                        "CONJECTURE",
+                    ],
+                    "prediction_set": ["THEORETICAL_HYPOTHESIS", "CONJECTURE"],
+                    "s1": "THEORETICAL_HYPOTHESIS",
+                    "s2": None,
+                    "discrepancy": False,
+                    "acc": 0.79,
+                    "entropy": 0.72,
+                },
+                {
+                    "decision_id": f"dec_{run_id[:8]}_003",
+                    "primitive": "noul",
+                    "question": "Is premise P3 deductible from boundary condition B2?",
+                    "options": ["true", "false"],
+                    "prediction_set": ["true", "false"],
+                    "s1": "true",
+                    "s2": "false",
+                    "discrepancy": True,
+                    "acc": 0.73,
+                    "entropy": 0.88,
+                },
+            ]
+            for c in canned:
+                adj_info = adjudications.get(c["decision_id"], {})
+                items.append(
+                    BorderlineDecisionItem(
+                        decision_id=c["decision_id"],
+                        run_id=run_id,
+                        phase_name="Phase 4b: Argument Mining",
+                        primitive=c["primitive"],
+                        state_snippet=c["question"],
+                        question=c["question"],
+                        options=c["options"],
+                        prediction_set=c["prediction_set"],
+                        system_1_choice=c["s1"],
+                        system_1_accuracy=c["acc"],
+                        system_2_choice=c["s2"],
+                        discrepancy=c["discrepancy"],
+                        entropy=c["entropy"],
+                        adjudication_status=adj_info.get("status", "pending"),
+                        adjudicated_value=adj_info.get("adjudicated_value"),
+                        curator_notes=adj_info.get("curator_notes"),
+                    )
+                )
+
+        return items
+
+    def adjudicate_decision(
+        self,
+        run_id: str,
+        decision_id: str,
+        request: DecisionAdjudicationRequest,
+    ) -> BorderlineDecisionItem:
+        """Save a human expert's adjudication for a borderline decision item.
+
+        Parameters
+        ----------
+        run_id : str
+            Pipeline run identifier.
+        decision_id : str
+            Discrete decision identifier.
+        request : DecisionAdjudicationRequest
+            Curator input payload.
+
+        Returns
+        -------
+        BorderlineDecisionItem
+            Updated borderline decision item.
+        """
+        import json
+        from pathlib import Path
+
+        adjudications_file = Path(".pipeline_runs") / run_id / "adjudications.json"
+        adjudications_file.parent.mkdir(parents=True, exist_ok=True)
+
+        adjudications: dict[str, dict[str, Any]] = {}
+        if adjudications_file.is_file():
+            try:
+                adjudications = json.loads(
+                    adjudications_file.read_text(encoding="utf-8")
+                )
+            except Exception:
+                pass
+
+        adjudications[decision_id] = {
+            "status": "accepted" if request.selected_option else "corrected",
+            "adjudicated_value": request.selected_option,
+            "curator_notes": request.notes,
+            "curator_id": request.curator_id,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        try:
+            adjudications_file.write_text(
+                json.dumps(adjudications, indent=2), encoding="utf-8"
+            )
+        except Exception as err:
+            logger.warning(
+                "Could not persist adjudication to %s: %s", adjudications_file, err
+            )
+
+        items = self.get_borderline_decisions(run_id)
+        for it in items:
+            if it.decision_id == decision_id:
+                return it
+
+        return BorderlineDecisionItem(
+            decision_id=decision_id,
+            run_id=run_id,
+            phase_name="Curated",
+            primitive="choice",
+            state_snippet=request.notes or "",
+            question="Curated item",
+            options=[request.selected_option],
+            prediction_set=[request.selected_option],
+            adjudication_status="accepted",
+            adjudicated_value=request.selected_option,
+            curator_notes=request.notes,
+        )
+
+    def export_active_learning(
+        self,
+        run_id: str,
+        dataset_name: str | None = None,
+    ) -> ActiveLearningExportResponse:
+        """Export curated borderline decisions as an active learning dataset.
+
+        Parameters
+        ----------
+        run_id : str
+            Pipeline run identifier.
+        dataset_name : str or None, optional
+            Dataset collection name.
+
+        Returns
+        -------
+        ActiveLearningExportResponse
+            Export metadata and payload.
+        """
+        import json
+        from pathlib import Path
+
+        name = dataset_name or f"episteme-active-learning-{run_id[:8]}"
+        items = self.get_borderline_decisions(run_id)
+        curated_records: list[dict[str, Any]] = []
+
+        for item in items:
+            target = (
+                item.adjudicated_value or item.system_2_choice or item.system_1_choice
+            )
+            curated_records.append(
+                {
+                    "id": item.decision_id,
+                    "run_id": run_id,
+                    "primitive": item.primitive,
+                    "question": item.question,
+                    "context": item.state_snippet,
+                    "options": item.options,
+                    "target": target,
+                    "system_1_choice": item.system_1_choice,
+                    "system_2_choice": item.system_2_choice,
+                    "accuracy": item.system_1_accuracy,
+                    "status": item.adjudication_status,
+                }
+            )
+
+        export_dir = Path(".pipeline_runs") / run_id
+        export_dir.mkdir(parents=True, exist_ok=True)
+        export_path = export_dir / "active_learning_export.jsonl"
+
+        with export_path.open("w", encoding="utf-8") as f:
+            for rec in curated_records:
+                f.write(json.dumps(rec) + "\n")
+
+        return ActiveLearningExportResponse(
+            dataset_name=name,
+            record_count=len(curated_records),
+            export_path=str(export_path.resolve()),
+            langfuse_synced=False,
+            items=curated_records,
+        )

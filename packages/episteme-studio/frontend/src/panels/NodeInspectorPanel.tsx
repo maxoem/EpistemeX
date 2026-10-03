@@ -495,6 +495,99 @@ export const NodeInspectorPanel: React.FC<NodeInspectorPanelProps> = ({
               </div>
             </div>
 
+            {/* Dual-Process Decision Calibration & QBAF Epistemic Properties */}
+            <div className="space-y-2 p-2.5 rounded-lg border border-app-border bg-app-surface/50">
+              <div className="pb-1 border-b border-app-border flex items-center justify-between">
+                <span className="text-xs font-semibold text-app-heading flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  Epistemic Modal Strength & QBAF Semantics
+                </span>
+                <div className="flex items-center gap-1.5">
+                  {node.decision_tier && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      {node.decision_tier}
+                    </span>
+                  )}
+                  {((node.is_modal_clamped ?? (node.props as any)?.is_modal_clamped ?? (node.props as any)?.clamped)) && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20" title="Clamped by structuralist syntax bounds [M_min, M_max]">
+                      Clamped Bounds
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Structuralist Syntax & Scope Classification (Schurz 2014) */}
+              {((node.scope_type || (node.props as any)?.scope_type || node.epistemic_status || (node.props as any)?.epistemic_status)) && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5 pb-1">
+                  {(node.scope_type || (node.props as any)?.scope_type) && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                      <span className="text-[9px] text-app-muted uppercase">Scope:</span>
+                      <strong className="font-semibold">{node.scope_type || (node.props as any)?.scope_type}</strong>
+                    </span>
+                  )}
+                  {(node.epistemic_status || (node.props as any)?.epistemic_status) && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                      <span className="text-[9px] text-app-muted uppercase">Status:</span>
+                      <strong className="font-semibold">{node.epistemic_status || (node.props as any)?.epistemic_status}</strong>
+                    </span>
+                  )}
+                  {(node.modal_resolver || (node.props as any)?.modal_resolver) && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono text-app-muted bg-app-subtle border border-app-border">
+                      {node.modal_resolver || (node.props as any)?.modal_resolver}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-app-muted block">Modal Strength M(φ)</span>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="font-semibold text-emerald-500 text-xs">
+                      {node.modal_strength !== null && node.modal_strength !== undefined
+                        ? node.modal_strength.toFixed(3)
+                        : "—"}
+                    </span>
+                    {(node.raw_modal_score !== null && node.raw_modal_score !== undefined || (node.props as any)?.raw_modal_score !== undefined || (node.props as any)?.raw_engine_score !== undefined) && (
+                      <span className="text-[9px] text-app-muted font-normal" title="Raw unconstrained System 1 score">
+                        (raw: {Number(node.raw_modal_score ?? (node.props as any)?.raw_modal_score ?? (node.props as any)?.raw_engine_score).toFixed(2)})
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-app-muted block">Base Score (τ_0)</span>
+                  <span className="font-semibold text-app-heading">
+                    {node.base_score !== null && node.base_score !== undefined
+                      ? node.base_score.toFixed(3)
+                      : "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-app-muted block">QBAF Equilibrium (τ*)</span>
+                  <span className="font-semibold text-purple-400">
+                    {node.qbaf_tau !== null && node.qbaf_tau !== undefined
+                      ? node.qbaf_tau.toFixed(3)
+                      : "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-app-muted block">Evidence Total (E)</span>
+                  <span className="text-app-text">
+                    {node.total_weight_of_evidence !== null && node.total_weight_of_evidence !== undefined
+                      ? node.total_weight_of_evidence.toFixed(2)
+                      : "—"}
+                  </span>
+                </div>
+                {node.conformal_set_size !== null && node.conformal_set_size !== undefined && (
+                  <div className="col-span-2">
+                    <span className="text-[9px] uppercase tracking-wider text-app-muted block">Conformal Set Size</span>
+                    <span className="text-blue-400">|C(x)| = {node.conformal_set_size}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Asserted Statement Section */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between pb-1 border-b border-app-border">

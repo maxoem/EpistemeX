@@ -174,3 +174,99 @@ async def test_engine_settings_service_and_api(tmp_path: Path) -> None:
         assert reset_res.status_code == 200
         reset_data = reset_res.json()
         assert reset_data["predicate_aliases"] == {}
+
+
+@pytest.mark.asyncio
+async def test_decision_engine_playground_and_protocol_contract() -> None:
+    """Verify POST /api/engine/decision/test accepts both playground and protocol payloads."""
+    app = create_app(StudioSettings())
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # 1. Playground modal payload (using input_text, candidate_labels)
+        pg_res = await client.post(
+            "/api/engine/decision/test",
+            json={
+                "primitive": "choice",
+                "input_text": "Der Satz vom Widerspruch ist das sicherste aller Prinzipien.",
+                "candidate_labels": ["Axiom", "Definition", "Lemma", "Theorem"],
+            },
+        )
+        assert pg_res.status_code == 200, f"Expected 200, got {pg_res.status_code}: {pg_res.text}"
+        pg_data = pg_res.json()
+        assert pg_data["primitive"] == "choice"
+        assert "prediction" in pg_data
+        assert "confidence" in pg_data
+        assert "conformal_set" in pg_data
+        assert "tier" in pg_data
+        assert "tokens_saved" in pg_data
+        assert "latency_ms" in pg_data
+
+        # 2. Protocol payload (using state, question, options)
+        proto_res = await client.post(
+            "/api/engine/decision/test",
+            json={
+                "primitive": "choice",
+                "state": "Sample premise text",
+                "question": "What is the classification?",
+                "options": ["A", "B", "C"],
+            },
+        )
+        assert proto_res.status_code == 200
+        proto_data = proto_res.json()
+        assert proto_data["primitive"] == "choice"
+        assert proto_data["selected_option"] is not None
+
+        # 3. Noul primitive playground payload (hypothesis_text)
+        noul_res = await client.post(
+            "/api/engine/decision/test",
+            json={
+                "primitive": "noul",
+                "input_text": "Premise stating validity.",
+                "hypothesis_text": "Is this logically valid?",
+            },
+        )
+        assert noul_res.status_code == 200
+        noul_data = noul_res.json()
+        assert noul_data["primitive"] == "noul"
+        assert "prediction" in noul_data
+
+        # 4. Playground request passing selected options from config panel
+        override_res = await client.post(
+            "/api/engine/decision/test",
+            json={
+                "primitive": "choice",
+                "input_text": "Philosophy of science studies structural representations.",
+                "candidate_labels": ["Axiom", "Theorem"],
+                "provider": "laya",
+                "model_checkpoint": "aac6fef/laya-mlx",
+                "fast_exit_threshold": 0.95,
+            },
+        )
+        assert override_res.status_code == 200
+        override_data = override_res.json()
+        assert override_data["primitive"] == "choice"
+        assert override_data["prediction"] is not None
+
+
+@pytest.mark.asyncio
+async def test_decision_engine_playground_read_only_docker_immunity() -> None:
+    """Verify that in read-only mode, the playground runs safely via simulation stub without failing."""
+    app = create_app(StudioSettings(read_only=True))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        res = await client.post(
+            "/api/engine/decision/test",
+            json={
+                "primitive": "choice",
+                "input_text": "Epistemic reasoning under uncertainty.",
+                "candidate_labels": ["Hypothesis", "Evidence"],
+                "provider": "laya",
+                "model_checkpoint": "aac6fef/laya-mlx",
+            },
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["is_mock"] is True
+        assert data["prediction"] is not None
+
+

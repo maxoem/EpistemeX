@@ -3,7 +3,7 @@
   "run_ids": [
     "run-demo-psychology"
   ],
-  "dataset_ref": "/Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld",
+  "dataset_ref": "/Users/maxoem/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld",
   "dataset_type": "gold",
   "outcome": "fail",
   "created_at": "2026-09-27T13:37:14.838784Z",
@@ -26,7 +26,7 @@
         "run_id": "run-demo-psychology",
         "level": "stage",
         "phase_name": "Phase 6: TheoryNet Projection",
-        "dataset_ref": "/Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld",
+        "dataset_ref": "/Users/maxoem/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld",
         "outcome": "fail",
         "metrics": [
           {

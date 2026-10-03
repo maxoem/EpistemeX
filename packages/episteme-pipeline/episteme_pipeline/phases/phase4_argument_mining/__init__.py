@@ -36,7 +36,12 @@ from episteme_pipeline.contracts.domain import (
     TheoryRelation,
 )
 from episteme_pipeline.decision.gleaning import GleaningStoppingOracle, JevGleaningGate
+from episteme_pipeline.decision.modal_resolver import HybridModalResolver
 from episteme_pipeline.protocols.decision import DecisionEngine
+from episteme_pipeline.protocols.modality import (
+    ModalStrengthResolver,
+    ensure_modal_strength_resolver,
+)
 from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import LLMACCClassifier
 from episteme_pipeline.phases.phase4_argument_mining.adu_segmenter import LLMADUSegmenter
 from episteme_pipeline.phases.phase4_argument_mining.arc_classifier import TAGARCClassifier
@@ -91,6 +96,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         global_extractor: GlobalRelationExtractor | None = None,
         decision_engine: DecisionEngine | None = None,
         stopping_oracle: GleaningStoppingOracle | None = None,
+        modal_resolver: ModalStrengthResolver | None = None,
     ) -> None:
         """Initialize Phase 4 Argument Mining runner.
 
@@ -118,6 +124,8 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             Optional calibrated decision engine for System 1 triage or cascading.
         stopping_oracle : GleaningStoppingOracle or None, default None
             Stopping oracle for actor-critic gleaning passes.
+        modal_resolver : ModalStrengthResolver or None, default None
+            Propositional modal strength resolver. If None, initialized from config and decision engine.
         """
         self.config = config
         self.schema = schema
@@ -128,6 +136,12 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         self.decision_engine = decision_engine
         self._adu_segmenter_override = adu_segmenter
         self._acc_classifier_override = acc_classifier
+
+        self.modal_resolver = ensure_modal_strength_resolver(modal_resolver) or HybridModalResolver.create(
+            config=config.modal_resolver,
+            decision_engine=self.decision_engine,
+        )
+
         self.stopping_oracle = stopping_oracle or JevGleaningGate.create(
             decision_engine=decision_engine,
             config=config.gleaning,
@@ -220,24 +234,15 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                             "to_id": entity_id,
                             "properties": {"confidence": 1.0},
                         })
-                for rel in local_rels:
-                    relations_to_upsert.append({
-                        "from_id": rel.source_id,
-                        "relation_type": rel.relation_type,
-                        "to_id": rel.target_id,
-                        "properties": {
-                            "confidence": rel.confidence,
-                            "scope": rel.scope,
-                            "weight": rel.weight,
-                        },
-                    })
-    
             all_components.extend(new_components)
             all_local_relations.extend(new_local_relations)
     
             # Batch persist local findings for this checkpoint
             for comp_batch in batched(new_components, 500):
                 await self.graph_store.upsert_argument_components(list(comp_batch))
+
+            for rel_batch in batched(new_local_relations, 500):
+                await self.graph_store.upsert_theory_relations(list(rel_batch))
             
             for rel_batch in batched(relations_to_upsert, 500):
                 await self.graph_store.upsert_relations(list(rel_batch))
@@ -289,20 +294,8 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 self.event_emitter.emit(ProgressCompleted(task_name=arc_task))
             
             # Commit global argument relations
-            global_relations_to_upsert = []
-            for rel in global_relations:
-                global_relations_to_upsert.append({
-                    "from_id": rel.source_id,
-                    "relation_type": rel.relation_type,
-                    "to_id": rel.target_id,
-                    "properties": {
-                        "confidence": rel.confidence,
-                        "scope": rel.scope,
-                        "weight": rel.weight,
-                    },
-                })
-            for rel_batch in batched(global_relations_to_upsert, 500):
-                await self.graph_store.upsert_relations(list(rel_batch))
+            for rel_batch in batched(global_relations, 500):
+                await self.graph_store.upsert_theory_relations(list(rel_batch))
 
         if processed_chunk_ids:
             for chunk_batch in batched(processed_chunk_ids, 500):
@@ -422,5 +415,12 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
 
         if not components:
             return [], [], chunk_id
+
+        # Resolve authorial propositional modal strength on newly mined components
+        if self.modal_resolver:
+            for c in components:
+                if "modal_strength" not in c.model_fields_set and "base_score" not in c.model_fields_set:
+                    c.modal_strength = await self.modal_resolver.resolve_modality(c, context=chunk_text)
+                    c.base_score = c.modal_strength
 
         return components, local_relations, chunk_id

@@ -12,6 +12,7 @@ class OverlayKind(StrEnum):
     """Supported and reserved graph overlay kinds."""
 
     GRADUAL_STRENGTH = "gradual_strength"
+    MODAL_STRENGTH = "modal_strength"
     INTERNAL_CORRELATION = "internal_correlation"
     DEGREE = "degree"
     COMPONENT = "component"

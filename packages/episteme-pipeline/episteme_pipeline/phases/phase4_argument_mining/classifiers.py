@@ -28,6 +28,7 @@ from episteme_pipeline.protocols.argument_mining import ACCClassifier, ARCClassi
 from episteme_pipeline.protocols.decision import DecisionEngine, DecisionNoulResult, DecisionScore
 from episteme_pipeline.protocols.extractors import EmbeddingModel, GlobalRelationExtractor
 from episteme_pipeline.protocols.graph_store import GraphReader
+from episteme_pipeline.protocols.modality import ModalStrengthResolver
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
@@ -92,9 +93,11 @@ class JevACCClassifier(ACCClassifier):
         self,
         decision_engine: DecisionEngine,
         prompts: StructuredPromptBundle | None = None,
+        modal_resolver: ModalStrengthResolver | None = None,
     ) -> None:
         self.decision_engine = decision_engine
         self.prompts = prompts
+        self.modal_resolver = modal_resolver
         if prompts is not None:
             question = prompts.decision_template
             criteria = prompts.decision_criteria
@@ -160,16 +163,18 @@ class JevACCClassifier(ACCClassifier):
             empirical_accuracy = decision.empirical_accuracy
 
             stable_id = _stable_component_id(chunk_id, adu_id)
-            atoms.append(
-                TheoryAtom(
-                    id=stable_id,
-                    text=adu_text,
-                    component_type=selected_type,
-                    source_chunk_id=chunk_id,
-                    confidence=confidence,
-                    plausibility=empirical_accuracy,
-                )
+            atom = TheoryAtom(
+                id=stable_id,
+                text=adu_text,
+                component_type=selected_type,
+                source_chunk_id=chunk_id,
+                confidence=confidence,
+                plausibility=empirical_accuracy,
             )
+            if self.modal_resolver:
+                atom.modal_strength = await self.modal_resolver.resolve_modality(atom, context=state)
+                atom.base_score = atom.modal_strength
+            atoms.append(atom)
 
         return atoms, []
 
@@ -294,6 +299,7 @@ class JevARCClassifier(ARCClassifier):
         embedding_model: EmbeddingModel | None = None,
         confidence_threshold: float = 0.65,
         max_candidates_per_component: int = 10,
+        default_modal_strength: float = 1.0,
     ) -> None:
         self.decision_engine = decision_engine
         self.prompts = prompts
@@ -301,6 +307,7 @@ class JevARCClassifier(ARCClassifier):
         self.embedding_model = embedding_model
         self.confidence_threshold = confidence_threshold
         self.max_candidates_per_component = max_candidates_per_component
+        self.default_modal_strength = default_modal_strength
 
         if prompts is not None:
             question = prompts.decision_template
@@ -313,6 +320,91 @@ class JevARCClassifier(ARCClassifier):
             raise ValueError("No decision prompt configured for JevARCClassifier.")
         self.decision_template = question.strip()
         self.criteria = criteria or DECISION_ARC_CRITERIA
+
+    def _resolve_modal_strength(
+        self,
+        source_atom: TheoryAtom,
+        target_atom: TheoryAtom,
+    ) -> float:
+        """Resolve propositional modal strength for a candidate relation edge.
+
+        In Quantitative Bipolar Argumentation Frameworks (QBAF), mathematical edge
+        weights decouple epistemic extraction certainty from propositional modal necessity:
+        w = M(modal_strength) * P(stance).
+
+        Parameters
+        ----------
+        source_atom : TheoryAtom
+            Source premise or hypothesis component.
+        target_atom : TheoryAtom
+            Target claim or conclusion component.
+
+        Returns
+        -------
+        float
+            Modal strength multiplier in [0.0, 1.0]. Defaults to `default_modal_strength` (1.0)
+            unless modulated by atom epistemic status or modality.
+        """
+        return self.default_modal_strength
+
+    def _resolve_relation_criterion(self, r_type: str, schema: SchemaConfig) -> str:
+        """Resolve prompt criterion text for a relation type using schema and polarity alignment.
+
+        Parameters
+        ----------
+        r_type : str
+            Canonical relation type identifier.
+        schema : SchemaConfig
+            Schema configuration providing relation definitions and polarities.
+
+        Returns
+        -------
+        str
+            Descriptive criterion text for decision engine choice prompts.
+        """
+        if isinstance(self.criteria, dict) and r_type in self.criteria:
+            return self.criteria[r_type]
+        if r_type in schema.argument_relation_definitions:
+            return schema.argument_relation_definitions[r_type]
+        if isinstance(self.criteria, dict):
+            r_pol = schema.relation_polarities.get(r_type, 0)
+            if r_pol != 0:
+                for crit_key, crit_text in self.criteria.items():
+                    if schema.relation_polarities.get(crit_key, 0) == r_pol:
+                        return crit_text
+        return f"Argumentative relation {r_type}"
+
+    def _resolve_neutral_criterion(self) -> str:
+        """Resolve prompt text for the neutral non-relation option.
+
+        Returns
+        -------
+        str
+            Criterion description for dialectical neutrality.
+        """
+        if isinstance(self.criteria, dict) and "NEUTRAL" in self.criteria:
+            return self.criteria["NEUTRAL"]
+        return "No direct argumentative relation between source and target."
+
+    def _build_choice_options(self, schema: SchemaConfig) -> dict[str, str]:
+        """Build decision engine choice options and definitions for candidate schema relations.
+
+        Parameters
+        ----------
+        schema : SchemaConfig
+            Schema configuration defining argument relations and polarities.
+
+        Returns
+        -------
+        dict[str, str]
+            Mapping from relation type (and NEUTRAL) to criterion description text.
+        """
+        options: dict[str, str] = {
+            r_type: self._resolve_relation_criterion(r_type, schema)
+            for r_type in schema.argument_relation_types
+        }
+        options["NEUTRAL"] = self._resolve_neutral_criterion()
+        return options
 
     async def classify_pair(
         self,
@@ -352,6 +444,8 @@ class JevARCClassifier(ARCClassifier):
                     question=question,
                 )
                 if decision.passed and decision.probability >= self.confidence_threshold:
+                    modal = self._resolve_modal_strength(source_atom, target_atom)
+                    eff_w = float(modal * decision.probability)
                     rels.append(
                         TheoryRelation(
                             source_id=source_atom.id,
@@ -359,27 +453,17 @@ class JevARCClassifier(ARCClassifier):
                             relation_type=r_type,
                             confidence=decision.probability,
                             scope="global",
-                            weight=decision.empirical_accuracy,
+                            weight=eff_w,
+                            class_probability=decision.probability,
+                            empirical_accuracy=decision.empirical_accuracy,
+                            modal_strength=modal,
+                            effective_weight=eff_w,
+                            decision_engine_provider="jev",
                         )
                     )
             return rels
 
-        options: dict[str, str] = {}
-        for r_type in schema.argument_relation_types:
-            if isinstance(self.criteria, dict) and r_type in self.criteria:
-                options[r_type] = self.criteria[r_type]
-            elif r_type in schema.argument_relation_definitions:
-                options[r_type] = schema.argument_relation_definitions[r_type]
-            else:
-                options[r_type] = f"Argumentative relation {r_type}"
-
-        # Neutral option representing absence of direct dialectical link
-        options["NEUTRAL"] = (
-            self.criteria.get("NEUTRAL", "No direct argumentative relation between source and target.")
-            if isinstance(self.criteria, dict)
-            else "No direct argumentative relation between source and target."
-        )
-
+        options = self._build_choice_options(schema)
         decision: DecisionScore = await self.decision_engine.evaluate_choice(
             state=state,
             question=self.decision_template,
@@ -387,15 +471,25 @@ class JevARCClassifier(ARCClassifier):
         )
 
         selected = str(decision.selected_option) if decision.selected_option else "NEUTRAL"
-        if selected in schema.argument_relation_types and decision.class_probability >= self.confidence_threshold:
+        resolved_type = schema.resolve_relation_type(selected)
+
+        if resolved_type and decision.class_probability >= self.confidence_threshold:
+            modal = self._resolve_modal_strength(source_atom, target_atom)
+            eff_w = float(modal * decision.class_probability)
             return [
                 TheoryRelation(
                     source_id=source_atom.id,
                     target_id=target_atom.id,
-                    relation_type=selected,
+                    relation_type=resolved_type,
                     confidence=decision.class_probability,
                     scope="global",
-                    weight=decision.empirical_accuracy,
+                    weight=eff_w,
+                    class_probability=decision.class_probability,
+                    empirical_accuracy=decision.empirical_accuracy,
+                    modal_strength=modal,
+                    effective_weight=eff_w,
+                    decision_engine_provider="jev",
+                    calibrated_confidence=decision.empirical_accuracy or decision.class_probability,
                 )
             ]
         return []

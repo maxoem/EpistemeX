@@ -1,6 +1,6 @@
 # Evaluation Report: eval_stnb_cpm_pilot_eval_01
 
-- **Manifest:** `/Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/manifests/eval_stnb.yaml`
+- **Manifest:** `/Users/maxoem/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/manifests/eval_stnb.yaml`
 - **Dataset:** `packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld`
 
 # Formal Structuralist Model Evaluation Report

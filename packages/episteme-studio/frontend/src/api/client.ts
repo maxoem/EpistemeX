@@ -29,6 +29,12 @@ import type {
   MetricExecutionQueuedResponse,
   MetricResult,
   RunLangfuseResponse,
+  ActiveLearningExportResponse,
+  BorderlineDecisionItem,
+  DecisionAdjudicationRequest,
+  DecisionEngineStatusResponse,
+  DecisionTestRequest,
+  DecisionTestResponse,
   EngineSettings,
   EngineSettingsPatch,
   PredicateMapping,
@@ -377,6 +383,59 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(mapping),
     });
+    return handleResponse(res);
+  },
+
+  async getDecisionStatus(): Promise<DecisionEngineStatusResponse> {
+    const res = await fetch(`${BASE_URL}/api/engine/decision/status`);
+    return handleResponse(res);
+  },
+
+  async testDecision(payload: DecisionTestRequest): Promise<DecisionTestResponse> {
+    const res = await fetch(`${BASE_URL}/api/engine/decision/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  async getBorderlineDecisions(
+    runId: string,
+    params?: { phase?: string; primitive?: string; limit?: number }
+  ): Promise<BorderlineDecisionItem[]> {
+    const q = new URLSearchParams();
+    if (params?.phase) q.set("phase", params.phase);
+    if (params?.primitive) q.set("primitive", params.primitive);
+    if (params?.limit) q.set("limit", params.limit.toString());
+    const query = q.toString() ? `?${q.toString()}` : "";
+    const res = await fetch(`${BASE_URL}/api/runs/${encodeURIComponent(runId)}/decisions/borderline${query}`);
+    return handleResponse(res);
+  },
+
+  async adjudicateDecision(
+    runId: string,
+    decisionId: string,
+    payload: DecisionAdjudicationRequest
+  ): Promise<BorderlineDecisionItem> {
+    const res = await fetch(
+      `${BASE_URL}/api/runs/${encodeURIComponent(runId)}/decisions/${encodeURIComponent(decisionId)}/adjudicate`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+    return handleResponse(res);
+  },
+
+  async exportActiveLearning(runId: string): Promise<ActiveLearningExportResponse> {
+    const res = await fetch(
+      `${BASE_URL}/api/runs/${encodeURIComponent(runId)}/decisions/export-active-learning`,
+      {
+        method: "POST",
+      }
+    );
     return handleResponse(res);
   },
 

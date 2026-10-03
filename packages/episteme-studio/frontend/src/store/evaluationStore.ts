@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import { api } from "../api/client.ts";
 import type {
+  ActiveLearningExportResponse,
   AdjudicateAndRecalculateResponse,
   BenchmarkDescriptor,
+  BorderlineDecisionItem,
   EdgeAdjudicationItem,
   EvaluationMode,
   EvaluationReportDetail,
@@ -124,6 +126,22 @@ export interface EvaluationState {
     evaluationId: string,
     exportDatasetPath?: string | null
   ) => Promise<AdjudicateAndRecalculateResponse | null>;
+
+  // Borderline Adjudication & Active Learning (ISSUE-052)
+  borderlineQueue: BorderlineDecisionItem[];
+  isLoadingBorderline: boolean;
+  borderlineFilterPhase: string;
+  borderlineFilterPrimitive: string;
+  fetchBorderlineDecisions: (runId: string) => Promise<void>;
+  adjudicateDecisionItem: (
+    runId: string,
+    decisionId: string,
+    value: string | number,
+    notes?: string
+  ) => Promise<void>;
+  exportActiveLearningData: (runId: string) => Promise<ActiveLearningExportResponse>;
+  setBorderlineFilterPhase: (phase: string) => void;
+  setBorderlineFilterPrimitive: (primitive: string) => void;
 
   // Cleanup
   resetStore: () => void;
@@ -435,6 +453,62 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
     }
   },
 
+  borderlineQueue: [],
+  isLoadingBorderline: false,
+  borderlineFilterPhase: "all",
+  borderlineFilterPrimitive: "all",
+
+  setBorderlineFilterPhase: (phase: string) => set({ borderlineFilterPhase: phase }),
+  setBorderlineFilterPrimitive: (primitive: string) => set({ borderlineFilterPrimitive: primitive }),
+
+  fetchBorderlineDecisions: async (runId: string) => {
+    set({ isLoadingBorderline: true });
+    try {
+      const { borderlineFilterPhase, borderlineFilterPrimitive } = get();
+      const items = await api.getBorderlineDecisions(runId, {
+        phase: borderlineFilterPhase === "all" ? undefined : borderlineFilterPhase,
+        primitive: borderlineFilterPrimitive === "all" ? undefined : borderlineFilterPrimitive,
+      });
+      set({ borderlineQueue: items, isLoadingBorderline: false });
+    } catch (err: any) {
+      set({
+        isLoadingBorderline: false,
+        error: err?.message || "Failed to fetch borderline decisions",
+      });
+    }
+  },
+
+  adjudicateDecisionItem: async (
+    runId: string,
+    decisionId: string,
+    value: string | number,
+    notes?: string
+  ) => {
+    try {
+      const updated = await api.adjudicateDecision(runId, decisionId, {
+        adjudicated_value: value,
+        notes,
+      });
+      set((state) => ({
+        borderlineQueue: state.borderlineQueue.map((item) =>
+          item.decision_id === decisionId ? updated : item
+        ),
+      }));
+    } catch (err: any) {
+      set({ error: err?.message || "Failed to adjudicate decision" });
+      throw err;
+    }
+  },
+
+  exportActiveLearningData: async (runId: string) => {
+    try {
+      return await api.exportActiveLearning(runId);
+    } catch (err: any) {
+      set({ error: err?.message || "Failed to export active learning dataset" });
+      throw err;
+    }
+  },
+
   resetStore: () => {
     set({
       activeReportId: null,
@@ -455,6 +529,10 @@ export const useEvaluationStore = create<EvaluationState>((set, get) => ({
       stagedAdjudications: new Map(),
       optimisticScalarDeltas: INITIAL_OPTIMISTIC_DELTAS,
       isCommittingBatch: false,
+      borderlineQueue: [],
+      isLoadingBorderline: false,
+      borderlineFilterPhase: "all",
+      borderlineFilterPrimitive: "all",
       error: null,
     });
   },

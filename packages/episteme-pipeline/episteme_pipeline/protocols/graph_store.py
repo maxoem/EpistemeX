@@ -191,6 +191,16 @@ class GraphWriter(GraphHandle, ABC):
     ) -> None: ...
 
     @abstractmethod
+    async def upsert_theory_relation(
+        self, relation: TheoryRelation
+    ) -> None: ...
+
+    @abstractmethod
+    async def upsert_theory_relations(
+        self, relations: list[TheoryRelation]
+    ) -> None: ...
+
+    @abstractmethod
     async def upsert_community(self, community_id: str, level: int, entity_ids: list[str]) -> None: ...
 
     @abstractmethod

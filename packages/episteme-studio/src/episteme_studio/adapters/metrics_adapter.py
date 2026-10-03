@@ -68,14 +68,19 @@ def compute_gradual_strength(
     edge_values: dict[str, float | str | None] = {}
     incomplete_inputs = 0
 
-    # Map nodes and track missing tau
+    # Map nodes and track missing tau (prioritizing modal_strength / base_score over legacy plausibility)
     tau_map: dict[str, float | None] = {}
     for node in graph.nodes:
-        if node.plausibility is None:
+        tau_val = (
+            node.modal_strength
+            if node.modal_strength is not None
+            else (node.base_score if node.base_score is not None else node.plausibility)
+        )
+        if tau_val is None:
             incomplete_inputs += 1
             tau_map[node.id] = None
         else:
-            tau_map[node.id] = float(node.plausibility)
+            tau_map[node.id] = float(tau_val)
 
     # Track incoming edges and missing phi
     incoming_edges: dict[str, list[tuple[str, float, int]]] = defaultdict(list)
@@ -145,6 +150,57 @@ def compute_gradual_strength(
         id=f"overlay-gradual_strength-{uuid4().hex[:8]}",
         kind=OverlayKind.GRADUAL_STRENGTH,
         params=opts,
+        node_values=node_values,
+        edge_values=edge_values,
+        scale="continuous",
+        domain=[0.0, 1.0],
+        computed_at=datetime.now(timezone.utc),
+        graph_version=graph.graph_version,
+        incomplete_inputs=incomplete_inputs,
+    )
+
+
+def compute_modal_strength(
+    graph: GraphView,
+    params: dict[str, Any] | None = None,
+) -> Overlay:
+    """Compute Propositional Modal Strength M(phi) overlay across nodes.
+
+    Extracts authorial certainty M(phi) = tau_0 from nodes resolved via
+    the ModalStrengthResolver (Structuralist syntax priors + System 1 Jev calibration).
+
+    Parameters
+    ----------
+    graph : GraphView
+        The graph snapshot view to analyze.
+    params : dict of str to Any, optional
+        Optional parameter overrides.
+
+    Returns
+    -------
+    Overlay
+        Computed modal strength overlay.
+    """
+    node_values: dict[str, float | str | None] = {}
+    edge_values: dict[str, float | str | None] = {}
+    incomplete_inputs = 0
+
+    for node in graph.nodes:
+        val = (
+            node.modal_strength
+            if node.modal_strength is not None
+            else (node.base_score if node.base_score is not None else node.plausibility)
+        )
+        if val is None:
+            incomplete_inputs += 1
+            node_values[node.id] = None
+        else:
+            node_values[node.id] = round(float(val), 4)
+
+    return Overlay(
+        id=f"overlay-modal_strength-{uuid4().hex[:8]}",
+        kind=OverlayKind.MODAL_STRENGTH,
+        params=params or {},
         node_values=node_values,
         edge_values=edge_values,
         scale="continuous",

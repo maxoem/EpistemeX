@@ -58,6 +58,20 @@ class ExtractedComponent(BaseModel):
         except (TypeError, ValueError):
             return 0.8
 
+    @field_validator("scope_type", mode="before")
+    @classmethod
+    def normalize_scope_type(cls, v: Any) -> str | None:
+        from episteme_pipeline.contracts.domain import ScopeType
+        st = ScopeType.from_str(v)
+        return st.value if st is not None else (str(v).strip() if v else None)
+
+    @field_validator("epistemic_status", mode="before")
+    @classmethod
+    def normalize_epistemic_status(cls, v: Any) -> str | None:
+        from episteme_pipeline.contracts.domain import EpistemicStatus
+        es = EpistemicStatus.from_str(v)
+        return es.value if es is not None else (str(v).strip() if v else None)
+
 
 class ExtractedTheoryRelation(BaseModel):
     source_id: str = Field(description="References an ExtractedComponent.id.")

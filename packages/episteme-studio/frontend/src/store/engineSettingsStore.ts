@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { api } from "../api/client.ts";
 import type {
+  DecisionEngineSettings,
+  DecisionEngineStatusResponse,
+  DecisionTestRequest,
+  DecisionTestResponse,
   EngineSettings,
   EngineSettingsPatch,
   PredicateMapping,
@@ -26,8 +30,13 @@ export interface EngineSettingsState {
   error: string | null;
 
   // Rail 1: Category selection
-  activeCategory: "ontology" | "unmapped" | "models";
-  setActiveCategory: (cat: "ontology" | "unmapped" | "models") => void;
+  activeCategory: "ontology" | "unmapped" | "models" | "decision";
+  setActiveCategory: (cat: "ontology" | "unmapped" | "models" | "decision") => void;
+
+  // Decision Engine hardware & playground
+  decisionStatus: DecisionEngineStatusResponse | null;
+  isTestingDecision: boolean;
+  decisionTestResult: DecisionTestResponse | null;
 
   // Rail 2: Sub-tab scoping
   ontologySubTab: "nodes" | "relations" | "components" | "arg_relations";
@@ -49,6 +58,9 @@ export interface EngineSettingsState {
   updateEngineSettings: (patch: EngineSettingsPatch) => Promise<void>;
   resetEngineSettings: () => Promise<void>;
   mapPredicate: (mapping: PredicateMapping) => Promise<void>;
+  fetchDecisionStatus: () => Promise<void>;
+  runDecisionTest: (req: DecisionTestRequest) => Promise<DecisionTestResponse>;
+  updateDecisionEngineSettings: (patch: Partial<DecisionEngineSettings>) => Promise<void>;
 
   // Zero-overhead O(1) domain lookup helpers
   getPolarity: (relationType: string) => number | null;
@@ -84,6 +96,10 @@ export const useEngineSettingsStore = create<EngineSettingsState>((set, get) => 
 
   activeCategory: "ontology",
   setActiveCategory: (cat) => set({ activeCategory: cat }),
+
+  decisionStatus: null,
+  isTestingDecision: false,
+  decisionTestResult: null,
 
   ontologySubTab: "nodes",
   setOntologySubTab: (tab) => set({ ontologySubTab: tab }),
@@ -177,6 +193,49 @@ export const useEngineSettingsStore = create<EngineSettingsState>((set, get) => 
       set({
         isSaving: false,
         error: err?.detail || err?.message || "Failed to map predicate",
+      });
+      throw err;
+    }
+  },
+
+  fetchDecisionStatus: async () => {
+    try {
+      const status = await api.getDecisionStatus();
+      set({ decisionStatus: status });
+    } catch (err) {
+      console.warn("Failed to fetch decision engine status:", err);
+    }
+  },
+
+  runDecisionTest: async (req: DecisionTestRequest) => {
+    set({ isTestingDecision: true, error: null });
+    try {
+      const res = await api.testDecision(req);
+      set({ isTestingDecision: false, decisionTestResult: res });
+      return res;
+    } catch (err: any) {
+      set({
+        isTestingDecision: false,
+        error: err?.detail || err?.message || "Failed to execute decision test",
+      });
+      throw err;
+    }
+  },
+
+  updateDecisionEngineSettings: async (patch: Partial<DecisionEngineSettings>) => {
+    set({ isSaving: true, error: null });
+    try {
+      const updated = await api.updateEngineSettings({
+        decision_engine: patch,
+      });
+      set({
+        settings: updated,
+        isSaving: false,
+      });
+    } catch (err: any) {
+      set({
+        isSaving: false,
+        error: err?.detail || err?.message || "Failed to update decision engine settings",
       });
       throw err;
     }

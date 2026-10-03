@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from episteme_pipeline.evaluation.scorers.calibration import (
+    CalibrationDataExtractor,
     CalibrationResult,
     CalibrationScorer,
+    DefaultCalibrationDataExtractor,
     ReliabilityBin,
+    compute_calibration_metrics,
 )
 from episteme_pipeline.evaluation.scorers.domain_bridge import (
     artifact_collection_to_theory_graph,
@@ -29,9 +32,12 @@ from episteme_pipeline.evaluation.scorers.oep import OptimalEditPathEvaluator
 from episteme_pipeline.evaluation.scorers.retrieval import ExtrinsicRetrievalEvaluator
 
 __all__ = [
+    "CalibrationDataExtractor",
     "CalibrationResult",
     "CalibrationScorer",
+    "DefaultCalibrationDataExtractor",
     "ReliabilityBin",
+    "compute_calibration_metrics",
     "GroundingEvaluationResult",
     "GroundingScorer",
     "calculate_anchor_iou",

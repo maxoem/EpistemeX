@@ -762,6 +762,40 @@ class DecisionGatingTriggered(BaseEvent):
     prediction_set_size: Optional[int] = None
 
 
+class ModalStrengthResolved(BaseEvent):
+    """An authorial propositional modal strength was resolved for a TheoryAtom.
+
+    Grounding:
+    - Toulmin (1958): Modal Qualifier Q on claims.
+    - Schurz (2014): Propositional structuralist scope and epistemic status.
+
+    Attributes
+    ----------
+    atom_id : str
+        Identifier of the target TheoryAtom.
+    modal_strength : float
+        Resolved authorial propositional modal certainty M(phi) in [0.0, 1.0].
+    resolver_type : str
+        Strategy/resolver used ('structural', 'decision_engine', 'hybrid').
+    scope_type : str, optional
+        Structuralist scope type (e.g. 'Essentieller Allsatz').
+    epistemic_status : str, optional
+        Epistemic status (e.g. 'Synthetisch', 'Analytisch').
+    raw_engine_score : float, optional
+        Unclamped linguistic certitude score from DecisionEngine, if evaluated.
+    clamped : bool, default False
+        Whether the engine score was clamped by structuralist syntactic bounds.
+    """
+
+    atom_id: str
+    modal_strength: float
+    resolver_type: str
+    scope_type: Optional[str] = None
+    epistemic_status: Optional[str] = None
+    raw_engine_score: Optional[float] = None
+    clamped: bool = False
+
+
 # Type union for event handling
 PipelineEvent = (
     EntityProcessed |
@@ -773,7 +807,8 @@ PipelineEvent = (
     EnvelopeInjectionAttempted | EnvelopeInjectionFailed |
     ProgressStarted | ProgressAdvanced | ProgressCompleted |
     EvaluationCompleted | EvaluationScoreLogged | ValidationViolationDetected |
-    DecisionEvaluationStarted | DecisionEvaluationCompleted | DecisionGatingTriggered
+    DecisionEvaluationStarted | DecisionEvaluationCompleted | DecisionGatingTriggered |
+    ModalStrengthResolved
 )
 
 

@@ -593,6 +593,11 @@ class ArgumentationStrategy:
                 polarity_accuracy = round(correct_pols / len(shared_pairs), 4)
                 polarity_conflict_rate = round(conflicts / len(shared_pairs), 4)
 
+        from episteme_pipeline.evaluation.scorers.calibration import CalibrationScorer
+
+        cal_scorer = CalibrationScorer()
+        cal_res = cal_scorer.evaluate(pred_relations, gold_relations)
+
         metrics = [
             EvaluationMetric(name="adu_precision", value=prec_adu),
             EvaluationMetric(name="adu_recall", value=rec_adu),
@@ -602,15 +607,22 @@ class ArgumentationStrategy:
             EvaluationMetric(name="arc_f1", value=f1_rel),
             EvaluationMetric(name="polarity_accuracy", value=polarity_accuracy),
             EvaluationMetric(name="polarity_conflict_rate", value=polarity_conflict_rate),
+            EvaluationMetric(name="ece", value=round(cal_res.ece, 4), unit="ratio"),
+            EvaluationMetric(name="brier_score", value=round(cal_res.brier_score, 4), unit="score"),
+            EvaluationMetric(name="mce", value=round(cal_res.mce, 4), unit="ratio"),
         ]
 
         markdown_report = (
             "## Layer 3 Argumentation Evaluation Report\n\n"
             f"- **ADU Component F1:** {f1_adu:.4f} (P: {prec_adu:.4f}, R: {rec_adu:.4f})\n"
             f"- **ARC Relation F1:** {f1_rel:.4f} (P: {prec_rel:.4f}, R: {rec_rel:.4f})\n"
+            f"- **ECE (Expected Calibration Error):** {cal_res.ece:.4f}\n"
+            f"- **Brier Score:** {cal_res.brier_score:.4f}\n"
             f"- **Predicted Components/Relations:** {len(pred_atoms)} / {len(pred_relations)}\n"
             f"- **Gold Components/Relations:** {len(gold_atoms)} / {len(gold_relations)}\n"
         )
+
+        diagram_dicts = [b.model_dump() for b in cal_res.bins] if cal_res.bins else None
 
         result = EvaluationResult(
             run_id=run_id,
@@ -624,6 +636,7 @@ class ArgumentationStrategy:
                 "category": "argumentation_mining",
                 "markdown_report": markdown_report,
             },
+            reliability_diagram=diagram_dicts,
         )
         return [result]
 

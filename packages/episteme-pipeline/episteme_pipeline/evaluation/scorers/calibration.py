@@ -1,17 +1,27 @@
 """Confidence Calibration Evaluator (ECE, MCE, and Brier Score).
 
-Assesses whether extraction and argumentation confidence scores correspond to
-true empirical probabilities, computing Expected Calibration Error (ECE),
+Attempts to assess whether extraction and argumentation confidence scores correspond to true empirical probabilities, computing Expected Calibration Error (ECE),
 Maximum Calibration Error (MCE), Brier Score, and reliability diagrams.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any, Sequence
+from typing import Any, Protocol, Sequence, runtime_checkable
+import networkx as nx
 import numpy as np
 from pydantic import BaseModel, Field
 
+from epistemetrics.core.models import TheoryEdge, TheoryNode
+from epistemetrics.graph.theory_graph import TheoryGraph
+from episteme_pipeline.contracts.domain import (
+    L1Chunk,
+    L2Entity,
+    L2Triple,
+    TheoryAtom,
+    TheoryNet,
+    TheoryRelation,
+)
 from episteme_pipeline.evaluation.models import (
     EvaluationLevel,
     EvaluationMetric,
@@ -112,6 +122,363 @@ class CalibrationResult(BaseModel):
         return "\n".join(lines)
 
 
+@runtime_checkable
+class CalibrationDataExtractor(Protocol):
+    """Port defining data extraction interface for calibration scoring.
+    """
+
+    def extract_predictions(self, data: Any) -> list[tuple[str, float]]:
+        """Extract canonical prediction keys and associated confidence probabilities.
+
+        Parameters
+        ----------
+        data : Any
+            Predicted domain entity, relation, triple, graph, or nested collection.
+
+        Returns
+        -------
+        list of tuple of (str, float)
+            List of (canonical_key, confidence_probability) tuples.
+        """
+        ...
+
+    def extract_gold_keys(self, data: Any) -> set[str]:
+        """Extract canonical keys from ground-truth or reference items.
+
+        Parameters
+        ----------
+        data : Any
+            Reference domain entity, relation, triple, graph, or nested collection.
+
+        Returns
+        -------
+        set of str
+            Set of canonical string keys used for empirical correctness matching.
+        """
+        ...
+
+
+class DefaultCalibrationDataExtractor:
+    """Default adapter extracting calibration items from domain models and graphs.
+
+    Implements CalibrationDataExtractor for typed contracts (TheoryRelation,
+    TheoryAtom, L2Triple), epistemetrics graphs (TheoryGraph, TheoryEdge, TheoryNode),
+    NetworkX DiGraphs, and legacy dictionaries without attribute reflection.
+    """
+
+    def extract_predictions(self, data: Any) -> list[tuple[str, float]]:
+        """Extract canonical keys and confidence probabilities from domain representations.
+
+        Parameters
+        ----------
+        data : Any
+            Domain entity, relation, triple, graph, or nested collection thereof.
+
+        Returns
+        -------
+        list of tuple of (str, float)
+            List of (canonical_key, confidence_score) tuples.
+        """
+        items: list[tuple[str, float]] = []
+        if isinstance(data, (list, tuple, set)):
+            for item in data:
+                items.extend(self.extract_predictions(item))
+            return items
+
+        # Typed Domain Contracts
+        if isinstance(data, TheoryRelation):
+            key = f"{data.source_id}::{data.relation_type}::{data.target_id}".lower()
+            conf = (
+                data.calibrated_confidence
+                if data.calibrated_confidence is not None
+                else (
+                    data.empirical_accuracy
+                    if data.empirical_accuracy is not None
+                    else (
+                        data.class_probability
+                        if data.class_probability is not None
+                        else data.confidence
+                    )
+                )
+            )
+            items.append((key, float(conf if conf is not None else 1.0)))
+            return items
+
+        if isinstance(data, TheoryAtom):
+            key = f"{data.id}::{data.component_type}".lower()
+            conf = data.plausibility if data.plausibility is not None else data.confidence
+            items.append((key, float(conf if conf is not None else 1.0)))
+            return items
+
+        if isinstance(data, L2Triple):
+            key = f"{data.subject_id}::{data.predicate}::{data.object_id}".lower()
+            items.append((key, float(data.confidence if data.confidence is not None else 1.0)))
+            return items
+
+        # Epistemetrics typed domain models
+        if isinstance(data, TheoryEdge):
+            key = f"{data.source}::{data.relation_type}::{data.target}".lower()
+            conf = (
+                data.empirical_accuracy
+                if data.empirical_accuracy is not None
+                else (
+                    data.class_probability
+                    if data.class_probability is not None
+                    else data.confidence
+                )
+            )
+            items.append((key, float(conf if conf is not None else 1.0)))
+            return items
+
+        if isinstance(data, TheoryNode):
+            key = str(data.id).lower()
+            items.append((key, float(data.confidence if data.confidence is not None else 1.0)))
+            return items
+
+        if isinstance(data, (L2Entity, L1Chunk)):
+            key = str(data.id).lower()
+            items.append((key, 1.0))
+            return items
+
+        if isinstance(data, TheoryGraph):
+            return self.extract_predictions(data.edges)
+
+        if isinstance(data, TheoryNet):
+            return self.extract_predictions(data.relations)
+
+        # NetworkX Graphs
+        if isinstance(data, (nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph)):
+            for u, v, edge_data in data.edges(data=True):
+                lbl = (
+                    edge_data.get("relation_type")
+                    or edge_data.get("label")
+                    or edge_data.get("relation")
+                    or ""
+                )
+                key = f"{u}::{lbl}::{v}".lower()
+                conf = float(
+                    edge_data.get("calibrated_confidence")
+                    or edge_data.get("empirical_accuracy")
+                    or edge_data.get("class_probability")
+                    or edge_data.get("confidence", 1.0)
+                    or 1.0
+                )
+                items.append((key, conf))
+            return items
+
+        # Dictionary representation
+        if isinstance(data, dict):
+            if "subject_id" in data and "predicate" in data and "object_id" in data:
+                key = f"{data['subject_id']}::{data['predicate']}::{data['object_id']}".lower()
+                conf = float(data.get("confidence", 1.0) or 1.0)
+                items.append((key, conf))
+            elif "source_id" in data and "relation_type" in data and "target_id" in data:
+                key = f"{data['source_id']}::{data['relation_type']}::{data['target_id']}".lower()
+                conf = float(
+                    data.get("calibrated_confidence")
+                    or data.get("empirical_accuracy")
+                    or data.get("class_probability")
+                    or data.get("confidence", 1.0)
+                    or 1.0
+                )
+                items.append((key, conf))
+            elif "source" in data and "relation_type" in data and "target" in data:
+                key = f"{data['source']}::{data['relation_type']}::{data['target']}".lower()
+                conf = float(
+                    data.get("calibrated_confidence")
+                    or data.get("empirical_accuracy")
+                    or data.get("class_probability")
+                    or data.get("confidence", 1.0)
+                    or 1.0
+                )
+                items.append((key, conf))
+            elif "id" in data:
+                key = str(data["id"]).lower()
+                conf = float(data.get("confidence", 1.0) or 1.0)
+                items.append((key, conf))
+
+        return items
+
+    def extract_gold_keys(self, data: Any) -> set[str]:
+        """Extract canonical keys from reference items or graphs.
+
+        Parameters
+        ----------
+        data : Any
+            Domain entity, relation, triple, graph, or nested collection thereof.
+
+        Returns
+        -------
+        set of str
+            Canonical string keys for matching with predicted items.
+        """
+        keys: set[str] = set()
+        if isinstance(data, (list, tuple, set)):
+            for item in data:
+                keys.update(self.extract_gold_keys(item))
+            return keys
+
+        # Typed Domain Contracts
+        if isinstance(data, TheoryRelation):
+            keys.add(f"{data.source_id}::{data.relation_type}::{data.target_id}".lower())
+            return keys
+
+        if isinstance(data, TheoryAtom):
+            keys.add(str(data.id).lower())
+            return keys
+
+        if isinstance(data, L2Triple):
+            keys.add(f"{data.subject_id}::{data.predicate}::{data.object_id}".lower())
+            return keys
+
+        # Epistemetrics typed domain models
+        if isinstance(data, TheoryEdge):
+            keys.add(f"{data.source}::{data.relation_type}::{data.target}".lower())
+            return keys
+
+        if isinstance(data, TheoryNode):
+            keys.add(str(data.id).lower())
+            return keys
+
+        if isinstance(data, (L2Entity, L1Chunk)):
+            keys.add(str(data.id).lower())
+            return keys
+
+        if isinstance(data, TheoryGraph):
+            return self.extract_gold_keys(data.edges)
+
+        if isinstance(data, TheoryNet):
+            return self.extract_gold_keys(data.relations)
+
+        # NetworkX Graphs
+        if isinstance(data, (nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph)):
+            for u, v, edge_data in data.edges(data=True):
+                lbl = (
+                    edge_data.get("relation_type")
+                    or edge_data.get("label")
+                    or edge_data.get("relation")
+                    or ""
+                )
+                keys.add(f"{u}::{lbl}::{v}".lower())
+            return keys
+
+        # Dictionary representation
+        if isinstance(data, dict):
+            if "subject_id" in data and "predicate" in data and "object_id" in data:
+                keys.add(f"{data['subject_id']}::{data['predicate']}::{data['object_id']}".lower())
+            elif "source_id" in data and "relation_type" in data and "target_id" in data:
+                keys.add(f"{data['source_id']}::{data['relation_type']}::{data['target_id']}".lower())
+            elif "source" in data and "relation_type" in data and "target" in data:
+                keys.add(f"{data['source']}::{data['relation_type']}::{data['target']}".lower())
+            elif "id" in data:
+                keys.add(str(data["id"]).lower())
+
+        return keys
+
+
+def compute_calibration_metrics(
+    confidences: Sequence[float],
+    labels: Sequence[int | bool | float],
+    num_bins: int = 10,
+) -> CalibrationResult:
+    """Compute calibration metrics from raw confidences and binary ground-truth labels.
+
+    Pure mathematical calculation of Expected Calibration Error (ECE),
+    Maximum Calibration Error (MCE), Brier Score, and reliability diagram bins.
+    Independent of domain models and extraction mechanisms.
+
+    Parameters
+    ----------
+    confidences : Sequence of float
+        Predicted confidence scores $p_i \\in [0.0, 1.0]$.
+    labels : Sequence of int, bool, or float
+        Binary ground-truth indicators $y_i \\in \\{0, 1\\}$.
+    num_bins : int, default 10
+        Number of equal-width probability bins over [0.0, 1.0].
+
+    Returns
+    -------
+    CalibrationResult
+        Evaluated ECE, MCE, Brier Score, and reliability bins.
+
+    Raises
+    ------
+    ValueError
+        If num_bins is non-positive or if confidences and labels have mismatched lengths.
+    """
+    if num_bins <= 0:
+        raise ValueError("num_bins must be a positive integer.")
+
+    if len(confidences) != len(labels):
+        raise ValueError(
+            f"Confidences ({len(confidences)}) and labels ({len(labels)}) must have matching length."
+        )
+
+    n = len(confidences)
+    if n == 0:
+        return CalibrationResult(
+            ece=0.0,
+            mce=0.0,
+            brier_score=0.0,
+            sample_count=0,
+            num_bins=num_bins,
+            bins=[],
+        )
+
+    confs = np.clip(np.asarray(confidences, dtype=np.float64), 0.0, 1.0)
+    labs = np.asarray([1.0 if bool(y) else 0.0 for y in labels], dtype=np.float64)
+
+    # Brier Score = (1/N) * sum((p_i - y_i)^2)
+    brier_score = float(np.mean((confs - labs) ** 2))
+
+    bin_edges = np.linspace(0.0, 1.0, num_bins + 1)
+    bins_data: list[ReliabilityBin] = []
+    weighted_ece = 0.0
+    max_gap = 0.0
+
+    for i in range(num_bins):
+        lower = float(bin_edges[i])
+        upper = float(bin_edges[i + 1])
+
+        if i == num_bins - 1:
+            mask = (confs >= lower) & (confs <= upper)
+        else:
+            mask = (confs >= lower) & (confs < upper)
+
+        count = int(np.sum(mask))
+        if count > 0:
+            avg_conf = float(np.mean(confs[mask]))
+            acc = float(np.mean(labs[mask]))
+            gap = float(abs(acc - avg_conf))
+            weighted_ece += (count / n) * gap
+            if gap > max_gap:
+                max_gap = gap
+        else:
+            avg_conf = (lower + upper) / 2.0
+            acc = 0.0
+            gap = 0.0
+
+        bins_data.append(
+            ReliabilityBin(
+                bin_lower=lower,
+                bin_upper=upper,
+                count=count,
+                avg_confidence=avg_conf,
+                accuracy=acc,
+                calibration_gap=gap,
+            )
+        )
+
+    return CalibrationResult(
+        ece=weighted_ece,
+        mce=max_gap,
+        brier_score=brier_score,
+        sample_count=n,
+        num_bins=num_bins,
+        bins=bins_data,
+    )
+
+
 class CalibrationScorer:
     """Evaluates probability calibration for extraction and argumentation predictions.
 
@@ -126,6 +493,9 @@ class CalibrationScorer:
         Acceptance threshold for Expected Calibration Error.
     max_brier_threshold : float, default 0.25
         Acceptance threshold for Brier Score.
+    extractor : CalibrationDataExtractor or None, default None
+        Port adapter used to extract predictions and reference elements.
+        If None, defaults to DefaultCalibrationDataExtractor.
     """
 
     def __init__(
@@ -133,12 +503,16 @@ class CalibrationScorer:
         num_bins: int = 10,
         max_ece_threshold: float = 0.15,
         max_brier_threshold: float = 0.25,
+        extractor: CalibrationDataExtractor | None = None,
     ) -> None:
         if num_bins <= 0:
             raise ValueError("num_bins must be a positive integer.")
         self.num_bins = num_bins
         self.max_ece_threshold = max_ece_threshold
         self.max_brier_threshold = max_brier_threshold
+        self.extractor: CalibrationDataExtractor = (
+            extractor if extractor is not None else DefaultCalibrationDataExtractor()
+        )
 
     def compute_calibration(
         self,
@@ -164,73 +538,10 @@ class CalibrationScorer:
         ValueError
             If confidences and labels have mismatched lengths.
         """
-        if len(confidences) != len(labels):
-            raise ValueError(
-                f"Confidences ({len(confidences)}) and labels ({len(labels)}) must have matching length."
-            )
-
-        n = len(confidences)
-        if n == 0:
-            return CalibrationResult(
-                ece=0.0,
-                mce=0.0,
-                brier_score=0.0,
-                sample_count=0,
-                num_bins=self.num_bins,
-                bins=[],
-            )
-
-        confs = np.clip(np.asarray(confidences, dtype=np.float64), 0.0, 1.0)
-        labs = np.asarray([1.0 if bool(y) else 0.0 for y in labels], dtype=np.float64)
-
-        # Brier Score = (1/N) * sum((p_i - y_i)^2)
-        brier_score = float(np.mean((confs - labs) ** 2))
-
-        bin_edges = np.linspace(0.0, 1.0, self.num_bins + 1)
-        bins_data: list[ReliabilityBin] = []
-        weighted_ece = 0.0
-        max_gap = 0.0
-
-        for i in range(self.num_bins):
-            lower = float(bin_edges[i])
-            upper = float(bin_edges[i + 1])
-
-            if i == self.num_bins - 1:
-                mask = (confs >= lower) & (confs <= upper)
-            else:
-                mask = (confs >= lower) & (confs < upper)
-
-            count = int(np.sum(mask))
-            if count > 0:
-                avg_conf = float(np.mean(confs[mask]))
-                acc = float(np.mean(labs[mask]))
-                gap = float(abs(acc - avg_conf))
-                weighted_ece += (count / n) * gap
-                if gap > max_gap:
-                    max_gap = gap
-            else:
-                avg_conf = (lower + upper) / 2.0
-                acc = 0.0
-                gap = 0.0
-
-            bins_data.append(
-                ReliabilityBin(
-                    bin_lower=lower,
-                    bin_upper=upper,
-                    count=count,
-                    avg_confidence=avg_conf,
-                    accuracy=acc,
-                    calibration_gap=gap,
-                )
-            )
-
-        return CalibrationResult(
-            ece=weighted_ece,
-            mce=max_gap,
-            brier_score=brier_score,
-            sample_count=n,
+        return compute_calibration_metrics(
+            confidences=confidences,
+            labels=labels,
             num_bins=self.num_bins,
-            bins=bins_data,
         )
 
     def evaluate(
@@ -240,8 +551,9 @@ class CalibrationScorer:
     ) -> CalibrationResult:
         """Evaluate calibration by aligning predicted items against reference gold items.
 
-        Extracts confidence scores from predicted triples or relations, assigns binary
-        match indicators against reference elements, and evaluates calibration.
+        Extracts confidence scores from predicted triples or relations via the
+        configured extractor port, assigns binary match indicators against reference
+        elements, and evaluates calibration.
 
         Parameters
         ----------
@@ -270,9 +582,9 @@ class CalibrationScorer:
                 labels.append(1 if y else 0)
             return self.compute_calibration(confs, labels)
 
-        # Extract predictions with confidences
-        pred_items = self._extract_confidence_items(predicted)
-        gold_keys = self._extract_gold_keys(gold)
+        # Extract predictions with confidences via extractor port
+        pred_items = self.extractor.extract_predictions(predicted)
+        gold_keys = self.extractor.extract_gold_keys(gold)
 
         for key, conf in pred_items:
             confs.append(conf)
@@ -360,83 +672,45 @@ class CalibrationScorer:
         )
 
     def _extract_confidence_items(self, obj: Any) -> list[tuple[str, float]]:
-        """Extract canonical keys and confidence scores from predictions."""
-        items: list[tuple[str, float]] = []
-        if isinstance(obj, (list, tuple)):
-            for item in obj:
-                items.extend(self._extract_confidence_items(item))
-            return items
+        """Extract canonical keys and confidence scores via the extractor adapter.
 
-        # Check L2Triple
-        if hasattr(obj, "subject_id") and hasattr(obj, "predicate") and hasattr(obj, "object_id"):
-            key = f"{obj.subject_id}::{obj.predicate}::{obj.object_id}".lower()
-            conf = getattr(obj, "confidence", 1.0)
-            items.append((key, float(conf if conf is not None else 1.0)))
-            return items
+        Provided for backward compatibility with existing callers.
 
-        # Check TheoryRelation
-        if hasattr(obj, "source_id") and hasattr(obj, "target_id") and hasattr(obj, "relation_type"):
-            key = f"{obj.source_id}::{obj.relation_type}::{obj.target_id}".lower()
-            conf = getattr(obj, "confidence", 1.0)
-            items.append((key, float(conf if conf is not None else 1.0)))
-            return items
+        Parameters
+        ----------
+        obj : Any
+            Domain entity, relation, triple, graph, or nested collection thereof.
 
-        # Check TheoryAtom
-        if hasattr(obj, "id") and hasattr(obj, "component_type"):
-            key = f"{obj.id}::{obj.component_type}".lower()
-            conf = getattr(obj, "confidence", 1.0)
-            items.append((key, float(conf if conf is not None else 1.0)))
-            return items
-
-        # Check dict
-        if isinstance(obj, dict):
-            if "subject_id" in obj and "predicate" in obj and "object_id" in obj:
-                key = f"{obj['subject_id']}::{obj['predicate']}::{obj['object_id']}".lower()
-                conf = float(obj.get("confidence", 1.0) or 1.0)
-                items.append((key, conf))
-            elif "source_id" in obj and "relation_type" in obj and "target_id" in obj:
-                key = f"{obj['source_id']}::{obj['relation_type']}::{obj['target_id']}".lower()
-                conf = float(obj.get("confidence", 1.0) or 1.0)
-                items.append((key, conf))
-            elif "id" in obj:
-                key = str(obj["id"]).lower()
-                conf = float(obj.get("confidence", 1.0) or 1.0)
-                items.append((key, conf))
-
-        return items
+        Returns
+        -------
+        list of tuple of (str, float)
+            List of (canonical_key, confidence_score) tuples.
+        """
+        return self.extractor.extract_predictions(obj)
 
     def _extract_gold_keys(self, obj: Any) -> set[str]:
-        """Extract canonical keys from reference items or graphs."""
-        keys: set[str] = set()
-        if isinstance(obj, (list, tuple)):
-            for item in obj:
-                keys.update(self._extract_gold_keys(item))
-            return keys
+        """Extract canonical keys from reference items via the extractor adapter.
 
-        if hasattr(obj, "edges"):  # NetworkX DiGraph
-            for u, v, data in obj.edges(data=True):
-                lbl = data.get("label") or data.get("relation") or ""
-                keys.add(f"{u}::{lbl}::{v}".lower())
-            return keys
+        Provided for backward compatibility with existing callers.
 
-        if hasattr(obj, "subject_id") and hasattr(obj, "predicate") and hasattr(obj, "object_id"):
-            keys.add(f"{obj.subject_id}::{obj.predicate}::{obj.object_id}".lower())
-            return keys
+        Parameters
+        ----------
+        obj : Any
+            Domain entity, relation, triple, graph, or nested collection thereof.
 
-        if hasattr(obj, "source_id") and hasattr(obj, "target_id") and hasattr(obj, "relation_type"):
-            keys.add(f"{obj.source_id}::{obj.relation_type}::{obj.target_id}".lower())
-            return keys
+        Returns
+        -------
+        set of str
+            Canonical string keys for matching with predicted items.
+        """
+        return self.extractor.extract_gold_keys(obj)
 
-        if hasattr(obj, "id"):
-            keys.add(str(obj.id).lower())
-            return keys
 
-        if isinstance(obj, dict):
-            if "subject_id" in obj and "predicate" in obj and "object_id" in obj:
-                keys.add(f"{obj['subject_id']}::{obj['predicate']}::{obj['object_id']}".lower())
-            elif "source_id" in obj and "relation_type" in obj and "target_id" in obj:
-                keys.add(f"{obj['source_id']}::{obj['relation_type']}::{obj['target_id']}".lower())
-            elif "id" in obj:
-                keys.add(str(obj["id"]).lower())
-
-        return keys
+__all__ = [
+    "CalibrationDataExtractor",
+    "CalibrationResult",
+    "CalibrationScorer",
+    "DefaultCalibrationDataExtractor",
+    "ReliabilityBin",
+    "compute_calibration_metrics",
+]

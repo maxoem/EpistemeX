@@ -13,6 +13,7 @@ Epistemetrics operationalizes foundational concepts from philosophy of science (
 - **Gerhard Schurz's Structural Theory Analysis**: Operationalizing empirical creativity ($E(H_1 \wedge H_2) \supset E(H_1) \cup E(H_2)$), unification power, and homogeneity (prevention of the tacking paradox).
 - **Imre Lakatos's Research Programmes**: Measuring hard-core resilience vs. protective belt shielding.
 - **Phan Minh Dung's Abstract Argumentation**: Evaluating dialectical strength, attack-support ratios, and grounded extension acceptability.
+- **Quantitative Bipolar Argumentation Frameworks (QBAF)**: Solving gradual semantics equilibrium degrees ($\tau$) under continuous calibrated modal weights vs unweighted binary baseline graphs.
 - **Paul Thagard's Explanatory Coherence**: Coherence energy minimization and circularity detection.
 
 ---

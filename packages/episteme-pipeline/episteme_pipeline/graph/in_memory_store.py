@@ -29,6 +29,7 @@ from episteme_pipeline.contracts.domain import (
     TheoryRelation,
 )
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
+from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
 
 def deterministic_text_embedding(text: str, dim: int = 128) -> list[float]:
@@ -78,6 +79,10 @@ class InMemoryGraphStore(ProcessingGraph):
         self._nodes: dict[str, dict[str, Any]] = {}
         self._embeddings: dict[str, list[float]] = {}
         self._node_run_ids: dict[str, str] = {}
+        self._argument_relation_types: set[str] = (
+            set(DEFAULT_SCHEMA.argument_relation_types)
+            | set(DEFAULT_SCHEMA.relation_polarities.keys())
+        )
 
     async def close(self) -> None:
         """Close handle (no-op for in-memory)."""
@@ -504,23 +509,57 @@ class InMemoryGraphStore(ProcessingGraph):
         to_id: str,
         properties: dict | None = None,
     ) -> None:
+        props = properties or {}
         rel_dict = {
             "from_id": from_id,
             "relation_type": relation_type,
             "to_id": to_id,
-            "properties": properties or {},
+            "properties": props,
         }
         self._generic_relations.append(rel_dict)
-        self._theory_relations.append(
-            TheoryRelation(
-                source_id=from_id,
-                target_id=to_id,
-                relation_type=relation_type,
-                confidence=float(properties.get("confidence", 1.0)) if properties else 1.0,
-                scope=properties.get("scope", "global") if properties else "global",
-                weight=float(properties.get("weight", 1.0)) if properties else 1.0,
+
+        # Delegate theory edge classification and domain reconstruction to TheoryRelation
+        if TheoryRelation.is_theory_edge(
+            relation_type=relation_type,
+            properties=props,
+            source_is_atom=from_id in self._theory_atoms,
+            target_is_atom=to_id in self._theory_atoms,
+        ):
+            self._theory_relations.append(
+                TheoryRelation.from_graph_properties(
+                    source_id=from_id,
+                    relation_type=relation_type,
+                    target_id=to_id,
+                    properties=props,
+                )
             )
-        )
+
+    async def upsert_theory_relation(self, relation: TheoryRelation) -> None:
+        """Upsert a single TheoryRelation domain instance.
+
+        Parameters
+        ----------
+        relation : TheoryRelation
+            Domain relation instance.
+        """
+        self._theory_relations.append(relation)
+        self._generic_relations.append({
+            "from_id": relation.source_id,
+            "relation_type": relation.relation_type,
+            "to_id": relation.target_id,
+            "properties": relation.to_graph_properties(),
+        })
+
+    async def upsert_theory_relations(self, relations: list[TheoryRelation]) -> None:
+        """Upsert a batch of TheoryRelation domain instances.
+
+        Parameters
+        ----------
+        relations : list of TheoryRelation
+            Domain relation instances.
+        """
+        for r in relations:
+            await self.upsert_theory_relation(r)
 
     async def upsert_relations(self, relations: list[dict]) -> None:
         for r in relations:

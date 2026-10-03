@@ -125,7 +125,7 @@ Epistemetrics provides a built-in default schema matching the `episteme-pipeline
   - *(L2 Context Entities: `Concept`, `Theory`, `Work`, `Person`, `Institution`)*
 - **Relation Types & Polarities:**
   - **Negative (`-1`):** `ATTACKS`, `UNDERCUTS`, `REFUTES`, `CONTRADICTS`, `INHIBITS`.
-  - **Positive (`+1`):** `SUPPORTS`, `SUPPORTS_ARG`, `ENTAILS`, `DEDUCES`, `COHERES_WITH`, `REDUCES_TO`.
+  - **Positive (`+1`):** `SUPPORTS`, `ENTAILS`, `DEDUCES`, `COHERES_WITH`, `REDUCES_TO`.
   - **Neutral (`0`):** `SPECIALIZES`, `CONSTRAINS`, `PART_OF`, `INSTANCE_OF`, `RELATED_TO`.
 
 ### Cyclic Graph Semantics

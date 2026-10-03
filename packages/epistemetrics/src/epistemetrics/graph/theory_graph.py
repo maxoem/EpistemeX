@@ -232,6 +232,10 @@ class TheoryGraph:
         confidence: float = 1.0,
         weight: float = 1.0,
         polarity: int | None = None,
+        class_probability: float | None = None,
+        empirical_accuracy: float | None = None,
+        modal_strength: float = 1.0,
+        effective_weight: float | None = None,
         attributes: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> TheoryEdge:
@@ -254,6 +258,14 @@ class TheoryGraph:
             Relational edge weight (default: 1.0).
         polarity : int | None, optional
             Epistemic polarity (+1, -1, 0). If None, defaults to canonical polarity.
+        class_probability : float | None, optional
+            Softmax probability P(stance).
+        empirical_accuracy : float | None, optional
+            Calibrated empirical accuracy frequency from decision engine.
+        modal_strength : float, default 1.0
+            Propositional modal strength score in [0.0, 1.0].
+        effective_weight : float | None, optional
+            Decoupled mathematical edge weight w = M * P.
         attributes : dict[str, Any] | None, optional
             Additional relation properties.
         **kwargs : Any
@@ -276,6 +288,13 @@ class TheoryGraph:
         merged_attrs = dict(attributes or {})
         merged_attrs.update(kwargs)
 
+        eff_w = effective_weight
+        if eff_w is None:
+            if class_probability is not None:
+                eff_w = float(modal_strength * class_probability)
+            else:
+                eff_w = float(weight)
+
         edge = TheoryEdge(
             source=source,
             target=target,
@@ -283,6 +302,10 @@ class TheoryGraph:
             confidence=confidence,
             weight=weight,
             polarity=resolved_polarity,
+            class_probability=class_probability,
+            empirical_accuracy=empirical_accuracy,
+            modal_strength=modal_strength,
+            effective_weight=eff_w,
             attributes=merged_attrs,
         )
 

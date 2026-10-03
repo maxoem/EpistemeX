@@ -23,8 +23,11 @@ def validate_host_and_token(settings: StudioSettings) -> None:
     Raises
     ------
     SecurityConfigurationError
-        If host is non-loopback and token is not provided.
+        If host is non-loopback and token is not provided (unless in demo_mode or read_only mode).
     """
+    if settings.demo_mode or settings.read_only:
+        return
+
     if not settings.is_loopback() and not settings.token:
         raise SecurityConfigurationError(
             f"Cannot bind to external interface '{settings.host}' without setting "

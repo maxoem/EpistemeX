@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
@@ -1825,3 +1825,103 @@ class RegisterBenchmarkRequest(BaseModel):
     task_type: str = "structuralist"
     gold_standard_jsonld: str
     queries_yaml: str | None = None
+
+
+class BorderlineDecisionItem(BaseModel):
+    """Borderline, high-entropy, or divergent discrete decision for human review.
+
+    Parameters
+    ----------
+    decision_id : str
+        Unique decision evaluation identifier.
+    run_id : str
+        Pipeline run identifier.
+    phase_name : str
+        Name of phase where decision occurred.
+    primitive : str
+        Primitive type ('noul', 'choice', 'score').
+    state_snippet : str
+        Input text passage or contextual state representation.
+    question : str
+        Question asked or criterion evaluated.
+    options : list of str
+        Candidate choices evaluated.
+    prediction_set : list of str
+        Conformal prediction set C(x).
+    system_1_choice : str or None, optional
+        Option chosen by fast System 1 model.
+    system_1_accuracy : float, default 0.0
+        Calibrated empirical accuracy frequency P(correct).
+    system_2_choice : str or None, optional
+        Option chosen by generative LLM if evaluated or audited.
+    discrepancy : bool, default False
+        True if System 1 and System 2 outputs diverged.
+    entropy : float, default 0.0
+        Categorical prediction distribution entropy.
+    adjudication_status : Literal['pending', 'accepted', 'corrected', 'skipped'], default 'pending'
+        Status of human curation.
+    adjudicated_value : str or None, optional
+        Option selected or verified by human curator.
+    curator_notes : str or None, optional
+        Explanation or reasoning entered by curator.
+    """
+
+    decision_id: str
+    run_id: str
+    phase_name: str
+    primitive: str
+    state_snippet: str
+    question: str
+    options: list[str] = Field(default_factory=list)
+    prediction_set: list[str] = Field(default_factory=list)
+    system_1_choice: str | None = None
+    system_1_accuracy: float = 0.0
+    system_2_choice: str | None = None
+    discrepancy: bool = False
+    entropy: float = 0.0
+    adjudication_status: Literal["pending", "accepted", "corrected", "skipped"] = "pending"
+    adjudicated_value: str | None = None
+    curator_notes: str | None = None
+
+
+class DecisionAdjudicationRequest(BaseModel):
+    """Payload to adjudicate a borderline decision item.
+
+    Parameters
+    ----------
+    selected_option : str
+        The true or preferred option chosen by the human expert.
+    curator_id : str, default 'curator'
+        Identifier of the annotator.
+    notes : str or None, optional
+        Annotations or justification notes.
+    """
+
+    selected_option: str
+    curator_id: str = "curator"
+    notes: str | None = None
+
+
+class ActiveLearningExportResponse(BaseModel):
+    """Report and metadata for exported active learning dataset.
+
+    Parameters
+    ----------
+    dataset_name : str
+        Name of exported dataset.
+    record_count : int
+        Number of curated examples bundled.
+    export_path : str
+        Local disk filepath where JSONL was persisted.
+    langfuse_synced : bool, default False
+        Whether remote Langfuse dataset sync succeeded.
+    items : list of dict of str to Any, optional
+        Exported records.
+    """
+
+    dataset_name: str
+    record_count: int
+    export_path: str
+    langfuse_synced: bool = False
+    items: list[dict[str, Any]] = Field(default_factory=list)
+

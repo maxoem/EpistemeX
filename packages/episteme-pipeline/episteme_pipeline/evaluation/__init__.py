@@ -70,8 +70,10 @@ from episteme_pipeline.evaluation.rubrics import (
     RubricCriterion,
 )
 from episteme_pipeline.evaluation.scorers import (
+    CalibrationDataExtractor,
     CalibrationResult,
     CalibrationScorer,
+    DefaultCalibrationDataExtractor,
     ExtrinsicRetrievalEvaluator,
     GraphBERTScoreEvaluator,
     GroundingEvaluationResult,
@@ -85,6 +87,7 @@ from episteme_pipeline.evaluation.scorers import (
     calculate_bbox_iou,
     calculate_tabular_grounding_iou,
     calculate_visual_grounding_iou,
+    compute_calibration_metrics,
     gold_standard_to_digraph,
     l2_triples_to_digraph,
     theory_net_to_digraph,
@@ -124,9 +127,12 @@ __all__ = [
     "load_gold_standard",
     "export_neo4j_to_theory_graph",
     # scorers
-    "CalibrationScorer",
+    "CalibrationDataExtractor",
     "CalibrationResult",
+    "CalibrationScorer",
+    "DefaultCalibrationDataExtractor",
     "ReliabilityBin",
+    "compute_calibration_metrics",
     "GroundingScorer",
     "GroundingEvaluationResult",
     "calculate_anchor_iou",

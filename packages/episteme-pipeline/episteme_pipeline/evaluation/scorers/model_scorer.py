@@ -163,6 +163,14 @@ class ModelScorer:
             ),
         ]
 
+        from episteme_pipeline.evaluation.scorers.calibration import CalibrationScorer
+        cal_scorer = CalibrationScorer()
+        cal_res = cal_scorer.evaluate(pred_graph.edges, gold_graph.edges)
+        metrics.extend([
+            EvaluationMetric(name="ece", value=round(cal_res.ece, 4), unit="ratio"),
+            EvaluationMetric(name="brier_score", value=round(cal_res.brier_score, 4), unit="score"),
+        ])
+
         notes = {
             "markdown_report": eval_result.to_markdown(),
             "subsumption_status": "subsumed" if eval_result.is_subsumed else "deficit",

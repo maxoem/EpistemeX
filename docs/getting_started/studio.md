@@ -31,17 +31,30 @@ options:
   --host HOST           Host interface to bind (default: 127.0.0.1)
   --port PORT           Port to listen on (default: 8000)
   --demo                Launch with canned demonstration runs and mock dependencies
+  --read-only           Disallow disk/database write mutations and sandbox execution
   --runs-dir DIR        Path to directory containing run manifests (default: .pipeline_runs)
   --artifacts-dir DIR   Path to directory containing artifact envelopes (default: .pipeline_artifacts)
   --dev [URL]           Proxy frontend requests to Vite dev server (default: http://127.0.0.1:5173)
   --token TOKEN         Authentication token (required when binding to external hosts)
 ```
 
+All flags can alternatively be configured via environment variables prefixed with `EPISTEME_STUDIO_`:
+* `EPISTEME_STUDIO_DEMO_MODE=true`
+* `EPISTEME_STUDIO_READ_ONLY=true`
+
+### Operating Modes & Security Model
+
+| Mode | Trigger | Mutation Policy | System 1 Decision Engine Behavior |
+| :--- | :--- | :--- | :--- |
+| **Development / Local** | Default (`serve`) | Full read/write access. Pipeline runs can be triggered; settings persisted. | Runs local inference backend (Apple MLX on macOS, PyTorch on CUDA/Linux, or ONNX). |
+| **Canned Demo** | `--demo` | Canned runs loaded into UI without external databases or LLM API keys. | Interactive Decision Playground routes to deterministic simulation stub. |
+| **Hardened Public Sandbox** | `--demo --read-only` | All write endpoints (`POST /api/runs`, `PUT /api/engine/settings`, file uploads) return `403 Forbidden`. | Strictly forced to offline simulation stub (~12ms latency, 0 tokens, 0 network requests, no model weights downloaded). |
+
 ---
 
 ## Core Workbench Views
 
-Episteme Studio organizes epistemic analysis into four primary views:
+Episteme Studio organizes epistemic analysis into five primary views:
 
 ```mermaid
 flowchart TD
@@ -49,11 +62,13 @@ flowchart TD
     Workbench --> Execution[2. Execution View]
     Workbench --> CypherConsole[3. Cypher Console]
     Workbench --> Comparison[4. Run Comparison Engine]
+    Workbench --> Engine[5. Decision Engine & Settings]
 
     Explorer -->|Visualize| Layers[L1 Sources, L2 Concepts, L3 TheoryNet]
     Execution -->|Compose & Launch| DAG[Pre-Flight Checks & Cost Forecasting]
     CypherConsole -->|Query| Sandbox[Read-Only Ad-Hoc Cypher Playground]
     Comparison -->|Diff Runs| Deltas[Set-Theoretic Deltas & KDE Shifts]
+    Engine -->|Tune & Test| Dual[System 1/2 Calibration & Conformal Sandbox]
 ```
 
 ---
@@ -107,6 +122,19 @@ Evaluate how varying prompt strategies, temperature settings, or underlying mode
   - **Intersection ($A \cap B$)**: Invariant entities and edges verified across both configurations.
   - **Pruned Set ($A \setminus B$)**: Baseline structural elements omitted by the candidate configuration.
   - **Discovered Set ($B \setminus A$)**: Novel entities and dialectical relations introduced by the candidate run.
+
+---
+
+### View 5: System 1 Decision Engine & Playground (`Engine Settings`)
+
+Configure the neuro-symbolic dual-process architecture (System 1 vs. System 2) and tune confidence gating:
+
+* **Dual-Process Configuration**: Regulate confidence threshold ($\tau$), conformal coverage significance ($\alpha$), and stochastic audit sampling rates.
+* **Granular Phase Gates**: Toggle fast-exit bypasses across Phase 1 noise gating, Phase 2 entity linking, Phase 3 pair pre-gating, Phase 4 gleaning oracles, and Phase 5 theory fusion.
+* **Interactive Decision Playground**: Live evaluation sandbox to test categorical choices, binary noul gates, and continuous scores against scientific or philosophical text spans.
+* **Demo Sandbox Protection**: When running in `--demo` or `--read-only` mode:
+  - Hyperparameter modifications are locked in read-only mode (`PUT /api/engine/settings` returns `403 Forbidden`).
+  - The Playground executes safely via an in-memory, deterministic simulation stub (`POST /api/engine/decision/test`), yielding calibrated conformal sets and token savings metrics in ~12ms without downloading model weights or invoking external APIs.
 
 ---
 

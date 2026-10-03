@@ -3,7 +3,7 @@
   "run_ids": [
     "run-demo-festinger1959"
   ],
-  "dataset_ref": "/Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_festinger_carlsmith_1959.jsonld",
+  "dataset_ref": "/Users/maxoem/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_festinger_carlsmith_1959.jsonld",
   "dataset_type": "gold",
   "outcome": "pass",
   "created_at": "2026-09-28T10:56:53.050343Z",
@@ -28,7 +28,7 @@
         "run_id": "run-demo-festinger1959",
         "level": "stage",
         "phase_name": "Phase 6: TheoryNet Projection",
-        "dataset_ref": "/Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_festinger_carlsmith_1959.jsonld",
+        "dataset_ref": "/Users/maxoem/EpistemeX/packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_festinger_carlsmith_1959.jsonld",
         "outcome": "pass",
         "metrics": [
           {

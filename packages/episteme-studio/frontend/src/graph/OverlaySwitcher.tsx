@@ -28,6 +28,11 @@ const OVERLAY_OPTIONS: OverlayOption[] = [
     description: "Acceptability via QBAF aggregation (theorynet_concept.md §4)",
   },
   {
+    kind: "modal_strength",
+    label: "Modal Strength M(φ)",
+    description: "Author propositional modal certainty M(φ) via structural syntax & System 1 calibration (ADR 0020)",
+  },
+  {
     kind: "internal_correlation",
     label: "Internal Correlation",
     description: "Epistemic community cohesion score via epistemetrics",
@@ -51,6 +56,11 @@ const OVERLAY_OPTIONS: OverlayOption[] = [
     kind: "leiden",
     label: "Leiden Communities (Hulls)",
     description: "Modular community clusters visualized via AntV G6 Hulls",
+  },
+  {
+    kind: "conformal_uncertainty",
+    label: "Decision Calibration & Uncertainty",
+    description: "Visualizes conformal prediction set ambiguity |C(x)| > 1 and empirical accuracy",
   },
   {
     kind: "b_consistency",

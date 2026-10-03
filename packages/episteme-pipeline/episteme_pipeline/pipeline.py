@@ -35,6 +35,10 @@ from episteme_pipeline.phases.phase3_global_relations.dense_retrieval_extractor 
     DenseRetrievalGlobalRelationExtractor,
 )
 from episteme_pipeline.protocols.decision import DecisionEngine, ensure_decision_engine
+from episteme_pipeline.protocols.modality import (
+    ModalStrengthResolver,
+    ensure_modal_strength_resolver,
+)
 from episteme_pipeline.protocols.extractors import (
     CrossEncoder,
     EmbeddingModel,
@@ -103,6 +107,7 @@ class Pipeline:
         checkpoint_store: Any,
         event_emitter: EventEmitter | None = None,
         decision_engine: DecisionEngine | None = None,
+        modal_resolver: ModalStrengthResolver | None = None,
     ) -> None:
         self.phases = phases
         self.config = config
@@ -111,6 +116,7 @@ class Pipeline:
         self.checkpoint_store = checkpoint_store
         self.event_emitter = event_emitter or NoOpEventEmitter()
         self.decision_engine = decision_engine
+        self.modal_resolver = modal_resolver
         # Stores
         self._manifest_store = JsonRunManifestStore(self.config.execution.runs_dir)
         self._artifact_store = JsonArtifactStore(self.config.execution.artifacts_dir)
@@ -181,6 +187,7 @@ class Pipeline:
         acc_classifier: Any | None = None,
         arc_classifier: Any | None = None,
         ner_extractor: Any | None = None,
+        modal_resolver: ModalStrengthResolver | None = None,
     ) -> "Pipeline":
         """Create a pipeline for a specific task.
 
@@ -248,17 +255,25 @@ class Pipeline:
 
         from episteme_pipeline.decision.observable import ObservableDecisionEngine
 
-        if decision_engine is None and getattr(config, "decision_engine", None) and getattr(config.decision_engine, "provider", "none") == "auto":
-            from episteme_pipeline.decision.jev_client import AutoDecisionEngine
-            decision_engine = AutoDecisionEngine()
+        if decision_engine is None and config.decision_engine is not None:
+            from episteme_pipeline.decision.jev_client import resolve_decision_engine
+
+            decision_engine = resolve_decision_engine(config.decision_engine)
 
         decision_engine = ensure_decision_engine(decision_engine)
         if decision_engine is not None and not isinstance(decision_engine, ObservableDecisionEngine):
-            stochastic_rate = getattr(config.decision_engine, "stochastic_audit_rate", 0.0) if config.decision_engine else 0.0
+            stochastic_rate = config.decision_engine.stochastic_audit_rate if config.decision_engine else 0.0
             decision_engine = ObservableDecisionEngine(
                 inner=decision_engine,
                 stochastic_audit_rate=stochastic_rate,
             )
+
+        from episteme_pipeline.decision.modal_resolver import HybridModalResolver
+
+        modal_resolver = ensure_modal_strength_resolver(modal_resolver) or HybridModalResolver.create(
+            config=config.modal_resolver,
+            decision_engine=decision_engine,
+        )
 
         # Wrap the LLM once, here, so the disk cache lands under the configured
         # runs_dir instead of the hardcoded repo-root default (F-10). Every
@@ -347,6 +362,7 @@ class Pipeline:
                 acc_classifier=acc_classifier,
                 arc_classifier=arc_classifier,
                 decision_engine=decision_engine,
+                modal_resolver=modal_resolver,
             ),
             Phase5ArgumentWebRunner(
                 config.phase5,
@@ -358,6 +374,8 @@ class Pipeline:
                 cast(Any, config.phase6),
                 config.graph_schema,
                 graph_store=projection_graph,
+                decision_engine=decision_engine,
+                modal_resolver=modal_resolver,
             ),
         ]
 
@@ -392,6 +410,7 @@ class Pipeline:
             checkpoint_store=checkpoint_store,
             event_emitter=emitter,
             decision_engine=decision_engine,
+            modal_resolver=modal_resolver,
         )
 
     async def _hydrate_previous_collection(

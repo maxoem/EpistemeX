@@ -23,6 +23,9 @@ from episteme_pipeline.events.bus import ContextualEventEmitter, SimpleEventEmit
 from episteme_pipeline.events.models import (
     ComponentCompleted,
     ComponentStarted,
+    DecisionEvaluationCompleted,
+    DecisionEvaluationStarted,
+    DecisionGatingTriggered,
     EntityProcessed,
     PhaseCompleted,
     ProgressAdvanced,
@@ -202,11 +205,14 @@ def _run_demo_pipeline(
     log_dir = Path(".pipeline_runs") / run_id
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "pipeline.log"
+    decisions_file = log_dir / "decisions.jsonl"
 
     phase_records: list[RunPhaseRecord] = []
     start_time = datetime.now(timezone.utc)
+    all_decisions: list[dict[str, Any]] = []
 
-    with log_file.open("w", encoding="utf-8") as lf:
+    with log_file.open("w", encoding="utf-8") as lf, decisions_file.open("w", encoding="utf-8") as df:
+        import json
         lf.write(f"[{start_time.isoformat()}] [INFO] pipeline: Starting pipeline run {run_id} (Simulation)\n")
         for phase_name, ordinal in phases:
             phase_start = datetime.now(timezone.utc)
@@ -239,6 +245,69 @@ def _run_demo_pipeline(
                         entity_type="TheoreticalConcept",
                     )
                 )
+
+                # Simulate System 1 Decision
+                is_audit = (step % 20 == 0)
+                is_escalated = (step % 6 == 0) and not is_audit
+                is_fast_exit = not is_escalated
+                action = "stochastic_audit" if is_audit else ("escalated_to_llm" if is_escalated else "fast_exit")
+                acc = round(0.95 if is_fast_exit else 0.72, 3)
+                dur = 0.013 if is_fast_exit else 2.15
+                tok_saved = 480 if is_fast_exit else 0
+                prim = "choice" if ordinal in (3, 4) else "noul"
+                val = "SUPPORTS" if step % 2 == 0 else "ATTACKS" if prim == "choice" else "true"
+                pred_set = [val] if is_fast_exit else [val, "ATTACKS" if val == "SUPPORTS" else "false"]
+
+                context_emitter.emit(
+                    DecisionEvaluationCompleted(
+                        engine_name="LayaDecisionEngine",
+                        primitive=prim,
+                        question=f"Evaluate dialectical relation for concept {step} in {phase_name}",
+                        prompt_name="decision_pair_gating" if ordinal == 3 else "acc_arc_triage",
+                        selected_value=val,
+                        class_probability=round(acc - 0.03, 3),
+                        empirical_accuracy=acc,
+                        probabilities={val: acc, "OTHER": round(1.0 - acc, 3)},
+                        prediction_set=pred_set,
+                        is_stochastic_audit=is_audit,
+                        duration_seconds=dur,
+                        tokens_saved_estimate=tok_saved,
+                    )
+                )
+                context_emitter.emit(
+                    DecisionGatingTriggered(
+                        gate_name=f"gate_{phase_name}",
+                        action_taken=action,
+                        empirical_accuracy=acc,
+                        threshold=0.85,
+                        prediction_set_size=len(pred_set),
+                    )
+                )
+
+                dec_entry = {
+                    "decision_id": f"dec_{run_id[:8]}_{ordinal}_{step}",
+                    "run_id": run_id,
+                    "phase_name": phase_name,
+                    "primitive": prim,
+                    "question": f"Evaluate dialectical relation for concept {step} in {phase_name}",
+                    "state_snippet": f"State context for concept {step} in {phase_name}",
+                    "selected_value": val,
+                    "system_1_choice": val,
+                    "system_2_choice": val if is_audit else ("ATTACKS" if is_escalated else None),
+                    "options": ["SUPPORTS", "ATTACKS"] if prim == "choice" else ["true", "false"],
+                    "prediction_set": pred_set,
+                    "class_probability": round(acc - 0.03, 3),
+                    "empirical_accuracy": acc,
+                    "is_stochastic_audit": is_audit,
+                    "duration_seconds": dur,
+                    "tokens_saved_estimate": tok_saved,
+                    "action_taken": action,
+                    "entropy": 0.32 if is_fast_exit else 0.78,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                all_decisions.append(dec_entry)
+                df.write(json.dumps(dec_entry) + "\n")
+
                 if ordinal >= 2:
                     conf = round(
                         min(
@@ -307,6 +376,70 @@ def _run_demo_pipeline(
         lf.write(f"[{end_time.isoformat()}] [INFO] pipeline: Pipeline run {run_id} completed\n")
         print(f"=== Pipeline run {run_id} completed successfully ===")
 
+    # Aggregate DecisionRunMetrics
+    tot_dec = len(all_decisions)
+    fe_cnt = sum(1 for d in all_decisions if d["action_taken"] in ("fast_exit", "stochastic_audit"))
+    esc_cnt = tot_dec - fe_cnt
+    aud_cnt = sum(1 for d in all_decisions if d["is_stochastic_audit"])
+    tok_saved = sum(d["tokens_saved_estimate"] for d in all_decisions)
+    cost_saved = round(tok_saved * 0.000008, 4)
+    lats = [d["duration_seconds"] * 1000 for d in all_decisions if d["action_taken"] == "fast_exit"]
+    lats.sort()
+    p50 = round(lats[len(lats) // 2], 2) if lats else 12.8
+    p95 = round(lats[int(len(lats) * 0.95)], 2) if lats else 15.4
+    p99 = round(lats[int(len(lats) * 0.99)], 2) if lats else 18.2
+
+    by_phase: dict[str, Any] = {}
+    by_prim: dict[str, int] = {}
+    for d in all_decisions:
+        pname = d["phase_name"]
+        ps = by_phase.setdefault(
+            pname,
+            {
+                "phase_name": pname,
+                "total_evaluations": 0,
+                "fast_exits": 0,
+                "escalations_to_llm": 0,
+                "stochastic_audits": 0,
+                "tokens_saved_estimate": 0,
+                "duration_seconds": 0.0,
+                "avg_empirical_accuracy": 0.0,
+            },
+        )
+        ps["total_evaluations"] += 1
+        if d["action_taken"] in ("fast_exit", "stochastic_audit"):
+            ps["fast_exits"] += 1
+        else:
+            ps["escalations_to_llm"] += 1
+        if d["is_stochastic_audit"]:
+            ps["stochastic_audits"] += 1
+        ps["tokens_saved_estimate"] += d["tokens_saved_estimate"]
+        ps["duration_seconds"] += d["duration_seconds"]
+        ps["avg_empirical_accuracy"] += d["empirical_accuracy"]
+        by_prim[d["primitive"]] = by_prim.get(d["primitive"], 0) + 1
+
+    for ps in by_phase.values():
+        if ps["total_evaluations"] > 0:
+            ps["avg_empirical_accuracy"] = round(
+                ps["avg_empirical_accuracy"] / ps["total_evaluations"], 3
+            )
+
+    decision_metrics_dict = {
+        "total_decisions": tot_dec,
+        "fast_exit_count": fe_cnt,
+        "fast_exit_ratio": round(fe_cnt / max(1, tot_dec), 3),
+        "llm_escalation_count": esc_cnt,
+        "llm_escalation_ratio": round(esc_cnt / max(1, tot_dec), 3),
+        "stochastic_audit_count": aud_cnt,
+        "tokens_saved_estimate": tok_saved,
+        "cost_saved_usd_estimate": cost_saved,
+        "latency_p50_ms": p50,
+        "latency_p95_ms": p95,
+        "latency_p99_ms": p99,
+        "by_phase": by_phase,
+        "by_primitive": by_prim,
+    }
+
     # Persist run manifest to .pipeline_runs/<run_id>.json
     try:
         manifest = RunManifest(
@@ -324,6 +457,7 @@ def _run_demo_pipeline(
                 "structural_anchor": structural_anchor,
             },
             parent_run_id=parent_run_id,
+            decision_metrics=decision_metrics_dict,
         )
         store = JsonRunManifestStore(".pipeline_runs")
         store.write_manifest(manifest)

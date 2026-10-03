@@ -39,6 +39,7 @@ from .models import (
     ProgressCompleted,
     EvaluationCompleted,
     EvaluationScoreLogged,
+    ModalStrengthResolved,
 )
 from .observers import (
     LoggingObserver,
@@ -89,6 +90,7 @@ __all__ = [
     "ProgressCompleted",
     "EvaluationCompleted",
     "EvaluationScoreLogged",
+    "ModalStrengthResolved",
     # Observers
     "LoggingObserver",
     "JsonlRunObserver",

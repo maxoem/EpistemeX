@@ -578,6 +578,8 @@ class TheoryNode(BaseModel):
         default=EpistemicStatus.NEUTRAL, description="Lakatosian or epistemic status."
     )
     confidence: float = Field(default=1.0, description="Extraction or validation confidence.")
+    modal_strength: float = Field(default=0.6, ge=0.0, le=1.0, description="Author propositional modal certainty M(phi).")
+    base_score: float = Field(default=0.6, ge=0.0, le=1.0, description="Prior plausibility tau_0 for QBAF.")
     description: Optional[str] = Field(default=None, description="Detailed text or description.")
     provenance: list[str] = Field(default_factory=list, description="Source chunk IDs or citation URIs.")
     attributes: dict[str, Any] = Field(default_factory=dict, description="Arbitrary domain attributes.")
@@ -611,8 +613,8 @@ class TheoryNode(BaseModel):
         KeyError
             If key is not found in model fields or attributes dictionary.
         """
-        if hasattr(self, key):
-            return getattr(self, key)
+        if key in self.model_fields:
+            return object.__getattribute__(self, key)
         if key in self.attributes:
             return self.attributes[key]
         raise KeyError(f"Attribute or field '{key}' not found on TheoryNode '{self.id}'.")
@@ -632,8 +634,8 @@ class TheoryNode(BaseModel):
         Any
             Field value, attribute value, or default.
         """
-        if hasattr(self, key):
-            val = getattr(self, key)
+        if key in self.model_fields:
+            val = object.__getattribute__(self, key)
             if val is not None:
                 return val
         return self.attributes.get(key, default)
@@ -668,6 +670,15 @@ class TheoryEdge(BaseModel):
     confidence: float = Field(default=1.0, description="Confidence score.")
     weight: float = Field(default=1.0, description="Edge weight.")
     polarity: int = Field(default=1, description="Epistemic polarity (-1, 0, +1).")
+    inferential_force: float = Field(default=0.75, ge=0.0, le=1.0, description="Toulminian warrant validity I_(j->i).")
+    stance_probability: float | None = Field(default=None, description="Canonical perception class probability P(stance).")
+    model_confidence: float | None = Field(default=None, description="Perception calibration confidence score C.")
+    is_admissible: bool = Field(default=True, description="Admissibility status under active thresholds.")
+    active_weight: float = Field(default=0.75, ge=0.0, le=1.0, description="Net weight W_ji ingested by gradual semantics.")
+    class_probability: float | None = Field(default=None, description="Softmax probability P(stance).")
+    empirical_accuracy: float | None = Field(default=None, description="Calibrated empirical accuracy frequency.")
+    modal_strength: float = Field(default=1.0, description="Propositional modal strength in [0, 1].")
+    effective_weight: float | None = Field(default=None, description="Decoupled mathematical edge weight w = M * P.")
     attributes: dict[str, Any] = Field(default_factory=dict, description="Arbitrary domain attributes.")
 
     @property
@@ -699,8 +710,8 @@ class TheoryEdge(BaseModel):
         KeyError
             If key is not found in model fields or attributes dictionary.
         """
-        if hasattr(self, key):
-            return getattr(self, key)
+        if key in self.model_fields:
+            return object.__getattribute__(self, key)
         if key in self.attributes:
             return self.attributes[key]
         raise KeyError(f"Attribute or field '{key}' not found on TheoryEdge '{self.source}->{self.target}'.")
@@ -720,8 +731,8 @@ class TheoryEdge(BaseModel):
         Any
             Field value, attribute value, or default.
         """
-        if hasattr(self, key):
-            val = getattr(self, key)
+        if key in self.model_fields:
+            val = object.__getattribute__(self, key)
             if val is not None:
                 return val
         return self.attributes.get(key, default)

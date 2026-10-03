@@ -14,13 +14,25 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Sequence
+import platform
+from typing import Any, Sequence, TYPE_CHECKING
 
+from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from episteme_pipeline.config import DecisionEngineConfig
 from episteme_pipeline.decision.mock import compute_conformal_prediction_set
+from episteme_pipeline.decision.strategies import (
+    estimate_tokens_saved,
+    evaluate_questions_sequentially,
+    get_question_strategy,
+)
 from episteme_pipeline.protocols.decision import (
     DecisionEngine,
     DecisionNoulResult,
+    DecisionQuestion,
     DecisionScore,
+    ensure_decision_question,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,33 +54,7 @@ class DecisionEngineError(RuntimeError):
         self.cause = cause
 
 
-def _estimate_tokens_saved(
-    state: Any,
-    question: str,
-    options: Sequence[Any] | dict[str, Any] | None = None,
-) -> int:
-    """Heuristic estimate of generative LLM tokens saved by System 1 fast-exit.
-
-    Parameters
-    ----------
-    state : Any
-        The input state block.
-    question : str
-        The evaluation question.
-    options : Sequence or dict or None, default None
-        Options or levels considered.
-
-    Returns
-    -------
-    int
-        Estimated tokens saved (input prompt + completion).
-    """
-    state_len = len(str(state))
-    question_len = len(question)
-    options_count = len(options) if options else 0
-    prompt_tokens = (state_len // 4) + (question_len // 4) + (options_count * 8)
-    completion_tokens = 50
-    return prompt_tokens + completion_tokens
+_estimate_tokens_saved = estimate_tokens_saved
 
 
 class LayaDecisionEngine:
@@ -208,16 +194,18 @@ class LayaDecisionEngine:
             )
 
             if has_large_choices and self.embed_fn is not None:
-                import laya_mlx as laya
+                try:
+                    from laya_mlx import predict_shortlist
 
-                if hasattr(laya, "predict_shortlist"):
-                    return laya.predict_shortlist(
+                    return predict_shortlist(
                         agent,
                         state,
                         questions,
                         self.embed_fn,
                         k=self.shortlist_threshold,
                     )
+                except (ImportError, AttributeError):
+                    pass
 
             return agent.predict(state, questions)
         except Exception as exc:
@@ -426,10 +414,33 @@ class LayaDecisionEngine:
             tokens_saved_estimate=tokens_saved,
         )
 
+    async def evaluate(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        question: DecisionQuestion | dict[str, Any],
+    ) -> DecisionScore | DecisionNoulResult:
+        """Evaluate a single typed question against a state payload.
+
+        Parameters
+        ----------
+        state : str or dict or list
+            Structured state payload.
+        question : DecisionQuestion or dict
+            Typed decision question specification or dictionary.
+
+        Returns
+        -------
+        DecisionScore or DecisionNoulResult
+            Evaluation outcome.
+        """
+        typed_q = ensure_decision_question(question)
+        strategy = get_question_strategy(typed_q.type)
+        return await strategy.evaluate_single(self, state, typed_q)
+
     async def evaluate_batch(
         self,
         state: str | dict[str, Any] | list[Any],
-        questions: dict[str, dict[str, Any]],
+        questions: dict[str, DecisionQuestion | dict[str, Any]],
     ) -> dict[str, DecisionScore | DecisionNoulResult]:
         """Evaluate multiple typed questions in a single forward pass.
 
@@ -437,7 +448,7 @@ class LayaDecisionEngine:
         ----------
         state : str or dict or list
             State payload.
-        questions : dict of str to dict
+        questions : dict of str to (DecisionQuestion or dict)
             Dictionary mapping question identifiers to specifications.
 
         Returns
@@ -445,76 +456,28 @@ class LayaDecisionEngine:
         dict of str to (DecisionScore or DecisionNoulResult)
             Mapped results for all evaluated questions.
         """
-        laya_questions: dict[str, dict[str, Any]] = {}
-        for q_id, q_spec in questions.items():
-            q_type = q_spec.get("type", "choice")
-            instructions = q_spec.get("instructions", q_spec.get("question", ""))
-            criteria = q_spec.get("criteria", q_spec.get("options", q_spec.get("levels")))
-            entry: dict[str, Any] = {"type": q_type, "instructions": instructions}
-            if criteria is not None:
-                entry["criteria"] = criteria
-            laya_questions[q_id] = entry
+        typed_questions = {q_id: ensure_decision_question(q_spec) for q_id, q_spec in questions.items()}
+        laya_questions = {
+            q_id: get_question_strategy(q_item.type).to_laya_spec(q_item)
+            for q_id, q_item in typed_questions.items()
+        }
 
         res = await self._predict_async(state, laya_questions)
         answers = res.get("answers", {})
         action_meta = res.get("action", {})
         default_act_p = float(action_meta.get("act_probability", 0.85))
 
-        results: dict[str, DecisionScore | DecisionNoulResult] = {}
-        for q_id, q_spec in questions.items():
-            q_type = q_spec.get("type", "choice")
-            raw_ans = answers.get(q_id)
-
-            if q_type == "noul":
-                prob = float(raw_ans) if isinstance(raw_ans, (int, float)) else 0.5
-                passed = prob >= self.default_confidence_threshold
-                results[q_id] = DecisionNoulResult(
-                    probability=prob,
-                    empirical_accuracy=default_act_p,
-                    passed=passed,
-                )
-            elif q_type == "score":
-                levels = q_spec.get("criteria", q_spec.get("levels", [1, 2, 3]))
-                if isinstance(raw_ans, (int, float)):
-                    idx = min(int(round(raw_ans)), len(levels) - 1)
-                    selected = levels[idx]
-                    probs = {str(l): 0.8 if l == selected else 0.1 for l in levels}
-                elif isinstance(raw_ans, dict):
-                    probs = {str(k): float(v) for k, v in raw_ans.items()}
-                    selected = max(probs, key=probs.get) if probs else levels[0]
-                else:
-                    selected = levels[0]
-                    probs = {str(l): 0.5 for l in levels}
-                results[q_id] = DecisionScore(
-                    selected_option=selected,
-                    class_probability=probs.get(str(selected), 0.8),
-                    empirical_accuracy=default_act_p,
-                    probabilities=probs,
-                    prediction_set=[str(selected)],
-                    tokens_saved_estimate=_estimate_tokens_saved(state, q_spec.get("instructions", ""), levels),
-                )
-            else:  # choice
-                options = q_spec.get("criteria", q_spec.get("options", []))
-                alpha = q_spec.get("alpha", self.conformal_alpha)
-                if isinstance(raw_ans, dict):
-                    probs = {str(k): float(v) for k, v in raw_ans.items()}
-                    selected = max(probs, key=probs.get)
-                else:
-                    opt_list = list(options.keys()) if isinstance(options, dict) else list(options)
-                    selected = opt_list[0] if opt_list else "UNKNOWN"
-                    probs = {selected: 0.85}
-                c_prob = probs.get(selected, 0.85)
-                pred_set = compute_conformal_prediction_set(probs, alpha=alpha)
-                results[q_id] = DecisionScore(
-                    selected_option=selected,
-                    class_probability=c_prob,
-                    empirical_accuracy=default_act_p,
-                    probabilities=probs,
-                    prediction_set=pred_set,
-                    tokens_saved_estimate=_estimate_tokens_saved(state, q_spec.get("instructions", ""), options),
-                )
-
-        return results
+        return {
+            q_id: get_question_strategy(q_item.type).decode_laya_answer(
+                question=q_item,
+                raw_answer=answers.get(q_id),
+                default_act_p=default_act_p,
+                state=state,
+                default_confidence_threshold=self.default_confidence_threshold,
+                conformal_alpha=self.conformal_alpha,
+            )
+            for q_id, q_item in typed_questions.items()
+        }
 
 
 class TransformersDecisionEngine:
@@ -610,6 +573,41 @@ class TransformersDecisionEngine:
                 cause=exc,
             ) from exc
 
+    @staticmethod
+    def _extract_model_logits(outputs: Any) -> Any:
+        """Extract prediction logits from Hugging Face ModelOutput or PyTorch tensor.
+
+        Supports sequence classification outputs (``logits``) and base transformer
+        hidden states (using normalized pooled representation as similarity proxy).
+
+        Parameters
+        ----------
+        outputs : Any
+            Hugging Face ModelOutput or PyTorch tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Extracted logits tensor for candidate ranking.
+        """
+        try:
+            return outputs.logits.squeeze(-1)
+        except AttributeError:
+            pass
+
+        try:
+            return outputs.last_hidden_state[:, 0, :].norm(dim=-1)
+        except AttributeError:
+            pass
+
+        if isinstance(outputs, dict):
+            if "logits" in outputs:
+                return outputs["logits"].squeeze(-1)
+            if "last_hidden_state" in outputs:
+                return outputs["last_hidden_state"][:, 0, :].norm(dim=-1)
+
+        return outputs.squeeze(-1)
+
     def _predict_with_model_sync(
         self,
         state: Any,
@@ -637,13 +635,6 @@ class TransformersDecisionEngine:
         if not opt_keys:
             return {"UNKNOWN": 1.0}
 
-        # If model exposes a bespoke .predict or .score method (e.g. wrapper), delegate directly
-        if hasattr(model, "predict"):
-            res = model.predict(state, {question: {"type": "choice", "criteria": opt_keys}})
-            ans = res.get("answers", {}).get(question, {})
-            if isinstance(ans, dict):
-                return {str(k): float(v) for k, v in ans.items()}
-
         import torch
 
         state_str = str(state)
@@ -660,13 +651,7 @@ class TransformersDecisionEngine:
             )
             inputs = {k: v.to(self.device or "cpu") for k, v in inputs.items()}
             outputs = model(**inputs)
-
-            if hasattr(outputs, "logits"):
-                logits = outputs.logits.squeeze(-1)
-            else:
-                # Use pooled representation norm / similarity as scoring proxy
-                hidden = outputs.last_hidden_state[:, 0, :]
-                logits = hidden.norm(dim=-1)
+            logits = self._extract_model_logits(outputs)
 
             probs = torch.softmax(logits, dim=0).tolist()
             if isinstance(probs, float):
@@ -785,18 +770,41 @@ class TransformersDecisionEngine:
         level_strs = [str(lvl) for lvl in levels]
         return await self.evaluate_choice(state, question, level_strs)
 
+    async def evaluate(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        question: DecisionQuestion | dict[str, Any],
+    ) -> DecisionScore | DecisionNoulResult:
+        """Evaluate a single typed question against a state payload.
+
+        Parameters
+        ----------
+        state : str or dict or list
+            Structured state payload.
+        question : DecisionQuestion or dict
+            Typed decision question specification or dictionary.
+
+        Returns
+        -------
+        DecisionScore or DecisionNoulResult
+            Evaluation outcome.
+        """
+        typed_q = ensure_decision_question(question)
+        strategy = get_question_strategy(typed_q.type)
+        return await strategy.evaluate_single(self, state, typed_q)
+
     async def evaluate_batch(
         self,
         state: str | dict[str, Any] | list[Any],
-        questions: dict[str, dict[str, Any]],
+        questions: dict[str, DecisionQuestion | dict[str, Any]],
     ) -> dict[str, DecisionScore | DecisionNoulResult]:
-        """Evaluate multiple questions against state sequentially or in threads.
+        """Evaluate multiple questions against state sequentially via strategies.
 
         Parameters
         ----------
         state : str or dict or list
             State payload.
-        questions : dict of str to dict
+        questions : dict of str to (DecisionQuestion or dict)
             Question definitions.
 
         Returns
@@ -804,54 +812,376 @@ class TransformersDecisionEngine:
         dict of str to (DecisionScore or DecisionNoulResult)
             Results for all questions.
         """
-        results: dict[str, DecisionScore | DecisionNoulResult] = {}
-        for key, q_spec in questions.items():
-            q_type = q_spec.get("type", "choice")
-            q_text = q_spec.get("instructions", q_spec.get("question", ""))
-            if q_type == "noul":
-                results[key] = await self.evaluate_noul(state, q_text)
-            elif q_type == "score":
-                levels = q_spec.get("criteria", q_spec.get("levels", [1, 2, 3]))
-                results[key] = await self.evaluate_score(state, q_text, levels)
-            else:
-                opts = q_spec.get("criteria", q_spec.get("options", []))
-                alpha = q_spec.get("alpha")
-                results[key] = await self.evaluate_choice(state, q_text, opts, alpha=alpha)
-        return results
+        return await evaluate_questions_sequentially(self, state, questions)
 
-import platform
+def _is_mlx_available() -> bool:
+    """Check if MLX execution is supported on the current hardware.
+
+    Returns
+    -------
+    bool
+        True if running on Apple Silicon (macOS arm64) with ``laya_mlx`` installed.
+    """
+    if platform.system() == "Darwin" and platform.machine() == "arm64":
+        try:
+            import laya_mlx  # noqa: F401
+
+            return True
+        except ImportError:
+            return False
+    return False
+
+
+def _map_transformers_checkpoint(checkpoint: str) -> str:
+    """Map MLX checkpoint repository identifiers to PyTorch/Transformers equivalents.
+
+    Parameters
+    ----------
+    checkpoint : str
+        Source checkpoint identifier.
+
+    Returns
+    -------
+    str
+        PyTorch/Transformers compatible checkpoint repository identifier.
+    """
+    if "mlx" in checkpoint.lower():
+        return "convaiinnovations/laya"
+    return checkpoint
+
+
+def _create_engine_backend(
+    provider: str,
+    checkpoint: str = "aac6fef/laya-mlx",
+    default_confidence_threshold: float = 0.85,
+    conformal_alpha: float = 0.05,
+    timeout_seconds: float = 2.0,
+    batch_size: int = 16,
+    device: str | None = None,
+    *args: Any,
+    **kwargs: Any,
+) -> DecisionEngine:
+    """Instantiate a concrete DecisionEngine adapter based on provider and platform.
+
+    Parameters
+    ----------
+    provider : str
+        Backend selector ('laya', 'mlx', 'transformers', 'mock', 'stub', or 'auto').
+    checkpoint : str, default "aac6fef/laya-mlx"
+        Model repository or local path.
+    default_confidence_threshold : float, default 0.85
+        Threshold for binary and gating decisions.
+    conformal_alpha : float, default 0.05
+        Conformal significance level (1 - alpha coverage).
+    timeout_seconds : float, default 2.0
+        Per-request inference timeout in seconds.
+    batch_size : int, default 16
+        Batch processing size.
+    device : str or None, default None
+        Target compute device.
+    *args : Any
+        Positional arguments forwarded to backend.
+    **kwargs : Any
+        Keyword arguments forwarded to backend.
+
+    Returns
+    -------
+    DecisionEngine
+        Configured concrete decision engine instance.
+    """
+    provider_clean = provider.strip().lower()
+
+    if provider_clean in ("mock", "stub"):
+        from episteme_pipeline.decision.mock import MockJevDecisionEngine
+
+        return MockJevDecisionEngine(
+            default_confidence_threshold=default_confidence_threshold,
+            conformal_alpha=conformal_alpha,
+        )
+
+    use_laya = False
+    if provider_clean in ("laya", "mlx"):
+        use_laya = True
+    elif provider_clean == "transformers":
+        use_laya = False
+    else:  # auto or unspecified
+        use_laya = _is_mlx_available()
+
+    if use_laya:
+        return LayaDecisionEngine(
+            checkpoint=checkpoint,
+            batch_size=batch_size,
+            timeout_seconds=timeout_seconds,
+            default_confidence_threshold=default_confidence_threshold,
+            conformal_alpha=conformal_alpha,
+            *args,
+            **kwargs,
+        )
+    else:
+        tf_model = _map_transformers_checkpoint(checkpoint)
+        dev_val = str(device) if device and str(device) not in ("auto", "mlx") else None
+        return TransformersDecisionEngine(
+            model_name=tf_model,
+            device=dev_val,
+            batch_size=batch_size,
+            timeout_seconds=timeout_seconds,
+            default_confidence_threshold=default_confidence_threshold,
+            conformal_alpha=conformal_alpha,
+            *args,
+            **kwargs,
+        )
+
 
 class AutoDecisionEngine:
-    """Decision Engine that automatically selects the best available backend.
-    
-    It prefers LayaDecisionEngine on Apple Silicon if laya-mlx is installed,
-    otherwise it falls back to TransformersDecisionEngine.
+    """Decision Engine adapter delegating to the best available backend.
+
+    Prefers :class:`LayaDecisionEngine` on Apple Silicon when ``laya_mlx`` is
+    installed; otherwise falls back to :class:`TransformersDecisionEngine`.
+
+    Parameters
+    ----------
+    checkpoint : str, default "aac6fef/laya-mlx"
+        Model checkpoint identifier (MLX format or Hugging Face repository ID).
+    model_name : str or None, optional
+        Alternative checkpoint identifier for Transformers.
+    provider : str or None, optional
+        Explicit backend selector ('laya', 'mlx', 'transformers', or 'auto').
+    default_confidence_threshold : float, default 0.85
+        Empirical accuracy threshold for fast-exit routing.
+    conformal_alpha : float, default 0.05
+        Significance level for conformal prediction sets.
+    batch_size : int, default 16
+        Maximum batch size for evaluation.
+    timeout_seconds : float, default 2.0
+        Per-decision call timeout in seconds.
+    *args : Any
+        Additional positional arguments passed to backend.
+    **kwargs : Any
+        Additional keyword arguments forwarded to backend engines.
     """
-    
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self._inner: Any = None
-        is_apple_silicon = platform.system() == "Darwin" and platform.machine() == "arm64"
-        laya_available = False
-        
-        if is_apple_silicon:
-            try:
-                import laya_mlx  # noqa: F401
-                laya_available = True
-            except ImportError:
-                pass
-                
-        if laya_available:
-            self._inner = LayaDecisionEngine(*args, **kwargs)
-        else:
-            self._inner = TransformersDecisionEngine(*args, **kwargs)
-            
-    async def evaluate_noul(self, state: str | dict[str, Any] | list[Any], question: str) -> DecisionNoulResult:
+
+    def __init__(
+        self,
+        checkpoint: str = "aac6fef/laya-mlx",
+        model_name: str | None = None,
+        provider: str | None = None,
+        default_confidence_threshold: float = 0.85,
+        conformal_alpha: float = 0.05,
+        batch_size: int = 16,
+        timeout_seconds: float = 2.0,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        target_checkpoint = model_name if model_name is not None else checkpoint
+        self._inner: DecisionEngine = _create_engine_backend(
+            provider=provider or "auto",
+            checkpoint=target_checkpoint,
+            default_confidence_threshold=default_confidence_threshold,
+            conformal_alpha=conformal_alpha,
+            batch_size=batch_size,
+            timeout_seconds=timeout_seconds,
+            *args,
+            **kwargs,
+        )
+
+    @property
+    def name(self) -> str:
+        """Return the active underlying engine name.
+
+        Returns
+        -------
+        str
+            Engine identifier.
+        """
+        return self._inner.name
+
+    async def evaluate_noul(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        question: str,
+    ) -> DecisionNoulResult:
+        """Evaluate a binary yes/no statement.
+
+        Parameters
+        ----------
+        state : str or dict or list
+            State payload.
+        question : str
+            Proposition or question.
+
+        Returns
+        -------
+        DecisionNoulResult
+            Evaluation outcome.
+        """
         return await self._inner.evaluate_noul(state, question)
-        
+
     async def evaluate_choice(
-        self, state: str | dict[str, Any] | list[Any], question: str, options: list[str] | dict[str, str], alpha: float | None = None
+        self,
+        state: str | dict[str, Any] | list[Any],
+        question: str,
+        options: list[str] | dict[str, str],
+        alpha: float | None = None,
     ) -> DecisionScore:
+        """Evaluate a categorical choice question.
+
+        Parameters
+        ----------
+        state : str or dict or list
+            State payload.
+        question : str
+            Categorical decision question.
+        options : list of str or dict of str to str
+            Candidate choices.
+        alpha : float or None, default None
+            Miscoverage significance level.
+
+        Returns
+        -------
+        DecisionScore
+            Scored categorical decision.
+        """
         return await self._inner.evaluate_choice(state, question, options, alpha)
-        
-    async def evaluate_score(self, state: str | dict[str, Any] | list[Any], question: str, levels: list[int | str]) -> DecisionScore:
+
+    async def evaluate_score(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        question: str,
+        levels: list[int | str],
+    ) -> DecisionScore:
+        """Evaluate an ordered scale or rubric score.
+
+        Parameters
+        ----------
+        state : str or dict or list
+            State payload.
+        question : str
+            Rubric or scoring question.
+        levels : list of int or list of str
+            Ordered score levels.
+
+        Returns
+        -------
+        DecisionScore
+            Score outcome.
+        """
         return await self._inner.evaluate_score(state, question, levels)
+
+    async def evaluate(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        question: DecisionQuestion | dict[str, Any],
+    ) -> DecisionScore | DecisionNoulResult:
+        """Evaluate a single typed question.
+
+        Parameters
+        ----------
+        state : str or dict or list
+            State payload.
+        question : DecisionQuestion or dict
+            Proposition or question specification.
+
+        Returns
+        -------
+        DecisionScore or DecisionNoulResult
+            Evaluation outcome.
+        """
+        return await self._inner.evaluate(state, question)
+
+    async def evaluate_batch(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        questions: dict[str, DecisionQuestion | dict[str, Any]],
+    ) -> dict[str, DecisionScore | DecisionNoulResult]:
+        """Evaluate multiple questions in batch.
+
+        Parameters
+        ----------
+        state : str or dict or list
+            State payload.
+        questions : dict of str to (DecisionQuestion or dict)
+            Question specifications.
+
+        Returns
+        -------
+        dict of str to (DecisionScore or DecisionNoulResult)
+            Batch evaluation results.
+        """
+        return await self._inner.evaluate_batch(state, questions)
+
+
+def resolve_decision_engine(
+    config: DecisionEngineConfig | dict[str, Any] | BaseModel | DecisionEngine | None = None,
+    *,
+    fallback_to_mock: bool = False,
+) -> DecisionEngine | None:
+    """Instantiate and configure the appropriate DecisionEngine from configuration.
+
+    Inspects configuration objects (such as ``DecisionEngineConfig``,
+    ``DecisionEngineSettings``, or dictionaries) and constructs the matching
+    concrete ``DecisionEngine`` implementation.
+
+    Parameters
+    ----------
+    config : DecisionEngineConfig, dict, BaseModel, DecisionEngine, or None, default None
+        Configuration object, dictionary, or existing DecisionEngine instance.
+    fallback_to_mock : bool, default False
+        Whether to instantiate a MockJevDecisionEngine if dependencies or weights
+        fail to initialize.
+
+    Returns
+    -------
+    DecisionEngine or None
+        Resolved DecisionEngine instance, or None if provider is 'none' / unconfigured.
+
+    Raises
+    ------
+    TypeError
+        If config is not a recognized configuration shape.
+    DecisionEngineError
+        If an explicit non-mock provider cannot be instantiated and fallback_to_mock is False.
+    """
+    if config is None:
+        return None
+
+    if isinstance(config, DecisionEngine):
+        return config
+
+    from episteme_pipeline.config import DecisionEngineConfig
+
+    if isinstance(config, DecisionEngineConfig):
+        cfg = config
+    elif isinstance(config, dict):
+        cfg = DecisionEngineConfig.model_validate(config)
+    elif isinstance(config, BaseModel):
+        cfg = DecisionEngineConfig.model_validate(config.model_dump())
+    else:
+        raise TypeError(
+            f"Expected DecisionEngineConfig, dict, or DecisionEngine, got {type(config).__name__}"
+        )
+
+    provider_clean = cfg.provider.strip().lower()
+    if provider_clean in ("none", "disabled", ""):
+        return None
+
+    conf_thresh = cfg.fast_exit_threshold or cfg.default_confidence_threshold
+
+    try:
+        return _create_engine_backend(
+            provider=provider_clean,
+            checkpoint=cfg.model_checkpoint,
+            default_confidence_threshold=conf_thresh,
+            conformal_alpha=cfg.conformal_alpha,
+            timeout_seconds=cfg.timeout_seconds,
+            device=cfg.device,
+        )
+    except Exception:
+        if fallback_to_mock:
+            from episteme_pipeline.decision.mock import MockJevDecisionEngine
+
+            return MockJevDecisionEngine(
+                default_confidence_threshold=conf_thresh,
+                conformal_alpha=cfg.conformal_alpha,
+            )
+        raise
+

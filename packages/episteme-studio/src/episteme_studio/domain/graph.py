@@ -28,7 +28,7 @@ class StudioNode(BaseModel):
         Open string representing the semantic node type.
     label : str
         Display label for the node.
-    partition : Literal["B", "A"] or None, optional
+    partition : Literal['B', 'A'] or None, optional
         TheoryNet partition (empirical base 'B' vs antecedent 'A') for L3 nodes.
     degree : int, default 0
         Total degree of the node in the current graph projection.
@@ -36,11 +36,45 @@ class StudioNode(BaseModel):
         Prior plausibility (tau). None denotes unknown, distinct from 0.0.
     confidence : float or None, optional
         Extraction or model confidence score.
+    empirical_accuracy : float or None, optional
+        Calibrated empirical accuracy frequency from System 1 decision engine.
+    modal_strength : float or None, optional
+        Author propositional modal certainty M(phi) in [0.0, 1.0].
+    base_score : float or None, optional
+        Prior base score tau_0 for QBAF semantics.
+    scope_type : str or None, optional
+        Schurz (2014) structuralist sentence scope classification (e.g. 'Essentieller Allsatz').
+    epistemic_status : str or None, optional
+        Epistemic classification ('Analytisch' vs. 'Synthetisch').
+    modal_resolver : str or None, optional
+        Lineage identifier or resolver class that derived modal strength.
+    raw_modal_score : float or None, optional
+        Raw unconstrained System 1 modality score prior to structural guardrail clamping.
+    is_modal_clamped : bool or None, optional
+        Whether modal strength was constrained by structuralist syntax bounds.
+    qbaf_tau : float or None, optional
+        Solved asymptotic equilibrium justification degree tau^*(a).
+    total_weight_of_evidence : float or None, optional
+        Gross epistemic weight / evidentiary volume E_total (Keynes/Gardenfors).
+    volatility_index : float or None, optional
+        Epistemic controversy / volatility index V in [0.0, 1.0].
+    decision_tier : Literal['system_1', 'system_2', 'legacy'], default 'legacy'
+        Execution tier that resolved this node.
+    conformal_set_size : int or None, optional
+        Size of conformal prediction set C(x) at classification time.
+    is_out_of_ontology : bool, default False
+        Whether node was classified as novel / out-of-ontology.
+    decision_id : str or None, optional
+        Lineage identifier linking to discrete decision record.
     resolved : bool, default True
         False if referenced in relations but never persisted as an artifact.
     synthetic : bool, default False
         True if reified (e.g. inference midpoint node for UNDERCUTS).
-    props : dict[str, Any], optional
+    parameters : dict of str to float or None, optional
+        Bourbaki structuralist model parameter coordinates.
+    tenability : dict of str to Any or None, optional
+        Theoretical tenability consistency evaluation dictionary.
+    props : dict of str to Any, optional
         Additional node properties and attributes.
     """
 
@@ -52,6 +86,21 @@ class StudioNode(BaseModel):
     degree: int = 0
     plausibility: float | None = None
     confidence: float | None = None
+    empirical_accuracy: float | None = None
+    modal_strength: float | None = None
+    base_score: float | None = None
+    scope_type: str | None = None
+    epistemic_status: str | None = None
+    modal_resolver: str | None = None
+    raw_modal_score: float | None = None
+    is_modal_clamped: bool | None = None
+    qbaf_tau: float | None = None
+    total_weight_of_evidence: float | None = None
+    volatility_index: float | None = None
+    decision_tier: Literal["system_1", "system_2", "legacy"] = "legacy"
+    conformal_set_size: int | None = None
+    is_out_of_ontology: bool = False
+    decision_id: str | None = None
     resolved: bool = True
     synthetic: bool = False
     parameters: dict[str, float] | None = None
@@ -70,7 +119,7 @@ class StudioEdge(BaseModel):
         Source node identifier.
     target : str
         Target node or edge identifier.
-    target_kind : Literal["node", "edge"], default "node"
+    target_kind : Literal['node', 'edge'], default 'node'
         Target entity type (reserved for reified inference targets).
     type : str
         Raw predicate name (open-vocabulary, e.g. 'WIDERSPRICHT').
@@ -85,7 +134,29 @@ class StudioEdge(BaseModel):
         Extraction or reranker confidence score.
     tenability : float or None, optional
         Edge constraint consistency tenability score (TS_edge).
-    props : dict[str, Any], optional
+    empirical_accuracy : float or None, optional
+        Calibrated empirical accuracy frequency from System 1 decision engine.
+    model_confidence : float or None, optional
+        Perception calibration confidence score C.
+    stance_probability : float or None, optional
+        Perception class probability P(stance).
+    inferential_force : float or None, optional
+        Toulminian inferential warrant validity I_(j->i) in [0.0, 1.0].
+    active_weight : float or None, optional
+        Net weight W_ji ingested by gradual semantics.
+    is_admissible : bool, default True
+        Admissibility status under active bivariate thresholds.
+    modal_strength : float or None, optional
+        Legacy alias for inferential warrant validity on edges.
+    qbaf_tau : float or None, optional
+        Propagated QBAF justification degree cache.
+    decision_tier : Literal['system_1', 'system_2', 'legacy'], default 'legacy'
+        Execution tier that resolved this edge ('system_1', 'system_2', 'legacy').
+    conformal_set_size : int or None, optional
+        Size of conformal prediction set C(x).
+    decision_id : str or None, optional
+        Lineage identifier linking to discrete decision record.
+    props : dict of str to Any, optional
         Additional edge properties.
     """
 
@@ -99,6 +170,17 @@ class StudioEdge(BaseModel):
     weight: float | None = None
     confidence: float | None = None
     tenability: float | None = None
+    empirical_accuracy: float | None = None
+    model_confidence: float | None = None
+    stance_probability: float | None = None
+    inferential_force: float | None = None
+    active_weight: float | None = None
+    is_admissible: bool = True
+    modal_strength: float | None = None
+    qbaf_tau: float | None = None
+    decision_tier: Literal["system_1", "system_2", "legacy"] = "legacy"
+    conformal_set_size: int | None = None
+    decision_id: str | None = None
     props: dict[str, Any] = Field(default_factory=dict)
 
 

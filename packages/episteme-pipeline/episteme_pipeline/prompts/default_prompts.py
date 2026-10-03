@@ -539,6 +539,10 @@ DECISION_ARC_CRITERIA = {
         "The source proposition provides evidence, justification, entailment, or logical backing "
         "for the target proposition."
     ),
+    "SUPPORTS_ARG": (
+        "The source proposition provides evidence, justification, entailment, or logical backing "
+        "for the target proposition."
+    ),
     "ATTACKS": (
         "The source proposition directly refutes, contradicts, or rebuts the target proposition."
     ),

@@ -25,6 +25,7 @@ import { EPISTEMIC_TAXONOMY, getEpistemicLayerForPhase } from "./epistemicTheme"
 import { PredicateCompositionDonutChart } from "./EpistemicCharts";
 import { StageTripleItem, ProvenanceChunkDisplay, formatPredicate } from "./StageArtifactsView";
 import type { PredicateSchemaRow } from "./RunOverviewView";
+import { DecisionAuditTable } from "./decisions/DecisionAuditTable";
 
 const formatBytes = (bytes: number): string => {
   if (bytes === 0) return "0 B";
@@ -72,8 +73,8 @@ export interface RunDiagnosticInspectorRailProps {
   onUpdatePredicateStatus?: (predicateName: string, status: "Valid" | "Flagged" | "Quarantined") => void;
   primaryInputName?: string;
   onDrilldownToGraph?: (lensId: string) => void;
-  activeTab?: "assertion" | "predicate" | "invariants" | "telemetry";
-  onActiveTabChange?: (tab: "assertion" | "predicate" | "invariants" | "telemetry") => void;
+  activeTab?: "assertion" | "predicate" | "invariants" | "telemetry" | "decisions";
+  onActiveTabChange?: (tab: "assertion" | "predicate" | "invariants" | "telemetry" | "decisions") => void;
 }
 
 export const RunDiagnosticInspectorRail: React.FC<RunDiagnosticInspectorRailProps> = ({
@@ -109,12 +110,12 @@ export const RunDiagnosticInspectorRail: React.FC<RunDiagnosticInspectorRailProp
   const isRunning = isRunActive || selectedRunDetail?.status === "running";
   
   // Controlled tab state with fallback to local state
-  const [internalTab, setInternalTab] = useState<"assertion" | "predicate" | "invariants" | "telemetry">(
+  const [internalTab, setInternalTab] = useState<"assertion" | "predicate" | "invariants" | "telemetry" | "decisions">(
     selectedPredicate ? "predicate" : activeTriple ? "assertion" : "invariants"
   );
   const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalTab;
 
-  const setActiveTab = (tab: "assertion" | "predicate" | "invariants" | "telemetry") => {
+  const setActiveTab = (tab: "assertion" | "predicate" | "invariants" | "telemetry" | "decisions") => {
     setInternalTab(tab);
     onActiveTabChange?.(tab);
   };
@@ -209,10 +210,31 @@ export const RunDiagnosticInspectorRail: React.FC<RunDiagnosticInspectorRailProp
         >
           <span>Telemetry</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("decisions")}
+          className={`h-full flex items-center transition-colors cursor-pointer border-b-2 font-medium ${
+            activeTab === "decisions"
+              ? "border-blue-600 dark:border-blue-500 text-app-heading font-semibold"
+              : "border-transparent text-app-muted hover:text-app-heading"
+          }`}
+        >
+          <span>Decisions</span>
+        </button>
       </div>
 
       {/* Rail Content Body (Scrollable, Clean Hairline Sections) */}
       <div className="flex-1 overflow-y-auto divide-y divide-app-border">
+        {activeTab === "decisions" && (
+          <div className="h-full flex flex-col animate-in fade-in duration-100">
+            <DecisionAuditTable
+              runId={selectedRunDetail?.run_id || ""}
+              selectedPhaseKey={selectedPhaseKey}
+            />
+          </div>
+        )}
+
         {activeTab === "predicate" && selectedPredicate ? (
           /* ================================================================= */
           /* TAB: SELECTED PREDICATE SCHEMA & DRIFT                            */

@@ -11,12 +11,14 @@ import { AdjudicationTableView } from "./AdjudicationTableView";
 import { AdjudicationInspectorRail } from "./AdjudicationInspectorRail";
 import { SchemaAliasOmnibar } from "./SchemaAliasOmnibar";
 import { ResizablePanel } from "../../../ResizablePanel";
+import { BorderlineAdjudicationQueue } from "../../adjudication/BorderlineAdjudicationQueue";
 
 export const AdjudicationDeskView: React.FC = () => {
   const { activeReport } = useEvaluationStore();
   const evaluationId = activeReport?.evaluation_id || "";
 
   // Data state
+  const [deskMode, setDeskMode] = useState<"triples" | "borderline">("triples");
   const [queueResponse, setQueueResponse] = useState<AdjudicationQueueResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState<"pending" | "adjudicated" | "all">("pending");
@@ -171,13 +173,46 @@ export const AdjudicationDeskView: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-app-bg select-none">
       {/* ─────────────────────────────────────────────────────────────────── */}
-      {/* Main Horizontally Integrated Workspace (2-Column Architecture)     */}
-      {/* Pane 1: Continuous Proposition Table with Consolidated Action Bar   */}
-      {/* Pane 2: Cursor Draggable Resizable Right Diagnostic Inspector       */}
+      {/* Adjudication View Mode Switcher                                     */}
       {/* ─────────────────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Pane 1: Center Fluid Adjudication Table with Integrated Header Toolbar */}
-        <AdjudicationTableView
+      <div className="h-9 px-4 border-b border-app-border bg-app-surface flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-6 text-xs font-sans h-full">
+          <button
+            type="button"
+            onClick={() => setDeskMode("triples")}
+            className={`h-full flex items-center transition-colors cursor-pointer border-b-2 font-medium ${
+              deskMode === "triples"
+                ? "border-blue-600 dark:border-blue-500 text-app-heading font-semibold"
+                : "border-transparent text-app-muted hover:text-app-heading"
+            }`}
+          >
+            <span>Candidate Triples Desk</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeskMode("borderline")}
+            className={`h-full flex items-center transition-colors cursor-pointer border-b-2 font-medium ${
+              deskMode === "borderline"
+                ? "border-blue-600 dark:border-blue-500 text-app-heading font-semibold"
+                : "border-transparent text-app-muted hover:text-app-heading"
+            }`}
+          >
+            <span>Borderline Decisions & Active Learning (Jev)</span>
+          </button>
+        </div>
+      </div>
+
+      {deskMode === "borderline" ? (
+        <BorderlineAdjudicationQueue />
+      ) : (
+        /* ─────────────────────────────────────────────────────────────────── */
+        /* Main Horizontally Integrated Workspace (2-Column Architecture)     */
+        /* Pane 1: Continuous Proposition Table with Consolidated Action Bar   */
+        /* Pane 2: Cursor Draggable Resizable Right Diagnostic Inspector       */
+        /* ─────────────────────────────────────────────────────────────────── */
+        <div className="flex-1 flex overflow-hidden">
+          {/* Pane 1: Center Fluid Adjudication Table with Integrated Header Toolbar */}
+          <AdjudicationTableView
           candidates={filteredCandidates}
           selectedIndex={selectedIndex}
           onSelectIndex={setSelectedIndex}
@@ -232,6 +267,7 @@ export const AdjudicationDeskView: React.FC = () => {
           />
         </ResizablePanel>
       </div>
+    )}
 
       {/* Schema Alias cmdk Omnibar Modal */}
       <SchemaAliasOmnibar

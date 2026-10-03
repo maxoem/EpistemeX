@@ -33,14 +33,23 @@ from epistemetrics.core.models import (
 )
 from epistemetrics.epistemic import (
     DynamicsEvaluationResult,
+    GradualSemanticsModel,
     ModelComponentEvaluationResult,
     PosetEvaluationResult,
+    QBAFComparisonResult,
+    QBAFGradualSemanticsSolver,
+    QBAFSolverResult,
     ReductionEvaluationResult,
+    WeightNormalizationMode,
+    WeightedQuadraticEnergySolver,
     calculate_anchor_iou,
+    compare_qbaf_weight_modes,
     evaluate_diachronic_dynamics,
     evaluate_intertheoretical_links,
     evaluate_model_components,
     evaluate_specialization_poset,
+    solve_continuous_qbaf,
+    solve_qbaf_gradual_semantics,
     verify_hard_core_invariance,
 )
 from epistemetrics.graph.algorithms import (
@@ -81,6 +90,16 @@ __all__ = [
     "DynamicsEvaluationResult",
     "evaluate_diachronic_dynamics",
     "verify_hard_core_invariance",
+    # QBAF Gradual Semantics
+    "GradualSemanticsModel",
+    "WeightNormalizationMode",
+    "WeightedQuadraticEnergySolver",
+    "QBAFSolverResult",
+    "QBAFComparisonResult",
+    "QBAFGradualSemanticsSolver",
+    "solve_qbaf_gradual_semantics",
+    "solve_continuous_qbaf",
+    "compare_qbaf_weight_modes",
     # Engines
     "AdaptiveAlgorithmsEngine",
     "GraphAlgorithmsEngine",

@@ -60,6 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Launch with canned demonstration runs and mock dependencies.",
     )
     serve_parser.add_argument(
+        "--read-only",
+        action="store_true",
+        help="Launch in read-only mode (disables execution triggers and filesystem mutations).",
+    )
+    serve_parser.add_argument(
         "--token",
         type=str,
         default=None,
@@ -106,6 +111,7 @@ def main(argv: list[str] | None = None) -> None:
             "port": args.port,
             "token": args.token,
             "demo_mode": args.demo,
+            "read_only": args.read_only,
             "dev_mode": args.dev,
         }
         if args.runs_dir is not None:

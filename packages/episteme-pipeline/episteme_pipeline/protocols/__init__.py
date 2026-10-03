@@ -25,13 +25,21 @@ from episteme_pipeline.protocols.memory import EvictionSignal, WorkingMemoryStat
 from episteme_pipeline.protocols.decision import (
     DecisionEngine,
     DecisionNoulResult,
+    DecisionQuestion,
     DecisionScore,
     ensure_decision_engine,
+    ensure_decision_question,
 )
 from episteme_pipeline.decision.observable import ObservableDecisionEngine
+from episteme_pipeline.protocols.modality import (
+    ModalStrengthResolver,
+    ensure_modal_strength_resolver,
+)
 
 
 __all__ = [
+    "ModalStrengthResolver",
+    "ensure_modal_strength_resolver",
     "TraceSink",
     "NoOpTraceSink",
     "PhaseRunner",
@@ -66,6 +74,8 @@ __all__ = [
     "DecisionEngine",
     "DecisionScore",
     "DecisionNoulResult",
+    "DecisionQuestion",
+    "ensure_decision_question",
     "ObservableDecisionEngine",
     "ensure_decision_engine",
 ]

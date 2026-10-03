@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import networkx as nx
 import pytest
 
-from episteme_pipeline.contracts.domain import L2Triple, TheoryRelation
+from epistemetrics.core.models import RelationType, TheoryEdge
+from epistemetrics.graph.theory_graph import TheoryGraph
+from episteme_pipeline.contracts.domain import L2Triple, TheoryAtom, TheoryNet, TheoryRelation
 from episteme_pipeline.evaluation.models import EvaluationOutcome
 from episteme_pipeline.evaluation.scorers.calibration import (
+    CalibrationDataExtractor,
     CalibrationResult,
     CalibrationScorer,
+    DefaultCalibrationDataExtractor,
     ReliabilityBin,
+    compute_calibration_metrics,
 )
 
 
@@ -98,3 +104,170 @@ class TestCalibrationScorer:
         assert "brier_score" in metric_names
         assert metric_names["ece"] <= 0.20
         assert "markdown_report" in eval_result.notes
+
+    def test_evaluate_with_theory_edges(self):
+        """Verify evaluate parses epistemetrics TheoryEdge objects with empirical accuracy."""
+        scorer = CalibrationScorer(num_bins=5)
+        pred_edges = [
+            TheoryEdge(
+                source="c1",
+                target="c2",
+                relation_type=RelationType.EXPLAINS,
+                confidence=0.8,
+                empirical_accuracy=0.85,
+            ),
+            TheoryEdge(
+                source="c2",
+                target="c3",
+                relation_type=RelationType.SUPPORTS,
+                confidence=0.7,
+                class_probability=0.75,
+            ),
+            TheoryEdge(
+                source="c3",
+                target="c4",
+                relation_type=RelationType.ATTACKS,
+                confidence=0.6,
+            ),
+        ]
+        gold_edges = [
+            TheoryEdge(
+                source="c1",
+                target="c2",
+                relation_type=RelationType.EXPLAINS,
+            ),
+            TheoryEdge(
+                source="c2",
+                target="c3",
+                relation_type=RelationType.SUPPORTS,
+            ),
+        ]
+        res = scorer.evaluate(pred_edges, gold_edges)
+        assert res.sample_count == 3
+        assert len(res.bins) == 5
+
+    def test_evaluate_with_theory_net(self):
+        """Verify evaluate extracts relations from TheoryNet containers."""
+        scorer = CalibrationScorer(num_bins=5)
+        pred_net = TheoryNet(
+            atoms=[
+                TheoryAtom(id="a1", text="Atom 1", component_type="CLAIM", source_chunk_id="chunk_1"),
+                TheoryAtom(id="a2", text="Atom 2", component_type="PREMISE", source_chunk_id="chunk_1"),
+            ],
+            relations=[
+                TheoryRelation(
+                    source_id="a2",
+                    target_id="a1",
+                    relation_type="SUPPORTS",
+                    confidence=0.9,
+                    scope="global",
+                    calibrated_confidence=0.88,
+                ),
+            ],
+        )
+        gold_net = TheoryNet(
+            atoms=[],
+            relations=[
+                TheoryRelation(
+                    source_id="a2",
+                    target_id="a1",
+                    relation_type="SUPPORTS",
+                    confidence=1.0,
+                    scope="global",
+                ),
+            ],
+        )
+        res = scorer.evaluate(pred_net, gold_net)
+        assert res.sample_count == 1
+        assert pytest.approx(res.ece, 0.001) == abs(1.0 - 0.88)
+
+    def test_evaluate_with_theory_graph(self):
+        """Verify evaluate extracts edges from TheoryGraph instances."""
+        scorer = CalibrationScorer(num_bins=5)
+        pred_tg = TheoryGraph(name="pred")
+        gold_tg = TheoryGraph(name="gold")
+
+        pred_tg.add_edge(
+            source="n1",
+            target="n2",
+            relation_type=RelationType.EXPLAINS,
+            confidence=0.95,
+        )
+        gold_tg.add_edge(
+            source="n1",
+            target="n2",
+            relation_type=RelationType.EXPLAINS,
+            confidence=1.0,
+        )
+
+        res = scorer.evaluate(pred_tg, gold_tg)
+        assert res.sample_count == 1
+
+    def test_evaluate_with_networkx_digraph(self):
+        """Verify evaluate extracts edge data from NetworkX DiGraph."""
+        scorer = CalibrationScorer(num_bins=5)
+        g_pred = nx.DiGraph()
+        g_pred.add_edge("u1", "v1", relation_type="CAUSES", confidence=0.8)
+        g_pred.add_edge("u2", "v2", relation_type="INHIBITS", confidence=0.4)
+
+        g_gold = nx.DiGraph()
+        g_gold.add_edge("u1", "v1", relation_type="CAUSES")
+
+        res = scorer.evaluate(g_pred, g_gold)
+        assert res.sample_count == 2
+
+    def test_compute_calibration_metrics_pure_function(self):
+        """Verify standalone compute_calibration_metrics computes identical metrics."""
+        confidences = [0.2, 0.4, 0.6, 0.8]
+        labels = [0, 0, 1, 1]
+        res = compute_calibration_metrics(confidences, labels, num_bins=4)
+
+        assert isinstance(res, CalibrationResult)
+        assert res.sample_count == 4
+        assert res.num_bins == 4
+        assert len(res.bins) == 4
+
+        with pytest.raises(ValueError, match="num_bins must be a positive integer"):
+            compute_calibration_metrics(confidences, labels, num_bins=0)
+
+    def test_custom_calibration_data_extractor_injection(self):
+        """Verify CalibrationScorer accepts custom CalibrationDataExtractor implementation."""
+        class CustomMockExtractor:
+            """Mock extractor for testing port injection."""
+
+            def extract_predictions(self, data: Any) -> list[tuple[str, float]]:
+                return [("custom::rel_1", 0.95), ("custom::rel_2", 0.25)]
+
+            def extract_gold_keys(self, data: Any) -> set[str]:
+                return {"custom::rel_1"}
+
+        custom_extractor = CustomMockExtractor()
+        assert isinstance(custom_extractor, CalibrationDataExtractor)
+
+        scorer = CalibrationScorer(num_bins=2, extractor=custom_extractor)
+        res = scorer.evaluate("dummy_pred_input", "dummy_gold_input")
+
+        assert res.sample_count == 2
+        # rel_1 matched (conf 0.95, label 1), rel_2 not in gold (conf 0.25, label 0)
+        assert res.brier_score < 0.1
+
+    def test_default_extractor_atoms_and_relations(self):
+        """Verify DefaultCalibrationDataExtractor directly extracts typed atoms and relations."""
+        extractor = DefaultCalibrationDataExtractor()
+        atom = TheoryAtom(id="atom_1", text="Test Atom", component_type="CLAIM", source_chunk_id="chunk_1", plausibility=0.85)
+        rel = TheoryRelation(
+            source_id="atom_1",
+            target_id="atom_2",
+            relation_type="SUPPORTS",
+            confidence=0.8,
+            calibrated_confidence=0.92,
+            scope="global",
+        )
+
+        preds = extractor.extract_predictions([atom, rel])
+        assert len(preds) == 2
+        assert preds[0] == ("atom_1::claim", 0.85)
+        assert preds[1] == ("atom_1::supports::atom_2", 0.92)
+
+        golds = extractor.extract_gold_keys([atom, rel])
+        assert golds == {"atom_1", "atom_1::supports::atom_2"}

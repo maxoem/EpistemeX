@@ -292,6 +292,7 @@ def get_engine_settings_service(
         request.app.state.engine_settings_service = EngineSettingsService(
             storage=storage,
             reader=reader,
+            settings=settings,
         )
     return cast(EngineSettingsService, request.app.state.engine_settings_service)
 

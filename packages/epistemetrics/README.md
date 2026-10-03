@@ -17,6 +17,7 @@ Built on top of **NetworkX**, `epistemetrics` operationalizes formal principles 
 - **Argumentation & Coherence Analysis**:
   - *Dung Abstract Argumentation*: Grounded extension detection, attack/support ratios, dispute density.
   - *Thagard Explanatory Coherence*: Coherence scoring and cycle/circularity detection.
+  - *QBAF Gradual Semantics Solvers*: Quantitative Bipolar Argumentation Framework equilibrium convergence under continuous calibrated modal weights vs unweighted binary graphs (Quadratic Energy, Eulerian, Categorizer, Linear).
 - **Structural Graph Properties**:
   - Hierarchical derivation depth, modularity, clustering, reciprocity, and component connectivity.
 - **Interoperability**: Seamless conversion to and from standard `networkx.Graph`, `networkx.DiGraph`, and `networkx.MultiDiGraph`.
@@ -58,6 +59,16 @@ tg.add_edge("H1", "P1", relation_type=em.RelationType.SUPPORTS)
 # Run full epistemic evaluation
 report = em.analyze_theory_graph(tg)
 print(report.to_markdown())
+
+# QBAF Gradual Semantics with Calibrated Modal Weights
+from epistemetrics.epistemic.qbaf import solve_qbaf_gradual_semantics, GradualSemanticsModel
+
+qbaf_result = solve_qbaf_gradual_semantics(
+    tg,
+    model=GradualSemanticsModel.QUADRATIC,
+    max_iterations=25,
+)
+print("justification degrees:", qbaf_result.final_values)
 ```
 
 ---

@@ -26,13 +26,20 @@ from episteme_pipeline.prompts.providers import DefaultPromptProvider, LangfuseP
 from episteme_pipeline.protocols.decision import (
     DecisionEngine,
     DecisionNoulResult,
+    DecisionQuestion,
     DecisionScore,
     ensure_decision_engine,
+    ensure_decision_question,
 )
 
 
 class ConformingMockDecisionEngine:
     """Mock engine satisfying the DecisionEngine protocol."""
+
+    @property
+    def name(self) -> str:
+        """Return engine name."""
+        return "ConformingMockDecisionEngine"
 
     async def evaluate_noul(
         self,
@@ -78,6 +85,22 @@ class ConformingMockDecisionEngine:
             probabilities={},
             prediction_set=None,
         )
+
+    async def evaluate(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        question: DecisionQuestion | dict[str, Any],
+    ) -> DecisionScore | DecisionNoulResult:
+        """Evaluate a single question."""
+        return DecisionNoulResult(probability=0.95, empirical_accuracy=0.92, passed=True)
+
+    async def evaluate_batch(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        questions: dict[str, Any],
+    ) -> dict[str, DecisionScore | DecisionNoulResult]:
+        """Evaluate batch questions."""
+        return {}
 
 
 class IncompleteMockDecisionEngine:
@@ -351,3 +374,174 @@ def test_pipeline_for_task_decision_engine_injection() -> None:
             checkpoint_store=mock_ckpt,
             decision_engine="not_an_engine",
         )
+
+
+def test_decision_question_model_and_normalizer() -> None:
+    """Verify DecisionQuestion instantiation, from_bundle, and normalizer."""
+    # Direct instantiation
+    dq = DecisionQuestion(
+        question="Is this claim valid?",
+        type="choice",
+        criteria=["VALID", "INVALID"],
+        alpha=0.05,
+    )
+    assert dq.question == "Is this claim valid?"
+    assert dq.type == "choice"
+    assert dq.criteria == ["VALID", "INVALID"]
+    assert dq.alpha == 0.05
+
+    # ensure_decision_question idempotent on DecisionQuestion
+    assert ensure_decision_question(dq) is dq
+
+    # Normalization from legacy dict with 'instructions' and 'options'
+    dict_choice = {"type": "choice", "instructions": "Pick one", "options": ["A", "B"]}
+    norm_choice = ensure_decision_question(dict_choice)
+    assert isinstance(norm_choice, DecisionQuestion)
+    assert norm_choice.question == "Pick one"
+    assert norm_choice.criteria == ["A", "B"]
+
+    # Normalization from legacy dict with 'question' and 'levels'
+    dict_score = {"type": "score", "question": "Rate level", "levels": [1, 2, 3]}
+    norm_score = ensure_decision_question(dict_score)
+    assert norm_score.question == "Rate level"
+    assert norm_score.type == "score"
+    assert norm_score.criteria == [1, 2, 3]
+
+    # Error on invalid type
+    with pytest.raises(TypeError, match="Expected DecisionQuestion or dict"):
+        ensure_decision_question(12345)  # type: ignore[arg-type]
+
+
+def test_decision_question_from_bundle() -> None:
+    """Verify StructuredPromptBundle conversion to DecisionQuestion."""
+    bundle = StructuredPromptBundle(
+        direct_template="Extract mentions from: {text}",
+        decision_template="Does the passage mention {target}?",
+        decision_criteria={"YES": "Explicitly mentions", "NO": "Does not mention"},
+    )
+
+    # Conversion via from_bundle classmethod with kwargs formatting
+    dq = DecisionQuestion.from_bundle(
+        bundle=bundle,
+        type="choice",
+        format_kwargs={"target": "Kant"},
+        alpha=0.01,
+    )
+    assert dq.question == "Does the passage mention Kant?"
+    assert dq.type == "choice"
+    assert dq.criteria == {"YES": "Explicitly mentions", "NO": "Does not mention"}
+    assert dq.alpha == 0.01
+
+    # Conversion via bundle.to_decision_question() instance method
+    dq_method = bundle.to_decision_question(
+        type="noul",
+        format_kwargs={"target": "Hegel"},
+    )
+    assert dq_method.question == "Does the passage mention Hegel?"
+    assert dq_method.type == "noul"
+
+
+@pytest.mark.asyncio
+async def test_mock_decision_engine_evaluate_batch_with_decision_questions() -> None:
+    """Verify MockJevDecisionEngine evaluates typed DecisionQuestion instances."""
+    from episteme_pipeline.decision.mock import MockJevDecisionEngine
+
+    engine = MockJevDecisionEngine()
+    batch = await engine.evaluate_batch(
+        state="Kant claims that pure reason is synthetic a priori.",
+        questions={
+            "q1": DecisionQuestion(
+                question="Is synthetic a priori asserted?",
+                type="noul",
+            ),
+            "q2": DecisionQuestion(
+                question="Classify claim status",
+                type="choice",
+                criteria=["CLAIM", "PREMISE"],
+            ),
+            "q3": DecisionQuestion(
+                question="Rate clarity tier",
+                type="score",
+                criteria=[1, 2, 3],
+            ),
+        },
+    )
+
+    assert "q1" in batch
+    assert "q2" in batch
+    assert "q3" in batch
+    assert isinstance(batch["q1"], DecisionNoulResult)
+    assert isinstance(batch["q2"], DecisionScore)
+    assert isinstance(batch["q3"], DecisionScore)
+
+
+@pytest.mark.asyncio
+async def test_decision_engine_evaluate_single_with_strategies() -> None:
+    """Verify DecisionEngine.evaluate dispatches polymorphically via question strategies."""
+    from episteme_pipeline.decision.mock import MockJevDecisionEngine
+
+    engine = MockJevDecisionEngine()
+
+    # 1. Noul single evaluation
+    q_noul = DecisionQuestion(question="Is this claim valid?", type="noul")
+    res_noul = await engine.evaluate("Some premise context", q_noul)
+    assert isinstance(res_noul, DecisionNoulResult)
+    assert res_noul.passed is True
+
+    # 2. Choice single evaluation
+    q_choice = DecisionQuestion(
+        question="Classify role",
+        type="choice",
+        criteria=["PREMISE", "CONCLUSION"],
+    )
+    res_choice = await engine.evaluate("Some premise context", q_choice)
+    assert isinstance(res_choice, DecisionScore)
+    assert res_choice.selected_option == "PREMISE"
+
+    # 3. Score single evaluation
+    q_score = DecisionQuestion(
+        question="Rate strength tier",
+        type="score",
+        criteria=[1, 2, 3],
+    )
+    res_score = await engine.evaluate("Some premise context", q_score)
+    assert isinstance(res_score, DecisionScore)
+    assert res_score.selected_option == 1
+
+
+def test_question_strategy_registry_and_specs() -> None:
+    """Verify question strategy registry, laya spec generation, and fallback."""
+    from episteme_pipeline.decision.strategies import (
+        ChoiceQuestionStrategy,
+        NoulQuestionStrategy,
+        ScoreQuestionStrategy,
+        get_question_strategy,
+    )
+
+    noul_strat = get_question_strategy("noul")
+    assert isinstance(noul_strat, NoulQuestionStrategy)
+    noul_spec = noul_strat.to_laya_spec(DecisionQuestion(question="Is true?", type="noul"))
+    assert noul_spec["type"] == "noul"
+    assert noul_spec["instructions"] == "Is true?"
+
+    choice_strat = get_question_strategy("choice")
+    assert isinstance(choice_strat, ChoiceQuestionStrategy)
+    choice_spec = choice_strat.to_laya_spec(
+        DecisionQuestion(question="Pick", type="choice", criteria=["A", "B"])
+    )
+    assert choice_spec["type"] == "choice"
+    assert choice_spec["criteria"] == ["A", "B"]
+
+    score_strat = get_question_strategy("score")
+    assert isinstance(score_strat, ScoreQuestionStrategy)
+    score_spec = score_strat.to_laya_spec(
+        DecisionQuestion(question="Rate", type="score", criteria=[1, 2, 3])
+    )
+    assert score_spec["type"] == "score"
+    assert score_spec["criteria"] == ["1", "2", "3"]
+
+    # Unknown modality falls back to ChoiceQuestionStrategy
+    unknown_strat = get_question_strategy("custom_unknown")
+    assert isinstance(unknown_strat, ChoiceQuestionStrategy)
+
+

@@ -20,6 +20,17 @@ from epistemetrics.epistemic.poset_evaluation import (
     PosetEvaluationResult,
     evaluate_specialization_poset,
 )
+from epistemetrics.epistemic.qbaf import (
+    GradualSemanticsModel,
+    QBAFComparisonResult,
+    QBAFGradualSemanticsSolver,
+    QBAFSolverResult,
+    WeightNormalizationMode,
+    WeightedQuadraticEnergySolver,
+    compare_qbaf_weight_modes,
+    solve_continuous_qbaf,
+    solve_qbaf_gradual_semantics,
+)
 from epistemetrics.epistemic.reduction_evaluation import (
     ReductionEvaluationResult,
     evaluate_intertheoretical_links,
@@ -40,4 +51,14 @@ __all__ = [
     "DynamicsEvaluationResult",
     "evaluate_diachronic_dynamics",
     "verify_hard_core_invariance",
+    # QBAF Gradual Semantics
+    "GradualSemanticsModel",
+    "WeightNormalizationMode",
+    "WeightedQuadraticEnergySolver",
+    "QBAFSolverResult",
+    "QBAFComparisonResult",
+    "QBAFGradualSemanticsSolver",
+    "solve_qbaf_gradual_semantics",
+    "solve_continuous_qbaf",
+    "compare_qbaf_weight_modes",
 ]

@@ -19,11 +19,17 @@ from episteme_pipeline.events.models import (
     DecisionEvaluationCompleted,
     DecisionEvaluationStarted,
 )
+from episteme_pipeline.decision.strategies import (
+    evaluate_questions_sequentially,
+    get_question_strategy,
+)
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.protocols.decision import (
     DecisionEngine,
     DecisionNoulResult,
+    DecisionQuestion,
     DecisionScore,
+    ensure_decision_question,
 )
 
 
@@ -47,18 +53,13 @@ class ObservableDecisionEngine:
 
     def __init__(
         self,
-        inner: Any,
+        inner: DecisionEngine,
         engine_name: str | None = None,
         prompt_bundle: StructuredPromptBundle | None = None,
         stochastic_audit_rate: float = 0.0,
     ) -> None:
         self.inner = inner
-        self.engine_name = (
-            engine_name
-            or getattr(inner, "name", None)
-            or getattr(inner, "model_name", None)
-            or type(inner).__name__
-        )
+        self.engine_name = engine_name or inner.name
         self.prompt_bundle = prompt_bundle
         self.stochastic_audit_rate = stochastic_audit_rate
 
@@ -138,7 +139,7 @@ class ObservableDecisionEngine:
         duration = time.perf_counter() - t0
 
         is_audit = self._should_audit()
-        tokens_saved = getattr(result, "tokens_saved_estimate", 0)
+        tokens_saved = result.tokens_saved_estimate if isinstance(result, DecisionScore) else 0
         if not tokens_saved:
             tokens_saved = (char_count // 4) + (len(question) // 4) + 30
 
@@ -314,6 +315,52 @@ class ObservableDecisionEngine:
             pass
 
         return result
+
+    async def evaluate(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        question: DecisionQuestion | dict[str, Any],
+    ) -> DecisionScore | DecisionNoulResult:
+        """Evaluate a single typed question with telemetry instrumentation.
+
+        Parameters
+        ----------
+        state : str or dict or list
+            Structured state payload.
+        question : DecisionQuestion or dict
+            Typed decision question specification or dictionary.
+
+        Returns
+        -------
+        DecisionScore or DecisionNoulResult
+            Evaluation outcome.
+        """
+        typed_q = ensure_decision_question(question)
+        strategy = get_question_strategy(typed_q.type)
+        return await strategy.evaluate_single(self, state, typed_q)
+
+    async def evaluate_batch(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        questions: dict[str, DecisionQuestion | dict[str, Any]],
+    ) -> dict[str, DecisionScore | DecisionNoulResult]:
+        """Evaluate multiple questions in batch via the inner decision engine.
+
+        Parameters
+        ----------
+        state : str or dict or list
+            Structured state payload.
+        questions : dict of str to (DecisionQuestion or dict)
+            Question specifications.
+
+        Returns
+        -------
+        dict of str to (DecisionScore or DecisionNoulResult)
+            Batch evaluation results.
+        """
+        if hasattr(self.inner, "evaluate_batch"):
+            return await self.inner.evaluate_batch(state, questions)
+        return await evaluate_questions_sequentially(self, state, questions)
 
     def __getattr__(self, name: str) -> Any:
         """Delegate unhandled attribute and method lookups to the inner engine."""

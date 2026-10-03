@@ -18,9 +18,17 @@ from episteme_pipeline.artifacts.models import (
     LocalRelationArtifact,
 )
 from episteme_pipeline.artifacts.builders import parse_mention_id
-from episteme_pipeline.contracts.domain import L1Chunk, L1Document, L2Entity, L2Triple, TheoryAtom
+from episteme_pipeline.contracts.domain import (
+    L1Chunk,
+    L1Document,
+    L2Entity,
+    L2Triple,
+    TheoryAtom,
+    TheoryRelation,
+)
 from episteme_pipeline.protocols.graph_projection import GraphProjectionProtocol
 from episteme_pipeline.protocols.graph_store import ProjectionGraph
+from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +41,13 @@ _NOT_PROJECTED = (FusionDecisionArtifact,)
 
 
 class ArtifactGraphProjector(GraphProjectionProtocol):
-    def __init__(self, graph_store: ProjectionGraph) -> None:
+    def __init__(
+        self,
+        graph_store: ProjectionGraph,
+        schema: SchemaConfig | None = None,
+    ) -> None:
         self.graph_store = graph_store
+        self.schema = schema or SchemaConfig()
 
     async def project(self, artifact: ArtifactEnvelope) -> None:
         payload = artifact.payload
@@ -142,16 +155,17 @@ class ArtifactGraphProjector(GraphProjectionProtocol):
             return
 
         if isinstance(payload, TheoryRelationArtifact):
-            await self.graph_store.upsert_relation(
-                payload.source_component_id,
-                payload.relation_type,
-                payload.target_component_id,
-                {
-                    "scope": payload.scope,
-                    "confidence": payload.confidence,
-                    "weight": payload.weight,
-                },
+            polarity = self.schema.relation_polarities.get(payload.relation_type, 0)
+            if polarity == 0:
+                polarity = self.schema.relation_polarities.get(payload.relation_type.upper(), 0)
+            props = payload.to_graph_properties(polarity=polarity)
+            rel = TheoryRelation.from_graph_properties(
+                source_id=payload.source_component_id,
+                relation_type=payload.relation_type,
+                target_id=payload.target_component_id,
+                properties=props,
             )
+            await self.graph_store.upsert_theory_relation(rel)
             return
 
         if isinstance(payload, CanonicalizationArtifact):

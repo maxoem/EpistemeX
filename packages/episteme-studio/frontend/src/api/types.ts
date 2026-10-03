@@ -23,6 +23,36 @@ export interface GlobalStructuralAnchor {
   global_thesis?: string | null;
 }
 
+export interface DecisionPhaseSummary {
+  phase_name: string;
+  total_decisions: number;
+  fast_exit_count: number;
+  llm_escalation_count: number;
+  tokens_saved: number;
+  cost_saved_usd: number;
+  avg_latency_ms: number;
+  avg_confidence: number;
+  avg_empirical_accuracy: number;
+}
+
+export interface DecisionRunMetrics {
+  total_decisions: number;
+  fast_exit_count: number;
+  fast_exit_ratio: number;
+  llm_escalation_count: number;
+  llm_escalation_ratio: number;
+  stochastic_audit_count: number;
+  tokens_saved_estimate: number;
+  cost_saved_usd_estimate: number;
+  latency_p50_ms: number;
+  latency_p95_ms: number;
+  latency_p99_ms: number;
+  audit_ratio?: number;
+  stochastic_concordance_rate?: number;
+  by_phase?: Record<string, DecisionPhaseSummary>;
+  by_primitive?: Record<string, number>;
+}
+
 export interface RunSummary {
   run_id: string;
   status: RunStatus;
@@ -43,6 +73,7 @@ export interface RunSummary {
   total_phase_count?: number;
   tags: string[];
   parent_run_id?: string | null;
+  decision_metrics?: DecisionRunMetrics | null;
 }
 
 export interface ProblemDetail {
@@ -91,6 +122,22 @@ export interface StudioNode {
   parameters?: Record<string, number> | null;
   tenability?: Record<string, any> | null;
   props: Record<string, any>;
+  // Calibrated decision engine & QBAF attributes
+  empirical_accuracy?: number | null;
+  modal_strength?: number | null;
+  base_score?: number | null;
+  scope_type?: string | null;
+  epistemic_status?: string | null;
+  modal_resolver?: string | null;
+  raw_modal_score?: number | null;
+  is_modal_clamped?: boolean | null;
+  qbaf_tau?: number | null;
+  total_weight_of_evidence?: number | null;
+  volatility_index?: number | null;
+  decision_tier?: "fast_exit" | "system1" | "system2" | "adjudicated" | null;
+  conformal_set_size?: number | null;
+  is_out_of_ontology?: boolean;
+  decision_id?: string | null;
 }
 
 export interface StudioEdge {
@@ -105,6 +152,18 @@ export interface StudioEdge {
   confidence?: number | null;
   tenability?: number | null;
   props: Record<string, any>;
+  // Calibrated decision engine & QBAF attributes
+  empirical_accuracy?: number | null;
+  model_confidence?: number | null;
+  stance_probability?: number | null;
+  inferential_force?: number | null;
+  active_weight?: number | null;
+  is_admissible?: boolean;
+  modal_strength?: number | null;
+  qbaf_tau?: number | null;
+  decision_tier?: "fast_exit" | "system1" | "system2" | "adjudicated" | null;
+  conformal_set_size?: number | null;
+  decision_id?: string | null;
 }
 
 export interface TextAnchor {
@@ -213,6 +272,7 @@ export interface CypherResult {
 
 export type OverlayKind =
   | "gradual_strength"
+  | "modal_strength"
   | "internal_correlation"
   | "degree"
   | "component"
@@ -220,7 +280,8 @@ export type OverlayKind =
   | "leiden"
   | "tenability"
   | "b_consistency"
-  | "stable_extension";
+  | "stable_extension"
+  | "conformal_uncertainty";
 
 export interface Overlay {
   id: string;
@@ -525,6 +586,115 @@ export interface UnmappedPredicateInfo {
   sample_runs: string[];
 }
 
+export interface DecisionPhaseGates {
+  phase2_entity_discovery: boolean;
+  phase3_global_relations: boolean;
+  phase4_argument_mining: boolean;
+  phase4_entity_maturation: boolean;
+  phase5_fusion: boolean;
+  phase6_theorynet: boolean;
+}
+
+export interface DecisionEngineSettings {
+  provider: "laya" | "auto" | "mlx" | "transformers" | "onnx" | "stub" | "none";
+  model_checkpoint: string;
+  device: "auto" | "mps" | "cuda" | "cpu";
+  fast_exit_threshold: number;
+  uncertainty_threshold: number;
+  stochastic_audit_rate: number;
+  phase_gates: DecisionPhaseGates;
+}
+
+export interface DecisionEngineStatusResponse {
+  provider: string;
+  model_checkpoint: string;
+  device: string;
+  mlx_available: boolean;
+  cuda_available: boolean;
+  checkpoint_cached: boolean;
+  checkpoint_path?: string | null;
+  vram_allocated_mb?: number | null;
+  latency_benchmark_ms?: number | null;
+  benchmark_latency_p50_ms?: number | null;
+  active: boolean;
+  available?: boolean;
+  model_metadata?: Record<string, any>;
+}
+
+export interface DecisionTestRequest {
+  primitive: "noul" | "choice" | "score";
+  input_text: string;
+  question?: string | null;
+  candidate_labels?: string[];
+  hypothesis_text?: string | null;
+  provider?: string;
+  model_checkpoint?: string;
+  device?: string;
+  fast_exit_threshold?: number;
+  uncertainty_threshold?: number;
+}
+
+
+export interface DecisionTestResponse {
+  decision_id: string;
+  primitive: "noul" | "choice" | "score";
+  prediction: string | number;
+  confidence: number;
+  empirical_accuracy: number;
+  conformal_set: string[];
+  tier: "fast_exit" | "system1" | "system2";
+  latency_ms: number;
+  tokens_saved: number;
+  is_mock?: boolean;
+  probabilities?: Record<string, number>;
+  engine_backend?: string;
+  warning?: string | null;
+}
+
+export interface BorderlineDecisionItem {
+  decision_id: string;
+  run_id: string;
+  phase: string;
+  primitive: "noul" | "choice" | "score";
+  tier: "fast_exit" | "system1" | "system2" | "stochastic_audit";
+  timestamp: string;
+  confidence: number;
+  empirical_accuracy: number;
+  margin: number;
+  conformal_set: string[];
+  prediction: string | number;
+  context: {
+    input_text?: string;
+    candidate_labels?: string[];
+    hypothesis?: string;
+    source_name?: string;
+    target_name?: string;
+  };
+  adjudicated_value?: string | number | null;
+  adjudicated_by?: string | null;
+  adjudicated_at?: string | null;
+  adjudication_notes?: string | null;
+}
+
+export interface DecisionAdjudicationRequest {
+  adjudicated_value: string | number;
+  adjudicated_by?: string;
+  notes?: string;
+}
+
+export interface ActiveLearningExportResponse {
+  status: "success";
+  exported_count: number;
+  target_file: string;
+  format: "jsonl";
+}
+
+export interface ModalResolverSettings {
+  mode: "guardrail" | "convex" | "structural_only" | "engine_only";
+  fusion_alpha: number;
+  default_base_score: number;
+}
+
 export interface EngineSettings {
   schema_config: SchemaConfig;
   predicate_aliases: Record<string, any>;
@@ -537,6 +707,8 @@ export interface EngineSettings {
     llm_api_base?: string | null;
     thinking_level: string;
   };
+  decision_engine: DecisionEngineSettings;
+  modal_resolver?: ModalResolverSettings;
   updated_at: string;
 }
 
@@ -544,6 +716,8 @@ export interface EngineSettingsPatch {
   schema_config?: Partial<SchemaConfig>;
   predicate_aliases?: Record<string, any>;
   models?: Partial<EngineSettings["models"]>;
+  decision_engine?: Partial<DecisionEngineSettings>;
+  modal_resolver?: Partial<ModalResolverSettings>;
 }
 
 export type EvaluationOutcome = "pass" | "fail" | "warning" | "inconclusive";

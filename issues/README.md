@@ -81,4 +81,3 @@ issues/
 | [**ISSUE-043**](10-decision-engine-and-jev/ISSUE-043-dense-entity-linking-and-ooo-gating.md)                | Dense Entity Linking: Jev Candidate Disambiguation & Out-of-Ontology Gating | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | High     | `Open`        |
 | [**ISSUE-044**](10-decision-engine-and-jev/ISSUE-044-phase1-epistemic-relevance-and-noise-gating.md)       | Phase 1 Data Foundation: Epistemic Ingestion Relevance & Noise Gating | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | Medium   | `Open`        |
 | [**ISSUE-045**](10-decision-engine-and-jev/ISSUE-045-phase3b-consolidation-merge-verification.md)          | Phase 3b Latent Graph Consolidation: Borderline Cluster Merge & Canonical Election | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | Medium   | `Open`        |
-

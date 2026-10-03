@@ -231,6 +231,19 @@ def _resolve_default_langfuse_host() -> str:
     )
 
 
+def _resolve_default_hf_home() -> str | None:
+    """Resolve default Hugging Face cache directory.
+
+    Checks HF_HOME.
+
+    Returns
+    -------
+    str or None
+        Resolved cache directory string, or None if unconfigured.
+    """
+    return os.environ.get("HF_HOME")
+
+
 class StudioSettings(BaseSettings):
     """Runtime configuration for GLP Studio server and services.
 
@@ -264,6 +277,8 @@ class StudioSettings(BaseSettings):
         Base URL for Langfuse monitoring traces.
     demo_mode : bool, default False
         If True, loads canned demonstration runs and mocks external dependencies.
+    read_only : bool, default False
+        If True, disables all execution triggers and filesystem mutations for safe public hosting.
     """
 
     model_config = SettingsConfigDict(
@@ -288,7 +303,10 @@ class StudioSettings(BaseSettings):
         try:
             default_runs = _resolve_default_runs_dir().resolve()
             if "extra_runs_dirs" not in self.model_fields_set:
-                if self.runs_dir.resolve() == default_runs or self.runs_dir.name == ".pipeline_runs":
+                if (
+                    self.runs_dir.resolve() == default_runs
+                    or self.runs_dir.name == ".pipeline_runs"
+                ):
                     self.extra_runs_dirs = _resolve_extra_dirs(".pipeline_runs")
                 else:
                     self.extra_runs_dirs = []
@@ -298,8 +316,13 @@ class StudioSettings(BaseSettings):
         try:
             default_artifacts = _resolve_default_artifacts_dir().resolve()
             if "extra_artifacts_dirs" not in self.model_fields_set:
-                if self.artifacts_dir.resolve() == default_artifacts or self.artifacts_dir.name == ".pipeline_artifacts":
-                    self.extra_artifacts_dirs = _resolve_extra_dirs(".pipeline_artifacts")
+                if (
+                    self.artifacts_dir.resolve() == default_artifacts
+                    or self.artifacts_dir.name == ".pipeline_artifacts"
+                ):
+                    self.extra_artifacts_dirs = _resolve_extra_dirs(
+                        ".pipeline_artifacts"
+                    )
                 else:
                     self.extra_artifacts_dirs = []
         except Exception:
@@ -307,17 +330,25 @@ class StudioSettings(BaseSettings):
 
         if self.demo_mode:
             try:
-                from episteme_studio.fixtures import get_fixture_artifacts_dir, get_fixture_runs_dir
+                from episteme_studio.fixtures import (
+                    get_fixture_artifacts_dir,
+                    get_fixture_runs_dir,
+                )
+
                 f_runs = get_fixture_runs_dir()
                 if f_runs.is_dir() and f_runs not in self.extra_runs_dirs:
                     self.extra_runs_dirs.append(f_runs)
                 f_artifacts = get_fixture_artifacts_dir()
-                if f_artifacts.is_dir() and f_artifacts not in self.extra_artifacts_dirs:
+                if (
+                    f_artifacts.is_dir()
+                    and f_artifacts not in self.extra_artifacts_dirs
+                ):
                     self.extra_artifacts_dirs.append(f_artifacts)
             except Exception:
                 pass
 
         return self
+
     query_timeout_seconds: float = 30.0
     static_dir: Path | None = None
     neo4j_url: str | None = Field(default_factory=_resolve_default_neo4j_url)
@@ -325,7 +356,9 @@ class StudioSettings(BaseSettings):
     neo4j_password: str | None = Field(default_factory=_resolve_default_neo4j_password)
     neo4j_database: str | None = Field(default_factory=_resolve_default_neo4j_database)
     langfuse_host: str = Field(default_factory=_resolve_default_langfuse_host)
+    hf_home: str | None = Field(default_factory=_resolve_default_hf_home)
     demo_mode: bool = False
+    read_only: bool = False
     dev_mode: str | bool | None = None
     execution_enabled: bool = False
 
@@ -396,4 +429,3 @@ def set_env_var(name: str, value: str) -> None:
         Value to assign.
     """
     os.environ[name] = value
-

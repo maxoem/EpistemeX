@@ -411,6 +411,39 @@ export const TopologicalErrorQuad: React.FC<TopologicalErrorQuadProps> = ({
                   </div>
                 </div>
 
+                {/* Epistemic Modality & Structural Scope (ADR 0020) */}
+                {((node.properties?.modal_strength !== undefined || node.properties?.base_score !== undefined || node.properties?.scope_type !== undefined || node.properties?.epistemic_status !== undefined)) && (
+                  <div className="py-2.5 px-3 rounded-lg bg-blue-500/5 border border-blue-500/20 space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-semibold uppercase text-app-muted tracking-wider">
+                      <span>Propositional Modality M(φ)</span>
+                      <span className="font-mono text-emerald-500 font-bold text-xs">
+                        {node.properties?.modal_strength !== undefined
+                          ? Number(node.properties.modal_strength).toFixed(3)
+                          : node.properties?.base_score !== undefined
+                          ? Number(node.properties.base_score).toFixed(3)
+                          : "—"}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {node.properties?.scope_type && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-mono">
+                          {node.properties.scope_type}
+                        </span>
+                      )}
+                      {node.properties?.epistemic_status && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-mono">
+                          {node.properties.epistemic_status}
+                        </span>
+                      )}
+                      {node.properties?.is_modal_clamped && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20 font-mono">
+                          Clamped
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Pillar 4: Properties & Grounding */}
                 <div className="py-3 space-y-2">
                   <div className="text-[10px] uppercase font-semibold text-app-muted tracking-wider">

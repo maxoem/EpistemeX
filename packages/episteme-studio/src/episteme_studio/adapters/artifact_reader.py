@@ -13,6 +13,7 @@ from episteme_studio.domain.errors import ProblemDetail
 from episteme_studio.domain.graph import GraphView, Layer, StudioEdge, StudioNode, reify_inferences
 from episteme_studio.domain.runs import (
     ArtifactRef,
+    DecisionRunMetrics,
     EvidenceChunk,
     EvidenceSpan,
     EvidenceTrail,
@@ -479,6 +480,14 @@ class ArtifactReader:
                 elif isinstance(anchor_raw, GlobalStructuralAnchor):
                     anchor_obj = anchor_raw
 
+                decision_metrics_raw = data.get("decision_metrics")
+                decision_metrics_obj = None
+                if decision_metrics_raw and isinstance(decision_metrics_raw, dict):
+                    try:
+                        decision_metrics_obj = DecisionRunMetrics(**decision_metrics_raw)
+                    except Exception:
+                        decision_metrics_obj = None
+
                 summary = RunSummary(
                     run_id=run_id,
                     status=status,
@@ -499,6 +508,7 @@ class ArtifactReader:
                     total_phase_count=total_phase_count,
                     tags=tags,
                     parent_run_id=parent_run_id,
+                    decision_metrics=decision_metrics_obj,
                 )
                 summaries.append(summary)
 
@@ -677,6 +687,14 @@ class ArtifactReader:
         elif isinstance(anchor_raw, GlobalStructuralAnchor):
             anchor_obj = anchor_raw
 
+        decision_metrics_raw = data.get("decision_metrics")
+        decision_metrics_obj = None
+        if decision_metrics_raw and isinstance(decision_metrics_raw, dict):
+            try:
+                decision_metrics_obj = DecisionRunMetrics(**decision_metrics_raw)
+            except Exception:
+                decision_metrics_obj = None
+
         return RunDetail(
             run_id=run_id,
             status=status,
@@ -706,6 +724,7 @@ class ArtifactReader:
             failure=data.get("failure"),
             cancellation_reason=data.get("cancellation_reason"),
             langfuse_url=langfuse_url,
+            decision_metrics=decision_metrics_obj,
         )
 
     def abort_run(self, run_id: str, reason: str = "Cancelled by user") -> RunSummary:
@@ -891,12 +910,18 @@ class ArtifactReader:
                 entity_id = payload.get("entity_id") or art_id
                 node_type = payload.get("entity_type") or payload.get("label") or "Concept"
                 label = payload.get("canonical_name") or payload.get("name") or entity_id
+                tier = "system_1" if payload.get("decision_tier") == "system_1" or payload.get("is_fast_exit") else ("system_2" if payload.get("decision_tier") == "system_2" else "legacy")
                 nodes_by_id[entity_id] = StudioNode(
                     id=entity_id,
                     layer=Layer.L2,
                     type=node_type,
                     label=label,
                     confidence=payload.get("confidence"),
+                    empirical_accuracy=payload.get("empirical_accuracy"),
+                    decision_tier=tier,
+                    conformal_set_size=payload.get("conformal_set_size"),
+                    is_out_of_ontology=bool(payload.get("is_out_of_ontology", False)),
+                    decision_id=payload.get("decision_id"),
                     props={
                         "description": payload.get("description"),
                         "source_chunk_ids": payload.get("source_chunk_ids", []),
@@ -921,6 +946,7 @@ class ArtifactReader:
                     if payload.get("supporting_chunk_ids"):
                         edge_props["supporting_chunk_ids"] = payload.get("supporting_chunk_ids")
 
+                    tier = "system_1" if payload.get("decision_tier") == "system_1" or payload.get("is_fast_exit") else ("system_2" if payload.get("decision_tier") == "system_2" else "legacy")
                     edges.append(
                         StudioEdge(
                             id=rel_id,
@@ -930,6 +956,16 @@ class ArtifactReader:
                             layer=Layer.L2,
                             polarity=polarity,
                             confidence=payload.get("confidence"),
+                            empirical_accuracy=payload.get("empirical_accuracy"),
+                            model_confidence=payload.get("model_confidence", payload.get("calibrated_confidence")),
+                            stance_probability=payload.get("stance_probability", payload.get("class_probability")),
+                            inferential_force=payload.get("inferential_force"),
+                            active_weight=payload.get("active_weight"),
+                            is_admissible=bool(payload.get("is_admissible", True)),
+                            modal_strength=payload.get("modal_strength"),
+                            decision_tier=tier,
+                            conformal_set_size=payload.get("conformal_set_size"),
+                            decision_id=payload.get("decision_id"),
                             props=edge_props,
                         )
                     )
@@ -940,17 +976,44 @@ class ArtifactReader:
                 comp_type = payload.get("component_type") or "TheoryAtom"
                 text = payload.get("text", "")
                 label = (text[:60] + "...") if len(text) > 60 else (text or comp_id)
+                base_sc = payload.get("base_score", payload.get("plausibility"))
+                mod_str = payload.get("modal_strength", base_sc)
+                tier = "system_1" if payload.get("decision_tier") == "system_1" or payload.get("is_fast_exit") else ("system_2" if payload.get("decision_tier") == "system_2" else "legacy")
+                scope_t = payload.get("scope_type")
+                epist_s = payload.get("epistemic_status")
+                res_type = payload.get("modal_resolver") or payload.get("resolver_type")
+                raw_m = payload.get("raw_modal_score") or payload.get("raw_engine_score")
+                clamped_m = payload.get("is_modal_clamped") or payload.get("clamped")
                 nodes_by_id[comp_id] = StudioNode(
                     id=comp_id,
                     layer=Layer.L3,
                     type=comp_type,
                     label=label,
                     partition=mapper.resolve_partition(comp_type),
-                    plausibility=payload.get("plausibility"),
+                    plausibility=base_sc,
                     confidence=payload.get("confidence"),
+                    empirical_accuracy=payload.get("empirical_accuracy"),
+                    modal_strength=mod_str,
+                    base_score=base_sc,
+                    scope_type=scope_t,
+                    epistemic_status=epist_s,
+                    modal_resolver=res_type,
+                    raw_modal_score=raw_m,
+                    is_modal_clamped=clamped_m,
+                    qbaf_tau=payload.get("qbaf_tau"),
+                    total_weight_of_evidence=payload.get("total_weight_of_evidence"),
+                    volatility_index=payload.get("volatility_index"),
+                    decision_tier=tier,
+                    conformal_set_size=payload.get("conformal_set_size"),
+                    decision_id=payload.get("decision_id"),
                     props={
+                        **payload,
                         "text": text,
                         "source_chunk_id": payload.get("source_chunk_id") or payload.get("chunk_id"),
+                        "scope_type": scope_t,
+                        "epistemic_status": epist_s,
+                        "modal_strength": mod_str,
+                        "modal_resolver": res_type,
                     },
                 )
 
@@ -964,6 +1027,9 @@ class ArtifactReader:
                     polarity = mapper.resolve_polarity(rel_type)
                     if polarity is None:
                         unmapped_predicates[rel_type] = unmapped_predicates.get(rel_type, 0) + 1
+                    tier = "system_1" if payload.get("decision_tier") == "system_1" or payload.get("is_fast_exit") else ("system_2" if payload.get("decision_tier") == "system_2" else "legacy")
+                    inf_force = payload.get("inferential_force", payload.get("modal_strength", 0.75))
+                    act_weight = payload.get("active_weight", payload.get("weight", inf_force))
                     edges.append(
                         StudioEdge(
                             id=rel_id,
@@ -972,9 +1038,20 @@ class ArtifactReader:
                             type=rel_type,
                             layer=Layer.L3,
                             polarity=polarity,
-                            weight=payload.get("weight"),
+                            weight=payload.get("weight", act_weight),
                             confidence=payload.get("confidence"),
                             tenability=payload.get("tenability"),
+                            empirical_accuracy=payload.get("empirical_accuracy"),
+                            model_confidence=payload.get("model_confidence", payload.get("calibrated_confidence")),
+                            stance_probability=payload.get("stance_probability", payload.get("class_probability")),
+                            inferential_force=inf_force,
+                            active_weight=act_weight,
+                            is_admissible=bool(payload.get("is_admissible", True)),
+                            modal_strength=payload.get("modal_strength"),
+                            qbaf_tau=payload.get("qbaf_tau"),
+                            decision_tier=tier,
+                            conformal_set_size=payload.get("conformal_set_size"),
+                            decision_id=payload.get("decision_id"),
                             props={
                                 "scope": payload.get("scope", "local"),
                                 "source_chunk_id": payload.get("source_chunk_id") or payload.get("chunk_id"),

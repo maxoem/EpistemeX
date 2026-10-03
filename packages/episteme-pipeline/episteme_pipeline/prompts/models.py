@@ -50,3 +50,34 @@ class StructuredPromptBundle(BaseModel):
     label: str | None = None
     provider: str = "default"
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    def to_decision_question(
+        self,
+        type: str = "choice",
+        format_kwargs: dict[str, Any] | None = None,
+        alpha: float | None = None,
+    ) -> Any:
+        """Convert this bundle into a strongly-typed DecisionQuestion contract.
+
+        Parameters
+        ----------
+        type : str, default "choice"
+            Evaluation modality ('choice', 'noul', or 'score').
+        format_kwargs : dict of str to Any or None, optional
+            Keyword formatting arguments to interpolate into the template.
+        alpha : float or None, optional
+            Conformal prediction significance level.
+
+        Returns
+        -------
+        DecisionQuestion
+            Instantiated typed decision question specification.
+        """
+        from episteme_pipeline.protocols.decision import DecisionQuestion
+
+        return DecisionQuestion.from_bundle(
+            bundle=self,
+            type=type,  # type: ignore[arg-type]
+            format_kwargs=format_kwargs,
+            alpha=alpha,
+        )

@@ -14,7 +14,9 @@ from typing import Any
 from episteme_pipeline.protocols.decision import (
     DecisionEngine,
     DecisionNoulResult,
+    DecisionQuestion,
     DecisionScore,
+    ensure_decision_question,
 )
 
 
@@ -56,6 +58,12 @@ def compute_conformal_prediction_set(
             break
 
     return prediction_set
+
+
+from episteme_pipeline.decision.strategies import (
+    evaluate_questions_sequentially,
+    get_question_strategy,
+)
 
 
 class MockJevDecisionEngine:
@@ -479,10 +487,33 @@ class MockJevDecisionEngine:
         )
         return res
 
+    async def evaluate(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        question: DecisionQuestion | dict[str, Any],
+    ) -> DecisionScore | DecisionNoulResult:
+        """Evaluate a single typed question against state.
+
+        Parameters
+        ----------
+        state : str or dict or list
+            Structured state payload.
+        question : DecisionQuestion or dict
+            Typed decision question specification or dictionary.
+
+        Returns
+        -------
+        DecisionScore or DecisionNoulResult
+            Evaluation outcome.
+        """
+        typed_q = ensure_decision_question(question)
+        strategy = get_question_strategy(typed_q.type)
+        return await strategy.evaluate_single(self, state, typed_q)
+
     async def evaluate_batch(
         self,
         state: str | dict[str, Any] | list[Any],
-        questions: dict[str, dict[str, Any]],
+        questions: dict[str, DecisionQuestion | dict[str, Any]],
     ) -> dict[str, DecisionScore | DecisionNoulResult]:
         """Evaluate a batch of questions against a single state block in parallel.
 
@@ -490,29 +521,12 @@ class MockJevDecisionEngine:
         ----------
         state : str or dict or list
             Structured state block.
-        questions : dict of str to dict
-            Mapping from key to question definition dictionary containing
-            ``type`` ("noul", "choice", "score"), ``question``, and optional
-            ``options``, ``levels``, or ``alpha``.
+        questions : dict of str to (DecisionQuestion or dict)
+            Mapping from key to question definition specification or dictionary.
 
         Returns
         -------
         dict of str to (DecisionScore or DecisionNoulResult)
             Mapping from question key to corresponding result.
         """
-        results: dict[str, DecisionScore | DecisionNoulResult] = {}
-        for key, q_spec in questions.items():
-            q_type = q_spec.get("type", "choice")
-            q_text = q_spec.get("instructions", q_spec.get("question", ""))
-            if q_type == "noul":
-                results[key] = await self.evaluate_noul(state, q_text)
-            elif q_type == "choice":
-                opts = q_spec.get("criteria", q_spec.get("options", []))
-                alpha = q_spec.get("alpha")
-                results[key] = await self.evaluate_choice(state, q_text, opts, alpha=alpha)
-            elif q_type == "score":
-                levels = q_spec.get("criteria", q_spec.get("levels", [1, 2, 3]))
-                results[key] = await self.evaluate_score(state, q_text, levels)
-            else:
-                results[key] = await self.evaluate_noul(state, q_text)
-        return results
+        return await evaluate_questions_sequentially(self, state, questions)

@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
-from episteme_pipeline.config import DecisionEngineConfig
 from episteme_pipeline.decision.jev_client import (
+    AutoDecisionEngine,
     DecisionEngineError,
     LayaDecisionEngine,
     TransformersDecisionEngine,
@@ -236,6 +237,14 @@ async def test_laya_decision_engine_with_mock_agent() -> None:
     assert isinstance(batch_res["choice_q"], DecisionScore)
     assert isinstance(batch_res["noul_q"], DecisionNoulResult)
 
+    # 5. evaluate single question via polymorphic strategy
+    single_res = await engine.evaluate(
+        state="Test state",
+        question={"type": "noul", "instructions": "Is this substantive?"},
+    )
+    assert isinstance(single_res, DecisionNoulResult)
+    assert single_res.passed is True
+
 
 @pytest.mark.asyncio
 async def test_laya_decision_engine_shortlist_trigger() -> None:
@@ -301,14 +310,19 @@ def test_laya_decision_engine_missing_mlx_package() -> None:
 
 @pytest.mark.asyncio
 async def test_transformers_decision_engine_with_mock_model() -> None:
-    """Verify TransformersDecisionEngine execution with mock model."""
-    mock_model = MagicMock()
-    mock_model.predict.return_value = {
-        "answers": {
-            "Which category?": {"A": 0.85, "B": 0.15},
-        }
-    }
+    """Verify TransformersDecisionEngine execution with mock PyTorch model and tokenizer."""
+    import torch
+
+    tensor_val = MagicMock()
+    tensor_val.to.return_value = tensor_val
+
     mock_tok = MagicMock()
+    mock_tok.return_value = {"input_ids": tensor_val}
+
+    mock_output = MagicMock()
+    mock_output.logits = torch.tensor([1.7346, 0.0])
+
+    mock_model = MagicMock(return_value=mock_output)
 
     engine = TransformersDecisionEngine(
         model=mock_model,
@@ -326,5 +340,100 @@ async def test_transformers_decision_engine_with_mock_model() -> None:
 
     noul = await engine.evaluate_noul("state block", "Which category?")
     assert isinstance(noul, DecisionNoulResult)
+
+    # Verify fallback to pooled last_hidden_state when logits are absent
+    mock_output_base = MagicMock(spec=["last_hidden_state"])
+    mock_output_base.last_hidden_state = torch.tensor([[[2.0, 0.0]], [[0.5, 0.0]]])
+    mock_model.return_value = mock_output_base
+    choice_base = await engine.evaluate_choice("state block", "Which category?", ["A", "B"])
+    assert choice_base.selected_option == "A"
+
+
+@pytest.mark.asyncio
+async def test_auto_decision_engine_dispatch_and_batch() -> None:
+    """Verify AutoDecisionEngine delegation, kwargs mapping, and batch evaluation."""
+    from episteme_pipeline.decision.jev_client import AutoDecisionEngine
+
+    mock_inner = MagicMock()
+    mock_inner.name = "MockBackend"
+    mock_inner.evaluate_noul = AsyncMock(return_value=DecisionNoulResult(probability=0.9, empirical_accuracy=0.9, passed=True))
+    mock_inner.evaluate_choice = AsyncMock(return_value=DecisionScore(selected_option="A", class_probability=0.9, empirical_accuracy=0.9, probabilities={"A": 0.9}))
+    mock_inner.evaluate_score = AsyncMock(return_value=DecisionScore(selected_option=1, class_probability=0.8, empirical_accuracy=0.8, probabilities={"1": 0.8}))
+    mock_inner.evaluate_batch = AsyncMock(return_value={"q1": DecisionNoulResult(probability=0.9, empirical_accuracy=0.9, passed=True)})
+    mock_inner.evaluate = AsyncMock(return_value=DecisionNoulResult(probability=0.9, empirical_accuracy=0.9, passed=True))
+
+    auto_engine = AutoDecisionEngine(checkpoint="aac6fef/laya-mlx")
+    auto_engine._inner = mock_inner
+
+    assert auto_engine.name == "MockBackend"
+
+    res_noul = await auto_engine.evaluate_noul("state", "question")
+    assert res_noul.passed is True
+
+    res_choice = await auto_engine.evaluate_choice("state", "question", ["A", "B"])
+    assert res_choice.selected_option == "A"
+
+    res_score = await auto_engine.evaluate_score("state", "question", [1, 2, 3])
+    assert res_score.selected_option == 1
+
+    res_eval = await auto_engine.evaluate("state", {"type": "noul", "instructions": "test"})
+    assert res_eval.passed is True
+
+    res_batch = await auto_engine.evaluate_batch("state", {"q1": {"type": "noul", "instructions": "test"}})
+    assert "q1" in res_batch
+
+
+def test_auto_decision_engine_transformers_fallback_kwargs_mapping() -> None:
+    """Verify AutoDecisionEngine handles checkpoint mapping without keyword collision."""
+    from episteme_pipeline.decision.jev_client import AutoDecisionEngine
+
+    with patch("platform.system", return_value="Linux"), patch("platform.machine", return_value="x86_64"):
+        # Passing checkpoint should not raise TypeError when delegating to TransformersDecisionEngine
+        engine = AutoDecisionEngine(
+            checkpoint="aac6fef/laya-mlx",
+            default_confidence_threshold=0.88,
+            conformal_alpha=0.02,
+        )
+        assert isinstance(engine._inner, TransformersDecisionEngine)
+        assert engine._inner.model_name == "convaiinnovations/laya"
+        assert engine._inner.default_confidence_threshold == 0.88
+
+
+def test_resolve_decision_engine() -> None:
+    """Verify resolve_decision_engine across configuration shapes and providers."""
+    from episteme_pipeline.decision.jev_client import resolve_decision_engine
+    from episteme_pipeline.config import DecisionEngineConfig
+
+    # None config
+    assert resolve_decision_engine(None) is None
+
+    # Already an engine
+    mock_eng = MockJevDecisionEngine()
+    assert resolve_decision_engine(mock_eng) is mock_eng
+
+    # Disabled provider
+    cfg_none = DecisionEngineConfig(provider="none")
+    assert resolve_decision_engine(cfg_none) is None
+
+    # Mock provider
+    cfg_mock = DecisionEngineConfig(provider="mock", default_confidence_threshold=0.92)
+    resolved_mock = resolve_decision_engine(cfg_mock)
+    assert isinstance(resolved_mock, MockJevDecisionEngine)
+    assert resolved_mock.default_confidence_threshold == 0.92
+
+    # Auto provider
+    cfg_auto = DecisionEngineConfig(provider="auto", model_checkpoint="aac6fef/laya-mlx")
+    resolved_auto = resolve_decision_engine(cfg_auto)
+    assert isinstance(resolved_auto, (AutoDecisionEngine, LayaDecisionEngine, TransformersDecisionEngine))
+
+    # Transformers provider
+    cfg_tf = DecisionEngineConfig(provider="transformers", model_checkpoint="convaiinnovations/laya")
+    resolved_tf = resolve_decision_engine(cfg_tf)
+    assert isinstance(resolved_tf, TransformersDecisionEngine)
+
+    # Dict configuration with fallback_to_mock
+    dict_cfg = {"provider": "laya", "model_checkpoint": "aac6fef/laya-mlx"}
+    resolved_dict = resolve_decision_engine(dict_cfg, fallback_to_mock=True)
+    assert isinstance(resolved_dict, (LayaDecisionEngine, MockJevDecisionEngine))
 
 

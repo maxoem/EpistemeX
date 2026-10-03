@@ -8,8 +8,104 @@ calibrated decision routing, along with the Pydantic result contracts
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from dataclasses import dataclass
+from typing import Any, Literal, Protocol, runtime_checkable
 from pydantic import BaseModel, Field
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionQuestion:
+    """Strongly-typed evaluation question specification for System 1 DecisionEngine.
+
+    Parameters
+    ----------
+    question : str
+        Decision question or instruction prompt to evaluate against state.
+    type : Literal["choice", "noul", "score"], default "choice"
+        Evaluation modality:
+        - "choice": Categorical classification over discrete options or rubrics.
+        - "noul": Binary yes/no proposition evaluation.
+        - "score": Ordered scale / Likert rubric scoring.
+    criteria : list of str, dict of str to str, list of int, or None, optional
+        Allowable categorical options, rubric criteria dictionary, or numerical scale levels.
+    alpha : float or None, optional
+        Conformal significance level (1 - alpha coverage) for prediction sets.
+    """
+
+    question: str
+    type: Literal["choice", "noul", "score"] = "choice"
+    criteria: list[str] | dict[str, str] | list[int] | None = None
+    alpha: float | None = None
+
+    @classmethod
+    def from_bundle(
+        cls,
+        bundle: Any,
+        type: Literal["choice", "noul", "score"] = "choice",
+        format_kwargs: dict[str, Any] | None = None,
+        alpha: float | None = None,
+    ) -> DecisionQuestion:
+        """Create a DecisionQuestion directly from a StructuredPromptBundle.
+
+        Parameters
+        ----------
+        bundle : StructuredPromptBundle
+            Configured prompt bundle.
+        type : Literal["choice", "noul", "score"], default "choice"
+            Evaluation modality.
+        format_kwargs : dict of str to Any or None, optional
+            Keyword arguments to format into the template.
+        alpha : float or None, optional
+            Conformal significance level.
+
+        Returns
+        -------
+        DecisionQuestion
+            Instantiated typed decision question.
+        """
+        text = getattr(bundle, "decision_template", None) or getattr(bundle, "direct_template", "")
+        if format_kwargs:
+            text = text.format(**format_kwargs)
+        criteria = getattr(bundle, "decision_criteria", None)
+        return cls(
+            question=text,
+            type=type,
+            criteria=criteria,
+            alpha=alpha,
+        )
+
+
+def ensure_decision_question(spec: DecisionQuestion | dict[str, Any]) -> DecisionQuestion:
+    """Normalize a DecisionQuestion or legacy dictionary specification into a typed DecisionQuestion.
+
+    Parameters
+    ----------
+    spec : DecisionQuestion or dict of str to Any
+        Input question specification.
+
+    Returns
+    -------
+    DecisionQuestion
+        Hard-typed decision question specification.
+    """
+    if isinstance(spec, DecisionQuestion):
+        return spec
+    if isinstance(spec, dict):
+        q_type = spec.get("type", "choice")
+        q_text = spec.get("instructions") or spec.get("question") or ""
+        criteria = spec.get("criteria")
+        if criteria is None:
+            criteria = spec.get("options")
+        if criteria is None:
+            criteria = spec.get("levels")
+        alpha = spec.get("alpha")
+        return DecisionQuestion(
+            question=str(q_text),
+            type=q_type,  # type: ignore[arg-type]
+            criteria=criteria,
+            alpha=float(alpha) if alpha is not None else None,
+        )
+    raise TypeError(f"Expected DecisionQuestion or dict, got {type(spec).__name__}")
 
 
 class DecisionScore(BaseModel):
@@ -83,6 +179,17 @@ class DecisionEngine(Protocol):
     emitting calibrated probabilities, conformal prediction sets, and empirical
     accuracy estimates.
     """
+
+    @property
+    def name(self) -> str:
+        """Return the engine identifier.
+
+        Returns
+        -------
+        str
+            Human-readable identifier of the decision engine.
+        """
+        ...
 
     async def evaluate_noul(
         self,
@@ -158,6 +265,48 @@ class DecisionEngine(Protocol):
         """
         ...
 
+    async def evaluate(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        question: DecisionQuestion | dict[str, Any],
+    ) -> DecisionScore | DecisionNoulResult:
+        """Evaluate a single typed question against a state payload.
+
+        Parameters
+        ----------
+        state : str or dict or list
+            Structured state payload (text chunk, triple context, or metadata).
+        question : DecisionQuestion or dict
+            Typed decision question specification or legacy dictionary.
+
+        Returns
+        -------
+        DecisionScore or DecisionNoulResult
+            Evaluation outcome corresponding to the question type.
+        """
+        ...
+
+    async def evaluate_batch(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        questions: dict[str, DecisionQuestion | dict[str, Any]],
+    ) -> dict[str, DecisionScore | DecisionNoulResult]:
+        """Evaluate multiple typed questions against a state payload in a single pass.
+
+        Parameters
+        ----------
+        state : str or dict or list
+            Structured state payload.
+        questions : dict of str to (DecisionQuestion or dict)
+            Mapping of question IDs to typed decision specifications or dictionaries.
+
+        Returns
+        -------
+        dict of str to (DecisionScore or DecisionNoulResult)
+            Mapped evaluation results for all evaluated questions.
+        """
+        ...
+
 
 @runtime_checkable
 class GleaningStoppingOracle(Protocol):
@@ -220,5 +369,5 @@ def ensure_decision_engine(engine: Any | None) -> DecisionEngine | None:
         return engine
     raise TypeError(
         f"{type(engine).__name__} does not satisfy the DecisionEngine protocol: it "
-        "must provide async evaluate_noul, evaluate_choice, and evaluate_score methods."
+        "must provide async evaluate, evaluate_noul, evaluate_choice, evaluate_score, and evaluate_batch methods."
     )

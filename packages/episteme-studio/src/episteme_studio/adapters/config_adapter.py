@@ -131,10 +131,20 @@ class ConfigAdapter:
                     raise InvalidConfigPatchError(
                         f"Unknown configuration path '{key_path}' (invalid segment '{part}')."
                     )
+                if part == "decision_engine" and target.get(part) is None:
+                    target[part] = {}
+                elif part == "phase_gates" and target.get(part) is None:
+                    target[part] = {}
+                elif part == "modal_resolver" and target.get(part) is None:
+                    target[part] = {}
                 target = target[part]
 
             leaf = parts[-1]
-            if not isinstance(target, dict) or leaf not in target:
+            if not isinstance(target, dict) or (
+                leaf not in target
+                and "decision_engine" not in key_path
+                and "modal_resolver" not in key_path
+            ):
                 raise InvalidConfigPatchError(
                     f"Unknown configuration path '{key_path}' (unknown property '{leaf}')."
                 )

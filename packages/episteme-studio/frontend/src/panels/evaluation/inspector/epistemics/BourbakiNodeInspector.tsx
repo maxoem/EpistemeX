@@ -200,6 +200,24 @@ export const BourbakiNodeInspector: React.FC<BourbakiNodeInspectorProps> = ({
           )}
         </div>
 
+        {/* Section 1b: Propositional Modality & Structural Scope (ADR 0020) */}
+        <div className="space-y-1.5 p-2.5 rounded bg-app-surface border border-app-border">
+          <div className="flex items-center justify-between text-xs">
+            <span className="type-caption text-app-muted uppercase tracking-wider font-semibold">
+              Modal Qualifier M(φ)
+            </span>
+            <span className="type-mono font-semibold text-emerald-500">
+              {element.classType === "Mp" ? "1.000 (Analytic Law)" : element.classType === "M" ? "0.900 (Synthetic Law)" : element.classType === "Mpp" ? "0.850 (Observation)" : "0.750"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-app-muted font-mono pt-1 border-t border-app-border/40">
+            <span>Schurz Scope:</span>
+            <span className="text-app-text font-medium">
+              {element.classType === "Mp" ? "Essentieller Allsatz (Analytisch)" : element.classType === "M" ? "Essentieller Allsatz (Synthetisch)" : element.classType === "Mpp" ? "Lokalisierter Existenzsatz" : "Statistischer Allsatz"}
+            </span>
+          </div>
+        </div>
+
         {/* Section 2: Poset Specialization Dependencies */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
