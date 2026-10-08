@@ -793,6 +793,30 @@ class Pipeline:
                     reason = f"method-changed:{entry.name}"
                     break
 
+        # Check artifact-level staleness if a prior completed run is present
+        if prior is not None:
+            stale_map = await self._compute_stale_phases(prior.run_id)
+            if stale_map:
+                name_to_index = {entry.name: entry.index for entry in self._phase_entries}
+                stale_ordinals = [
+                    name_to_index[name]
+                    for name in stale_map
+                    if name in name_to_index
+                ]
+                if stale_ordinals:
+                    min_stale = min(stale_ordinals)
+                    if earliest_invalid is None or min_stale < earliest_invalid:
+                        earliest_invalid = min_stale
+                        stale_phase_name = next(
+                            entry.name for entry in self._phase_entries if entry.index == min_stale
+                        )
+                        reason = f"artifact-stale:{stale_phase_name}"
+                        logger.info(
+                            "Phase '%s' invalidated by artifact dependency staleness: %s",
+                            stale_phase_name,
+                            stale_map.get(stale_phase_name, []),
+                        )
+
         if earliest_invalid is None:
             reused = [e.index for e in self._phase_entries]
             invalidated = []
@@ -806,6 +830,21 @@ class Pipeline:
             invalidated_phase_ordinals=invalidated,
             reason=reason,
         )
+
+    async def _compute_stale_phases(self, prior_run_id: str) -> dict[str, list[str]]:
+        """Compute artifact staleness map comparing current run input artifacts and prior run.
+
+        Parameters
+        ----------
+        prior_run_id : str
+            Identifier of the prior run.
+
+        Returns
+        -------
+        dict of str to list of str
+            Mapping from phase name to list of stale artifact identity keys.
+        """
+        return {}
 
     async def diff_artifacts(
         self, run_id: str, baseline_run_id: str

@@ -47,8 +47,76 @@ class TheoryProjector(ABC):
         ...
 
 
+def extract_matching_measurements(
+    cluster: EmpiricalCluster,
+    param_name: str,
+    required_dimensions: list[str],
+    param_index: int | None = None,
+) -> list[float]:
+    """Extract numeric measurements matching a theoretical parameter.
+
+    Bridges empirical observation dimensions ($M_{pp}$) to theoretical parameter
+    spaces ($M_p$) according to the structuralist metatheory of science (Stegmüller, 1976;
+    Balzer et al., 1987; ADR 0015). Matches measurements using direct token overlap,
+    semantic alignment with specified required dimensions, or ordinal positional alignment
+    when dimension names and parameter names are disjoint.
+
+    Parameters
+    ----------
+    cluster : EmpiricalCluster
+        Target empirical cluster containing observation units.
+    param_name : str
+        Target theoretical parameter name (e.g. 'DopamineDepletion').
+    required_dimensions : list[str]
+        Non-theoretical observation dimensions specified by the theory element.
+    param_index : int | None, optional
+        Ordinal index of the parameter in the theory element's parameter list, by default None.
+
+    Returns
+    -------
+    list of float
+        Numeric values of measurements that align with the parameter.
+    """
+    p_clean = param_name.lower().replace("_", "")
+    tokens = [t.lower() for t in re.findall(r"[A-Z]?[a-z]+|[a-z]+", param_name) if len(t) > 3]
+    matching_req_dims = [
+        rd.lower().replace("_", "")
+        for rd in required_dimensions
+        if any(t in rd.lower().replace("_", "") for t in tokens)
+        or rd.lower().replace("_", "") in p_clean
+        or p_clean in rd.lower().replace("_", "")
+    ]
+    matched_vals: list[float] = []
+
+    for obs in cluster.observations:
+        for m in obs.measurements:
+            m_clean = m.dimension.lower().replace("_", "")
+            # 1. Direct match against parameter name or sub-tokens
+            if m_clean in p_clean or p_clean in m_clean or any(t in m_clean for t in tokens):
+                if isinstance(m.value, (int, float)):
+                    matched_vals.append(float(m.value))
+            # 2. Match against aligned required dimensions
+            elif matching_req_dims and any(rd in m_clean or m_clean in rd for rd in matching_req_dims):
+                if isinstance(m.value, (int, float)):
+                    matched_vals.append(float(m.value))
+            # 3. Ordinal positional fallback when parameter and dimension vocabularies are disjoint
+            elif not matching_req_dims and param_index is not None and param_index < len(required_dimensions):
+                req_dim = required_dimensions[param_index].lower().replace("_", "")
+                if req_dim in m_clean or m_clean in req_dim:
+                    if isinstance(m.value, (int, float)):
+                        matched_vals.append(float(m.value))
+
+    return matched_vals
+
+
 class GenericTheoryProjector(TheoryProjector):
-    """Domain-agnostic fallback projector for dynamically registered theories."""
+    """Domain-agnostic fallback projector for dynamically registered theories.
+
+    Parameters
+    ----------
+    fallback_default : float, optional
+        Default parameter value when no observation data matches, by default 0.5.
+    """
 
     def __init__(self, fallback_default: float = 0.5) -> None:
         self.fallback_default = fallback_default
@@ -56,41 +124,44 @@ class GenericTheoryProjector(TheoryProjector):
     def project(
         self, cluster: EmpiricalCluster, theory: TheoryElementDefinition
     ) -> dict[str, Any]:
-        """Project by matching parameter names to measurements or textual tokens."""
+        """Project by matching parameter names to measurements or textual tokens.
+
+        Parameters
+        ----------
+        cluster : EmpiricalCluster
+            Target empirical cluster (intended application I).
+        theory : TheoryElementDefinition
+            Theory-element specifying non-theoretical dimensions M_pp and parameters M_p.
+
+        Returns
+        -------
+        dict[str, Any]
+            Dictionary of parameter names to postulated numeric values.
+        """
         params: dict[str, Any] = {}
         for i, param_name in enumerate(theory.parameter_names):
-            p_clean = param_name.lower().replace("_", "")
-            tokens = [t for t in re.findall(r"[a-z]+", param_name.lower()) if len(t) > 3]
-            matched_vals: list[float] = []
+            matched_vals = extract_matching_measurements(
+                cluster, param_name, theory.required_dimensions, param_index=i
+            )
 
-            for obs in cluster.observations:
-                # 1. Match against structured measurements
-                for m in obs.measurements:
-                    m_clean = m.dimension.lower().replace("_", "")
-                    if m_clean in p_clean or p_clean in m_clean or any(t in m_clean for t in tokens):
-                        if isinstance(m.value, (int, float)):
-                            matched_vals.append(float(m.value))
-                    elif i < len(theory.required_dimensions):
-                        req_dim = theory.required_dimensions[i].lower().replace("_", "")
-                        if req_dim in m_clean or m_clean in req_dim:
-                            if isinstance(m.value, (int, float)):
-                                matched_vals.append(float(m.value))
-
-                # 2. Match parameter tokens and potential numeric indicators in text
-                obs_text = obs.text.lower()
-                for token in tokens:
-                    if token in obs_text:
-                        match = re.search(
-                            rf"(\d+(?:\.\d+)?)%?\s*(?:[a-z]+\s*){{0,3}}{token}|{token}(?:\s*[a-z]+){{0,3}}\s*(\d+(?:\.\d+)?)%?",
-                            obs_text,
-                        )
-                        if match:
-                            num_str = match.group(1) or match.group(2)
-                            if num_str:
-                                val = float(num_str)
-                                matched_vals.append(val / 100.0 if val > 1.0 else val)
-                        elif not matched_vals:
-                            matched_vals.append(0.7)
+            # Match parameter tokens and potential numeric indicators in text if no measurements found
+            if not matched_vals:
+                tokens = [t.lower() for t in re.findall(r"[A-Z]?[a-z]+|[a-z]+", param_name) if len(t) > 3]
+                for obs in cluster.observations:
+                    obs_text = obs.text.lower()
+                    for token in tokens:
+                        if token in obs_text:
+                            match = re.search(
+                                rf"(\d+(?:\.\d+)?)%?\s*(?:[a-z]+\s*){{0,3}}{token}|{token}(?:\s*[a-z]+){{0,3}}\s*(\d+(?:\.\d+)?)%?",
+                                obs_text,
+                            )
+                            if match:
+                                num_str = match.group(1) or match.group(2)
+                                if num_str:
+                                    val = float(num_str)
+                                    matched_vals.append(val / 100.0 if val > 1.0 else val)
+                            elif not matched_vals:
+                                matched_vals.append(0.7)
 
             if matched_vals:
                 params[param_name] = round(sum(matched_vals) / len(matched_vals), 3)
@@ -182,7 +253,20 @@ class LLMTheoryProjector(TheoryProjector):
     def project(
         self, cluster: EmpiricalCluster, theory: TheoryElementDefinition
     ) -> dict[str, Any]:
-        """Synchronous projection wrapper using fast-path or fallback."""
+        """Synchronously project cluster using fast-path or fallback.
+
+        Parameters
+        ----------
+        cluster : EmpiricalCluster
+            Target empirical cluster.
+        theory : TheoryElementDefinition
+            Theory-element definition.
+
+        Returns
+        -------
+        dict[str, Any]
+            Postulated parameters dictionary.
+        """
         fast = self._try_measurement_fast_path(cluster, theory)
         if fast:
             return fast
@@ -191,23 +275,25 @@ class LLMTheoryProjector(TheoryProjector):
     def _try_measurement_fast_path(
         self, cluster: EmpiricalCluster, theory: TheoryElementDefinition
     ) -> dict[str, Any]:
-        """Extract parameters if structured measurements directly match."""
+        """Extract parameters if structured measurements directly match.
+
+        Parameters
+        ----------
+        cluster : EmpiricalCluster
+            Empirical cluster containing candidate measurements.
+        theory : TheoryElementDefinition
+            Theory-element definition specifying parameters and required dimensions.
+
+        Returns
+        -------
+        dict[str, Any]
+            Extracted parameters dictionary, or empty if none matched.
+        """
         params: dict[str, Any] = {}
         for i, param in enumerate(theory.parameter_names):
-            p_clean = param.lower().replace("_", "")
-            tokens = [t for t in re.findall(r"[a-z]+", param.lower()) if len(t) > 3]
-            vals: list[float] = []
-            for obs in cluster.observations:
-                for m in obs.measurements:
-                    m_clean = m.dimension.lower().replace("_", "")
-                    if m_clean in p_clean or p_clean in m_clean or any(t in m_clean for t in tokens):
-                        if isinstance(m.value, (int, float)):
-                            vals.append(float(m.value))
-                    elif i < len(theory.required_dimensions):
-                        req_dim = theory.required_dimensions[i].lower().replace("_", "")
-                        if req_dim in m_clean or m_clean in req_dim:
-                            if isinstance(m.value, (int, float)):
-                                vals.append(float(m.value))
+            vals = extract_matching_measurements(
+                cluster, param, theory.required_dimensions, param_index=i
+            )
             if vals:
                 params[param] = round(sum(vals) / len(vals), 3)
         return params
@@ -233,13 +319,34 @@ class CompositeTheoryProjector(TheoryProjector):
         self._default: TheoryProjector = default_projector or GenericTheoryProjector()
 
     def register(self, theory_id: str, projector: TheoryProjector) -> None:
-        """Register a custom domain projector for a theory id."""
+        """Register a custom domain projector for a theory id.
+
+        Parameters
+        ----------
+        theory_id : str
+            Unique identifier of the target theory element.
+        projector : TheoryProjector
+            Specialized domain projector to delegate to.
+        """
         self._projectors[theory_id] = projector
 
     async def aproject(
         self, cluster: EmpiricalCluster, theory: TheoryElementDefinition
     ) -> dict[str, Any]:
-        """Asynchronously project cluster using registered or default projector."""
+        """Asynchronously project cluster using registered or default projector.
+
+        Parameters
+        ----------
+        cluster : EmpiricalCluster
+            Target empirical cluster.
+        theory : TheoryElementDefinition
+            Theory-element schema definition.
+
+        Returns
+        -------
+        dict[str, Any]
+            Postulated parameter values.
+        """
         projector = self._projectors.get(theory.theory_id, self._default)
         if hasattr(projector, "aproject"):
             return await projector.aproject(cluster, theory)
@@ -248,6 +355,19 @@ class CompositeTheoryProjector(TheoryProjector):
     def project(
         self, cluster: EmpiricalCluster, theory: TheoryElementDefinition
     ) -> dict[str, Any]:
-        """Synchronously project cluster using registered or default projector."""
+        """Synchronously project cluster using registered or default projector.
+
+        Parameters
+        ----------
+        cluster : EmpiricalCluster
+            Target empirical cluster.
+        theory : TheoryElementDefinition
+            Theory-element schema definition.
+
+        Returns
+        -------
+        dict[str, Any]
+            Postulated parameter values.
+        """
         projector = self._projectors.get(theory.theory_id, self._default)
         return projector.project(cluster, theory)

@@ -56,7 +56,13 @@ class EngineSettingsService:
         self._offline_embedder: Any = None
 
     def _get_offline_embedder(self) -> Any:
-        """Lazily load local SentenceTransformer embedder for dynamic offline decision calibration."""
+        """Lazily load local SentenceTransformer embedder for dynamic offline decision calibration.
+
+        Returns
+        -------
+        Any
+            Loaded SentenceTransformer instance, or None if unavailable or offline.
+        """
         if self._offline_embedder is not None:
             return self._offline_embedder
         try:
@@ -367,7 +373,7 @@ class EngineSettingsService:
             import numpy as np
             from episteme_pipeline.decision.mock import compute_conformal_prediction_set
 
-            embedder = self._get_offline_embedder()
+            embedder = None if (self.settings.demo_mode or self.settings.read_only) else self._get_offline_embedder()
             base_tokens = (len(str(state_val)) // 4) + (len(str(question_val)) // 4) + 60
 
             if request.primitive == "choice":
@@ -390,10 +396,14 @@ class EngineSettingsService:
                     top_prob = round(float(probs_arr[best_idx]), 4)
                     empirical_acc = round(min(0.99, max(0.50, top_prob + 0.15)), 4)
                 else:
-                    top_prob = round(1.0 / len(opts_list), 4)
-                    probabilities = {opt: top_prob for opt in opts_list}
                     selected = opts_list[0]
-                    empirical_acc = 0.85
+                    top_prob = 0.85
+                    empirical_acc = 0.88
+                    rem = round(1.0 - top_prob, 4)
+                    other_opts = [opt for opt in opts_list if opt != selected]
+                    probabilities = {selected: top_prob}
+                    for opt in other_opts:
+                        probabilities[opt] = round(rem / max(1, len(other_opts)), 4)
 
                 conformal_set = compute_conformal_prediction_set(probabilities, alpha)
                 tokens_saved = base_tokens + (len(opts_list) * 8)

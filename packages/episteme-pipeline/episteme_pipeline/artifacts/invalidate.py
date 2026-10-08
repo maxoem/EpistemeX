@@ -59,7 +59,13 @@ class ArtifactDependencyGraph:
         self._edges_resolved = False
 
     def _resolve_edges(self) -> None:
-        """Translate provenance ``artifact_id`` references into ``identity_key`` edges."""
+        """Translate provenance ``artifact_id`` references into ``identity_key`` edges.
+
+        Under O-01 architecture, ``artifact_id`` (e.g. ``artifact::{x}``) references
+        are mapped to DAG node ``identity_key`` (e.g. ``{kind}::{x}``). If a test fixture
+        or producer specifies an ``identity_key`` directly in ``upstream_artifact_ids``,
+        it is recognized if already present in ``self.nodes``.
+        """
         if self._edges_resolved:
             return
         self._downstream = defaultdict(set)
@@ -68,6 +74,9 @@ class ArtifactDependencyGraph:
         for key, raw_ids in self._raw_upstream.items():
             for up_id in raw_ids:
                 up_key = self._identity_by_artifact_id.get(up_id)
+                if up_key is None and up_id in self.nodes:
+                    # Permissive fallback: upstream reference was already an identity_key
+                    up_key = up_id
                 if up_key is None:
                     # The referenced artifact is not part of this artifact set —
                     # e.g. a phase hydrated from a parent run whose artifacts were
