@@ -396,14 +396,10 @@ class EngineSettingsService:
                     top_prob = round(float(probs_arr[best_idx]), 4)
                     empirical_acc = round(min(0.99, max(0.50, top_prob + 0.15)), 4)
                 else:
+                    top_prob = round(1.0 / len(opts_list), 4)
+                    probabilities = {opt: top_prob for opt in opts_list}
                     selected = opts_list[0]
-                    top_prob = 0.85
-                    empirical_acc = 0.88
-                    rem = round(1.0 - top_prob, 4)
-                    other_opts = [opt for opt in opts_list if opt != selected]
-                    probabilities = {selected: top_prob}
-                    for opt in other_opts:
-                        probabilities[opt] = round(rem / max(1, len(other_opts)), 4)
+                    empirical_acc = 0.85
 
                 conformal_set = compute_conformal_prediction_set(probabilities, alpha)
                 tokens_saved = base_tokens + (len(opts_list) * 8)

@@ -227,6 +227,64 @@ def test_multi_theory_lens_projections(mixed_empirical_atoms, seeded_theories):
     assert freud_params["UnconsciousResistance"] == pytest.approx(0.85, abs=0.05)
 
 
+def test_generic_projector_text_token_fallback() -> None:
+    """Verify that GenericTheoryProjector extracts parameters from textual mentions when measurements are absent."""
+    cluster = EmpiricalCluster(
+        cluster_id="cluster-text-only",
+        observations=[
+            TheoryAtom(
+                id="obs_text_1",
+                text="Patient exhibits high dopamine depletion of 65% in recent scans.",
+                component_type="ObservationUnit",
+                source_chunk_id="chunk_001",
+                confidence=0.9,
+                measurements=[],
+            )
+        ],
+        claimant_theory_ids=["neurology"],
+    )
+    theory = TheoryElementDefinition(
+        theory_id="neurology",
+        name="Neurology",
+        required_dimensions=["unrelated_dim"],
+        parameter_names=["DopamineDepletion"],
+        laws=[],
+    )
+    projector = GenericTheoryProjector()
+    params = projector.project(cluster, theory)
+    assert params["DopamineDepletion"] == pytest.approx(0.65, abs=0.01)
+
+
+def test_generic_projector_ordinal_positional_fallback() -> None:
+    """Verify positional alignment when parameter names and dimension names are disjoint."""
+    cluster = EmpiricalCluster(
+        cluster_id="cluster-disjoint",
+        observations=[
+            TheoryAtom(
+                id="obs_disjoint_1",
+                text="Empirical observation with disjoint vocabulary.",
+                component_type="ObservationUnit",
+                source_chunk_id="chunk_002",
+                confidence=0.9,
+                measurements=[
+                    Measurement(dimension="x_dim", value=0.42, unit="ratio"),
+                ],
+            )
+        ],
+        claimant_theory_ids=["abstract_theory"],
+    )
+    theory = TheoryElementDefinition(
+        theory_id="abstract_theory",
+        name="AbstractTheory",
+        required_dimensions=["x_dim"],
+        parameter_names=["LatentTheta"],
+        laws=[],
+    )
+    projector = GenericTheoryProjector()
+    params = projector.project(cluster, theory)
+    assert params["LatentTheta"] == pytest.approx(0.42, abs=0.01)
+
+
 def test_local_tenability_solver(seeded_theories):
     """Test Step 3: Local Tenability optimization (TS_local = sup { 1 - delta })."""
     solver = TenabilitySolver(anomaly_threshold=0.5)
