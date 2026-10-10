@@ -146,3 +146,60 @@ async def test_get_run_langfuse_stats_endpoint(monkeypatch: pytest.MonkeyPatch) 
         assert data["run_id"] == "run-mock-123"
         assert isinstance(data["observations"], list)
 
+
+def test_artifact_reader_aggregates_component_fingerprints(tmp_path: Path) -> None:
+    """Verify ArtifactReader aggregates phase_config, method, and direct fingerprints.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Temporary directory for pipeline runs.
+
+    Returns
+    -------
+    None
+    """
+    from episteme_studio.adapters.artifact_reader import ArtifactReader
+
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir()
+    artifacts_dir = tmp_path / "artifacts"
+    artifacts_dir.mkdir()
+
+    manifest_data = {
+        "run_id": "test-run-fps",
+        "status": "completed",
+        "created_at": "2026-10-10T12:00:00Z",
+        "pipeline_version": "0.1.0",
+        "fingerprints": {"legacy_fp": "hash_legacy"},
+        "phase_config_fingerprints": {
+            0: "hash_phase0",
+            "phase2": "hash_phase2",
+        },
+        "method_fingerprints": {
+            "phase2.decision_engine": "hash_de_v1",
+            "phase2.modal_resolver": "hash_mr_v1",
+            "phase3.relation_reranker": "hash_rr_v1",
+        },
+    }
+    manifest_path = runs_dir / "test-run-fps.json"
+    manifest_path.write_text(json.dumps(manifest_data), encoding="utf-8")
+
+    reader = ArtifactReader(runs_dir=runs_dir, artifacts_dir=artifacts_dir)
+    detail = reader.get_run("test-run-fps")
+
+    assert detail is not None
+    assert detail.method_fingerprints == {
+        "phase2.decision_engine": "hash_de_v1",
+        "phase2.modal_resolver": "hash_mr_v1",
+        "phase3.relation_reranker": "hash_rr_v1",
+    }
+    # Fingerprints should aggregate phase_config_fingerprints, method_fingerprints, and direct fingerprints
+    assert detail.fingerprints["0"] == "hash_phase0"
+    assert detail.fingerprints["phase2"] == "hash_phase2"
+    assert detail.fingerprints["phase2.decision_engine"] == "hash_de_v1"
+    assert detail.fingerprints["phase2.modal_resolver"] == "hash_mr_v1"
+    assert detail.fingerprints["phase3.relation_reranker"] == "hash_rr_v1"
+    assert detail.fingerprints["legacy_fp"] == "hash_legacy"
+
+

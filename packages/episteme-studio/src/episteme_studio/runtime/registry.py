@@ -134,6 +134,7 @@ class RunHandle(BaseModel):
             graph_schema=self.config_snapshot.get("graph_schema", {}),
             config_snapshot=self.config_snapshot,
             fingerprints={},
+            method_fingerprints={},
             unresolved_count=0,
             failure=self.failure,
         )

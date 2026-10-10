@@ -57,6 +57,19 @@ class StructuralistModalResolver:
     def __init__(self, default_base_score: float = 0.60) -> None:
         self.default_base_score = default_base_score
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic structuralist modal resolver configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier and default base score.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "default_base_score": self.default_base_score,
+        }
+
     def _classify_component(self, comp: str) -> str:
         """Classify component type string into coarse epistemological category.
 
@@ -234,6 +247,27 @@ class DecisionEngineModalResolver:
         self.levels = levels or [0.2, 0.4, 0.6, 0.8, 1.0]
         self._fallback_resolver = StructuralistModalResolver()
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic decision engine modal resolver configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, question template, levels,
+            and underlying decision engine fingerprint.
+        """
+        eng_fp = (
+            self.decision_engine.fingerprint()
+            if hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            else {"class": self.decision_engine.__class__.__name__}
+        )
+        return {
+            "class": self.__class__.__name__,
+            "question_template": self.question_template,
+            "levels": list(self.levels),
+            "decision_engine": eng_fp,
+        }
+
     async def resolve_modality(
         self,
         atom: TheoryAtom,
@@ -343,6 +377,30 @@ class HybridModalResolver:
         self.decision_resolver = decision_resolver
         self.mode = mode
         self.fusion_alpha = max(0.0, min(1.0, fusion_alpha))
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic hybrid modal resolver configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing mode, fusion alpha, and component resolver fingerprints.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "mode": self.mode,
+            "fusion_alpha": self.fusion_alpha,
+            "structural_resolver": (
+                self.structural_resolver.fingerprint()
+                if hasattr(self.structural_resolver, "fingerprint") and callable(self.structural_resolver.fingerprint)
+                else {"class": self.structural_resolver.__class__.__name__}
+            ),
+            "decision_resolver": (
+                self.decision_resolver.fingerprint()
+                if self.decision_resolver and hasattr(self.decision_resolver, "fingerprint") and callable(self.decision_resolver.fingerprint)
+                else None
+            ),
+        }
 
     @classmethod
     def create(

@@ -91,6 +91,7 @@ export interface RunDetail extends RunSummary {
   graph_schema: Record<string, any>;
   config_snapshot: Record<string, any>;
   fingerprints: Record<string, any>;
+  method_fingerprints?: Record<string, string>;
   unresolved_count: number;
   langfuse_url?: string | null;
   failure?: ProblemDetail | null;

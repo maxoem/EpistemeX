@@ -198,6 +198,35 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         self.trace_sink = trace_sink or NoOpTraceSink()
         self.decision_engine = decision_engine
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic dense retrieval global relation extractor configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier and fingerprints of injected
+            reranker, decision engine, embedding model, and language model.
+        """
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        reranker_fp = (
+            self.reranker.fingerprint()
+            if hasattr(self.reranker, "fingerprint") and callable(self.reranker.fingerprint)
+            else fingerprint_method(self.reranker)
+        )
+        de_fp = (
+            self.decision_engine.fingerprint()
+            if self.decision_engine and hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            else fingerprint_method(self.decision_engine) if self.decision_engine else None
+        )
+        return {
+            "class": self.__class__.__name__,
+            "reranker": reranker_fp,
+            "decision_engine": de_fp,
+            "embedding_model": fingerprint_method(self.embedding_model),
+            "llm": fingerprint_method(self.llm),
+        }
+
     @property
     def event_emitter(self) -> EventEmitter:
         from episteme_pipeline.events.context import get_event_emitter

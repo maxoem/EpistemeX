@@ -108,6 +108,28 @@ class TAGARCClassifier(ARCClassifier):
         self.max_candidates_per_component = max_candidates_per_component
         self.use_priority_rank = use_priority_rank
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic TAG ARC classifier configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing thresholds, subgraph depth, strategy,
+            and fingerprints of LLM and embedding model.
+        """
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        return {
+            "class": self.__class__.__name__,
+            "strategy": str(getattr(self.strategy, "value", self.strategy)),
+            "confidence_threshold": self.confidence_threshold,
+            "subgraph_depth": self.subgraph_depth,
+            "max_candidates_per_component": self.max_candidates_per_component,
+            "use_priority_rank": self.use_priority_rank,
+            "llm": fingerprint_method(self.llm),
+            "embedding_model": fingerprint_method(self.embedding_model),
+        }
+
     async def classify_global(
         self,
         local_components: list[TheoryAtom],

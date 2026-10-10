@@ -639,12 +639,18 @@ class Pipeline:
                 prefix = getattr(entry, "name", "phase")
             if not isinstance(prefix, str):
                 prefix = "phase"
-            # Try common attributes on runners
-            for attr, suffix in (("llm", "llm"), ("embedding_model", "embedding_model"), ("global_extractor", "global_extractor")):
-                obj = getattr(runner, attr, None)
-                fp = fingerprint_method(obj)
+            # Recursively discover and fingerprint all attached components
+            from episteme_pipeline.protocols.fingerprint import find_components
+
+            comps = (
+                runner.components()
+                if hasattr(runner, "components") and callable(runner.components)
+                else find_components(runner)
+            )
+            for comp_name, comp_obj in comps.items():
+                fp = fingerprint_method(comp_obj)
                 if fp:
-                    fps[f"{prefix}.{suffix}"] = fp
+                    fps[f"{prefix}.{comp_name}"] = fp
             phase_key = getattr(entry, "phase_key", getattr(runner, "phase_key", ""))
             for pname, pfp in prompt_fps.get(phase_key, {}).items():
                 fps[f"{prefix}.prompt.{pname}"] = pfp

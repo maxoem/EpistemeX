@@ -122,6 +122,28 @@ class LayaDecisionEngine:
         """Return the engine name."""
         return f"LayaDecisionEngine({self.checkpoint})"
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return a deterministic representation of engine configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Deterministic dictionary containing model checkpoint, precision,
+            batch size, inference timeout, calibration thresholds, and flags.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "checkpoint": self.checkpoint,
+            "dtype": self.dtype,
+            "batch_size": self.batch_size,
+            "timeout_seconds": self.timeout_seconds,
+            "default_confidence_threshold": self.default_confidence_threshold,
+            "conformal_alpha": self.conformal_alpha,
+            "shortlist_threshold": self.shortlist_threshold,
+            "compile": self.compile,
+            "cache_prompts": self.cache_prompts,
+        }
+
     def _get_agent(self) -> Any:
         """Lazily load the underlying Laya MLX agent.
 
@@ -531,6 +553,25 @@ class TransformersDecisionEngine:
     def name(self) -> str:
         """Return the engine name."""
         return f"TransformersDecisionEngine({self.model_name})"
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return a deterministic representation of engine configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Deterministic dictionary containing model name, device, batch size,
+            timeout, and calibration parameters.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "model_name": self.model_name,
+            "device": str(self.device) if self.device else None,
+            "batch_size": self.batch_size,
+            "timeout_seconds": self.timeout_seconds,
+            "default_confidence_threshold": self.default_confidence_threshold,
+            "conformal_alpha": self.conformal_alpha,
+        }
 
     def _ensure_loaded(self) -> tuple[Any, Any]:
         """Lazily load PyTorch model and tokenizer.
@@ -994,6 +1035,24 @@ class AutoDecisionEngine:
             Engine identifier.
         """
         return self._inner.name
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return a deterministic representation of engine configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Deterministic dictionary delegating to the underlying engine backend.
+        """
+        inner_fp = (
+            self._inner.fingerprint()
+            if hasattr(self._inner, "fingerprint") and callable(self._inner.fingerprint)
+            else {"class": self._inner.__class__.__name__}
+        )
+        return {
+            "class": self.__class__.__name__,
+            "inner": inner_fp,
+        }
 
     async def evaluate_noul(
         self,

@@ -242,6 +242,8 @@ class RunDetail(RunSummary):
         Snapshot of the full pipeline configuration (secrets redacted).
     fingerprints : dict of str to Any
         Phase and method fingerprint hashes.
+    method_fingerprints : dict of str to str, default dict
+        Fine-grained fingerprints of models, extractors, decision engines, and prompts.
     unresolved_count : int, default 0
         Number of dangling components referenced in this run.
     langfuse_url : str or None, optional
@@ -255,6 +257,7 @@ class RunDetail(RunSummary):
     graph_schema: dict[str, Any] = Field(default_factory=dict)
     config_snapshot: dict[str, Any] = Field(default_factory=dict)
     fingerprints: dict[str, Any] = Field(default_factory=dict)
+    method_fingerprints: dict[str, str] = Field(default_factory=dict)
     unresolved_count: int = 0
     langfuse_url: str | None = None
     failure: ProblemDetail | None = None

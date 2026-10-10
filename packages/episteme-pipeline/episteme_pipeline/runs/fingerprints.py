@@ -25,7 +25,7 @@ def _is_fully_serializable(value: Any) -> bool:
     """Recursively check if a value is JSON-serializable by our constraints."""
     if isinstance(value, _SimpleTypes):
         return True
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return all(_is_fully_serializable(item) for item in value)
     if isinstance(value, dict):
         return all(

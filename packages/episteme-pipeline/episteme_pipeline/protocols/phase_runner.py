@@ -43,3 +43,19 @@ class PhaseRunner(ABC, Generic[InputT]):
 
     @abstractmethod
     async def run(self, input: InputT, context: ArtifactExecutionContext) -> ArtifactCollection: ...
+
+    def components(self) -> dict[str, object]:
+        """Discover all injected computational components attached to this runner.
+
+        Recursively inspects runner attributes to discover objects implementing
+        the ``Fingerprintable`` protocol, LLM facades, embedders, decision engines,
+        and classifiers.
+
+        Returns
+        -------
+        dict of str to object
+            Mapping from dotted hierarchical path to component instances.
+        """
+        from episteme_pipeline.protocols.fingerprint import find_components
+
+        return find_components(self)

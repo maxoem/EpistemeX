@@ -695,6 +695,30 @@ class ArtifactReader:
             except Exception:
                 decision_metrics_obj = None
 
+        phase_config_fps = data.get("phase_config_fingerprints") or {}
+        norm_phase_config_fps = (
+            {str(k): str(v) for k, v in phase_config_fps.items()}
+            if isinstance(phase_config_fps, dict)
+            else {}
+        )
+        raw_method_fps = data.get("method_fingerprints") or {}
+        norm_method_fps = (
+            {str(k): str(v) for k, v in raw_method_fps.items()}
+            if isinstance(raw_method_fps, dict)
+            else {}
+        )
+        raw_fps = data.get("fingerprints") or {}
+        norm_fps = (
+            {str(k): v for k, v in raw_fps.items()}
+            if isinstance(raw_fps, dict)
+            else {}
+        )
+        combined_fps = {
+            **norm_phase_config_fps,
+            **norm_method_fps,
+            **norm_fps,
+        }
+
         return RunDetail(
             run_id=run_id,
             status=status,
@@ -719,7 +743,8 @@ class ArtifactReader:
             artifact_counts_by_kind=artifact_counts_by_kind,
             graph_schema=graph_schema,
             config_snapshot=sanitized_config,
-            fingerprints=data.get("fingerprints", {}),
+            fingerprints=combined_fps,
+            method_fingerprints=norm_method_fps,
             unresolved_count=0,
             failure=data.get("failure"),
             cancellation_reason=data.get("cancellation_reason"),

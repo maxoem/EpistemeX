@@ -102,6 +102,24 @@ class MockJevDecisionEngine:
         """Return the mock engine name."""
         return "MockJevDecisionEngine"
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return a deterministic representation of mock engine configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Deterministic dictionary containing thresholds, rule counts, and simulated latency.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "default_confidence_threshold": self.default_confidence_threshold,
+            "conformal_alpha": self.conformal_alpha,
+            "simulated_latency": self.simulated_latency,
+            "noul_rules_count": len(self._noul_rules),
+            "choice_rules_count": len(self._choice_rules),
+            "score_rules_count": len(self._score_rules),
+        }
+
     def register_noul_response(
         self,
         question_pattern: str,

@@ -213,6 +213,21 @@ class HuggingFaceEmbeddingModel:
             self.model.config.hidden_size if hasattr(self.model, "config") else None
         )
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic Hugging Face embedding model configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing model name, device, and embedding dimension.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "model_name": str(self.model_name),
+            "device": str(self.device) if self.device else None,
+            "dimension": self.dimension,
+        }
+
     def encode(self, texts: list[str]) -> "torch.Tensor":
         """Synchronous forward pass returning a ``[n, hidden]`` tensor."""
         import torch
@@ -265,6 +280,29 @@ class ObservableEmbeddingModel:
         )
         self.device = getattr(inner, "device", None)
         self.dimension = getattr(inner, "dimension", None)
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic observable embedding model configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing model name, device, dimension, and inner fingerprint.
+        """
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        inner_fp = (
+            self.inner.fingerprint()
+            if hasattr(self.inner, "fingerprint") and callable(self.inner.fingerprint)
+            else fingerprint_method(self.inner)
+        )
+        return {
+            "class": self.__class__.__name__,
+            "model_name": str(self.model_name) if self.model_name else None,
+            "device": str(self.device) if self.device else None,
+            "dimension": self.dimension,
+            "inner": inner_fp,
+        }
 
     async def aget_text_embedding(self, text: str) -> list[float]:
         """Compute embedding vector for a single text with observability."""

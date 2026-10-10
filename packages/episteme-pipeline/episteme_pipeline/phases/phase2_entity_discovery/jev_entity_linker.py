@@ -85,6 +85,31 @@ class JevEntityLinker(EntityLinker):
         # Candidate envelope cache: entity_id -> (text, embedding)
         self._candidate_cache: dict[str, tuple[str, list[float]]] = {}
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic Jev entity linker configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing alpha, top_k, ooo_threshold, and fingerprints of
+            embedding model and decision engine.
+        """
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        de_fp = (
+            self.decision_engine.fingerprint()
+            if hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            else fingerprint_method(self.decision_engine)
+        )
+        return {
+            "class": self.__class__.__name__,
+            "alpha": self.alpha,
+            "top_k": self.top_k,
+            "ooo_threshold": self.ooo_threshold,
+            "embedding_model": fingerprint_method(self.embedding_model),
+            "decision_engine": de_fp,
+        }
+
     @property
     def event_emitter(self) -> EventEmitter:
         """Return the bound domain event emitter."""
@@ -327,6 +352,31 @@ class CascadingEntityLinker(EntityLinker):
         self.primary = primary
         self.fallback = fallback
         self.audit_rate = audit_rate
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic cascading entity linker configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing audit rate and fingerprints of primary and fallback linkers.
+        """
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        return {
+            "class": self.__class__.__name__,
+            "audit_rate": self.audit_rate,
+            "primary": (
+                self.primary.fingerprint()
+                if hasattr(self.primary, "fingerprint") and callable(self.primary.fingerprint)
+                else fingerprint_method(self.primary)
+            ),
+            "fallback": (
+                self.fallback.fingerprint()
+                if hasattr(self.fallback, "fingerprint") and callable(self.fallback.fingerprint)
+                else fingerprint_method(self.fallback)
+            ),
+        }
 
     async def link(
         self,
