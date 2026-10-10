@@ -8,13 +8,16 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import yaml
 
 from episteme_pipeline.contracts.domain import L1Chunk
-from episteme_pipeline.evaluation.benchmarks.structuralist import load_structuralist_benchmark
+from episteme_pipeline.evaluation.benchmarks.structuralist import (
+    load_structuralist_benchmark,
+)
 from episteme_pipeline.evaluation.models import (
     DatasetType,
     EvaluationLevel,

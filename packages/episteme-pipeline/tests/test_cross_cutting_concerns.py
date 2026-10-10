@@ -2,13 +2,15 @@
 
 from episteme_pipeline.config import StructuredPromptBundle
 from episteme_pipeline.events import (
-    SimpleEventEmitter,
+    ComponentStarted,
     NoOpEventEmitter,
+    SimpleEventEmitter,
     get_event_emitter,
     use_event_emitter,
-    ComponentStarted,
 )
-from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import LLMNERExtractor
+from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import (
+    LLMNERExtractor,
+)
 from episteme_pipeline.prompts import NER_DIRECT_PROMPT, NER_GLEANING_PROMPT
 
 

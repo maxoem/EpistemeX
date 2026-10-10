@@ -4,11 +4,11 @@ from episteme_pipeline.contracts.domain import (
     L1Chunk,
     L2Entity,
     L2Triple,
-    TheoryAtom,
-    TheoryRelation,
+    PhaseItemRecord,
     SearchResult,
     SubGraph,
-    PhaseItemRecord,
+    TheoryAtom,
+    TheoryRelation,
 )
 
 
@@ -289,12 +289,12 @@ class FusionGraph(GraphReader, GraphWriter, ABC):
 
 
 __all__ = [
+    "EntityGraph",
+    "FusionGraph",
     "GraphHandle",
     "GraphReader",
     "GraphWriter",
     "PhaseCheckpointStore",
-    "EntityGraph",
-    "ProjectionGraph",
     "ProcessingGraph",
-    "FusionGraph",
+    "ProjectionGraph",
 ]

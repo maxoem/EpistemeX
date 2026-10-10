@@ -11,11 +11,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import epistemetrics as em
 import networkx as nx
 import pytest
 import yaml
-
-import epistemetrics as em
 from episteme_pipeline.artifacts.execution import ArtifactCollection
 from episteme_pipeline.artifacts.models import (
     ArtifactEnvelope,
@@ -36,7 +35,6 @@ from episteme_pipeline.evaluation.pipelines import (
 from episteme_pipeline.evaluation.scorers.domain_bridge import (
     artifact_collection_to_theory_graph,
 )
-
 
 # ===========================================================================
 # ISSUE-027: Adapter Schema Inconsistencies & Edge Decoding Bugs

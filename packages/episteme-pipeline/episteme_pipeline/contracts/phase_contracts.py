@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
@@ -14,12 +14,14 @@ from episteme_pipeline.contracts.domain import (
     L1Document,
     L2Entity,
     L2Triple,
-    TheoryAtom,
-    TheoryRelation,
-    TheoryNet,
     SearchResult,
     SubGraph,
+    TheoryAtom,
+    TheoryNet,
+    TheoryRelation,
 )
+
+
 class PipelineInput(BaseModel):
     """
     Entry point for the full pipeline.
@@ -78,9 +80,9 @@ class Phase5Output(BaseModel):
 class PipelineResult(BaseModel):
     """Result envelope for running (part of) the pipeline."""
     # Use explicit models to ensure required fields (e.g., run_id) exist.
-    manifest: "RunManifest | None" = None
+    manifest: RunManifest | None = None
     artifacts: list[object] = Field(default_factory=list)
-    report: "RunReport | None" = None
+    report: RunReport | None = None
 
 
 __all__ = [
@@ -88,16 +90,16 @@ __all__ = [
     "L1Document",
     "L2Entity",
     "L2Triple",
-    "TheoryAtom",
-    "TheoryRelation",
-    "TheoryNet",
-    "SearchResult",
-    "SubGraph",
-    "PipelineInput",
     "Phase1Output",
     "Phase2Output",
     "Phase3Output",
     "Phase4Output",
     "Phase5Output",
+    "PipelineInput",
     "PipelineResult",
+    "SearchResult",
+    "SubGraph",
+    "TheoryAtom",
+    "TheoryNet",
+    "TheoryRelation",
 ]

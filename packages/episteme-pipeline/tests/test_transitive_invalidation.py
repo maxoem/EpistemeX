@@ -1,8 +1,10 @@
 from pathlib import Path
 
 import pytest
-
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+)
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.pipeline import Pipeline
 from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus

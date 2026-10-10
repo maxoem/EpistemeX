@@ -6,7 +6,7 @@ must remain strictly decoupled from `episteme_pipeline.*` and `epistemetrics.*`.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Literal
 
@@ -21,7 +21,7 @@ def utc_now() -> datetime:
     datetime
         Current UTC timestamp.
     """
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class EvaluationOutcome(StrEnum):
@@ -852,7 +852,7 @@ class EdgeAdjudicationItem(BaseModel):
         Timestamp of adjudication.
     """
 
-    adjudication_id: str = Field(default_factory=lambda: f"adj_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}")
+    adjudication_id: str = Field(default_factory=lambda: f"adj_{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}")
     predicted_edge: dict[str, Any]
     reference_edge: dict[str, Any] | None = None
     similarity_score: float = 0.0

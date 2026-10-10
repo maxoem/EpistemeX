@@ -55,8 +55,8 @@ def resolve_gds_graph_name(graph: Any, default_name: str = "theory_graph_project
     """
     if isinstance(graph, str) and graph:
         return graph
-    if hasattr(graph, "projection_name") and getattr(graph, "projection_name"):
-        return getattr(graph, "projection_name")
-    if hasattr(graph, "name") and getattr(graph, "name"):
-        return getattr(graph, "name")
+    if hasattr(graph, "projection_name") and graph.projection_name:
+        return graph.projection_name
+    if hasattr(graph, "name") and graph.name:
+        return graph.name
     return default_name

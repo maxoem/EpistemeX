@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from episteme_studio.adapters.engine_storage import EngineSettingsStorage, FileEngineSettingsStorage
+from episteme_studio.adapters.engine_storage import (
+    EngineSettingsStorage,
+    FileEngineSettingsStorage,
+)
 from episteme_studio.adapters.schema_mapper import SchemaMapper
 from episteme_studio.domain.engine import (
     DecisionEngineStatusResponse,
@@ -150,7 +153,7 @@ class EngineSettingsService:
                 else patch.modal_resolver.model_dump()
             )
 
-        data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        data["updated_at"] = datetime.now(UTC).isoformat()
         updated = EngineSettings.model_validate(data)
 
         await self.storage.save(updated)
@@ -179,7 +182,7 @@ class EngineSettingsService:
 
             mlx_available = True
             try:
-                import mlx.core.metal as metal
+                from mlx.core import metal
 
                 if metal.is_available():
                     vram_mb = round(float(metal.get_active_memory()) / (1024 * 1024), 2)
@@ -325,7 +328,9 @@ class EngineSettingsService:
         # Attempt real local execution if hardware backend is configured and not running in demo/mock mode
         if not is_mock and ds.provider in ("mlx", "laya", "transformers", "auto"):
             try:
-                from episteme_pipeline.decision.jev_client import resolve_decision_engine
+                from episteme_pipeline.decision.jev_client import (
+                    resolve_decision_engine,
+                )
 
                 if cache_key not in self._cached_engines:
                     self._cached_engines[cache_key] = resolve_decision_engine(ds)

@@ -51,9 +51,15 @@ from episteme_pipeline.events.models import (
     ProgressStarted,
 )
 from episteme_pipeline.phases.chunk_selection import select_pending_chunks
-from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import LLMACCClassifier
-from episteme_pipeline.phases.phase4_argument_mining.adu_segmenter import LLMADUSegmenter
-from episteme_pipeline.phases.phase4_argument_mining.arc_classifier import TAGARCClassifier
+from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import (
+    LLMACCClassifier,
+)
+from episteme_pipeline.phases.phase4_argument_mining.adu_segmenter import (
+    LLMADUSegmenter,
+)
+from episteme_pipeline.phases.phase4_argument_mining.arc_classifier import (
+    TAGARCClassifier,
+)
 from episteme_pipeline.protocols.argument_mining import (
     ACCClassifier,
     ADUSegmenter,
@@ -179,8 +185,8 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         all_components: list[TheoryAtom] = await self.graph_store.get_theory_atoms()
         all_local_relations: list[TheoryRelation] = []
 
-        from itertools import batched
         import asyncio
+        from itertools import batched
 
         progress_task = f"Phase 4: Chunk ADU Extraction ({len(chunks)} chunks)"
         if chunks:

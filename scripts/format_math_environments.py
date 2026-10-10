@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import argparse
 import difflib
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import NamedTuple
 
 

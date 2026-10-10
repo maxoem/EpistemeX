@@ -24,8 +24,14 @@ import logging
 from itertools import batched
 from pathlib import Path
 
-from episteme_pipeline.artifacts.builders import build_chunk_artifact, build_document_artifact
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext
+from episteme_pipeline.artifacts.builders import (
+    build_chunk_artifact,
+    build_document_artifact,
+)
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+)
 from episteme_pipeline.config import Phase1Config
 from episteme_pipeline.contracts.domain import L1Chunk, L1Document
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
@@ -37,7 +43,10 @@ from episteme_pipeline.events import (
     ProgressStarted,
     get_event_emitter,
 )
-from episteme_pipeline.phases.phase1_foundation.adapters import DEFAULT_ADAPTERS, find_adapter
+from episteme_pipeline.phases.phase1_foundation.adapters import (
+    DEFAULT_ADAPTERS,
+    find_adapter,
+)
 from episteme_pipeline.phases.phase1_foundation.chunker import chunk_document
 from episteme_pipeline.phases.phase1_foundation.provenance import (
     base_provenance,

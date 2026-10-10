@@ -9,7 +9,8 @@ Operationalizes Task 5 of the Structuralist Theory-Net Benchmark (STNB):
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import networkx as nx
 from pydantic import BaseModel, ConfigDict, Field

@@ -15,7 +15,8 @@ Evaluates the decomposition of Theory Elements into their constituent model clas
 from __future__ import annotations
 
 import re
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import networkx as nx
 from pydantic import BaseModel, ConfigDict, Field
@@ -863,8 +864,7 @@ def evaluate_model_components(
                         0.0, 1.0 - abs(w_ref - w_pred) / max(w_ref, 1.0)
                     )
                     score = 0.5 * rel_match + 0.3 * pol_match + 0.2 * weight_fid
-                    if score > best_edge_score:
-                        best_edge_score = score
+                    best_edge_score = max(best_edge_score, score)
                 edge_fidelity_scores.append(best_edge_score)
             else:
                 edge_fidelity_scores.append(0.0)

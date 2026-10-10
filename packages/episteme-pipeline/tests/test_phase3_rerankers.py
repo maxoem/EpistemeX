@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from episteme_pipeline.contracts.domain import L2Entity, SubGraph
 from episteme_pipeline.phases.phase3_global_relations.rerankers import (
     SentenceTransformerCrossEncoderReranker,
@@ -174,7 +173,9 @@ def test_cross_encoder_reranker_forwards_huggingface_configs_to_loader() -> None
 
 def test_cross_encoder_reranker_cache_key_differentiates_hf_configs() -> None:
     """Cache key varies when Hugging Face configuration arguments differ."""
-    from episteme_pipeline.phases.phase3_global_relations.rerankers import _model_cache_key
+    from episteme_pipeline.phases.phase3_global_relations.rerankers import (
+        _model_cache_key,
+    )
 
     key1 = _model_cache_key(
         model_name="test-model",
@@ -202,7 +203,10 @@ def test_cross_encoder_reranker_cache_key_differentiates_hf_configs() -> None:
 async def test_jev_relation_reranker_default_prompt() -> None:
     """Verify JevRelationReranker uses PAIR_GATING_DECISION_PROMPT by default."""
     from unittest.mock import AsyncMock, MagicMock
-    from episteme_pipeline.phases.phase3_global_relations.rerankers import JevRelationReranker
+
+    from episteme_pipeline.phases.phase3_global_relations.rerankers import (
+        JevRelationReranker,
+    )
     from episteme_pipeline.prompts.default_prompts import PAIR_GATING_DECISION_PROMPT
     from episteme_pipeline.protocols.decision import DecisionNoulResult
 
@@ -231,7 +235,10 @@ async def test_jev_relation_reranker_default_prompt() -> None:
 async def test_jev_relation_reranker_custom_prompt() -> None:
     """Verify JevRelationReranker respects custom decision_template in prompt bundle."""
     from unittest.mock import AsyncMock, MagicMock
-    from episteme_pipeline.phases.phase3_global_relations.rerankers import JevRelationReranker
+
+    from episteme_pipeline.phases.phase3_global_relations.rerankers import (
+        JevRelationReranker,
+    )
     from episteme_pipeline.prompts.models import StructuredPromptBundle
     from episteme_pipeline.protocols.decision import DecisionNoulResult
 
@@ -258,8 +265,11 @@ async def test_jev_relation_reranker_custom_prompt() -> None:
 def test_jev_relation_reranker_missing_prompt_fails() -> None:
     """Verify JevRelationReranker raises ValueError if decision template is empty."""
     from unittest.mock import MagicMock
+
     import pytest
-    from episteme_pipeline.phases.phase3_global_relations.rerankers import JevRelationReranker
+    from episteme_pipeline.phases.phase3_global_relations.rerankers import (
+        JevRelationReranker,
+    )
     from episteme_pipeline.prompts.models import StructuredPromptBundle
 
     bundle = StructuredPromptBundle(direct_template="Direct", decision_template="")

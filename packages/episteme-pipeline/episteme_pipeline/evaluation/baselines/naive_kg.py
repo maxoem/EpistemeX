@@ -9,14 +9,17 @@ from __future__ import annotations
 import logging
 import re
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import networkx as nx
 
 from episteme_pipeline.contracts.domain import L1Chunk, L2Entity, L2Triple
 from episteme_pipeline.evaluation.benchmarks.scierc import load_scierc_subset
-from episteme_pipeline.evaluation.benchmarks.structuralist import load_structuralist_benchmark
+from episteme_pipeline.evaluation.benchmarks.structuralist import (
+    load_structuralist_benchmark,
+)
 from episteme_pipeline.evaluation.models import EvaluationMetric, EvaluationResult
 from episteme_pipeline.evaluation.scorers.domain_bridge import l2_triples_to_digraph
 from episteme_pipeline.evaluation.strategies import ExtractionStrategy

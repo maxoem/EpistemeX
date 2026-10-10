@@ -16,7 +16,6 @@ import hashlib
 from unittest.mock import MagicMock
 
 import pytest
-
 from episteme_pipeline.decision.mock import MockJevDecisionEngine
 from episteme_pipeline.decision.observable import ObservableDecisionEngine
 from episteme_pipeline.events import SimpleEventEmitter, use_event_emitter

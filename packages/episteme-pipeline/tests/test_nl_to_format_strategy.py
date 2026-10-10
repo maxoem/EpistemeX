@@ -17,14 +17,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pytest
-from pydantic import BaseModel
-
 from episteme_pipeline.config import StructuredDecodingStrategy
 from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
 from episteme_pipeline.llm.structured import (
     LlamaIndexStructuredLLMAdapter,
     ensure_structured_llm,
 )
+from pydantic import BaseModel
 
 
 class Answer(BaseModel):

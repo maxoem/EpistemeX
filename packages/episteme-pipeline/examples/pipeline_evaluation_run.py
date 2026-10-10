@@ -36,8 +36,9 @@ import argparse
 import asyncio
 import logging
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 # Ensure project root is on sys.path when executed directly
 _PROJECT_ROOT = str(Path(__file__).resolve().parents[1])
@@ -46,14 +47,11 @@ if _PROJECT_ROOT not in sys.path:
 
 import networkx as nx
 import yaml
-
 from episteme_pipeline.contracts.domain import (
     TheoryAtom,
     TheoryNet,
     TheoryRelation,
 )
-from episteme_pipeline.events import SimpleEventEmitter
-from episteme_pipeline.events.models import EvaluationCompleted
 from episteme_pipeline.evaluation.baselines import (
     BaselineNaiveKG,
 )
@@ -78,6 +76,8 @@ from episteme_pipeline.evaluation.scorers.retrieval import (
 from episteme_pipeline.evaluation.strategies import (
     ArgumentationStrategy,
 )
+from episteme_pipeline.events import SimpleEventEmitter
+from episteme_pipeline.events.models import EvaluationCompleted
 from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 

@@ -15,8 +15,8 @@ from dotenv import load_dotenv
 from episteme_pipeline.config import (
     ExecutionConfig,
     Phase2Config,
-    Phase3Config,
     Phase3bConfig,
+    Phase3Config,
     PipelineConfig,
 )
 from episteme_pipeline.events import EventEmitter, NoOpEventEmitter
@@ -36,9 +36,13 @@ from episteme_pipeline.phases.phase3_global_relations.rerankers import (
     CrossEncoderRelationReranker,
     SentenceTransformerCrossEncoderReranker,
 )
-from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
+from episteme_pipeline.phases.phase3b_consolidation import (
+    Phase3bLatentConsolidationRunner,
+)
 from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
-from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
+from episteme_pipeline.phases.phase4_entity_maturation import (
+    Phase4EntityMaturationRunner,
+)
 from episteme_pipeline.phases.phase6_theorynet import Phase6Runner
 from episteme_pipeline.pipeline import Pipeline
 from episteme_pipeline.protocols.extractors import ensure_embedding_model

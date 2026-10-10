@@ -8,7 +8,7 @@ import os
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +27,7 @@ from episteme_pipeline.events.models import (
 )
 from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 from episteme_pipeline.runs.persistence import JsonRunManifestStore
+
 from episteme_studio.runtime.observer import StudioEventObserver
 from episteme_studio.settings import (
     check_env_var_set,
@@ -130,7 +131,7 @@ class StreamTee:
                     "level": lvl,
                     "message": msg,
                     "lines": lines,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
         except Exception:
@@ -207,14 +208,14 @@ def _run_demo_pipeline(
     decisions_file = log_dir / "decisions.jsonl"
 
     phase_records: list[RunPhaseRecord] = []
-    start_time = datetime.now(timezone.utc)
+    start_time = datetime.now(UTC)
     all_decisions: list[dict[str, Any]] = []
 
     with log_file.open("w", encoding="utf-8") as lf, decisions_file.open("w", encoding="utf-8") as df:
         import json
         lf.write(f"[{start_time.isoformat()}] [INFO] pipeline: Starting pipeline run {run_id} (Simulation)\n")
         for phase_name, ordinal in phases:
-            phase_start = datetime.now(timezone.utc)
+            phase_start = datetime.now(UTC)
             lf.write(f"[{phase_start.isoformat()}] [INFO] pipeline.{phase_name}: Starting runner\n")
             print(f"[{phase_name}] Runner started")
             context_emitter.defaults["phase"] = phase_name
@@ -302,7 +303,7 @@ def _run_demo_pipeline(
                     "tokens_saved_estimate": tok_saved,
                     "action_taken": action,
                     "entropy": 0.32 if is_fast_exit else 0.78,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                 }
                 all_decisions.append(dec_entry)
                 df.write(json.dumps(dec_entry) + "\n")
@@ -334,14 +335,14 @@ def _run_demo_pipeline(
                         advance=1,
                     )
                 )
-                lf.write(f"[{datetime.now(timezone.utc).isoformat()}] [INFO] {phase_name}: Processed concept {step}\n")
+                lf.write(f"[{datetime.now(UTC).isoformat()}] [INFO] {phase_name}: Processed concept {step}\n")
 
             context_emitter.emit(
                 ProgressCompleted(
                     task_name=phase_name,
                 )
             )
-            phase_end = datetime.now(timezone.utc)
+            phase_end = datetime.now(UTC)
             context_emitter.emit(
                 PhaseCompleted(
                     phase_name=phase_name,
@@ -371,7 +372,7 @@ def _run_demo_pipeline(
                 )
             )
 
-        end_time = datetime.now(timezone.utc)
+        end_time = datetime.now(UTC)
         lf.write(f"[{end_time.isoformat()}] [INFO] pipeline: Pipeline run {run_id} completed\n")
         print(f"=== Pipeline run {run_id} completed successfully ===")
 
@@ -550,7 +551,9 @@ def run_pipeline_worker(
                 emitter.register_observer(observer)
                 if check_env_var_set("LANGFUSE_PUBLIC_KEY"):
                     try:
-                        from episteme_pipeline.events.langfuse_observer import LangfuseObserver
+                        from episteme_pipeline.events.langfuse_observer import (
+                            LangfuseObserver,
+                        )
 
                         emitter.register_observer(LangfuseObserver())
                     except Exception as err:

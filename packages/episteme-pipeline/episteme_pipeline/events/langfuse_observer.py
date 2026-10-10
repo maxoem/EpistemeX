@@ -7,29 +7,29 @@ token usage accounting, and score logging.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .bus import EventObserver
 from .models import (
-    PipelineEvent,
-    DenseCandidatesGenerated,
-    RerankerScoreAssigned,
-    LLMRelationDecoded,
-    ComponentStarted,
-    ComponentCompleted,
-    PhaseCompleted,
     ChunksGenerated,
+    ComponentCompleted,
+    ComponentStarted,
+    DecisionEvaluationCompleted,
+    DecisionGatingTriggered,
+    DenseCandidatesGenerated,
+    EmbeddingGenerationCompleted,
     EntityLinkingCandidatesRetrieved,
     EntityLinkingReranked,
     EntityMaturationSynthesized,
+    EvaluationCompleted,
+    EvaluationScoreLogged,
     FusionDecisionMade,
     LLMDurationMeasured,
     LLMGenerationCompleted,
-    EmbeddingGenerationCompleted,
-    EvaluationCompleted,
-    EvaluationScoreLogged,
-    DecisionEvaluationCompleted,
-    DecisionGatingTriggered,
+    LLMRelationDecoded,
+    PhaseCompleted,
+    PipelineEvent,
+    RerankerScoreAssigned,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ class LangfuseObserver(EventObserver):
             raise RuntimeError("Langfuse is not installed")
 
         self.client = client or get_client()
-        self.active_spans: Dict[str, Any] = {}
+        self.active_spans: dict[str, Any] = {}
 
     def on_event(self, event: PipelineEvent) -> None:
         """Map domain events to Langfuse observations.
@@ -102,7 +102,7 @@ class LangfuseObserver(EventObserver):
 
     def _resolve_trace_context(
         self, event: PipelineEvent
-    ) -> tuple[Optional[str], Optional[str], Optional[dict[str, str]]]:
+    ) -> tuple[str | None, str | None, dict[str, str] | None]:
         """Extract or derive active trace context.
 
         Parameters
@@ -137,7 +137,7 @@ class LangfuseObserver(EventObserver):
     def _handle_lifecycle_event(
         self,
         event: ComponentStarted | ComponentCompleted | PhaseCompleted,
-        trace_context: Optional[dict[str, str]],
+        trace_context: dict[str, str] | None,
     ) -> None:
         """Handle component and phase lifecycle events."""
         if isinstance(event, ComponentStarted):
@@ -179,7 +179,7 @@ class LangfuseObserver(EventObserver):
     def _handle_generation_event(
         self,
         event: LLMGenerationCompleted | EmbeddingGenerationCompleted,
-        trace_context: Optional[dict[str, str]],
+        trace_context: dict[str, str] | None,
     ) -> None:
         """Handle LLM and embedding generation events."""
         if isinstance(event, LLMGenerationCompleted):
@@ -238,7 +238,7 @@ class LangfuseObserver(EventObserver):
     def _handle_decision_event(
         self,
         event: DecisionEvaluationCompleted | DecisionGatingTriggered,
-        trace_context: Optional[dict[str, str]],
+        trace_context: dict[str, str] | None,
     ) -> None:
         """Handle discrete decision engine evaluations and dynamic gating events.
 
@@ -318,8 +318,8 @@ class LangfuseObserver(EventObserver):
     def _handle_evaluation_event(
         self,
         event: EvaluationCompleted | EvaluationScoreLogged,
-        trace_id: Optional[str],
-        trace_context: Optional[dict[str, str]],
+        trace_id: str | None,
+        trace_context: dict[str, str] | None,
     ) -> None:
         """Handle evaluation metrics and score publishing."""
         if isinstance(event, EvaluationScoreLogged):
@@ -358,7 +358,7 @@ class LangfuseObserver(EventObserver):
             observation.end()
 
     def _handle_domain_event(
-        self, event: PipelineEvent, trace_context: Optional[dict[str, str]]
+        self, event: PipelineEvent, trace_context: dict[str, str] | None
     ) -> None:
         """Handle domain-specific pipeline events."""
         if isinstance(event, ChunksGenerated):

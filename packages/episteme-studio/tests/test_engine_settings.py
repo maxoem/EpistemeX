@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from episteme_pipeline.schema.default_schema import SchemaConfig
 from episteme_studio.adapters.engine_storage import FileEngineSettingsStorage
 from episteme_studio.adapters.schema_mapper import SchemaMapper
@@ -14,6 +12,7 @@ from episteme_studio.app import create_app
 from episteme_studio.domain.engine import EngineSettings, PredicateMapping
 from episteme_studio.services.engine_settings_service import EngineSettingsService
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
 
 
 def test_schema_mapper_l2_definitions_and_edge_descriptors() -> None:

@@ -7,14 +7,18 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Protocol, Any
+from typing import Any, Protocol
 
 from episteme_pipeline.events.context import get_event_emitter
-from episteme_pipeline.events.models import EnvelopeInjectionAttempted, EnvelopeInjectionFailed
+from episteme_pipeline.events.models import (
+    EnvelopeInjectionAttempted,
+    EnvelopeInjectionFailed,
+)
 
 logger = logging.getLogger(__name__)
 
 import unicodedata
+
 
 def _normalize_string(text: str) -> str:
     """Normalize typography, dashes, and whitespace for robust matching."""

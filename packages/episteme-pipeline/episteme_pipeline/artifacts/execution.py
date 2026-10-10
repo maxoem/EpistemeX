@@ -4,9 +4,6 @@ from dataclasses import dataclass
 
 from episteme_pipeline.artifacts.builders import parse_mention_id
 from episteme_pipeline.artifacts.models import (
-    TheoreticalEnrichmentArtifact,
-    TheoryAtomArtifact,
-    TheoryRelationArtifact,
     ArtifactEnvelope,
     ArtifactKind,
     ArtifactPayload,
@@ -16,6 +13,9 @@ from episteme_pipeline.artifacts.models import (
     GlobalRelationArtifact,
     LinkedEntityArtifact,
     LocalRelationArtifact,
+    TheoreticalEnrichmentArtifact,
+    TheoryAtomArtifact,
+    TheoryRelationArtifact,
 )
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
@@ -46,7 +46,7 @@ class Phase1ArtifactsView:
     chunks: list[L1Chunk]
 
     @classmethod
-    def from_collection(cls, collection: ArtifactCollection) -> "Phase1ArtifactsView":
+    def from_collection(cls, collection: ArtifactCollection) -> Phase1ArtifactsView:
         documents: list[L1Document] = []
         chunks: list[L1Chunk] = []
         for artifact in collection.of_kind(*cls._allowed_kinds):
@@ -95,7 +95,7 @@ class Phase2ArtifactsView:
     entity_count_by_type: dict[str, int]
 
     @classmethod
-    def from_collection(cls, collection: ArtifactCollection) -> "Phase2ArtifactsView":
+    def from_collection(cls, collection: ArtifactCollection) -> Phase2ArtifactsView:
         entities: list[L2Entity] = []
         triples: list[L2Triple] = []
         entity_count_by_type: dict[str, int] = {}
@@ -161,7 +161,7 @@ class Phase3ArtifactsView:
     chunks: list[L1Chunk]
 
     @classmethod
-    def from_collection(cls, collection: ArtifactCollection) -> "Phase3ArtifactsView":
+    def from_collection(cls, collection: ArtifactCollection) -> Phase3ArtifactsView:
         triples: list[L2Triple] = []
         distribution: dict[str, int] = {}
         chunks: list[L1Chunk] = []
@@ -211,7 +211,7 @@ class Phase4ArtifactsView:
     theory_relations: list[TheoryRelation]
 
     @classmethod
-    def from_collection(cls, collection: ArtifactCollection) -> "Phase4ArtifactsView":
+    def from_collection(cls, collection: ArtifactCollection) -> Phase4ArtifactsView:
         components: list[TheoryAtom] = []
         relations: list[TheoryRelation] = []
         for artifact in collection.artifacts:
@@ -270,7 +270,7 @@ class TheoreticalEnrichmentArtifactsView:
     enrichments: list[TheoreticalEnrichmentArtifact]
 
     @classmethod
-    def from_collection(cls, collection: ArtifactCollection) -> "TheoreticalEnrichmentArtifactsView":
+    def from_collection(cls, collection: ArtifactCollection) -> TheoreticalEnrichmentArtifactsView:
         """Construct the view from an artifact collection.
 
         Parameters

@@ -31,18 +31,30 @@ import inspect
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
 from episteme_pipeline.config import Phase3Config
-from episteme_pipeline.contracts.domain import L2Entity, L2Triple, SubGraph, CandidatePair
+from episteme_pipeline.contracts.domain import (
+    CandidatePair,
+    L2Entity,
+    L2Triple,
+    SubGraph,
+)
+
 # Events support
 from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.events.models import (
-    DenseCandidatesGenerated, RerankerScoreAssigned, CandidateRejectedByThreshold,
-    LLMRelationDecoded, SchemaValidationRejectedRelation, TripleCommitted, EntityProcessed, ProgressAdvanced,
-    ProgressStarted, ProgressCompleted
+    CandidateRejectedByThreshold,
+    DenseCandidatesGenerated,
+    EntityProcessed,
+    LLMRelationDecoded,
+    ProgressAdvanced,
+    ProgressCompleted,
+    ProgressStarted,
+    RerankerScoreAssigned,
+    SchemaValidationRejectedRelation,
+    TripleCommitted,
 )
 from episteme_pipeline.llm import ensure_structured_llm
 from episteme_pipeline.phases.phase3_global_relations.models import GlobalRelationOutput
@@ -52,9 +64,13 @@ from episteme_pipeline.phases.phase3_global_relations.rerankers import (
 )
 from episteme_pipeline.prompts.default_prompts import PAIR_GATING_DECISION_PROMPT
 from episteme_pipeline.protocols import DecisionEngine
-from episteme_pipeline.protocols.extractors import GlobalRelationExtractor, RelationReranker, EmbeddingModel
+from episteme_pipeline.protocols.extractors import (
+    EmbeddingModel,
+    GlobalRelationExtractor,
+    RelationReranker,
+)
 from episteme_pipeline.protocols.graph_store import GraphReader
-from episteme_pipeline.protocols.tracing import TraceSink, NoOpTraceSink
+from episteme_pipeline.protocols.tracing import NoOpTraceSink, TraceSink
 from episteme_pipeline.schema.default_schema import SchemaConfig
 from episteme_pipeline.utils import format_envelope
 
@@ -184,7 +200,7 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         config: Phase3Config,
         envelope_overflow_handler: EnvelopeOverflowHandler | None = None,
         # Kept for backward compatibility
-        trace_sink: Optional[TraceSink] = None,
+        trace_sink: TraceSink | None = None,
         decision_engine: DecisionEngine | None = None,
     ) -> None:
         self.llm = ensure_structured_llm(llm)

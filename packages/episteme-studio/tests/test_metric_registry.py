@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from episteme_studio.app import create_app
 from episteme_studio.domain.metrics import (
     MetricDescriptor,
@@ -12,6 +10,7 @@ from episteme_studio.domain.metrics import (
 )
 from episteme_studio.services.metric_service import MetricService
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
 
 
 class _MockNeo4jReader:

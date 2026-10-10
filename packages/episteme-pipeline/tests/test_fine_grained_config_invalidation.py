@@ -1,8 +1,10 @@
 """Integration tests for fine-grained nested config fingerprint diffs."""
 
 import pytest
-
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+)
 from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.pipeline import Pipeline
@@ -61,7 +63,7 @@ async def test_fine_grained_nested_config_detects_leaf_change(tmp_path, graph_st
     pipeline._phase_config_fingerprints = lambda: {
         1: {"a": "fp_for_20", "b": "fp_for_same"}
     }
-    pipeline._method_fingerprints = lambda: {}
+    pipeline._method_fingerprints = dict
 
     decision = await pipeline._choose_reuse_source(
         RunManifest(
@@ -119,7 +121,7 @@ async def test_fine_grained_nested_config_all_leaves_match(tmp_path, graph_store
     pipeline._phase_config_fingerprints = lambda: {
         1: {"a": "fp_for_10", "b": "fp_for_same"}
     }
-    pipeline._method_fingerprints = lambda: {}
+    pipeline._method_fingerprints = dict
 
     decision = await pipeline._choose_reuse_source(
         RunManifest(

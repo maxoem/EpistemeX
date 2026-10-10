@@ -16,14 +16,17 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from episteme_pipeline.artifacts.execution import (
     ArtifactExecutionContext,
     Phase1ArtifactsView,
 )
 from episteme_pipeline.artifacts.models import DocumentArtifact
 from episteme_pipeline.config import Phase1Config, Phase2Config, PipelineConfig
-from episteme_pipeline.contracts.domain import GlobalStructuralAnchor, L1Chunk, L1Document
+from episteme_pipeline.contracts.domain import (
+    GlobalStructuralAnchor,
+    L1Chunk,
+    L1Document,
+)
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
 from episteme_pipeline.phases.phase1_foundation import Phase1Runner
@@ -37,7 +40,6 @@ from episteme_pipeline.runs.fingerprints import (
 )
 from episteme_pipeline.runs.models import RunManifest
 from episteme_pipeline.schema.default_schema import SchemaConfig
-
 
 # ---------------------------------------------------------------------------
 # 1. Domain Contract & Formatting Tests

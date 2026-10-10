@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from episteme_pipeline.contracts.domain import L2Entity, L2Triple, TheoryAtom, TheoryRelation
+from episteme_pipeline.contracts.domain import (
+    L2Entity,
+    L2Triple,
+    TheoryAtom,
+    TheoryRelation,
+)
 from episteme_pipeline.protocols.graph_store import GraphReader
 
 
@@ -28,7 +33,7 @@ async def export_baseline(graph_reader: GraphReader, output_path: str | Path) ->
 
     data = {
         "metadata": {
-            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
             "dataset_type": "baseline",
             "status": "uncorrected",
             "instructions": "Review and correct entries. Change status to 'gold' when done.",

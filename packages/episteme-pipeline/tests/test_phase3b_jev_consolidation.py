@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from episteme_pipeline.contracts.domain import L2Entity
 from episteme_pipeline.decision.mock import MockJevDecisionEngine
 from episteme_pipeline.events import SimpleEventEmitter, set_event_emitter
@@ -14,7 +13,9 @@ from episteme_pipeline.phases.phase3b_consolidation.clustering import (
     elect_canonical_representative,
     verify_borderline_pair,
 )
-from episteme_pipeline.phases.phase3b_consolidation.consolidation import LatentGraphConsolidation
+from episteme_pipeline.phases.phase3b_consolidation.consolidation import (
+    LatentGraphConsolidation,
+)
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 
 

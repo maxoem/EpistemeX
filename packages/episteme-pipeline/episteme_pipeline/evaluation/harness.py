@@ -7,13 +7,14 @@ import asyncio
 import logging
 import os
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
+import epistemetrics as em
 import networkx as nx
 import yaml
 
-import epistemetrics as em
 from episteme_pipeline.artifacts.execution import ArtifactCollection
 from episteme_pipeline.contracts.domain import TheoryNet
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
@@ -53,7 +54,10 @@ from episteme_pipeline.evaluation.strategies import (
     default_registry,
 )
 from episteme_pipeline.events import EventEmitter, NoOpEventEmitter
-from episteme_pipeline.events.models import EvaluationCompleted, ValidationViolationDetected
+from episteme_pipeline.events.models import (
+    EvaluationCompleted,
+    ValidationViolationDetected,
+)
 from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
 from episteme_pipeline.graph.validation import GraphValidator
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
@@ -617,7 +621,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
 
         # 2. Strategy's own build_pipeline method if implemented
         if strategy is not None and hasattr(strategy, "build_pipeline"):
-            return getattr(strategy, "build_pipeline")(event_emitter=self.event_emitter, in_memory=True)
+            return strategy.build_pipeline(event_emitter=self.event_emitter, in_memory=True)
 
         # 3. Lookup builder by dataset_type in registry
         try:

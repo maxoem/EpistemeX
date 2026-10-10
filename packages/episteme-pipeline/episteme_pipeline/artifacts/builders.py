@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from episteme_pipeline.artifacts.models import (
-    TheoryAtomArtifact,
-    TheoryRelationArtifact,
     ArtifactEnvelope,
     ArtifactKind,
     ArtifactProvenance,
@@ -14,8 +12,17 @@ from episteme_pipeline.artifacts.models import (
     GlobalRelationArtifact,
     LinkedEntityArtifact,
     LocalRelationArtifact,
+    TheoryAtomArtifact,
+    TheoryRelationArtifact,
 )
-from episteme_pipeline.contracts.domain import L1Chunk, L1Document, L2Entity, L2Triple, TheoryAtom, TheoryRelation
+from episteme_pipeline.contracts.domain import (
+    L1Chunk,
+    L1Document,
+    L2Entity,
+    L2Triple,
+    TheoryAtom,
+    TheoryRelation,
+)
 from episteme_pipeline.runs.fingerprints import stable_fingerprint
 
 

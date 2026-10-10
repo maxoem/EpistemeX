@@ -10,7 +10,11 @@ from episteme_pipeline.contracts.domain import L2Entity, SubGraph
 from episteme_pipeline.prompts.default_prompts import PAIR_GATING_DECISION_PROMPT
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.protocols.decision import DecisionEngine
-from episteme_pipeline.protocols.extractors import CrossEncoder, RelationReranker, normalize_scores
+from episteme_pipeline.protocols.extractors import (
+    CrossEncoder,
+    RelationReranker,
+    normalize_scores,
+)
 from episteme_pipeline.utils import format_envelope
 
 _model_cache: weakref.WeakValueDictionary = weakref.WeakValueDictionary()

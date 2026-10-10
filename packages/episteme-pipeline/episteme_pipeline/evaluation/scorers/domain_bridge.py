@@ -4,11 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
+import epistemetrics as em
 import networkx as nx
 
-import epistemetrics as em
-from episteme_pipeline.artifacts.execution import ArtifactCollection, Phase4ArtifactsView
-from episteme_pipeline.contracts.domain import L2Entity, L2Triple, TheoryAtom, TheoryNet, TheoryRelation
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    Phase4ArtifactsView,
+)
+from episteme_pipeline.contracts.domain import (
+    L2Entity,
+    L2Triple,
+    TheoryAtom,
+    TheoryNet,
+    TheoryRelation,
+)
 from episteme_pipeline.evaluation.scorers.networkx_builder import build_digraph
 from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
 from episteme_pipeline.schema.default_schema import SchemaConfig

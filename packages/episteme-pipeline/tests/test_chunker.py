@@ -7,7 +7,6 @@ from episteme_pipeline.phases.phase1_foundation.chunker import (
     parse_sections,
 )
 
-
 MARKDOWN_DOC = """\
 # Introduction
 

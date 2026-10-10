@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import networkx as nx
-
 import epistemetrics as em
+import networkx as nx
+from epistemetrics.epistemic.model_evaluation import ModelComponentEvaluationResult
+
 from episteme_pipeline.artifacts.execution import ArtifactCollection
 from episteme_pipeline.contracts.domain import TheoryNet
 from episteme_pipeline.evaluation.benchmarks.structuralist import (
@@ -28,7 +29,6 @@ from episteme_pipeline.evaluation.scorers.domain_bridge import (
     artifact_collection_to_theory_graph,
     theory_net_to_theory_graph,
 )
-from epistemetrics.epistemic.model_evaluation import ModelComponentEvaluationResult
 
 
 class ModelScorer:

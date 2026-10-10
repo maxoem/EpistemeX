@@ -24,8 +24,15 @@ from episteme_pipeline.prompts.default_prompts import (
 )
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.protocols.argument_mining import ACCClassifier, ARCClassifier
-from episteme_pipeline.protocols.decision import DecisionEngine, DecisionNoulResult, DecisionScore
-from episteme_pipeline.protocols.extractors import EmbeddingModel, GlobalRelationExtractor
+from episteme_pipeline.protocols.decision import (
+    DecisionEngine,
+    DecisionNoulResult,
+    DecisionScore,
+)
+from episteme_pipeline.protocols.extractors import (
+    EmbeddingModel,
+    GlobalRelationExtractor,
+)
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.protocols.modality import ModalStrengthResolver
 from episteme_pipeline.schema.default_schema import SchemaConfig

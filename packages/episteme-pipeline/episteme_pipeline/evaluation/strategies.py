@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import importlib
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Protocol, runtime_checkable
-
-import networkx as nx
+from typing import Any, Protocol, runtime_checkable
 
 import epistemetrics as em
+import networkx as nx
+
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     Phase2ArtifactsView,
@@ -28,7 +29,9 @@ from episteme_pipeline.contracts.domain import (
     TheoryNet,
     TheoryRelation,
 )
-from episteme_pipeline.evaluation.benchmarks.arg_microtexts import load_arg_microtexts_subset
+from episteme_pipeline.evaluation.benchmarks.arg_microtexts import (
+    load_arg_microtexts_subset,
+)
 from episteme_pipeline.evaluation.benchmarks.scierc import load_scierc_subset
 from episteme_pipeline.evaluation.benchmarks.structuralist import (
     load_structuralist_benchmark,
@@ -169,7 +172,9 @@ class StructuralistStrategy:
         Pipeline
             Instantiated evaluation pipeline.
         """
-        from episteme_pipeline.evaluation.pipelines import build_l4_theorynet_eval_pipeline
+        from episteme_pipeline.evaluation.pipelines import (
+            build_l4_theorynet_eval_pipeline,
+        )
 
         return build_l4_theorynet_eval_pipeline(event_emitter=event_emitter, in_memory=in_memory, **kwargs)
 
@@ -1091,7 +1096,7 @@ class StrategyRegistry:
         if key in self._strategies:
             strat = self.get(key)
             if hasattr(strat, "build_pipeline"):
-                return getattr(strat, "build_pipeline")
+                return strat.build_pipeline
 
         # Support dynamic import: 'my_module:build_pipeline' or 'my_module.build_pipeline'
         if ":" in name or "." in name:
@@ -1243,16 +1248,16 @@ class StrategyRegistry:
 default_registry = StrategyRegistry()
 
 __all__ = [
-    "EvaluationStrategy",
-    "StructuralistStrategy",
-    "ExtractionStrategy",
     "ArgumentationStrategy",
+    "EvaluationStrategy",
+    "ExtractionStrategy",
     "NoiseRobustnessStrategy",
     "StrategyRegistry",
-    "default_registry",
-    "apply_typo_noise",
-    "apply_sentence_shuffling",
+    "StructuralistStrategy",
     "apply_entity_synonym_swaps",
     "apply_graph_perturbation",
+    "apply_sentence_shuffling",
+    "apply_typo_noise",
     "compute_rdf",
+    "default_registry",
 ]

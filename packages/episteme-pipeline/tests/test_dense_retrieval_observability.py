@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
-from typing import Iterator
 
 import pytest
-
 from episteme_pipeline.config import Phase3Config
-from episteme_pipeline.contracts.domain import L2Entity, L2Triple, SearchResult, SubGraph
+from episteme_pipeline.contracts.domain import (
+    L2Entity,
+    L2Triple,
+    SearchResult,
+    SubGraph,
+)
 from episteme_pipeline.phases.phase3_global_relations.dense_retrieval_extractor import (
     DenseRetrievalGlobalRelationExtractor,
     make_reduce_depth_overflow_handler,

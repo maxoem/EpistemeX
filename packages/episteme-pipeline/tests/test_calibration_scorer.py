@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import networkx as nx
 import pytest
-
-from episteme_pipeline.contracts.domain import L2Triple, TheoryAtom, TheoryNet, TheoryRelation
+from episteme_pipeline.contracts.domain import (
+    L2Triple,
+    TheoryAtom,
+    TheoryNet,
+    TheoryRelation,
+)
 from episteme_pipeline.evaluation.models import EvaluationOutcome
 from episteme_pipeline.evaluation.scorers.calibration import (
     CalibrationDataExtractor,

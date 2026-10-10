@@ -5,12 +5,12 @@ from __future__ import annotations
 import contextlib
 import logging
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from rich.console import Console
-    from rich.logging import RichHandler
 
 DEFAULT_NOISY_LOGGERS: tuple[str, ...] = (
     "litellm",

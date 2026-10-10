@@ -16,14 +16,21 @@ from typing import TYPE_CHECKING, Any
 
 import networkx as nx
 
-from episteme_pipeline.contracts.domain import L2Entity, L2Triple, TheoryAtom, TheoryRelation
+from episteme_pipeline.contracts.domain import (
+    L2Entity,
+    L2Triple,
+    TheoryAtom,
+    TheoryRelation,
+)
 from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.fusion import TheoryFusion
 from episteme_pipeline.protocols.graph_store import FusionGraph
 
 if TYPE_CHECKING:
     from episteme_pipeline.config import Phase5Config
-    from episteme_pipeline.phases.phase5_fusion.argument_clustering import InterDocumentClusterVerifier
+    from episteme_pipeline.phases.phase5_fusion.argument_clustering import (
+        InterDocumentClusterVerifier,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +104,9 @@ class LeidenTheoryClustering(TheoryFusion):
             Configured LeidenTheoryClustering instance.
         """
         if cluster_verifier is None and config.gating.enabled and decision_engine is not None:
-            from episteme_pipeline.phases.phase5_fusion.argument_clustering import InterDocumentClusterVerifier
+            from episteme_pipeline.phases.phase5_fusion.argument_clustering import (
+                InterDocumentClusterVerifier,
+            )
 
             cluster_verifier = InterDocumentClusterVerifier.from_config(
                 config.gating,

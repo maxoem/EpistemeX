@@ -18,19 +18,21 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from episteme_pipeline.contracts.domain import L2Entity
-from episteme_pipeline.contracts.domain import SubGraph
+from episteme_pipeline.contracts.domain import L2Entity, SubGraph
 from episteme_pipeline.events.bus import EventEmitter
-from episteme_pipeline.events.models import EntityLinkingCandidatesRetrieved, EntityLinkingReranked, \
-    UnlinkableMentionError
+from episteme_pipeline.events.models import (
+    EntityLinkingCandidatesRetrieved,
+    EntityLinkingReranked,
+    UnlinkableMentionError,
+)
 from episteme_pipeline.protocols.extractors import (
     CrossEncoder,
     EmbeddingModel,
     EntityLinker,
     argmax,
     as_tensor,
-    normalize_scores,
     ensure_embedding_model,
+    normalize_scores,
 )
 from episteme_pipeline.protocols.graph_store import GraphReader
 
@@ -64,13 +66,13 @@ class EnvelopeBiEncoder:
         from transformers import AutoModel, AutoTokenizer
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.tokenizer: "PreTrainedTokenizer" = AutoTokenizer.from_pretrained(model_name)
+        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(model_name)
 
         # Add special tokens for epistemic bounding
         special_tokens_dict = {'additional_special_tokens': ['[ENT]', '[\\ENT]']}
         self.tokenizer.add_special_tokens(special_tokens_dict)
 
-        self.model: "PreTrainedModel" = AutoModel.from_pretrained(model_name)
+        self.model: PreTrainedModel = AutoModel.from_pretrained(model_name)
         self.model.resize_token_embeddings(len(self.tokenizer))
         self.model.to(self.device)
         self.model.eval()
@@ -271,8 +273,9 @@ class DenseEntityLinker(EntityLinker):
         # 2. Cross-Encoder: Structural Evaluation (L07 Option B)
         # Fetch actual 1-hop subgraph ONLY for the top-k candidates
         import asyncio
-        from episteme_pipeline.utils import format_envelope
+
         from episteme_pipeline.prompts.input_formatters import InputFormatStrategy
+        from episteme_pipeline.utils import format_envelope
 
         tasks = [graph_store.get_neighborhood(c.id, depth=1) for c in top_candidates]
         subgraphs = await asyncio.gather(*tasks, return_exceptions=True)

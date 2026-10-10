@@ -8,8 +8,9 @@ by delegating to isolated modular algorithm implementations.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any
 
 from epistemetrics.adapters.neo4j.client import Neo4jClient
 from epistemetrics.core.exceptions import GDSProjectionError

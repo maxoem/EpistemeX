@@ -1,7 +1,15 @@
 import pytest
-
-from episteme_pipeline.artifacts.mappers import map_phase1_output_to_artifacts, map_phase2_output_to_artifacts
-from episteme_pipeline.contracts.phase_contracts import L1Chunk, L1Document, L2Entity, Phase1Output, Phase2Output
+from episteme_pipeline.artifacts.mappers import (
+    map_phase1_output_to_artifacts,
+    map_phase2_output_to_artifacts,
+)
+from episteme_pipeline.contracts.phase_contracts import (
+    L1Chunk,
+    L1Document,
+    L2Entity,
+    Phase1Output,
+    Phase2Output,
+)
 from episteme_pipeline.projection.artifact_projector import ArtifactGraphProjector
 
 

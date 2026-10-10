@@ -14,20 +14,20 @@ import json
 import logging
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, TextIO, Optional
+from typing import TextIO
 
 from .bus import EventObserver
 from .models import (
-    PipelineEvent,
-    serialize_event,
-    get_event_type_name,
-    DenseCandidatesGenerated,
-    RerankerScoreAssigned,
     CandidateRejectedByThreshold,
+    DenseCandidatesGenerated,
+    EntityMaturationSynthesized,
     LLMRelationDecoded,
+    PipelineEvent,
+    RerankerScoreAssigned,
     SchemaValidationRejectedRelation,
     TripleCommitted,
-    EntityMaturationSynthesized,
+    get_event_type_name,
+    serialize_event,
 )
 
 
@@ -43,7 +43,7 @@ class LoggingObserver(EventObserver):
         Logger instance to use. If not provided, uses module logger.
     """
 
-    def __init__(self, logger: Optional[logging.Logger] = None) -> None:
+    def __init__(self, logger: logging.Logger | None = None) -> None:
         self.logger = logger or logging.getLogger(__name__)
 
     def on_event(self, event: PipelineEvent) -> None:
@@ -116,7 +116,7 @@ class JsonlRunObserver(EventObserver):
 
     def __init__(self, file_path: str | Path) -> None:
         self.file_path = Path(file_path)
-        self.file_handle: Optional[TextIO] = None
+        self.file_handle: TextIO | None = None
 
     def __enter__(self) -> JsonlRunObserver:
         """Open the file for writing.
@@ -181,8 +181,8 @@ class MetricsObserver(EventObserver):
     """
 
     def __init__(self) -> None:
-        self.event_counts: Dict[str, int] = defaultdict(int)
-        self.candidate_acceptance_rates: Dict[str, Dict[str, int]] = defaultdict(
+        self.event_counts: dict[str, int] = defaultdict(int)
+        self.candidate_acceptance_rates: dict[str, dict[str, int]] = defaultdict(
             lambda: {"total": 0, "accepted": 0}
         )
         self.total_triples_committed = 0

@@ -1,7 +1,11 @@
 """Phase 3b: Latent Graph Consolidation."""
 
 from episteme_pipeline.artifacts.builders import build_canonicalization_artifact
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext, Phase3ArtifactsView
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+    Phase3ArtifactsView,
+)
 from episteme_pipeline.config import Phase3bConfig
 from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.events.models import ProgressCompleted, ProgressStarted
@@ -9,7 +13,9 @@ from episteme_pipeline.phases.phase3b_consolidation.clustering import (
     elect_canonical_representative,
     verify_borderline_pair,
 )
-from episteme_pipeline.phases.phase3b_consolidation.consolidation import LatentGraphConsolidation
+from episteme_pipeline.phases.phase3b_consolidation.consolidation import (
+    LatentGraphConsolidation,
+)
 from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.fusion import InstanceFusion
 from episteme_pipeline.protocols.graph_store import FusionGraph

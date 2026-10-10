@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from episteme_studio.app import create_app
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
 
 
 @pytest.mark.asyncio

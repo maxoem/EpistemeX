@@ -6,13 +6,11 @@ import asyncio
 import json
 import queue
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from episteme_pipeline.events.models import BaseEvent, ComponentStarted
 from episteme_studio.adapters.event_mapper import to_studio_event
 from episteme_studio.app import create_app
@@ -21,6 +19,7 @@ from episteme_studio.runtime.broker import EventBroker
 from episteme_studio.runtime.observer import StudioEventObserver
 from episteme_studio.runtime.registry import RunRegistry
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
 
 
 class UnseenCustomEvent(BaseEvent):
@@ -290,7 +289,7 @@ async def test_sse_stream_broadcast_to_multiple_subscribers() -> None:
                 "kind": f"test.event.{i}",
                 "run_id": run_id,
                 "message": f"Message {i}",
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
             },
         )
 
@@ -316,7 +315,7 @@ async def test_sse_stream_replays_history_via_last_event_id_or_since() -> None:
                 "kind": f"phase.step.{i}",
                 "run_id": run_id,
                 "message": f"Step {i}",
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
             },
         )
 
@@ -480,6 +479,7 @@ def test_stream_tee_batches_lines_into_single_message() -> None:
     None
     """
     from io import StringIO
+
     from episteme_studio.adapters.worker import StreamTee
 
     orig = StringIO()

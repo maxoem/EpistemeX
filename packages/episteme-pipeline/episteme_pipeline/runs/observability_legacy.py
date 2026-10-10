@@ -13,8 +13,9 @@ It is safe to import without Langfuse installed; functions will no-op.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager, nullcontext
-from typing import Protocol, Iterator
+from typing import Protocol
 from uuid import uuid4
 
 from episteme_pipeline.protocols.tracing import NoOpTraceSink, TraceSpan
@@ -28,7 +29,7 @@ except Exception:  # pragma: no cover
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .models import RunReport, RunManifest
+    from .models import RunManifest, RunReport
 
 
 class RunPublisher(Protocol):
@@ -201,9 +202,8 @@ def run_observability_context(
     )
 
     try:
-        with root_ctx:
-            with pa:
-                yield lf_client
+        with root_ctx, pa:
+            yield lf_client
     finally:
         try:
             lf_client.flush()

@@ -6,8 +6,6 @@ import logging
 
 from episteme_pipeline.artifacts.builders import parse_mention_id
 from episteme_pipeline.artifacts.models import (
-    TheoryAtomArtifact,
-    TheoryRelationArtifact,
     ArtifactEnvelope,
     CanonicalizationArtifact,
     ChunkArtifact,
@@ -17,6 +15,8 @@ from episteme_pipeline.artifacts.models import (
     GlobalRelationArtifact,
     LinkedEntityArtifact,
     LocalRelationArtifact,
+    TheoryAtomArtifact,
+    TheoryRelationArtifact,
 )
 from episteme_pipeline.contracts.domain import (
     L1Chunk,

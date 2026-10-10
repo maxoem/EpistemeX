@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
+import epistemetrics as em
 import networkx as nx
 import pytest
-
-import epistemetrics as em
 from epistemetrics.epistemic.poset_evaluation import (
     check_hierarchical_subsumption,
     compute_specialization_reachability,

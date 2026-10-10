@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from episteme_pipeline.events.bus import SimpleEventEmitter, ContextualEventEmitter
+from episteme_pipeline.events.bus import ContextualEventEmitter, SimpleEventEmitter
 from episteme_pipeline.events.models import DenseCandidatesGenerated
 
 

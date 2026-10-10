@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from episteme_pipeline.artifacts.builders import build_argument_component_artifact
 from episteme_pipeline.artifacts.models import TheoryAtomArtifact
 from episteme_pipeline.config import Phase2Config, Phase3Config, Phase4Config
@@ -67,6 +66,7 @@ def test_phase_configs_confidence_threshold_defaults():
 @pytest.mark.asyncio
 async def test_phase2_runner_confidence_filtering():
     from unittest.mock import AsyncMock, MagicMock
+
     from episteme_pipeline.contracts.domain import L1Chunk
     from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
@@ -110,6 +110,7 @@ async def test_phase2_runner_confidence_filtering():
 @pytest.mark.asyncio
 async def test_phase4_runner_acc_confidence_filtering():
     from unittest.mock import AsyncMock, MagicMock
+
     from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
     graph_store = AsyncMock()

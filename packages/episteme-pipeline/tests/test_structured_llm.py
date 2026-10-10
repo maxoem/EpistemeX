@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from llama_index.core import PromptTemplate
-from pydantic import BaseModel
-
 from episteme_pipeline.llm import (
     LlamaIndexStructuredLLMAdapter,
     StructuredPredictionError,
     ensure_structured_llm,
 )
 from episteme_pipeline.llm.structured import sanitize_structured_output
-from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import LLMNERExtractor
+from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import (
+    LLMNERExtractor,
+)
 from episteme_pipeline.schema.default_schema import SchemaConfig
+from llama_index.core import PromptTemplate
+from pydantic import BaseModel
 
 
 class _SimpleOutput(BaseModel):

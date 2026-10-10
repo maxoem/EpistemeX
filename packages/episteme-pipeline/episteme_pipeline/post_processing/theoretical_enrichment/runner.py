@@ -49,7 +49,9 @@ from episteme_pipeline.post_processing.theoretical_enrichment.projectors import 
     LLMTheoryProjector,
     TheoryProjector,
 )
-from episteme_pipeline.post_processing.theoretical_enrichment.solvers import TenabilitySolver
+from episteme_pipeline.post_processing.theoretical_enrichment.solvers import (
+    TenabilitySolver,
+)
 from episteme_pipeline.protocols.graph_store import ProjectionGraph
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.schema.default_schema import SchemaConfig

@@ -69,9 +69,9 @@ def get_fixture_reports_dir() -> Path:
 
 __all__ = [
     "DEMO_RUN_MANIFEST",
-    "get_fixtures_dir",
-    "get_fixture_runs_dir",
     "get_fixture_artifacts_dir",
     "get_fixture_cypher_dir",
     "get_fixture_reports_dir",
+    "get_fixture_runs_dir",
+    "get_fixtures_dir",
 ]

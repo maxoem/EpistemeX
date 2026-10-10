@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 from episteme_pipeline.artifacts.builders import (
     build_chunk_artifact,
     build_document_artifact,

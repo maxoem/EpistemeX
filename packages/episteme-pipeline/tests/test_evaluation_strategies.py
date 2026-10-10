@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from episteme_pipeline.artifacts.execution import ArtifactCollection
 from episteme_pipeline.artifacts.models import (
     ArtifactEnvelope,

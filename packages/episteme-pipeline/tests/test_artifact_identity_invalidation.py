@@ -1,4 +1,9 @@
-from episteme_pipeline.artifacts.models import ArtifactEnvelope, ArtifactKind, ArtifactProvenance, ChunkArtifact
+from episteme_pipeline.artifacts.models import (
+    ArtifactEnvelope,
+    ArtifactKind,
+    ArtifactProvenance,
+    ChunkArtifact,
+)
 from episteme_pipeline.runs.fingerprints import stable_fingerprint
 
 

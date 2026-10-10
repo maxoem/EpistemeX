@@ -44,11 +44,11 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from episteme_pipeline.contracts.domain import (
+    CandidatePair,
     L2Entity,
     L2Triple,
-    SubGraph,
-    CandidatePair,
     PhaseItemRecord,
+    SubGraph,
 )
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.schema.default_schema import SchemaConfig
@@ -105,7 +105,7 @@ class CrossEncoder(Protocol):
 # ----------------------------------------------------------------------
 
 
-def as_tensor(embeddings: Sequence[Sequence[float]]) -> "torch.Tensor":
+def as_tensor(embeddings: Sequence[Sequence[float]]) -> torch.Tensor:
     """Convert protocol-shaped embeddings into a ``[n, dim]`` float tensor.
 
     Kept out of the :class:`EmbeddingModel` contract on purpose: only two
@@ -200,6 +200,7 @@ class HuggingFaceEmbeddingModel:
     ) -> None:
         import torch
         from transformers import AutoModel, AutoTokenizer
+
         from episteme_pipeline.config import PipelineConfig
 
         selected_model = model_name or PipelineConfig().default_embedding_model
@@ -228,7 +229,7 @@ class HuggingFaceEmbeddingModel:
             "dimension": self.dimension,
         }
 
-    def encode(self, texts: list[str]) -> "torch.Tensor":
+    def encode(self, texts: list[str]) -> torch.Tensor:
         """Synchronous forward pass returning a ``[n, hidden]`` tensor."""
         import torch
 
@@ -315,6 +316,7 @@ class ObservableEmbeddingModel:
             return []
 
         import time
+
         from episteme_pipeline.events.context import get_event_emitter
         from episteme_pipeline.events.models import EmbeddingGenerationCompleted
         from episteme_pipeline.llm.metadata import LLMResponseMetadataExtractor

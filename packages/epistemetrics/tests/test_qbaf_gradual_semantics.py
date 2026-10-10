@@ -9,19 +9,18 @@ from __future__ import annotations
 import networkx as nx
 import numpy as np
 import pytest
-from scipy.integrate import solve_ivp
-
 from epistemetrics.core.models import RelationType
 from epistemetrics.epistemic.qbaf import (
     GradualSemanticsModel,
     QBAFGradualSemanticsSolver,
-    WeightNormalizationMode,
     WeightedQuadraticEnergySolver,
+    WeightNormalizationMode,
     compare_qbaf_weight_modes,
     solve_continuous_qbaf,
     solve_qbaf_gradual_semantics,
 )
 from epistemetrics.graph.theory_graph import TheoryGraph
+from scipy.integrate import solve_ivp
 
 
 class TestQBAFGradualSemantics:

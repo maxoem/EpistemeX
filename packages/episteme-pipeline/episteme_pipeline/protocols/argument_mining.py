@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 
 from episteme_pipeline.contracts.domain import (
+    L2Entity,
     TheoryAtom,
     TheoryRelation,
-    L2Entity,
 )
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
 from episteme_pipeline.protocols.graph_store import GraphReader

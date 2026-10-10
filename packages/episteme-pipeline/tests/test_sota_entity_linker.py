@@ -1,12 +1,16 @@
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import torch
-
-from episteme_pipeline.contracts.domain import L2Entity, SubGraph, L2Triple
+from episteme_pipeline.contracts.domain import L2Entity, L2Triple, SubGraph
 from episteme_pipeline.events.models import UnlinkableMentionError
-from episteme_pipeline.phases.phase2_entity_discovery.mention_context_injector import DefaultMentionContextInjector
-from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import EnvelopeBiEncoder, DenseEntityLinker
+from episteme_pipeline.phases.phase2_entity_discovery.mention_context_injector import (
+    DefaultMentionContextInjector,
+)
+from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import (
+    DenseEntityLinker,
+    EnvelopeBiEncoder,
+)
 
 
 class DummyStructuredLLM:
@@ -142,8 +146,8 @@ async def test_dense_entity_linker_missing_envelope_raises():
 
 
 def test_dense_entity_linker_reranker_propagation():
-    from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
     from episteme_pipeline.config import Phase2Config
+    from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
 
     mock_cross_encoder = MagicMock()
     mock_embed = AsyncMock()
@@ -168,8 +172,10 @@ def test_dense_entity_linker_reranker_propagation():
 
 
 def test_phase4_entity_maturation_bi_encoder_propagation():
-    from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
     from episteme_pipeline.config import Phase4EntityMaturationConfig
+    from episteme_pipeline.phases.phase4_entity_maturation import (
+        Phase4EntityMaturationRunner,
+    )
 
     mock_bi_encoder = AsyncMock()
     dummy_llm = DummyStructuredLLM()
@@ -189,7 +195,7 @@ def test_phase4_entity_maturation_bi_encoder_propagation():
 @pytest.mark.asyncio
 async def test_embedding_model_protocol_adherence():
     """The single embedding contract is async and returns list[float]."""
-    from episteme_pipeline.protocols.extractors import EmbeddingModel, CrossEncoder
+    from episteme_pipeline.protocols.extractors import CrossEncoder, EmbeddingModel
 
     class AsyncEmbeddingModel:
         async def aget_text_embedding(self, text: str) -> list[float]:
@@ -265,7 +271,12 @@ def test_ensure_embedding_model_rejects_incompatible_objects():
 def test_configs_pure_json_serializable():
     """W-05: configs must be purely JSON-serializable and not contain live model slots."""
     import json
-    from episteme_pipeline.config import PipelineConfig, Phase2Config, Phase4EntityMaturationConfig
+
+    from episteme_pipeline.config import (
+        Phase2Config,
+        Phase4EntityMaturationConfig,
+        PipelineConfig,
+    )
 
     p2 = Phase2Config()
     assert not hasattr(p2, "embedding_model")

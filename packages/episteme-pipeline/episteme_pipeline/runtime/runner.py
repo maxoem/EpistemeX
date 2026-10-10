@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from llama_index.embeddings.litellm import LiteLLMEmbedding
 from llama_index.llms.litellm import LiteLLM
@@ -18,8 +19,8 @@ from llama_index.llms.litellm import LiteLLM
 from episteme_pipeline.config import (
     ExecutionConfig,
     Phase2Config,
-    Phase3Config,
     Phase3bConfig,
+    Phase3Config,
     Phase5Config,
     PipelineConfig,
 )

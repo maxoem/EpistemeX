@@ -7,7 +7,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
 from episteme_pipeline.config import DecisionEngineConfig, PipelineConfig
 from episteme_pipeline.prompts.default_prompts import (
     ACC_DIRECT_PROMPT,
@@ -22,7 +21,10 @@ from episteme_pipeline.prompts.default_prompts import (
     DECISION_EPISTEMIC_RELEVANCE_QUESTION,
 )
 from episteme_pipeline.prompts.models import StructuredPromptBundle
-from episteme_pipeline.prompts.providers import DefaultPromptProvider, LangfusePromptProvider
+from episteme_pipeline.prompts.providers import (
+    DefaultPromptProvider,
+    LangfusePromptProvider,
+)
 from episteme_pipeline.protocols.decision import (
     DecisionEngine,
     DecisionNoulResult,
@@ -319,8 +321,8 @@ async def test_conforming_mock_decision_engine_execution() -> None:
 
 def test_pipeline_for_task_decision_engine_injection() -> None:
     """Verify Pipeline.for_task accepts and stores decision_engine."""
-    from episteme_pipeline.pipeline import Pipeline
     from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
+    from episteme_pipeline.pipeline import Pipeline
 
     mock_llm = MagicMock(spec=DiskCachedStructuredLLM)
     mock_reranker = MagicMock()

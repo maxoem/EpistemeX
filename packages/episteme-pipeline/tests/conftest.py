@@ -5,20 +5,18 @@ Shared test fixtures and in-memory graph store for pipeline unit tests.
 from __future__ import annotations
 
 import pytest
-
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
 from episteme_pipeline.contracts.phase_contracts import (
     L1Chunk,
     L2Entity,
     L2Triple,
+    PhaseItemRecord,
     SearchResult,
     SubGraph,
-    PhaseItemRecord,
 )
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
-
 
 # ---------------------------------------------------------------------------
 # In-memory GraphStore (no Neo4j required)

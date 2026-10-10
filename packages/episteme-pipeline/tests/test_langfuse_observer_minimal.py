@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from episteme_pipeline.events.langfuse_observer import LangfuseObserver
 from episteme_pipeline.events.models import (
-    ComponentStarted,
     ComponentCompleted,
-    PhaseCompleted,
+    ComponentStarted,
     DenseCandidatesGenerated,
-    RerankerScoreAssigned,
     LLMRelationDecoded,
+    PhaseCompleted,
+    RerankerScoreAssigned,
 )
 
 

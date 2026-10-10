@@ -8,7 +8,7 @@ Evaluation results are always linked to concrete runs, artifacts, and datasets.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -18,7 +18,7 @@ from episteme_pipeline.evaluation.comparison import RunComparison
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class EvaluationLevel(StrEnum):

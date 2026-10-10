@@ -9,7 +9,8 @@ evaluation modality ("choice", "noul", "score").
 from __future__ import annotations
 
 import logging
-from typing import Any, Protocol, Sequence, runtime_checkable
+from collections.abc import Sequence
+from typing import Any, Protocol, runtime_checkable
 
 from episteme_pipeline.decision.mock import compute_conformal_prediction_set
 from episteme_pipeline.protocols.decision import (

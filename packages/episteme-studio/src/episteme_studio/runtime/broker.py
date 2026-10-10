@@ -112,8 +112,7 @@ class EventBroker:
                 events_to_yield: list[StudioEvent] = []
                 if buf:
                     oldest_seq = buf[0].seq
-                    if cursor_seq < oldest_seq - 1:
-                        cursor_seq = oldest_seq - 1
+                    cursor_seq = max(cursor_seq, oldest_seq - 1)
 
                     for ev in list(buf):
                         if ev.seq > cursor_seq:
@@ -134,7 +133,7 @@ class EventBroker:
                         break
                     try:
                         await asyncio.wait_for(notifier.wait(), timeout=15.0)
-                    except (asyncio.TimeoutError, TimeoutError):
+                    except TimeoutError:
                         pass
         finally:
             self._notifiers[run_id].discard(notifier)

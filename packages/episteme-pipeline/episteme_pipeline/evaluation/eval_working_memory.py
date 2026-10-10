@@ -26,9 +26,14 @@ from typing import Any
 
 import tiktoken
 
-from episteme_pipeline.contracts.domain import L1Chunk, L2Entity, GlobalStructuralAnchor
-from episteme_pipeline.phases.phase2_entity_discovery.models import NERExtractionOutput, WorkingMemorySignal
-from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import LLMNERExtractor
+from episteme_pipeline.contracts.domain import GlobalStructuralAnchor, L1Chunk, L2Entity
+from episteme_pipeline.phases.phase2_entity_discovery.models import (
+    NERExtractionOutput,
+    WorkingMemorySignal,
+)
+from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import (
+    LLMNERExtractor,
+)
 from episteme_pipeline.phases.phase2_entity_discovery.working_memory import (
     EpisodicWorkingMemoryManager,
 )

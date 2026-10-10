@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
@@ -94,7 +94,7 @@ class ExecutionJob:
         self.result = result
         self.error = error
         self.cancel_event = asyncio.Event()
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.task: asyncio.Task[MetricResult] | None = None
 
 
@@ -520,7 +520,7 @@ class MetricService:
         """
         opts = params or {}
         exec_id = execution_id or f"exec-{uuid4().hex[:8]}"
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
 
         if opts.get("_mock_delay"):
             await asyncio.sleep(float(opts["_mock_delay"]))
@@ -550,7 +550,7 @@ class MetricService:
                         max_iterations=max_iterations,
                         tolerance=tolerance,
                     )
-                    end = datetime.now(timezone.utc)
+                    end = datetime.now(UTC)
                     affected_nodes = {
                         nid: AffectedNodeDetail(
                             roles=["centrality"],
@@ -584,7 +584,7 @@ class MetricService:
                 graph_view,
                 params={"damping": damping, "max_iterations": max_iterations, "tolerance": tolerance, **opts},
             )
-            end = datetime.now(timezone.utc)
+            end = datetime.now(UTC)
             scores = pr_res.scores
             vals = list(scores.values()) if scores else [0.0]
             summary = {
@@ -620,7 +620,7 @@ class MetricService:
 
         elif metric_id == "degree_global":
             overlay = compute_degree(graph_view, params=opts)
-            end = datetime.now(timezone.utc)
+            end = datetime.now(UTC)
             scores = {
                 nid: float(val) for nid, val in overlay.node_values.items() if val is not None
             }
@@ -654,7 +654,7 @@ class MetricService:
 
         elif metric_id == "component_global":
             wcc_res = run_epistemetrics_wcc(graph_view, params=opts)
-            end = datetime.now(timezone.utc)
+            end = datetime.now(UTC)
             affected_nodes = {
                 nid: AffectedNodeDetail(
                     roles=["component"],
@@ -691,7 +691,7 @@ class MetricService:
 
         elif metric_id in ("betweenness_global", "betweenness"):
             bet_res = run_epistemetrics_betweenness(graph_view, params=opts)
-            end = datetime.now(timezone.utc)
+            end = datetime.now(UTC)
             affected_nodes = {
                 nid: AffectedNodeDetail(
                     roles=["centrality", "betweenness"],
@@ -723,7 +723,7 @@ class MetricService:
 
         elif metric_id in ("eigenvector_global", "eigenvector"):
             eig_res = run_epistemetrics_eigenvector(graph_view, params=opts)
-            end = datetime.now(timezone.utc)
+            end = datetime.now(UTC)
             affected_nodes = {
                 nid: AffectedNodeDetail(
                     roles=["centrality", "eigenvector"],
@@ -755,7 +755,7 @@ class MetricService:
 
         elif metric_id in ("louvain_global", "louvain"):
             louv_res = run_epistemetrics_louvain(graph_view, params=opts)
-            end = datetime.now(timezone.utc)
+            end = datetime.now(UTC)
             affected_nodes = {
                 nid: AffectedNodeDetail(
                     roles=["cluster"],
@@ -803,7 +803,7 @@ class MetricService:
                         tolerance=tolerance,
                         max_levels=max_levels,
                     )
-                    end = datetime.now(timezone.utc)
+                    end = datetime.now(UTC)
                     affected_nodes = {
                         nid: AffectedNodeDetail(
                             roles=["cluster"],
@@ -837,7 +837,7 @@ class MetricService:
                 warnings.append("Executed via in-memory igraph fallback (Neo4j GDS not detected)")
 
             overlay = compute_leiden(graph_view, params={"gamma": gamma, "max_levels": max_levels, **opts})
-            end = datetime.now(timezone.utc)
+            end = datetime.now(UTC)
             communities = {
                 nid: str(val) for nid, val in overlay.node_values.items() if val is not None
             }
@@ -881,7 +881,7 @@ class MetricService:
                 graph_view,
                 params={"theory_id": theory_id, "tenability_threshold": threshold},
             )
-            end = datetime.now(timezone.utc)
+            end = datetime.now(UTC)
             scores = {
                 nid: float(val) for nid, val in overlay.node_values.items() if val is not None
             }
@@ -1018,7 +1018,7 @@ class MetricService:
             async with asyncio.timeout(fast_path_timeout):
                 result = await _run_task()
                 return job, True
-        except (asyncio.TimeoutError, TimeoutError):
+        except TimeoutError:
             # Did not finish in fast-path window; convert to background execution
             background_task = asyncio.create_task(_run_task())
             job.task = background_task

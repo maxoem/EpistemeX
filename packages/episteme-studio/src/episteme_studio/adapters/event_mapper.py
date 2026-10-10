@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
-from episteme_pipeline.events.models import BaseEvent, get_event_type_name, serialize_event
+from episteme_pipeline.events.models import (
+    BaseEvent,
+    get_event_type_name,
+    serialize_event,
+)
+
 from episteme_studio.domain.events import StudioEvent
 
 _EVENT_KIND_MAP: dict[str, str] = {
@@ -155,9 +160,9 @@ def to_studio_event(
         try:
             ts = datetime.fromisoformat(ts_val)
         except Exception:
-            ts = datetime.now(timezone.utc)
+            ts = datetime.now(UTC)
     else:
-        ts = datetime.now(timezone.utc)
+        ts = datetime.now(UTC)
 
     run_id = str(event_data.get("run_id") or "unknown_run")
     phase = event_data.get("phase")
@@ -194,7 +199,7 @@ def to_studio_event(
             scope = event_data.get("scope_type") or "none"
             clamped_str = " (clamped)" if event_data.get("clamped") else ""
             message = f"Modality resolved [{atom_id}]: M(φ)={m_val:.3f} via {res_type} [scope={scope}]{clamped_str}"
-        elif "description" in event_data and event_data["description"]:
+        elif event_data.get("description"):
             message = str(event_data["description"])
         elif "phase_name" in event_data:
             message = f"Phase '{event_data['phase_name']}' event: {raw_type}"

@@ -8,8 +8,8 @@ from episteme_pipeline.graph.neo4j_store import (
 
 __all__ = [
     "InMemoryGraphStore",
+    "Neo4jCheckpointStore",
     "Neo4jGraphReader",
     "Neo4jGraphWriter",
-    "Neo4jCheckpointStore",
     "Neo4jProcessingGraph",
 ]

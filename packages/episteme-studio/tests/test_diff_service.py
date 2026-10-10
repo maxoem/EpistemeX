@@ -5,14 +5,13 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from episteme_studio.app import create_app
 from episteme_studio.domain.diff import NodeDiffStatus
 from episteme_studio.domain.graph import GraphView, Layer, StudioEdge, StudioNode
 from episteme_studio.domain.runs import RunDetail, RunStatus
 from episteme_studio.services.diff_service import DiffService
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
 
 
 def _make_sample_graph_a() -> GraphView:

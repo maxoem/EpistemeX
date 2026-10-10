@@ -12,7 +12,6 @@ nothing raised — hence these tests.
 from __future__ import annotations
 
 import pytest
-
 from episteme_pipeline.artifacts.invalidate import (
     ArtifactDependencyGraph,
     build_prior_fingerprints,

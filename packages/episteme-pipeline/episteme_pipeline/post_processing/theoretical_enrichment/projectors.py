@@ -92,11 +92,7 @@ def extract_matching_measurements(
         for m in obs.measurements:
             m_clean = m.dimension.lower().replace("_", "")
             # 1. Direct match against parameter name or sub-tokens
-            if m_clean in p_clean or p_clean in m_clean or any(t in m_clean for t in tokens):
-                if isinstance(m.value, (int, float)):
-                    matched_vals.append(float(m.value))
-            # 2. Match against aligned required dimensions
-            elif matching_req_dims and any(rd in m_clean or m_clean in rd for rd in matching_req_dims):
+            if m_clean in p_clean or p_clean in m_clean or any(t in m_clean for t in tokens) or matching_req_dims and any(rd in m_clean or m_clean in rd for rd in matching_req_dims):
                 if isinstance(m.value, (int, float)):
                     matched_vals.append(float(m.value))
             # 3. Ordinal positional fallback when parameter and dimension vocabularies are disjoint

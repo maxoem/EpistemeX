@@ -13,8 +13,6 @@ from typing import Any
 from unittest.mock import MagicMock, Mock
 
 import pytest
-from pydantic import BaseModel
-
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
@@ -41,6 +39,7 @@ from episteme_pipeline.runs.models import (
     RunPhaseRecord,
     RunStatus,
 )
+from pydantic import BaseModel
 
 
 class CustomLeafComponent:

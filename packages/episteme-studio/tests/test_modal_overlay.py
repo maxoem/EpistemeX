@@ -4,7 +4,10 @@ from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.events.models import ModalStrengthResolved
 from episteme_studio.adapters.config_adapter import ConfigAdapter
 from episteme_studio.adapters.event_mapper import to_studio_event
-from episteme_studio.adapters.metrics_adapter import compute_gradual_strength, compute_modal_strength
+from episteme_studio.adapters.metrics_adapter import (
+    compute_gradual_strength,
+    compute_modal_strength,
+)
 from episteme_studio.domain.graph import GraphView, Layer, StudioEdge, StudioNode
 from episteme_studio.domain.overlays import OverlayKind
 from episteme_studio.services.overlay_service import OverlayService

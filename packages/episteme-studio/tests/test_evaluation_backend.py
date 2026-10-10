@@ -14,8 +14,6 @@ import json
 from pathlib import Path
 
 import pytest
-from starlette.testclient import TestClient
-
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.adapters.evaluation_adapter import EvaluationAdapter
 from episteme_studio.app import create_app
@@ -29,6 +27,7 @@ from episteme_studio.domain.evaluation import (
 )
 from episteme_studio.runtime import EventBroker
 from episteme_studio.settings import StudioSettings
+from starlette.testclient import TestClient
 
 
 class TestEvaluationDomainModels:

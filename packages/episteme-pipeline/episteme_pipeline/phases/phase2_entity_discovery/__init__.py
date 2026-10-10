@@ -30,29 +30,53 @@ import asyncio
 import logging
 from collections import defaultdict
 
-from episteme_pipeline.artifacts.builders import build_entity_mention_artifact, build_linked_entity_artifact, \
-    build_local_relation_artifact
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext, Phase1ArtifactsView
+from episteme_pipeline.artifacts.builders import (
+    build_entity_mention_artifact,
+    build_linked_entity_artifact,
+    build_local_relation_artifact,
+)
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+    Phase1ArtifactsView,
+)
 from episteme_pipeline.config import Phase2Config
-from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
 from episteme_pipeline.contracts.domain import (
+    GlobalStructuralAnchor,
     L1Chunk,
     L2Entity,
     L2Triple,
 )
-from episteme_pipeline.events import ProgressStarted, ProgressAdvanced, ProgressCompleted
+from episteme_pipeline.events import (
+    ProgressAdvanced,
+    ProgressCompleted,
+    ProgressStarted,
+)
 from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.phases.chunk_selection import select_pending_chunks
-from episteme_pipeline.phases.phase2_entity_discovery.entity_linker import NameEntityLinker
+from episteme_pipeline.phases.phase2_entity_discovery.entity_linker import (
+    NameEntityLinker,
+)
 from episteme_pipeline.phases.phase2_entity_discovery.jev_entity_linker import (
     CascadingEntityLinker,
     JevEntityLinker,
 )
-from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import LLMNERExtractor
-from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import DenseEntityLinker
-from episteme_pipeline.phases.phase2_entity_discovery.working_memory import EpisodicWorkingMemoryManager
+from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import (
+    LLMNERExtractor,
+)
+from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import (
+    DenseEntityLinker,
+)
+from episteme_pipeline.phases.phase2_entity_discovery.working_memory import (
+    EpisodicWorkingMemoryManager,
+)
 from episteme_pipeline.protocols import DecisionEngine
-from episteme_pipeline.protocols.extractors import EntityLinker, NERExtractor, CrossEncoder, EmbeddingModel
+from episteme_pipeline.protocols.extractors import (
+    CrossEncoder,
+    EmbeddingModel,
+    EntityLinker,
+    NERExtractor,
+)
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.schema.default_schema import SchemaConfig

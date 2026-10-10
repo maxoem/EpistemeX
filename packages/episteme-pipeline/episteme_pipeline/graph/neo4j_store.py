@@ -31,12 +31,12 @@ from episteme_pipeline.contracts.domain import (
     L2Entity,
     L2Triple,
     Measurement,
+    PhaseItemRecord,
     SearchResult,
     SubGraph,
     TenabilityResult,
     TheoryAtom,
     TheoryRelation,
-    PhaseItemRecord,
 )
 from episteme_pipeline.protocols.graph_store import (
     EntityGraph,

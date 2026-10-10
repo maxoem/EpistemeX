@@ -11,7 +11,8 @@ import hashlib
 import inspect
 import logging
 import time
-from datetime import date, datetime, time as dt_time
+from datetime import date, datetime
+from datetime import time as dt_time
 from typing import Any
 from uuid import uuid4
 
@@ -279,7 +280,7 @@ class Neo4jReader:
 
         except ResultTooLargeError:
             raise
-        except (asyncio.TimeoutError, TimeoutError):
+        except TimeoutError:
             raise QueryTimeoutError(
                 f"Cypher query exceeded timeout limit of {timeout}s."
             )

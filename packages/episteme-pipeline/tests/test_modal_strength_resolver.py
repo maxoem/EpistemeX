@@ -11,7 +11,6 @@ Verifies:
 from __future__ import annotations
 
 import pytest
-
 from episteme_pipeline.config import ModalResolverConfig
 from episteme_pipeline.contracts.domain import (
     EpistemicStatus,
@@ -403,7 +402,9 @@ def test_atom_boundary_normalization() -> None:
     assert atom.scope_type == ScopeType.ESSENTIELLER_ALLSATZ.value
     assert atom.epistemic_status == EpistemicStatus.ANALYTISCH.value
 
-    from episteme_pipeline.phases.phase4_argument_mining.models import ExtractedComponent
+    from episteme_pipeline.phases.phase4_argument_mining.models import (
+        ExtractedComponent,
+    )
     comp = ExtractedComponent(
         id="AC1",
         component_type="ObservationUnit",

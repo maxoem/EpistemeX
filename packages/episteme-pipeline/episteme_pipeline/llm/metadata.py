@@ -8,7 +8,7 @@ model names, and execution parameters from heterogeneous LLM responses
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ class TokenUsage:
 class TokenUsageExtractorProtocol(Protocol):
     """Protocol for extracting token counts and metadata from LLM responses."""
 
-    def extract_usage(self, response: Any, prompt_text: Optional[str] = None) -> TokenUsage:
+    def extract_usage(self, response: Any, prompt_text: str | None = None) -> TokenUsage:
         """Extract token usage counts from a response object or fallback text.
 
         Parameters
@@ -105,8 +105,8 @@ class LLMResponseMetadataExtractor:
     def extract_usage(
         cls,
         response: Any,
-        prompt_text: Optional[str] = None,
-        output_text: Optional[str] = None,
+        prompt_text: str | None = None,
+        output_text: str | None = None,
     ) -> TokenUsage:
         """Extract token counts from a response or fallback to heuristics.
 
@@ -209,7 +209,7 @@ class LLMResponseMetadataExtractor:
             return max(1, len(text) // 4)
 
     @staticmethod
-    def _estimate_usage(prompt_text: Optional[str], output_text: Optional[str]) -> TokenUsage:
+    def _estimate_usage(prompt_text: str | None, output_text: str | None) -> TokenUsage:
         """Estimate token counts if provider did not supply usage."""
         p_tokens = LLMResponseMetadataExtractor.estimate_tokens(prompt_text or "")
         c_tokens = LLMResponseMetadataExtractor.estimate_tokens(output_text or "")

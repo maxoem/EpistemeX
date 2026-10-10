@@ -11,9 +11,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+import epistemetrics as em
 import networkx as nx
 
-import epistemetrics as em
 from episteme_pipeline.contracts.domain import L1Chunk
 
 

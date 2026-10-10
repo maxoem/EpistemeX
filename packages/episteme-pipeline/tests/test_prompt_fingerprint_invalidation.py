@@ -1,8 +1,10 @@
 """Tests for prompt version changes tracked in method fingerprints."""
 
 import pytest
-
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+)
 from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.pipeline import Pipeline

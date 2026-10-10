@@ -5,7 +5,7 @@ Per D-01, domain models must remain strictly decoupled from episteme_pipeline.* 
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -353,7 +353,7 @@ class EngineSettings(BaseModel):
     models: EngineModelConfig = Field(default_factory=EngineModelConfig)
     decision_engine: DecisionEngineSettings = Field(default_factory=DecisionEngineSettings)
     modal_resolver: ModalResolverSettings = Field(default_factory=ModalResolverSettings)
-    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class EngineSettingsPatch(BaseModel):

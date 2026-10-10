@@ -6,11 +6,10 @@ import ast
 from pathlib import Path
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from episteme_studio.app import create_app
 from episteme_studio.security import SecurityConfigurationError, validate_host_and_token
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
 
 
 @pytest.mark.asyncio
@@ -122,7 +121,7 @@ def test_domain_never_imports_pipeline_or_epistemetrics() -> None:
                         f"{file_path.name}:{node.lineno} imports from '{node.module}'"
                     )
 
-    assert not violations, f"Domain isolation violated (D-01):\n" + "\n".join(
+    assert not violations, "Domain isolation violated (D-01):\n" + "\n".join(
         violations
     )
 

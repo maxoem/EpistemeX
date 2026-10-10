@@ -13,7 +13,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from episteme_pipeline.decision.jev_client import (
     AutoDecisionEngine,
     DecisionEngineError,
@@ -401,8 +400,8 @@ def test_auto_decision_engine_transformers_fallback_kwargs_mapping() -> None:
 
 def test_resolve_decision_engine() -> None:
     """Verify resolve_decision_engine across configuration shapes and providers."""
-    from episteme_pipeline.decision.jev_client import resolve_decision_engine
     from episteme_pipeline.config import DecisionEngineConfig
+    from episteme_pipeline.decision.jev_client import resolve_decision_engine
 
     # None config
     assert resolve_decision_engine(None) is None

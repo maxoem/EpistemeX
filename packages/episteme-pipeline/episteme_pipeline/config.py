@@ -7,17 +7,28 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, SecretStr
 
 from episteme_pipeline.prompts.default_prompts import (
-    ACC_DIRECT_PROMPT, ACC_REASONING_PROMPT, ACC_FORMAT_PROMPT,
+    ACC_DIRECT_PROMPT,
+    ACC_FORMAT_PROMPT,
+    ACC_REASONING_PROMPT,
     ADU_SEGMENTATION_PROMPT,
-    ARC_DIRECT_PROMPT, ARC_REASONING_PROMPT, ARC_FORMAT_PROMPT,
-    ENTITY_LINKING_PROMPT,
-    GLOBAL_RELATION_DIRECT_PROMPT, GLOBAL_RELATION_REASONING_PROMPT, GLOBAL_RELATION_FORMAT_PROMPT,
-    NER_DIRECT_PROMPT, NER_REASONING_PROMPT, NER_FORMAT_PROMPT, NER_GLEANING_PROMPT,
-    ENTITY_SYNTHESIS_PROMPT,
-    PAIR_GATING_DECISION_PROMPT,
-    DECISION_ACC_QUESTION, DECISION_ACC_CRITERIA,
-    DECISION_ARC_QUESTION, DECISION_ARC_CRITERIA,
+    ARC_DIRECT_PROMPT,
+    ARC_FORMAT_PROMPT,
+    ARC_REASONING_PROMPT,
+    DECISION_ACC_CRITERIA,
+    DECISION_ACC_QUESTION,
+    DECISION_ARC_CRITERIA,
+    DECISION_ARC_QUESTION,
     DECISION_GLEANING_QUESTION,
+    ENTITY_LINKING_PROMPT,
+    ENTITY_SYNTHESIS_PROMPT,
+    GLOBAL_RELATION_DIRECT_PROMPT,
+    GLOBAL_RELATION_FORMAT_PROMPT,
+    GLOBAL_RELATION_REASONING_PROMPT,
+    NER_DIRECT_PROMPT,
+    NER_FORMAT_PROMPT,
+    NER_GLEANING_PROMPT,
+    NER_REASONING_PROMPT,
+    PAIR_GATING_DECISION_PROMPT,
 )
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
@@ -89,7 +100,7 @@ class ModelConfig(BaseModel):
     thinking_level: str = "off"
 
     @classmethod
-    def from_env(cls, **overrides: Any) -> "ModelConfig":
+    def from_env(cls, **overrides: Any) -> ModelConfig:
         """Resolve model selection from the environment, then apply overrides.
 
         Reads ``LLM_MODEL``, ``EMBED_MODEL``, ``RERANKER_MODEL``,
@@ -566,7 +577,7 @@ class PipelineConfig(BaseModel):
     modal_resolver: ModalResolverConfig = Field(default_factory=ModalResolverConfig)
 
     @classmethod
-    def from_env(cls, **overrides: Any) -> "PipelineConfig":
+    def from_env(cls, **overrides: Any) -> PipelineConfig:
         """Build a config whose model selection is resolved from the environment.
 
         This is the one supported way to turn ambient environment state into a

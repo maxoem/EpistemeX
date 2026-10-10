@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import List
-from typing import cast, Any
+from datetime import UTC
+from typing import Any, cast
 
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
@@ -45,12 +45,13 @@ from episteme_pipeline.protocols.modality import (
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.fingerprints import (
     fingerprint_existing_sources,
+    fingerprint_method,
     fingerprint_phase_config,
     fingerprint_structural_anchor,
-    fingerprint_method,
     stable_fingerprint,
 )
 from episteme_pipeline.runs.models import (
+    ArtifactReportEntry,
     ExecutionResult,
     InvalidationDecision,
     ResumePoint,
@@ -58,7 +59,6 @@ from episteme_pipeline.runs.models import (
     RunPhaseRecord,
     RunReport,
     RunStatus,
-    ArtifactReportEntry,
 )
 from episteme_pipeline.runs.persistence import JsonRunManifestStore
 
@@ -97,7 +97,7 @@ class Pipeline:
     def __init__(
         self,
         *,
-        phases: List[PhaseRunner],
+        phases: list[PhaseRunner],
         config: PipelineConfig,
         graph_reader: Any,
         projection_graph: Any,
@@ -117,7 +117,9 @@ class Pipeline:
         # Stores
         self._manifest_store = JsonRunManifestStore(self.config.execution.runs_dir)
         self._artifact_store = JsonArtifactStore(self.config.execution.artifacts_dir)
-        from episteme_pipeline.projection.artifact_projector import ArtifactGraphProjector
+        from episteme_pipeline.projection.artifact_projector import (
+            ArtifactGraphProjector,
+        )
         self._projector = ArtifactGraphProjector(projection_graph)
 
         # Build internal phase entries (1-based ordinals). Validate the dispatch
@@ -185,7 +187,7 @@ class Pipeline:
         arc_classifier: Any | None = None,
         ner_extractor: Any | None = None,
         modal_resolver: ModalStrengthResolver | None = None,
-    ) -> "Pipeline":
+    ) -> Pipeline:
         """Create a pipeline for a specific task.
 
         Parameters
@@ -237,15 +239,20 @@ class Pipeline:
         from episteme_pipeline.phases.phase1_foundation import Phase1Runner
         from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
         from episteme_pipeline.phases.phase3_global_relations import Phase3Runner
-        from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
-        from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
-        from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
-        from episteme_pipeline.phases.phase5_fusion.argument_web import Phase5ArgumentWebRunner
-        from episteme_pipeline.phases.phase6_theorynet import Phase6Runner
-
         from episteme_pipeline.phases.phase3_global_relations.rerankers import (
             CrossEncoderRelationReranker,
         )
+        from episteme_pipeline.phases.phase3b_consolidation import (
+            Phase3bLatentConsolidationRunner,
+        )
+        from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
+        from episteme_pipeline.phases.phase4_entity_maturation import (
+            Phase4EntityMaturationRunner,
+        )
+        from episteme_pipeline.phases.phase5_fusion.argument_web import (
+            Phase5ArgumentWebRunner,
+        )
+        from episteme_pipeline.phases.phase6_theorynet import Phase6Runner
 
         emitter = event_emitter or NoOpEventEmitter()
         embedding_model = ensure_embedding_model(embedding_model)
@@ -277,7 +284,10 @@ class Pipeline:
         # extractor calls ensure_structured_llm on whatever it is given, and
         # that returns an already-wrapped DiskCachedStructuredLLM unchanged — so
         # this is the single place the cache location is decided.
-        from episteme_pipeline.llm.cache import DiskCachedStructuredLLM, default_cache_dir
+        from episteme_pipeline.llm.cache import (
+            DiskCachedStructuredLLM,
+            default_cache_dir,
+        )
         from episteme_pipeline.llm.structured import ensure_structured_llm
 
         if not isinstance(llm, DiskCachedStructuredLLM):
@@ -289,7 +299,9 @@ class Pipeline:
             )
 
         if getattr(config.phase3, "use_jev_reranker", False) and decision_engine is not None:
-            from episteme_pipeline.phases.phase3_global_relations.rerankers import JevRelationReranker
+            from episteme_pipeline.phases.phase3_global_relations.rerankers import (
+                JevRelationReranker,
+            )
             relation_reranker = JevRelationReranker(
                 decision_engine,
                 prompts=config.phase3.global_relation_prompts,
@@ -853,7 +865,7 @@ class Pipeline:
         initial_previous_collection: ArtifactCollection | None,
         invalidation_decision: InvalidationDecision,
     ) -> ExecutionResult:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # Persist initial manifest
         if self.config.execution.persist_run_manifests:
@@ -863,7 +875,7 @@ class Pipeline:
             manifest=manifest,
             run_id=manifest.run_id,
             status=RunStatus.RUNNING,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             phase_records=manifest.phase_records,
             reused_phase_ordinals=list(invalidation_decision.reused_phase_ordinals),
             invalidated_phase_ordinals=list(invalidation_decision.invalidated_phase_ordinals),
@@ -927,7 +939,7 @@ class Pipeline:
             record = records_by_ordinal.get(ordinal)
             if record is not None:
                 record.status = RunStatus.RUNNING
-                record.started_at = datetime.now(timezone.utc)
+                record.started_at = datetime.now(UTC)
                 record.input_artifact_ids = list(upstream_artifact_ids)
 
             phase_emitter = ContextualEventEmitter(
@@ -954,10 +966,10 @@ class Pipeline:
                 logger.exception("Phase %s failed: %s", phase_name, exc)
                 if record is not None:
                     record.status = RunStatus.FAILED
-                    record.completed_at = datetime.now(timezone.utc)
+                    record.completed_at = datetime.now(UTC)
                     record.notes["error"] = f"{type(exc).__name__}: {exc}"
                 manifest.status = RunStatus.FAILED
-                manifest.completed_at = datetime.now(timezone.utc)
+                manifest.completed_at = datetime.now(UTC)
                 report.status = RunStatus.FAILED
                 report.completed_at = manifest.completed_at
                 if self.config.execution.persist_run_manifests:
@@ -977,7 +989,7 @@ class Pipeline:
             produced_ids = [a.artifact_id for a in collection.artifacts]
             if record is not None:
                 record.status = RunStatus.COMPLETED
-                record.completed_at = datetime.now(timezone.utc)
+                record.completed_at = datetime.now(UTC)
                 record.artifact_ids = produced_ids
                 record.output_artifact_ids = produced_ids
                 record.config_fingerprint = cast(str, manifest.phase_config_fingerprints.get(f"phase_{ordinal}"))
@@ -1037,7 +1049,7 @@ class Pipeline:
 
         # Finalize manifest/report
         manifest.status = RunStatus.COMPLETED
-        manifest.completed_at = datetime.now(timezone.utc)
+        manifest.completed_at = datetime.now(UTC)
         report.status = RunStatus.COMPLETED
         report.completed_at = manifest.completed_at
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 
 import epistemetrics as em
+
 from episteme_pipeline.protocols.graph_store import GraphReader
 
 logger = logging.getLogger(__name__)

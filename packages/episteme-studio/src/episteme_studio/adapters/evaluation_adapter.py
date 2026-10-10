@@ -10,14 +10,13 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import epistemetrics as em
 import networkx as nx
 import yaml
-
-import epistemetrics as em
 from episteme_pipeline.contracts.domain import (
     L2Entity,
     L2Triple,
@@ -30,7 +29,9 @@ from episteme_pipeline.evaluation.baselines import (
     BaselineNaiveKG,
     BaselineTextRAG,
 )
-from episteme_pipeline.evaluation.benchmarks.structuralist import load_structuralist_benchmark
+from episteme_pipeline.evaluation.benchmarks.structuralist import (
+    load_structuralist_benchmark,
+)
 from episteme_pipeline.evaluation.comparison import (
     ComparisonAxis,
     compute_run_comparisons,
@@ -47,6 +48,7 @@ from episteme_pipeline.evaluation.scorers.domain_bridge import (
 from episteme_pipeline.evaluation.scorers.retrieval import ExtrinsicRetrievalEvaluator
 from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
+
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.domain.evaluation import (
     AdjudicateAndRecalculateRequest,
@@ -62,8 +64,8 @@ from episteme_studio.domain.evaluation import (
     BenchmarkSplitResource,
     BenchmarkValidationIssue,
     BenchmarkValidationResult,
-    BourbakiInvariantsSummary,
     BoundingBoxCoordinates,
+    BourbakiInvariantsSummary,
     CalibrationBinDetail,
     CalibrationReportDetail,
     ComparativeEvaluationResponse,
@@ -72,7 +74,6 @@ from episteme_studio.domain.evaluation import (
     DynamicsStepDetail,
     DynamicsTrajectoryRequest,
     DynamicsTrajectoryResponse,
-    ExtractionSpecialization,
     EdgeAdjudicationItem,
     EdgeAlignmentStatus,
     EvaluationEdgeOverlay,
@@ -83,6 +84,7 @@ from episteme_studio.domain.evaluation import (
     EvaluationOutcome,
     EvaluationReportDetail,
     EvaluationReportSummary,
+    ExtractionSpecialization,
     GroundingEvaluationDetail,
     LeaderboardEntry,
     LeaderboardRequest,
@@ -1211,7 +1213,7 @@ class EvaluationAdapter:
                         outcome=EvaluationOutcome(r.outcome.value if hasattr(r.outcome, "value") else str(r.outcome)),
                         metrics=m_vals,
                         notes=getattr(r, "notes", {}),
-                        evaluated_at=getattr(r, "evaluated_at", datetime.now(timezone.utc)),
+                        evaluated_at=getattr(r, "evaluated_at", datetime.now(UTC)),
                     )
                 )
             results_by_lvl[str(lvl)] = lvl_results
@@ -1301,9 +1303,9 @@ class EvaluationAdapter:
 
         created_str = data.get("created_at")
         try:
-            created_at = datetime.fromisoformat(created_str.replace("Z", "+00:00")) if created_str else datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            created_at = datetime.fromisoformat(created_str.replace("Z", "+00:00")) if created_str else datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
         except Exception:
-            created_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            created_at = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
 
         has_baseline = "baseline" in res_by_lvl or bool(data.get("pairwise_comparisons"))
         return EvaluationReportSummary(
@@ -1541,9 +1543,7 @@ class EvaluationAdapter:
                 target = self._load_run_evaluation_target(rid, reader)
                 if isinstance(target, TheoryNet):
                     snapshots.append(theory_net_to_theory_graph(target))
-                elif isinstance(target, nx.DiGraph):
-                    snapshots.append(target)
-                elif isinstance(target, em.TheoryGraph):
+                elif isinstance(target, nx.DiGraph) or isinstance(target, em.TheoryGraph):
                     snapshots.append(target)
                 else:
                     snapshots.append(target)

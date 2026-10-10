@@ -2,7 +2,11 @@
 
 from pathlib import Path
 
-from episteme_pipeline.phases.phase1_foundation.provenance import chunk_id, chapter_id, doc_id
+from episteme_pipeline.phases.phase1_foundation.provenance import (
+    chapter_id,
+    chunk_id,
+    doc_id,
+)
 
 
 def test_doc_id_is_deterministic():

@@ -11,7 +11,7 @@ from episteme_pipeline.evaluation.baselines.text_rag import BaselineTextRAG
 from episteme_pipeline.evaluation.baselines.zero_shot import BaselineZeroShotLLM
 
 __all__ = [
-    "BaselineTextRAG",
     "BaselineNaiveKG",
+    "BaselineTextRAG",
     "BaselineZeroShotLLM",
 ]

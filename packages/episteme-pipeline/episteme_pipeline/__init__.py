@@ -41,15 +41,20 @@ from episteme_pipeline.config import (
     PipelineConfig,
 )
 from episteme_pipeline.contracts.domain import (
-    TheoryNet,
     L1Chunk,
     L1Document,
     L2Entity,
     L2Triple,
     TheoryAtom,
+    TheoryNet,
     TheoryRelation,
 )
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
+from episteme_pipeline.phases.phase2_entity_discovery import (
+    CascadingEntityLinker,
+    DenseEntityLinker,
+    JevEntityLinker,
+)
 from episteme_pipeline.pipeline import Pipeline
 from episteme_pipeline.protocols import (
     ACCClassifier,
@@ -57,24 +62,19 @@ from episteme_pipeline.protocols import (
     ARCClassifier,
     ArgumentClustering,
     DataSourceAdapter,
-    EntityLinker,
-    GlobalRelationExtractor,
     EntityGraph,
+    EntityLinker,
     FusionGraph,
+    GlobalRelationExtractor,
     GraphReader,
     GraphWriter,
-    PhaseCheckpointStore,
-    ProcessingGraph,
-    ProjectionGraph,
     InstanceFusion,
     NERExtractor,
+    PhaseCheckpointStore,
     PhaseRunner,
+    ProcessingGraph,
+    ProjectionGraph,
     TheoryFusion,
-)
-from episteme_pipeline.phases.phase2_entity_discovery import (
-    CascadingEntityLinker,
-    DenseEntityLinker,
-    JevEntityLinker,
 )
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
 

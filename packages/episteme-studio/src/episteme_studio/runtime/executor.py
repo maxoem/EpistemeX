@@ -6,7 +6,7 @@ import asyncio
 import multiprocessing
 import queue
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from episteme_studio.domain.errors import ProblemDetail
@@ -30,7 +30,6 @@ _DEFAULT_PHASES = [
 class RunAlreadyActiveError(Exception):
     """Raised when an execution start is attempted while another run is active."""
 
-    pass
 
 
 class PipelineExecutor:
@@ -118,7 +117,7 @@ class PipelineExecutor:
         handle = RunHandle(
             run_id=target_run_id,
             status=RunStatus.RUNNING,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             phase_records=initial_phases,
             config_snapshot=config_dict or {},
             input_sources=source_paths or [],
@@ -216,7 +215,7 @@ class PipelineExecutor:
                 pass
 
             handle.status = RunStatus.ABORTED
-            handle.completed_at = datetime.now(timezone.utc)
+            handle.completed_at = datetime.now(UTC)
 
             # Mark any remaining running phase as aborted
             for p in handle.phase_records:
@@ -294,7 +293,7 @@ class PipelineExecutor:
                     pass
                 if process.exitcode != 0:
                     handle.status = RunStatus.FAILED
-                    handle.completed_at = datetime.now(timezone.utc)
+                    handle.completed_at = datetime.now(UTC)
                     handle.failure = ProblemDetail(
                         type="run-crashed",
                         title="Run Subprocess Crashed",
@@ -304,14 +303,14 @@ class PipelineExecutor:
                     )
                 else:
                     handle.status = RunStatus.COMPLETED
-                    handle.completed_at = datetime.now(timezone.utc)
+                    handle.completed_at = datetime.now(UTC)
                 self.broker.close_run(run_id)
         except asyncio.CancelledError:
             pass
         except Exception as err:
             if handle.status == RunStatus.RUNNING:
                 handle.status = RunStatus.FAILED
-                handle.completed_at = datetime.now(timezone.utc)
+                handle.completed_at = datetime.now(UTC)
                 handle.failure = ProblemDetail(
                     type="internal-error",
                     title="Telemetry Reader Error",
@@ -334,7 +333,7 @@ class PipelineExecutor:
         msg_type = item.get("_type")
         if msg_type == "RUN_COMPLETED":
             handle.status = RunStatus.COMPLETED
-            handle.completed_at = datetime.now(timezone.utc)
+            handle.completed_at = datetime.now(UTC)
             for p in handle.phase_records:
                 if p.status == RunStatus.RUNNING:
                     p.status = RunStatus.COMPLETED
@@ -344,7 +343,7 @@ class PipelineExecutor:
 
         if msg_type == "RUN_FAILED":
             handle.status = RunStatus.FAILED
-            handle.completed_at = datetime.now(timezone.utc)
+            handle.completed_at = datetime.now(UTC)
             for p in handle.phase_records:
                 if p.status == RunStatus.RUNNING:
                     p.status = RunStatus.FAILED
@@ -403,16 +402,16 @@ class PipelineExecutor:
                 for p in handle.phase_records:
                     if _matches_phase(p, phase_name, phase_ordinal):
                         p.status = RunStatus.RUNNING
-                        p.started_at = p.started_at or datetime.now(timezone.utc)
+                        p.started_at = p.started_at or datetime.now(UTC)
                     elif p.status == RunStatus.RUNNING:
                         # Auto-complete preceding running phase
                         p.status = RunStatus.COMPLETED
-                        p.completed_at = p.completed_at or datetime.now(timezone.utc)
+                        p.completed_at = p.completed_at or datetime.now(UTC)
             elif raw_type in ("PhaseCompleted", "ComponentCompleted"):
                 for p in handle.phase_records:
                     if _matches_phase(p, phase_name, phase_ordinal):
                         p.status = RunStatus.COMPLETED
-                        p.completed_at = datetime.now(timezone.utc)
+                        p.completed_at = datetime.now(UTC)
                         art_count = item.get("artifact_count")
                         if art_count is not None:
                             p.artifact_count = art_count

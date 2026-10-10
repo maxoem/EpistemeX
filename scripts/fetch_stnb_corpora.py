@@ -16,9 +16,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import sys
-from typing import Any, Mapping
+from pathlib import Path
+from typing import Any
 
 CORPUS_REGISTRY: dict[str, dict[str, Any]] = {
     "festinger_carlsmith_1959": {
@@ -233,7 +233,7 @@ def verify_corpus(corpus_key: str, input_path: Path | None = None) -> bool:
         if file_hash == expected_hash:
             print(f"SHA-256 Digest Verified: {file_hash}")
         else:
-            print(f"️   SHA-256 Hash Mismatch!")
+            print("️   SHA-256 Hash Mismatch!")
             print(f"   Expected: {expected_hash}")
             print(f"   Found:    {file_hash}")
             print("   The text may have different whitespace, encoding, or OCR variants.")

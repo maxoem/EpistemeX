@@ -133,7 +133,6 @@ def fingerprint_method(method_obj: Any) -> str | None:
                 )
         except Exception as ex:
             logger.exception(ex)
-            pass
 
     fingerprint_data: dict[str, Any] = {"class": method_obj.__class__.__name__}
     model_name = getattr(method_obj, "model_name", None)

@@ -11,7 +11,6 @@ Verifies that:
 from __future__ import annotations
 
 import pytest
-
 from episteme_pipeline.artifacts.builders import (
     build_argument_relation_artifact,
 )

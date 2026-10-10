@@ -15,7 +15,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import platform
-from typing import Any, Sequence, TYPE_CHECKING
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
@@ -261,7 +262,7 @@ class LayaDecisionEngine:
                 asyncio.to_thread(self._run_predict_sync, agent, state, questions),
                 timeout=self.timeout_seconds,
             )
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise DecisionEngineError(
                 f"Laya inference timed out after {self.timeout_seconds} seconds.",
                 cause=exc,
@@ -732,7 +733,7 @@ class TransformersDecisionEngine:
                 ),
                 timeout=self.timeout_seconds,
             )
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise DecisionEngineError(
                 f"Transformers inference timed out after {self.timeout_seconds} seconds.",
                 cause=exc,

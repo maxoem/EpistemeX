@@ -1,6 +1,9 @@
 """Tests for build_phase_staleness_map and structural DAG diff staleness."""
 
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+)
 from episteme_pipeline.artifacts.invalidate import (
     ArtifactDependencyGraph,
     build_prior_fingerprints,
@@ -8,7 +11,11 @@ from episteme_pipeline.artifacts.invalidate import (
 )
 from episteme_pipeline.artifacts.mappers import map_phase1_output_to_artifacts
 from episteme_pipeline.artifacts.models import ArtifactEnvelope, ArtifactKind
-from episteme_pipeline.contracts.phase_contracts import L1Chunk, L1Document, Phase1Output
+from episteme_pipeline.contracts.phase_contracts import (
+    L1Chunk,
+    L1Document,
+    Phase1Output,
+)
 
 
 class StubPhase:

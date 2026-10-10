@@ -24,7 +24,11 @@ from typing import Any
 import torch
 from pydantic import BaseModel
 
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext, Phase3ArtifactsView
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+    Phase3ArtifactsView,
+)
 from episteme_pipeline.config import Phase4EntityMaturationConfig
 from episteme_pipeline.contracts.domain import L2Entity
 from episteme_pipeline.events.bus import EventEmitter
@@ -116,8 +120,8 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
         logger.info(f"Found {len(immature_entities)} immature entities out of {len(all_entities)} total.")
         
         matured_artifacts = []
-        from itertools import batched
         import asyncio
+        from itertools import batched
         
         progress_task = f"Phase 4 Maturation: {len(immature_entities)} entities"
         if immature_entities:

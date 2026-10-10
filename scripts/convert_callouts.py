@@ -30,9 +30,8 @@ from __future__ import annotations
 
 import argparse
 import difflib
-from pathlib import Path
 import re
-from typing import Optional
+from pathlib import Path
 
 CALLOUT_BLOCK_REGEX = re.compile(r"^(\s*)((?:> ?)+) *\[!([^\]]*)\]([\-\+]?)(.*)?")
 # (1): leading whitespace (all tabs and 4x spaces get reused)
@@ -186,7 +185,7 @@ class CalloutParser:
         self.list_in_prev_line = bool(is_list)
         return line
 
-    def _convert_block(self, line: str) -> Optional[str | list[str]]:
+    def _convert_block(self, line: str) -> str | list[str] | None:
         """Match and convert a callout header block."""
         match = re.search(CALLOUT_BLOCK_REGEX, line)
         if match:

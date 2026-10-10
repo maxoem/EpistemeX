@@ -10,7 +10,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from episteme_pipeline.llm.structured import StructuredLLM
-from episteme_pipeline.runs.fingerprints import stable_fingerprint, fingerprint_method
+from episteme_pipeline.runs.fingerprints import fingerprint_method, stable_fingerprint
 
 logger = logging.getLogger(__name__)
 

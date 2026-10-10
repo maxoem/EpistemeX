@@ -13,7 +13,12 @@ from episteme_pipeline.artifacts.builders import (
     build_local_relation_artifact,
 )
 from episteme_pipeline.artifacts.models import ArtifactEnvelope
-from episteme_pipeline.contracts.phase_contracts import Phase1Output, Phase2Output, Phase3Output, Phase4Output
+from episteme_pipeline.contracts.phase_contracts import (
+    Phase1Output,
+    Phase2Output,
+    Phase3Output,
+    Phase4Output,
+)
 
 
 def map_phase1_output_to_artifacts(output: Phase1Output, *, run_id: str, phase_name: str = "Phase 1: Data Foundation") -> list[ArtifactEnvelope]:

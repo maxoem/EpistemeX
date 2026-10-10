@@ -7,10 +7,13 @@ Maximum Calibration Error (MCE), Brier Score, and reliability diagrams.
 from __future__ import annotations
 
 import json
-from typing import Any, Protocol, Sequence, runtime_checkable
+from collections.abc import Sequence
+from typing import Any, Protocol, runtime_checkable
 
 import networkx as nx
 import numpy as np
+from epistemetrics.core.models import TheoryEdge, TheoryNode
+from epistemetrics.graph.theory_graph import TheoryGraph
 from pydantic import BaseModel, Field
 
 from episteme_pipeline.contracts.domain import (
@@ -27,8 +30,6 @@ from episteme_pipeline.evaluation.models import (
     EvaluationOutcome,
     EvaluationResult,
 )
-from epistemetrics.core.models import TheoryEdge, TheoryNode
-from epistemetrics.graph.theory_graph import TheoryGraph
 
 
 class ReliabilityBin(BaseModel):
@@ -452,8 +453,7 @@ def compute_calibration_metrics(
             acc = float(np.mean(labs[mask]))
             gap = float(abs(acc - avg_conf))
             weighted_ece += (count / n) * gap
-            if gap > max_gap:
-                max_gap = gap
+            max_gap = max(max_gap, gap)
         else:
             avg_conf = (lower + upper) / 2.0
             acc = 0.0

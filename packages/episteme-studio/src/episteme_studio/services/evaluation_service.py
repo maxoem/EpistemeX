@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.adapters.evaluation_adapter import EvaluationAdapter
-from episteme_studio.domain.events import StudioEvent
+from episteme_studio.api.errors import StudioProblemException
 from episteme_studio.domain.evaluation import (
     ActiveLearningExportResponse,
     AdjudicateAndRecalculateRequest,
@@ -24,15 +24,15 @@ from episteme_studio.domain.evaluation import (
     AdjudicationQueueResponse,
     AdjudicationRequest,
     AdjudicationResponse,
-    BorderlineDecisionItem,
-    DecisionAdjudicationRequest,
     BenchmarkDescriptor,
     BenchmarkPreviewResponse,
     BenchmarkValidationResult,
+    BorderlineDecisionItem,
     CalibrationReportDetail,
     CancelEvaluationJobResponse,
     ComparativeEvaluationResponse,
     CompareRunsRequest,
+    DecisionAdjudicationRequest,
     DynamicsTrajectoryRequest,
     DynamicsTrajectoryResponse,
     EdgeAdjudicationItem,
@@ -51,7 +51,7 @@ from episteme_studio.domain.evaluation import (
     RetrievalDiagnosticsResponse,
     StressTestRequest,
 )
-from episteme_studio.api.errors import StudioProblemException
+from episteme_studio.domain.events import StudioEvent
 from episteme_studio.runtime.broker import EventBroker
 from episteme_studio.settings import StudioSettings
 
@@ -425,7 +425,7 @@ class EvaluationService:
                 detail="Evaluation background jobs are disabled on this read-only instance.",
                 instance="/api/evaluation/jobs",
             )
-        job_id = f"eval_job_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+        job_id = f"eval_job_{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}"
         req_type = "manifest" if manifest_request is not None else "run"
         descriptor = EvaluationJobDescriptor(
             job_id=job_id,
@@ -465,7 +465,7 @@ class EvaluationService:
             event = StudioEvent(
                 seq=1,
                 run_id=job_id,
-                ts=datetime.now(timezone.utc),
+                ts=datetime.now(UTC),
                 kind=kind,
                 level=level,
                 phase="Evaluation",
@@ -482,7 +482,7 @@ class EvaluationService:
                     desc = self._jobs.get(job_id)
                     if desc:
                         desc.status = EvaluationJobStatus.ABORTED
-                        desc.completed_at = datetime.now(timezone.utc)
+                        desc.completed_at = datetime.now(UTC)
                         self._persist_job(desc)
                     emit(
                         "evaluation.job.aborted",
@@ -526,7 +526,7 @@ class EvaluationService:
                 if cancel_event and cancel_event.is_set():
                     desc = self._jobs.get(job_id, desc)
                     desc.status = EvaluationJobStatus.ABORTED
-                    desc.completed_at = datetime.now(timezone.utc)
+                    desc.completed_at = datetime.now(UTC)
                     self._persist_job(desc)
                     emit(
                         "evaluation.job.aborted",
@@ -564,7 +564,7 @@ class EvaluationService:
 
                 # Mark completed
                 desc.status = EvaluationJobStatus.COMPLETED
-                desc.completed_at = datetime.now(timezone.utc)
+                desc.completed_at = datetime.now(UTC)
                 desc.report_id = report.evaluation_id
                 desc.report = report
                 self._persist_job(desc)
@@ -580,7 +580,7 @@ class EvaluationService:
             desc = self._jobs.get(job_id)
             if desc:
                 desc.status = EvaluationJobStatus.ABORTED
-                desc.completed_at = datetime.now(timezone.utc)
+                desc.completed_at = datetime.now(UTC)
                 self._persist_job(desc)
             emit(
                 "evaluation.job.aborted",
@@ -593,7 +593,7 @@ class EvaluationService:
             desc = self._jobs.get(job_id)
             if desc:
                 desc.status = EvaluationJobStatus.FAILED
-                desc.completed_at = datetime.now(timezone.utc)
+                desc.completed_at = datetime.now(UTC)
                 desc.error = str(e)
                 self._persist_job(desc)
             emit(
@@ -645,7 +645,7 @@ class EvaluationService:
             )
 
         desc.status = EvaluationJobStatus.ABORTED
-        desc.completed_at = datetime.now(timezone.utc)
+        desc.completed_at = datetime.now(UTC)
         self._persist_job(desc)
 
         cancel_event = self._cancellation_events.get(job_id)
@@ -662,7 +662,7 @@ class EvaluationService:
                 StudioEvent(
                     seq=1,
                     run_id=job_id,
-                    ts=datetime.now(timezone.utc),
+                    ts=datetime.now(UTC),
                     kind="evaluation.job.aborted",
                     level="warning",
                     phase="Evaluation",
@@ -1155,7 +1155,7 @@ class EvaluationService:
             "adjudicated_value": request.selected_option,
             "curator_notes": request.notes,
             "curator_id": request.curator_id,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
 
         try:

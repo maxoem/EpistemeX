@@ -11,7 +11,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from episteme_pipeline.artifacts.execution import (
     ArtifactExecutionContext,
     Phase4ArtifactsView,
@@ -512,8 +511,8 @@ def test_dynamic_pipeline_runner_injection():
     custom_runner = TheoreticalEnrichmentRunner(config=config.theoretical_enrichment)
 
     phases = [custom_runner]
-    from episteme_pipeline.pipeline import Pipeline
     from episteme_pipeline.events.bus import NoOpEventEmitter
+    from episteme_pipeline.pipeline import Pipeline
 
     pipe = Pipeline(
         phases=phases,
@@ -534,6 +533,7 @@ def test_dynamic_pipeline_runner_injection():
 def test_pipeline_for_task_with_post_processors():
     """Verify that Pipeline.for_task accepts and appends post_processors cleanly."""
     from unittest.mock import MagicMock
+
     from episteme_pipeline.pipeline import Pipeline
     from episteme_pipeline.protocols.phase_runner import PhaseRunner
 

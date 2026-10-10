@@ -9,7 +9,11 @@ from episteme_pipeline.events.models import (
     RerankerScoreAssigned,
     TripleCommitted,
 )
-from episteme_pipeline.events.observers import JsonlRunObserver, MetricsObserver, CompositeObserver
+from episteme_pipeline.events.observers import (
+    CompositeObserver,
+    JsonlRunObserver,
+    MetricsObserver,
+)
 
 
 class _Capture:

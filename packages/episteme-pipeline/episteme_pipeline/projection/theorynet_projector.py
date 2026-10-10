@@ -11,17 +11,18 @@ import logging
 import math
 from typing import Literal
 
-from episteme_pipeline.artifacts.execution import Phase4ArtifactsView
-from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet, TheoryRelation
-from episteme_pipeline.decision.modal_resolver import StructuralistModalResolver
-from episteme_pipeline.protocols.modality import ModalStrengthResolver
-from episteme_pipeline.schema.default_schema import SchemaConfig
 from epistemetrics.core.models import RelationType, TheoryEdge
 from epistemetrics.epistemic.qbaf import (
     GradualSemanticsModel,
     QBAFGradualSemanticsSolver,
     WeightNormalizationMode,
 )
+
+from episteme_pipeline.artifacts.execution import Phase4ArtifactsView
+from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet, TheoryRelation
+from episteme_pipeline.decision.modal_resolver import StructuralistModalResolver
+from episteme_pipeline.protocols.modality import ModalStrengthResolver
+from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
 
@@ -175,8 +176,8 @@ class TheoryNetProjector:
         self.modal_resolver = modal_resolver or StructuralistModalResolver()
         self.admissibility_threshold = admissibility_threshold
         self.admissibility_mode = admissibility_mode
-        self.tau_p = tau_p if tau_p > 0.0 else (admissibility_threshold if admissibility_threshold > 0.0 else 0.0)
-        self.tau_c = tau_c if tau_c > 0.0 else (admissibility_threshold if admissibility_threshold > 0.0 else 0.0)
+        self.tau_p = tau_p if tau_p > 0.0 else (max(0.0, admissibility_threshold))
+        self.tau_c = tau_c if tau_c > 0.0 else (max(0.0, admissibility_threshold))
         self.prune_inadmissible = prune_inadmissible
         self.iterations = iterations
         self.tolerance = tolerance

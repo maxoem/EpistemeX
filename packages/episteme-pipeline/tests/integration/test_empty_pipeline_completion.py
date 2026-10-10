@@ -13,8 +13,10 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+)
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.runs.models import RunManifest, RunStatus
 

@@ -11,7 +11,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # ---------------------------------------------------------------------------
 # ADU Segmentation output
 # ---------------------------------------------------------------------------
@@ -95,7 +94,7 @@ class ACCOutput(BaseModel):
     components: list[ExtractedComponent] = Field(default_factory=list)
     relations: list[ExtractedTheoryRelation] = Field(default_factory=list)
 
-    def validate_references(self) -> "ACCOutput":
+    def validate_references(self) -> ACCOutput:
         """Remove relations whose source/target references a non-existent component."""
         valid_ids = {c.id for c in self.components}
         valid_relations = [

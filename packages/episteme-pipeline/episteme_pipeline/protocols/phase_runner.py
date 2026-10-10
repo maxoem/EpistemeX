@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import ClassVar, Generic, TypeVar
 
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+)
 
 InputT = TypeVar("InputT")
 

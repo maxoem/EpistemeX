@@ -5,9 +5,14 @@ from __future__ import annotations
 import hashlib
 import math
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from episteme_pipeline.evaluation.extrinsic import calculate_hits_at_k, calculate_mrr, calculate_ndcg
+from episteme_pipeline.evaluation.extrinsic import (
+    calculate_hits_at_k,
+    calculate_mrr,
+    calculate_ndcg,
+)
 from episteme_pipeline.protocols.graph_store import GraphReader
 
 

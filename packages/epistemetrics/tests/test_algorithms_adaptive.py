@@ -8,7 +8,6 @@ from unittest.mock import MagicMock
 
 import networkx as nx
 import pytest
-
 from epistemetrics.adapters.neo4j.client import Neo4jClient
 from epistemetrics.adapters.neo4j.gds_engine import Neo4jGDSAlgorithmsEngine
 from epistemetrics.core.models import CentralityResult

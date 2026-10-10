@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import pytest
-
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
@@ -24,13 +23,14 @@ from episteme_pipeline.contracts.domain import (
     L1Document,
     L2Entity,
     L2Triple,
+    TheoryAtom,
+    TheoryRelation,
 )
-from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
 from episteme_pipeline.contracts.phase_contracts import (
-    PipelineInput,
     Phase1Output,
     Phase2Output,
     Phase3Output,
+    PipelineInput,
 )
 from episteme_pipeline.pipeline import Pipeline
 from episteme_pipeline.runs.models import (

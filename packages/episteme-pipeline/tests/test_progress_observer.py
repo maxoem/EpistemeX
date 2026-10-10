@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import logging
 
-from rich.console import Console
-from rich.logging import RichHandler
-
 from episteme_pipeline.events.bus import SimpleEventEmitter
 from episteme_pipeline.events.models import (
     ProgressAdvanced,
@@ -14,6 +11,8 @@ from episteme_pipeline.events.models import (
     ProgressStarted,
 )
 from episteme_pipeline.events.progress_observer import RichProgressObserver
+from rich.console import Console
+from rich.logging import RichHandler
 
 
 def test_progress_observer_lifecycle() -> None:

@@ -13,7 +13,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel
 
@@ -65,7 +65,7 @@ class BaseOutputDecodingStrategyHandler(ABC):
     @abstractmethod
     async def decode(
         self,
-        adapter: "LlamaIndexStructuredLLMAdapter",
+        adapter: LlamaIndexStructuredLLMAdapter,
         output_cls: type[ModelT],
         prompt_bundle: Any,
         fallback_behavior: Any,
@@ -95,7 +95,7 @@ class DirectDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
 
     async def decode(
         self,
-        adapter: "LlamaIndexStructuredLLMAdapter",
+        adapter: LlamaIndexStructuredLLMAdapter,
         output_cls: type[ModelT],
         prompt_bundle: Any,
         fallback_behavior: Any,
@@ -179,7 +179,7 @@ class NlToFormatDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
 
     async def decode(
         self,
-        adapter: "LlamaIndexStructuredLLMAdapter",
+        adapter: LlamaIndexStructuredLLMAdapter,
         output_cls: type[ModelT],
         prompt_bundle: Any,
         fallback_behavior: Any,
@@ -204,7 +204,7 @@ class TriggerTokenDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
 
     async def decode(
         self,
-        adapter: "LlamaIndexStructuredLLMAdapter",
+        adapter: LlamaIndexStructuredLLMAdapter,
         output_cls: type[ModelT],
         prompt_bundle: Any,
         fallback_behavior: Any,
@@ -224,7 +224,7 @@ class TriggerTokenDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
 
 
 # Decoding Strategy Registry
-DECODING_STRATEGY_HANDLERS: Dict[str, BaseOutputDecodingStrategyHandler] = {
+DECODING_STRATEGY_HANDLERS: dict[str, BaseOutputDecodingStrategyHandler] = {
     "direct_constrained": DirectDecodingStrategyHandler(),
     "nl_to_format": NlToFormatDecodingStrategyHandler(),
     "trigger_token": TriggerTokenDecodingStrategyHandler(),

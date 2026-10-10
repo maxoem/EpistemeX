@@ -5,7 +5,6 @@ import tempfile
 from pathlib import Path
 
 import networkx as nx
-
 from episteme_pipeline.runs.models import RunManifest, RunStatus
 
 

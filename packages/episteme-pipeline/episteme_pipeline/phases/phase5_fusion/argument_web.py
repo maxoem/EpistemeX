@@ -1,5 +1,9 @@
 from episteme_pipeline.artifacts.builders import build_fusion_cluster_artifact
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext, Phase4ArtifactsView
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+    Phase4ArtifactsView,
+)
 from episteme_pipeline.config import Phase5Config
 from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.events.models import ProgressCompleted, ProgressStarted
@@ -67,7 +71,9 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
             embedding_model=embedding_model,
             similarity_threshold=config.fusion_similarity_threshold,
         )
-        from episteme_pipeline.phases.phase5_fusion.leiden_clustering import LeidenTheoryClustering
+        from episteme_pipeline.phases.phase5_fusion.leiden_clustering import (
+            LeidenTheoryClustering,
+        )
 
         self.theory_fusion = theory_fusion or LeidenTheoryClustering.from_config(
             config,

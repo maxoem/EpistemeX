@@ -13,9 +13,10 @@ comparative evaluation between uncalibrated binary weights vs. calibrated modal 
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Literal, Mapping, Sequence
+from typing import Any, Literal
 
 import networkx as nx
 import numpy as np
@@ -577,8 +578,7 @@ class QBAFGradualSemanticsSolver:
                 )
 
                 delta = abs(updated_val - tau_current[nid])
-                if delta > max_delta:
-                    max_delta = delta
+                max_delta = max(max_delta, delta)
 
                 tau_next[nid] = updated_val
 

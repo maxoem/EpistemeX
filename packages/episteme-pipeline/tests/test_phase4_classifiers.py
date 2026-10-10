@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from episteme_pipeline.config import Phase4Config
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
 from episteme_pipeline.phases.phase4_argument_mining.classifiers import (

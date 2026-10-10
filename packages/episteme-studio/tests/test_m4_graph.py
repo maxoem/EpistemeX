@@ -6,11 +6,10 @@ import json
 from pathlib import Path
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from episteme_studio.app import create_app
 from episteme_studio.domain.graph import Layer
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
 
 LARGEST_RUN_ID = "run-4dd7b5fb-21b9-4236-8e67-ea4363408387"
 RUN_EXISTS = (Path(".pipeline_runs") / f"{LARGEST_RUN_ID}.json").exists()

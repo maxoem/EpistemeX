@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from episteme_studio.adapters.schema_mapper import SchemaMapper
-from episteme_studio.domain.graph import GraphView, Layer, StudioEdge, StudioNode, reify_inferences
+from episteme_studio.domain.graph import (
+    GraphView,
+    Layer,
+    StudioEdge,
+    StudioNode,
+    reify_inferences,
+)
 from episteme_studio.domain.runs import (
     ArtifactRef,
     DecisionRunMetrics,
@@ -155,7 +162,10 @@ class ArtifactReader:
 
         if extra_runs_dirs is None:
             try:
-                from episteme_studio.settings import _resolve_default_runs_dir, _resolve_extra_dirs
+                from episteme_studio.settings import (
+                    _resolve_default_runs_dir,
+                    _resolve_extra_dirs,
+                )
                 default_runs = _resolve_default_runs_dir().resolve()
                 if self.runs_dir.resolve() == default_runs or self.runs_dir.name == ".pipeline_runs":
                     e_runs = _resolve_extra_dirs(".pipeline_runs")
@@ -168,7 +178,10 @@ class ArtifactReader:
 
         if extra_artifacts_dirs is None:
             try:
-                from episteme_studio.settings import _resolve_default_artifacts_dir, _resolve_extra_dirs
+                from episteme_studio.settings import (
+                    _resolve_default_artifacts_dir,
+                    _resolve_extra_dirs,
+                )
                 default_arts = _resolve_default_artifacts_dir().resolve()
                 if self.artifacts_dir.resolve() == default_arts or self.artifacts_dir.name == ".pipeline_artifacts":
                     e_arts = _resolve_extra_dirs(".pipeline_artifacts")
@@ -772,7 +785,7 @@ class ArtifactReader:
             If the run manifest cannot be found or aborted on disk.
         """
         manifest_path = self._find_manifest_path(run_id)
-        now_dt = datetime.now(timezone.utc)
+        now_dt = datetime.now(UTC)
         now_iso = now_dt.isoformat()
 
         if manifest_path and manifest_path.is_file():

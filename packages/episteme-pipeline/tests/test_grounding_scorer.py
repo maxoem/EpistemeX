@@ -11,7 +11,6 @@ Verifies:
 from __future__ import annotations
 
 import pytest
-
 from episteme_pipeline.evaluation.scorers.grounding import (
     GroundingEvaluationResult,
     GroundingScorer,

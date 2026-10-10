@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from episteme_pipeline.contracts.domain import L2Entity
 from episteme_pipeline.decision.mock import MockJevDecisionEngine
 from episteme_pipeline.events.bus import SimpleEventEmitter

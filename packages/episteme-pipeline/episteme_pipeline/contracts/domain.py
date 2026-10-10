@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Literal
 
@@ -105,7 +105,7 @@ class L1Document(BaseModel):
     id: str
     title: str
     source_path: str
-    ingested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    ingested_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     chapter_count: int
     chunk_count: int
     structural_anchor: GlobalStructuralAnchor | None = None

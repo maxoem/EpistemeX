@@ -15,17 +15,17 @@ from episteme_pipeline.contracts.domain import (
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 
 __all__ = [
-    "PipelineInput",
     "EpistemicStatus",
     "L1Chunk",
     "L1Document",
     "L2Entity",
     "L2Triple",
+    "PipelineInput",
     "ScopeType",
-    "SubGraph",
     "SearchResult",
+    "SubGraph",
     "TextAnchor",
     "TheoryAtom",
-    "TheoryRelation",
     "TheoryNet",
+    "TheoryRelation",
 ]

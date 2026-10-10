@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import TYPE_CHECKING
 
 from episteme_studio.adapters.artifact_reader import ArtifactReader, ArtifactStoreError
@@ -366,7 +367,7 @@ class RunService:
         StudioProblemException
             If run is not found in active registry or on disk.
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # 1. Terminate any lingering OS process
         self._terminate_orphaned_run_process(run_id)
@@ -406,7 +407,7 @@ class RunService:
                     "run_id": run_id,
                     "level": "warning",
                     "message": f"Run '{run_id}' was cancelled by user.",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 },
             )
             self.executor.broker.close_run(run_id)
@@ -463,6 +464,7 @@ class RunService:
             Dictionary with configured, connected, count, and observations list.
         """
         import hashlib
+
         from episteme_studio.settings import get_env_var
 
         active_host = (

@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from episteme_pipeline.config import GleaningConfig, Phase2Config, Phase4Config
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom
 from episteme_pipeline.decision.gleaning import FixedPassGleaningOracle, JevGleaningGate
@@ -14,7 +13,9 @@ from episteme_pipeline.events import SimpleEventEmitter, set_event_emitter
 from episteme_pipeline.events.models import DecisionGatingTriggered
 from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
 from episteme_pipeline.phases.phase2_entity_discovery.models import NERExtractionOutput
-from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import LLMNERExtractor
+from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import (
+    LLMNERExtractor,
+)
 from episteme_pipeline.protocols.decision import GleaningStoppingOracle
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 

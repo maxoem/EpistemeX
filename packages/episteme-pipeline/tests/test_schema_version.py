@@ -25,9 +25,13 @@ def test_build_manifest_includes_schema_version(config):
     from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
         TAGRelationExtractor,
     )
+    from episteme_pipeline.phases.phase3b_consolidation import (
+        Phase3bLatentConsolidationRunner,
+    )
     from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
-    from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
-    from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
+    from episteme_pipeline.phases.phase4_entity_maturation import (
+        Phase4EntityMaturationRunner,
+    )
     from episteme_pipeline.phases.phase5_fusion import Phase5ArgumentWebRunner
 
     llm = _make_mock_llm()
@@ -112,9 +116,13 @@ def test_build_manifest_schema_version_tracks_config_change(config):
     from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
         TAGRelationExtractor,
     )
+    from episteme_pipeline.phases.phase3b_consolidation import (
+        Phase3bLatentConsolidationRunner,
+    )
     from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
-    from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
-    from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
+    from episteme_pipeline.phases.phase4_entity_maturation import (
+        Phase4EntityMaturationRunner,
+    )
     from episteme_pipeline.phases.phase5_fusion import Phase5ArgumentWebRunner
 
     llm = _make_mock_llm()

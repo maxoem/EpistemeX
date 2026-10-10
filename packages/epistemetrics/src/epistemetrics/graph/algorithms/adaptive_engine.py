@@ -77,8 +77,8 @@ class AdaptiveAlgorithmsEngine:
             if isinstance(graph, str):
                 return self.neo4j_engine.has_projection(graph)
 
-            if hasattr(graph, "projection_name") and getattr(graph, "projection_name"):
-                return self.neo4j_engine.has_projection(getattr(graph, "projection_name"))
+            if hasattr(graph, "projection_name") and graph.projection_name:
+                return self.neo4j_engine.has_projection(graph.projection_name)
 
             return False
         except Exception as exc:

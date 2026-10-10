@@ -9,8 +9,9 @@ and connectivity components).
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator, Mapping
 from enum import Enum
-from typing import Any, Iterator, Mapping, Optional
+from typing import Any
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
@@ -581,7 +582,7 @@ class TheoryNode(BaseModel):
     confidence: float = Field(default=1.0, description="Extraction or validation confidence.")
     modal_strength: float = Field(default=0.6, ge=0.0, le=1.0, description="Author propositional modal certainty M(phi).")
     base_score: float = Field(default=0.6, ge=0.0, le=1.0, description="Prior plausibility tau_0 for QBAF.")
-    description: Optional[str] = Field(default=None, description="Detailed text or description.")
+    description: str | None = Field(default=None, description="Detailed text or description.")
     provenance: list[str] = Field(default_factory=list, description="Source chunk IDs or citation URIs.")
     attributes: dict[str, Any] = Field(default_factory=dict, description="Arbitrary domain attributes.")
 

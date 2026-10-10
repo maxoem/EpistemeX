@@ -1,7 +1,6 @@
 """Tests for LLM output model validation (pure Pydantic, no I/O)."""
 
 import pytest
-
 from episteme_pipeline.phases.phase2_entity_discovery.models import (
     ExtractedEntity,
     ExtractedTriple,
@@ -10,10 +9,9 @@ from episteme_pipeline.phases.phase2_entity_discovery.models import (
 from episteme_pipeline.phases.phase4_argument_mining.models import (
     ACCOutput,
     ARCRelationOutput,
-    ExtractedTheoryRelation,
     ExtractedComponent,
+    ExtractedTheoryRelation,
 )
-
 
 # ---------------------------------------------------------------------------
 # NERExtractionOutput

@@ -86,7 +86,6 @@ class InMemoryGraphStore(ProcessingGraph):
 
     async def close(self) -> None:
         """Close handle (no-op for in-memory)."""
-        pass
 
     async def get_chunks(
         self, filters: dict | None = None, limit: int | None = None
@@ -340,7 +339,7 @@ class InMemoryGraphStore(ProcessingGraph):
             return indexed_count
 
         # 4. NetworkX DiGraph
-        if hasattr(target, "nodes") and callable(getattr(target, "nodes")):
+        if hasattr(target, "nodes") and callable(target.nodes):
             for nid, data in target.nodes(data=True):
                 node_id = str(nid)
                 lbl = str(data.get("label", data.get("node_type", "Concept")))

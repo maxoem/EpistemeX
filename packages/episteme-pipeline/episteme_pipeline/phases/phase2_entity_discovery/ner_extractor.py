@@ -24,16 +24,17 @@ from episteme_pipeline.config import StructuredPromptBundle
 from episteme_pipeline.contracts.domain import L2Entity, L2Triple
 from episteme_pipeline.decision.gleaning import FixedPassGleaningOracle
 from episteme_pipeline.llm import ensure_structured_llm
-from episteme_pipeline.phases.phase2_entity_discovery.mention_context_injector import DefaultMentionContextInjector
+from episteme_pipeline.phases.phase2_entity_discovery.mention_context_injector import (
+    DefaultMentionContextInjector,
+)
 from episteme_pipeline.phases.phase2_entity_discovery.models import NERExtractionOutput
 from episteme_pipeline.prompts import (
     NER_DIRECT_PROMPT,
-    NER_REASONING_PROMPT,
     NER_FORMAT_PROMPT,
     NER_GLEANING_PROMPT,
+    NER_REASONING_PROMPT,
 )
-from episteme_pipeline.protocols.decision import DecisionEngine
-from episteme_pipeline.protocols.decision import GleaningStoppingOracle
+from episteme_pipeline.protocols.decision import DecisionEngine, GleaningStoppingOracle
 from episteme_pipeline.protocols.extractors import NERExtractor
 from episteme_pipeline.schema.default_schema import SchemaConfig
 

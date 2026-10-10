@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import networkx as nx
 import pytest
-
 from episteme_pipeline.contracts.domain import L2Triple
 from episteme_pipeline.evaluation.models import DatasetType
 from episteme_pipeline.evaluation.strategies import (

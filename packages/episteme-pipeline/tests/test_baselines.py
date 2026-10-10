@@ -11,8 +11,13 @@ from typing import Any
 
 import networkx as nx
 import pytest
-
-from episteme_pipeline.contracts.domain import L1Chunk, L2Entity, L2Triple, TheoryAtom, TheoryNet
+from episteme_pipeline.contracts.domain import (
+    L1Chunk,
+    L2Entity,
+    L2Triple,
+    TheoryAtom,
+    TheoryNet,
+)
 from episteme_pipeline.evaluation.baselines import (
     BaselineNaiveKG,
     BaselineTextRAG,

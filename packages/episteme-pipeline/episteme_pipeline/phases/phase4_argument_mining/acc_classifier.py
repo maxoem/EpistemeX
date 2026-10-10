@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import logging
 
-from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation, L2Entity
+from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom, TheoryRelation
 from episteme_pipeline.llm import ensure_structured_llm
 from episteme_pipeline.phases.phase4_argument_mining.models import ACCOutput
 from episteme_pipeline.protocols.argument_mining import ACCClassifier

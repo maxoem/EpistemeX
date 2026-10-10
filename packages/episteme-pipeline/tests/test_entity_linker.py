@@ -1,12 +1,11 @@
 """Tests for NameEntityLinker overlap scoring logic (pure functions)."""
 
 import pytest
-
 from episteme_pipeline.contracts.phase_contracts import L2Entity
 from episteme_pipeline.phases.phase2_entity_discovery.entity_linker import (
+    NameEntityLinker,
     _normalized,
     _overlap_score,
-    NameEntityLinker,
 )
 
 

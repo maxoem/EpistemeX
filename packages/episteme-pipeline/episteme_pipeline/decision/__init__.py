@@ -23,10 +23,10 @@ from episteme_pipeline.decision.mock import (
     compute_conformal_prediction_set,
 )
 from episteme_pipeline.decision.modal_resolver import (
-    ModalSyntaxProfile,
-    StructuralistModalResolver,
     DecisionEngineModalResolver,
     HybridModalResolver,
+    ModalSyntaxProfile,
+    StructuralistModalResolver,
 )
 from episteme_pipeline.decision.observable import ObservableDecisionEngine
 from episteme_pipeline.decision.strategies import (

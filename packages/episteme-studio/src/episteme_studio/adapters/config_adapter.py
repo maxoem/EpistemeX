@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import ValidationError
-
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.runs.fingerprints import fingerprint_phase_config
+from pydantic import ValidationError
+
 from episteme_studio.domain.errors import InvalidConfigPatchError
 
 PHASE_INDEX_TO_NAME: dict[int, str] = {
@@ -131,11 +131,7 @@ class ConfigAdapter:
                     raise InvalidConfigPatchError(
                         f"Unknown configuration path '{key_path}' (invalid segment '{part}')."
                     )
-                if part == "decision_engine" and target.get(part) is None:
-                    target[part] = {}
-                elif part == "phase_gates" and target.get(part) is None:
-                    target[part] = {}
-                elif part == "modal_resolver" and target.get(part) is None:
+                if part == "decision_engine" and target.get(part) is None or part == "phase_gates" and target.get(part) is None or part == "modal_resolver" and target.get(part) is None:
                     target[part] = {}
                 target = target[part]
 

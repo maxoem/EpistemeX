@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     Phase1ArtifactsView,

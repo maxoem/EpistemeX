@@ -8,9 +8,8 @@ Verifies Bourbaki structuralist model decomposition across:
 - I_0 (Paradigmatic Applications)
 """
 
-import pytest
-
 import epistemetrics as em
+import pytest
 from epistemetrics.epistemic.model_evaluation import (
     calculate_anchor_iou,
     evaluate_model_components,

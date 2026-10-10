@@ -5,8 +5,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from episteme_pipeline.artifacts.execution import ArtifactExecutionContext, Phase4ArtifactsView
+from episteme_pipeline.artifacts.execution import (
+    ArtifactExecutionContext,
+    Phase4ArtifactsView,
+)
 from episteme_pipeline.config import FusionGatingConfig, Phase5Config
 from episteme_pipeline.contracts.domain import TheoryAtom
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
@@ -14,7 +16,9 @@ from episteme_pipeline.decision.conformal import ConformalCalibrator
 from episteme_pipeline.decision.mock import MockJevDecisionEngine
 from episteme_pipeline.events import SimpleEventEmitter, set_event_emitter
 from episteme_pipeline.events.models import DecisionGatingTriggered
-from episteme_pipeline.phases.phase5_fusion.argument_clustering import verify_inter_document_cluster
+from episteme_pipeline.phases.phase5_fusion.argument_clustering import (
+    verify_inter_document_cluster,
+)
 from episteme_pipeline.phases.phase5_fusion.argument_web import Phase5ArgumentWebRunner
 from episteme_pipeline.protocols.decision import DecisionScore
 

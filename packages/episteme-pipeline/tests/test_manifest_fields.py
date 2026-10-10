@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock
 
 import pytest
-
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
@@ -112,17 +111,21 @@ def test_method_fingerprints_uses_class_when_no_model_attrs(
 
 def test_build_manifest_captures_source_fingerprint(simple_config):
     """Verify RunManifest.source_fingerprint is populated."""
-    from episteme_pipeline.pipeline import Pipeline
     from episteme_pipeline.phases.phase1_foundation import Phase1Runner
     from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
     from episteme_pipeline.phases.phase3_global_relations import Phase3Runner
     from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
         TAGRelationExtractor,
     )
+    from episteme_pipeline.phases.phase3b_consolidation import (
+        Phase3bLatentConsolidationRunner,
+    )
     from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
-    from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
-    from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
+    from episteme_pipeline.phases.phase4_entity_maturation import (
+        Phase4EntityMaturationRunner,
+    )
     from episteme_pipeline.phases.phase5_fusion import Phase5ArgumentWebRunner
+    from episteme_pipeline.pipeline import Pipeline
 
     llm = MagicMock()
     llm.model_name = "gpt-4"
@@ -203,17 +206,21 @@ def test_build_manifest_captures_source_fingerprint(simple_config):
 
 def test_build_manifest_captures_config_snapshot(simple_config):
     """Verify RunManifest.config_snapshot is populated."""
-    from episteme_pipeline.pipeline import Pipeline
     from episteme_pipeline.phases.phase1_foundation import Phase1Runner
     from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
     from episteme_pipeline.phases.phase3_global_relations import Phase3Runner
     from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
         TAGRelationExtractor,
     )
+    from episteme_pipeline.phases.phase3b_consolidation import (
+        Phase3bLatentConsolidationRunner,
+    )
     from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
-    from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
-    from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
+    from episteme_pipeline.phases.phase4_entity_maturation import (
+        Phase4EntityMaturationRunner,
+    )
     from episteme_pipeline.phases.phase5_fusion import Phase5ArgumentWebRunner
+    from episteme_pipeline.pipeline import Pipeline
 
     llm = MagicMock()
     llm.model_name = "gpt-4"
@@ -296,17 +303,22 @@ def test_build_manifest_captures_config_snapshot(simple_config):
 def test_build_manifest_captures_input_sources(simple_config):
     """Verify RunManifest.input_sources is populated."""
     from pathlib import Path
-    from episteme_pipeline.pipeline import Pipeline
+
     from episteme_pipeline.phases.phase1_foundation import Phase1Runner
     from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
     from episteme_pipeline.phases.phase3_global_relations import Phase3Runner
     from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
         TAGRelationExtractor,
     )
+    from episteme_pipeline.phases.phase3b_consolidation import (
+        Phase3bLatentConsolidationRunner,
+    )
     from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
-    from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
-    from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
+    from episteme_pipeline.phases.phase4_entity_maturation import (
+        Phase4EntityMaturationRunner,
+    )
     from episteme_pipeline.phases.phase5_fusion import Phase5ArgumentWebRunner
+    from episteme_pipeline.pipeline import Pipeline
 
     llm = MagicMock()
     llm.model_name = "gpt-4"
@@ -390,17 +402,21 @@ def test_build_manifest_captures_input_sources(simple_config):
 
 def test_method_fingerprints_not_empty(simple_config):
     """Verify method fingerprints are non-empty for a fully configured pipeline."""
-    from episteme_pipeline.pipeline import Pipeline
     from episteme_pipeline.phases.phase1_foundation import Phase1Runner
     from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
     from episteme_pipeline.phases.phase3_global_relations import Phase3Runner
     from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
         TAGRelationExtractor,
     )
+    from episteme_pipeline.phases.phase3b_consolidation import (
+        Phase3bLatentConsolidationRunner,
+    )
     from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
-    from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
-    from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
+    from episteme_pipeline.phases.phase4_entity_maturation import (
+        Phase4EntityMaturationRunner,
+    )
     from episteme_pipeline.phases.phase5_fusion import Phase5ArgumentWebRunner
+    from episteme_pipeline.pipeline import Pipeline
 
     llm = MagicMock()
     llm.model_name = "gpt-4"

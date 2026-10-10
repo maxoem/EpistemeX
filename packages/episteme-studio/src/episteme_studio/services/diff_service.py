@@ -237,8 +237,7 @@ class DiffService:
                     if isinstance(rho_a, (int, float)) and isinstance(rho_b, (int, float)):
                         delta = round(float(rho_b) - float(rho_a), 4)
                         rho_deltas[nid] = delta
-                        if abs(delta) > max_rho_drift:
-                            max_rho_drift = abs(delta)
+                        max_rho_drift = max(max_rho_drift, abs(delta))
 
         # 4. Configuration Delta Isolation
         flat_cfg_a = _flatten_dict(detail_a.config_snapshot or {})

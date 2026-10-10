@@ -37,8 +37,14 @@ from episteme_pipeline.artifacts.execution import (
 from episteme_pipeline.config import Phase3Config
 from episteme_pipeline.contracts.domain import CandidatePair, L2Triple, PhaseItemRecord
 from episteme_pipeline.events.bus import EventEmitter
-from episteme_pipeline.events.models import ProgressAdvanced, ProgressCompleted, ProgressStarted
-from episteme_pipeline.phases.phase3_global_relations.tag_extractor import TAGRelationExtractor
+from episteme_pipeline.events.models import (
+    ProgressAdvanced,
+    ProgressCompleted,
+    ProgressStarted,
+)
+from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
+    TAGRelationExtractor,
+)
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
 from episteme_pipeline.protocols.graph_store import EntityGraph, ProcessingGraph
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
