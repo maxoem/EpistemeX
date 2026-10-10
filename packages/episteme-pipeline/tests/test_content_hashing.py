@@ -58,7 +58,7 @@ def test_content_hash_field_present_in_records(tmp_path: Path):
 
     fp = fingerprint_existing_sources([str(doc)])
 
-    expected_hash = hashlib.sha256(b"test content").hexdigest()
+    hashlib.sha256(b"test content").hexdigest()
     # The fingerprint is a SHA-256 of the records, so we verify the expected
     # hash would produce a different fingerprint
     different_fp = fingerprint_existing_sources([f"{tmp_path}/nonexistent.md"])

@@ -1113,7 +1113,7 @@ class TestEvaluationWorkbenchEndpoints:
     def test_noise_robustness_stress_test(self, test_env):
         """Verify adversarial noise robustness stress test and curves (ISSUE-031)."""
         client = test_env["client"]
-        eval_id = test_env["eval_id"]
+        test_env["eval_id"]
         run_id = test_env["run_id"]
 
         stress_req = {

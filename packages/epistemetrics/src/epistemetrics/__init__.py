@@ -67,61 +67,61 @@ from epistemetrics.graph.theory_graph import TheoryGraph
 __version__ = "0.1.0"
 
 __all__ = [
-    # Core domain graph and analysis
-    "TheoryGraph",
-    "TheoryNode",
-    "TheoryEdge",
-    "NodeType",
-    "EpistemicStatus",
-    "RelationType",
-    "analyze_theory_graph",
-    "EpistemicReport",
-    # Epistemic model component evaluation
-    "ModelComponentEvaluationResult",
-    "evaluate_model_components",
-    "calculate_anchor_iou",
-    # Poset specialization hierarchies
-    "PosetEvaluationResult",
-    "evaluate_specialization_poset",
-    # Intertheoretical link prediction
-    "ReductionEvaluationResult",
-    "evaluate_intertheoretical_links",
-    # Diachronic dynamics & degeneration
-    "DynamicsEvaluationResult",
-    "evaluate_diachronic_dynamics",
-    "verify_hard_core_invariance",
-    # QBAF Gradual Semantics
-    "GradualSemanticsModel",
-    "WeightNormalizationMode",
-    "WeightedQuadraticEnergySolver",
-    "QBAFSolverResult",
-    "QBAFComparisonResult",
-    "QBAFGradualSemanticsSolver",
-    "solve_qbaf_gradual_semantics",
-    "solve_continuous_qbaf",
-    "compare_qbaf_weight_modes",
+    # Exceptions
+    "AdapterError",
     # Engines
     "AdaptiveAlgorithmsEngine",
-    "GraphAlgorithmsEngine",
-    "NetworkXAlgorithmsEngine",
-    # Algorithm entry points
-    "betweenness_centrality",
-    "eigenvector_centrality",
-    "louvain_communities",
-    "page_rank",
-    "weakly_connected_components",
+    "AlgorithmConvergenceError",
+    "AlgorithmError",
     # Result models
     "AlgorithmExecutionMode",
     "CentralityResult",
-    "PartitionResult",
-    # Exceptions
-    "AdapterError",
-    "AlgorithmConvergenceError",
-    "AlgorithmError",
     "DomainValidationError",
+    # Diachronic dynamics & degeneration
+    "DynamicsEvaluationResult",
     "EpistemetricsError",
+    "EpistemicReport",
+    "EpistemicStatus",
     "GDSNotAvailableError",
     "GDSProjectionError",
+    # QBAF Gradual Semantics
+    "GradualSemanticsModel",
+    "GraphAlgorithmsEngine",
     "GraphNotFoundError",
+    # Epistemic model component evaluation
+    "ModelComponentEvaluationResult",
+    "NetworkXAlgorithmsEngine",
+    "NodeType",
+    "PartitionResult",
+    # Poset specialization hierarchies
+    "PosetEvaluationResult",
+    "QBAFComparisonResult",
+    "QBAFGradualSemanticsSolver",
+    "QBAFSolverResult",
+    # Intertheoretical link prediction
+    "ReductionEvaluationResult",
+    "RelationType",
     "RepositoryConnectionError",
+    "TheoryEdge",
+    # Core domain graph and analysis
+    "TheoryGraph",
+    "TheoryNode",
+    "WeightNormalizationMode",
+    "WeightedQuadraticEnergySolver",
+    "analyze_theory_graph",
+    # Algorithm entry points
+    "betweenness_centrality",
+    "calculate_anchor_iou",
+    "compare_qbaf_weight_modes",
+    "eigenvector_centrality",
+    "evaluate_diachronic_dynamics",
+    "evaluate_intertheoretical_links",
+    "evaluate_model_components",
+    "evaluate_specialization_poset",
+    "louvain_communities",
+    "page_rank",
+    "solve_continuous_qbaf",
+    "solve_qbaf_gradual_semantics",
+    "verify_hard_core_invariance",
+    "weakly_connected_components",
 ]

@@ -14,7 +14,7 @@ import json
 import logging
 from collections import defaultdict
 from pathlib import Path
-from typing import TextIO
+from typing import Self, TextIO
 
 from .bus import EventObserver
 from .models import (
@@ -118,7 +118,7 @@ class JsonlRunObserver(EventObserver):
         self.file_path = Path(file_path)
         self.file_handle: TextIO | None = None
 
-    def __enter__(self) -> JsonlRunObserver:
+    def __enter__(self) -> Self:
         """Open the file for writing.
 
         Creates parent directories if they don't exist.

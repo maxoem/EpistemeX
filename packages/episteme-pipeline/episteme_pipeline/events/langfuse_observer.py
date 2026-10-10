@@ -82,7 +82,7 @@ class LangfuseObserver(EventObserver):
             The event to convert to a Langfuse observation.
         """
         try:
-            trace_id, parent_observation_id, trace_context_arg = self._resolve_trace_context(event)
+            trace_id, _parent_observation_id, trace_context_arg = self._resolve_trace_context(event)
 
             if isinstance(event, (ComponentStarted, ComponentCompleted, PhaseCompleted)):
                 self._handle_lifecycle_event(event, trace_context_arg)

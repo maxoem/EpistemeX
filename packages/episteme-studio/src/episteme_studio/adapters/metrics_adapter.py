@@ -408,7 +408,7 @@ def compute_component(
         if node.id not in node_values:
             node_values[node.id] = "c_0"
 
-    domain_vals = sorted(list({str(v) for v in node_values.values() if v is not None}))
+    domain_vals = sorted({str(v) for v in node_values.values() if v is not None})
 
     return Overlay(
         id=f"overlay-component-{uuid4().hex[:8]}",
@@ -592,7 +592,7 @@ def compute_leiden(
         node.id: str(membership[idx])
         for idx, node in enumerate(graph.nodes)
     }
-    unique_communities = sorted(list({str(v) for v in node_values.values() if v is not None}))
+    unique_communities = sorted({str(v) for v in node_values.values() if v is not None})
 
     return Overlay(
         id=f"overlay-leiden-{uuid4().hex[:8]}",
@@ -856,7 +856,7 @@ def compute_local_gradual_strength(
 
     # Build affected nodes with marginal contributions
     affected_nodes: dict[str, AffectedNodeDetail] = {}
-    for nid, node in sub_nodes.items():
+    for nid in sub_nodes:
         if nid == focus_node_id:
             affected_nodes[nid] = AffectedNodeDetail(
                 roles=["focus"],
@@ -865,7 +865,7 @@ def compute_local_gradual_strength(
             )
             continue
 
-        raw_roles = sorted(list(node_roles.get(nid, set())))
+        raw_roles = sorted(node_roles.get(nid, set()))
         if not raw_roles:
             # Fallback based on incoming edge type if path sign unresolved
             raw_roles = ["neutral"]
@@ -974,7 +974,7 @@ def compute_tenability(
     """
     opts = params or {}
     theory_filter = opts.get("theory_id")
-    threshold = float(opts.get("tenability_threshold", 0.5))
+    float(opts.get("tenability_threshold", 0.5))
 
     node_values: dict[str, float | str | None] = {}
     edge_values: dict[str, float | str | None] = {}

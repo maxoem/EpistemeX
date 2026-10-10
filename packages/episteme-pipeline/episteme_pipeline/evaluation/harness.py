@@ -463,7 +463,6 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         baseline_results: list[EvaluationResult] = []
         baseline_metrics: dict[str, float] = {}
         pairwise_comparisons: list[RunComparison] = []
-        comparison_obj: EvaluationComparison | None = None
         highlights_md = ""
         baseline_run_id = f"baseline_{baseline_name}_{run_id}" if baseline_name else ""
 
@@ -556,7 +555,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
                 + format_comparison_markdown(pairwise_comparisons, title=f"Side-by-Side Metrics ({baseline_name})", name_a="Baseline", name_b="Pipeline")
             )
 
-            comparison_obj = EvaluationComparison(
+            EvaluationComparison(
                 comparison_id=f"comp_{run_id}_vs_{baseline_run_id}",
                 run_ids=[baseline_run_id, run_id],
                 axis=ComparisonAxis.METHOD,

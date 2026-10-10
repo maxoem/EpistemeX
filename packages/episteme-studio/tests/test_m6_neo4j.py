@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 import asyncio
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import pytest
 from episteme_studio.adapters.neo4j_reader import Neo4jReader
@@ -63,7 +63,7 @@ class _MockAsyncSession:
     def __init__(self, run_handler) -> None:
         self.run_handler = run_handler
 
-    async def __aenter__(self) -> _MockAsyncSession:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:

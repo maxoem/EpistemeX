@@ -93,10 +93,7 @@ def is_component(val: Any, attr_name: str | None = None) -> bool:
         return False
 
     # Core runner component attributes (backwards compatibility for test doubles)
-    if attr_name in _CORE_COMPONENT_NAMES:
-        return True
-
-    return False
+    return attr_name in _CORE_COMPONENT_NAMES
 
 
 def find_components(
@@ -130,7 +127,7 @@ def find_components(
     if root is None or id(root) in visited:
         return {}
 
-    if isinstance(root, _PRIMITIVE_TYPES) or isinstance(root, (list, tuple, set, dict, NonCallableMock)):
+    if isinstance(root, (_PRIMITIVE_TYPES, list, tuple, set, dict, NonCallableMock)):
         return {}
 
     visited.add(id(root))

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -280,7 +280,7 @@ ArtifactPayload = (
 ArtifactPayloadT = TypeVar("ArtifactPayloadT", bound=ArtifactPayload)
 
 
-class ArtifactEnvelope(BaseModel, Generic[ArtifactPayloadT]):
+class ArtifactEnvelope[ArtifactPayloadT: ArtifactPayload](BaseModel):
     artifact_id: str
     identity_key: str | None = None
     kind: ArtifactKind

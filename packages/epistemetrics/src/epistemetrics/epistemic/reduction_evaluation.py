@@ -265,9 +265,9 @@ def evaluate_intertheoretical_links(
         v_m = mapping.get(v, v)
         pred_links.add((u_m, v_m, r))
 
-    matched_links = sorted(list(pred_links & ref_links))
-    unmatched_ref = sorted(list(ref_links - pred_links))
-    spurious_pred = sorted(list(pred_links - ref_links))
+    matched_links = sorted(pred_links & ref_links)
+    unmatched_ref = sorted(ref_links - pred_links)
+    spurious_pred = sorted(pred_links - ref_links)
 
     tp = len(matched_links)
     fp = len(spurious_pred)
@@ -287,7 +287,6 @@ def evaluate_intertheoretical_links(
         )
 
     # Breakdown per relation
-    rel_names = ["reduces_to", "presupposes"]
     per_rel_scores: dict[str, dict[str, float]] = {}
 
     reduces_ref_c = sum(1 for _, _, r in ref_links if r == "reduces_to")

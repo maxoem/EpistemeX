@@ -74,7 +74,7 @@ class TestSTNBAdapterIssue027:
         test_file = tmp_path / "test_dual.jsonld"
         test_file.write_text(json.dumps(jsonld_data), encoding="utf-8")
 
-        chunks, gold_graph = load_structuralist_benchmark(test_file)
+        _chunks, gold_graph = load_structuralist_benchmark(test_file)
         assert gold_graph.number_of_edges() == 1
 
         for u, v, d in gold_graph.edges(data=True):
@@ -113,7 +113,7 @@ class TestSTNBAdapterIssue027:
         test_file.write_text(json.dumps(jsonld_data), encoding="utf-8")
 
         # Parsing should succeed without TypeError
-        chunks, gold_graph = load_structuralist_benchmark(test_file)
+        _chunks, gold_graph = load_structuralist_benchmark(test_file)
         assert gold_graph.number_of_nodes() == 6
         assert gold_graph.number_of_edges() == 5
 
@@ -160,7 +160,7 @@ class TestSTNBAdapterIssue027:
         test_file = tmp_path / "test_anchors.jsonld"
         test_file.write_text(json.dumps(jsonld_data), encoding="utf-8")
 
-        chunks, gold_graph = load_structuralist_benchmark(test_file)
+        chunks, _gold_graph = load_structuralist_benchmark(test_file)
         assert len(chunks) == 3
         assert [c.id for c in chunks] == ["c1", "c2", "c3"]
         assert [c.text for c in chunks] == ["First quote.", "Second quote.", "Third quote."]
@@ -195,7 +195,7 @@ class TestSTNBAdapterIssue027:
         test_file = tmp_path / "test_edges.jsonld"
         test_file.write_text(json.dumps(jsonld_data), encoding="utf-8")
 
-        chunks, gold_graph = load_structuralist_benchmark(test_file)
+        _chunks, gold_graph = load_structuralist_benchmark(test_file)
         assert gold_graph.has_edge("str:T1", "str:T2")
         assert gold_graph["str:T1"]["str:T2"]["relation"] == "reducesTo"
 
@@ -250,7 +250,7 @@ class TestSTNBAdapterIssue027:
         test_file = tmp_path / "test_poset.jsonld"
         test_file.write_text(json.dumps(jsonld_data), encoding="utf-8")
 
-        chunks, gold_graph = load_structuralist_benchmark(test_file)
+        _chunks, gold_graph = load_structuralist_benchmark(test_file)
         # Specialization edges must flow from parent to child
         assert gold_graph.has_edge("str:T_Root", "str:T_Sub1")
         assert gold_graph.has_edge("str:T_Root", "str:T_Sub2")
@@ -295,7 +295,7 @@ class TestSTNBGroundTruthIssue026:
 
     def test_cpm_pilot_component_counts(self):
         """Verify CPM pilot contains required structuralist components."""
-        chunks, gold_graph = load_structuralist_benchmark(self.CPM_PILOT_PATH)
+        _chunks, gold_graph = load_structuralist_benchmark(self.CPM_PILOT_PATH)
 
         # Count node types
         types = [d.get("node_type") for _, d in gold_graph.nodes(data=True)]
@@ -379,7 +379,7 @@ class TestPackagingAndInMemoryExecutionIssue028:
         cpm_gold_path = (
             "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
         )
-        chunks, gold_graph = load_structuralist_benchmark(cpm_gold_path)
+        _chunks, gold_graph = load_structuralist_benchmark(cpm_gold_path)
 
         # Construct an in-memory TheoryNet mimicking pipeline output for CPM
         atoms = [
@@ -515,7 +515,7 @@ class TestPackagingAndInMemoryExecutionIssue028:
         cpm_gold_path = (
             "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
         )
-        chunks, gold_graph = load_structuralist_benchmark(cpm_gold_path)
+        _chunks, _gold_graph = load_structuralist_benchmark(cpm_gold_path)
 
         atom_payload = TheoryAtomArtifact(
             component_id="str:M_CPM_Newton2",

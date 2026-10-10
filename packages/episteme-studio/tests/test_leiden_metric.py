@@ -224,7 +224,7 @@ async def test_metric_service_leiden_fallback_to_igraph() -> None:
     assert result.scope == MetricScope.GLOBAL
     assert result.result_value >= 2
     assert len(result.affected_nodes) == 6
-    for nid, detail in result.affected_nodes.items():
+    for detail in result.affected_nodes.values():
         assert "cluster" in detail.roles
         assert "community" in detail.metadata
 

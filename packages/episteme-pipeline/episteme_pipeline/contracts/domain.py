@@ -696,15 +696,7 @@ class TheoryRelation(BaseModel):
             return True
 
         # 4. Partial atom match (one endpoint is an atom and edge is not structural)
-        if (source_is_atom or target_is_atom) and relation_type not in (
-            "CONTAINS",
-            "EXTRACTED_FROM",
-            "SAME_AS",
-            "MENTIONS",
-        ):
-            return True
-
-        return False
+        return bool((source_is_atom or target_is_atom) and relation_type not in ("CONTAINS", "EXTRACTED_FROM", "SAME_AS", "MENTIONS"))
 
 
 class SubGraph(BaseModel):

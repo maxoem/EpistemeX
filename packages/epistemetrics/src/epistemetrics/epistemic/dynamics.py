@@ -315,7 +315,7 @@ def evaluate_diachronic_dynamics(
     )
 
     if len(snapshots) == 1:
-        c, aux, anom, emp = _extract_snapshot_components(snapshots[0])
+        _c, aux, anom, emp = _extract_snapshot_components(snapshots[0])
         di = float(len(aux) + len(anom)) / float(len(emp) + epsilon)
         return DynamicsEvaluationResult(
             degeneration_index=di,

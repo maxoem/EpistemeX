@@ -168,7 +168,7 @@ async def test_cooperative_cancellation() -> None:
     metric_service: MetricService = app.state.metric_service
     graph = _make_sample_graph()
 
-    job, is_fast = await metric_service.submit_execution(
+    job, _is_fast = await metric_service.submit_execution(
         metric_id="gradual_strength_local",
         graph_view=graph,
         focus_node_id="focus",

@@ -91,7 +91,7 @@ def test_saturated_queue_surfaces_dropped_before_and_does_not_block() -> None:
     observer.on_event(event)
     assert observer.dropped_count == 0
 
-    item1 = q.get_nowait()
+    q.get_nowait()
     item2 = q.get_nowait()
     assert item2["_dropped_before"] == 2
 

@@ -61,7 +61,6 @@ async def test_chunk_embedding_never_in_response() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(f"/api/runs/{LARGEST_RUN_ID}/graph?budget=1000")
         assert response.status_code == 200
-        raw_text = response.text
 
         # Ensure embedding keyword never appears as a property
         data = response.json()

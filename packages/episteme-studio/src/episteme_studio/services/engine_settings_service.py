@@ -437,7 +437,7 @@ class EngineSettingsService:
                     q_emb = embedder.encode(str(question_val), normalize_embeddings=True)
                     sim = float(np.dot(state_emb, q_emb))
                     norm_score = (sim + 1.0) / 2.0
-                    idx = int(round(norm_score * (len(lvls) - 1)))
+                    idx = round(norm_score * (len(lvls) - 1))
                     idx = min(max(0, idx), len(lvls) - 1)
                     selected = lvls[idx]
                     probabilities = {str(lvl): round(1.0 / len(lvls), 3) for lvl in lvls}

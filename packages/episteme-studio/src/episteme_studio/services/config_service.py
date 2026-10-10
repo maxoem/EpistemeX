@@ -262,7 +262,7 @@ class ConfigService:
                 if prior_fp != after_fp:
                     changed_fps[key] = (prior_fp, after_fp)
 
-            has_schema_changes = any(k.startswith("graph_schema.") for k in patch.keys())
+            has_schema_changes = any(k.startswith("graph_schema.") for k in patch)
             if has_schema_changes and (earliest_invalid is None or earliest_invalid > 2):
                 earliest_invalid = 2
                 changed_fps["graph_schema"] = (None, "modified")
@@ -302,7 +302,7 @@ class ConfigService:
             if before != after:
                 changed_fps[f"phase_{ordinal}"] = (before, after)
 
-        has_schema_changes = any(k.startswith("graph_schema.") for k in patch.keys())
+        has_schema_changes = any(k.startswith("graph_schema.") for k in patch)
 
         if not changed_fps and not has_schema_changes:
             return InvalidationPreview(
@@ -316,7 +316,7 @@ class ConfigService:
         # Find the earliest invalidated phase (schema changes affect Phase 2 onwards)
         if changed_fps:
             earliest_invalid = min(
-                int(key.split("_")[1]) for key in changed_fps.keys()
+                int(key.split("_")[1]) for key in changed_fps
             )
             if has_schema_changes and earliest_invalid > 2:
                 earliest_invalid = 2

@@ -301,7 +301,7 @@ class ScoreQuestionStrategy:
         """
         levels = question.criteria if isinstance(question.criteria, list) else [1, 2, 3]
         if isinstance(raw_answer, (int, float)):
-            idx = min(int(round(raw_answer)), len(levels) - 1)
+            idx = min(round(raw_answer), len(levels) - 1)
             selected = levels[idx]
             probs = {
                 str(lvl): 0.8 if lvl == selected else round(0.20 / max(1, len(levels) - 1), 4)

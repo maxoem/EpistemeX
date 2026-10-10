@@ -1283,7 +1283,7 @@ class EvaluationAdapter:
         all_outcomes: list[str] = []
 
         res_by_lvl = data.get("results_by_level", {})
-        for lvl, res_list in res_by_lvl.items():
+        for res_list in res_by_lvl.values():
             if isinstance(res_list, list):
                 for r in res_list:
                     if isinstance(r, dict):
@@ -1303,7 +1303,7 @@ class EvaluationAdapter:
 
         created_str = data.get("created_at")
         try:
-            created_at = datetime.fromisoformat(created_str.replace("Z", "+00:00")) if created_str else datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+            created_at = datetime.fromisoformat(created_str) if created_str else datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
         except Exception:
             created_at = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
 
@@ -1543,7 +1543,7 @@ class EvaluationAdapter:
                 target = self._load_run_evaluation_target(rid, reader)
                 if isinstance(target, TheoryNet):
                     snapshots.append(theory_net_to_theory_graph(target))
-                elif isinstance(target, nx.DiGraph) or isinstance(target, em.TheoryGraph):
+                elif isinstance(target, (nx.DiGraph, em.TheoryGraph)):
                     snapshots.append(target)
                 else:
                     snapshots.append(target)

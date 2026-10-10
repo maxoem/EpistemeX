@@ -73,7 +73,7 @@ def test_progress_observer_syncs_existing_rich_handler() -> None:
     root_logger.addHandler(existing_handler)
 
     try:
-        with RichProgressObserver(console=custom_console, sync_root_handlers=True) as observer:
+        with RichProgressObserver(console=custom_console, sync_root_handlers=True):
             assert existing_handler.console is custom_console
     finally:
         root_logger.removeHandler(existing_handler)

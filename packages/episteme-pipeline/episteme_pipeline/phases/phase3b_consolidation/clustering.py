@@ -47,7 +47,7 @@ def _format_entity_summary(
     str
         Summary string.
     """
-    rels = sorted(list(relation_signatures))[:10] if relation_signatures else []
+    rels = sorted(relation_signatures)[:10] if relation_signatures else []
     rel_str = ", ".join(rels) if rels else "None"
     envelope = entity.textual_envelope or ""
     if template:

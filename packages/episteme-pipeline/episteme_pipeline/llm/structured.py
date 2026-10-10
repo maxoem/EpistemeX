@@ -231,7 +231,7 @@ DECODING_STRATEGY_HANDLERS: dict[str, BaseOutputDecodingStrategyHandler] = {
 }
 
 
-async def execute_nl_to_format(
+async def execute_nl_to_format[ModelT: BaseModel](
     llm: StructuredLLM,
     output_cls: type[ModelT],
     prompt_bundle: Any,

@@ -88,7 +88,7 @@ class CalloutParser:
         indent_spaces: int = 4,
         handle_lazy_continuation: bool = True,
     ) -> None:
-        self.indent_levels: list[int] = list()
+        self.indent_levels: list[int] = []
         self.convert_aliases: bool = convert_aliases
         self.breakless_lists: bool = breakless_lists
         self.indent_spaces: int = indent_spaces
@@ -96,7 +96,7 @@ class CalloutParser:
 
         self.text_in_prev_line: bool = False
         self.list_in_prev_line: bool = False
-        self.in_codefence: list[int] = list()
+        self.in_codefence: list[int] = []
 
         self.title_from_first_bold: bool = title_from_first_bold
         self.look_for_title: bool = False
@@ -197,7 +197,7 @@ class CalloutParser:
 
     def _reset_states(self) -> None:
         """Reset parser state."""
-        self.indent_levels = list()
+        self.indent_levels = []
         self.look_for_title = False
         self.backup_title = ""
         self.temp_block_syntax = ""

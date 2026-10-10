@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import ClassVar, Generic, TypeVar
+from typing import ClassVar, TypeVar
 
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
@@ -9,7 +9,7 @@ from episteme_pipeline.artifacts.execution import (
 InputT = TypeVar("InputT")
 
 
-class PhaseRunner(ABC, Generic[InputT]):
+class PhaseRunner[InputT](ABC):
     """
     Base for every pipeline phase. Each phase accepts a typed input contract
     and returns an artifact collection. Phases may still project to the graph incrementally for crash resilience, but artifact collections are the runtime handoff.

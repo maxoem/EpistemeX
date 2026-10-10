@@ -295,7 +295,7 @@ def test_local_tenability_solver(seeded_theories):
     assert len(anomalies) == 0
 
     # Incoherent parameters
-    ts_bad, delta_bad, anomalies_bad = solver.solve_local_tenability(
+    ts_bad, delta_bad, _anomalies_bad = solver.solve_local_tenability(
         {"DopamineDepletion": 1.0, "AmygdalaHyperactivity": 0.0}, neuro_def
     )
     assert ts_bad <= 0.60
@@ -323,7 +323,7 @@ def test_edge_tenability_and_anomaly_detection():
     assert len(anomalies) == 0
 
     # Incompatible mixed model
-    ts_bad, delta_bad, bad_anomalies = solver.solve_edge_tenability(
+    ts_bad, _delta_bad, bad_anomalies = solver.solve_edge_tenability(
         {"RepressionMagnitude": 0.90}, {"AmygdalaHyperactivity": 0.10}, rel
     )
     assert ts_bad < 0.5

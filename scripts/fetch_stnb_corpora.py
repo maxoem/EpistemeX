@@ -225,7 +225,7 @@ def verify_corpus(corpus_key: str, input_path: Path | None = None) -> bool:
         return False
 
     print(f"🔍 Located local text at: {found_path}")
-    file_bytes = found_path.stat().st_size
+    found_path.stat().st_size
     file_hash = compute_sha256(found_path)
 
     expected_hash = entry.get("expected_sha256")

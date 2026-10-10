@@ -175,7 +175,7 @@ async def test_dense_entity_linker_retrieval_and_cross_encoding():
     assert result.id == "e_kant"
     assert "e_kant" in linker._candidate_cache
     # Verify candidate formatting has type grounding
-    cached_text, cached_vec = linker._candidate_cache["e_kant"]
+    cached_text, _cached_vec = linker._candidate_cache["e_kant"]
     assert "[PERSON] Immanuel Kant: German philosopher" == cached_text
 
 

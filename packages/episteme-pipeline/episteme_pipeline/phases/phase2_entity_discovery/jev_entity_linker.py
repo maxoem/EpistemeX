@@ -409,7 +409,7 @@ class CascadingEntityLinker(EntityLinker):
             return await self.fallback.link(mention, graph_store, top_k=top_k, threshold=threshold)
 
         if isinstance(self.primary, JevEntityLinker):
-            matched, decision, is_ambiguous = await self.primary.link_with_decision(
+            matched, _decision, is_ambiguous = await self.primary.link_with_decision(
                 mention, graph_store, top_k=top_k, threshold=threshold
             )
             if not is_ambiguous:

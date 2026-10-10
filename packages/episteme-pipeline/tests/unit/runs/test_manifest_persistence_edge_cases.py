@@ -80,7 +80,7 @@ class TestManifestPersistenceEdgeCases:
             store = JsonRunManifestStore(runs_dir)
             
             # Create a report that would represent a run with no artifacts
-            report = RunReport(
+            RunReport(
                 run_id="empty-report-run",
                 status=RunStatus.COMPLETED,
                 artifact_counts_by_kind={},  # No artifacts of any kind

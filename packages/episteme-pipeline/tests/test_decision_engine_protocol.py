@@ -63,7 +63,7 @@ class ConformingMockDecisionEngine:
         alpha: float | None = None,
     ) -> DecisionScore:
         """Evaluate categorical choice."""
-        selected = list(options)[0] if isinstance(options, (list, dict)) else "CLAIM"
+        selected = next(iter(options)) if isinstance(options, (list, dict)) else "CLAIM"
         return DecisionScore(
             selected_option=selected,
             class_probability=0.88,

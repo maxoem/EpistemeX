@@ -432,7 +432,7 @@ class RunService:
         list of ArtifactRef
             Artifact references.
         """
-        run = self.get_run(run_id)
+        self.get_run(run_id)
         return self.reader.list_artifacts(run_id, kind=kind)
 
     def get_run_langfuse_stats(

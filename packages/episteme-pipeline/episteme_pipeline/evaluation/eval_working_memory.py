@@ -93,7 +93,7 @@ class MockNERLLM:
         **kwargs: Any,
     ) -> NERExtractionOutput:
         chunk_text = kwargs.get("chunk_text", "")
-        wm_context = kwargs.get("working_memory_context", "")
+        kwargs.get("working_memory_context", "")
 
         # Simulate extracting active entities and state updates based on chunk content
         active_entities = []
@@ -115,7 +115,7 @@ class MockNERLLM:
         # Detect semantic boundary on chapter shift or topic transition
         boundary_detected = "unification can cognition arise" in chunk_text
 
-        entities = [
+        [
             L2Entity(
                 id=f"ent_{e.lower().replace(' ', '_')}",
                 label="CONCEPT",

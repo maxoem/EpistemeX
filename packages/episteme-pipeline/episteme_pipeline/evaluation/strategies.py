@@ -312,8 +312,8 @@ class ExtractionStrategy:
         gold_ent_names = {norm(e.name) for e in gold_entities if e.name}
 
         tp_ent = len(pred_ent_names & gold_ent_names)
-        fp_ent = len(pred_ent_names - gold_ent_names)
-        fn_ent = len(gold_ent_names - pred_ent_names)
+        len(pred_ent_names - gold_ent_names)
+        len(gold_ent_names - pred_ent_names)
 
         ent_prec = tp_ent / len(pred_ent_names) if pred_ent_names else (1.0 if not gold_ent_names else 0.0)
         ent_rec = tp_ent / len(gold_ent_names) if gold_ent_names else 1.0
@@ -1229,7 +1229,7 @@ class StrategyRegistry:
                 return self.get("argumentation")
 
         # 3. Inspect predicted representation
-        if isinstance(predicted, TheoryNet) or isinstance(predicted, em.TheoryGraph):
+        if isinstance(predicted, (TheoryNet, em.TheoryGraph)):
             return self.get("structuralist")
 
         if isinstance(predicted, ArtifactCollection):

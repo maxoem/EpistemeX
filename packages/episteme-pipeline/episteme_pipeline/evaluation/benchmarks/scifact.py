@@ -44,7 +44,7 @@ def load_scifact_subset(
             data = json.loads(line)
             query = data.get("claim", "")
             gold_ids = []
-            for doc_id in data.get("evidence", {}).keys():
+            for doc_id in data.get("evidence", {}):
                 gold_ids.append(str(doc_id))
 
             queries.append({

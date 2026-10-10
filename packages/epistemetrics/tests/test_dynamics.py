@@ -72,7 +72,7 @@ def test_dynamics_degenerating_program_with_adhoc_immunization():
     assert result.anomalies_count == 2
     assert result.delta_empirical_content == 0
     # Node immunization should detect pure immunizing patches
-    for nid, score in result.node_immunization_scores.items():
+    for score in result.node_immunization_scores.values():
         assert score == 1.0
 
 

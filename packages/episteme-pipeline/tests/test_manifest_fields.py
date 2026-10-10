@@ -38,8 +38,8 @@ def _make_phase4_runner(config, llm, embedding_model):
         async def get_chunks(self, filters=None, limit=None):
             return []
 
-    graph_reader = DummyGraphReader()
-    projection_graph = DummyGraphReader()
+    DummyGraphReader()
+    DummyGraphReader()
 
     from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
 

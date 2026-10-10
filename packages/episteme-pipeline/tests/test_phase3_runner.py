@@ -279,7 +279,7 @@ async def test_phase3_atomic_commit_per_batch(graph_store, phase2_view, schema):
         source_chunk_id="chunk_a",
     )
     runner = make_runner(graph_store, schema, extractor=StubGlobalExtractor([triple]))
-    result = await runner.run(phase2_view, make_context())
+    await runner.run(phase2_view, make_context())
 
     # Check that triple was committed
     committed = await graph_store.get_all_entity_triples()
@@ -310,7 +310,7 @@ async def test_phase3_poison_pill_quarantine(graph_store, phase2_view, schema):
             succeeded_calls += 1
 
     runner = make_runner(graph_store, schema, extractor=SelectiveCrashingExtractor())
-    result = await runner.run(three_view, make_context())
+    await runner.run(three_view, make_context())
 
     # The poison pill pair was quarantined as failed
     pair = CandidatePair(entity_a=phase2_view.entities[0], entity_b=phase2_view.entities[1])

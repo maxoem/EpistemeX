@@ -287,8 +287,6 @@ class TestQBAFGradualSemantics:
     def test_early_stationary_termination_event(self) -> None:
         """Verify cyclic network terminates integration early via stationary root-finding event."""
         # Mutual attack loop: A attacks B, B attacks A
-        nodes = {"A": 0.7, "B": 0.7}
-        edges = [("A", "B", 0.8, -1), ("B", "A", 0.8, -1)]
 
         solver = WeightedQuadraticEnergySolver(t_max=50.0, atol=1e-5)
         w = np.array([0.7, 0.7])
@@ -296,7 +294,7 @@ class TestQBAFGradualSemantics:
         g_att = np.array([[0.0, 0.8], [0.8, 0.0]])
 
         # Execute direct solve
-        s_final, converged, telemetry = solver.solve(w, g_supp, g_att)
+        s_final, converged, _telemetry = solver.solve(w, g_supp, g_att)
 
         assert converged
         assert pytest.approx(s_final[0], rel=1e-3) == s_final[1]

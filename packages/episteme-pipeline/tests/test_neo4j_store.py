@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Self
+
 import pytest
 from episteme_pipeline.graph.neo4j_store import _Neo4jWriteMixin
 
@@ -10,7 +12,7 @@ class _RecordingTransaction:
     def __init__(self, session: _RecordingSession) -> None:
         self.session = session
 
-    async def __aenter__(self) -> _RecordingTransaction:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
@@ -27,7 +29,7 @@ class _RecordingSession:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict]] = []
 
-    async def __aenter__(self) -> _RecordingSession:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
@@ -217,7 +219,7 @@ async def test_get_theory_atoms_deserialization() -> None:
         def __init__(self, data: list[dict]) -> None:
             self._data = data
 
-        async def __aenter__(self) -> _MockReadSession:
+        async def __aenter__(self) -> Self:
             return self
 
         async def __aexit__(self, exc_type, exc, tb) -> None:
@@ -325,7 +327,7 @@ async def test_get_theory_atoms_resilient_deserialization() -> None:
         def __init__(self, data: list[dict]) -> None:
             self._data = data
 
-        async def __aenter__(self) -> _MockReadSession:
+        async def __aenter__(self) -> Self:
             return self
 
         async def __aexit__(self, exc_type, exc, tb) -> None:
@@ -386,7 +388,7 @@ async def test_get_all_theory_relations_includes_tenability() -> None:
         def __init__(self, data: list[dict]) -> None:
             self._data = data
 
-        async def __aenter__(self) -> _MockReadSession:
+        async def __aenter__(self) -> Self:
             return self
 
         async def __aexit__(self, exc_type, exc, tb) -> None:

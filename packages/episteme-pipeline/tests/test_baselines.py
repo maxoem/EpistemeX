@@ -206,7 +206,7 @@ class TestBaselineNaiveKG:
         assert isinstance(graph, nx.DiGraph)
         assert len(graph.nodes) >= 2
         assert len(graph.edges) >= 1
-        edge_data = list(graph.edges(data=True))[0][2]
+        edge_data = next(iter(graph.edges(data=True)))[2]
         assert "polarity" in edge_data
 
     def test_custom_schema_and_polarity_injection(self):
@@ -219,7 +219,7 @@ class TestBaselineNaiveKG:
         baseline = BaselineNaiveKG(schema=custom_schema)
         sample_text = "Protein kinase binds to substrate. Drug inhibitor inhibits enzyme."
 
-        entities, triples = baseline.extract(sample_text)
+        _entities, triples = baseline.extract(sample_text)
         predicates = {t.predicate for t in triples}
         assert "BINDS_TO" in predicates
         assert "INHIBITS" in predicates

@@ -240,7 +240,7 @@ class ModelScorer:
         predicted: ArtifactCollection | TheoryNet | em.TheoryGraph | nx.DiGraph,
         name: str = "TheoryGraph",
     ) -> em.TheoryGraph | nx.DiGraph:
-        if isinstance(predicted, em.TheoryGraph) or isinstance(predicted, (nx.DiGraph, nx.MultiDiGraph, nx.Graph)):
+        if isinstance(predicted, (em.TheoryGraph, nx.DiGraph, nx.MultiDiGraph, nx.Graph)):
             return predicted
         if isinstance(predicted, TheoryNet):
             return theory_net_to_theory_graph(predicted, name=name)
@@ -256,6 +256,6 @@ class ModelScorer:
         if isinstance(gold, (str, Path)):
             _, nx_gold = load_structuralist_benchmark(gold)
             return structuralist_digraph_to_theory_graph(nx_gold, name=name)
-        if isinstance(gold, em.TheoryGraph) or isinstance(gold, (nx.DiGraph, nx.MultiDiGraph, nx.Graph)):
+        if isinstance(gold, (em.TheoryGraph, nx.DiGraph, nx.MultiDiGraph, nx.Graph)):
             return gold
         raise TypeError(f"Cannot convert gold reference {type(gold).__name__} to an evaluation graph.")

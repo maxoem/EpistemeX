@@ -412,7 +412,7 @@ class LayaDecisionEngine:
             selected_option = max(probabilities, key=probabilities.get)
             class_prob = probabilities[selected_option]
         elif isinstance(answer_val, (int, float)):
-            idx = min(int(round(answer_val)), len(levels) - 1)
+            idx = min(round(answer_val), len(levels) - 1)
             selected_option = levels[idx]
             class_prob = 0.80
             probabilities = {

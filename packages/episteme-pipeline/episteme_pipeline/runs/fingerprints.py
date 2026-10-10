@@ -97,9 +97,8 @@ def _fingerprint_nested_leafs(obj: Any, prefix: str) -> dict[str, str]:
                     result[new_key] = stable_fingerprint(item)
             elif _is_fully_serializable(item):
                 result[new_key] = stable_fingerprint(item)
-    elif _is_fully_serializable(obj):
-        if prefix:
-            result[prefix] = stable_fingerprint(obj)
+    elif _is_fully_serializable(obj) and prefix:
+        result[prefix] = stable_fingerprint(obj)
     return result
 
 

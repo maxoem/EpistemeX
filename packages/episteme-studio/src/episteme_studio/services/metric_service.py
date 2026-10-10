@@ -841,7 +841,7 @@ class MetricService:
             communities = {
                 nid: str(val) for nid, val in overlay.node_values.items() if val is not None
             }
-            unique_comms = sorted(list(set(communities.values())))
+            unique_comms = sorted(set(communities.values()))
             summary = {
                 "community_count": len(unique_comms),
                 "node_count": len(communities),
@@ -1016,7 +1016,7 @@ class MetricService:
         # Fast-path attempt
         try:
             async with asyncio.timeout(fast_path_timeout):
-                result = await _run_task()
+                await _run_task()
                 return job, True
         except TimeoutError:
             # Did not finish in fast-path window; convert to background execution

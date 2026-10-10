@@ -232,7 +232,7 @@ class BaselineZeroShotLLM:
         items: list[L1Chunk] | list[str] = []
         if isinstance(corpus, (str, Path)) and Path(corpus).is_file():
             path_str = str(corpus)
-            if path_str.endswith(".jsonld") or path_str.endswith(".json"):
+            if path_str.endswith((".jsonld", ".json")):
                 chunks, _ = load_structuralist_benchmark(path_str)
                 items = chunks
             else:

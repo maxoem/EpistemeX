@@ -85,7 +85,7 @@ async def test_verify_borderline_pair_aborts_hierarchical_subsumption():
     entity_a = L2Entity(id="e1", name="Imperative", label="Concept")
     entity_b = L2Entity(id="e2", name="Categorical Imperative", label="Concept")
 
-    selected, emp_acc, pred_set = await verify_borderline_pair(
+    selected, _emp_acc, _pred_set = await verify_borderline_pair(
         entity_a,
         entity_b,
         engine,
@@ -117,7 +117,7 @@ async def test_verify_borderline_pair_aborts_on_ambiguous_prediction_set():
     entity_a = L2Entity(id="e1", name="Transcendental Aesthetic", label="Concept")
     entity_b = L2Entity(id="e2", name="Transcendental Analytic", label="Concept")
 
-    selected, emp_acc, pred_set = await verify_borderline_pair(
+    _selected, _emp_acc, pred_set = await verify_borderline_pair(
         entity_a,
         entity_b,
         engine,

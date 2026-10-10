@@ -145,7 +145,7 @@ def test_hierarchical_subsumption_check():
     tg.add_edge("T_Parent", "M_Parent", relation_type=em.RelationType.HAS_ACTUAL_MODEL)
 
     # Child has NO actual model (vacuous specialization)
-    score, valid, details = check_hierarchical_subsumption(tg)
+    score, valid, _details = check_hierarchical_subsumption(tg)
     assert score == 0.0
     assert valid is False
 

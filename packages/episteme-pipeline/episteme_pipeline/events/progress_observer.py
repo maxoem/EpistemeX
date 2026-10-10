@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Self
 
 try:
     from rich.console import Console
@@ -141,7 +141,7 @@ class RichProgressObserver(EventObserver):
             **kwargs,
         )
 
-    def __enter__(self) -> RichProgressObserver:
+    def __enter__(self) -> Self:
         """Start the progress display and configure logger coordination.
 
         Returns

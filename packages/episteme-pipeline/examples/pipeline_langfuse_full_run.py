@@ -81,7 +81,7 @@ async def run_pipeline(
     source_paths: list[str] | None = None,
     *,
     event_emitter: EventEmitter | None = None,
-    run_id: str = None,
+    run_id: str | None = None,
 ) -> ExecutionResult:
     """Run a complete 7-runner pipeline pass using LiteLLM, CrossEncoder, and Neo4j.
 

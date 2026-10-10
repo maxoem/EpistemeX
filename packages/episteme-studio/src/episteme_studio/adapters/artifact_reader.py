@@ -471,8 +471,8 @@ class ArtifactReader:
                 duration_s = None
                 if created_at and completed_at:
                     try:
-                        c_dt = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
-                        e_dt = datetime.fromisoformat(str(completed_at).replace("Z", "+00:00"))
+                        c_dt = datetime.fromisoformat(str(created_at))
+                        e_dt = datetime.fromisoformat(str(completed_at))
                         duration_s = max(0.0, (e_dt - c_dt).total_seconds())
                     except Exception:
                         pass
@@ -594,8 +594,8 @@ class ArtifactReader:
             completed_at_str = pr.get("completed_at")
             if started_at_str and completed_at_str:
                 try:
-                    s_dt = datetime.fromisoformat(str(started_at_str).replace("Z", "+00:00"))
-                    c_dt = datetime.fromisoformat(str(completed_at_str).replace("Z", "+00:00"))
+                    s_dt = datetime.fromisoformat(str(started_at_str))
+                    c_dt = datetime.fromisoformat(str(completed_at_str))
                     phase_duration_s = max(0.0, (c_dt - s_dt).total_seconds())
                 except Exception:
                     pass
@@ -660,8 +660,8 @@ class ArtifactReader:
         run_duration_s = None
         if created_at and completed_at:
             try:
-                c_dt = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
-                e_dt = datetime.fromisoformat(str(completed_at).replace("Z", "+00:00"))
+                c_dt = datetime.fromisoformat(str(created_at))
+                e_dt = datetime.fromisoformat(str(completed_at))
                 run_duration_s = max(0.0, (e_dt - c_dt).total_seconds())
             except Exception:
                 pass

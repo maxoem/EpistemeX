@@ -332,7 +332,7 @@ async def test_llm_ner_extractor_with_stopping_oracle():
         stopping_oracle=mock_oracle,
     )
 
-    entities, triples, _, _, _ = await extractor.extract(
+    _entities, _triples, _, _, _ = await extractor.extract(
         chunk_id="chunk_test",
         chunk_text="A theoretical passage on empiricism.",
         schema=DEFAULT_SCHEMA,
