@@ -15,6 +15,12 @@ services:
       - EPISTEME_STUDIO_NEO4J_USER=neo4j
       - EPISTEME_STUDIO_NEO4J_PASSWORD=episteme_password
       - EPISTEME_STUDIO_EXECUTION_ENABLED=false
+      # ── Langfuse Internal Tracing Configuration ──
+      - LANGFUSE_HOST=http://langfuse:3000
+      - EPISTEME_STUDIO_LANGFUSE_HOST=http://langfuse:3000
+      - LANGFUSE_BASE_URL=http://langfuse:3000
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-pk-lf-episteme-public}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-sk-lf-episteme-secret}
     volumes:
       # Mount local manifests and artifact stores
       - ./.pipeline_runs:/app/.pipeline_runs
@@ -23,6 +29,8 @@ services:
     command: ["serve", "--host", "0.0.0.0", "--port", "8000", "--demo"]
     depends_on:
       neo4j:
+        condition: service_healthy
+      langfuse:
         condition: service_healthy
 
   neo4j:
@@ -45,5 +53,62 @@ services:
       retries: 10
       start_period: 15s
 
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Langfuse Server (v2) with Headless Automated Provisioning
+  # ─────────────────────────────────────────────────────────────────────────────
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:2
+    container_name: episteme-langfuse
+    restart: unless-stopped
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@langfuse-db:5432/langfuse
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=episteme_nextauth_secret_minimum_32_characters_random
+      - SALT=episteme_salt_token_must_be_long_and_secure
+      - ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      - TELEMETRY_ENABLED=false
+      # ── Headless Automated Provisioning ──
+      # Do not wrap values in double quotes per Langfuse docker-compose docs
+      - LANGFUSE_INIT_ORG_ID=episteme-org
+      - LANGFUSE_INIT_ORG_NAME=Episteme
+      - LANGFUSE_INIT_PROJECT_ID=episteme
+      - LANGFUSE_INIT_PROJECT_NAME=Episteme
+      - LANGFUSE_INIT_PROJECT_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-pk-lf-episteme-public}
+      - LANGFUSE_INIT_PROJECT_SECRET_KEY=${LANGFUSE_SECRET_KEY:-sk-lf-episteme-secret}
+      - LANGFUSE_INIT_USER_EMAIL=admin@episteme.local
+      - LANGFUSE_INIT_USER_NAME=Admin
+      - LANGFUSE_INIT_USER_PASSWORD=episteme_password
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/public/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 25s
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Langfuse Database (PostgreSQL 16)
+  # ─────────────────────────────────────────────────────────────────────────────
+  langfuse-db:
+    image: postgres:16-alpine
+    container_name: episteme-langfuse-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=langfuse
+    volumes:
+      - langfuse_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   neo4j_data:
+  langfuse_db_data:
