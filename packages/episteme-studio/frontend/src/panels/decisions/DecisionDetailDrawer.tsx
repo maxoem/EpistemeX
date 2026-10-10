@@ -1,21 +1,9 @@
-import React, { useEffect, useRef } from "react";
-import { BorderlineDecisionItem } from "../../api/types";
+import React, {useEffect, useRef} from "react";
+import {BorderlineDecisionItem} from "../../api/types";
 import * as echarts from "../echarts";
-import { useThemeStore } from "../../store/themeStore";
-import { StochasticAuditComparator } from "./StochasticAuditComparator";
-import {
-  X,
-  Zap,
-  Cpu,
-  ShieldCheck,
-  ExternalLink,
-  Code2,
-  Sliders,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-  Layers,
-} from "lucide-react";
+import {useThemeStore} from "../../store/themeStore";
+import {StochasticAuditComparator} from "./StochasticAuditComparator";
+import {Code2, ExternalLink, Sliders, X, Zap,} from "lucide-react";
 
 export interface DecisionDetailDrawerProps {
   decision: BorderlineDecisionItem | null;

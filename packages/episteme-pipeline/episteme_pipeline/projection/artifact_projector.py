@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from episteme_pipeline.artifacts.builders import parse_mention_id
 from episteme_pipeline.artifacts.models import (
     TheoryAtomArtifact,
     TheoryRelationArtifact,
@@ -17,10 +18,8 @@ from episteme_pipeline.artifacts.models import (
     LinkedEntityArtifact,
     LocalRelationArtifact,
 )
-from episteme_pipeline.artifacts.builders import parse_mention_id
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
-    L1Document,
     L2Entity,
     L2Triple,
     TheoryAtom,

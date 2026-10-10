@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from episteme_pipeline.observability.logging import (
     DEFAULT_NOISY_LOGGERS,

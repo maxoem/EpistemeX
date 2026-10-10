@@ -8,9 +8,10 @@ and connectivity components).
 
 from __future__ import annotations
 
-from enum import Enum
 import re
+from enum import Enum
 from typing import Any, Iterator, Mapping, Optional
+
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 

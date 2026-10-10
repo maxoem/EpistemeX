@@ -1,30 +1,30 @@
-import React, { useState, useMemo } from "react";
+import React, {useMemo, useState} from "react";
 import {
-  ChevronDown,
-  Download,
-  Eye,
-  EyeOff,
-  Play,
-  RefreshCw,
-  Wrench,
-  CheckCircle2,
-  XCircle,
-  TriangleAlert,
-  Clock,
-  Award,
-  Plus,
-  Search,
-  Copy,
-  FileCode,
+    Award,
+    CheckCircle2,
+    ChevronDown,
+    Clock,
+    Copy,
+    Download,
+    Eye,
+    EyeOff,
+    FileCode,
+    Play,
+    Plus,
+    RefreshCw,
+    Search,
+    TriangleAlert,
+    Wrench,
+    XCircle,
 } from "lucide-react";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import { WorkspaceContextBar, BreadcrumbItem } from "../../../shell/navigation";
-import { ExportReportModal } from "./ExportReportModal";
-import { ExecuteEvaluationModal } from "./ExecuteEvaluationModal";
-import { PromoteToGoldModal } from "../catalog/PromoteToGoldModal";
-import { RegisterBenchmarkModal } from "../catalog/RegisterBenchmarkModal";
-import { openPhasePromptInExecution } from "./ActionableHookPill";
-import type { EvaluationOutcome } from "../../../api/types";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import {BreadcrumbItem, WorkspaceContextBar} from "../../../shell/navigation";
+import {ExportReportModal} from "./ExportReportModal";
+import {ExecuteEvaluationModal} from "./ExecuteEvaluationModal";
+import {PromoteToGoldModal} from "../catalog/PromoteToGoldModal";
+import {RegisterBenchmarkModal} from "../catalog/RegisterBenchmarkModal";
+import {openPhasePromptInExecution} from "./ActionableHookPill";
+import type {EvaluationOutcome} from "../../../api/types";
 
 export interface EvaluationContextBarProps {
   isSidebarCollapsed: boolean;

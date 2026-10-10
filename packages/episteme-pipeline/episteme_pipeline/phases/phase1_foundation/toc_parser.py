@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Protocol, Sequence
+from typing import Protocol, Sequence
 
 from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
+
 
 # ---------------------------------------------------------------------------
 # Protocol / Interface

@@ -7,8 +7,8 @@ and remains free of FastAPI dependencies for complete unit testability.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -49,7 +49,6 @@ from episteme_studio.domain.evaluation import (
     NoiseRobustnessReportDetail,
     RegisterBenchmarkRequest,
     RetrievalDiagnosticsResponse,
-    StartEvaluationJobRequest,
     StressTestRequest,
 )
 from episteme_studio.api.errors import StudioProblemException

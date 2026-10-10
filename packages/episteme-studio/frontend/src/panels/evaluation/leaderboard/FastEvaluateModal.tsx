@@ -1,10 +1,10 @@
-import React, { useState } from "react";
-import { Play, Sparkles, X, CheckCircle2, AlertCircle } from "lucide-react";
-import { api } from "../../../api/client";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import { useLeaderboardStore } from "../../../store/leaderboardStore";
-import { useRunsStore } from "../../../store/runsStore";
-import type { EvaluateRunRequest } from "../../../api/types";
+import React, {useState} from "react";
+import {Play, Sparkles, X} from "lucide-react";
+import {api} from "../../../api/client";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import {useLeaderboardStore} from "../../../store/leaderboardStore";
+import {useRunsStore} from "../../../store/runsStore";
+import type {EvaluateRunRequest} from "../../../api/types";
 
 interface FastEvaluateModalProps {
   isOpen: boolean;

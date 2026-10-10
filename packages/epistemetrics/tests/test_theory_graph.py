@@ -1,13 +1,9 @@
 """Unit tests for TheoryGraph lifecycle, serialization, and epistemic analysis."""
 
-import pytest
 import networkx as nx
 
 import epistemetrics as em
 from epistemetrics.core.models import (
-    EpistemicStatus,
-    NodeType,
-    RelationType,
     TheoryEdge,
     TheoryNode,
 )

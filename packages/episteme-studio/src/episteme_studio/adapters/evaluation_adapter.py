@@ -9,15 +9,15 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import networkx as nx
 import yaml
 
+import epistemetrics as em
 from episteme_pipeline.contracts.domain import (
     L2Entity,
     L2Triple,
@@ -29,8 +29,8 @@ from episteme_pipeline.contracts.domain import (
 from episteme_pipeline.evaluation.baselines import (
     BaselineNaiveKG,
     BaselineTextRAG,
-    BaselineZeroShotLLM,
 )
+from episteme_pipeline.evaluation.benchmarks.structuralist import load_structuralist_benchmark
 from episteme_pipeline.evaluation.comparison import (
     ComparisonAxis,
     compute_run_comparisons,
@@ -38,21 +38,15 @@ from episteme_pipeline.evaluation.comparison import (
 )
 from episteme_pipeline.evaluation.harness import EvaluationHarness
 from episteme_pipeline.evaluation.models import (
-    EvaluationLevel,
-    EvaluationOutcome as PipelineOutcome,
     EvaluationReport as PipelineEvaluationReport,
-    EvaluationResult as PipelineEvaluationResult,
 )
-import epistemetrics as em
-from episteme_pipeline.evaluation.benchmarks.structuralist import load_structuralist_benchmark
 from episteme_pipeline.evaluation.scorers.domain_bridge import (
     l2_triples_to_digraph,
-    theory_net_to_digraph,
     theory_net_to_theory_graph,
 )
 from episteme_pipeline.evaluation.scorers.retrieval import ExtrinsicRetrievalEvaluator
 from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
-from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
+from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.domain.evaluation import (
     AdjudicateAndRecalculateRequest,

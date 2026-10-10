@@ -17,7 +17,6 @@ from dataclasses import dataclass
 import nltk
 import tiktoken
 
-
 _HEADER_RE = re.compile(r'^(#{1,2})\s+(.+)$', re.MULTILINE)
 
 # Ensure nltk punkt is downloaded

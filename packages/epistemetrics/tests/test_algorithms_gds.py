@@ -5,7 +5,9 @@ Tests for Neo4j Graph Data Science (GDS) algorithms engine using mocked Neo4jCli
 from __future__ import annotations
 
 from unittest.mock import MagicMock
+
 import pytest
+
 from epistemetrics.adapters.neo4j.client import Neo4jClient
 from epistemetrics.adapters.neo4j.gds_engine import Neo4jGDSAlgorithmsEngine
 from epistemetrics.core.exceptions import GDSNotAvailableError, GDSProjectionError

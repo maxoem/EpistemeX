@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Any
+
 import uvicorn
 
 from episteme_studio.app import create_app

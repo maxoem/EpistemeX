@@ -1,15 +1,6 @@
 import React from "react";
-import {
-  CheckCircle2,
-  Eye,
-  Layers,
-  Sliders,
-  TriangleAlert,
-  Users,
-  XCircle,
-  HelpCircle,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
+import {Eye, Layers, Sliders, Users,} from "lucide-react";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
 
 export interface CanvasEvaluationHudProps {
   borderlineCount?: number;

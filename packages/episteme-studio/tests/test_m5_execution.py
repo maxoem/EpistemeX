@@ -3,24 +3,24 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 import json
-import multiprocessing
-from pathlib import Path
 import queue
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from episteme_studio.adapters.event_mapper import serialize_pipeline_event, to_studio_event
+from episteme_pipeline.events.models import BaseEvent, ComponentStarted
+from episteme_studio.adapters.event_mapper import to_studio_event
 from episteme_studio.app import create_app
 from episteme_studio.domain.runs import RunStatus
 from episteme_studio.runtime.broker import EventBroker
 from episteme_studio.runtime.observer import StudioEventObserver
-from episteme_studio.runtime.registry import RunHandle, RunRegistry
+from episteme_studio.runtime.registry import RunRegistry
 from episteme_studio.settings import StudioSettings
-from episteme_pipeline.events.models import BaseEvent, ComponentStarted
 
 
 class UnseenCustomEvent(BaseEvent):

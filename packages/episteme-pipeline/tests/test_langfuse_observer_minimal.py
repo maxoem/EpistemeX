@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import types
-
+from episteme_pipeline.events.langfuse_observer import LangfuseObserver
 from episteme_pipeline.events.models import (
     ComponentStarted,
     ComponentCompleted,
@@ -10,7 +9,6 @@ from episteme_pipeline.events.models import (
     RerankerScoreAssigned,
     LLMRelationDecoded,
 )
-from episteme_pipeline.events.langfuse_observer import LangfuseObserver
 
 
 class _RecClient:

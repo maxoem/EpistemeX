@@ -1,8 +1,8 @@
 import React from "react";
-import { AlertTriangle, ShieldAlert, Sparkles, X, Sliders } from "lucide-react";
-import type { MiscalibratedAssertionItem } from "../../../../api/types";
-import { ActionableHookPill } from "../../components/ActionableHookPill";
-import { ThresholdOptimizerBar } from "./ThresholdOptimizerBar";
+import {ShieldAlert, Sliders, X} from "lucide-react";
+import type {MiscalibratedAssertionItem} from "../../../../api/types";
+import {ActionableHookPill} from "../../components/ActionableHookPill";
+import {ThresholdOptimizerBar} from "./ThresholdOptimizerBar";
 
 export interface CalibrationDiagnosticRailProps {
   selectedAssertion: MiscalibratedAssertionItem | null;

@@ -8,12 +8,11 @@ from __future__ import annotations
 
 import json
 from typing import Any, Protocol, Sequence, runtime_checkable
+
 import networkx as nx
 import numpy as np
 from pydantic import BaseModel, Field
 
-from epistemetrics.core.models import TheoryEdge, TheoryNode
-from epistemetrics.graph.theory_graph import TheoryGraph
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
     L2Entity,
@@ -28,6 +27,8 @@ from episteme_pipeline.evaluation.models import (
     EvaluationOutcome,
     EvaluationResult,
 )
+from epistemetrics.core.models import TheoryEdge, TheoryNode
+from epistemetrics.graph.theory_graph import TheoryGraph
 
 
 class ReliabilityBin(BaseModel):

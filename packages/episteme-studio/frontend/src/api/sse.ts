@@ -2,7 +2,7 @@
  * Server-Sent Events subscriber with automatic reconnection and Last-Event-ID tracking.
  */
 
-import { StudioEvent } from "./types";
+import {StudioEvent} from "./types";
 
 export function subscribeToRunEvents(
   runId: string,

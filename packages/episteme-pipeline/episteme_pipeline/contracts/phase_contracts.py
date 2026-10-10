@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from episteme_pipeline.runs.models import RunManifest, RunReport
@@ -19,8 +19,6 @@ from episteme_pipeline.contracts.domain import (
     TheoryNet,
     SearchResult,
     SubGraph,
-    CandidatePair,
-    PhaseItemRecord,
 )
 class PipelineInput(BaseModel):
     """

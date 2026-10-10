@@ -7,6 +7,7 @@ and markdown serialization for scientific theory evaluations.
 from __future__ import annotations
 
 from typing import Any
+
 import networkx as nx
 from pydantic import BaseModel, ConfigDict, Field
 

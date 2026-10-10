@@ -1,21 +1,13 @@
-import React, { useState, useMemo, useRef, useLayoutEffect, useCallback } from "react";
-import { PhaseStatus } from "../api/types";
-import {
-  GitBranch,
-  Layers,
-  Activity,
-  ArrowRight,
-  Coins,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from "lucide-react";
-import { getEpistemicLayerForPhase } from "./epistemicTheme";
-import { resolvePhaseKey } from "./phaseConfig/phaseConfigResolver";
-import { useRunsStore } from "../store/runsStore";
-import { GitRailNode, ViewPerspective } from "./gitRail/types";
-import { OrthogonalGitRail } from "./gitRail/OrthogonalGitRail";
-import { GitRailRow } from "./gitRail/GitRailRow";
-import { LayerRollupView } from "./gitRail/LayerRollupView";
+import React, {useCallback, useLayoutEffect, useMemo, useRef, useState} from "react";
+import {PhaseStatus} from "../api/types";
+import {Activity, ArrowRight, Coins, GitBranch, Layers,} from "lucide-react";
+import {getEpistemicLayerForPhase} from "./epistemicTheme";
+import {resolvePhaseKey} from "./phaseConfig/phaseConfigResolver";
+import {useRunsStore} from "../store/runsStore";
+import {GitRailNode, ViewPerspective} from "./gitRail/types";
+import {OrthogonalGitRail} from "./gitRail/OrthogonalGitRail";
+import {GitRailRow} from "./gitRail/GitRailRow";
+import {LayerRollupView} from "./gitRail/LayerRollupView";
 
 export interface PipelineDagViewerProps {
   phaseRecords: PhaseStatus[];

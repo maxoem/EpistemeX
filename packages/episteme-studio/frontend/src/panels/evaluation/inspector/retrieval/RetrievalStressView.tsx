@@ -8,10 +8,9 @@
  * Reference: ISSUE-031, ISSUE-032
  */
 
-import React, { useState } from "react";
-import { Filter, Activity, Columns, Maximize2 } from "lucide-react";
-import { CompetencyRankingTable } from "./CompetencyRankingTable";
-import { NoiseRobustnessPlot } from "./NoiseRobustnessPlot";
+import React, {useState} from "react";
+import {CompetencyRankingTable} from "./CompetencyRankingTable";
+import {NoiseRobustnessPlot} from "./NoiseRobustnessPlot";
 
 export interface RetrievalStressViewProps {
   onOpenCanvas?: () => void;

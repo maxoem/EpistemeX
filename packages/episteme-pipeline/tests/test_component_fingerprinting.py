@@ -35,9 +35,8 @@ from episteme_pipeline.protocols.fingerprint import (
     is_component,
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
-from episteme_pipeline.runs.fingerprints import fingerprint_method, stable_fingerprint
+from episteme_pipeline.runs.fingerprints import fingerprint_method
 from episteme_pipeline.runs.models import (
-    ExecutionResult,
     RunManifest,
     RunPhaseRecord,
     RunStatus,

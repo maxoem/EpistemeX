@@ -17,10 +17,12 @@ belong to the same community, and 0 otherwise.
 
 from __future__ import annotations
 
-from collections import defaultdict
 import logging
+from collections import defaultdict
 from typing import Any
+
 import networkx as nx
+
 from epistemetrics.core.exceptions import AlgorithmError, GDSProjectionError
 from epistemetrics.core.models import AlgorithmExecutionMode, PartitionResult
 from epistemetrics.graph.algorithms.common import extract_nx_graph, resolve_gds_graph_name

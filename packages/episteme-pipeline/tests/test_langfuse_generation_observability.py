@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+
 import pytest
-from pydantic import BaseModel
 from llama_index.core import PromptTemplate
+from pydantic import BaseModel
 
 from episteme_pipeline.events.bus import SimpleEventEmitter
 from episteme_pipeline.events.context import use_event_emitter
@@ -16,9 +17,9 @@ from episteme_pipeline.events.models import (
     EvaluationScoreLogged,
     LLMGenerationCompleted,
 )
-from episteme_pipeline.llm.metadata import LLMResponseMetadataExtractor, TokenUsage
-from episteme_pipeline.llm.structured import LlamaIndexStructuredLLMAdapter
 from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
+from episteme_pipeline.llm.metadata import LLMResponseMetadataExtractor
+from episteme_pipeline.llm.structured import LlamaIndexStructuredLLMAdapter
 
 
 class _FakeStructuredOutput(BaseModel):
@@ -378,9 +379,7 @@ def test_langfuse_observer_maps_domain_and_lifecycle_events(monkeypatch: Any) ->
         ComponentStarted,
         ComponentCompleted,
         PhaseCompleted,
-        ChunksGenerated,
         RerankerScoreAssigned,
-        LLMRelationDecoded,
         LLMDurationMeasured,
     )
 

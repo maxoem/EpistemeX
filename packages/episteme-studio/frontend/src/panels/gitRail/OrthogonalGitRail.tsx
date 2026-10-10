@@ -1,6 +1,6 @@
 import React from "react";
-import { GitRailNode, GitRailTrackEdge } from "./types";
-import { EPISTEMIC_TAXONOMY } from "../epistemicTheme";
+import {GitRailNode, GitRailTrackEdge} from "./types";
+import {EPISTEMIC_TAXONOMY} from "../epistemicTheme";
 
 interface OrthogonalGitRailProps {
   nodes: GitRailNode[];

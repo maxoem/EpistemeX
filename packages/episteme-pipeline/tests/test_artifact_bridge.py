@@ -5,7 +5,6 @@ from episteme_pipeline.artifacts.mappers import (
     map_phase2_output_to_artifacts,
 )
 from episteme_pipeline.artifacts.store import InMemoryArtifactStore, JsonArtifactStore
-from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
 from episteme_pipeline.contracts.phase_contracts import (
     L1Chunk,
     L1Document,

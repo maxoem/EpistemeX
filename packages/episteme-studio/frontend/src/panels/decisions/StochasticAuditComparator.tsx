@@ -1,15 +1,6 @@
 import React from "react";
-import { BorderlineDecisionItem } from "../../api/types";
-import {
-  CheckCircle2,
-  AlertTriangle,
-  Zap,
-  Cpu,
-  Clock,
-  ShieldCheck,
-  ExternalLink,
-  ArrowRight,
-} from "lucide-react";
+import {BorderlineDecisionItem} from "../../api/types";
+import {AlertTriangle, CheckCircle2, Cpu, ShieldCheck, Zap,} from "lucide-react";
 
 export interface StochasticAuditComparatorProps {
   decision: BorderlineDecisionItem;

@@ -2,7 +2,6 @@
 Simple test script to demonstrate the model caching mechanism without downloading models.
 """
 
-import time
 import weakref
 from unittest.mock import Mock
 

@@ -2,10 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext, Phase1ArtifactsView, Phase2ArtifactsView
+from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext, Phase1ArtifactsView, \
+    Phase2ArtifactsView
 from episteme_pipeline.config import PipelineConfig
-from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.contracts.domain import L1Chunk, L1Document, L2Entity, L2Triple
+from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
 from episteme_pipeline.runs.models import ExecutionResult, RunManifest, RunPhaseRecord, RunStatus
 

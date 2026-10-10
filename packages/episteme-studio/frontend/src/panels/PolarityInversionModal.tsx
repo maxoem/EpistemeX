@@ -1,8 +1,8 @@
 import React from "react";
-import { useDiffStore } from "../store/diffStore";
-import { useRunsStore } from "../store/runsStore";
-import { PolarityInversion } from "../api/types";
-import { Zap, X, ArrowRight, ShieldAlert, Crosshair, CheckCircle, AlertCircle } from "lucide-react";
+import {useDiffStore} from "../store/diffStore";
+import {useRunsStore} from "../store/runsStore";
+import {PolarityInversion} from "../api/types";
+import {ArrowRight, CheckCircle, Crosshair, X, Zap} from "lucide-react";
 
 interface PolarityInversionModalProps {
   onFocusEndpoints?: (sourceId: string, targetId: string) => void;

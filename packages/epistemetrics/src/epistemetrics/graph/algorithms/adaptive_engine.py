@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+
 from epistemetrics.adapters.neo4j.gds_engine import Neo4jGDSAlgorithmsEngine
 from epistemetrics.core.models import CentralityResult, PartitionResult
 from epistemetrics.graph.algorithms.networkx_engine import NetworkXAlgorithmsEngine

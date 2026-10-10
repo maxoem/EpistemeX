@@ -1,17 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import {
-  AlertCircle,
-  AlertTriangle,
-  CheckCircle2,
-  Copy,
-  Download,
-  FileCode,
-  RefreshCw,
-  Sparkles,
-  Wand2,
-} from "lucide-react";
-import { api } from "../../../api/client";
-import type { BenchmarkValidationResult, BenchmarkValidationIssue } from "../../../api/types";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
+import {AlertCircle, AlertTriangle, CheckCircle2, Copy, Download, FileCode, RefreshCw, Wand2,} from "lucide-react";
+import {api} from "../../../api/client";
+import type {BenchmarkValidationResult} from "../../../api/types";
 
 interface PreFlightLinterRailProps {
   initialContent?: string;

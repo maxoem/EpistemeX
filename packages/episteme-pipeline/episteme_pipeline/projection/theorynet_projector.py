@@ -11,17 +11,17 @@ import logging
 import math
 from typing import Literal
 
+from episteme_pipeline.artifacts.execution import Phase4ArtifactsView
+from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet, TheoryRelation
+from episteme_pipeline.decision.modal_resolver import StructuralistModalResolver
+from episteme_pipeline.protocols.modality import ModalStrengthResolver
+from episteme_pipeline.schema.default_schema import SchemaConfig
 from epistemetrics.core.models import RelationType, TheoryEdge
 from epistemetrics.epistemic.qbaf import (
     GradualSemanticsModel,
     QBAFGradualSemanticsSolver,
     WeightNormalizationMode,
 )
-from episteme_pipeline.artifacts.execution import Phase4ArtifactsView
-from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet, TheoryRelation
-from episteme_pipeline.decision.modal_resolver import StructuralistModalResolver
-from episteme_pipeline.protocols.modality import ModalStrengthResolver
-from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
 

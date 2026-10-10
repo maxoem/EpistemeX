@@ -1,21 +1,6 @@
 import React from "react";
-import {
-  CheckCircle2,
-  XCircle,
-  GitMerge,
-  RotateCcw,
-  Sparkles,
-  ArrowRight,
-  Info,
-  Layers,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
-import type {
-  AdjudicationDecision,
-  AdjudicationQueueItem,
-  EdgeAdjudicationItem,
-} from "../../../../api/types";
+import {CheckCircle2, ChevronDown, ChevronRight, GitMerge, Layers, RotateCcw, Sparkles, XCircle,} from "lucide-react";
+import type {AdjudicationDecision, AdjudicationQueueItem, EdgeAdjudicationItem,} from "../../../../api/types";
 
 export interface AdjudicationTriadCardProps {
   candidate: AdjudicationQueueItem | null;

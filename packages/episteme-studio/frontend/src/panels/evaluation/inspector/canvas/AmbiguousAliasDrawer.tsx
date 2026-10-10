@@ -1,18 +1,7 @@
-import React, { useState, useMemo } from "react";
-import {
-  Check,
-  CheckCheck,
-  ExternalLink,
-  Layers,
-  Sparkles,
-  Users,
-  X,
-  XCircle,
-  HelpCircle,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
-import { ActionableHookPill } from "../../components/ActionableHookPill";
-import type { EvaluationNodeOverlay } from "../../../../api/types";
+import React, {useMemo, useState} from "react";
+import {Check, CheckCheck, Users, X, XCircle,} from "lucide-react";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
+import {ActionableHookPill} from "../../components/ActionableHookPill";
 
 export interface AmbiguousEntityCandidate {
   id: string;

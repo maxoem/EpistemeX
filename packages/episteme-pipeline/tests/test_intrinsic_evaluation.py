@@ -1,6 +1,5 @@
 """Unit tests for pipeline intrinsic evaluation integration."""
 
-import pytest
 import epistemetrics as em
 from episteme_pipeline.evaluation import evaluate_theory_graph_components
 

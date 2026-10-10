@@ -5,6 +5,7 @@ Shared utility functions for graph algorithm implementations.
 from __future__ import annotations
 
 from typing import Any
+
 import networkx as nx
 
 

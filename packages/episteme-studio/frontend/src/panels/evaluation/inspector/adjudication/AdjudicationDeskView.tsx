@@ -1,17 +1,14 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
-import { api } from "../../../../api/client";
-import type {
-  AdjudicationQueueItem,
-  AdjudicationQueueResponse,
-} from "../../../../api/types";
-import { useAdjudicationStaging } from "./useAdjudicationStaging";
-import { useEvaluationHotkeys } from "./useEvaluationHotkeys";
-import { AdjudicationTableView } from "./AdjudicationTableView";
-import { AdjudicationInspectorRail } from "./AdjudicationInspectorRail";
-import { SchemaAliasOmnibar } from "./SchemaAliasOmnibar";
-import { ResizablePanel } from "../../../ResizablePanel";
-import { BorderlineAdjudicationQueue } from "../../adjudication/BorderlineAdjudicationQueue";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
+import {api} from "../../../../api/client";
+import type {AdjudicationQueueItem, AdjudicationQueueResponse,} from "../../../../api/types";
+import {useAdjudicationStaging} from "./useAdjudicationStaging";
+import {useEvaluationHotkeys} from "./useEvaluationHotkeys";
+import {AdjudicationTableView} from "./AdjudicationTableView";
+import {AdjudicationInspectorRail} from "./AdjudicationInspectorRail";
+import {SchemaAliasOmnibar} from "./SchemaAliasOmnibar";
+import {ResizablePanel} from "../../../ResizablePanel";
+import {BorderlineAdjudicationQueue} from "../../adjudication/BorderlineAdjudicationQueue";
 
 export const AdjudicationDeskView: React.FC = () => {
   const { activeReport } = useEvaluationStore();

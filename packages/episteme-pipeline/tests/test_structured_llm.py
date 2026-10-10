@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
 from llama_index.core import PromptTemplate
+from pydantic import BaseModel
 
 from episteme_pipeline.llm import (
     LlamaIndexStructuredLLMAdapter,

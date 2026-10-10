@@ -1,18 +1,6 @@
-import React, { useState } from "react";
-import { BorderlineDecisionItem } from "../../../api/types";
-import {
-  CheckCircle2,
-  AlertTriangle,
-  Zap,
-  Cpu,
-  ShieldCheck,
-  Send,
-  Check,
-  X,
-  FileText,
-  HelpCircle,
-  Sparkles,
-} from "lucide-react";
+import React, {useState} from "react";
+import {BorderlineDecisionItem} from "../../../api/types";
+import {AlertTriangle, Check, CheckCircle2, FileText, Send, ShieldCheck, Zap,} from "lucide-react";
 
 export interface AdjudicationCardProps {
   item: BorderlineDecisionItem;

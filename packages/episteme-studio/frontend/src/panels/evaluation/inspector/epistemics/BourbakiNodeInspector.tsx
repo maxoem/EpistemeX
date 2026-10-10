@@ -1,17 +1,8 @@
 import React from "react";
-import {
-  AlertOctagon,
-  CheckCircle2,
-  GitBranch,
-  Link2,
-  Network,
-  ShieldAlert,
-  Workflow,
-  X,
-} from "lucide-react";
-import type { BourbakiSubElement } from "./types";
-import { CLASS_METADATA } from "./types";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
+import {AlertOctagon, CheckCircle2, GitBranch, Link2, Network, ShieldAlert, Workflow, X,} from "lucide-react";
+import type {BourbakiSubElement} from "./types";
+import {CLASS_METADATA} from "./types";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
 
 export interface BourbakiNodeInspectorProps {
   element: BourbakiSubElement;

@@ -1,13 +1,7 @@
-import React, { useState, useMemo, useEffect } from "react";
-import {
-  BookOpen,
-  ChevronRight,
-  Copy,
-  Play,
-  Plus,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import type { BenchmarkDescriptor } from "../../../api/types";
+import React, {useEffect, useMemo, useState} from "react";
+import {BookOpen, ChevronRight, Copy, Play, Plus,} from "lucide-react";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import type {BenchmarkDescriptor} from "../../../api/types";
 
 interface BenchmarkRegistryTableProps {
   benchmarks: BenchmarkDescriptor[];

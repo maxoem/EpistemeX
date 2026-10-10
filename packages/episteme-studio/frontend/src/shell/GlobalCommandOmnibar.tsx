@@ -1,30 +1,26 @@
-import React, { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
-import { Command } from "cmdk";
+import React, {useEffect, useState} from "react";
+import {createPortal} from "react-dom";
+import {Command} from "cmdk";
 import {
-  Search,
-  Circle,
-  ArrowRight,
-  Play,
-  Download,
-  Settings,
-  Database,
-  Layers,
-  Network,
-  BringToFront,
-  Sliders,
-  Sparkles,
-  Terminal,
-  Activity,
-  History,
-  FileCode,
-  FileSpreadsheet,
-  Image,
-  Cpu,
+    Activity,
+    ArrowRight,
+    BringToFront,
+    Circle,
+    Cpu,
+    Database,
+    Download,
+    FileCode,
+    FileSpreadsheet,
+    Image,
+    Layers,
+    Network,
+    Play,
+    Search,
+    Settings,
 } from "lucide-react";
-import { StudioNode, RunSummary } from "../api/types";
-import { useRunsStore } from "../store/runsStore";
-import { useProjectSettingsStore } from "../store/projectSettingsStore";
+import {RunSummary, StudioNode} from "../api/types";
+import {useRunsStore} from "../store/runsStore";
+import {useProjectSettingsStore} from "../store/projectSettingsStore";
 
 interface GlobalCommandOmnibarProps {
   nodes?: StudioNode[];

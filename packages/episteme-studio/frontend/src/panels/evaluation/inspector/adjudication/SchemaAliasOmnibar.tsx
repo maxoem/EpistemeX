@@ -1,14 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Command } from "cmdk";
-import {
-  GitMerge,
-  Search,
-  Check,
-  X,
-  ArrowRight,
-  BookOpen,
-  Sparkles,
-} from "lucide-react";
+import React, {useEffect, useRef, useState} from "react";
+import {Command} from "cmdk";
+import {ArrowRight, BookOpen, Check, GitMerge, Search, Sparkles, X,} from "lucide-react";
 
 export interface SchemaAliasOmnibarProps {
   isOpen: boolean;

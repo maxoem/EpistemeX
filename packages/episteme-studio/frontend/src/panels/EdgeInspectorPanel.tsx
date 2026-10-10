@@ -1,16 +1,7 @@
-import React, { useState, useMemo } from "react";
-import { StudioEdge, StudioNode, MetricResult } from "../api/types";
-import {
-  X,
-  ArrowRight,
-  Copy,
-  Check,
-  Database,
-  Search,
-  Code2,
-  Table,
-} from "lucide-react";
-import { useEngineSchema } from "../store/engineSettingsStore";
+import React, {useMemo, useState} from "react";
+import {MetricResult, StudioEdge, StudioNode} from "../api/types";
+import {Check, Code2, Copy, Database, Search, Table, X,} from "lucide-react";
+import {useEngineSchema} from "../store/engineSettingsStore";
 
 interface EdgeInspectorPanelProps {
   edge: StudioEdge;

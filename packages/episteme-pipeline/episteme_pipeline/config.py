@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 from enum import Enum
 from typing import Any, Literal
-from pydantic import BaseModel, Field, SecretStr, model_validator
+
+from pydantic import BaseModel, Field, SecretStr
 
 from episteme_pipeline.prompts.default_prompts import (
     ACC_DIRECT_PROMPT, ACC_REASONING_PROMPT, ACC_FORMAT_PROMPT,

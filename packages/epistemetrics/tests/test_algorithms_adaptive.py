@@ -5,13 +5,14 @@ Tests for AdaptiveAlgorithmsEngine auto-detection and fallback logic.
 from __future__ import annotations
 
 from unittest.mock import MagicMock
+
 import networkx as nx
 import pytest
+
 from epistemetrics.adapters.neo4j.client import Neo4jClient
 from epistemetrics.adapters.neo4j.gds_engine import Neo4jGDSAlgorithmsEngine
 from epistemetrics.core.models import CentralityResult
 from epistemetrics.graph.algorithms.adaptive_engine import AdaptiveAlgorithmsEngine
-from epistemetrics.graph.algorithms.networkx_engine import NetworkXAlgorithmsEngine
 
 
 @pytest.fixture

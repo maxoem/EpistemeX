@@ -17,7 +17,6 @@ import networkx as nx
 import epistemetrics as em
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
-    Phase1ArtifactsView,
     Phase2ArtifactsView,
     Phase3ArtifactsView,
     Phase4ArtifactsView,
@@ -33,7 +32,6 @@ from episteme_pipeline.evaluation.benchmarks.arg_microtexts import load_arg_micr
 from episteme_pipeline.evaluation.benchmarks.scierc import load_scierc_subset
 from episteme_pipeline.evaluation.benchmarks.structuralist import (
     load_structuralist_benchmark,
-    load_structuralist_theory_graph,
 )
 from episteme_pipeline.evaluation.models import (
     DatasetType,
@@ -43,13 +41,11 @@ from episteme_pipeline.evaluation.models import (
     EvaluationResult,
 )
 from episteme_pipeline.evaluation.scorers.domain_bridge import (
-    artifact_collection_to_theory_graph,
     l2_triples_to_digraph,
-    theory_net_to_theory_graph,
 )
 from episteme_pipeline.evaluation.scorers.model_scorer import ModelScorer
 from episteme_pipeline.evaluation.scorers.oep import OptimalEditPathEvaluator
-from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
+from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
 

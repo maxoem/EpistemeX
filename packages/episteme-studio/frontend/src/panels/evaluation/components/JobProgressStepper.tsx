@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, {useState} from "react";
 import {
   Activity,
   AlertCircle,
@@ -7,15 +7,13 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
-  ExternalLink,
   Layers,
   Network,
-  RotateCcw,
   Sliders,
   Sparkles,
   Terminal,
 } from "lucide-react";
-import type { EvaluationJobStatus, StudioEvent } from "../../../api/types";
+import type {EvaluationJobStatus, StudioEvent} from "../../../api/types";
 
 export interface JobProgressStepperProps {
   jobId: string;

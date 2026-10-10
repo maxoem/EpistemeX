@@ -10,14 +10,14 @@ from episteme_pipeline.artifacts.mappers import (
 )
 from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
+from episteme_pipeline.contracts.domain import L1Chunk, L1Document
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
 from episteme_pipeline.contracts.phase_contracts import (
     L2Triple,
-            Phase3Output,
+    Phase3Output,
     Phase4Output,
     PipelineInput,
 )
-from episteme_pipeline.contracts.domain import L1Chunk, L1Document
 from episteme_pipeline.pipeline import Pipeline
 from episteme_pipeline.runs.models import ExecutionResult, RunManifest, RunPhaseRecord, RunStatus
 

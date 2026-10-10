@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { Sliders, Sparkles, Check, ArrowRight } from "lucide-react";
+import React, {useMemo, useState} from "react";
+import {ArrowRight, Sliders} from "lucide-react";
 
 export interface ThresholdOptimizerBarProps {
   baselinePrecision?: number;

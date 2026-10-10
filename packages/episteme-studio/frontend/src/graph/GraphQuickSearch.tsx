@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { Command } from "cmdk";
-import { Search, Layers, Circle, ArrowRight } from "lucide-react";
-import { StudioNode } from "../api/types";
+import React, {useEffect, useState} from "react";
+import {Command} from "cmdk";
+import {ArrowRight, Circle, Search} from "lucide-react";
+import {StudioNode} from "../api/types";
 
 interface GraphQuickSearchProps {
   nodes: StudioNode[];

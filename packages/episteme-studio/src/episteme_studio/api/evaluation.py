@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import PlainTextResponse
 from sse_starlette.sse import EventSourceResponse
 
 from episteme_studio.api.deps import get_broker, get_evaluation_service
 from episteme_studio.api.errors import (
-    BenchmarkNotFoundException,
     EvaluationReportNotFoundException,
 )
 from episteme_studio.domain.evaluation import (

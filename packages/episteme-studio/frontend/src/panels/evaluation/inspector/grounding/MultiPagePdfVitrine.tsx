@@ -8,32 +8,24 @@
  * Reference: ISSUE-029 (Multimodal Document Grounding)
  */
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
 import {
-  BookOpen,
-  ChevronLeft,
-  ChevronRight,
-  Maximize2,
-  Minimize2,
-  ZoomIn,
-  ZoomOut,
-  Layers,
-  Sparkles,
-  Eye,
-  EyeOff,
-  Navigation,
-  FileText,
+    BookOpen,
+    ChevronLeft,
+    ChevronRight,
+    FileText,
+    Maximize2,
+    Navigation,
+    Sparkles,
+    ZoomIn,
+    ZoomOut,
 } from "lucide-react";
-import type {
-  GroundingEvaluationDetail,
-  BoundingBoxCoordinates,
-  TextSpanCoordinates,
-} from "../../../../api/types";
+import type {GroundingEvaluationDetail, TextSpanCoordinates,} from "../../../../api/types";
 import {
-  computeGlobalBoundingBox,
-  computeLocalBoundingBox,
-  computeBezierSplineAcrossPages,
-  type PageDimension,
+    computeBezierSplineAcrossPages,
+    computeGlobalBoundingBox,
+    computeLocalBoundingBox,
+    type PageDimension,
 } from "./coordinateScaling";
 
 export interface MultiPagePdfVitrineProps {

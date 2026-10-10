@@ -8,12 +8,11 @@ dynamic pipeline runner / post-processor plugging with ZERO hardcoded theories.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
+
+import pytest
 
 from episteme_pipeline.artifacts.execution import (
-    ArtifactCollection,
     ArtifactExecutionContext,
     Phase4ArtifactsView,
 )
@@ -28,7 +27,6 @@ from episteme_pipeline.events.bus import SimpleEventEmitter
 from episteme_pipeline.events.context import use_event_emitter
 from episteme_pipeline.post_processing.theoretical_enrichment import (
     ClusterProjectionOutput,
-    CompositeTheoryProjector,
     EmpiricalCluster,
     GenericTheoryProjector,
     InducedTheoryElement,
@@ -36,7 +34,6 @@ from episteme_pipeline.post_processing.theoretical_enrichment import (
     LLMTheoryInducer,
     LLMTheoryProjector,
     SafeFormulaEvaluator,
-    TenabilityAnomalyDetected,
     TenabilityEvaluationCompleted,
     TenabilitySolver,
     TheoreticalClusterIdentified,
@@ -46,7 +43,6 @@ from episteme_pipeline.post_processing.theoretical_enrichment import (
     TheoryInductionOutput,
     TheoryLaw,
     TheoryRegistry,
-    evaluate_formula_safely,
 )
 from episteme_pipeline.runs.models import RunManifest
 

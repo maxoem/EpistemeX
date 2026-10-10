@@ -22,6 +22,12 @@ from episteme_pipeline.decision.mock import (
     MockJevDecisionEngine,
     compute_conformal_prediction_set,
 )
+from episteme_pipeline.decision.modal_resolver import (
+    ModalSyntaxProfile,
+    StructuralistModalResolver,
+    DecisionEngineModalResolver,
+    HybridModalResolver,
+)
 from episteme_pipeline.decision.observable import ObservableDecisionEngine
 from episteme_pipeline.decision.strategies import (
     ChoiceQuestionStrategy,
@@ -31,12 +37,6 @@ from episteme_pipeline.decision.strategies import (
     evaluate_questions_sequentially,
     get_question_strategy,
     register_question_strategy,
-)
-from episteme_pipeline.decision.modal_resolver import (
-    ModalSyntaxProfile,
-    StructuralistModalResolver,
-    DecisionEngineModalResolver,
-    HybridModalResolver,
 )
 
 __all__ = [

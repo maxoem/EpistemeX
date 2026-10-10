@@ -1,25 +1,25 @@
-import { create } from "zustand";
-import { api } from "../api/client.ts";
+import {create} from "zustand";
+import {api} from "../api/client.ts";
 import type {
-  DecisionEngineSettings,
-  DecisionEngineStatusResponse,
-  DecisionTestRequest,
-  DecisionTestResponse,
-  EngineSettings,
-  EngineSettingsPatch,
-  PredicateMapping,
-  SchemaConfig,
-  UnmappedPredicateInfo,
+    DecisionEngineSettings,
+    DecisionEngineStatusResponse,
+    DecisionTestRequest,
+    DecisionTestResponse,
+    EngineSettings,
+    EngineSettingsPatch,
+    PredicateMapping,
+    SchemaConfig,
+    UnmappedPredicateInfo,
 } from "../api/types.ts";
 import {
-  DEFAULT_L2_NODE_DEFINITIONS,
-  DEFAULT_L2_RELATION_DEFINITIONS,
-  DEFAULT_L3_COMPONENT_DEFINITIONS,
-  DEFAULT_L3_ARGUMENT_RELATION_DEFINITIONS,
-  DEFAULT_COMPONENT_PARTITIONS,
-  DEFAULT_RELATION_POLARITIES,
+    DEFAULT_COMPONENT_PARTITIONS,
+    DEFAULT_L2_NODE_DEFINITIONS,
+    DEFAULT_L2_RELATION_DEFINITIONS,
+    DEFAULT_L3_ARGUMENT_RELATION_DEFINITIONS,
+    DEFAULT_L3_COMPONENT_DEFINITIONS,
+    DEFAULT_RELATION_POLARITIES,
 } from "../panels/configEditor/constants.ts";
-import type { SelectedItem } from "../panels/engine/types.ts";
+import type {SelectedItem} from "../panels/engine/types.ts";
 
 export interface EngineSettingsState {
   settings: EngineSettings | null;

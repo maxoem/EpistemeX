@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, {useEffect, useState} from "react";
 import {
-  Layers,
-  Plus,
-  Compass,
-  Settings,
-  GripVertical,
-  Sparkles,
-  MoreHorizontal,
-  Copy,
-  RotateCcw,
-  X,
-  Zap,
+    Compass,
+    Copy,
+    GripVertical,
+    Layers,
+    MoreHorizontal,
+    Plus,
+    RotateCcw,
+    Settings,
+    Sparkles,
+    X,
+    Zap,
 } from "lucide-react";
-import { PHASE_REGISTRY, isPhaseMandatory } from "../../phaseConfig/phaseRegistry";
-import { PhaseExecutionStatusMap } from "../phaseExecution";
+import {isPhaseMandatory, PHASE_REGISTRY} from "../../phaseConfig/phaseRegistry";
+import {PhaseExecutionStatusMap} from "../phaseExecution";
 
 interface PipelineComposerRailProps {
   selectedPhaseKey: string;

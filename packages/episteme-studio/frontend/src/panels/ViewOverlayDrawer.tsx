@@ -1,41 +1,29 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, {useMemo, useState} from "react";
+import {CURATED_LENSES, extractTheoriesFromGraph, SubgraphMask, useViewOverlayStore,} from "../store/viewOverlayStore";
+import {GraphView, OverlayKind} from "../api/types";
+import {api} from "../api/client";
+import {useRunsStore} from "../store/runsStore";
 import {
-  useViewOverlayStore,
-  CURATED_LENSES,
-  CuratedLens,
-  DynamicTheoryLens,
-  extractTheoriesFromGraph,
-  SubgraphMask,
-} from "../store/viewOverlayStore";
-import { GraphView, Overlay, OverlayKind } from "../api/types";
-import { api } from "../api/client";
-import { useRunsStore } from "../store/runsStore";
-import {
-  Filter,
-  Eye,
-  Check,
-  X,
-  RotateCcw,
-  Bookmark,
-  Trash2,
-  AlertTriangle,
-  Scale,
-  Brain,
-  Layers,
-  Network,
-  TrendingUp,
-  Boxes,
-  Activity,
-  Share2,
-  Sliders,
-  ChevronRight,
-  ChevronDown,
-  ArrowLeft,
-  Loader2,
-  Play,
-  CheckCircle2,
-  Compass,
-  Info,
+    Activity,
+    AlertTriangle,
+    ArrowLeft,
+    Bookmark,
+    Boxes,
+    Brain,
+    Check,
+    CheckCircle2,
+    ChevronRight,
+    Eye,
+    Layers,
+    Loader2,
+    Network,
+    Play,
+    RotateCcw,
+    Scale,
+    Share2,
+    Sliders,
+    Trash2,
+    TrendingUp,
 } from "lucide-react";
 
 export interface ViewOverlayDrawerProps {

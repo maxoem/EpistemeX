@@ -1,20 +1,12 @@
 import React from "react";
-import {
-  Activity,
-  BookOpen,
-  Filter,
-  Layers,
-  Network,
-  Sliders,
-  Sparkles,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import { TopologicalCanvasView } from "./canvas/TopologicalCanvasView";
-import { EpistemicTheoryNetView } from "./epistemics/EpistemicTheoryNetView";
-import { AdjudicationDeskView } from "./adjudication/AdjudicationDeskView";
-import { CalibrationLabView } from "./calibration/CalibrationLabView";
-import { DocumentGroundingView } from "./grounding/DocumentGroundingView";
-import { RetrievalStressView } from "./retrieval/RetrievalStressView";
+import {Activity,} from "lucide-react";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import {TopologicalCanvasView} from "./canvas/TopologicalCanvasView";
+import {EpistemicTheoryNetView} from "./epistemics/EpistemicTheoryNetView";
+import {AdjudicationDeskView} from "./adjudication/AdjudicationDeskView";
+import {CalibrationLabView} from "./calibration/CalibrationLabView";
+import {DocumentGroundingView} from "./grounding/DocumentGroundingView";
+import {RetrievalStressView} from "./retrieval/RetrievalStressView";
 
 export interface RunEvaluationInspectorProps {
   onOpenConfigEditor?: () => void;

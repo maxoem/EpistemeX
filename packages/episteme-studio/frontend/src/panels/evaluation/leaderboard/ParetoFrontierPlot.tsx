@@ -1,19 +1,11 @@
-import React, { useEffect, useRef, useMemo } from "react";
+import React, {useEffect, useMemo, useRef} from "react";
 import * as echarts from "echarts/core";
-import {
-  ScatterChart,
-  LineChart,
-} from "echarts/charts";
-import {
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-  TitleComponent,
-} from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
-import { useLeaderboardStore } from "../../../store/leaderboardStore";
-import { useThemeStore } from "../../../store/themeStore";
-import type { LeaderboardEntry } from "../../../api/types";
+import {LineChart, ScatterChart,} from "echarts/charts";
+import {GridComponent, LegendComponent, TitleComponent, TooltipComponent,} from "echarts/components";
+import {CanvasRenderer} from "echarts/renderers";
+import {useLeaderboardStore} from "../../../store/leaderboardStore";
+import {useThemeStore} from "../../../store/themeStore";
+import type {LeaderboardEntry} from "../../../api/types";
 
 echarts.use([
   ScatterChart,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.resources
 from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -12,12 +13,12 @@ from fastapi.staticfiles import StaticFiles
 from episteme_studio.api.config import router as config_router
 from episteme_studio.api.diff import router as diff_router
 from episteme_studio.api.engine import router as engine_router
-from episteme_studio.api.evaluation import router as evaluation_router
 from episteme_studio.api.errors import (
     StudioProblemException,
     problem_exception_handler,
     problem_json_response,
 )
+from episteme_studio.api.evaluation import router as evaluation_router
 from episteme_studio.api.graph import router as graph_router
 from episteme_studio.api.metrics import router as metrics_router
 from episteme_studio.api.overlays import router as overlays_router

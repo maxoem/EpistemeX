@@ -1,48 +1,48 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { GitFork, X } from "lucide-react";
-import { api } from "../api/client";
+import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
+import {GitFork, X} from "lucide-react";
+import {api} from "../api/client";
+import type {DecisionEngineSettings, DecisionPhaseGates} from "../api/types";
 import {
-  AvailableInputDoc,
-  ConfigView,
-  GlobalStructuralAnchor,
-  InvalidationPreview,
-  PromptResolveResponse,
-  ResolvedPromptItem,
+    AvailableInputDoc,
+    ConfigView,
+    GlobalStructuralAnchor,
+    InvalidationPreview,
+    PromptResolveResponse,
+    ResolvedPromptItem,
 } from "../api/types";
-import { useRunsStore } from "../store/runsStore";
-import { useProjectSettingsStore } from "../store/projectSettingsStore";
-import { useNavigationStore } from "../store/navigationStore";
+import {useRunsStore} from "../store/runsStore";
+import {useProjectSettingsStore} from "../store/projectSettingsStore";
+import {useNavigationStore} from "../store/navigationStore";
 import {
-  PHASE_REGISTRY,
-  PhaseMetadata,
-  isPhaseMandatory,
-  isPhasePostProcessor,
-  registerCustomPhase,
-  CORE_DAG_PHASE_KEYS,
-  POST_PROCESSOR_KEYS,
-  PIPELINE_DEFAULTS_KEY,
+    CORE_DAG_PHASE_KEYS,
+    isPhaseMandatory,
+    isPhasePostProcessor,
+    PHASE_REGISTRY,
+    PhaseMetadata,
+    PIPELINE_DEFAULTS_KEY,
+    POST_PROCESSOR_KEYS,
+    registerCustomPhase,
 } from "./phaseConfig/phaseRegistry";
-import { PhaseCatalogDrawer } from "./PhaseCatalogDrawer";
-import { ResizablePanel } from "./ResizablePanel";
-import { useCredentialStore } from "../store/credentialStore";
-import { DatabaseCollisionModal } from "./DatabaseCollisionModal";
+import {PhaseCatalogDrawer} from "./PhaseCatalogDrawer";
+import {ResizablePanel} from "./ResizablePanel";
+import {useCredentialStore} from "../store/credentialStore";
+import {DatabaseCollisionModal} from "./DatabaseCollisionModal";
 import {
-  ConfigEditorProps,
-  RunMetadataItem,
-  BASELINE_PREVIEW,
-  derivePhaseExecutionStatus,
-  PhaseExecutionStatusMap,
-  StageScopeHeader,
-  PipelineComposerRail,
-  PreFlightInspectorRail,
-  StructuralAnchorsView,
-  PipelineDefaultsView,
-  EpistemicSchemaView,
-  StageWorkspaceView,
+    BASELINE_PREVIEW,
+    ConfigEditorProps,
+    derivePhaseExecutionStatus,
+    EpistemicSchemaView,
+    PhaseExecutionStatusMap,
+    PipelineComposerRail,
+    PipelineDefaultsView,
+    PreFlightInspectorRail,
+    RunMetadataItem,
+    StageScopeHeader,
+    StageWorkspaceView,
+    StructuralAnchorsView,
 } from "./configEditor/index";
-import { DecisionEngineConfigPanel } from "./engine/components/DecisionEngineConfigPanel";
-import { useEngineSettingsStore } from "../store/engineSettingsStore";
-import type { DecisionEngineSettings, DecisionPhaseGates } from "../api/types";
+import {DecisionEngineConfigPanel} from "./engine/components/DecisionEngineConfigPanel";
+import {useEngineSettingsStore} from "../store/engineSettingsStore";
 
 export type { ConfigEditorProps };
 

@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from "react";
-import { AppShell } from "./shell/AppShell";
-import { RunList } from "./panels/RunList";
-import { RunDetailView } from "./panels/RunDetailView";
-import { ConfigEditor } from "./panels/ConfigEditor";
-import { PhaseConfigDiffView } from "./panels/PhaseConfigDiffView";
-import { ResizablePanel } from "./panels/ResizablePanel";
-import { AppDiffBottomDock } from "./shell/AppDiffBottomDock";
-import { useRunsStore } from "./store/runsStore";
-import { useDiffStore } from "./store/diffStore";
-import { useEngineSettingsStore } from "./store/engineSettingsStore";
-import { useNavigationStore } from "./store/navigationStore";
-import { EngineSettingsPage } from "./panels/engine/EngineSettingsPage";
-import { subscribeToRunEvents } from "./api/sse";
+import React, {useEffect, useState} from "react";
+import {AppShell} from "./shell/AppShell";
+import {RunList} from "./panels/RunList";
+import {RunDetailView} from "./panels/RunDetailView";
+import {ConfigEditor} from "./panels/ConfigEditor";
+import {PhaseConfigDiffView} from "./panels/PhaseConfigDiffView";
+import {ResizablePanel} from "./panels/ResizablePanel";
+import {AppDiffBottomDock} from "./shell/AppDiffBottomDock";
+import {useRunsStore} from "./store/runsStore";
+import {useDiffStore} from "./store/diffStore";
+import {useEngineSettingsStore} from "./store/engineSettingsStore";
+import {useNavigationStore} from "./store/navigationStore";
+import {EngineSettingsPage} from "./panels/engine/EngineSettingsPage";
+import {subscribeToRunEvents} from "./api/sse";
 
 const CypherConsole = React.lazy(() =>
   import("./console/CypherConsole").then((m) => ({ default: m.CypherConsole }))

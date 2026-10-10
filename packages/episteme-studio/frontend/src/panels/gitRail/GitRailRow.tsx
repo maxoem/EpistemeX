@@ -1,9 +1,9 @@
 import React from "react";
-import { GitRailNode } from "./types";
-import { EPISTEMIC_TAXONOMY } from "../epistemicTheme";
-import { getShortStageLabel } from "../stageModel";
-import { ChevronDown, ChevronRight, Boxes, Zap } from "lucide-react";
-import { useRunsStore } from "../../store/runsStore";
+import {GitRailNode} from "./types";
+import {EPISTEMIC_TAXONOMY} from "../epistemicTheme";
+import {getShortStageLabel} from "../stageModel";
+import {ChevronDown, ChevronRight, Zap} from "lucide-react";
+import {useRunsStore} from "../../store/runsStore";
 
 interface GitRailRowProps {
   node: GitRailNode;

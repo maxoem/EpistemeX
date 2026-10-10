@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 import epistemetrics as em
 from epistemetrics.epistemic.dynamics import (
     evaluate_diachronic_dynamics,

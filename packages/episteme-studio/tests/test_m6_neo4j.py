@@ -6,15 +6,13 @@ import ast
 import asyncio
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from neo4j import RoutingControl
-from neo4j.exceptions import ClientError, TransientError
+from neo4j.exceptions import ClientError
 
 from episteme_studio.adapters.neo4j_reader import Neo4jReader
-from episteme_studio.adapters.schema_mapper import SchemaMapper
 from episteme_studio.app import create_app
 from episteme_studio.domain.errors import Neo4jUnavailableError
 from episteme_studio.domain.graph import (

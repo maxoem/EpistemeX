@@ -1,15 +1,8 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
-import {
-  AlertTriangle,
-  ArrowRight,
-  Scale,
-  Quote,
-  Network,
-  ShieldCheck,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
-import { ActionableHookPill } from "../../components/ActionableHookPill";
-import type { PolarityConcordanceDetail } from "../../../../api/types";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
+import {ArrowRight, Network, Scale, ShieldCheck,} from "lucide-react";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
+import {ActionableHookPill} from "../../components/ActionableHookPill";
+import type {PolarityConcordanceDetail} from "../../../../api/types";
 
 export interface PolarityConflictItem {
   id: string;

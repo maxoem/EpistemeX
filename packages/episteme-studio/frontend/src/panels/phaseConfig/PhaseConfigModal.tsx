@@ -1,16 +1,8 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { PhaseStatus } from "../../api/types";
-import { resolvePhaseConfig, getAvailablePhaseTabs, resolvePhaseKey } from "./phaseConfigResolver";
-import { PhaseConfigViewer } from "./PhaseConfigViewer";
-import {
-  X,
-  SlidersHorizontal,
-  ChevronRight,
-  Layers,
-  Sparkles,
-  Copy,
-  Check,
-} from "lucide-react";
+import React, {useEffect, useMemo, useState} from "react";
+import {PhaseStatus} from "../../api/types";
+import {getAvailablePhaseTabs, resolvePhaseConfig, resolvePhaseKey} from "./phaseConfigResolver";
+import {PhaseConfigViewer} from "./PhaseConfigViewer";
+import {SlidersHorizontal, Sparkles, X,} from "lucide-react";
 
 export interface PhaseConfigModalProps {
   isOpen: boolean;

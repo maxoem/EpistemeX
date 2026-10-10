@@ -10,11 +10,11 @@ Functions will safely no-op if Langfuse is not installed or configured.
 
 from __future__ import annotations
 
+import hashlib
+import os
 from contextlib import contextmanager, nullcontext
 from typing import Iterator, Protocol
 from uuid import uuid4
-import hashlib
-import os
 
 try:  # pragma: no cover
     # Optional dependency; guarded to keep the pipeline importable without it

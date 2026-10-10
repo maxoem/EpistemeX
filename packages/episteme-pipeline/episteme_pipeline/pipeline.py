@@ -27,23 +27,20 @@ from episteme_pipeline.events import (
     PhaseCompleted,
     use_event_emitter,
 )
-
 from episteme_pipeline.observability.logging import run_folder_logger
-
-
 from episteme_pipeline.phases.phase3_global_relations.dense_retrieval_extractor import (
     DenseRetrievalGlobalRelationExtractor,
 )
 from episteme_pipeline.protocols.decision import DecisionEngine, ensure_decision_engine
-from episteme_pipeline.protocols.modality import (
-    ModalStrengthResolver,
-    ensure_modal_strength_resolver,
-)
 from episteme_pipeline.protocols.extractors import (
     CrossEncoder,
     EmbeddingModel,
     RelationReranker,
     ensure_embedding_model,
+)
+from episteme_pipeline.protocols.modality import (
+    ModalStrengthResolver,
+    ensure_modal_strength_resolver,
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.fingerprints import (

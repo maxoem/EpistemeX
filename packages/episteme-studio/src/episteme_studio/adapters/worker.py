@@ -12,19 +12,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from episteme_studio.runtime.observer import StudioEventObserver
-from episteme_studio.settings import (
-    check_env_var_set,
-    get_env_var,
-    load_all_dotenv,
-    set_env_var,
-)
 from episteme_pipeline.events.bus import ContextualEventEmitter, SimpleEventEmitter
 from episteme_pipeline.events.models import (
     ComponentCompleted,
     ComponentStarted,
     DecisionEvaluationCompleted,
-    DecisionEvaluationStarted,
     DecisionGatingTriggered,
     EntityProcessed,
     PhaseCompleted,
@@ -35,6 +27,13 @@ from episteme_pipeline.events.models import (
 )
 from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 from episteme_pipeline.runs.persistence import JsonRunManifestStore
+from episteme_studio.runtime.observer import StudioEventObserver
+from episteme_studio.settings import (
+    check_env_var_set,
+    get_env_var,
+    load_all_dotenv,
+    set_env_var,
+)
 
 
 class StreamTee:

@@ -1,5 +1,5 @@
-import { create } from "zustand";
-import type { Overlay, OverlayKind } from "../api/types.ts";
+import {create} from "zustand";
+import type {Overlay, OverlayKind} from "../api/types.ts";
 
 export interface SubgraphMask {
   lensId: string | null;

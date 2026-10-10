@@ -13,8 +13,8 @@ Covers:
 from __future__ import annotations
 
 import hashlib
-from typing import Any
 from unittest.mock import MagicMock
+
 import pytest
 
 from episteme_pipeline.decision.mock import MockJevDecisionEngine
@@ -29,7 +29,7 @@ from episteme_pipeline.events.models import (
     PipelineEvent,
 )
 from episteme_pipeline.prompts.models import StructuredPromptBundle
-from episteme_pipeline.protocols.decision import DecisionEngine, ensure_decision_engine
+from episteme_pipeline.protocols.decision import DecisionEngine
 
 
 class CapturingObserver(EventObserver):

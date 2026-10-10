@@ -1,41 +1,32 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
 import {
-  Layers,
-  ArrowRight,
-  TrendingDown,
-  Activity,
-  AlertTriangle,
-  ShieldCheck,
-  CheckCircle2,
-  Filter,
-  Search,
-  Sliders,
-  Database,
-  ExternalLink,
-  Lock,
-  GitMerge,
-  Network,
-  FileText,
-  Check,
-  X,
-  Zap,
-  Cpu,
-  Clock,
-  Sparkles,
-  Maximize2,
+    Activity,
+    AlertTriangle,
+    ArrowRight,
+    Check,
+    CheckCircle2,
+    Clock,
+    Cpu,
+    ExternalLink,
+    FileText,
+    GitMerge,
+    Layers,
+    Maximize2,
+    Network,
+    Search,
+    ShieldCheck,
+    Sparkles,
+    TrendingDown,
+    X,
+    Zap,
 } from "lucide-react";
 import * as echarts from "./echarts";
-import { useRunsStore } from "../store/runsStore";
-import { useThemeStore } from "../store/themeStore";
-import { EPISTEMIC_TAXONOMY } from "./epistemicTheme";
-import { GraphView } from "../api/types";
-import { StageTripleItem, formatPredicate } from "./StageArtifactsView";
-import { LocalEgoGraph } from "./LocalEgoGraph";
-import {
-  computePredicateRows,
-  computeDegreeDistribution,
-  computeCrossLayerHeatmap,
-} from "./assertionTransformer";
+import {useRunsStore} from "../store/runsStore";
+import {useThemeStore} from "../store/themeStore";
+import {GraphView} from "../api/types";
+import {formatPredicate, StageTripleItem} from "./StageArtifactsView";
+import {LocalEgoGraph} from "./LocalEgoGraph";
+import {computeCrossLayerHeatmap, computeDegreeDistribution, computePredicateRows,} from "./assertionTransformer";
 
 export interface PredicateSchemaRow {
   predicate: string;

@@ -1,8 +1,8 @@
-import React, { useState } from "react";
-import { Plus, X, FileCode, CheckCircle2, AlertCircle } from "lucide-react";
-import { api } from "../../../api/client";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import type { RegisterBenchmarkRequest } from "../../../api/types";
+import React, {useState} from "react";
+import {CheckCircle2, Plus, X} from "lucide-react";
+import {api} from "../../../api/client";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import type {RegisterBenchmarkRequest} from "../../../api/types";
 
 interface RegisterBenchmarkModalProps {
   isOpen: boolean;

@@ -13,7 +13,6 @@ from __future__ import annotations
 import pytest
 
 from episteme_pipeline.artifacts.builders import (
-    build_argument_component_artifact,
     build_argument_relation_artifact,
 )
 from episteme_pipeline.artifacts.execution import (
@@ -22,7 +21,6 @@ from episteme_pipeline.artifacts.execution import (
     Phase4ArtifactsView,
 )
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet, TheoryRelation
-from episteme_pipeline.evaluation.models import EvaluationLevel
 from episteme_pipeline.evaluation.strategies import ArgumentationStrategy
 from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
 from episteme_pipeline.phases.phase6_theorynet.runner import Phase6Runner

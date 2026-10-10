@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import networkx as nx
-import pytest
-
 import epistemetrics as em
 from epistemetrics.epistemic.reduction_evaluation import (
     evaluate_intertheoretical_links,
-    extract_intertheoretical_links,
 )
 
 

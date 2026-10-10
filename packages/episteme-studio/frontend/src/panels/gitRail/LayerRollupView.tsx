@@ -1,8 +1,8 @@
-import React, { useState } from "react";
-import { GitRailNode } from "./types";
-import { EPISTEMIC_TAXONOMY, EpistemicLayerTheme } from "../epistemicTheme";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { getShortStageLabel } from "../stageModel";
+import React, {useState} from "react";
+import {GitRailNode} from "./types";
+import {EPISTEMIC_TAXONOMY, EpistemicLayerTheme} from "../epistemicTheme";
+import {ChevronDown, ChevronRight} from "lucide-react";
+import {getShortStageLabel} from "../stageModel";
 
 interface LayerRollupViewProps {
   nodes: GitRailNode[];

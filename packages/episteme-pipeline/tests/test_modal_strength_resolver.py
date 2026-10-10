@@ -18,7 +18,6 @@ from episteme_pipeline.contracts.domain import (
     ScopeType,
     TheoryAtom,
     TheoryNet,
-    TheoryRelation,
 )
 from episteme_pipeline.decision.mock import MockJevDecisionEngine
 from episteme_pipeline.decision.modal_resolver import (
@@ -29,10 +28,8 @@ from episteme_pipeline.decision.modal_resolver import (
 from episteme_pipeline.events.bus import SimpleEventEmitter
 from episteme_pipeline.events.context import use_event_emitter
 from episteme_pipeline.events.models import ModalStrengthResolved
-from episteme_pipeline.phases.phase6_theorynet.runner import Phase6Runner
 from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
 from episteme_pipeline.protocols.modality import (
-    ModalStrengthResolver,
     ensure_modal_strength_resolver,
 )
 from episteme_pipeline.schema.default_schema import SchemaConfig

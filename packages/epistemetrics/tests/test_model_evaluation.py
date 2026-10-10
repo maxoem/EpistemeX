@@ -9,14 +9,12 @@ Verifies Bourbaki structuralist model decomposition across:
 """
 
 import pytest
-import networkx as nx
 
 import epistemetrics as em
 from epistemetrics.epistemic.model_evaluation import (
     calculate_anchor_iou,
     evaluate_model_components,
     formula_similarity,
-    normalize_formula,
 )
 
 

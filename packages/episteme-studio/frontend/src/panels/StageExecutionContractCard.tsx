@@ -1,17 +1,6 @@
 import React from "react";
-import {
-  FileCode,
-  ShieldCheck,
-  Cpu,
-  GitBranch,
-  Layers,
-  Sparkles,
-  AlertTriangle,
-  ArrowRight,
-  Database,
-  Hash,
-} from "lucide-react";
-import { EPISTEMIC_TAXONOMY, getEpistemicLayerForPhase } from "./epistemicTheme";
+import {AlertTriangle, Cpu, Database, ShieldCheck, Sparkles,} from "lucide-react";
+import {EPISTEMIC_TAXONOMY, getEpistemicLayerForPhase} from "./epistemicTheme";
 
 export interface StageContractDef {
   inputInvariants: string[];

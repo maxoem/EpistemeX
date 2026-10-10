@@ -1,22 +1,10 @@
-import React, { useState } from "react";
-import {
-  Activity,
-  AlertCircle,
-  CheckCircle2,
-  Cpu,
-  Layers,
-  Network,
-  Play,
-  Sliders,
-  Sparkles,
-  X,
-  Zap,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import { apiClient } from "../../../api/client";
-import { useEvaluationJob } from "../hooks/useEvaluationJob";
-import { JobProgressStepper } from "./JobProgressStepper";
-import type { EvaluateRunRequest } from "../../../api/types";
+import React, {useState} from "react";
+import {Activity, AlertCircle, Layers, Network, Play, Sliders, Sparkles, X, Zap,} from "lucide-react";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import {apiClient} from "../../../api/client";
+import {useEvaluationJob} from "../hooks/useEvaluationJob";
+import {JobProgressStepper} from "./JobProgressStepper";
+import type {EvaluateRunRequest} from "../../../api/types";
 
 export interface ExecuteEvaluationModalProps {
   isOpen: boolean;

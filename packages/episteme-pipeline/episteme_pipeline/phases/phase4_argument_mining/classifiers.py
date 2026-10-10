@@ -8,12 +8,11 @@ DecisionEngine protocols.
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
 import hashlib
 import logging
 import random
 import re
-from typing import Any
+from collections import defaultdict
 
 from episteme_pipeline.config import Phase4Config
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom, TheoryRelation

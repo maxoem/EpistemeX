@@ -1,22 +1,17 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, {useEffect, useMemo, useState} from "react";
+import {ArrowDown, ArrowUp, ArrowUpDown, Trash2,} from "lucide-react";
 import {
-  Trash2,
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
-} from "lucide-react";
-import {
-  useTable,
-  tableFeatures,
-  rowSortingFeature,
-  columnVisibilityFeature,
-  createSortedRowModel,
-  createColumnHelper,
-  flexRender,
-  SortingState,
+    columnVisibilityFeature,
+    createColumnHelper,
+    createSortedRowModel,
+    flexRender,
+    rowSortingFeature,
+    SortingState,
+    tableFeatures,
+    useTable,
 } from "@tanstack/react-table";
-import { UnmappedPredicateInfo } from "../../../api/types";
-import { SelectedItem } from "../types";
+import {UnmappedPredicateInfo} from "../../../api/types";
+import {SelectedItem} from "../types";
 
 /**
  * Base features configuration for Engine data grids.

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Test that the example script components work correctly."""
 
-import sys
 import os
+import sys
 import tempfile
-import json
 from pathlib import Path
 
 # Add project root to path

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.domain.diff import (
     ConfigDeltaItem,

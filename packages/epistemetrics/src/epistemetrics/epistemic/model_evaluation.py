@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 from typing import Any, Mapping
+
 import networkx as nx
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -23,8 +24,6 @@ from epistemetrics.core.models import (
     EpistemicStatus,
     NodeType,
     RelationType,
-    TheoryEdge,
-    TheoryNode,
 )
 from epistemetrics.graph.theory_graph import TheoryGraph
 

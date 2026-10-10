@@ -1,20 +1,8 @@
 import React from "react";
-import {
-  ArrowDown,
-  ArrowUp,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  ExternalLink,
-  Layers,
-  Minus,
-  Sparkles,
-  Split,
-  X,
-} from "lucide-react";
-import { useLeaderboardStore } from "../../../store/leaderboardStore";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import type { ComparativeMetricDelta } from "../../../api/types";
+import {ArrowDown, ArrowUp, ChevronDown, ChevronUp, ExternalLink, Split, X,} from "lucide-react";
+import {useLeaderboardStore} from "../../../store/leaderboardStore";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import type {ComparativeMetricDelta} from "../../../api/types";
 
 interface PairwiseDiffDrawerProps {
   className?: string;

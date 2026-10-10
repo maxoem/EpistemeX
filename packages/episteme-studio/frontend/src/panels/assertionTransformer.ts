@@ -3,9 +3,9 @@
  * assertions, PredicateSchemaRow aggregations, degree distributions, and cross-layer matrices.
  */
 
-import type { GraphView, StudioNode, StudioEdge } from "../api/types.ts";
-import type { StageTripleItem, ProvenanceChunkDisplay } from "./StageArtifactsView.tsx";
-import type { PredicateSchemaRow } from "./RunOverviewView.tsx";
+import type {GraphView, StudioEdge, StudioNode} from "../api/types.ts";
+import type {ProvenanceChunkDisplay, StageTripleItem} from "./StageArtifactsView.tsx";
+import type {PredicateSchemaRow} from "./RunOverviewView.tsx";
 
 const CANONICAL_HIERARCHICAL = new Set([
   "part_of",

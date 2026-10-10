@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import {create} from "zustand";
 
 export type StudioTab = "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation";
 

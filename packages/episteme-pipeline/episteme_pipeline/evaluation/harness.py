@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Protocol, runtime_checkable
 
@@ -19,14 +17,11 @@ import epistemetrics as em
 from episteme_pipeline.artifacts.execution import ArtifactCollection
 from episteme_pipeline.contracts.domain import TheoryNet
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
-from episteme_pipeline.events import EventEmitter, NoOpEventEmitter
-from episteme_pipeline.events.models import EvaluationCompleted, ValidationViolationDetected
 from episteme_pipeline.evaluation.baselines import (
     BaselineNaiveKG,
     BaselineTextRAG,
     BaselineZeroShotLLM,
 )
-from episteme_pipeline.evaluation.benchmarks.structuralist import load_structuralist_benchmark
 from episteme_pipeline.evaluation.comparison import (
     ComparisonAxis,
     EvaluationComparison,
@@ -43,24 +38,22 @@ from episteme_pipeline.evaluation.models import (
     EvaluationResult,
 )
 from episteme_pipeline.evaluation.pipelines import (
-    build_l2_eval_pipeline,
-    build_l3_eval_pipeline,
     build_l4_theorynet_eval_pipeline,
 )
 from episteme_pipeline.evaluation.scorers.domain_bridge import (
     artifact_collection_to_theory_graph,
     l2_triples_to_digraph,
-    theory_net_to_digraph,
 )
 from episteme_pipeline.evaluation.scorers.gm_gbs import GraphBERTScoreEvaluator
 from episteme_pipeline.evaluation.scorers.model_scorer import ModelScorer
-from episteme_pipeline.evaluation.scorers.oep import OptimalEditPathEvaluator
 from episteme_pipeline.evaluation.scorers.retrieval import ExtrinsicRetrievalEvaluator
 from episteme_pipeline.evaluation.strategies import (
     EvaluationStrategy,
     StrategyRegistry,
     default_registry,
 )
+from episteme_pipeline.events import EventEmitter, NoOpEventEmitter
+from episteme_pipeline.events.models import EvaluationCompleted, ValidationViolationDetected
 from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
 from episteme_pipeline.graph.validation import GraphValidator
 from episteme_pipeline.protocols.graph_store import ProcessingGraph

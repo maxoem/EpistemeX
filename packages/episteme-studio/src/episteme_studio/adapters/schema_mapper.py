@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
 
 

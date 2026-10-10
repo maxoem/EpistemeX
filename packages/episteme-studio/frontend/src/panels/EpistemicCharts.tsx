@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React, {useEffect, useRef} from "react";
 import * as echarts from "./echarts";
-import { useThemeStore } from "../store/themeStore";
-import { EPISTEMIC_TAXONOMY } from "./epistemicTheme";
+import {useThemeStore} from "../store/themeStore";
+import {EPISTEMIC_TAXONOMY} from "./epistemicTheme";
 
 interface BaseChartProps {
   className?: string;

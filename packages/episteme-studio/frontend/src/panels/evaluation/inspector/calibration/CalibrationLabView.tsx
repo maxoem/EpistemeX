@@ -1,30 +1,16 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import * as echarts from "echarts/core";
-import { BarChart, LineChart } from "echarts/charts";
-import {
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-  TitleComponent,
-} from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
-import {
-  Sparkles,
-  CheckCircle2,
-  AlertTriangle,
-  RefreshCw,
-  Loader2,
-  Search,
-  PanelRightClose,
-  Sliders,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
-import { useThemeStore } from "../../../../store/themeStore";
-import { api } from "../../../../api/client";
-import type { CalibrationReportDetail } from "../../../../api/types";
-import { OverconfidenceTable } from "./OverconfidenceTable";
-import { CalibrationDiagnosticRail } from "./CalibrationDiagnosticRail";
-import { ResizablePanel } from "../../../ResizablePanel";
+import {BarChart, LineChart} from "echarts/charts";
+import {GridComponent, LegendComponent, TitleComponent, TooltipComponent,} from "echarts/components";
+import {CanvasRenderer} from "echarts/renderers";
+import {AlertTriangle, CheckCircle2, Loader2, PanelRightClose, RefreshCw, Search, Sparkles,} from "lucide-react";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
+import {useThemeStore} from "../../../../store/themeStore";
+import {api} from "../../../../api/client";
+import type {CalibrationReportDetail} from "../../../../api/types";
+import {OverconfidenceTable} from "./OverconfidenceTable";
+import {CalibrationDiagnosticRail} from "./CalibrationDiagnosticRail";
+import {ResizablePanel} from "../../../ResizablePanel";
 
 echarts.use([
   BarChart,

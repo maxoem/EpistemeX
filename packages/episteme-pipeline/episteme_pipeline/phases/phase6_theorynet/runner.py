@@ -16,7 +16,7 @@ from episteme_pipeline.artifacts.execution import (
     Phase4ArtifactsView,
 )
 from episteme_pipeline.config import Phase6Config
-from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet, TheoryRelation
+from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet
 from episteme_pipeline.decision.modal_resolver import HybridModalResolver
 from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
 from episteme_pipeline.protocols.decision import DecisionEngine

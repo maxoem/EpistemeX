@@ -1,5 +1,5 @@
-import type { StudioEdge } from "../../api/types.ts";
-import type { EdgeStyleContext } from "./types.ts";
+import type {StudioEdge} from "../../api/types.ts";
+import type {EdgeStyleContext} from "./types.ts";
 
 export interface ComputedEdgeStyle {
   stroke: string;

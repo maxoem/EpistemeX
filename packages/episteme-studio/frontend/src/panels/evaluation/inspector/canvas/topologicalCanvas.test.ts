@@ -1,10 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type {
-  EvaluationEdgeOverlay,
-  EvaluationNodeOverlay,
-  EvaluationGraphOverlay,
-} from "../../../../api/types.ts";
+import type {EvaluationEdgeOverlay, EvaluationGraphOverlay, EvaluationNodeOverlay,} from "../../../../api/types.ts";
 
 test("topologicalCanvas: classification and alignment status invariants", () => {
   const tpNode: EvaluationNodeOverlay = {

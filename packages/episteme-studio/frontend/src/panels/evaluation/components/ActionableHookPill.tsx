@@ -1,14 +1,14 @@
 import React from "react";
-import { ArrowUpRight, Cpu, Network, RotateCw, Sliders, Sparkles, Wrench } from "lucide-react";
-import { useNavigationStore } from "../../../store/navigationStore.ts";
-import { useEngineSettingsStore } from "../../../store/engineSettingsStore.ts";
-import { useEvaluationStore } from "../../../store/evaluationStore.ts";
+import {ArrowUpRight, Cpu, RotateCw, Sliders, Wrench} from "lucide-react";
+import {useNavigationStore} from "../../../store/navigationStore.ts";
+import {useEngineSettingsStore} from "../../../store/engineSettingsStore.ts";
+import {useEvaluationStore} from "../../../store/evaluationStore.ts";
 import {
-  EpistemicHookType,
-  openPredicateInEngine,
-  openArgRelationInEngine,
-  openPhasePromptInExecution,
-  isolateCycleInCanvas,
+    EpistemicHookType,
+    isolateCycleInCanvas,
+    openArgRelationInEngine,
+    openPhasePromptInExecution,
+    openPredicateInEngine,
 } from "./actionableHooks.ts";
 
 export type { EpistemicHookType };

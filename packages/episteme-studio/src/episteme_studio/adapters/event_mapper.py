@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import re
+from datetime import datetime, timezone
 from typing import Any, Literal
 
-from episteme_studio.domain.events import StudioEvent
 from episteme_pipeline.events.models import BaseEvent, get_event_type_name, serialize_event
-
+from episteme_studio.domain.events import StudioEvent
 
 _EVENT_KIND_MAP: dict[str, str] = {
     "ComponentStarted": "phase.component_started",

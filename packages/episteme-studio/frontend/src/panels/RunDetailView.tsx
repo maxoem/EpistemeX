@@ -1,62 +1,44 @@
-import React, { useState, useMemo } from "react";
-import { useRunsStore } from "../store/runsStore";
-import { LogConsole } from "../console/LogConsole";
+import React, {useMemo, useState} from "react";
+import {useRunsStore} from "../store/runsStore";
+import {LogConsole} from "../console/LogConsole";
+import {getAvailablePhaseTabs, resolvePhaseConfig, resolvePhaseKey,} from "./phaseConfig/phaseConfigResolver";
 import {
-  resolvePhaseConfig,
-  getAvailablePhaseTabs,
-  resolvePhaseKey,
-} from "./phaseConfig/phaseConfigResolver";
-import {
-  AlertCircle,
-  Clock,
-  Cpu,
-  Layers,
-  CheckCircle2,
-  PlayCircle,
-  XCircle,
-  FileText,
-  RotateCcw,
-  ExternalLink,
-  Copy,
-  Check,
-  Calendar,
-  GitFork,
-  Sliders,
-  Database,
-  GitCompare,
-  Network,
-  ChevronDown,
-  ChevronUp,
-  Square,
-  Play,
-  Sparkles,
-  Terminal,
-  Loader2,
-  Brain,
-  MoreHorizontal,
-  Download,
+    AlertCircle,
+    Check,
+    ChevronDown,
+    ChevronUp,
+    Copy,
+    Cpu,
+    Download,
+    ExternalLink,
+    FileText,
+    GitCompare,
+    GitFork,
+    Loader2,
+    MoreHorizontal,
+    Network,
+    Play,
+    Sliders,
+    Sparkles,
+    Square,
+    Terminal,
 } from "lucide-react";
-import { RunStatus, GraphView } from "../api/types";
-import { api } from "../api/client";
-import { useDiffStore } from "../store/diffStore";
-import { useNavigationStore } from "../store/navigationStore";
-import { useEvaluationStore } from "../store/evaluationStore";
-import { RunCompareModal } from "./RunCompareModal";
-import { ExecuteEvaluationModal } from "./evaluation/components/ExecuteEvaluationModal";
-import { useViewOverlayStore } from "../store/viewOverlayStore";
-import { resolveStageArtifacts } from "./stageModel";
-import {
-  StageArtifactsView,
-  StageTripleItem,
-  INITIAL_STAGE_TRIPLES,
-} from "./StageArtifactsView";
-import { transformGraphToTriples } from "./assertionTransformer";
-import { StageProvenancePane } from "./StageProvenancePane";
-import { RunOverviewView, type PredicateSchemaRow } from "./RunOverviewView";
-import { ResizablePanel } from "./ResizablePanel";
-import { RunDiagnosticInspectorRail } from "./RunDiagnosticInspectorRail";
-import { useProjectSettingsStore } from "../store/projectSettingsStore";
-import { Coins } from "lucide-react";
+import {GraphView, RunStatus} from "../api/types";
+import {api} from "../api/client";
+import {useDiffStore} from "../store/diffStore";
+import {useNavigationStore} from "../store/navigationStore";
+import {useEvaluationStore} from "../store/evaluationStore";
+import {RunCompareModal} from "./RunCompareModal";
+import {ExecuteEvaluationModal} from "./evaluation/components/ExecuteEvaluationModal";
+import {useViewOverlayStore} from "../store/viewOverlayStore";
+import {resolveStageArtifacts} from "./stageModel";
+import {INITIAL_STAGE_TRIPLES, StageArtifactsView, StageTripleItem,} from "./StageArtifactsView";
+import {transformGraphToTriples} from "./assertionTransformer";
+import {StageProvenancePane} from "./StageProvenancePane";
+import {type PredicateSchemaRow, RunOverviewView} from "./RunOverviewView";
+import {ResizablePanel} from "./ResizablePanel";
+import {RunDiagnosticInspectorRail} from "./RunDiagnosticInspectorRail";
+import {useProjectSettingsStore} from "../store/projectSettingsStore";
 
 const GenerationCostsView = React.lazy(() =>
   import("./GenerationCostsView").then((m) => ({ default: m.GenerationCostsView }))

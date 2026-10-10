@@ -12,10 +12,11 @@ comparative evaluation between uncalibrated binary weights vs. calibrated modal 
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
-import math
 from typing import Any, Literal, Mapping, Sequence
+
 import networkx as nx
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field

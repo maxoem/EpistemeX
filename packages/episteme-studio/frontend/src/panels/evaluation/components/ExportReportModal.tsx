@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { Check, Copy, Download, FileCode, FileJson, FileSpreadsheet, Loader2, X } from "lucide-react";
-import { api } from "../../../api/client";
-import type { EvaluationReportDetail } from "../../../api/types";
+import React, {useEffect, useState} from "react";
+import {Check, Copy, Download, FileCode, FileJson, FileSpreadsheet, Loader2, X} from "lucide-react";
+import {api} from "../../../api/client";
+import type {EvaluationReportDetail} from "../../../api/types";
 
 export type ExportReportFormat = "latex" | "jsonld" | "csv";
 

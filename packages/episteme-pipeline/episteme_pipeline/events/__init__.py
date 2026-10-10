@@ -12,6 +12,7 @@ from .bus import (
     SimpleEventEmitter,
 )
 from .context import get_event_emitter, set_event_emitter, use_event_emitter
+from .langfuse_observer import LangfuseObserver
 from .models import (
     PipelineEvent,
     BaseEvent,
@@ -48,8 +49,6 @@ from .observers import (
     CompositeObserver,
 )
 from .progress_observer import RichProgressObserver
-from .langfuse_observer import LangfuseObserver
-
 
 __all__ = [
     # Protocols / emitters / context

@@ -1,6 +1,6 @@
 import React from "react";
-import { ChevronDown, RotateCcw } from "lucide-react";
-import { AvailableInputDoc } from "../../../api/types";
+import {ChevronDown, RotateCcw} from "lucide-react";
+import {AvailableInputDoc} from "../../../api/types";
 
 interface StageScopeHeaderProps {
   selectedInputPath: string;

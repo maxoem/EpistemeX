@@ -1,18 +1,6 @@
-import React, { useEffect } from "react";
-import { useDiffStore, DiffScrubMode, DiffFilter } from "../store/diffStore";
-import {
-  GitCompare,
-  Zap,
-  PlusCircle,
-  MinusCircle,
-  Sliders,
-  X,
-  Play,
-  Square,
-  Activity,
-  Layers,
-  HelpCircle,
-} from "lucide-react";
+import React, {useEffect} from "react";
+import {useDiffStore} from "../store/diffStore";
+import {Activity, GitCompare, MinusCircle, Play, PlusCircle, Sliders, Square, X, Zap,} from "lucide-react";
 
 export const GraphDiffHud: React.FC = () => {
   const {

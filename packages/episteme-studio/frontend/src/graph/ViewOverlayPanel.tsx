@@ -1,5 +1,5 @@
 import React from "react";
-import { ViewOverlayDrawer, ViewOverlayDrawerProps } from "../panels/ViewOverlayDrawer";
+import {ViewOverlayDrawer, ViewOverlayDrawerProps} from "../panels/ViewOverlayDrawer";
 
 export type ViewOverlayPanelProps = ViewOverlayDrawerProps;
 

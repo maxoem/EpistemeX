@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { MoveHorizontal, PanelLeftOpen, PanelRightOpen } from "lucide-react";
+import React, {useCallback, useEffect, useRef, useState} from "react";
+import {MoveHorizontal, PanelLeftOpen, PanelRightOpen} from "lucide-react";
 
 export interface ResizablePanelProps {
   children: React.ReactNode;

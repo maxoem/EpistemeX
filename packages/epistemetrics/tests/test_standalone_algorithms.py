@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import networkx as nx
 import pytest
+
 from epistemetrics.graph.algorithms.betweenness import betweenness_centrality, networkx_betweenness
 from epistemetrics.graph.algorithms.eigenvector import eigenvector_centrality, networkx_eigenvector
 from epistemetrics.graph.algorithms.louvain import louvain_communities, networkx_louvain

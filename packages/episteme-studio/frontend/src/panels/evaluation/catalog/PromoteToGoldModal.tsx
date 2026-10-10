@@ -1,9 +1,9 @@
-import React, { useState } from "react";
-import { Award, CheckCircle2, FileText, Layers, ShieldCheck, X } from "lucide-react";
-import { api } from "../../../api/client";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import { useRunsStore } from "../../../store/runsStore";
-import type { RegisterBenchmarkRequest } from "../../../api/types";
+import React, {useState} from "react";
+import {Award, ShieldCheck, X} from "lucide-react";
+import {api} from "../../../api/client";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import {useRunsStore} from "../../../store/runsStore";
+import type {RegisterBenchmarkRequest} from "../../../api/types";
 
 interface PromoteToGoldModalProps {
   isOpen: boolean;

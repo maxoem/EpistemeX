@@ -1,9 +1,9 @@
 import React from "react";
-import { Brain, Database, ExternalLink, RefreshCw, Check, ChevronDown, ChevronRight } from "lucide-react";
-import { ConfigView } from "../../../../api/types";
-import { ParameterFieldMeta, PhaseMetadata } from "../../../phaseConfig/phaseRegistry";
-import { THINKING_LEVEL_PRESETS } from "../../constants";
-import { ParameterRow } from "../ParameterRow";
+import {Brain, Check, ChevronDown, ChevronRight, Database, ExternalLink, RefreshCw} from "lucide-react";
+import {ConfigView} from "../../../../api/types";
+import {ParameterFieldMeta, PhaseMetadata} from "../../../phaseConfig/phaseRegistry";
+import {THINKING_LEVEL_PRESETS} from "../../constants";
+import {ParameterRow} from "../ParameterRow";
 
 interface PipelineDefaultsViewProps {
   patch: Record<string, any>;

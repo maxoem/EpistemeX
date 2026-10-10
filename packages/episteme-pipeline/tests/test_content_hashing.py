@@ -1,8 +1,6 @@
 """Tests for content-based hashing of corpus files in fingerprint_existing_sources."""
 
 import hashlib
-import json
-
 from pathlib import Path
 
 from episteme_pipeline.runs.fingerprints import fingerprint_existing_sources

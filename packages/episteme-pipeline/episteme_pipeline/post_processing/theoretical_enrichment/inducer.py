@@ -13,7 +13,6 @@ from typing import Any, Protocol
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
 from episteme_pipeline.llm.structured import StructuredLLM, ensure_structured_llm
 from episteme_pipeline.post_processing.theoretical_enrichment.enrichment_models import (
-    InducedTheoryElement,
     TheoryElementDefinition,
     TheoryInductionOutput,
     TheoryLaw,

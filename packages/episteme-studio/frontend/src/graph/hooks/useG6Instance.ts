@@ -1,10 +1,10 @@
-import { useRef, useEffect, useCallback } from "react";
-import { Graph, NodeEvent, EdgeEvent, CanvasEvent, GraphEvent } from "@antv/g6";
-import { GraphView, StudioNode, StudioEdge, MetricResult } from "../../api/types";
-import { GraphSettings } from "../../store/graphSettingsStore";
-import { LayoutType } from "../GraphCanvasHud";
-import { ComputedNodeStyle } from "../styling/nodeStyling";
-import { ComputedEdgeStyle } from "../styling/edgeStyling";
+import {useCallback, useEffect, useRef} from "react";
+import {CanvasEvent, EdgeEvent, Graph, GraphEvent, NodeEvent} from "@antv/g6";
+import {GraphView, MetricResult, StudioEdge, StudioNode} from "../../api/types";
+import {GraphSettings} from "../../store/graphSettingsStore";
+import {LayoutType} from "../GraphCanvasHud";
+import {ComputedNodeStyle} from "../styling/nodeStyling";
+import {ComputedEdgeStyle} from "../styling/edgeStyling";
 
 export interface UseG6InstanceParams {
   graphData: GraphView | null;

@@ -26,7 +26,6 @@ added before the upstream artifacts it references.
 
 from __future__ import annotations
 
-
 from collections import defaultdict, deque
 
 from episteme_pipeline.artifacts.models import ArtifactEnvelope

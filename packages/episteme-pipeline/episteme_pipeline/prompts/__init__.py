@@ -1,10 +1,3 @@
-from episteme_pipeline.prompts.models import StructuredPromptBundle
-from episteme_pipeline.protocols.prompts import PromptProvider
-from episteme_pipeline.prompts.providers import (
-    DefaultPromptProvider,
-    LangfusePromptProvider,
-    FilePromptProvider,
-)
 from episteme_pipeline.prompts.default_prompts import (
     ACC_DIRECT_PROMPT,
     ACC_FORMAT_PROMPT,
@@ -30,6 +23,13 @@ from episteme_pipeline.prompts.default_prompts import (
     DECISION_THEORY_FUSION_QUESTION,
     DECISION_THEORY_FUSION_CRITERIA,
 )
+from episteme_pipeline.prompts.models import StructuredPromptBundle
+from episteme_pipeline.prompts.providers import (
+    DefaultPromptProvider,
+    LangfusePromptProvider,
+    FilePromptProvider,
+)
+from episteme_pipeline.protocols.prompts import PromptProvider
 
 __all__ = [
     "StructuredPromptBundle",

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+
 import networkx as nx
 import pytest
 import yaml
@@ -20,29 +21,21 @@ from episteme_pipeline.artifacts.models import (
     ArtifactEnvelope,
     ArtifactKind,
     TheoryAtomArtifact,
-    TheoryRelationArtifact,
 )
-from episteme_pipeline.contracts.domain import L1Chunk, TheoryAtom, TheoryNet, TheoryRelation
+from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet
 from episteme_pipeline.evaluation.benchmarks.structuralist import (
     _as_list,
     load_structuralist_benchmark,
     load_structuralist_theory_graph,
-    structuralist_digraph_to_theory_graph,
 )
 from episteme_pipeline.evaluation.harness import EvaluationHarness
-from episteme_pipeline.evaluation.models import DatasetType, EvaluationLevel, EvaluationOutcome
+from episteme_pipeline.evaluation.models import EvaluationLevel, EvaluationOutcome
 from episteme_pipeline.evaluation.pipelines import (
-    build_l2_eval_pipeline,
-    build_l3_eval_pipeline,
     build_l4_theorynet_eval_pipeline,
 )
 from episteme_pipeline.evaluation.scorers.domain_bridge import (
     artifact_collection_to_theory_graph,
-    theory_net_to_theory_graph,
 )
-from episteme_pipeline.evaluation.scorers.gm_gbs import GraphBERTScoreEvaluator
-from episteme_pipeline.evaluation.scorers.model_scorer import ModelScorer
-from episteme_pipeline.evaluation.scorers.oep import OptimalEditPathEvaluator
 
 
 # ===========================================================================
@@ -376,10 +369,7 @@ class TestPackagingAndInMemoryExecutionIssue028:
         from episteme_pipeline.evaluation import (
             EvaluationHarness,
             ModelScorer,
-            build_l2_eval_pipeline,
-            build_l3_eval_pipeline,
             build_l4_theorynet_eval_pipeline,
-            load_structuralist_benchmark,
         )
 
         assert EvaluationHarness is not None

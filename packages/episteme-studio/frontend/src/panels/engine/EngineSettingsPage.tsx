@@ -1,39 +1,37 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, {useEffect, useMemo, useState} from "react";
 import {
-  Plus,
-  Trash2,
   AlertCircle,
-  Link2,
-  Cpu,
-  Layers,
-  Search,
-  Database,
-  RefreshCw,
-  X,
-  ChevronDown,
-  Network,
-  Compass,
-  Sliders,
-  Save,
-  RotateCcw,
-  Zap,
-  Play,
   Brain,
+  Compass,
+  Cpu,
+  Database,
+  Layers,
+  Link2,
+  Network,
+  Play,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Search,
+  Sliders,
+  X,
+  Zap,
 } from "lucide-react";
-import { useEngineSettingsStore } from "../../store/engineSettingsStore";
-import { SchemaConfig } from "../../api/types";
-import { SelectedItem } from "./types";
-import { ContextualInspectorRail } from "./components/ContextualInspectorRail";
-import { DecisionEngineConfigPanel } from "./components/DecisionEngineConfigPanel";
-import { DecisionPlaygroundModal } from "./components/DecisionPlaygroundModal";
-import { ResizablePanel } from "../ResizablePanel";
+import {useEngineSettingsStore} from "../../store/engineSettingsStore";
+import {SchemaConfig} from "../../api/types";
+import {SelectedItem} from "./types";
+import {ContextualInspectorRail} from "./components/ContextualInspectorRail";
+import {DecisionEngineConfigPanel} from "./components/DecisionEngineConfigPanel";
+import {DecisionPlaygroundModal} from "./components/DecisionPlaygroundModal";
+import {ResizablePanel} from "../ResizablePanel";
 import {
+  OntologyArgRelationsTable,
+  OntologyComponentsTable,
   OntologyNodesTable,
   OntologyRelationsTable,
-  OntologyComponentsTable,
-  OntologyArgRelationsTable,
-  UnmappedDiscoveredTable,
   UnmappedAliasesTable,
+  UnmappedDiscoveredTable,
 } from "./components/EngineTanStackTables";
 
 export const EngineSettingsPage: React.FC = () => {

@@ -1,10 +1,6 @@
-import React, { useState } from "react";
-import {
-  RotateCcw,
-  CheckCircle2,
-  Info,
-} from "lucide-react";
-import { formatPredicate } from "../../../StageArtifactsView";
+import React, {useState} from "react";
+import {CheckCircle2, Info, RotateCcw,} from "lucide-react";
+import {formatPredicate} from "../../../StageArtifactsView";
 
 export interface ComparativeOverlayGraphProps {
   predictedEdge: {

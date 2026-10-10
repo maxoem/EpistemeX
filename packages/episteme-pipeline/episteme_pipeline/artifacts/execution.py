@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from episteme_pipeline.artifacts.builders import parse_mention_id
 from episteme_pipeline.artifacts.models import (
     TheoreticalEnrichmentArtifact,
     TheoryAtomArtifact,
@@ -16,7 +17,6 @@ from episteme_pipeline.artifacts.models import (
     LinkedEntityArtifact,
     LocalRelationArtifact,
 )
-from episteme_pipeline.artifacts.builders import parse_mention_id
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
     L1Document,

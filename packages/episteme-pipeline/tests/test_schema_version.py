@@ -1,10 +1,8 @@
 """Tests for schema_version on RunManifest and SchemaConfig."""
 
-from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
-from episteme_pipeline.runs.models import RunManifest
-from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
+from episteme_pipeline.schema.default_schema import SchemaConfig
 
 
 def test_schema_config_has_version_field():
@@ -105,7 +103,6 @@ def test_build_manifest_includes_schema_version(config):
 
 def test_build_manifest_schema_version_tracks_config_change(config):
     """Verify schema_version changes when SchemaConfig.version is different."""
-    from pathlib import Path
 
     config.graph_schema.version = "v2-custom"
 

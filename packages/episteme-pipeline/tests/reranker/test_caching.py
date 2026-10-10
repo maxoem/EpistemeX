@@ -1,6 +1,7 @@
 """Test script to demonstrate the model caching functionality in the reranker."""
 
 from unittest.mock import MagicMock
+
 from episteme_pipeline.phases.phase3_global_relations.rerankers import (
     SentenceTransformerCrossEncoderReranker,
 )

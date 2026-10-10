@@ -1,10 +1,10 @@
-import { useState, useCallback, useRef } from "react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
+import {useCallback, useRef, useState} from "react";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
 import type {
-  AdjudicateAndRecalculateResponse,
-  AdjudicationDecision,
-  AdjudicationQueueItem,
-  EdgeAdjudicationItem,
+    AdjudicateAndRecalculateResponse,
+    AdjudicationDecision,
+    AdjudicationQueueItem,
+    EdgeAdjudicationItem,
 } from "../../../../api/types";
 
 export interface StagingActionHistoryItem {

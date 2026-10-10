@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+
 import networkx as nx
+
 from epistemetrics.core.exceptions import (
     AlgorithmConvergenceError,
     AlgorithmError,

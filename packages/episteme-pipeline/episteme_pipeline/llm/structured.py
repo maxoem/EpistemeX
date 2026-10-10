@@ -18,11 +18,10 @@ from typing import Any, Dict, Protocol, TypeVar
 from pydantic import BaseModel
 
 from episteme_pipeline.config import StructuredDecodingStrategy
-from episteme_pipeline.events.bus import EventEmitter, NoOpEventEmitter
+from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.events.context import get_event_emitter
 from episteme_pipeline.events.models import LLMDurationMeasured, LLMGenerationCompleted
 from episteme_pipeline.llm.metadata import LLMResponseMetadataExtractor
-
 
 logger = logging.getLogger(__name__)
 

@@ -3,18 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from enum import StrEnum
-import logging
-from typing import Any, Callable
+from typing import Any
 from uuid import uuid4
 
 from episteme_studio.adapters.metrics_adapter import (
-    compute_component,
     compute_degree,
     compute_leiden,
     compute_local_gradual_strength,
-    compute_pagerank,
     compute_tenability,
     run_epistemetrics_betweenness,
     run_epistemetrics_eigenvector,

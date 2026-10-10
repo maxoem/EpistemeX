@@ -8,6 +8,7 @@ and capability subsumption verification (G_pred >=cap G_ref).
 from __future__ import annotations
 
 from typing import Any
+
 import epistemetrics as em
 from epistemetrics.epistemic.model_evaluation import ModelComponentEvaluationResult
 

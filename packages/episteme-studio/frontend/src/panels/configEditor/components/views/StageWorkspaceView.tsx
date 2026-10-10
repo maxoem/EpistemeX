@@ -1,9 +1,9 @@
 import React from "react";
-import { Code2, ChevronRight, ChevronDown } from "lucide-react";
-import { ConfigView, ResolvedPromptItem } from "../../../../api/types";
-import { ParameterFieldMeta, PhaseMetadata } from "../../../phaseConfig/phaseRegistry";
-import { PromptCodeEditor } from "../../../phaseConfig/PromptCodeEditor";
-import { ParameterRow } from "../ParameterRow";
+import {ChevronDown, ChevronRight, Code2} from "lucide-react";
+import {ConfigView, ResolvedPromptItem} from "../../../../api/types";
+import {ParameterFieldMeta, PhaseMetadata} from "../../../phaseConfig/phaseRegistry";
+import {PromptCodeEditor} from "../../../phaseConfig/PromptCodeEditor";
+import {ParameterRow} from "../ParameterRow";
 
 interface StageWorkspaceViewProps {
   selectedPhaseKey: string;

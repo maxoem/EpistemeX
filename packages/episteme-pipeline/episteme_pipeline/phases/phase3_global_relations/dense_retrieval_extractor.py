@@ -29,37 +29,34 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-from dataclasses import dataclass
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
 
-from llama_index.core import PromptTemplate
-
 from episteme_pipeline.config import Phase3Config
 from episteme_pipeline.contracts.domain import L2Entity, L2Triple, SubGraph, CandidatePair
-from episteme_pipeline.prompts.default_prompts import PAIR_GATING_DECISION_PROMPT
+# Events support
+from episteme_pipeline.events.bus import EventEmitter
+from episteme_pipeline.events.models import (
+    DenseCandidatesGenerated, RerankerScoreAssigned, CandidateRejectedByThreshold,
+    LLMRelationDecoded, SchemaValidationRejectedRelation, TripleCommitted, EntityProcessed, ProgressAdvanced,
+    ProgressStarted, ProgressCompleted
+)
 from episteme_pipeline.llm import ensure_structured_llm
 from episteme_pipeline.phases.phase3_global_relations.models import GlobalRelationOutput
 from episteme_pipeline.phases.phase3_global_relations.rerankers import (
     build_relation_reranker_inputs,
     summarize_reranker_text_pair,
 )
+from episteme_pipeline.prompts.default_prompts import PAIR_GATING_DECISION_PROMPT
 from episteme_pipeline.protocols import DecisionEngine
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor, RelationReranker, EmbeddingModel
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.protocols.tracing import TraceSink, NoOpTraceSink
 from episteme_pipeline.schema.default_schema import SchemaConfig
 from episteme_pipeline.utils import format_envelope
-
-# Events support
-from episteme_pipeline.events.bus import EventEmitter, NoOpEventEmitter
-from episteme_pipeline.events.models import (
-    DenseCandidatesGenerated, RerankerScoreAssigned, CandidateRejectedByThreshold,
-    LLMRelationDecoded, SchemaValidationRejectedRelation, TripleCommitted, EntityProcessed, ProgressAdvanced,
-    ProgressStarted, ProgressCompleted
-)
 
 logger = logging.getLogger(__name__)
 

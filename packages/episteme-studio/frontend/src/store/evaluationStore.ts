@@ -1,20 +1,20 @@
-import { create } from "zustand";
-import { api } from "../api/client.ts";
+import {create} from "zustand";
+import {api} from "../api/client.ts";
 import type {
-  ActiveLearningExportResponse,
-  AdjudicateAndRecalculateResponse,
-  BenchmarkDescriptor,
-  BorderlineDecisionItem,
-  EdgeAdjudicationItem,
-  EvaluationMode,
-  EvaluationReportDetail,
-  EvaluationReportSummary,
-  EvaluationSubTab,
-  EvaluationGraphOverlay,
-  EvaluationNodeOverlay,
-  EvaluationEdgeOverlay,
+    ActiveLearningExportResponse,
+    AdjudicateAndRecalculateResponse,
+    BenchmarkDescriptor,
+    BorderlineDecisionItem,
+    EdgeAdjudicationItem,
+    EvaluationEdgeOverlay,
+    EvaluationGraphOverlay,
+    EvaluationMode,
+    EvaluationNodeOverlay,
+    EvaluationReportDetail,
+    EvaluationReportSummary,
+    EvaluationSubTab,
 } from "../api/types";
-import type { BourbakiSubElement } from "../panels/evaluation/inspector/epistemics/types";
+import type {BourbakiSubElement} from "../panels/evaluation/inspector/epistemics/types";
 
 export interface OptimisticScalarDeltas {
   f1: number;

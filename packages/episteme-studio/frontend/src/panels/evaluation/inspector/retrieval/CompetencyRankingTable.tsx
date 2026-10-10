@@ -8,29 +8,22 @@
  * Reference: ISSUE-032 (Competency Question Per-Query Diagnostics)
  */
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, {useEffect, useMemo, useState} from "react";
 import {
-  Search,
-  Filter,
-  CheckCircle2,
-  XCircle,
-  ChevronDown,
-  ChevronRight,
-  Network,
-  RefreshCw,
-  AlertTriangle,
-  HelpCircle,
-  Layers,
-  ArrowUpDown,
-  Tag,
+    AlertTriangle,
+    CheckCircle2,
+    ChevronDown,
+    ChevronRight,
+    Layers,
+    Network,
+    RefreshCw,
+    Search,
+    Tag,
+    XCircle,
 } from "lucide-react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
-import { api } from "../../../../api/client";
-import type {
-  CompetencyQueryDiagnosticItem,
-  RetrievalDiagnosticsResponse,
-  RetrievedCandidateItem,
-} from "../../../../api/types";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
+import {api} from "../../../../api/client";
+import type {CompetencyQueryDiagnosticItem, RetrievalDiagnosticsResponse,} from "../../../../api/types";
 
 export interface CompetencyRankingTableProps {
   onOpenCanvas?: () => void;

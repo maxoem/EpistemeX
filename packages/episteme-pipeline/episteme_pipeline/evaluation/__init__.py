@@ -11,6 +11,11 @@ This package provides a unified evaluation framework for knowledge graphs and fo
 
 from __future__ import annotations
 
+from episteme_pipeline.evaluation.baselines import (
+    BaselineNaiveKG,
+    BaselineTextRAG,
+    BaselineZeroShotLLM,
+)
 from episteme_pipeline.evaluation.benchmarks import (
     export_baseline,
     export_neo4j_to_theory_graph,
@@ -21,11 +26,6 @@ from episteme_pipeline.evaluation.benchmarks import (
     load_structuralist_benchmark,
     load_structuralist_theory_graph,
     structuralist_digraph_to_theory_graph,
-)
-from episteme_pipeline.evaluation.baselines import (
-    BaselineNaiveKG,
-    BaselineTextRAG,
-    BaselineZeroShotLLM,
 )
 from episteme_pipeline.evaluation.comparison import (
     ComparisonAxis,

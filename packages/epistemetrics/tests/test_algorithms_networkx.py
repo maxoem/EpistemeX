@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import networkx as nx
 import pytest
+
 from epistemetrics.graph.algorithms.networkx_engine import NetworkXAlgorithmsEngine
 
 

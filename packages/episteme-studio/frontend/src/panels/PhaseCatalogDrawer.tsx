@@ -1,28 +1,26 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, {useEffect, useMemo, useState} from "react";
 import {
-  PHASE_REGISTRY,
-  PhaseMetadata,
-  isPhaseMandatory,
-  isPhasePostProcessor,
-  getAllRegisteredPhases,
+    getAllRegisteredPhases,
+    isPhaseMandatory,
+    isPhasePostProcessor,
+    PHASE_REGISTRY,
+    PhaseMetadata,
 } from "./phaseConfig/phaseRegistry";
 import {
-  Layers,
-  Search,
-  X,
-  RotateCcw,
-  Check,
-  Lock,
-  ChevronRight,
-  Plus,
-  Cpu,
-  Brain,
-  Boxes,
-  FileText,
-  ArrowRight,
-  Tag,
-  Sliders,
-  SlidersHorizontal,
+    ArrowRight,
+    Boxes,
+    Brain,
+    Check,
+    Cpu,
+    FileText,
+    Layers,
+    Lock,
+    Plus,
+    RotateCcw,
+    Search,
+    SlidersHorizontal,
+    Tag,
+    X,
 } from "lucide-react";
 
 export interface PhaseCatalogDrawerProps {

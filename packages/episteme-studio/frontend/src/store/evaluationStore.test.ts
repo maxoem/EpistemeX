@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { useEvaluationStore } from "./evaluationStore.ts";
-import type { EdgeAdjudicationItem, EvaluationReportDetail } from "../api/types.ts";
+import {useEvaluationStore} from "./evaluationStore.ts";
+import type {EdgeAdjudicationItem, EvaluationReportDetail} from "../api/types.ts";
 
 test("evaluationStore: initial state adheres to Phase 0 contracts", () => {
   const store = useEvaluationStore.getState();

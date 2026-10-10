@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Callable
+
 from episteme_studio.adapters.metrics_adapter import (
     compute_component,
     compute_degree,

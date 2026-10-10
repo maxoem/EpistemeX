@@ -24,7 +24,6 @@ from episteme_pipeline.artifacts.models import (
 )
 from episteme_pipeline.config import TheoreticalEnrichmentConfig
 from episteme_pipeline.contracts.domain import (
-    TenabilityResult,
     TheoryAtom,
     TheoryRelation,
 )

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from episteme_pipeline.config import Phase2Config, Phase3Config, Phase4Config
-from episteme_pipeline.contracts.domain import L2Entity, L2Triple, TheoryAtom, TheoryRelation
-from episteme_pipeline.artifacts.models import TheoryAtomArtifact, EntityMentionArtifact, LinkedEntityArtifact
 from episteme_pipeline.artifacts.builders import build_argument_component_artifact
+from episteme_pipeline.artifacts.models import TheoryAtomArtifact
+from episteme_pipeline.config import Phase2Config, Phase3Config, Phase4Config
+from episteme_pipeline.contracts.domain import L2Entity, L2Triple, TheoryAtom
 from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
 from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
 

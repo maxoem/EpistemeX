@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-
 L2_NODE_TYPES: list[str] = [
     "Concept",
     "Person",

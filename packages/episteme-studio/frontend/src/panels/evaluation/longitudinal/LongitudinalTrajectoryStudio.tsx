@@ -1,33 +1,9 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
 import * as echarts from "echarts";
-import {
-  Activity,
-  AlertOctagon,
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-  Flame,
-  Layers,
-  Play,
-  RefreshCw,
-  RotateCw,
-  Scale,
-  ShieldAlert,
-  ShieldCheck,
-  Sparkles,
-  TrendingDown,
-  TrendingUp,
-  XCircle,
-} from "lucide-react";
-import { api } from "../../../api/client";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import type {
-  DynamicsStepDetail,
-  DynamicsTrajectoryRequest,
-  DynamicsTrajectoryResponse,
-} from "../../../api/types";
+import {AlertOctagon, ArrowLeft, CheckCircle2, Play, Scale, ShieldAlert, ShieldCheck, TrendingUp,} from "lucide-react";
+import {api} from "../../../api/client";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import type {DynamicsTrajectoryRequest, DynamicsTrajectoryResponse,} from "../../../api/types";
 
 interface HistoricalPreset {
   id: string;

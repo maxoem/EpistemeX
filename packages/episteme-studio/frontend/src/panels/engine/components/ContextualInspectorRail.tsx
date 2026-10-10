@@ -1,16 +1,8 @@
 import React from "react";
-import {
-  Save,
-  RotateCcw,
-  CheckCircle2,
-  X,
-  Link2,
-  Activity,
-  Loader2,
-} from "lucide-react";
-import { SelectedItem } from "../types";
-import { SchemaConfig, UnmappedPredicateInfo } from "../../../api/types";
-import { DemoValidationRules, DemoEditHistory } from "./DemoMetadataInspector";
+import {Activity, CheckCircle2, Loader2, RotateCcw, Save, X,} from "lucide-react";
+import {SelectedItem} from "../types";
+import {SchemaConfig, UnmappedPredicateInfo} from "../../../api/types";
+import {DemoEditHistory, DemoValidationRules} from "./DemoMetadataInspector";
 
 interface ContextualInspectorRailProps {
   selectedItem: SelectedItem | null;

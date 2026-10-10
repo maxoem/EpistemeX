@@ -1,9 +1,10 @@
 import tempfile
-from pathlib import Path
+
 import pytest
 from pydantic import BaseModel
-from episteme_pipeline.llm.structured import StructuredLLM
+
 from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
+from episteme_pipeline.llm.structured import StructuredLLM
 
 
 class _MockModel(BaseModel):

@@ -12,14 +12,13 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Dict, Any, TextIO, Optional
 from collections import defaultdict
 from pathlib import Path
+from typing import Dict, TextIO, Optional
 
 from .bus import EventObserver
 from .models import (
     PipelineEvent,
-    BaseEvent,
     serialize_event,
     get_event_type_name,
     DenseCandidatesGenerated,

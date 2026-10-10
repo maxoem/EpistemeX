@@ -1,11 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { useEvaluationStore } from "../../../../store/evaluationStore.ts";
-import type {
-  AdjudicationQueueItem,
-  EdgeAdjudicationItem,
-  EvaluationReportDetail,
-} from "../../../../api/types.ts";
+import {useEvaluationStore} from "../../../../store/evaluationStore.ts";
+import type {AdjudicationQueueItem, EdgeAdjudicationItem,} from "../../../../api/types.ts";
 
 test("HITL Staging: deterministic local staging and O(1) delta estimation", () => {
   const store = useEvaluationStore.getState();

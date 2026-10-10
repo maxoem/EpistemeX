@@ -1,8 +1,8 @@
-import React, { useState } from "react";
-import { Overlay, OverlayKind } from "../api/types";
-import { api } from "../api/client";
-import { useRunsStore } from "../store/runsStore";
-import { Layers, AlertTriangle, CheckCircle, RefreshCw, XCircle } from "lucide-react";
+import React, {useState} from "react";
+import {Overlay, OverlayKind} from "../api/types";
+import {api} from "../api/client";
+import {useRunsStore} from "../store/runsStore";
+import {AlertTriangle, CheckCircle, Layers, RefreshCw, XCircle} from "lucide-react";
 
 interface OverlaySwitcherProps {
   runId?: string | null;

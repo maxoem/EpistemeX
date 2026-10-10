@@ -1,14 +1,5 @@
 """Tests for ArtifactsView kind validation in execution.py."""
 
-from episteme_pipeline.artifacts.execution import (
-    ArtifactCollection,
-    Phase1ArtifactsView,
-    Phase2ArtifactsView,
-    ArtifactExecutionContext,
-)
-from episteme_pipeline.artifacts.models import (
-    FusionDecisionArtifact,
-)
 from episteme_pipeline.artifacts.builders import (
     build_document_artifact,
     build_chunk_artifact,
@@ -19,6 +10,12 @@ from episteme_pipeline.artifacts.builders import (
     build_argument_component_artifact,
     build_argument_relation_artifact,
     build_fusion_cluster_artifact,
+)
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    Phase1ArtifactsView,
+    Phase2ArtifactsView,
+    ArtifactExecutionContext,
 )
 from episteme_pipeline.contracts.domain import (
     L1Chunk,

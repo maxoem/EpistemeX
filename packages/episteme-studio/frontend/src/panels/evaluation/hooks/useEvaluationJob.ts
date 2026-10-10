@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { apiClient } from "../../../api/client";
-import { subscribeToEvaluationJobEvents } from "../../../api/sse";
-import type { EvaluationJobDescriptor, EvaluationJobStatus, StudioEvent } from "../../../api/types";
+import {useCallback, useEffect, useRef, useState} from "react";
+import {apiClient} from "../../../api/client";
+import {subscribeToEvaluationJobEvents} from "../../../api/sse";
+import type {EvaluationJobDescriptor, EvaluationJobStatus, StudioEvent} from "../../../api/types";
 
 export interface UseEvaluationJobOptions {
   jobId: string | null;

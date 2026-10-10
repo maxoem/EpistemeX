@@ -7,18 +7,16 @@ This test reproduces and verifies the exact scenario where:
 4. No FileNotFoundError should occur
 """
 
-import tempfile
 import os
+import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
-import asyncio
 
-from episteme_pipeline.config import PipelineConfig, ExecutionConfig
+from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.runs.models import RunManifest, RunStatus
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext
 
 
 class EmptyResultsPhaseRunner:

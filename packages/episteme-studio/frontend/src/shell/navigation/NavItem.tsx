@@ -1,5 +1,5 @@
 import React from "react";
-import type { NavItemDef } from "./NavTypes";
+import type {NavItemDef} from "./NavTypes";
 
 interface NavItemProps {
   item: NavItemDef;

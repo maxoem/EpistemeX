@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import type { NavGroupDef } from "./NavTypes";
-import { NavItem } from "./NavItem";
+import React, {useEffect, useState} from "react";
+import {ChevronDown, ChevronRight} from "lucide-react";
+import type {NavGroupDef} from "./NavTypes";
+import {NavItem} from "./NavItem";
 
 interface NavGroupProps {
   group: NavGroupDef;

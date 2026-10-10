@@ -1,6 +1,6 @@
-import React, { useMemo, useEffect, useCallback } from "react";
-import { AlertTriangle, ShieldAlert, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
-import type { MiscalibratedAssertionItem } from "../../../../api/types";
+import React, {useCallback, useEffect, useMemo} from "react";
+import {ChevronDown, ChevronUp, ShieldAlert} from "lucide-react";
+import type {MiscalibratedAssertionItem} from "../../../../api/types";
 
 export interface OverconfidenceTableProps {
   assertions: MiscalibratedAssertionItem[];

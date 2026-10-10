@@ -8,7 +8,7 @@
  * Reference: ISSUE-029 (Multimodal Evidence Grounding Inspection)
  */
 
-import type { BoundingBoxCoordinates, TextSpanCoordinates } from "../../../../api/types";
+import type {BoundingBoxCoordinates, TextSpanCoordinates} from "../../../../api/types";
 
 export interface PageDimension {
   width: number;

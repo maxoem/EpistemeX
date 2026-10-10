@@ -1,7 +1,7 @@
-import React, { useMemo } from "react";
-import { Award, ChevronRight, Play } from "lucide-react";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import type { BenchmarkDescriptor } from "../../../api/types";
+import React, {useMemo} from "react";
+import {Award, ChevronRight, Play} from "lucide-react";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import type {BenchmarkDescriptor} from "../../../api/types";
 
 interface BenchmarkRunsTabProps {
   benchmark: BenchmarkDescriptor;

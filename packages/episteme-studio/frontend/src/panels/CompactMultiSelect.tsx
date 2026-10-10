@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
-import { ChevronDown, Search, Check, RotateCcw, X } from "lucide-react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
+import {Check, ChevronDown, Search, X} from "lucide-react";
 
 export interface CompactMultiSelectProps {
   label: string;

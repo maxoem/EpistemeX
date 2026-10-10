@@ -1,37 +1,30 @@
 import * as echarts from "echarts/core";
-import {
-  LineChart,
-  BarChart,
-  PieChart,
-  BoxplotChart,
-  ScatterChart,
-  HeatmapChart,
-} from "echarts/charts";
 import type {
-  LineSeriesOption,
-  BarSeriesOption,
-  PieSeriesOption,
-  BoxplotSeriesOption,
-  ScatterSeriesOption,
-  HeatmapSeriesOption,
+    BarSeriesOption,
+    BoxplotSeriesOption,
+    HeatmapSeriesOption,
+    LineSeriesOption,
+    PieSeriesOption,
+    ScatterSeriesOption,
 } from "echarts/charts";
-import {
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-  TitleComponent,
-  DatasetComponent,
-  VisualMapComponent,
-} from "echarts/components";
+import {BarChart, BoxplotChart, HeatmapChart, LineChart, PieChart, ScatterChart,} from "echarts/charts";
 import type {
-  GridComponentOption,
-  TooltipComponentOption,
-  LegendComponentOption,
-  TitleComponentOption,
-  DatasetComponentOption,
-  VisualMapComponentOption,
+    DatasetComponentOption,
+    GridComponentOption,
+    LegendComponentOption,
+    TitleComponentOption,
+    TooltipComponentOption,
+    VisualMapComponentOption,
 } from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
+import {
+    DatasetComponent,
+    GridComponent,
+    LegendComponent,
+    TitleComponent,
+    TooltipComponent,
+    VisualMapComponent,
+} from "echarts/components";
+import {CanvasRenderer} from "echarts/renderers";
 
 echarts.use([
   LineChart,

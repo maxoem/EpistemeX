@@ -8,37 +8,16 @@
  * Reference: ISSUE-031 (Adversarial Noise Robustness Stress Testing)
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, {useEffect, useRef, useState} from "react";
 import * as echarts from "echarts/core";
-import { LineChart } from "echarts/charts";
-import {
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-  TitleComponent,
-} from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
-import {
-  Activity,
-  ShieldCheck,
-  ShieldAlert,
-  Play,
-  RefreshCw,
-  Sliders,
-  CheckCircle2,
-  XCircle,
-  HelpCircle,
-  Sparkles,
-  Layers,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
-import { useThemeStore } from "../../../../store/themeStore";
-import { api } from "../../../../api/client";
-import type {
-  NoiseRobustnessReportDetail,
-  PerturbationType,
-  StressTestRequest,
-} from "../../../../api/types";
+import {LineChart} from "echarts/charts";
+import {GridComponent, LegendComponent, TitleComponent, TooltipComponent,} from "echarts/components";
+import {CanvasRenderer} from "echarts/renderers";
+import {Activity, Play, RefreshCw, ShieldAlert, ShieldCheck,} from "lucide-react";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
+import {useThemeStore} from "../../../../store/themeStore";
+import {api} from "../../../../api/client";
+import type {NoiseRobustnessReportDetail, PerturbationType, StressTestRequest,} from "../../../../api/types";
 
 echarts.use([
   LineChart,

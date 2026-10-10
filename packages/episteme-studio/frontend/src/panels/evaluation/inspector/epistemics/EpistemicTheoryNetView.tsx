@@ -1,20 +1,13 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import {
-  Layers,
-  Network,
-  PanelRightClose,
-  Workflow,
-  Scale,
-  CheckCircle2,
-} from "lucide-react";
-import { CascadingBourbakiGrid } from "./CascadingBourbakiGrid";
-import { PosetDagViewer } from "./PosetDagViewer";
-import { PolarityConflictMatrix } from "./PolarityConflictMatrix";
-import { BourbakiNodeInspector } from "./BourbakiNodeInspector";
-import { ResizablePanel } from "../../../ResizablePanel";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
-import type { BourbakiSubElement } from "./types";
-import { CLASS_METADATA, getBourbakiSubElements } from "./types";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
+import {CheckCircle2, Layers, PanelRightClose, Scale, Workflow,} from "lucide-react";
+import {CascadingBourbakiGrid} from "./CascadingBourbakiGrid";
+import {PosetDagViewer} from "./PosetDagViewer";
+import {PolarityConflictMatrix} from "./PolarityConflictMatrix";
+import {BourbakiNodeInspector} from "./BourbakiNodeInspector";
+import {ResizablePanel} from "../../../ResizablePanel";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
+import type {BourbakiSubElement} from "./types";
+import {CLASS_METADATA, getBourbakiSubElements} from "./types";
 
 interface CompletenessEntry {
   symbol: string;

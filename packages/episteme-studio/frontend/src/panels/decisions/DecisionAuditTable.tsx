@@ -1,22 +1,9 @@
-import React, { useState, useMemo, useEffect } from "react";
-import { BorderlineDecisionItem } from "../../api/types";
-import { api } from "../../api/client";
-import { useRunsStore } from "../../store/runsStore";
-import { DecisionDetailDrawer } from "./DecisionDetailDrawer";
-import {
-  Zap,
-  Cpu,
-  ShieldCheck,
-  Search,
-  Filter,
-  Sliders,
-  AlertTriangle,
-  Clock,
-  Layers,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-} from "lucide-react";
+import React, {useEffect, useMemo, useState} from "react";
+import {BorderlineDecisionItem} from "../../api/types";
+import {api} from "../../api/client";
+import {useRunsStore} from "../../store/runsStore";
+import {DecisionDetailDrawer} from "./DecisionDetailDrawer";
+import {AlertTriangle, Cpu, Search, ShieldCheck, Zap,} from "lucide-react";
 
 export interface DecisionAuditTableProps {
   runId: string;

@@ -1,4 +1,4 @@
-import { PhaseStatus, RunStatus } from "../../api/types";
+import {PhaseStatus} from "../../api/types";
 
 export interface GitRailNode {
   key: string;

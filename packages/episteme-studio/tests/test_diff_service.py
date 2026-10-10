@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from episteme_studio.app import create_app
-from episteme_studio.domain.diff import EdgeDiffStatus, NodeDiffStatus
+from episteme_studio.domain.diff import NodeDiffStatus
 from episteme_studio.domain.graph import GraphView, Layer, StudioEdge, StudioNode
 from episteme_studio.domain.runs import RunDetail, RunStatus
 from episteme_studio.services.diff_service import DiffService

@@ -12,7 +12,6 @@ import asyncio
 from typing import Any
 
 from episteme_pipeline.protocols.decision import (
-    DecisionEngine,
     DecisionNoulResult,
     DecisionQuestion,
     DecisionScore,

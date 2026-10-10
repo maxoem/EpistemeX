@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import logging
-from unittest.mock import MagicMock
 
-import pytest
 from rich.console import Console
 from rich.logging import RichHandler
-from rich.progress import Progress
 
 from episteme_pipeline.events.bus import SimpleEventEmitter
 from episteme_pipeline.events.models import (

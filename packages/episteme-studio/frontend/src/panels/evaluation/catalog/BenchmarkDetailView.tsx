@@ -1,19 +1,14 @@
-import React, { useState } from "react";
-import {
-  BookOpen,
-  Network,
-  Play,
-  Table as TableIcon,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import { BenchmarkDataViewer } from "./BenchmarkDataViewer";
-import { BenchmarkCardTab } from "./BenchmarkCardTab";
-import { StructuralistSpecializationTab } from "./StructuralistSpecializationTab";
-import { RetrievalSpecializationTab } from "./RetrievalSpecializationTab";
-import { ExtractionSpecializationTab } from "./ExtractionSpecializationTab";
-import { BenchmarkRunsTab } from "./BenchmarkRunsTab";
-import { PreFlightLinterRail } from "./PreFlightLinterRail";
-import type { BenchmarkDescriptor } from "../../../api/types";
+import React, {useState} from "react";
+import {BookOpen, Network, Play, Table as TableIcon,} from "lucide-react";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import {BenchmarkDataViewer} from "./BenchmarkDataViewer";
+import {BenchmarkCardTab} from "./BenchmarkCardTab";
+import {StructuralistSpecializationTab} from "./StructuralistSpecializationTab";
+import {RetrievalSpecializationTab} from "./RetrievalSpecializationTab";
+import {ExtractionSpecializationTab} from "./ExtractionSpecializationTab";
+import {BenchmarkRunsTab} from "./BenchmarkRunsTab";
+import {PreFlightLinterRail} from "./PreFlightLinterRail";
+import type {BenchmarkDescriptor} from "../../../api/types";
 
 interface BenchmarkDetailViewProps {
   benchmark: BenchmarkDescriptor;

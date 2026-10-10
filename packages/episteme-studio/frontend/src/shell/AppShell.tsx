@@ -1,26 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { useRunsStore } from "../store/runsStore";
-import { useProjectSettingsStore } from "../store/projectSettingsStore";
-import { AppLogo } from "./AppLogo";
-import { StudioSettingsModal } from "./StudioSettingsModal";
-import { ProjectSettingsModal } from "./ProjectSettingsModal";
-import { RunCredentialsModal } from "../panels/RunCredentialsModal";
-import { GlobalCommandOmnibar } from "./GlobalCommandOmnibar";
-import { ConnectionProvenancePill } from "./ConnectionProvenancePill";
-import {
-  Activity,
-  ChevronDown,
-  Cpu,
-  Database,
-  Laptop,
-  Layers,
-  Moon,
-  Network,
-  Settings,
-  Sliders,
-  Sun,
-  Terminal,
-} from "lucide-react";
+import React, {useEffect, useState} from "react";
+import {useRunsStore} from "../store/runsStore";
+import {useProjectSettingsStore} from "../store/projectSettingsStore";
+import {AppLogo} from "./AppLogo";
+import {StudioSettingsModal} from "./StudioSettingsModal";
+import {ProjectSettingsModal} from "./ProjectSettingsModal";
+import {RunCredentialsModal} from "../panels/RunCredentialsModal";
+import {GlobalCommandOmnibar} from "./GlobalCommandOmnibar";
+import {ConnectionProvenancePill} from "./ConnectionProvenancePill";
+import {Activity, Cpu, Layers, Network, Sliders, Terminal,} from "lucide-react";
 
 interface AppShellProps {
   children: React.ReactNode;

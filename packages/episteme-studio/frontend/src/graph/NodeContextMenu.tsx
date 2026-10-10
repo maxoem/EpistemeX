@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from "react";
-import { StudioNode } from "../api/types";
-import { Zap, Activity, Info, Copy, Check } from "lucide-react";
+import React, {useEffect, useRef} from "react";
+import {StudioNode} from "../api/types";
+import {Activity, Copy, Info, Zap} from "lucide-react";
 
 interface NodeContextMenuProps {
   node: StudioNode;

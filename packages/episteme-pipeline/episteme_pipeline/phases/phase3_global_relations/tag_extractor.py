@@ -31,8 +31,6 @@ import asyncio
 import logging
 from collections import defaultdict
 
-from llama_index.core import PromptTemplate
-
 from episteme_pipeline.config import Phase3Config
 from episteme_pipeline.contracts.domain import L2Entity, L2Triple, SubGraph, CandidatePair
 from episteme_pipeline.llm import ensure_structured_llm

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Callable
+
 from pydantic import BaseModel, Field
 
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation

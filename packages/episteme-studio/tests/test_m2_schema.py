@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from episteme_pipeline.schema.default_schema import SchemaConfig
 from episteme_studio.adapters.schema_mapper import SchemaMapper
 from episteme_studio.app import create_app
 from episteme_studio.settings import StudioSettings
-from episteme_pipeline.schema.default_schema import SchemaConfig
 
 
 @pytest.mark.asyncio

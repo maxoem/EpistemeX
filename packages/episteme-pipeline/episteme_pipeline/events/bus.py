@@ -10,8 +10,8 @@ The event system follows the Observer pattern:
 """
 from __future__ import annotations
 
-from typing import Protocol, List, Optional, Dict, Any
 from abc import abstractmethod
+from typing import Protocol, List, Optional, Dict, Any
 
 from .models import BaseEvent, PipelineEvent
 

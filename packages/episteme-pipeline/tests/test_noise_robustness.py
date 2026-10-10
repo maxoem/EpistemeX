@@ -6,9 +6,8 @@ import networkx as nx
 import pytest
 
 from episteme_pipeline.contracts.domain import L2Triple
-from episteme_pipeline.evaluation.models import DatasetType, EvaluationOutcome
+from episteme_pipeline.evaluation.models import DatasetType
 from episteme_pipeline.evaluation.strategies import (
-    ExtractionStrategy,
     NoiseRobustnessStrategy,
     apply_entity_synonym_swaps,
     apply_graph_perturbation,

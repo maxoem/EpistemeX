@@ -1,19 +1,9 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
-  Filter,
-  Layers,
-  ShieldAlert,
-  CheckCircle2,
-  XCircle,
-  Link2,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
-import type { ModelDecompositionEntry } from "../../../../api/types";
-import type { BourbakiSubElement } from "./types";
-import { CLASS_METADATA, getBourbakiSubElements } from "./types";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
+import {AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Filter, Layers, Link2, XCircle,} from "lucide-react";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
+import type {ModelDecompositionEntry} from "../../../../api/types";
+import type {BourbakiSubElement} from "./types";
+import {CLASS_METADATA, getBourbakiSubElements} from "./types";
 
 export interface CascadingBourbakiGridProps {
   selectedElement?: BourbakiSubElement | null;

@@ -6,11 +6,11 @@ Implements the O(1) span extraction and symmetrical truncation safeguard.
 from __future__ import annotations
 
 import logging
-from typing import Protocol, Any
 import re
+from typing import Protocol, Any
 
-from episteme_pipeline.events.models import EnvelopeInjectionAttempted, EnvelopeInjectionFailed
 from episteme_pipeline.events.context import get_event_emitter
+from episteme_pipeline.events.models import EnvelopeInjectionAttempted, EnvelopeInjectionFailed
 
 logger = logging.getLogger(__name__)
 

@@ -18,10 +18,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from episteme_pipeline.artifacts.execution import (
-    ArtifactCollection,
     ArtifactExecutionContext,
     Phase1ArtifactsView,
-    Phase2ArtifactsView,
 )
 from episteme_pipeline.artifacts.models import DocumentArtifact
 from episteme_pipeline.config import Phase1Config, Phase2Config, PipelineConfig

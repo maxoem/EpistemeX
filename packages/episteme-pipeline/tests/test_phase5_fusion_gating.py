@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from episteme_pipeline.artifacts.execution import ArtifactExecutionContext, Phase4ArtifactsView
 from episteme_pipeline.config import FusionGatingConfig, Phase5Config

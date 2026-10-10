@@ -17,13 +17,13 @@ from episteme_pipeline.artifacts.mappers import (
 )
 from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
-from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
+from episteme_pipeline.contracts.domain import TheoryAtom
 from episteme_pipeline.contracts.phase_contracts import (
     L1Chunk,
     L1Document,
     L2Entity,
     L2Triple,
-        Phase1Output,
+    Phase1Output,
     Phase2Output,
     Phase3Output,
     Phase4Output,

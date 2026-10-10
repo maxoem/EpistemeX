@@ -1,11 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  getPhaseLifecycleGroup,
-  resolveStageArtifacts,
-  getShortStageLabel,
-  LIFECYCLE_GROUPS,
-} from "./stageModel.ts";
+import {getPhaseLifecycleGroup, getShortStageLabel, resolveStageArtifacts,} from "./stageModel.ts";
 
 test("getPhaseLifecycleGroup correctly partitions phases into lifecycle stages", () => {
   // Ingest

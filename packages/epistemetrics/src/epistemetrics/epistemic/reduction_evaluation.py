@@ -9,12 +9,12 @@ Operationalizes Task 4 of the Structuralist Theory-Net Benchmark (STNB):
 from __future__ import annotations
 
 from typing import Any
+
 import networkx as nx
 from pydantic import BaseModel, ConfigDict, Field
 
 from epistemetrics.core.models import (
     RelationType,
-    TheoryEdge,
 )
 from epistemetrics.graph.theory_graph import TheoryGraph
 

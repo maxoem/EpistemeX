@@ -6,14 +6,13 @@ delta scoring in EvaluationHarness deterministically without live LLM calls.
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import Any
 
 import networkx as nx
 import pytest
 
-from episteme_pipeline.contracts.domain import L1Chunk, L2Entity, L2Triple, TheoryAtom, TheoryNet, TheoryRelation
+from episteme_pipeline.contracts.domain import L1Chunk, L2Entity, L2Triple, TheoryAtom, TheoryNet
 from episteme_pipeline.evaluation.baselines import (
     BaselineNaiveKG,
     BaselineTextRAG,

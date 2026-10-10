@@ -1,38 +1,36 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
 import * as echarts from "./echarts";
-import { LangfuseClient } from "@langfuse/client";
-import { api } from "../api/client";
-import { useProjectSettingsStore } from "../store/projectSettingsStore";
-import { useThemeStore } from "../store/themeStore";
+import {LangfuseClient} from "@langfuse/client";
+import {api} from "../api/client";
+import {useProjectSettingsStore} from "../store/projectSettingsStore";
+import {useThemeStore} from "../store/themeStore";
 import {
-  DollarSign,
-  Coins,
-  Cpu,
-  Clock,
-  RefreshCw,
-  ExternalLink,
-  Sliders,
-  AlertCircle,
-  Activity,
-  CheckCircle2,
-  Layers,
-  Sparkles,
-  Zap,
-  TrendingDown,
-  ShieldCheck,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
+    Activity,
+    AlertCircle,
+    ArrowDown,
+    ArrowUp,
+    ArrowUpDown,
+    CheckCircle2,
+    Clock,
+    Coins,
+    Cpu,
+    ExternalLink,
+    Layers,
+    RefreshCw,
+    Sliders,
+    Sparkles,
+    TrendingDown,
+    Zap,
 } from "lucide-react";
-import { useRunsStore } from "../store/runsStore";
+import {useRunsStore} from "../store/runsStore";
 import {
-  useLegacyTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  LegacyColumnDef,
-  LegacyColumn,
+    getCoreRowModel,
+    getSortedRowModel,
+    LegacyColumn,
+    LegacyColumnDef,
+    useLegacyTable,
 } from "@tanstack/react-table/legacy";
-import { flexRender, SortingState } from "@tanstack/react-table";
+import {flexRender, SortingState} from "@tanstack/react-table";
 
 interface ObservationRecord {
   id: string;

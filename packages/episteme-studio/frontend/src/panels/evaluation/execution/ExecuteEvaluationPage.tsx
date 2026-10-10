@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, {useEffect, useState} from "react";
 import {
   Activity,
   AlertCircle,
@@ -7,8 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
-  Cpu,
-  Database,
   ExternalLink,
   Layers,
   Network,
@@ -19,13 +17,13 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import { useRunsStore } from "../../../store/runsStore";
-import { useNavigationStore } from "../../../store/navigationStore";
-import { apiClient } from "../../../api/client";
-import { useEvaluationJob } from "../hooks/useEvaluationJob";
-import { JobProgressStepper } from "../components/JobProgressStepper";
-import type { EvaluateRunRequest } from "../../../api/types";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import {useRunsStore} from "../../../store/runsStore";
+import {useNavigationStore} from "../../../store/navigationStore";
+import {apiClient} from "../../../api/client";
+import {useEvaluationJob} from "../hooks/useEvaluationJob";
+import {JobProgressStepper} from "../components/JobProgressStepper";
+import type {EvaluateRunRequest} from "../../../api/types";
 
 export type EvalMode =
   | "benchmark_alignment"

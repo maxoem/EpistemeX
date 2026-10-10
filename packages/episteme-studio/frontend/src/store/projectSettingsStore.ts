@@ -1,6 +1,6 @@
-import { create } from "zustand";
-import { api } from "../api/client";
-import { LangfuseStatusResponse } from "../api/types";
+import {create} from "zustand";
+import {api} from "../api/client";
+import {LangfuseStatusResponse} from "../api/types";
 
 interface ProjectSettingsState {
   langfuseHost: string;

@@ -11,7 +11,6 @@ import pytest
 
 from episteme_pipeline.artifacts.execution import ArtifactExecutionContext, Phase2ArtifactsView
 from episteme_pipeline.config import Phase3Config
-from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
 from episteme_pipeline.contracts.phase_contracts import (
     L2Entity,
     L2Triple,

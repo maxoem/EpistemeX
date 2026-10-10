@@ -8,7 +8,6 @@ from episteme_pipeline.contracts.domain import SearchResult
 from episteme_pipeline.evaluation.extrinsic import calculate_hits_at_k, calculate_mrr, calculate_ndcg
 from episteme_pipeline.evaluation.scorers.retrieval import (
     ExtrinsicRetrievalEvaluator,
-    default_deterministic_embedder,
 )
 from episteme_pipeline.evaluation.scorers.retrieval_scorer import (
     ExtrinsicRetrievalEvaluator as AliasEvaluator,

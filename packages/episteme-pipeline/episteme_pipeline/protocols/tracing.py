@@ -6,9 +6,9 @@ but are kept for backward compatibility during the transition.
 """
 from __future__ import annotations
 
-from typing import Protocol, Iterator
 from contextlib import contextmanager
 from typing import Dict, Any, Optional
+from typing import Protocol, Iterator
 
 
 class TraceSpan(Protocol):

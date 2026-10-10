@@ -1,18 +1,6 @@
-import React, { useMemo } from "react";
-import {
-  CheckCircle2,
-  XCircle,
-  GitMerge,
-  Clock,
-  ArrowRight,
-  Search,
-  Filter,
-} from "lucide-react";
-import type {
-  AdjudicationDecision,
-  AdjudicationQueueItem,
-  EdgeAdjudicationItem,
-} from "../../../../api/types";
+import React from "react";
+import {ArrowRight, CheckCircle2, Filter, GitMerge, Search, XCircle,} from "lucide-react";
+import type {AdjudicationDecision, AdjudicationQueueItem, EdgeAdjudicationItem,} from "../../../../api/types";
 
 export interface AdjudicationQueueListProps {
   candidates: AdjudicationQueueItem[];

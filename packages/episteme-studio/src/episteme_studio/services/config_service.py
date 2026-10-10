@@ -459,7 +459,6 @@ class ConfigService:
         list of AvailableInputDoc
             Discovered markdown and text files suitable for pipeline execution.
         """
-        import os
         from pathlib import Path
 
         discovered: list[AvailableInputDoc] = []

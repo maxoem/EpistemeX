@@ -26,10 +26,17 @@ See: docs/workflow/4_argument_mining/
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from collections import defaultdict
 
+from episteme_pipeline.artifacts.builders import (
+    build_argument_component_artifact,
+    build_argument_relation_artifact,
+)
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+    Phase3ArtifactsView,
+)
 from episteme_pipeline.config import Phase4Config
 from episteme_pipeline.contracts.domain import (
     TheoryAtom,
@@ -37,11 +44,13 @@ from episteme_pipeline.contracts.domain import (
 )
 from episteme_pipeline.decision.gleaning import GleaningStoppingOracle, JevGleaningGate
 from episteme_pipeline.decision.modal_resolver import HybridModalResolver
-from episteme_pipeline.protocols.decision import DecisionEngine
-from episteme_pipeline.protocols.modality import (
-    ModalStrengthResolver,
-    ensure_modal_strength_resolver,
+from episteme_pipeline.events.bus import EventEmitter
+from episteme_pipeline.events.models import (
+    ProgressAdvanced,
+    ProgressCompleted,
+    ProgressStarted,
 )
+from episteme_pipeline.phases.chunk_selection import select_pending_chunks
 from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import LLMACCClassifier
 from episteme_pipeline.phases.phase4_argument_mining.adu_segmenter import LLMADUSegmenter
 from episteme_pipeline.phases.phase4_argument_mining.arc_classifier import TAGARCClassifier
@@ -50,23 +59,12 @@ from episteme_pipeline.protocols.argument_mining import (
     ADUSegmenter,
     ARCClassifier,
 )
+from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
-from episteme_pipeline.phases.chunk_selection import select_pending_chunks
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
-from episteme_pipeline.artifacts.execution import (
-    ArtifactCollection,
-    ArtifactExecutionContext,
-    Phase3ArtifactsView,
-)
-from episteme_pipeline.artifacts.builders import (
-    build_argument_component_artifact,
-    build_argument_relation_artifact,
-)
-from episteme_pipeline.events.bus import EventEmitter, NoOpEventEmitter
-from episteme_pipeline.events.models import (
-    ProgressAdvanced,
-    ProgressCompleted,
-    ProgressStarted,
+from episteme_pipeline.protocols.modality import (
+    ModalStrengthResolver,
+    ensure_modal_strength_resolver,
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.schema.default_schema import SchemaConfig

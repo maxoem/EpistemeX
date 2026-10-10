@@ -1,18 +1,18 @@
-import { create } from "zustand";
-import { api } from "../api/client";
+import {create} from "zustand";
+import {api} from "../api/client";
 import {
-  Capabilities,
-  GlobalStructuralAnchor,
-  RunDetail,
-  RunSummary,
-  StartRunPayload,
-  StudioEvent,
-  StudioNode,
+    Capabilities,
+    GlobalStructuralAnchor,
+    RunDetail,
+    RunSummary,
+    StartRunPayload,
+    StudioEvent,
+    StudioNode,
 } from "../api/types";
-import { useCredentialStore } from "./credentialStore";
-import { useProjectSettingsStore } from "./projectSettingsStore";
-import { resolvePhaseKey } from "../panels/phaseConfig/phaseConfigResolver";
-import { calculateProgressionSnapshots } from "../panels/progressionUtils";
+import {useCredentialStore} from "./credentialStore";
+import {useProjectSettingsStore} from "./projectSettingsStore";
+import {resolvePhaseKey} from "../panels/phaseConfig/phaseConfigResolver";
+import {calculateProgressionSnapshots} from "../panels/progressionUtils";
 
 export interface ProgressionSnapshot {
   step: number;

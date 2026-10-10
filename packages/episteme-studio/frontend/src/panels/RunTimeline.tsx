@@ -1,26 +1,8 @@
-import React, { useMemo } from "react";
-import { PhaseStatus, RunStatus } from "../api/types";
-import {
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  PlayCircle,
-  XCircle,
-  RotateCcw,
-  Sparkles,
-  Layers,
-  ChevronRight,
-  Database,
-  Cpu,
-  ArrowRight,
-} from "lucide-react";
-import {
-  LIFECYCLE_GROUPS,
-  PipelineLifecycleGroup,
-  getPhaseLifecycleGroup,
-  getShortStageLabel,
-} from "./stageModel";
-import { resolvePhaseKey } from "./phaseConfig/phaseConfigResolver";
+import React, {useMemo} from "react";
+import {PhaseStatus} from "../api/types";
+import {ChevronRight, Layers, RotateCcw,} from "lucide-react";
+import {getPhaseLifecycleGroup, getShortStageLabel, LIFECYCLE_GROUPS, PipelineLifecycleGroup,} from "./stageModel";
+import {resolvePhaseKey} from "./phaseConfig/phaseConfigResolver";
 
 export interface RunTimelineProps {
   phaseRecords: PhaseStatus[];

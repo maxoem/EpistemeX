@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { useLeaderboardStore } from "./leaderboardStore.ts";
+import {useLeaderboardStore} from "./leaderboardStore.ts";
 
 test("leaderboardStore: initial state and defaults", () => {
   const state = useLeaderboardStore.getState();

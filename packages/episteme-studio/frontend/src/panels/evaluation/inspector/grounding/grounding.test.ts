@@ -1,15 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  computeGlobalBoundingBox,
-  computeLocalBoundingBox,
-  computeBezierSplineAcrossPages,
-  computeBoundingBoxIoU,
-  verifyLatexFormulaEquivalence,
-  normalizeLatexFormula,
-  spanToBoundingBox,
+    computeBezierSplineAcrossPages,
+    computeBoundingBoxIoU,
+    computeGlobalBoundingBox,
+    computeLocalBoundingBox,
+    verifyLatexFormulaEquivalence,
 } from "./coordinateScaling.ts";
-import type { BoundingBoxCoordinates, TextSpanCoordinates } from "../../../../api/types.ts";
+import type {BoundingBoxCoordinates, TextSpanCoordinates} from "../../../../api/types.ts";
 
 test("coordinateScaling: Tier 1 Global Continuous Container eliminates Page 1 stacking", () => {
   const pageDims = [

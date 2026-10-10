@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 from unittest.mock import MagicMock
+
 import pytest
-from pydantic import SecretStr
 
 from episteme_pipeline.config import DecisionEngineConfig, PipelineConfig
 from episteme_pipeline.prompts.default_prompts import (

@@ -12,11 +12,10 @@ It is safe to import without Langfuse installed; functions will no-op.
 
 from __future__ import annotations
 
+import os
 from contextlib import contextmanager, nullcontext
 from typing import Protocol, Iterator
 from uuid import uuid4
-
-import os
 
 from episteme_pipeline.protocols.tracing import NoOpTraceSink, TraceSpan
 

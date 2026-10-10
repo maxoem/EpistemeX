@@ -1,6 +1,3 @@
-import type { AvailableInputDoc, ConfigView, FieldProvenance, GlobalStructuralAnchor, InvalidationPreview, ResolvedPromptItem } from "../../api/types.ts";
-import type { PhaseMetadata } from "../phaseConfig/phaseRegistry.ts";
-
 export interface ConfigEditorProps {
   onNavigateToRuns?: () => void;
 }

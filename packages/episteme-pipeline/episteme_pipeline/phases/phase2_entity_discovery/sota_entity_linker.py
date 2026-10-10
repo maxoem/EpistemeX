@@ -19,6 +19,10 @@ from typing import TYPE_CHECKING
 import torch
 
 from episteme_pipeline.contracts.domain import L2Entity
+from episteme_pipeline.contracts.domain import SubGraph
+from episteme_pipeline.events.bus import EventEmitter
+from episteme_pipeline.events.models import EntityLinkingCandidatesRetrieved, EntityLinkingReranked, \
+    UnlinkableMentionError
 from episteme_pipeline.protocols.extractors import (
     CrossEncoder,
     EmbeddingModel,
@@ -29,9 +33,6 @@ from episteme_pipeline.protocols.extractors import (
     ensure_embedding_model,
 )
 from episteme_pipeline.protocols.graph_store import GraphReader
-from episteme_pipeline.events.bus import EventEmitter
-from episteme_pipeline.events.models import EntityLinkingCandidatesRetrieved, EntityLinkingReranked, UnlinkableMentionError
-from episteme_pipeline.contracts.domain import SubGraph
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel, PreTrainedTokenizer

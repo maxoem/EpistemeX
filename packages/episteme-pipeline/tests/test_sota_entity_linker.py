@@ -1,11 +1,12 @@
-import pytest
-import torch
 from unittest.mock import MagicMock, AsyncMock
 
-from episteme_pipeline.phases.phase2_entity_discovery.mention_context_injector import DefaultMentionContextInjector
-from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import EnvelopeBiEncoder, DenseEntityLinker
+import pytest
+import torch
+
 from episteme_pipeline.contracts.domain import L2Entity, SubGraph, L2Triple
 from episteme_pipeline.events.models import UnlinkableMentionError
+from episteme_pipeline.phases.phase2_entity_discovery.mention_context_injector import DefaultMentionContextInjector
+from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import EnvelopeBiEncoder, DenseEntityLinker
 
 
 class DummyStructuredLLM:

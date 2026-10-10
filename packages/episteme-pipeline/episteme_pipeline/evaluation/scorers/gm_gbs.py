@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Callable
+
 import networkx as nx
 import numpy as np
 

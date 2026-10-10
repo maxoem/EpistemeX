@@ -1,28 +1,11 @@
-import React, { useEffect, useState, useMemo } from "react";
-import {
-  Activity,
-  ArrowUpDown,
-  Award,
-  BarChart2,
-  Check,
-  CheckCircle2,
-  ExternalLink,
-  Layers,
-  Play,
-  Plus,
-  RefreshCw,
-  Search,
-  Sliders,
-  Sparkles,
-  Split,
-  TrendingUp,
-} from "lucide-react";
-import { useLeaderboardStore } from "../../../store/leaderboardStore";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import { ParetoFrontierPlot } from "./ParetoFrontierPlot";
-import { PairwiseDiffDrawer } from "./PairwiseDiffDrawer";
-import { FastEvaluateModal } from "./FastEvaluateModal";
-import type { LeaderboardEntry } from "../../../api/types";
+import React, {useEffect, useMemo, useState} from "react";
+import {Check, ExternalLink, Play, RefreshCw, Search, TrendingUp,} from "lucide-react";
+import {useLeaderboardStore} from "../../../store/leaderboardStore";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import {ParetoFrontierPlot} from "./ParetoFrontierPlot";
+import {PairwiseDiffDrawer} from "./PairwiseDiffDrawer";
+import {FastEvaluateModal} from "./FastEvaluateModal";
+import type {LeaderboardEntry} from "../../../api/types";
 
 export const LeaderboardPage: React.FC = () => {
   const {

@@ -1,21 +1,9 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
-import {
-  FileText,
-  Network,
-  X,
-  AlertTriangle,
-  Search,
-  CheckCircle2,
-  SlidersHorizontal,
-  Maximize2,
-  Check,
-  ChevronRight,
-} from "lucide-react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
+import {AlertTriangle, Check, FileText, Maximize2, Network, Search, X,} from "lucide-react";
 
-import { StageArtifactsReport } from "./stageModel";
-import { getEpistemicLayerForPhase, EPISTEMIC_TAXONOMY } from "./epistemicTheme";
-import { LocalEgoGraph } from "./LocalEgoGraph";
-import { GraphView } from "../api/types";
+import {StageArtifactsReport} from "./stageModel";
+import {LocalEgoGraph} from "./LocalEgoGraph";
+import {GraphView} from "../api/types";
 
 export function formatPredicate(predicate: string): string {
   if (!predicate) return "";

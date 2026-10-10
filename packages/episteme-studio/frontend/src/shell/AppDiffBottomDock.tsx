@@ -1,20 +1,6 @@
-import React, { useEffect } from "react";
-import { useDiffStore, DiffScrubMode, DiffFilter } from "../store/diffStore";
-import {
-  GitCompare,
-  Zap,
-  PlusCircle,
-  MinusCircle,
-  Sliders,
-  X,
-  Play,
-  Square,
-  Activity,
-  Network,
-  ArrowRight,
-  Layers,
-  ChevronRight,
-} from "lucide-react";
+import React, {useEffect} from "react";
+import {useDiffStore} from "../store/diffStore";
+import {ChevronRight, GitCompare, MinusCircle, Network, Play, PlusCircle, Sliders, Square, X, Zap,} from "lucide-react";
 
 interface AppDiffBottomDockProps {
   activeTab: "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation";

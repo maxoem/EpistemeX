@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
-import logging
+
 import igraph as ig
 import networkx as nx
 

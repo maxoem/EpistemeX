@@ -1,23 +1,11 @@
-import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { Graph, NodeEvent, EdgeEvent, CanvasEvent } from "@antv/g6";
-import {
-  Focus,
-  Maximize2,
-  Minimize2,
-  RefreshCw,
-  ZoomIn,
-  ZoomOut,
-  Layers,
-  Sparkles,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
-import { CanvasEvaluationHud } from "./CanvasEvaluationHud";
-import { TopologicalErrorQuad } from "./TopologicalErrorQuad";
-import { AmbiguousAliasDrawer } from "./AmbiguousAliasDrawer";
-import type {
-  EvaluationEdgeOverlay,
-  EvaluationNodeOverlay,
-} from "../../../../api/types";
+import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
+import {CanvasEvent, EdgeEvent, Graph, NodeEvent} from "@antv/g6";
+import {Focus, ZoomIn, ZoomOut,} from "lucide-react";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
+import {CanvasEvaluationHud} from "./CanvasEvaluationHud";
+import {TopologicalErrorQuad} from "./TopologicalErrorQuad";
+import {AmbiguousAliasDrawer} from "./AmbiguousAliasDrawer";
+import type {EvaluationEdgeOverlay, EvaluationNodeOverlay,} from "../../../../api/types";
 
 const BOURBAKI_HULL_PALETTE: Record<string, { fill: string; stroke: string; label: string }> = {
   Mp: { fill: "#3b82f6", stroke: "#2563eb", label: "Mp: Potential Models" },

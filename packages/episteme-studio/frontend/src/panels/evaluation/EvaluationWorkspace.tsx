@@ -1,27 +1,25 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, {useEffect, useMemo, useState} from "react";
 import {
-  Activity,
-  Award,
-  BarChart2,
-  BookOpen,
-  Filter,
-  Layers,
-  Network,
-  Play,
-  Plus,
-  Sliders,
-  Sparkles,
-  TrendingUp,
+    Activity,
+    BarChart2,
+    BookOpen,
+    Filter,
+    Layers,
+    Network,
+    Play,
+    Sliders,
+    Sparkles,
+    TrendingUp,
 } from "lucide-react";
-import { useEvaluationStore } from "../../store/evaluationStore";
-import { ResizablePanel } from "../ResizablePanel";
-import { LocalNavSidebar, NavSectionDef } from "../../shell/navigation";
-import { EvaluationContextBar } from "./components/EvaluationContextBar";
-import { BenchmarkCatalogPage } from "./catalog/BenchmarkCatalogPage";
-import { LeaderboardPage } from "./leaderboard/LeaderboardPage";
-import { RunEvaluationInspector } from "./inspector/RunEvaluationInspector";
-import { LongitudinalTrajectoryStudio } from "./longitudinal/LongitudinalTrajectoryStudio";
-import { ExecuteEvaluationPage } from "./execution/ExecuteEvaluationPage";
+import {useEvaluationStore} from "../../store/evaluationStore";
+import {ResizablePanel} from "../ResizablePanel";
+import {LocalNavSidebar, NavSectionDef} from "../../shell/navigation";
+import {EvaluationContextBar} from "./components/EvaluationContextBar";
+import {BenchmarkCatalogPage} from "./catalog/BenchmarkCatalogPage";
+import {LeaderboardPage} from "./leaderboard/LeaderboardPage";
+import {RunEvaluationInspector} from "./inspector/RunEvaluationInspector";
+import {LongitudinalTrajectoryStudio} from "./longitudinal/LongitudinalTrajectoryStudio";
+import {ExecuteEvaluationPage} from "./execution/ExecuteEvaluationPage";
 
 export const EvaluationWorkspace: React.FC = () => {
   const {

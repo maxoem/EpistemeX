@@ -3,7 +3,6 @@ from pathlib import Path
 
 from episteme_pipeline.protocols.data_source import DataSourceAdapter
 
-
 _BLANK_LINES_RE = re.compile(r'\n{3,}')
 _HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)
 

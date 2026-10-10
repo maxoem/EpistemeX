@@ -1,16 +1,7 @@
-import React, { useMemo } from "react";
-import {
-  AlertOctagon,
-  CheckCircle2,
-  RotateCw,
-  Workflow,
-  Network,
-  ArrowRight,
-  ShieldCheck,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
-import { ActionableHookPill } from "../../components/ActionableHookPill";
-import type { PosetEvaluationDetail } from "../../../../api/types";
+import React, {useMemo} from "react";
+import {AlertOctagon, ArrowRight, CheckCircle2, Network, RotateCw, ShieldCheck, Workflow,} from "lucide-react";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
+import type {PosetEvaluationDetail} from "../../../../api/types";
 
 export interface CycleViolation {
   id: string;

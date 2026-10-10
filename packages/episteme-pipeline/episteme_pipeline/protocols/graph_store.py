@@ -11,6 +11,7 @@ from episteme_pipeline.contracts.domain import (
     PhaseItemRecord,
 )
 
+
 class GraphHandle(ABC):
     """Lifecycle surface shared by every graph-backed handle.
 

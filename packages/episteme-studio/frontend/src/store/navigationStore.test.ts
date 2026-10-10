@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { useNavigationStore } from "./navigationStore.ts";
-import { useEngineSettingsStore } from "./engineSettingsStore.ts";
-import { useEvaluationStore } from "./evaluationStore.ts";
+import {useNavigationStore} from "./navigationStore.ts";
+import {useEngineSettingsStore} from "./engineSettingsStore.ts";
+import {useEvaluationStore} from "./evaluationStore.ts";
 import {
-  openPredicateInEngine,
-  openArgRelationInEngine,
-  openPhasePromptInExecution,
-  isolateCycleInCanvas,
+    isolateCycleInCanvas,
+    openArgRelationInEngine,
+    openPhasePromptInExecution,
+    openPredicateInEngine,
 } from "../panels/evaluation/components/actionableHooks.ts";
 
 test("navigationStore: manages global workspace activeTab and promptTuningTarget", () => {

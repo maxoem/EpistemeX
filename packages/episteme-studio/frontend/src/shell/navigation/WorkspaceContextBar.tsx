@@ -1,5 +1,5 @@
 import React from "react";
-import { PanelLeftOpen, ChevronRight } from "lucide-react";
+import {ChevronRight, PanelLeftOpen} from "lucide-react";
 
 export interface BreadcrumbItem {
   label: string;

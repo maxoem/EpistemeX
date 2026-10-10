@@ -1,24 +1,20 @@
-import React, { useEffect, useRef } from "react";
+import React, {useEffect, useRef} from "react";
 import {
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Filter,
-  GitMerge,
-  Loader2,
-  RefreshCw,
-  Search,
-  Send,
-  X,
-  XCircle,
+    CheckCircle2,
+    ChevronDown,
+    ChevronRight,
+    Filter,
+    GitMerge,
+    Loader2,
+    RefreshCw,
+    Search,
+    Send,
+    X,
+    XCircle,
 } from "lucide-react";
-import type {
-  AdjudicationDecision,
-  AdjudicationQueueItem,
-  EdgeAdjudicationItem,
-} from "../../../../api/types";
-import { formatPredicate } from "../../../StageArtifactsView";
-import { classifyEpistemicRole } from "../../../assertionTransformer";
+import type {AdjudicationDecision, AdjudicationQueueItem, EdgeAdjudicationItem,} from "../../../../api/types";
+import {formatPredicate} from "../../../StageArtifactsView";
+import {classifyEpistemicRole} from "../../../assertionTransformer";
 
 export interface AdjudicationTableViewProps {
   candidates: AdjudicationQueueItem[];

@@ -1,6 +1,6 @@
-import React, { useState } from "react";
-import { Copy, Terminal } from "lucide-react";
-import type { BenchmarkDescriptor } from "../../../api/types";
+import React, {useState} from "react";
+import {Copy, Terminal} from "lucide-react";
+import type {BenchmarkDescriptor} from "../../../api/types";
 
 interface BenchmarkCardTabProps {
   benchmark: BenchmarkDescriptor;

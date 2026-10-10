@@ -1,18 +1,8 @@
-import React, { useState } from "react";
-import {
-  FileCode,
-  GitMerge,
-  Info,
-  Layers,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
-import type {
-  AdjudicationQueueItem,
-  EdgeAdjudicationItem,
-} from "../../../../api/types";
-import { ComparativeOverlayGraph } from "./ComparativeOverlayGraph";
-import { formatPredicate } from "../../../StageArtifactsView";
+import React, {useState} from "react";
+import {ChevronDown, ChevronRight, FileCode, GitMerge, Info, Layers,} from "lucide-react";
+import type {AdjudicationQueueItem, EdgeAdjudicationItem,} from "../../../../api/types";
+import {ComparativeOverlayGraph} from "./ComparativeOverlayGraph";
+import {formatPredicate} from "../../../StageArtifactsView";
 
 export interface AdjudicationInspectorRailProps {
   candidate: AdjudicationQueueItem | null;

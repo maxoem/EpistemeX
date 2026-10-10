@@ -8,34 +8,23 @@
  * Reference: ISSUE-029 (Multimodal Evidence Grounding Inspection)
  */
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, {useEffect, useMemo, useState} from "react";
 import {
-  BookOpen,
-  CheckCircle2,
-  XCircle,
-  Copy,
-  Check,
-  Sparkles,
-  ExternalLink,
-  Layers,
-  ChevronDown,
-  Navigation,
-  FileCode,
   AlertTriangle,
+  BookOpen,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  Copy,
+  Layers,
   RefreshCw,
-  Eye,
+  XCircle,
 } from "lucide-react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
-import { api } from "../../../../api/client";
-import type {
-  GroundingEvaluationDetail,
-  MultiModalEvidenceAnchor,
-} from "../../../../api/types";
-import {
-  verifyLatexFormulaEquivalence,
-  type FormulaVerificationResult,
-} from "./coordinateScaling";
-import { MultiPagePdfVitrine } from "./MultiPagePdfVitrine";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
+import {api} from "../../../../api/client";
+import type {GroundingEvaluationDetail,} from "../../../../api/types";
+import {type FormulaVerificationResult, verifyLatexFormulaEquivalence,} from "./coordinateScaling";
+import {MultiPagePdfVitrine} from "./MultiPagePdfVitrine";
 
 export interface DocumentGroundingViewProps {
   onOpenCanvas?: () => void;

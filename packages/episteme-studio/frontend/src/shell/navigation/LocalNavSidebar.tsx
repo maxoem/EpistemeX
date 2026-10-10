@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
-import { PanelLeftClose, PanelLeftOpen, ChevronRight } from "lucide-react";
-import type { NavSectionDef, NavItemDef, NavGroupDef } from "./NavTypes";
-import { NavItem } from "./NavItem";
-import { NavGroup } from "./NavGroup";
+import React, {useEffect, useRef, useState} from "react";
+import {createPortal} from "react-dom";
+import {ChevronRight, PanelLeftClose, PanelLeftOpen} from "lucide-react";
+import type {NavGroupDef, NavItemDef, NavSectionDef} from "./NavTypes";
+import {NavItem} from "./NavItem";
+import {NavGroup} from "./NavGroup";
 
 interface RailItemWithTooltipProps {
   item: NavItemDef;

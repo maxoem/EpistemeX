@@ -304,7 +304,7 @@ async def test_upsert_argument_components_omits_empty_entity_ids() -> None:
 @pytest.mark.asyncio
 async def test_get_theory_atoms_resilient_deserialization() -> None:
     """Verify that get_theory_atoms gracefully handles non-string and malformed inputs."""
-    from episteme_pipeline.contracts.domain import Measurement, TenabilityResult
+    from episteme_pipeline.contracts.domain import Measurement
     from episteme_pipeline.graph.neo4j_store import _Neo4jReadMixin
 
     class _MockResult:

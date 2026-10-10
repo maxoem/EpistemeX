@@ -1,31 +1,12 @@
-import React, { useState, useEffect } from "react";
-import {
-  Activity,
-  Cpu,
-  Loader2,
-  ShieldCheck,
-  Zap,
-  Layers,
-  Database,
-  CheckCircle2,
-  AlertTriangle,
-  FileText,
-  Boxes,
-  Check,
-  Flag,
-  ShieldAlert,
-  ArrowRight,
-  ExternalLink,
-  X,
-} from "lucide-react";
-import { RunDetail, PhaseStatus } from "../api/types";
-import { StageArtifactsReport } from "./stageModel";
-import { LiveProgress, SubtaskProgress } from "../store/runsStore";
-import { EPISTEMIC_TAXONOMY, getEpistemicLayerForPhase } from "./epistemicTheme";
-import { PredicateCompositionDonutChart } from "./EpistemicCharts";
-import { StageTripleItem, ProvenanceChunkDisplay, formatPredicate } from "./StageArtifactsView";
-import type { PredicateSchemaRow } from "./RunOverviewView";
-import { DecisionAuditTable } from "./decisions/DecisionAuditTable";
+import React, {useEffect, useState} from "react";
+import {Activity, AlertTriangle, Check, X,} from "lucide-react";
+import {PhaseStatus, RunDetail} from "../api/types";
+import {StageArtifactsReport} from "./stageModel";
+import {LiveProgress, SubtaskProgress} from "../store/runsStore";
+import {PredicateCompositionDonutChart} from "./EpistemicCharts";
+import {formatPredicate, StageTripleItem} from "./StageArtifactsView";
+import type {PredicateSchemaRow} from "./RunOverviewView";
+import {DecisionAuditTable} from "./decisions/DecisionAuditTable";
 
 const formatBytes = (bytes: number): string => {
   if (bytes === 0) return "0 B";

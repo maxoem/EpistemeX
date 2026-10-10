@@ -5,8 +5,7 @@ and Episodic Eviction Handler mechanics.
 
 from __future__ import annotations
 
-import pytest
-
+from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
 from episteme_pipeline.contracts.domain import L1Chunk
 from episteme_pipeline.phases.phase2_entity_discovery.working_memory import (
     EpisodicEvictionHandler,
@@ -15,7 +14,6 @@ from episteme_pipeline.phases.phase2_entity_discovery.working_memory import (
     KeyValueWorkingMemoryState,
     PydanticWorkingMemoryState,
 )
-from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
 
 
 def test_global_structural_anchor_formatting() -> None:

@@ -11,9 +11,6 @@ from epistemetrics.epistemic.poset_evaluation import (
     compute_specialization_reachability,
     compute_transitive_reduction_f1,
     evaluate_specialization_poset,
-    extract_specialization_subgraph,
-    find_poset_roots,
-    verify_strict_partial_order,
 )
 
 

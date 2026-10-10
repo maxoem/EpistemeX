@@ -1,25 +1,11 @@
 import React from "react";
-import {
-  ArrowRight,
-  BookOpen,
-  CheckCircle2,
-  ExternalLink,
-  Info,
-  Layers,
-  Network,
-  Quote,
-  Sliders,
-  TriangleAlert,
-  Wrench,
-  X,
-  XCircle,
-} from "lucide-react";
-import { useEvaluationStore } from "../../../../store/evaluationStore";
+import {BookOpen, CheckCircle2, Info, Network, Quote, Sliders, TriangleAlert, Wrench, X, XCircle,} from "lucide-react";
+import {useEvaluationStore} from "../../../../store/evaluationStore";
 import type {
-  EdgeAlignmentStatus,
-  EvaluationEdgeOverlay,
-  EvaluationNodeOverlay,
-  NodeAlignmentStatus,
+    EdgeAlignmentStatus,
+    EvaluationEdgeOverlay,
+    EvaluationNodeOverlay,
+    NodeAlignmentStatus,
 } from "../../../../api/types";
 
 export interface TopologicalErrorQuadProps {

@@ -9,7 +9,6 @@ from episteme_studio.api.errors import (
     InvalidConfigPatchException,
     StudioProblemException,
 )
-from episteme_studio.settings import StudioSettings
 from episteme_studio.domain.config import (
     AvailableInputDoc,
     ConfigPatch,
@@ -22,6 +21,7 @@ from episteme_studio.domain.config import (
 )
 from episteme_studio.domain.errors import InvalidConfigPatchError
 from episteme_studio.services.config_service import ConfigService
+from episteme_studio.settings import StudioSettings
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 

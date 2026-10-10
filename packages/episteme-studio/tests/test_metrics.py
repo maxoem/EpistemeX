@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from episteme_studio.adapters.metrics_adapter import compute_local_gradual_strength
 from episteme_studio.adapters.neo4j_reader import Neo4jReader
 from episteme_studio.app import create_app
-from episteme_studio.domain.errors import QueryTimeoutError
 from episteme_studio.domain.graph import GraphView, Layer, StudioEdge, StudioNode
 from episteme_studio.domain.metrics import MetricScope
 from episteme_studio.services.metric_service import MetricService

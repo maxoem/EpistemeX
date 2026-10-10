@@ -1,25 +1,23 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { useDiffStore } from "../store/diffStore";
-import { api } from "../api/client";
-import { RunDetail } from "../api/types";
-import { resolvePhaseConfig } from "@/panels/phaseConfig";
-import { PHASE_REGISTRY } from "@/panels/phaseConfig";
-import { PhaseConfigDescriptor } from "./phaseConfig/types";
+import React, {useEffect, useMemo, useState} from "react";
+import {useDiffStore} from "../store/diffStore";
+import {api} from "../api/client";
+import {RunDetail} from "../api/types";
+import {PHASE_REGISTRY, resolvePhaseConfig} from "@/panels/phaseConfig";
+import {PhaseConfigDescriptor} from "./phaseConfig/types";
 import {
-  Sliders,
-  CheckCircle2,
-  AlertTriangle,
-  FileCode,
-  ArrowRight,
-  Filter,
-  BarChart3,
-  Network,
-  GitCompare,
-  Zap,
-  Scale,
-  Cpu,
+    AlertTriangle,
+    ArrowRight,
+    BarChart3,
+    CheckCircle2,
+    Cpu,
+    FileCode,
+    Filter,
+    Network,
+    Scale,
+    Sliders,
+    Zap,
 } from "lucide-react";
-import { ConfidenceKdeChart } from "./EpistemicCharts";
+import {ConfidenceKdeChart} from "./EpistemicCharts";
 
 interface PhaseConfigDiffViewProps {
   onSwitchToStaging?: () => void;

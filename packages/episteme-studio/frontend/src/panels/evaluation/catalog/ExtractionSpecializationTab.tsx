@@ -1,5 +1,5 @@
 import React from "react";
-import type { BenchmarkDescriptor } from "../../../api/types";
+import type {BenchmarkDescriptor} from "../../../api/types";
 
 interface ExtractionSpecializationTabProps {
   benchmark: BenchmarkDescriptor;

@@ -1,22 +1,7 @@
-import React, { useState, useEffect, useMemo } from "react";
-import {
-  AlertCircle,
-  Copy,
-  Download,
-  ExternalLink,
-  Eye,
-  FileCode,
-  Filter,
-  RefreshCw,
-  Search,
-  Table as TableIcon,
-} from "lucide-react";
-import { api } from "../../../api/client";
-import type {
-  BenchmarkDescriptor,
-  BenchmarkPreviewRecord,
-  BenchmarkPreviewResponse,
-} from "../../../api/types";
+import React, {useEffect, useMemo, useState} from "react";
+import {AlertCircle, Copy, Download, RefreshCw, Search, Table as TableIcon,} from "lucide-react";
+import {api} from "../../../api/client";
+import type {BenchmarkDescriptor, BenchmarkPreviewRecord, BenchmarkPreviewResponse,} from "../../../api/types";
 
 interface BenchmarkDataViewerProps {
   benchmark: BenchmarkDescriptor;

@@ -1,10 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type {
-  CompetencyQueryDiagnosticItem,
-  PerturbationSweepPoint,
-  NoiseRobustnessReportDetail,
-} from "../../../../api/types.ts";
+import type {CompetencyQueryDiagnosticItem, PerturbationSweepPoint,} from "../../../../api/types.ts";
 
 test("retrieval: MRR and Hits@K metric calculation adheres to Information Retrieval invariants", () => {
   const queries: CompetencyQueryDiagnosticItem[] = [

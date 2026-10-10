@@ -1,22 +1,21 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { StudioNode, StudioEdge, EvidenceTrail, Overlay } from "../api/types";
-import { api } from "../api/client";
+import React, {useEffect, useMemo, useState} from "react";
+import {EvidenceTrail, Overlay, StudioEdge, StudioNode} from "../api/types";
+import {api} from "../api/client";
 import {
-  X,
-  Copy,
-  Check,
-  Network,
-  Activity,
-  AlertCircle,
-  Search,
-  Code2,
-  Table,
-  ChevronDown,
-  ChevronRight,
-  Database,
-  ArrowRight,
+    Activity,
+    ArrowRight,
+    Check,
+    ChevronDown,
+    ChevronRight,
+    Code2,
+    Copy,
+    Database,
+    Network,
+    Search,
+    Table,
+    X,
 } from "lucide-react";
-import { useEngineSchema } from "../store/engineSettingsStore";
+import {useEngineSchema} from "../store/engineSettingsStore";
 
 interface NodeInspectorPanelProps {
   node: StudioNode;

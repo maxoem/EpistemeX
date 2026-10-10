@@ -1,8 +1,8 @@
-import React, { useMemo } from "react";
-import { useEvaluationStore } from "../../../store/evaluationStore";
-import { BenchmarkRegistryTable } from "./BenchmarkRegistryTable";
-import { BenchmarkDetailView } from "./BenchmarkDetailView";
-import type { BenchmarkDescriptor } from "../../../api/types";
+import React, {useMemo} from "react";
+import {useEvaluationStore} from "../../../store/evaluationStore";
+import {BenchmarkRegistryTable} from "./BenchmarkRegistryTable";
+import {BenchmarkDetailView} from "./BenchmarkDetailView";
+import type {BenchmarkDescriptor} from "../../../api/types";
 
 interface BenchmarkCatalogPageProps {
   onSelectRunToEvaluate?: (benchmarkId: string) => void;

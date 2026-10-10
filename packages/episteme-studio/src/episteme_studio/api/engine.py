@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from fastapi import APIRouter, Depends
 
 from episteme_studio.api.deps import get_engine_settings_service, get_settings

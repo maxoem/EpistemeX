@@ -6,9 +6,8 @@ LaTeXToCParser, FallbackToCParser, AutoToCParser, and Phase 1 → Phase 2 propag
 from __future__ import annotations
 
 from pathlib import Path
-import pytest
 
-from episteme_pipeline.contracts.domain import L1Document
+from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
 from episteme_pipeline.phases.phase1_foundation.toc_parser import (
     AutoToCParser,
     FallbackToCParser,
@@ -16,7 +15,6 @@ from episteme_pipeline.phases.phase1_foundation.toc_parser import (
     MarkdownToCParser,
     ToCParserStrategy,
 )
-from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
 
 
 def test_markdown_toc_parser() -> None:

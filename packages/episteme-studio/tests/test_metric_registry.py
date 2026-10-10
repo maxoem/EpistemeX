@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from episteme_studio.app import create_app
 from episteme_studio.domain.metrics import (
-    AffectedEdgeDetail,
-    AffectedNodeDetail,
     MetricDescriptor,
-    MetricResult,
     MetricScope,
 )
 from episteme_studio.services.metric_service import MetricService

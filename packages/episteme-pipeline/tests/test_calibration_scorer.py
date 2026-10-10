@@ -5,8 +5,6 @@ from __future__ import annotations
 import networkx as nx
 import pytest
 
-from epistemetrics.core.models import RelationType, TheoryEdge
-from epistemetrics.graph.theory_graph import TheoryGraph
 from episteme_pipeline.contracts.domain import L2Triple, TheoryAtom, TheoryNet, TheoryRelation
 from episteme_pipeline.evaluation.models import EvaluationOutcome
 from episteme_pipeline.evaluation.scorers.calibration import (
@@ -14,9 +12,10 @@ from episteme_pipeline.evaluation.scorers.calibration import (
     CalibrationResult,
     CalibrationScorer,
     DefaultCalibrationDataExtractor,
-    ReliabilityBin,
     compute_calibration_metrics,
 )
+from epistemetrics.core.models import RelationType, TheoryEdge
+from epistemetrics.graph.theory_graph import TheoryGraph
 
 
 class TestCalibrationScorer:

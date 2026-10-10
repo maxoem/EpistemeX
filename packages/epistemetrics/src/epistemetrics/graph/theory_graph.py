@@ -7,7 +7,8 @@ in-memory multi-directed graph structure suitable for epistemic evaluation.
 from __future__ import annotations
 
 import copy
-from typing import Any, Iterator, Mapping, Optional
+from typing import Any, Iterator
+
 import networkx as nx
 
 from epistemetrics.core.models import (

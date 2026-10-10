@@ -1,25 +1,25 @@
 import React from "react";
 import {
-  Activity,
-  Play,
-  RefreshCw,
-  AlertTriangle,
-  Clock,
-  DollarSign,
-  Terminal,
-  ChevronDown,
-  ChevronRight,
-  Check,
-  Copy,
-  Database,
-  ShieldCheck,
-  ArrowRight,
-  Layers,
-  Loader2,
-  Zap,
+    Activity,
+    AlertTriangle,
+    ArrowRight,
+    Check,
+    ChevronDown,
+    ChevronRight,
+    Clock,
+    Copy,
+    Database,
+    DollarSign,
+    Layers,
+    Loader2,
+    Play,
+    RefreshCw,
+    ShieldCheck,
+    Terminal,
+    Zap,
 } from "lucide-react";
-import { GlobalStructuralAnchor, InvalidationPreview, DecisionEngineSettings } from "../../../api/types";
-import { PhaseExecutionStatusMap } from "../phaseExecution";
+import {DecisionEngineSettings, GlobalStructuralAnchor, InvalidationPreview} from "../../../api/types";
+import {PhaseExecutionStatusMap} from "../phaseExecution";
 
 interface PreFlightInspectorRailProps {
   hasRunBaseline: boolean;

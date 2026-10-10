@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { CalibrationBinDetail, MiscalibratedAssertionItem } from "../../../../api/types.ts";
+import type {CalibrationBinDetail, MiscalibratedAssertionItem} from "../../../../api/types.ts";
 
 test("Calibration Lab: ECE and MCE metric verification", () => {
   const sampleBins: CalibrationBinDetail[] = [

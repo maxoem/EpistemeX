@@ -1,6 +1,6 @@
 import React from "react";
-import { CheckCircle2, Network } from "lucide-react";
-import type { BenchmarkDescriptor } from "../../../api/types";
+import {CheckCircle2, Network} from "lucide-react";
+import type {BenchmarkDescriptor} from "../../../api/types";
 
 interface StructuralistSpecializationTabProps {
   benchmark: BenchmarkDescriptor;

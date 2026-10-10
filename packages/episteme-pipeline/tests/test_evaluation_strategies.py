@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-import networkx as nx
+
 import pytest
 import yaml
 
@@ -23,22 +23,18 @@ from episteme_pipeline.artifacts.models import (
     ArtifactKind,
     ChunkArtifact,
     LinkedEntityArtifact,
-    LocalRelationArtifact,
     TheoryAtomArtifact,
 )
 from episteme_pipeline.contracts.domain import (
-    L1Chunk,
     L2Entity,
     L2Triple,
     TheoryAtom,
-    TheoryNet,
     TheoryRelation,
 )
 from episteme_pipeline.evaluation.harness import EvaluationHarness
 from episteme_pipeline.evaluation.models import EvaluationLevel, EvaluationOutcome
 from episteme_pipeline.evaluation.strategies import (
     ArgumentationStrategy,
-    EvaluationStrategy,
     ExtractionStrategy,
     StrategyRegistry,
     StructuralistStrategy,

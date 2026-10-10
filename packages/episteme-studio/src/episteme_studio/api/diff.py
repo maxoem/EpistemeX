@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.api.deps import get_settings
 from episteme_studio.domain.diff import GraphDiffView

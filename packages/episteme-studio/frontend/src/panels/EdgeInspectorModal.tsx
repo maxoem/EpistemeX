@@ -1,7 +1,7 @@
-import React, { useEffect } from "react";
-import { StudioEdge, StudioNode } from "../api/types";
-import { X, ArrowRight, Copy, Link, Check, Sparkles, Scale, Info } from "lucide-react";
-import { useEngineSchema } from "../store/engineSettingsStore";
+import React, {useEffect} from "react";
+import {StudioEdge, StudioNode} from "../api/types";
+import {ArrowRight, Copy, Scale, X} from "lucide-react";
+import {useEngineSchema} from "../store/engineSettingsStore";
 
 interface EdgeInspectorModalProps {
   edge: StudioEdge | null;

@@ -1,4 +1,4 @@
-import { InvalidationPreview } from "../../api/types";
+import {InvalidationPreview} from "../../api/types";
 
 export type PhaseExecutionStatus = "exec" | "recompute" | "cached";
 
