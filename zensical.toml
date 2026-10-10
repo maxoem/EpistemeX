@@ -5,7 +5,7 @@ strict = false
 docs_dir = "docs"
 repo_name = "maoem/episteme"
 repo = "fontawesome/brands/git-alt"
-repo_url = "https://github.com/maxoem/episteme"
+repo_url = "https://github.com/maxoem/epistemeX"
 
 
 extra_css = [
