@@ -221,7 +221,7 @@ This project is licensed under the [MIT License](LICENSE).
 If you use Episteme or Epistemetrics in your research, please cite:
 
 ```bibtex
-@article{oehmichen2026episteme,
+@article{maoem2026episteme,
   title={Episteme: A Neuro-Symbolic Engine for Scientific Theory Graph Construction and Evaluation},
   author={MAOEM},
   year={2026},
