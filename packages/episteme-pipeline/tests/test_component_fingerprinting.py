@@ -10,9 +10,10 @@ Grounding & Verification:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 
 import pytest
+from pydantic import BaseModel
 
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
@@ -97,6 +98,88 @@ def test_is_component_ignores_primitives() -> None:
     assert is_component(42) is False
     assert is_component(True) is False
     assert is_component(None) is False
+
+
+def test_is_component_ignores_pydantic_models() -> None:
+    class DummyConfig(BaseModel):
+        threshold: float = 0.5
+        name: str = "config"
+
+    cfg = DummyConfig()
+    assert is_component(cfg) is False
+
+
+def test_is_component_identifies_core_names_fallback() -> None:
+    class UnannotatedModel:
+        pass
+
+    obj = UnannotatedModel()
+    assert is_component(obj) is False
+    assert is_component(obj, attr_name="llm") is True
+    assert is_component(obj, attr_name="reranker") is True
+    assert is_component(obj, attr_name="unrelated") is False
+
+
+def test_is_component_rejects_non_callable_fingerprint() -> None:
+    class NonCallableFingerprint:
+        fingerprint = "not-a-method"
+
+    obj = NonCallableFingerprint()
+    # While PEP 544 @runtime_checkable does shallow attribute existence check,
+    # is_component strictly verifies that the fingerprint method is callable.
+    assert is_component(obj) is False
+
+
+def test_find_components_ignores_private_attributes() -> None:
+    class RunnerWithPrivate:
+        def __init__(self) -> None:
+            self._private_comp = CustomLeafComponent("hidden", 0.5)
+            self.public_comp = CustomLeafComponent("visible", 0.5)
+
+    discovered = find_components(RunnerWithPrivate())
+    assert "public_comp" in discovered
+    assert "_private_comp" not in discovered
+
+
+def test_find_components_handles_mocks_safely() -> None:
+    class RunnerWithMocks:
+        def __init__(self) -> None:
+            self.mock_service = MagicMock()
+            self.llm = Mock()
+            self.real_comp = CustomLeafComponent("real", 0.7)
+
+    runner = RunnerWithMocks()
+    discovered = find_components(runner)
+    assert "llm" in discovered
+    assert "real_comp" in discovered
+    assert not any("mock_service." in k for k in discovered)
+    assert not any("llm." in k for k in discovered)
+
+
+def test_phase_runner_components_method_delegation() -> None:
+    leaf = CustomLeafComponent("bert", 0.8)
+    runner = DummyPhase(component_a=leaf)
+    comps = runner.components()
+    assert "component_a" in comps
+    assert comps["component_a"] is leaf
+
+
+def test_find_components_mixed_collections() -> None:
+    leaf = CustomLeafComponent("item", 0.5)
+
+    class RunnerWithMixed:
+        def __init__(self) -> None:
+            self.items = [1, "text", None, leaf, False]
+            self.mapping = {"num": 10, "leaf": leaf, "_priv": leaf}
+
+    discovered = find_components(RunnerWithMixed())
+    assert "items[3]" in discovered
+    assert discovered["items[3]"] is leaf
+    assert len([k for k in discovered if k.startswith("items")]) == 1
+
+    assert "mapping.leaf" in discovered
+    assert discovered["mapping.leaf"] is leaf
+    assert "mapping._priv" not in discovered
 
 
 def test_find_components_recursive_discovery() -> None:
@@ -265,3 +348,32 @@ async def test_pipeline_invalidates_when_decision_engine_changes(tmp_path, graph
 
     assert 1 in decision.invalidated_phase_ordinals, "Phase 2 must be invalidated due to decision engine change"
     assert "method-changed" in decision.reason
+
+
+def test_pipeline_manifest_captures_nested_component_hierarchy(tmp_path, graph_store) -> None:
+    """Verify that Pipeline manifest captures dotted paths for nested components."""
+    config = PipelineConfig()
+    config.execution.runs_dir = str(tmp_path / "runs")
+    config.execution.artifacts_dir = str(tmp_path / "artifacts")
+
+    leaf = CustomLeafComponent("bert-base", 0.95)
+    composite = CustomCompositeComponent("wrapper", leaf)
+    phase = DummyPhase(component_a=composite)
+
+    pipeline = Pipeline(
+        phases=[phase],
+        config=config,
+        graph_reader=graph_store,
+        projection_graph=graph_store,
+        checkpoint_store=graph_store,
+    )
+
+    manifest = pipeline._build_manifest(
+        run_id="run-hierarchy",
+        pipeline_input=MagicMock(source_paths=[], bib_paths=[], metadata={}, structural_anchor=None),
+    )
+
+    expected_key = "Phase: Custom Verification.component_a.sub_component"
+    assert expected_key in manifest.method_fingerprints
+    assert manifest.method_fingerprints[expected_key] == fingerprint_method(leaf)
+

@@ -162,6 +162,25 @@ class DenseEntityLinker(EntityLinker):
         # Value: (bi-encoder_text, bi-encoder_vector)
         self._candidate_cache: dict[str, tuple[str, list[float]]] = {}
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic dense entity linker configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing tau threshold, top_k, and fingerprints of
+            embedding model and cross encoder.
+        """
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        return {
+            "class": self.__class__.__name__,
+            "tau": self.tau,
+            "top_k": self.top_k,
+            "embedding_model": fingerprint_method(self.embedding_model),
+            "cross_encoder": fingerprint_method(self.cross_encoder) if self.cross_encoder else None,
+        }
+
     @property
     def event_emitter(self) -> EventEmitter:
         from episteme_pipeline.events.context import get_event_emitter

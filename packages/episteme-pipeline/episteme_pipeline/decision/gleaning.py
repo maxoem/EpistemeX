@@ -48,6 +48,19 @@ class FixedPassGleaningOracle:
         effective_max = max_passes if max_passes is not None else self.max_passes
         return pass_count < effective_max, 1.0
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fixed-pass gleaning oracle configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier and max passes limit.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "max_passes": self.max_passes,
+        }
+
 
 class JevGleaningGate:
     """Actor-Critic stopping oracle for iterative extraction and gleaning passes.
@@ -97,6 +110,30 @@ class JevGleaningGate:
             cfg.max_passes = max_passes
 
         self.config = cfg
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic Jev gleaning gate configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, confidence threshold,
+            audit rate, max passes, and decision engine fingerprint.
+        """
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        de_fp = (
+            self.decision_engine.fingerprint()
+            if self.decision_engine and hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            else fingerprint_method(self.decision_engine) if self.decision_engine else None
+        )
+        return {
+            "class": self.__class__.__name__,
+            "confidence_threshold": self.config.confidence_threshold,
+            "audit_rate": self.config.audit_rate,
+            "max_passes": self.config.max_passes,
+            "decision_engine": de_fp,
+        }
 
     @property
     def default_threshold(self) -> float:

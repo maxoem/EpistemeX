@@ -96,6 +96,30 @@ class LLMNERExtractor(NERExtractor):
         self.strategy = strategy
         self.stopping_oracle = stopping_oracle or FixedPassGleaningOracle(max_passes=max_gleanings)
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic NER extractor configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, max gleanings, strategy,
+            and fingerprints of stopping oracle and language model.
+        """
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        oracle_fp = (
+            self.stopping_oracle.fingerprint()
+            if hasattr(self.stopping_oracle, "fingerprint") and callable(self.stopping_oracle.fingerprint)
+            else fingerprint_method(self.stopping_oracle)
+        )
+        return {
+            "class": self.__class__.__name__,
+            "max_gleanings": self.max_gleanings,
+            "strategy": str(getattr(self.strategy, "value", self.strategy)),
+            "llm": fingerprint_method(self.llm),
+            "stopping_oracle": oracle_fp,
+        }
+
     @classmethod
     def from_config(
         cls,

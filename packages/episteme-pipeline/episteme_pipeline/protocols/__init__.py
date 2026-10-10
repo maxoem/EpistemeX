@@ -35,6 +35,10 @@ from episteme_pipeline.protocols.modality import (
     ModalStrengthResolver,
     ensure_modal_strength_resolver,
 )
+from episteme_pipeline.protocols.fingerprint import (
+    Fingerprintable,
+    find_components,
+)
 
 
 __all__ = [
@@ -78,4 +82,6 @@ __all__ = [
     "ensure_decision_question",
     "ObservableDecisionEngine",
     "ensure_decision_engine",
+    "Fingerprintable",
+    "find_components",
 ]

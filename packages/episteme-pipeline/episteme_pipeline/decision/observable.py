@@ -68,6 +68,27 @@ class ObservableDecisionEngine:
         """Return the engine name."""
         return self.engine_name
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return a deterministic representation of the observable wrapper and wrapped engine.
+
+        Returns
+        -------
+        dict of str to Any
+            Deterministic dictionary containing wrapper metadata, audit rate,
+            and inner engine fingerprint.
+        """
+        inner_fp = (
+            self.inner.fingerprint()
+            if hasattr(self.inner, "fingerprint") and callable(self.inner.fingerprint)
+            else {"class": self.inner.__class__.__name__}
+        )
+        return {
+            "class": self.__class__.__name__,
+            "engine_name": self.engine_name,
+            "stochastic_audit_rate": self.stochastic_audit_rate,
+            "inner": inner_fp,
+        }
+
     @staticmethod
     def _compute_state_hash(state: Any) -> tuple[str, int]:
         """Compute stable SHA-256 hash and character count of the input state.

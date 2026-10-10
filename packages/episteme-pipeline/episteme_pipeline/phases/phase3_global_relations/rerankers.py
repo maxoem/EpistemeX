@@ -144,6 +144,24 @@ class CrossEncoderRelationReranker(RelationReranker):
             )
         self.cross_encoder = cross_encoder
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic cross-encoder relation reranker configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier and wrapped cross encoder fingerprint.
+        """
+        ce_fp = (
+            self.cross_encoder.fingerprint()
+            if hasattr(self.cross_encoder, "fingerprint") and callable(self.cross_encoder.fingerprint)
+            else {"class": self.cross_encoder.__class__.__name__}
+        )
+        return {
+            "class": self.__class__.__name__,
+            "cross_encoder": ce_fp,
+        }
+
     async def score_relation(
         self,
         entity_a: L2Entity,
@@ -249,6 +267,25 @@ class SentenceTransformerCrossEncoderReranker(RelationReranker):
             )
             if cache_model:
                 _model_cache[cache_key] = self.model
+        self.model_name = model_name
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic sentence transformer reranker configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing model name, prompt name, sequence length, and model arguments.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "model_name": self.model_name,
+            "prompt_name": self.prompt_name,
+            "max_length": self.max_length,
+            "device": str(self.device) if self.device else None,
+            "trust_remote_code": self.trust_remote_code,
+            "model_kwargs": self.model_kwargs,
+        }
 
     async def score_relation(
         self,
@@ -470,6 +507,25 @@ class JevRelationReranker(RelationReranker):
         if not template or not template.strip():
             raise ValueError("No decision prompt configured for JevRelationReranker.")
         self.decision_template = template.strip()
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic Jev relation reranker configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, decision template, and decision engine fingerprint.
+        """
+        eng_fp = (
+            self.decision_engine.fingerprint()
+            if hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            else {"class": self.decision_engine.__class__.__name__}
+        )
+        return {
+            "class": self.__class__.__name__,
+            "decision_template": self.decision_template,
+            "decision_engine": eng_fp,
+        }
 
     async def score_relation(
         self,
