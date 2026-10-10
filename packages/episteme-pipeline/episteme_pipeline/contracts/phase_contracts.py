@@ -9,11 +9,13 @@ if TYPE_CHECKING:
     from episteme_pipeline.runs.models import RunManifest, RunReport
 
 from episteme_pipeline.contracts.domain import (
+    CandidatePair,
     GlobalStructuralAnchor,
     L1Chunk,
     L1Document,
     L2Entity,
     L2Triple,
+    PhaseItemRecord,
     SearchResult,
     SubGraph,
     TheoryAtom,
@@ -66,7 +68,7 @@ class Phase4Output(BaseModel):
     theory_net: TheoryNet | None = None
     qbaf: Any = None
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, context: Any, /) -> None:
         if self.argument_relations and not self.theory_relations:
             object.__setattr__(self, "theory_relations", self.argument_relations)
         elif self.theory_relations and not self.argument_relations:
@@ -79,6 +81,7 @@ class Phase5Output(BaseModel):
 
 class PipelineResult(BaseModel):
     """Result envelope for running (part of) the pipeline."""
+
     # Use explicit models to ensure required fields (e.g., run_id) exist.
     manifest: RunManifest | None = None
     artifacts: list[object] = Field(default_factory=list)
@@ -86,6 +89,8 @@ class PipelineResult(BaseModel):
 
 
 __all__ = [
+    "CandidatePair",
+    "GlobalStructuralAnchor",
     "L1Chunk",
     "L1Document",
     "L2Entity",
@@ -95,6 +100,7 @@ __all__ = [
     "Phase3Output",
     "Phase4Output",
     "Phase5Output",
+    "PhaseItemRecord",
     "PipelineInput",
     "PipelineResult",
     "SearchResult",

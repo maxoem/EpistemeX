@@ -7,22 +7,37 @@ from pathlib import Path
 
 import pytest
 from episteme_studio.app import create_app
+from episteme_studio.fixtures import get_fixture_artifacts_dir, get_fixture_runs_dir
 from episteme_studio.settings import StudioSettings
 from httpx import ASGITransport, AsyncClient
 
 
-@pytest.mark.asyncio
-async def test_list_runs_endpoint() -> None:
-    """GET /api/runs lists existing pipeline runs from disk."""
-    settings = StudioSettings()
-    app = create_app(settings)
+@pytest.fixture
+def hermetic_settings() -> StudioSettings:
+    """Provide hermetic StudioSettings backed by packaged fixtures."""
+    return StudioSettings(
+        runs_dir=get_fixture_runs_dir(),
+        artifacts_dir=get_fixture_artifacts_dir(),
+        extra_runs_dirs=[],
+        extra_artifacts_dirs=[],
+    )
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+
+@pytest.mark.asyncio
+async def test_list_runs_endpoint(hermetic_settings: StudioSettings) -> None:
+    """GET /api/runs lists existing pipeline runs from disk."""
+    app = create_app(hermetic_settings)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         response = await client.get("/api/runs")
         assert response.status_code == 200
         runs = response.json()
         assert isinstance(runs, list)
-        assert len(runs) > 0, "Expected existing runs to be discovered in .pipeline_runs"
+        assert len(runs) > 0, (
+            "Expected existing runs to be discovered in .pipeline_runs"
+        )
 
         first_run = runs[0]
         assert "run_id" in first_run
@@ -38,12 +53,15 @@ async def test_list_runs_endpoint() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_run_detail_preserves_own_schema_and_phases() -> None:
+async def test_get_run_detail_preserves_own_schema_and_phases(
+    hermetic_settings: StudioSettings,
+) -> None:
     """GET /api/runs/{run_id} renders under that run's OWN graph_schema and dynamic phases (D-13, D-22)."""
-    settings = StudioSettings()
-    app = create_app(settings)
+    app = create_app(hermetic_settings)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # First get available runs
         list_resp = await client.get("/api/runs")
         runs = list_resp.json()
@@ -70,7 +88,9 @@ async def test_get_run_detail_preserves_own_schema_and_phases() -> None:
 
         if len(phase_records) >= 8:
             # Check for multiple phases named 'Phase 4'
-            phase_4_names = [p["phase_name"] for p in phase_records if "Phase 4" in p["phase_name"]]
+            phase_4_names = [
+                p["phase_name"] for p in phase_records if "Phase 4" in p["phase_name"]
+            ]
             assert len(phase_4_names) >= 2
 
 
@@ -80,7 +100,9 @@ async def test_unknown_run_returns_404_problem_detail() -> None:
     settings = StudioSettings()
     app = create_app(settings)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         response = await client.get("/api/runs/run-does-not-exist-9999")
         assert response.status_code == 404
         assert response.headers["content-type"] == "application/problem+json"
@@ -104,7 +126,9 @@ async def test_corrupted_run_manifest_returns_problem_detail(tmp_path: Path) -> 
     settings = StudioSettings(runs_dir=runs_dir, artifacts_dir=artifacts_dir)
     app = create_app(settings)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # Listing runs should skip corrupted files without throwing
         list_resp = await client.get("/api/runs")
         assert list_resp.status_code == 200
@@ -137,9 +161,13 @@ async def test_get_run_langfuse_stats_endpoint(monkeypatch: pytest.MonkeyPatch) 
     settings = StudioSettings()
     app = create_app(settings)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # Unconfigured keys without query parameters
-        resp = await client.get("/api/runs/run-mock-123/langfuse?public_key=&secret_key=")
+        resp = await client.get(
+            "/api/runs/run-mock-123/langfuse?public_key=&secret_key="
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["configured"] is False
@@ -201,5 +229,3 @@ def test_artifact_reader_aggregates_component_fingerprints(tmp_path: Path) -> No
     assert detail.fingerprints["phase2.modal_resolver"] == "hash_mr_v1"
     assert detail.fingerprints["phase3.relation_reranker"] == "hash_rr_v1"
     assert detail.fingerprints["legacy_fp"] == "hash_legacy"
-
-

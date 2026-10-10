@@ -65,7 +65,6 @@ def test_chunk_section_single_chunk_for_short_text():
     assert len(chunks) == 1
     assert "Short text." in chunks[0].text
 
-
 def test_chunk_section_splits_long_text():
     # Chunker splits at paragraph boundaries — use many paragraphs
     paragraphs = [" ".join([f"word{j}" for j in range(30)]) for _ in range(10)]
