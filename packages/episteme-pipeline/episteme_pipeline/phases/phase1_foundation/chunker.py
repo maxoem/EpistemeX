@@ -13,10 +13,10 @@ for dense philosophical prose in German/English).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
-import re
 
 import nltk
 import tiktoken

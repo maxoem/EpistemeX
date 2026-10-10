@@ -6,7 +6,6 @@ sequence monotonicity, overlap tracking, and pluggable token counters.
 """
 
 import pytest
-
 from episteme_pipeline.phases.phase1_foundation.chunker import (
     RawSection,
     chunk_document,
