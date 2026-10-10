@@ -21,8 +21,9 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install runtime system packages and certificates
+# Install runtime system packages, build tools, and certificates
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/*

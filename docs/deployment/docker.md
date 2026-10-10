@@ -48,21 +48,30 @@ docker run -d --rm \
 
 ---
 
-## 3. Full Stack with Neo4j (`docker-compose`)
+## 3. Full Stack with Neo4j & Langfuse (`docker-compose`)
 
-For users who want both the Episteme Studio workbench and a local Neo4j graph database with APOC pre-configured, use the provided `docker-compose.yml`:
+For users who want the complete local development and evaluation environment (Episteme Studio workbench, Neo4j graph database, and local Langfuse LLM observability with PostgreSQL), use the provided `docker-compose.yml`:
 
 ```bash
 docker compose up -d
 ```
 
-This starts:
+This launches the full integrated stack:
 1. **Neo4j Community** on ports `7474` (browser) and `7687` (Bolt) with persistent volume `neo4j_data`.
-2. **Episteme Studio** on port `8000` connected to Neo4j via Bolt.
+2. **Langfuse Server (v2)** on port `3000` backed by **PostgreSQL 16** with persistent volume `langfuse_db_data`.
+   - **Headless Auto-Provisioning**: Automatically bootstraps the organization (`Episteme`), project (`Episteme`), admin account, and API keys on first launch.
+   - **Web UI**: Access at [http://localhost:3000](http://localhost:3000) using email `admin@episteme.local` and password `episteme_password`.
+3. **Episteme Studio** on port `8000` connected to Neo4j via Bolt and pre-authenticated to Langfuse for immediate trace streaming.
+   - **Workbench UI**: Access at [http://localhost:8000](http://localhost:8000).
 
 To stop the services:
 ```bash
 docker compose down
+```
+
+To wipe persistent database volumes when resetting:
+```bash
+docker compose down -v
 ```
 
 ---
