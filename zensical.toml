@@ -207,7 +207,10 @@ nav = [
             { "Events API" = "reference/events-api.md" },
             { "Graph API" = "reference/graph-api.md" },
             { "Artifacts System" = "reference/artifacts.md" },
-            { "Schema Taxonomies" = "reference/schema.md" }
+            { "Schema Taxonomies" = "reference/schema.md" },
+            { "Core Protocols & Fingerprinting" = "reference/protocols.md" },
+            { "Decision Engines" = "reference/decision.md" },
+            { "Phase Components" = "reference/phase-components.md" }
         ] },
         { "Domain Glossaries" = [
             { "Glossary" = "concepts/glossary.md" }

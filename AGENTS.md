@@ -10,7 +10,7 @@
 
 - **Tooling:** `uv` (Use `uv sync` for dependencies).
 - **Constraint [NO LEGACY]:** Zero backward compatibility required. Prioritize agile, research-driven iteration.
-- **Required System Hooks:** All components MUST integrate caching, logging, event publishing, and observability.
+- **Required System Hooks:** All components MUST integrate caching, fingerprinting, logging, event publishing, and observability.
 - ***Code Quality**: Follow development best practices like SOLID, Hexagonal Architecture, ensure the use of dependency inversion and avoid `getattrb`.
 
 ## 3. DOCUMENTATION & STANDARDS
