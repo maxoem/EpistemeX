@@ -1,9 +1,9 @@
 import React from "react";
-import { Code2, ChevronRight, ChevronDown } from "lucide-react";
-import { ConfigView, ResolvedPromptItem } from "../../../../api/types";
-import { ParameterFieldMeta, PhaseMetadata } from "../../../phaseConfig/phaseRegistry";
-import { PromptCodeEditor } from "../../../phaseConfig/PromptCodeEditor";
-import { ParameterRow } from "../ParameterRow";
+import {ChevronDown, ChevronRight, Code2} from "lucide-react";
+import {ConfigView, ResolvedPromptItem} from "../../../../api/types";
+import {ParameterFieldMeta, PhaseMetadata} from "../../../phaseConfig/phaseRegistry";
+import {PromptCodeEditor} from "../../../phaseConfig/PromptCodeEditor";
+import {ParameterRow} from "../ParameterRow";
 
 interface StageWorkspaceViewProps {
   selectedPhaseKey: string;
@@ -241,6 +241,132 @@ export const StageWorkspaceView: React.FC<StageWorkspaceViewProps> = ({
               Inherited Baseline
             </span>
           </div>
+
+          {/* Decision Engine Fast-Exit Gating for this stage */}
+          {(() => {
+            const gateMap: Record<string, { gateKey: string; label: string; capability: string }> = {
+              phase2: { gateKey: "phase2_entity_discovery", label: "Phase 2: Entity Discovery", capability: "Categorical Choice Mention Filter" },
+              phase3: { gateKey: "phase3_global_relations", label: "Phase 3: Global Relations", capability: "Binary Noul Candidate Pruning" },
+              phase4: { gateKey: "phase4_argument_mining", label: "Phase 4: Argument Mining", capability: "Categorical Choice ADU & Stance" },
+              phase4_maturation: { gateKey: "phase4_entity_maturation", label: "Phase 4b: Entity Maturation", capability: "Continuous Score Verification" },
+              phase5: { gateKey: "phase5_fusion", label: "Phase 5: Inter-Document Web", capability: "Binary Noul Cluster Equivalence" },
+              phase6: { gateKey: "phase6_theorynet", label: "Phase 6: Epistemic TheoryNet", capability: "Continuous Score QBAF Warrants" },
+            };
+            const gate = gateMap[selectedPhaseKey];
+            if (!gate) return null;
+
+            const patchKey = `decision_engine.phase_gates.${gate.gateKey}`;
+            const isGated =
+              patch[patchKey] !== undefined
+                ? Boolean(patch[patchKey])
+                : patch["decision_engine.phase_gates"]?.[gate.gateKey] !== undefined
+                ? Boolean(patch["decision_engine.phase_gates"][gate.gateKey])
+                : true;
+            const isOverridden =
+              patch[patchKey] !== undefined ||
+              patch["decision_engine.phase_gates"]?.[gate.gateKey] !== undefined;
+
+            return (
+              <div className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-app-border/40">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-xs text-app-heading">
+                      Decision Engine (Jev) Fast-Exit Gating
+                    </span>
+                    <span className="font-mono text-[10px] text-app-muted bg-app-subtle px-1.5 py-0.2 rounded border border-app-border">
+                      {gate.capability}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-app-muted font-sans block mt-0.5">
+                    {isGated
+                      ? "System 1 local accelerated fast-exit active for this stage."
+                      : "Gating bypassed. All decisions escalated directly to generative LLM."}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  {isOverridden && (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold border border-blue-500/20">
+                      Overridden
+                    </span>
+                  )}
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isGated}
+                      onChange={(e) => updateField(patchKey, e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-8 h-4 bg-app-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#2563EB]" />
+                  </label>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Modal Strength Resolution Strategy (ADR 0020) for Phase 4 & Phase 6 */}
+          {(selectedPhaseKey === "phase4" || selectedPhaseKey === "phase6") && (() => {
+            const modeKey = `${selectedPhaseKey}.modal_resolver.mode`;
+            const alphaKey = `${selectedPhaseKey}.modal_resolver.fusion_alpha`;
+            const baseKey = `${selectedPhaseKey}.modal_resolver.default_base_score`;
+
+            const currentMode = patch[modeKey] || "guardrail";
+            const currentAlpha = patch[alphaKey] !== undefined ? Number(patch[alphaKey]) : 0.5;
+            const isOverridden = patch[modeKey] !== undefined || patch[alphaKey] !== undefined || patch[baseKey] !== undefined;
+
+            return (
+              <div className="py-3 border-t border-app-border/40 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-xs text-app-heading">
+                        Modal Strength Resolver (ADR 0020)
+                      </span>
+                      <span className="font-mono text-[10px] text-blue-500 bg-blue-500/10 px-1.5 py-0.2 rounded border border-blue-500/20 font-semibold">
+                        M(φ) ≡ τ₀(a)
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-app-muted font-sans block mt-0.5">
+                      Synthesizes structuralist sentence syntax (Schurz 2014) with System 1 calibrated certainty.
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isOverridden && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold border border-blue-500/20">
+                        Overridden
+                      </span>
+                    )}
+                    <select
+                      value={currentMode}
+                      onChange={(e) => updateField(modeKey, e.target.value)}
+                      className="text-xs bg-app-surface text-app-heading px-2.5 py-1 rounded border border-app-border focus:outline-hidden font-mono"
+                    >
+                      <option value="guardrail">guardrail (syntax bounded)</option>
+                      <option value="convex">convex (α · syntax + (1-α) · engine)</option>
+                      <option value="structural_only">structural_only (syntax only)</option>
+                      <option value="engine_only">engine_only (System 1 Jev only)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {currentMode === "convex" && (
+                  <div className="flex items-center justify-between gap-4 pt-1 px-1 bg-app-subtle/30 p-2 rounded border border-app-border/50">
+                    <span className="text-[11px] font-sans text-app-muted">
+                      Fusion Weight α ({Math.round(currentAlpha * 100)}% Syntax / {Math.round((1 - currentAlpha) * 100)}% Engine)
+                    </span>
+                    <input
+                      type="range"
+                      min="0.0"
+                      max="1.0"
+                      step="0.05"
+                      value={currentAlpha}
+                      onChange={(e) => updateField(alphaKey, parseFloat(e.target.value))}
+                      className="w-32 accent-blue-600"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 

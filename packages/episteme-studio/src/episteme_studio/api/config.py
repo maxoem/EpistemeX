@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 
-from episteme_studio.api.deps import get_config_service
-from episteme_studio.api.errors import InvalidConfigPatchException
+from episteme_studio.api.deps import get_config_service, get_settings
+from episteme_studio.api.errors import (
+    InvalidConfigPatchException,
+    StudioProblemException,
+)
 from episteme_studio.domain.config import (
     AvailableInputDoc,
     ConfigPatch,
@@ -18,13 +21,16 @@ from episteme_studio.domain.config import (
 )
 from episteme_studio.domain.errors import InvalidConfigPatchError
 from episteme_studio.services.config_service import ConfigService
+from episteme_studio.settings import StudioSettings
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
 
 @router.get("/effective", response_model=ConfigView)
 async def get_effective_config(
-    profile_id: str | None = Query(default=None, description="Configuration profile identifier"),
+    profile_id: str | None = Query(
+        default=None, description="Configuration profile identifier"
+    ),
     config_service: ConfigService = Depends(get_config_service),
 ) -> ConfigView:
     """Retrieve the effective configuration with secrets masked and provenance mapped.
@@ -155,6 +161,7 @@ async def list_inputs(
 async def upload_input(
     file: UploadFile = File(...),
     config_service: ConfigService = Depends(get_config_service),
+    settings: StudioSettings = Depends(get_settings),
 ) -> AvailableInputDoc:
     """Upload a candidate input document into the workspace.
 
@@ -164,12 +171,27 @@ async def upload_input(
         Uploaded file payload.
     config_service : ConfigService
         Injected configuration service.
+    settings : StudioSettings
+        Injected application settings.
 
     Returns
     -------
     AvailableInputDoc
         Metadata record for the uploaded document ready for pipeline execution.
+
+    Raises
+    ------
+    StudioProblemException
+        If the instance is operating in read-only mode.
     """
+    if settings.read_only:
+        raise StudioProblemException(
+            type="read-only-mode",
+            title="Read-Only Mode",
+            status=403,
+            detail="File upload is disabled on this read-only instance.",
+            instance="/api/config/inputs/upload",
+        )
     content = await file.read()
     return config_service.upload_input(file.filename or "uploaded_doc.txt", content)
 
@@ -197,6 +219,7 @@ async def get_langfuse_status(
 async def test_langfuse_connection(
     payload: LangfuseTestRequest,
     config_service: ConfigService = Depends(get_config_service),
+    settings: StudioSettings = Depends(get_settings),
 ) -> LangfuseStatusResponse:
     """Test Langfuse server authentication with specified or default credentials.
 
@@ -206,12 +229,22 @@ async def test_langfuse_connection(
         Optional host, public key, and secret key overrides to test.
     config_service : ConfigService
         Injected configuration service.
+    settings : StudioSettings
+        Injected application settings.
 
     Returns
     -------
     LangfuseStatusResponse
         Connection status and diagnostic message.
     """
+    if settings.read_only:
+        return LangfuseStatusResponse(
+            connected=False,
+            host=payload.host or "http://localhost:3000",
+            public_key_configured=False,
+            active_telemetry=False,
+            message="Langfuse connection testing is disabled in read-only mode.",
+        )
     return config_service.test_langfuse(
         host=payload.host,
         public_key=payload.public_key,

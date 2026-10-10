@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import types
-
-from episteme_pipeline.events.models import (
-    ComponentStarted,
-    ComponentCompleted,
-    PhaseCompleted,
-    DenseCandidatesGenerated,
-    RerankerScoreAssigned,
-    LLMRelationDecoded,
-)
 from episteme_pipeline.events.langfuse_observer import LangfuseObserver
+from episteme_pipeline.events.models import (
+    ComponentCompleted,
+    ComponentStarted,
+    DenseCandidatesGenerated,
+    LLMRelationDecoded,
+    PhaseCompleted,
+    RerankerScoreAssigned,
+)
 
 
 class _RecClient:

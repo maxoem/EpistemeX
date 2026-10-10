@@ -1,22 +1,10 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
-import { useRunsStore } from "../store/runsStore";
-import { useProjectSettingsStore } from "../store/projectSettingsStore";
-import { useCredentialStore } from "../store/credentialStore";
-import { useThemeStore } from "../store/themeStore";
-import { api } from "../api/client";
-import {
-  ChevronDown,
-  Database,
-  HardDrive,
-  Key,
-  Activity,
-  Check,
-  Lock,
-  Moon,
-  Sun,
-  Laptop,
-  Settings,
-} from "lucide-react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
+import {useRunsStore} from "../store/runsStore";
+import {useProjectSettingsStore} from "../store/projectSettingsStore";
+import {useCredentialStore} from "../store/credentialStore";
+import {useThemeStore} from "../store/themeStore";
+import {api} from "../api/client";
+import {Activity, Check, ChevronDown, Database, HardDrive, Key, Laptop, Lock, Moon, Settings, Sun,} from "lucide-react";
 
 interface ConnectionProvenancePillProps {
   onOpenCreds: () => void;

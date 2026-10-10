@@ -6,12 +6,12 @@ API and the new event-based observability system.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-from contextlib import contextmanager
 import time
+from contextlib import contextmanager
+from typing import Any
 
-from .bus import EventEmitter, NoOpEventEmitter, SimpleEventEmitter
-from .models import ComponentStarted, ComponentCompleted
+from .bus import EventEmitter, SimpleEventEmitter
+from .models import ComponentCompleted, ComponentStarted
 
 
 class TraceSinkToEventEmitterAdapter(EventEmitter):
@@ -69,7 +69,7 @@ class TraceSinkToEventEmitterAdapter(EventEmitter):
         self._internal_emitter.unregister_observer(observer)
 
     @contextmanager
-    def trace_span(self, name: str, input: Optional[Dict[str, Any]] = None):
+    def trace_span(self, name: str, input: dict[str, Any] | None = None):
         """Context manager that wraps trace sink span for backward compatibility.
         
         Emits ComponentStarted and ComponentCompleted events while delegating

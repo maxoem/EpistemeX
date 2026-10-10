@@ -1,7 +1,15 @@
-import React, { useEffect, useRef } from "react";
-import { EditorState, Extension } from "@codemirror/state";
-import { EditorView, MatchDecorator, Decoration, ViewPlugin, lineNumbers, highlightActiveLineGutter, highlightActiveLine } from "@codemirror/view";
-import { useThemeStore } from "../../store/themeStore";
+import React, {useEffect, useRef} from "react";
+import {EditorState, Extension} from "@codemirror/state";
+import {
+    Decoration,
+    EditorView,
+    highlightActiveLine,
+    highlightActiveLineGutter,
+    lineNumbers,
+    MatchDecorator,
+    ViewPlugin
+} from "@codemirror/view";
+import {useThemeStore} from "../../store/themeStore";
 
 interface PromptCodeEditorProps {
   value: string;

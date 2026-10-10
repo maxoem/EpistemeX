@@ -1,41 +1,34 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, {useEffect, useMemo, useState} from "react";
 import {
-  Cpu,
-  Copy,
-  Check,
-  Terminal,
-  Play,
-  AlertCircle,
-  CheckCircle2,
-  Layers,
-  Search,
-  X,
-  SlidersHorizontal,
-  Table as TableIcon,
-  FileJson,
-  Download,
-  Sparkles,
-  Braces,
-  Activity,
-  Sliders,
-  Filter,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  Network,
+    AlertCircle,
+    ArrowDown,
+    ArrowUp,
+    ArrowUpDown,
+    Braces,
+    Check,
+    CheckCircle2,
+    Copy,
+    Download,
+    FileJson,
+    Filter,
+    Layers,
+    Network,
+    Play,
+    Search,
+    Sliders,
+    SlidersHorizontal,
+    Sparkles,
+    Table as TableIcon,
+    Terminal,
+    X,
 } from "lucide-react";
-import {
-  useLegacyTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  LegacyColumnDef,
-} from "@tanstack/react-table/legacy";
-import { flexRender, SortingState } from "@tanstack/react-table";
-import { PromptCodeEditor } from "./phaseConfig/PromptCodeEditor";
-import { PhaseConfigDescriptor, PhaseConfigField } from "./phaseConfig/types";
-import { PhaseStatus, CypherResult } from "../api/types";
-import { api } from "../api/client";
-import { getEpistemicLayerForPhase, EPISTEMIC_TAXONOMY } from "./epistemicTheme";
+import {getCoreRowModel, getSortedRowModel, LegacyColumnDef, useLegacyTable,} from "@tanstack/react-table/legacy";
+import {flexRender, SortingState} from "@tanstack/react-table";
+import {PromptCodeEditor} from "./phaseConfig/PromptCodeEditor";
+import {PhaseConfigDescriptor, PhaseConfigField} from "./phaseConfig/types";
+import {CypherResult, PhaseStatus} from "../api/types";
+import {api} from "../api/client";
+import {EPISTEMIC_TAXONOMY, getEpistemicLayerForPhase} from "./epistemicTheme";
 
 export interface StageProvenancePaneProps {
   descriptor: PhaseConfigDescriptor;

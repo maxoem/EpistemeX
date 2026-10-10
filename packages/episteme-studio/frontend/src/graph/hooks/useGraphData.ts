@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useRunsStore } from "../../store/runsStore";
-import { useDiffStore } from "../../store/diffStore";
-import { api } from "../../api/client";
-import { GraphView } from "../../api/types";
+import {useCallback, useEffect, useRef, useState} from "react";
+import {useRunsStore} from "../../store/runsStore";
+import {useDiffStore} from "../../store/diffStore";
+import {api} from "../../api/client";
+import {GraphView} from "../../api/types";
 
 export interface UseGraphDataOptions {
   onNotify?: (msg: string) => void;

@@ -2,14 +2,10 @@
 
 from episteme_pipeline.runs.fingerprints import stable_fingerprint
 from episteme_pipeline.runs.models import RunManifest
-from episteme_pipeline.contracts.phase_contracts import PipelineInput
-from episteme_pipeline.schema.default_schema import SchemaConfig
-from episteme_pipeline.config import PipelineConfig
 
 
 def test_prompt_fingerprints_captures_custom_ner_prompt():
     """When a custom NER prompt is set, its fingerprint should be captured."""
-    from unittest.mock import MagicMock
 
     custom_prompt = "CUSTOM NER PROMPT TEMPLATE v2"
     default_prompt = "You are an expert in formal logic and the history of philosophy."

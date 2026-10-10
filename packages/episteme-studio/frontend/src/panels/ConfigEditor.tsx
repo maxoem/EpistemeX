@@ -1,44 +1,48 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { GitFork, X } from "lucide-react";
-import { api } from "../api/client";
+import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
+import {GitFork, X} from "lucide-react";
+import {api} from "../api/client";
+import type {DecisionEngineSettings, DecisionPhaseGates} from "../api/types";
 import {
-  AvailableInputDoc,
-  ConfigView,
-  GlobalStructuralAnchor,
-  InvalidationPreview,
-  PromptResolveResponse,
-  ResolvedPromptItem,
+    AvailableInputDoc,
+    ConfigView,
+    GlobalStructuralAnchor,
+    InvalidationPreview,
+    PromptResolveResponse,
+    ResolvedPromptItem,
 } from "../api/types";
-import { useRunsStore } from "../store/runsStore";
-import { useProjectSettingsStore } from "../store/projectSettingsStore";
+import {useRunsStore} from "../store/runsStore";
+import {useProjectSettingsStore} from "../store/projectSettingsStore";
+import {useNavigationStore} from "../store/navigationStore";
 import {
-  PHASE_REGISTRY,
-  PhaseMetadata,
-  isPhaseMandatory,
-  isPhasePostProcessor,
-  registerCustomPhase,
-  CORE_DAG_PHASE_KEYS,
-  POST_PROCESSOR_KEYS,
-  PIPELINE_DEFAULTS_KEY,
+    CORE_DAG_PHASE_KEYS,
+    isPhaseMandatory,
+    isPhasePostProcessor,
+    PHASE_REGISTRY,
+    PhaseMetadata,
+    PIPELINE_DEFAULTS_KEY,
+    POST_PROCESSOR_KEYS,
+    registerCustomPhase,
 } from "./phaseConfig/phaseRegistry";
-import { PhaseCatalogDrawer } from "./PhaseCatalogDrawer";
-import { ResizablePanel } from "./ResizablePanel";
-import { useCredentialStore } from "../store/credentialStore";
-import { DatabaseCollisionModal } from "./DatabaseCollisionModal";
+import {PhaseCatalogDrawer} from "./PhaseCatalogDrawer";
+import {ResizablePanel} from "./ResizablePanel";
+import {useCredentialStore} from "../store/credentialStore";
+import {DatabaseCollisionModal} from "./DatabaseCollisionModal";
 import {
-  ConfigEditorProps,
-  RunMetadataItem,
-  BASELINE_PREVIEW,
-  derivePhaseExecutionStatus,
-  PhaseExecutionStatusMap,
-  StageScopeHeader,
-  PipelineComposerRail,
-  PreFlightInspectorRail,
-  StructuralAnchorsView,
-  PipelineDefaultsView,
-  EpistemicSchemaView,
-  StageWorkspaceView,
+    BASELINE_PREVIEW,
+    ConfigEditorProps,
+    derivePhaseExecutionStatus,
+    EpistemicSchemaView,
+    PhaseExecutionStatusMap,
+    PipelineComposerRail,
+    PipelineDefaultsView,
+    PreFlightInspectorRail,
+    RunMetadataItem,
+    StageScopeHeader,
+    StageWorkspaceView,
+    StructuralAnchorsView,
 } from "./configEditor/index";
+import {DecisionEngineConfigPanel} from "./engine/components/DecisionEngineConfigPanel";
+import {useEngineSettingsStore} from "../store/engineSettingsStore";
 
 export type { ConfigEditorProps };
 
@@ -173,6 +177,23 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ onNavigateToRuns }) 
     database: string;
     runIds: string[];
   } | null>(null);
+
+  // Cross-module prompt tuning target listener (Phase 6)
+  const { promptTuningTarget, setPromptTuningTarget } = useNavigationStore();
+  useEffect(() => {
+    if (!promptTuningTarget) return;
+
+    if (promptTuningTarget.phaseKey) {
+      setSelectedPhaseKey(promptTuningTarget.phaseKey);
+    }
+    if (promptTuningTarget.promptKey) {
+      setActivePromptSubTab(promptTuningTarget.promptKey);
+    }
+    if (promptTuningTarget.sourceText) {
+      setCustomSourceInput(promptTuningTarget.sourceText);
+    }
+    setPromptTuningTarget(null);
+  }, [promptTuningTarget, setPromptTuningTarget]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -522,11 +543,91 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ onNavigateToRuns }) 
       ? String(patch["models.thinking_level"])
       : String(configView?.values?.["models.thinking_level"] || "off");
 
+  // Global engine settings & Decision Engine overrides
+  const { settings: globalEngineSettings } = useEngineSettingsStore();
+
+  const baseDecisionEngine: DecisionEngineSettings = useMemo(() => {
+    return (
+      globalEngineSettings?.decision_engine || {
+        provider: "laya",
+        model_checkpoint: "aac6fef/laya-mlx",
+        device: "auto",
+        fast_exit_threshold: 0.92,
+        uncertainty_threshold: 0.55,
+        stochastic_audit_rate: 0.05,
+        phase_gates: {
+          phase2_entity_discovery: true,
+          phase3_global_relations: true,
+          phase4_argument_mining: true,
+          phase4_entity_maturation: true,
+          phase5_fusion: true,
+          phase6_theorynet: true,
+        },
+      }
+    );
+  }, [globalEngineSettings]);
+
+  const hasDecisionOverrides = useMemo(() => {
+    return Object.keys(patch).some((k) => k.startsWith("decision_engine"));
+  }, [patch]);
+
+  const stagedDecisionEngine: DecisionEngineSettings = useMemo(() => {
+    const merged: DecisionEngineSettings = {
+      ...baseDecisionEngine,
+      phase_gates: { ...(baseDecisionEngine.phase_gates || {}) },
+    };
+    if (patch["decision_engine.provider"] !== undefined) merged.provider = patch["decision_engine.provider"];
+    if (patch["decision_engine.model_checkpoint"] !== undefined) merged.model_checkpoint = patch["decision_engine.model_checkpoint"];
+    if (patch["decision_engine.device"] !== undefined) merged.device = patch["decision_engine.device"];
+    if (patch["decision_engine.fast_exit_threshold"] !== undefined) merged.fast_exit_threshold = patch["decision_engine.fast_exit_threshold"];
+    if (patch["decision_engine.uncertainty_threshold"] !== undefined) merged.uncertainty_threshold = patch["decision_engine.uncertainty_threshold"];
+    if (patch["decision_engine.stochastic_audit_rate"] !== undefined) merged.stochastic_audit_rate = patch["decision_engine.stochastic_audit_rate"];
+    if (patch["decision_engine.phase_gates"] !== undefined) {
+      merged.phase_gates = { ...merged.phase_gates, ...patch["decision_engine.phase_gates"] };
+    }
+    for (const k of Object.keys(patch)) {
+      if (k.startsWith("decision_engine.phase_gates.")) {
+        const gateKey = k.replace("decision_engine.phase_gates.", "") as keyof DecisionPhaseGates;
+        merged.phase_gates[gateKey] = patch[k];
+      }
+    }
+    return merged;
+  }, [baseDecisionEngine, patch]);
+
+  const handleDecisionEngineChange = useCallback((updated: Partial<DecisionEngineSettings>) => {
+    setPatch((prev) => {
+      const next = { ...prev };
+      for (const [key, val] of Object.entries(updated)) {
+        if (key === "phase_gates") {
+          next["decision_engine.phase_gates"] = val;
+        } else {
+          next[`decision_engine.${key}`] = val;
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  const handleResetDecisionOverrides = useCallback(() => {
+    setPatch((prev) => {
+      const next = { ...prev };
+      for (const k of Object.keys(next)) {
+        if (k.startsWith("decision_engine")) {
+          delete next[k];
+        }
+      }
+      return next;
+    });
+  }, []);
+
   // Active stage metadata
   const activePhaseMeta: PhaseMetadata | undefined = PHASE_REGISTRY[selectedPhaseKey];
 
   // Count modifications per stage
   const getPhaseModificationCount = (phaseKey: string): number => {
+    if (phaseKey === "decision_engine") {
+      return Object.keys(patch).filter((k) => k.startsWith("decision_engine")).length;
+    }
     if (phaseKey === "phase0") {
       return Object.keys(patch).filter((k) => k.startsWith("models.") || k.startsWith("execution.")).length;
     }
@@ -627,6 +728,10 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ onNavigateToRuns }) 
   };
 
   const handleResetStageOverrides = (phaseKey: string) => {
+    if (phaseKey === "decision_engine") {
+      handleResetDecisionOverrides();
+      return;
+    }
     const meta = PHASE_REGISTRY[phaseKey];
     const prefix = meta?.configPrefix || phaseKey;
     const nextPatch = { ...patch };
@@ -669,6 +774,9 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ onNavigateToRuns }) 
           handleTogglePhase={handleTogglePhase}
           handleResetStageOverrides={handleResetStageOverrides}
           setIsPhaseDrawerOpen={setIsPhaseDrawerOpen}
+          hasDecisionOverrides={hasDecisionOverrides}
+          decisionProvider={stagedDecisionEngine.provider}
+          decisionFastExitThreshold={stagedDecisionEngine.fast_exit_threshold}
         />
       </ResizablePanel>
 
@@ -792,6 +900,15 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ onNavigateToRuns }) 
                   isAdvancedDrawerOpen={isAdvancedDrawerOpen}
                   setIsAdvancedDrawerOpen={setIsAdvancedDrawerOpen}
                 />
+              ) : selectedPhaseKey === "decision_engine" ? (
+                <DecisionEngineConfigPanel
+                  draftSettings={stagedDecisionEngine}
+                  onChange={handleDecisionEngineChange}
+                  isExecutionMode={true}
+                  baselineSettings={baseDecisionEngine}
+                  onResetOverrides={handleResetDecisionOverrides}
+                  hasOverrides={hasDecisionOverrides}
+                />
               ) : selectedPhaseKey === "schema" ? (
                 <EpistemicSchemaView
                   patch={patch}
@@ -859,6 +976,8 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ onNavigateToRuns }) 
           cliCommand={cliCommand}
           copiedCli={copiedCli}
           handleCopyCli={handleCopyCli}
+          decisionEngineSettings={stagedDecisionEngine}
+          hasDecisionOverrides={hasDecisionOverrides}
         />
       </ResizablePanel>
 

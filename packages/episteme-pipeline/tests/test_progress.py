@@ -6,9 +6,15 @@ uv run python examples/test_progress.py
 """
 
 import time
+
 from episteme_pipeline.events.bus import SimpleEventEmitter
+from episteme_pipeline.events.models import (
+    ProgressAdvanced,
+    ProgressCompleted,
+    ProgressStarted,
+)
 from episteme_pipeline.events.progress_observer import RichProgressObserver
-from episteme_pipeline.events.models import ProgressStarted, ProgressAdvanced, ProgressCompleted
+
 
 def mock_phase1(emitter):
     task_name = "Phase 1: 5 docs"

@@ -4,21 +4,26 @@ Shared test fixtures and in-memory graph store for pipeline unit tests.
 
 from __future__ import annotations
 
-import pytest
+import os
 
+# Ensure Hugging Face, Transformers, and Tiktoken operate in offline mode during unit tests
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+os.environ.setdefault("TIKTOKEN_OFFLINE", "1")
+
+import pytest
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
 from episteme_pipeline.contracts.phase_contracts import (
     L1Chunk,
     L2Entity,
     L2Triple,
+    PhaseItemRecord,
     SearchResult,
     SubGraph,
-    PhaseItemRecord,
 )
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
-
 
 # ---------------------------------------------------------------------------
 # In-memory GraphStore (no Neo4j required)
@@ -52,7 +57,7 @@ class InMemoryGraphStore(ProcessingGraph):
     async def get_neighborhood(self, node_id: str, depth: int = 1) -> SubGraph:
         return SubGraph(center_id=node_id, nodes=[], triples=[], depth=depth)
 
-    async def vector_search(self, embedding, top_k, node_label=None) -> list[SearchResult]:
+    async def vector_search(self, embedding, top_k, node_label=None, run_id=None) -> list[SearchResult]:
         return []
 
     async def upsert_node(
@@ -114,6 +119,20 @@ class InMemoryGraphStore(ProcessingGraph):
 
     async def upsert_theory_atom(self, component: TheoryAtom) -> None:
         self._theory_atoms[component.id] = component
+
+    async def upsert_argument_component(self, component: TheoryAtom) -> None:
+        self._theory_atoms[component.id] = component
+
+    async def upsert_argument_components(self, components: list[TheoryAtom]) -> None:
+        for c in components:
+            await self.upsert_argument_component(c)
+
+    async def upsert_theory_relation(self, relation: TheoryRelation) -> None:
+        self._relations.append((relation.source_id, relation.relation_type, relation.target_id, relation.to_graph_properties()))
+
+    async def upsert_theory_relations(self, relations: list[TheoryRelation]) -> None:
+        for r in relations:
+            await self.upsert_theory_relation(r)
 
     async def get_theory_atoms(self) -> list[TheoryAtom]:
         return list(self._theory_atoms.values())

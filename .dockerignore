@@ -1,0 +1,36 @@
+# Git and CI
+.git
+.github
+
+# Python bytecode and caches
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+test-results
+.mypy_cache
+
+# Node and frontend development artifacts
+**/node_modules/
+**/packages/episteme-studio/frontend/dist/
+packages/episteme-studio/src/episteme_studio/static/
+
+# Local runs and scratch artifacts
+.pipeline_runs/
+.pipeline_artifacts/
+data/uploads/
+*.log
+
+# Environment and sensitive keys
+.env
+.env.*
+!.env.example
+
+# OS metadata
+.DS_Store
+Thumbs.db

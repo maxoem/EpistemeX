@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-import pytest
-from pydantic import BaseModel
-from llama_index.core import PromptTemplate
 
+import pytest
 from episteme_pipeline.events.bus import SimpleEventEmitter
 from episteme_pipeline.events.context import use_event_emitter
 from episteme_pipeline.events.langfuse_observer import LangfuseObserver
@@ -16,9 +14,11 @@ from episteme_pipeline.events.models import (
     EvaluationScoreLogged,
     LLMGenerationCompleted,
 )
-from episteme_pipeline.llm.metadata import LLMResponseMetadataExtractor, TokenUsage
-from episteme_pipeline.llm.structured import LlamaIndexStructuredLLMAdapter
 from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
+from episteme_pipeline.llm.metadata import LLMResponseMetadataExtractor
+from episteme_pipeline.llm.structured import LlamaIndexStructuredLLMAdapter
+from llama_index.core import PromptTemplate
+from pydantic import BaseModel
 
 
 class _FakeStructuredOutput(BaseModel):
@@ -299,8 +299,8 @@ class _MockRawEmbeddingEncoder:
 @pytest.mark.asyncio
 async def test_observable_embedding_model_emits_events() -> None:
     """ObservableEmbeddingModel emits EmbeddingGenerationCompleted upon computing embeddings."""
-    from episteme_pipeline.protocols.extractors import ensure_embedding_model
     from episteme_pipeline.events.models import EmbeddingGenerationCompleted
+    from episteme_pipeline.protocols.extractors import ensure_embedding_model
 
     emitter = SimpleEventEmitter()
     events: list[Any] = []
@@ -375,13 +375,11 @@ def test_langfuse_observer_maps_embedding_generation(monkeypatch: Any) -> None:
 def test_langfuse_observer_maps_domain_and_lifecycle_events(monkeypatch: Any) -> None:
     """LangfuseObserver captures domain outputs (reranker, linking, chunks) and lifecycle properly."""
     from episteme_pipeline.events.models import (
-        ComponentStarted,
         ComponentCompleted,
-        PhaseCompleted,
-        ChunksGenerated,
-        RerankerScoreAssigned,
-        LLMRelationDecoded,
+        ComponentStarted,
         LLMDurationMeasured,
+        PhaseCompleted,
+        RerankerScoreAssigned,
     )
 
     monkeypatch.setattr("episteme_pipeline.events.langfuse_observer.LANGFUSE_AVAILABLE", True)

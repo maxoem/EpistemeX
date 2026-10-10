@@ -1,18 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { useProjectSettingsStore } from "../store/projectSettingsStore";
-import {
-  X,
-  Database,
-  Activity,
-  CheckCircle2,
-  AlertTriangle,
-  RefreshCw,
-  Eye,
-  EyeOff,
-  Sliders,
-  Shield,
-  Layers,
-} from "lucide-react";
+import React, {useEffect, useState} from "react";
+import {useProjectSettingsStore} from "../store/projectSettingsStore";
+import {Activity, AlertTriangle, CheckCircle2, Database, Eye, EyeOff, RefreshCw, X,} from "lucide-react";
 
 export const ProjectSettingsModal: React.FC = () => {
   const {

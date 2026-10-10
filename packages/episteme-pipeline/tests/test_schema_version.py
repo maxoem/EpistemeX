@@ -1,10 +1,8 @@
 """Tests for schema_version on RunManifest and SchemaConfig."""
 
-from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
-from episteme_pipeline.runs.models import RunManifest
-from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
+from episteme_pipeline.schema.default_schema import SchemaConfig
 
 
 def test_schema_config_has_version_field():
@@ -27,9 +25,13 @@ def test_build_manifest_includes_schema_version(config):
     from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
         TAGRelationExtractor,
     )
+    from episteme_pipeline.phases.phase3b_consolidation import (
+        Phase3bLatentConsolidationRunner,
+    )
     from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
-    from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
-    from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
+    from episteme_pipeline.phases.phase4_entity_maturation import (
+        Phase4EntityMaturationRunner,
+    )
     from episteme_pipeline.phases.phase5_fusion import Phase5ArgumentWebRunner
 
     llm = _make_mock_llm()
@@ -72,6 +74,7 @@ def test_build_manifest_includes_schema_version(config):
             config.phase4_maturation,
             llm=llm,
             graph_store=graph_reader,
+            embedding_model=emb,
         ),
         Phase4Runner(
             config.phase4,
@@ -105,7 +108,6 @@ def test_build_manifest_includes_schema_version(config):
 
 def test_build_manifest_schema_version_tracks_config_change(config):
     """Verify schema_version changes when SchemaConfig.version is different."""
-    from pathlib import Path
 
     config.graph_schema.version = "v2-custom"
 
@@ -115,9 +117,13 @@ def test_build_manifest_schema_version_tracks_config_change(config):
     from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
         TAGRelationExtractor,
     )
+    from episteme_pipeline.phases.phase3b_consolidation import (
+        Phase3bLatentConsolidationRunner,
+    )
     from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
-    from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
-    from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
+    from episteme_pipeline.phases.phase4_entity_maturation import (
+        Phase4EntityMaturationRunner,
+    )
     from episteme_pipeline.phases.phase5_fusion import Phase5ArgumentWebRunner
 
     llm = _make_mock_llm()
@@ -160,6 +166,7 @@ def test_build_manifest_schema_version_tracks_config_change(config):
             config.phase4_maturation,
             llm=llm,
             graph_store=graph_reader,
+            embedding_model=emb,
         ),
         Phase4Runner(
             config.phase4,

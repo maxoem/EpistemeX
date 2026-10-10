@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Test that the example script components work correctly."""
 
-import sys
 import os
+import sys
 import tempfile
-import json
 from pathlib import Path
 
 # Add project root to path
@@ -16,8 +15,12 @@ def test_reporting_utilities():
     print("Testing reporting utilities...")
     
     # Import our utilities
-    from episteme_pipeline.runs.models import RunManifest, RunStatus, RunReport
-    from episteme_pipeline.runs.reporting import format_text, format_markdown, format_json
+    from episteme_pipeline.runs.models import RunManifest, RunReport, RunStatus
+    from episteme_pipeline.runs.reporting import (
+        format_json,
+        format_markdown,
+        format_text,
+    )
     
     # Create test data that mimics an "empty" run
     manifest = RunManifest(

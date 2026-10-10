@@ -1,5 +1,5 @@
 import React from "react";
-import { DemoValidationRule, DemoAuditHistoryEntry } from "../types";
+import {DemoAuditHistoryEntry, DemoValidationRule} from "../types";
 
 /**
  * ============================================================================

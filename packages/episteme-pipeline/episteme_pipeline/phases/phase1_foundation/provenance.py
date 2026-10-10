@@ -29,7 +29,7 @@ graph.
 """
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -71,7 +71,7 @@ def chunk_id(chap_id: str, sequence_index: int, text: str) -> str:
 
 
 def now_utc() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def base_provenance(source_path: Path) -> dict:

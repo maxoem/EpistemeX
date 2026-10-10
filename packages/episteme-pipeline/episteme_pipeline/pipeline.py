@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import List
-from typing import cast, Any
+from datetime import UTC
+from typing import Any, cast
 
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
@@ -27,28 +27,31 @@ from episteme_pipeline.events import (
     PhaseCompleted,
     use_event_emitter,
 )
-
 from episteme_pipeline.observability.logging import run_folder_logger
-
-
 from episteme_pipeline.phases.phase3_global_relations.dense_retrieval_extractor import (
     DenseRetrievalGlobalRelationExtractor,
 )
+from episteme_pipeline.protocols.decision import DecisionEngine, ensure_decision_engine
 from episteme_pipeline.protocols.extractors import (
     CrossEncoder,
     EmbeddingModel,
     RelationReranker,
     ensure_embedding_model,
 )
+from episteme_pipeline.protocols.modality import (
+    ModalStrengthResolver,
+    ensure_modal_strength_resolver,
+)
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.fingerprints import (
     fingerprint_existing_sources,
+    fingerprint_method,
     fingerprint_phase_config,
     fingerprint_structural_anchor,
-    fingerprint_method,
     stable_fingerprint,
 )
 from episteme_pipeline.runs.models import (
+    ArtifactReportEntry,
     ExecutionResult,
     InvalidationDecision,
     ResumePoint,
@@ -56,7 +59,6 @@ from episteme_pipeline.runs.models import (
     RunPhaseRecord,
     RunReport,
     RunStatus,
-    ArtifactReportEntry,
 )
 from episteme_pipeline.runs.persistence import JsonRunManifestStore
 
@@ -95,12 +97,14 @@ class Pipeline:
     def __init__(
         self,
         *,
-        phases: List[PhaseRunner],
+        phases: list[PhaseRunner],
         config: PipelineConfig,
         graph_reader: Any,
         projection_graph: Any,
         checkpoint_store: Any,
         event_emitter: EventEmitter | None = None,
+        decision_engine: DecisionEngine | None = None,
+        modal_resolver: ModalStrengthResolver | None = None,
     ) -> None:
         self.phases = phases
         self.config = config
@@ -108,10 +112,14 @@ class Pipeline:
         self.projection_graph = projection_graph
         self.checkpoint_store = checkpoint_store
         self.event_emitter = event_emitter or NoOpEventEmitter()
+        self.decision_engine = decision_engine
+        self.modal_resolver = modal_resolver
         # Stores
         self._manifest_store = JsonRunManifestStore(self.config.execution.runs_dir)
         self._artifact_store = JsonArtifactStore(self.config.execution.artifacts_dir)
-        from episteme_pipeline.projection.artifact_projector import ArtifactGraphProjector
+        from episteme_pipeline.projection.artifact_projector import (
+            ArtifactGraphProjector,
+        )
         self._projector = ArtifactGraphProjector(projection_graph)
 
         # Build internal phase entries (1-based ordinals). Validate the dispatch
@@ -164,6 +172,7 @@ class Pipeline:
         llm: Any,
         relation_reranker: RelationReranker | None = None,
         cross_encoder: CrossEncoder | None = None,
+        entity_linker: Any | None = None,
         embedding_model: EmbeddingModel | Any = None,
         config: PipelineConfig,
         graph_reader: Any,
@@ -173,7 +182,12 @@ class Pipeline:
         extra_phases: list[PhaseRunner] | None = None,
         post_processors: list[PhaseRunner] | None = None,
         working_memory_manager: Any | None = None,
-    ) -> "Pipeline":
+        decision_engine: DecisionEngine | None = None,
+        acc_classifier: Any | None = None,
+        arc_classifier: Any | None = None,
+        ner_extractor: Any | None = None,
+        modal_resolver: ModalStrengthResolver | None = None,
+    ) -> Pipeline:
         """Create a pipeline for a specific task.
 
         Parameters
@@ -192,6 +206,11 @@ class Pipeline:
             linking). These are two different contracts; if one object
             implements both, pass it to both parameters explicitly rather than
             relying on the coincidence.
+        entity_linker
+            Optional pre-constructed EntityLinker instance (e.g. JevEntityLinker,
+            DenseEntityLinker, or CascadingEntityLinker) to inject into Phase 2.
+            If omitted, defaults to DenseEntityLinker with the supplied cross_encoder
+            and embedding_model.
         embedding_model
             Any embedding model — a llama-index ``BaseEmbedding``, a
             sentence-transformers model, or a custom object. It is normalised
@@ -206,6 +225,11 @@ class Pipeline:
             following the core pipeline phases.
         working_memory_manager
             Optional custom EpisodicWorkingMemoryManager to inject into Phase 2.
+        decision_engine
+            Optional System 1 DecisionEngine implementation (e.g. TypeSafe Jev
+            or Laya adapter). Normalised once here via ``resolve_decision_engine``.
+            When None (the default), pipeline phases execute baseline generative
+            LLM or CrossEncoder routines without modification.
         """
         if task not in _SUPPORTED_TASKS:
             raise ValueError(
@@ -215,25 +239,55 @@ class Pipeline:
         from episteme_pipeline.phases.phase1_foundation import Phase1Runner
         from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
         from episteme_pipeline.phases.phase3_global_relations import Phase3Runner
-        from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
-        from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
-        from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
-        from episteme_pipeline.phases.phase5_fusion.argument_web import Phase5ArgumentWebRunner
-        from episteme_pipeline.phases.phase6_theorynet import Phase6Runner
-
         from episteme_pipeline.phases.phase3_global_relations.rerankers import (
             CrossEncoderRelationReranker,
         )
+        from episteme_pipeline.phases.phase3b_consolidation import (
+            Phase3bLatentConsolidationRunner,
+        )
+        from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
+        from episteme_pipeline.phases.phase4_entity_maturation import (
+            Phase4EntityMaturationRunner,
+        )
+        from episteme_pipeline.phases.phase5_fusion.argument_web import (
+            Phase5ArgumentWebRunner,
+        )
+        from episteme_pipeline.phases.phase6_theorynet import Phase6Runner
 
         emitter = event_emitter or NoOpEventEmitter()
         embedding_model = ensure_embedding_model(embedding_model)
+
+        from episteme_pipeline.decision.observable import ObservableDecisionEngine
+
+        if decision_engine is None and config.decision_engine is not None:
+            from episteme_pipeline.decision.jev_client import resolve_decision_engine
+
+            decision_engine = resolve_decision_engine(config.decision_engine)
+
+        decision_engine = ensure_decision_engine(decision_engine)
+        if decision_engine is not None and not isinstance(decision_engine, ObservableDecisionEngine):
+            stochastic_rate = config.decision_engine.stochastic_audit_rate if config.decision_engine else 0.0
+            decision_engine = ObservableDecisionEngine(
+                inner=decision_engine,
+                stochastic_audit_rate=stochastic_rate,
+            )
+
+        from episteme_pipeline.decision.modal_resolver import HybridModalResolver
+
+        modal_resolver = ensure_modal_strength_resolver(modal_resolver) or HybridModalResolver.create(
+            config=config.modal_resolver,
+            decision_engine=decision_engine,
+        )
 
         # Wrap the LLM once, here, so the disk cache lands under the configured
         # runs_dir instead of the hardcoded repo-root default (F-10). Every
         # extractor calls ensure_structured_llm on whatever it is given, and
         # that returns an already-wrapped DiskCachedStructuredLLM unchanged — so
         # this is the single place the cache location is decided.
-        from episteme_pipeline.llm.cache import DiskCachedStructuredLLM, default_cache_dir
+        from episteme_pipeline.llm.cache import (
+            DiskCachedStructuredLLM,
+            default_cache_dir,
+        )
         from episteme_pipeline.llm.structured import ensure_structured_llm
 
         if not isinstance(llm, DiskCachedStructuredLLM):
@@ -244,7 +298,15 @@ class Pipeline:
                 cache_dir=default_cache_dir(config.execution.runs_dir),
             )
 
-        if relation_reranker is None and cross_encoder is not None:
+        if getattr(config.phase3, "use_jev_reranker", False) and decision_engine is not None:
+            from episteme_pipeline.phases.phase3_global_relations.rerankers import (
+                JevRelationReranker,
+            )
+            relation_reranker = JevRelationReranker(
+                decision_engine,
+                prompts=config.phase3.global_relation_prompts,
+            )
+        elif relation_reranker is None and cross_encoder is not None:
             relation_reranker = CrossEncoderRelationReranker(cross_encoder)
         if relation_reranker is None:
             raise ValueError(
@@ -254,8 +316,9 @@ class Pipeline:
             )
 
         global_extractor = DenseRetrievalGlobalRelationExtractor(
-            llm, embedding_model, relation_reranker, config.phase3
+            llm, embedding_model, relation_reranker, config.phase3, decision_engine=decision_engine
         )
+
         phases: list[Any] = [
             Phase1Runner(
                 config.phase1,
@@ -271,8 +334,10 @@ class Pipeline:
                 graph_store=checkpoint_store,
                 cross_encoder=cross_encoder,
                 working_memory_manager=working_memory_manager,
+                decision_engine=decision_engine,
+                entity_linker=entity_linker,
+                ner_extractor=ner_extractor,
             ),
-
             Phase3Runner(
                 config.phase3,
                 config.graph_schema,
@@ -285,6 +350,7 @@ class Pipeline:
                 config.phase3b,
                 embedding_model=embedding_model,
                 graph_store=graph_reader,
+                decision_engine=decision_engine,
             ),
             Phase4EntityMaturationRunner(
                 config.phase4_maturation,
@@ -302,16 +368,23 @@ class Pipeline:
                 # when the extractor is present. Phase 3 and Phase 4 share the
                 # same instance so retrieval caches and the reranker are reused.
                 global_extractor=global_extractor,
+                acc_classifier=acc_classifier,
+                arc_classifier=arc_classifier,
+                decision_engine=decision_engine,
+                modal_resolver=modal_resolver,
             ),
             Phase5ArgumentWebRunner(
                 config.phase5,
                 embedding_model=embedding_model,
                 graph_store=graph_reader,
+                decision_engine=decision_engine,
             ),
             Phase6Runner(
                 cast(Any, config.phase6),
                 config.graph_schema,
                 graph_store=projection_graph,
+                decision_engine=decision_engine,
+                modal_resolver=modal_resolver,
             ),
         ]
 
@@ -345,6 +418,8 @@ class Pipeline:
             projection_graph=projection_graph,
             checkpoint_store=checkpoint_store,
             event_emitter=emitter,
+            decision_engine=decision_engine,
+            modal_resolver=modal_resolver,
         )
 
     async def _hydrate_previous_collection(
@@ -573,12 +648,18 @@ class Pipeline:
                 prefix = getattr(entry, "name", "phase")
             if not isinstance(prefix, str):
                 prefix = "phase"
-            # Try common attributes on runners
-            for attr, suffix in (("llm", "llm"), ("embedding_model", "embedding_model"), ("global_extractor", "global_extractor")):
-                obj = getattr(runner, attr, None)
-                fp = fingerprint_method(obj)
+            # Recursively discover and fingerprint all attached components
+            from episteme_pipeline.protocols.fingerprint import find_components
+
+            comps = (
+                runner.components()
+                if hasattr(runner, "components") and callable(runner.components)
+                else find_components(runner)
+            )
+            for comp_name, comp_obj in comps.items():
+                fp = fingerprint_method(comp_obj)
                 if fp:
-                    fps[f"{prefix}.{suffix}"] = fp
+                    fps[f"{prefix}.{comp_name}"] = fp
             phase_key = getattr(entry, "phase_key", getattr(runner, "phase_key", ""))
             for pname, pfp in prompt_fps.get(phase_key, {}).items():
                 fps[f"{prefix}.prompt.{pname}"] = pfp
@@ -784,7 +865,7 @@ class Pipeline:
         initial_previous_collection: ArtifactCollection | None,
         invalidation_decision: InvalidationDecision,
     ) -> ExecutionResult:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # Persist initial manifest
         if self.config.execution.persist_run_manifests:
@@ -794,7 +875,7 @@ class Pipeline:
             manifest=manifest,
             run_id=manifest.run_id,
             status=RunStatus.RUNNING,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             phase_records=manifest.phase_records,
             reused_phase_ordinals=list(invalidation_decision.reused_phase_ordinals),
             invalidated_phase_ordinals=list(invalidation_decision.invalidated_phase_ordinals),
@@ -858,7 +939,7 @@ class Pipeline:
             record = records_by_ordinal.get(ordinal)
             if record is not None:
                 record.status = RunStatus.RUNNING
-                record.started_at = datetime.now(timezone.utc)
+                record.started_at = datetime.now(UTC)
                 record.input_artifact_ids = list(upstream_artifact_ids)
 
             phase_emitter = ContextualEventEmitter(
@@ -885,10 +966,10 @@ class Pipeline:
                 logger.exception("Phase %s failed: %s", phase_name, exc)
                 if record is not None:
                     record.status = RunStatus.FAILED
-                    record.completed_at = datetime.now(timezone.utc)
+                    record.completed_at = datetime.now(UTC)
                     record.notes["error"] = f"{type(exc).__name__}: {exc}"
                 manifest.status = RunStatus.FAILED
-                manifest.completed_at = datetime.now(timezone.utc)
+                manifest.completed_at = datetime.now(UTC)
                 report.status = RunStatus.FAILED
                 report.completed_at = manifest.completed_at
                 if self.config.execution.persist_run_manifests:
@@ -908,7 +989,7 @@ class Pipeline:
             produced_ids = [a.artifact_id for a in collection.artifacts]
             if record is not None:
                 record.status = RunStatus.COMPLETED
-                record.completed_at = datetime.now(timezone.utc)
+                record.completed_at = datetime.now(UTC)
                 record.artifact_ids = produced_ids
                 record.output_artifact_ids = produced_ids
                 record.config_fingerprint = cast(str, manifest.phase_config_fingerprints.get(f"phase_{ordinal}"))
@@ -968,7 +1049,7 @@ class Pipeline:
 
         # Finalize manifest/report
         manifest.status = RunStatus.COMPLETED
-        manifest.completed_at = datetime.now(timezone.utc)
+        manifest.completed_at = datetime.now(UTC)
         report.status = RunStatus.COMPLETED
         report.completed_at = manifest.completed_at
 

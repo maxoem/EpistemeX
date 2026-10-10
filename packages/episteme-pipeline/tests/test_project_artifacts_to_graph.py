@@ -1,7 +1,8 @@
 import pytest
-from episteme_pipeline.config import PipelineConfig, ExecutionConfig
+from episteme_pipeline.config import ExecutionConfig, PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
+
 from tests.conftest import InMemoryGraphStore
 from tests.test_full_pipeline_integration import (
     FullStubPhase1,

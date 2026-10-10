@@ -19,28 +19,29 @@ evidence gathering would violate phase boundaries.
 from __future__ import annotations
 
 import logging
-import torch
-import json
 from typing import Any
 
+import torch
 from pydantic import BaseModel
 
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+    Phase3ArtifactsView,
+)
 from episteme_pipeline.config import Phase4EntityMaturationConfig
 from episteme_pipeline.contracts.domain import L2Entity
-from episteme_pipeline.llm import ensure_structured_llm
-from episteme_pipeline.protocols.extractors import EmbeddingModel, as_tensor
-from episteme_pipeline.protocols.graph_store import ProcessingGraph
-
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext, Phase3ArtifactsView
+from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.events.models import (
     EntityMaturationSynthesized,
     ProgressAdvanced,
     ProgressCompleted,
     ProgressStarted,
 )
-from episteme_pipeline.events.bus import EventEmitter, NoOpEventEmitter
+from episteme_pipeline.llm import ensure_structured_llm
+from episteme_pipeline.protocols.extractors import EmbeddingModel, as_tensor
+from episteme_pipeline.protocols.graph_store import ProcessingGraph
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
-
 
 logger = logging.getLogger(__name__)
 
@@ -119,8 +120,8 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
         logger.info(f"Found {len(immature_entities)} immature entities out of {len(all_entities)} total.")
         
         matured_artifacts = []
-        from itertools import batched
         import asyncio
+        from itertools import batched
         
         progress_task = f"Phase 4 Maturation: {len(immature_entities)} entities"
         if immature_entities:

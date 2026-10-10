@@ -1,12 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import ClassVar, Generic, TypeVar
+from typing import ClassVar, TypeVar
 
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+)
 
 InputT = TypeVar("InputT")
 
 
-class PhaseRunner(ABC, Generic[InputT]):
+class PhaseRunner[InputT](ABC):
     """
     Base for every pipeline phase. Each phase accepts a typed input contract
     and returns an artifact collection. Phases may still project to the graph incrementally for crash resilience, but artifact collections are the runtime handoff.
@@ -43,3 +46,19 @@ class PhaseRunner(ABC, Generic[InputT]):
 
     @abstractmethod
     async def run(self, input: InputT, context: ArtifactExecutionContext) -> ArtifactCollection: ...
+
+    def components(self) -> dict[str, object]:
+        """Discover all injected computational components attached to this runner.
+
+        Recursively inspects runner attributes to discover objects implementing
+        the ``Fingerprintable`` protocol, LLM facades, embedders, decision engines,
+        and classifiers.
+
+        Returns
+        -------
+        dict of str to object
+            Mapping from dotted hierarchical path to component instances.
+        """
+        from episteme_pipeline.protocols.fingerprint import find_components
+
+        return find_components(self)

@@ -7,27 +7,29 @@ token usage accounting, and score logging.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .bus import EventObserver
 from .models import (
-    PipelineEvent,
-    DenseCandidatesGenerated,
-    RerankerScoreAssigned,
-    LLMRelationDecoded,
-    ComponentStarted,
-    ComponentCompleted,
-    PhaseCompleted,
     ChunksGenerated,
+    ComponentCompleted,
+    ComponentStarted,
+    DecisionEvaluationCompleted,
+    DecisionGatingTriggered,
+    DenseCandidatesGenerated,
+    EmbeddingGenerationCompleted,
     EntityLinkingCandidatesRetrieved,
     EntityLinkingReranked,
     EntityMaturationSynthesized,
+    EvaluationCompleted,
+    EvaluationScoreLogged,
     FusionDecisionMade,
     LLMDurationMeasured,
     LLMGenerationCompleted,
-    EmbeddingGenerationCompleted,
-    EvaluationCompleted,
-    EvaluationScoreLogged,
+    LLMRelationDecoded,
+    PhaseCompleted,
+    PipelineEvent,
+    RerankerScoreAssigned,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,7 +71,7 @@ class LangfuseObserver(EventObserver):
             raise RuntimeError("Langfuse is not installed")
 
         self.client = client or get_client()
-        self.active_spans: Dict[str, Any] = {}
+        self.active_spans: dict[str, Any] = {}
 
     def on_event(self, event: PipelineEvent) -> None:
         """Map domain events to Langfuse observations.
@@ -80,12 +82,14 @@ class LangfuseObserver(EventObserver):
             The event to convert to a Langfuse observation.
         """
         try:
-            trace_id, parent_observation_id, trace_context_arg = self._resolve_trace_context(event)
+            trace_id, _parent_observation_id, trace_context_arg = self._resolve_trace_context(event)
 
             if isinstance(event, (ComponentStarted, ComponentCompleted, PhaseCompleted)):
                 self._handle_lifecycle_event(event, trace_context_arg)
             elif isinstance(event, (LLMGenerationCompleted, EmbeddingGenerationCompleted)):
                 self._handle_generation_event(event, trace_context_arg)
+            elif isinstance(event, (DecisionEvaluationCompleted, DecisionGatingTriggered)):
+                self._handle_decision_event(event, trace_context_arg)
             elif isinstance(event, (EvaluationCompleted, EvaluationScoreLogged)):
                 self._handle_evaluation_event(event, trace_id, trace_context_arg)
             elif isinstance(event, LLMDurationMeasured):
@@ -98,7 +102,7 @@ class LangfuseObserver(EventObserver):
 
     def _resolve_trace_context(
         self, event: PipelineEvent
-    ) -> tuple[Optional[str], Optional[str], Optional[dict[str, str]]]:
+    ) -> tuple[str | None, str | None, dict[str, str] | None]:
         """Extract or derive active trace context.
 
         Parameters
@@ -133,7 +137,7 @@ class LangfuseObserver(EventObserver):
     def _handle_lifecycle_event(
         self,
         event: ComponentStarted | ComponentCompleted | PhaseCompleted,
-        trace_context: Optional[dict[str, str]],
+        trace_context: dict[str, str] | None,
     ) -> None:
         """Handle component and phase lifecycle events."""
         if isinstance(event, ComponentStarted):
@@ -175,7 +179,7 @@ class LangfuseObserver(EventObserver):
     def _handle_generation_event(
         self,
         event: LLMGenerationCompleted | EmbeddingGenerationCompleted,
-        trace_context: Optional[dict[str, str]],
+        trace_context: dict[str, str] | None,
     ) -> None:
         """Handle LLM and embedding generation events."""
         if isinstance(event, LLMGenerationCompleted):
@@ -231,11 +235,91 @@ class LangfuseObserver(EventObserver):
             )
             observation.end()
 
+    def _handle_decision_event(
+        self,
+        event: DecisionEvaluationCompleted | DecisionGatingTriggered,
+        trace_context: dict[str, str] | None,
+    ) -> None:
+        """Handle discrete decision engine evaluations and dynamic gating events.
+
+        Parameters
+        ----------
+        event : DecisionEvaluationCompleted or DecisionGatingTriggered
+            The decision event to log.
+        trace_context : dict of str to str or None
+            Active distributed trace context.
+        """
+        if isinstance(event, DecisionEvaluationCompleted):
+            is_active_learning = (
+                (event.prediction_set is not None and len(event.prediction_set) > 1)
+                or (0.40 <= event.class_probability <= 0.60)
+            )
+
+            observation = self.client.start_observation(
+                as_type="generation",
+                name=f"decision.{event.primitive}",
+                trace_context=trace_context,
+                model=event.engine_name,
+                input={"question": event.question, "primitive": event.primitive},
+                output={
+                    "selected_value": event.selected_value,
+                    "class_probability": event.class_probability,
+                    "empirical_accuracy": event.empirical_accuracy,
+                    "probabilities": event.probabilities,
+                    "prediction_set": event.prediction_set,
+                },
+                usage_details={
+                    "input": event.tokens_saved_estimate,
+                    "output": 0,
+                    "total": event.tokens_saved_estimate,
+                },
+                metadata=_drop_none(
+                    {
+                        "system_1": True,
+                        "primitive": event.primitive,
+                        "class_probability": event.class_probability,
+                        "empirical_accuracy": event.empirical_accuracy,
+                        "prediction_set": event.prediction_set,
+                        "tokens_saved_estimate": event.tokens_saved_estimate,
+                        "is_stochastic_audit": event.is_stochastic_audit,
+                        "duration_seconds": event.duration_seconds,
+                        "active_learning_candidate": is_active_learning,
+                        "prompt_name": event.prompt_name,
+                        "prompt_version": event.prompt_version,
+                        "prompt_label": event.prompt_label,
+                    }
+                ),
+            )
+            observation.end()
+
+
+        elif isinstance(event, DecisionGatingTriggered):
+            observation = self.client.start_observation(
+                as_type="span",
+                name=f"decision.gate.{event.gate_name}",
+                trace_context=trace_context,
+                input={
+                    "gate_name": event.gate_name,
+                    "threshold": event.threshold,
+                },
+                output={
+                    "action_taken": event.action_taken,
+                    "empirical_accuracy": event.empirical_accuracy,
+                    "prediction_set_size": event.prediction_set_size,
+                },
+                metadata={
+                    "system_1": True,
+                    "action_taken": event.action_taken,
+                    "threshold": event.threshold,
+                },
+            )
+            observation.end()
+
     def _handle_evaluation_event(
         self,
         event: EvaluationCompleted | EvaluationScoreLogged,
-        trace_id: Optional[str],
-        trace_context: Optional[dict[str, str]],
+        trace_id: str | None,
+        trace_context: dict[str, str] | None,
     ) -> None:
         """Handle evaluation metrics and score publishing."""
         if isinstance(event, EvaluationScoreLogged):
@@ -274,7 +358,7 @@ class LangfuseObserver(EventObserver):
             observation.end()
 
     def _handle_domain_event(
-        self, event: PipelineEvent, trace_context: Optional[dict[str, str]]
+        self, event: PipelineEvent, trace_context: dict[str, str] | None
     ) -> None:
         """Handle domain-specific pipeline events."""
         if isinstance(event, ChunksGenerated):

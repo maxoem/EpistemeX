@@ -1,20 +1,25 @@
-import { create } from "zustand";
-import { api } from "../api/client";
+import {create} from "zustand";
+import {api} from "../api/client.ts";
+import type {
+    DecisionEngineSettings,
+    DecisionEngineStatusResponse,
+    DecisionTestRequest,
+    DecisionTestResponse,
+    EngineSettings,
+    EngineSettingsPatch,
+    PredicateMapping,
+    SchemaConfig,
+    UnmappedPredicateInfo,
+} from "../api/types.ts";
 import {
-  EngineSettings,
-  EngineSettingsPatch,
-  PredicateMapping,
-  SchemaConfig,
-  UnmappedPredicateInfo,
-} from "../api/types";
-import {
-  DEFAULT_L2_NODE_DEFINITIONS,
-  DEFAULT_L2_RELATION_DEFINITIONS,
-  DEFAULT_L3_COMPONENT_DEFINITIONS,
-  DEFAULT_L3_ARGUMENT_RELATION_DEFINITIONS,
-  DEFAULT_COMPONENT_PARTITIONS,
-  DEFAULT_RELATION_POLARITIES,
-} from "../panels/configEditor/constants";
+    DEFAULT_COMPONENT_PARTITIONS,
+    DEFAULT_L2_NODE_DEFINITIONS,
+    DEFAULT_L2_RELATION_DEFINITIONS,
+    DEFAULT_L3_ARGUMENT_RELATION_DEFINITIONS,
+    DEFAULT_L3_COMPONENT_DEFINITIONS,
+    DEFAULT_RELATION_POLARITIES,
+} from "../panels/configEditor/constants.ts";
+import type {SelectedItem} from "../panels/engine/types.ts";
 
 export interface EngineSettingsState {
   settings: EngineSettings | null;
@@ -24,12 +29,38 @@ export interface EngineSettingsState {
   isSaving: boolean;
   error: string | null;
 
+  // Rail 1: Category selection
+  activeCategory: "ontology" | "unmapped" | "models" | "decision";
+  setActiveCategory: (cat: "ontology" | "unmapped" | "models" | "decision") => void;
+
+  // Decision Engine hardware & playground
+  decisionStatus: DecisionEngineStatusResponse | null;
+  isTestingDecision: boolean;
+  decisionTestResult: DecisionTestResponse | null;
+
+  // Rail 2: Sub-tab scoping
+  ontologySubTab: "nodes" | "relations" | "components" | "arg_relations";
+  setOntologySubTab: (tab: "nodes" | "relations" | "components" | "arg_relations") => void;
+  unmappedSubTab: "discovered" | "aliases";
+  setUnmappedSubTab: (tab: "discovered" | "aliases") => void;
+
+  // Rail 3: Contextual selection
+  selectedItem: SelectedItem | null;
+  setSelectedItem: (item: SelectedItem | null) => void;
+  selectedUnmapped: Set<string>;
+  setSelectedUnmapped: (
+    val: Set<string> | ((prev: Set<string>) => Set<string>)
+  ) => void;
+
   // Actions
   fetchEngineSettings: () => Promise<void>;
   fetchUnmappedPredicates: () => Promise<void>;
   updateEngineSettings: (patch: EngineSettingsPatch) => Promise<void>;
   resetEngineSettings: () => Promise<void>;
   mapPredicate: (mapping: PredicateMapping) => Promise<void>;
+  fetchDecisionStatus: () => Promise<void>;
+  runDecisionTest: (req: DecisionTestRequest) => Promise<DecisionTestResponse>;
+  updateDecisionEngineSettings: (patch: Partial<DecisionEngineSettings>) => Promise<void>;
 
   // Zero-overhead O(1) domain lookup helpers
   getPolarity: (relationType: string) => number | null;
@@ -62,6 +93,28 @@ export const useEngineSettingsStore = create<EngineSettingsState>((set, get) => 
   isLoading: false,
   isSaving: false,
   error: null,
+
+  activeCategory: "ontology",
+  setActiveCategory: (cat) => set({ activeCategory: cat }),
+
+  decisionStatus: null,
+  isTestingDecision: false,
+  decisionTestResult: null,
+
+  ontologySubTab: "nodes",
+  setOntologySubTab: (tab) => set({ ontologySubTab: tab }),
+
+  unmappedSubTab: "discovered",
+  setUnmappedSubTab: (tab) => set({ unmappedSubTab: tab }),
+
+  selectedItem: { type: "node", id: "Concept" },
+  setSelectedItem: (item) => set({ selectedItem: item }),
+
+  selectedUnmapped: new Set<string>(),
+  setSelectedUnmapped: (val) =>
+    set((state) => ({
+      selectedUnmapped: typeof val === "function" ? val(state.selectedUnmapped) : val,
+    })),
 
   fetchEngineSettings: async () => {
     set({ isLoading: true, error: null });
@@ -140,6 +193,49 @@ export const useEngineSettingsStore = create<EngineSettingsState>((set, get) => 
       set({
         isSaving: false,
         error: err?.detail || err?.message || "Failed to map predicate",
+      });
+      throw err;
+    }
+  },
+
+  fetchDecisionStatus: async () => {
+    try {
+      const status = await api.getDecisionStatus();
+      set({ decisionStatus: status });
+    } catch (err) {
+      console.warn("Failed to fetch decision engine status:", err);
+    }
+  },
+
+  runDecisionTest: async (req: DecisionTestRequest) => {
+    set({ isTestingDecision: true, error: null });
+    try {
+      const res = await api.testDecision(req);
+      set({ isTestingDecision: false, decisionTestResult: res });
+      return res;
+    } catch (err: any) {
+      set({
+        isTestingDecision: false,
+        error: err?.detail || err?.message || "Failed to execute decision test",
+      });
+      throw err;
+    }
+  },
+
+  updateDecisionEngineSettings: async (patch: Partial<DecisionEngineSettings>) => {
+    set({ isSaving: true, error: null });
+    try {
+      const updated = await api.updateEngineSettings({
+        decision_engine: patch,
+      });
+      set({
+        settings: updated,
+        isSaving: false,
+      });
+    } catch (err: any) {
+      set({
+        isSaving: false,
+        error: err?.detail || err?.message || "Failed to update decision engine settings",
       });
       throw err;
     }

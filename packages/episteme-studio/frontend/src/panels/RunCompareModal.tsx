@@ -1,7 +1,7 @@
-import React, { useState } from "react";
-import { useRunsStore } from "../store/runsStore";
-import { useDiffStore } from "../store/diffStore";
-import { GitCompare, X, CheckCircle2, AlertTriangle, ArrowRight } from "lucide-react";
+import React, {useState} from "react";
+import {useRunsStore} from "../store/runsStore";
+import {useDiffStore} from "../store/diffStore";
+import {AlertTriangle, ArrowRight, CheckCircle2, GitCompare, X} from "lucide-react";
 
 interface RunCompareModalProps {
   onNavigateToGraph?: () => void;

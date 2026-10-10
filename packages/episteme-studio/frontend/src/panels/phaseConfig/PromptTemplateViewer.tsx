@@ -1,7 +1,7 @@
-import React, { useState } from "react";
-import { PromptRole, PromptTemplateItem } from "./types";
-import { Copy, Check, ChevronDown, ChevronUp, Sparkles, Code2, Tag } from "lucide-react";
-import { PromptCodeEditor } from "./PromptCodeEditor";
+import React, {useState} from "react";
+import {PromptRole, PromptTemplateItem} from "./types";
+import {Check, ChevronDown, ChevronUp, Code2, Copy, Sparkles, Tag} from "lucide-react";
+import {PromptCodeEditor} from "./PromptCodeEditor";
 
 interface PromptTemplateViewerProps {
   prompts: PromptTemplateItem[];

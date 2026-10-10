@@ -18,7 +18,6 @@ from pathlib import Path
 
 from episteme_pipeline.protocols.data_source import DataSourceAdapter
 
-
 _LATEX_ARTIFACT_RE = re.compile(
     r'\\(?:label|ref|eqref|vspace|hspace|noindent|newpage|clearpage|'
     r'centering|begin|end|includegraphics|caption|footnote)\{[^}]*\}',

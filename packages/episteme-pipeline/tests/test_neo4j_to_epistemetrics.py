@@ -1,11 +1,18 @@
 """Unit tests for Neo4j to epistemetrics adapter."""
 
 from unittest.mock import AsyncMock
-import pytest
 
-from evaluation.adapters.neo4j_to_epistemetrics import export_neo4j_to_theory_graph
-from episteme_pipeline.contracts.domain import L2Entity, L2Triple, TheoryAtom, TheoryRelation
 import epistemetrics as em
+import pytest
+from episteme_pipeline.contracts.domain import (
+    L2Entity,
+    L2Triple,
+    TheoryAtom,
+    TheoryRelation,
+)
+from episteme_pipeline.evaluation.benchmarks.neo4j_to_epistemetrics import (
+    export_neo4j_to_theory_graph,
+)
 
 
 class TestNeo4jToEpistemetricsAdapter:

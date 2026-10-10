@@ -1,18 +1,18 @@
-import { create } from "zustand";
-import { api } from "../api/client";
+import {create} from "zustand";
+import {api} from "../api/client";
 import {
-  Capabilities,
-  GlobalStructuralAnchor,
-  RunDetail,
-  RunSummary,
-  StartRunPayload,
-  StudioEvent,
-  StudioNode,
+    Capabilities,
+    GlobalStructuralAnchor,
+    RunDetail,
+    RunSummary,
+    StartRunPayload,
+    StudioEvent,
+    StudioNode,
 } from "../api/types";
-import { useCredentialStore } from "./credentialStore";
-import { useProjectSettingsStore } from "./projectSettingsStore";
-import { resolvePhaseKey } from "../panels/phaseConfig/phaseConfigResolver";
-import { calculateProgressionSnapshots } from "../panels/progressionUtils";
+import {useCredentialStore} from "./credentialStore";
+import {useProjectSettingsStore} from "./projectSettingsStore";
+import {resolvePhaseKey} from "../panels/phaseConfig/phaseConfigResolver";
+import {calculateProgressionSnapshots} from "../panels/progressionUtils";
 
 export interface ProgressionSnapshot {
   step: number;
@@ -81,6 +81,15 @@ interface RunsState {
   setSearchableNodes: (nodes: StudioNode[]) => void;
   focusedNodeId: string | null;
   setFocusedNodeId: (nodeId: string | null) => void;
+  recentDecisions: StudioEvent[];
+  liveDecisionCounters: {
+    fastExit: number;
+    escalated: number;
+    audit: number;
+    total: number;
+    tokensSaved: number;
+    costSavedUsd: number;
+  };
 
   fetchCapabilities: () => Promise<void>;
   fetchRuns: () => Promise<void>;
@@ -170,6 +179,15 @@ export const useRunsStore = create<RunsState>((set, get) => ({
   setSearchableNodes: (nodes: StudioNode[]) => set({ searchableNodes: nodes }),
   focusedNodeId: null,
   setFocusedNodeId: (nodeId: string | null) => set({ focusedNodeId: nodeId }),
+  recentDecisions: [],
+  liveDecisionCounters: {
+    fastExit: 0,
+    escalated: 0,
+    audit: 0,
+    total: 0,
+    tokensSaved: 0,
+    costSavedUsd: 0,
+  },
   defaultDriver: getInitialDriver(),
   activeDataSource: getInitialDataSource(),
   forkedRunDetail: null,
@@ -321,10 +339,40 @@ export const useRunsStore = create<RunsState>((set, get) => ({
       const newSubtasks: Record<string, SubtaskProgress> = { ...state.subtasks };
       const newPhaseScores: Record<string, number[]> = { ...state.phaseScores };
       const newPhaseProgression: Record<string, ProgressionSnapshot[]> = { ...state.phaseProgression };
+      let newRecentDecisions = [...(state.recentDecisions || [])];
+      const newDecisionCounters = {
+        ...(state.liveDecisionCounters || {
+          fastExit: 0,
+          escalated: 0,
+          audit: 0,
+          total: 0,
+          tokensSaved: 0,
+          costSavedUsd: 0,
+        }),
+      };
 
       for (const event of validEvents) {
         const kind = event.kind || "";
         const rawType = (event.payload?._raw_type as string) || "";
+
+        if (kind.startsWith("decision.")) {
+          newRecentDecisions.push(event);
+          if (newRecentDecisions.length > 500) {
+            newRecentDecisions = newRecentDecisions.slice(newRecentDecisions.length - 500);
+          }
+          const tier = (event.payload?.tier as string) || "";
+          if (tier === "fast_exit") newDecisionCounters.fastExit++;
+          else if (tier === "system2") newDecisionCounters.escalated++;
+          else if (tier === "stochastic_audit") newDecisionCounters.audit++;
+          newDecisionCounters.total++;
+
+          if (typeof event.payload?.tokens_saved === "number") {
+            newDecisionCounters.tokensSaved += event.payload.tokens_saved;
+          }
+          if (typeof event.payload?.cost_saved_usd === "number") {
+            newDecisionCounters.costSavedUsd += event.payload.cost_saved_usd;
+          }
+        }
         let phaseName =
           event.phase ||
           (event.payload?.component_name as string) ||
@@ -690,13 +738,31 @@ export const useRunsStore = create<RunsState>((set, get) => ({
         runs: newRuns,
         phaseScores: newPhaseScores,
         phaseProgression: newPhaseProgression,
+        recentDecisions: newRecentDecisions,
+        liveDecisionCounters: newDecisionCounters,
         activeDataSource: nextSource,
       };
     });
   },
 
   clearEvents: () =>
-    set({ events: [], lastSeq: 0, subtasks: {}, liveProgress: null, phaseScores: {}, phaseProgression: {} }),
+    set({
+      events: [],
+      lastSeq: 0,
+      subtasks: {},
+      liveProgress: null,
+      phaseScores: {},
+      phaseProgression: {},
+      recentDecisions: [],
+      liveDecisionCounters: {
+        fastExit: 0,
+        escalated: 0,
+        audit: 0,
+        total: 0,
+        tokensSaved: 0,
+        costSavedUsd: 0,
+      },
+    }),
   setLogFilterLevel: (level: string) => set({ logFilterLevel: level }),
   setLogFilterPhase: (phase: string) => set({ logFilterPhase: phase }),
   setLogSearch: (query: string) => set({ logSearch: query }),

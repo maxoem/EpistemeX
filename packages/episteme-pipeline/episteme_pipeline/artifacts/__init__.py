@@ -5,8 +5,6 @@ from episteme_pipeline.artifacts.models import (
     ArtifactKind,
     ArtifactProvenance,
     ArtifactRef,
-    TheoryAtomArtifact,
-    TheoryRelationArtifact,
     CanonicalizationArtifact,
     ChunkArtifact,
     DocumentArtifact,
@@ -15,6 +13,8 @@ from episteme_pipeline.artifacts.models import (
     GlobalRelationArtifact,
     LinkedEntityArtifact,
     LocalRelationArtifact,
+    TheoryAtomArtifact,
+    TheoryRelationArtifact,
 )
 
 __all__ = [
@@ -22,8 +22,6 @@ __all__ = [
     "ArtifactKind",
     "ArtifactProvenance",
     "ArtifactRef",
-    "TheoryAtomArtifact",
-    "TheoryRelationArtifact",
     "CanonicalizationArtifact",
     "ChunkArtifact",
     "DocumentArtifact",
@@ -32,6 +30,8 @@ __all__ = [
     "GlobalRelationArtifact",
     "LinkedEntityArtifact",
     "LocalRelationArtifact",
+    "TheoryAtomArtifact",
+    "TheoryRelationArtifact",
 ]
 from episteme_pipeline.artifacts.mappers import (
     map_phase1_output_to_artifacts,

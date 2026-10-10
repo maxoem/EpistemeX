@@ -1,0 +1,23 @@
+{
+  "artifact_id": "trel_fc_mp",
+  "identity_key": "trel_fc_mp",
+  "kind": "theory_relation",
+  "run_id": "run-demo-festinger1959",
+  "phase_name": "Phase 5: Inter-Document Argument Web",
+  "payload": {
+    "relation_id": "trel_fc_mp",
+    "source_component_id": "str:TE_DissF6",
+    "relation_type": "hasPotentialModel",
+    "target_component_id": "str:MP_DissF6",
+    "weight": 1.0,
+    "confidence": 1.0,
+    "scope": "global"
+  },
+  "provenance": {
+    "source_path": "datasets/run-demo-festinger1959.cypher",
+    "notes": {
+      "generated": "demo_fixture"
+    }
+  },
+  "created_at": "2026-09-01T10:00:00Z"
+}

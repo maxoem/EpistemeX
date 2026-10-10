@@ -8,6 +8,7 @@ isolated modular implementation.
 from __future__ import annotations
 
 from typing import Any
+
 from epistemetrics.core.models import CentralityResult, PartitionResult
 from epistemetrics.graph.algorithms.betweenness import networkx_betweenness
 from epistemetrics.graph.algorithms.eigenvector import networkx_eigenvector

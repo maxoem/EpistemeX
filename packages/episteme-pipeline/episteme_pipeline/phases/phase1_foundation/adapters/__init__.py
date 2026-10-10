@@ -28,10 +28,10 @@ def find_adapter(
 
 
 __all__ = [
+    "DEFAULT_ADAPTERS",
     "DataSourceAdapter",
-    "TexAdapter",
     "MarkdownAdapter",
     "PlainTextAdapter",
-    "DEFAULT_ADAPTERS",
+    "TexAdapter",
     "find_adapter",
 ]

@@ -3,37 +3,71 @@
  */
 
 import type {
-  AvailableInputDoc,
-  Capabilities,
-  ComputeOverlayRequest,
-  ConfigPatch,
-  ConfigView,
-  CypherResult,
-  GraphDiffView,
-  GraphView,
-  InvalidationPreview,
-  LangfuseStatusResponse,
-  LangfuseTestRequest,
-  Neo4jConnectPayload,
-  Neo4jConnectResponse,
-  Neo4jStatusResponse,
-  Overlay,
-  PromptResolveRequest,
-  PromptResolveResponse,
-  RunDetail,
-  RunSummary,
-  StartRunPayload,
-  ExecuteMetricRequest,
-  ExecutionStatusResponse,
-  MetricDescriptor,
-  MetricExecutionQueuedResponse,
-  MetricResult,
-  RunLangfuseResponse,
-  EngineSettings,
-  EngineSettingsPatch,
-  PredicateMapping,
-  SchemaConfig,
-  UnmappedPredicateInfo,
+    ActiveLearningExportResponse,
+    AdjudicateAndRecalculateRequest,
+    AdjudicateAndRecalculateResponse,
+    AdjudicationQueueResponse,
+    AdjudicationRequest,
+    AdjudicationResponse,
+    AvailableInputDoc,
+    BenchmarkDescriptor,
+    BenchmarkPreviewResponse,
+    BenchmarkValidationResult,
+    BorderlineDecisionItem,
+    CalibrationReportDetail,
+    CancelEvaluationJobResponse,
+    Capabilities,
+    ComparativeEvaluationResponse,
+    CompareRunsRequest,
+    ComputeOverlayRequest,
+    ConfigPatch,
+    ConfigView,
+    CypherResult,
+    DecisionAdjudicationRequest,
+    DecisionEngineStatusResponse,
+    DecisionTestRequest,
+    DecisionTestResponse,
+    DynamicsTrajectoryRequest,
+    DynamicsTrajectoryResponse,
+    EdgeAdjudicationItem,
+    EngineSettings,
+    EngineSettingsPatch,
+    EvaluateManifestRequest,
+    EvaluateRunRequest,
+    EvaluationGraphOverlay,
+    EvaluationJobDescriptor,
+    EvaluationReportDetail,
+    EvaluationReportSummary,
+    ExecuteMetricRequest,
+    ExecutionStatusResponse,
+    GraphDiffView,
+    GraphView,
+    GroundingEvaluationDetail,
+    InvalidationPreview,
+    LangfuseStatusResponse,
+    LangfuseTestRequest,
+    LeaderboardRequest,
+    LeaderboardResponse,
+    MetricDescriptor,
+    MetricExecutionQueuedResponse,
+    MetricResult,
+    Neo4jConnectPayload,
+    Neo4jConnectResponse,
+    Neo4jStatusResponse,
+    NoiseRobustnessReportDetail,
+    Overlay,
+    PredicateMapping,
+    PromptResolveRequest,
+    PromptResolveResponse,
+    RegisterBenchmarkRequest,
+    RetrievalDiagnosticsResponse,
+    RunDetail,
+    RunLangfuseResponse,
+    RunSummary,
+    SchemaConfig,
+    StartRunPayload,
+    StressTestRequest,
+    UnmappedPredicateInfo,
 } from "./types.ts";
 
 const BASE_URL = "";
@@ -49,6 +83,19 @@ async function handleResponse<T>(res: Response): Promise<T> {
     throw errorData;
   }
   return res.json();
+}
+
+async function handleTextResponse(res: Response): Promise<string> {
+  if (!res.ok) {
+    let errorData: any;
+    try {
+      errorData = await res.json();
+    } catch {
+      errorData = { title: res.statusText, status: res.status };
+    }
+    throw errorData;
+  }
+  return res.text();
 }
 
 export const api = {
@@ -338,5 +385,382 @@ export const api = {
     });
     return handleResponse(res);
   },
+
+  async getDecisionStatus(): Promise<DecisionEngineStatusResponse> {
+    const res = await fetch(`${BASE_URL}/api/engine/decision/status`);
+    return handleResponse(res);
+  },
+
+  async testDecision(payload: DecisionTestRequest): Promise<DecisionTestResponse> {
+    const res = await fetch(`${BASE_URL}/api/engine/decision/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  async getBorderlineDecisions(
+    runId: string,
+    params?: { phase?: string; primitive?: string; limit?: number }
+  ): Promise<BorderlineDecisionItem[]> {
+    const q = new URLSearchParams();
+    if (params?.phase) q.set("phase", params.phase);
+    if (params?.primitive) q.set("primitive", params.primitive);
+    if (params?.limit) q.set("limit", params.limit.toString());
+    const query = q.toString() ? `?${q.toString()}` : "";
+    const res = await fetch(`${BASE_URL}/api/runs/${encodeURIComponent(runId)}/decisions/borderline${query}`);
+    return handleResponse(res);
+  },
+
+  async adjudicateDecision(
+    runId: string,
+    decisionId: string,
+    payload: DecisionAdjudicationRequest
+  ): Promise<BorderlineDecisionItem> {
+    const res = await fetch(
+      `${BASE_URL}/api/runs/${encodeURIComponent(runId)}/decisions/${encodeURIComponent(decisionId)}/adjudicate`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+    return handleResponse(res);
+  },
+
+  async exportActiveLearning(runId: string): Promise<ActiveLearningExportResponse> {
+    const res = await fetch(
+      `${BASE_URL}/api/runs/${encodeURIComponent(runId)}/decisions/export-active-learning`,
+      {
+        method: "POST",
+      }
+    );
+    return handleResponse(res);
+  },
+
+  // ===========================================================================
+  // Evaluation Workbench API (/api/evaluation/*)
+  // ===========================================================================
+
+  async listEvaluationReports(params?: {
+    run_id?: string;
+    outcome?: string;
+  }): Promise<EvaluationReportSummary[]> {
+    const q = new URLSearchParams();
+    if (params?.run_id) q.set("run_id", params.run_id);
+    if (params?.outcome) q.set("outcome", params.outcome);
+    const query = q.toString() ? `?${q.toString()}` : "";
+    const res = await fetch(`${BASE_URL}/api/evaluation/reports${query}`);
+    return handleResponse(res);
+  },
+
+  async getEvaluationReport(evaluationId: string): Promise<EvaluationReportDetail> {
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(evaluationId)}`
+    );
+    return handleResponse(res);
+  },
+
+  async getEvaluationReportMarkdown(evaluationId: string): Promise<string> {
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(evaluationId)}/markdown`
+    );
+    return handleTextResponse(res);
+  },
+
+  async evaluateRun(payload: EvaluateRunRequest): Promise<EvaluationReportDetail> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  async evaluateManifest(payload: EvaluateManifestRequest): Promise<EvaluationReportDetail> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/manifest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  async compareEvaluationRuns(payload: CompareRunsRequest): Promise<ComparativeEvaluationResponse> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/compare`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  async listBenchmarks(): Promise<BenchmarkDescriptor[]> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/benchmarks`);
+    return handleResponse(res);
+  },
+
+  async getBenchmarkPreview(
+    benchmarkId: string,
+    limit: number = 50
+  ): Promise<BenchmarkPreviewResponse> {
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/benchmarks/${encodeURIComponent(benchmarkId)}/preview?limit=${limit}`
+    );
+    return handleResponse(res);
+  },
+
+  async registerBenchmark(payload: RegisterBenchmarkRequest): Promise<BenchmarkDescriptor> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/benchmarks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  async validateBenchmark(content: string): Promise<BenchmarkValidationResult> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/benchmarks/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+    return handleResponse(res);
+  },
+
+  async listEvaluationManifests(): Promise<Record<string, any>[]> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/manifests`);
+    return handleResponse(res);
+  },
+
+  async calculateDynamicsTrajectory(
+    payload: DynamicsTrajectoryRequest
+  ): Promise<DynamicsTrajectoryResponse> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/dynamics/trajectory`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  async submitAdjudications(payload: AdjudicationRequest): Promise<AdjudicationResponse> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/adjudications`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  async listAdjudications(): Promise<EdgeAdjudicationItem[]> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/adjudications`);
+    return handleResponse(res);
+  },
+
+  async startManifestEvaluationJob(
+    payload: EvaluateManifestRequest
+  ): Promise<EvaluationJobDescriptor> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/jobs/manifest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  async startRunEvaluationJob(payload: EvaluateRunRequest): Promise<EvaluationJobDescriptor> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/jobs/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  async getEvaluationJob(jobId: string): Promise<EvaluationJobDescriptor> {
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/jobs/${encodeURIComponent(jobId)}`
+    );
+    return handleResponse(res);
+  },
+
+  async cancelEvaluationJob(jobId: string): Promise<CancelEvaluationJobResponse> {
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/jobs/${encodeURIComponent(jobId)}/cancel`,
+      { method: "POST" }
+    );
+    return handleResponse(res);
+  },
+
+  async getEvaluationGraphOverlay(
+    evaluationId: string,
+    runIdOrParams?:
+      | string
+      | {
+          runId?: string;
+          benchmarkId?: string;
+          includeGhosts?: boolean;
+          filterStatus?: string;
+        },
+    benchmarkId?: string
+  ): Promise<EvaluationGraphOverlay> {
+    const q = new URLSearchParams();
+    if (typeof runIdOrParams === "string") {
+      if (runIdOrParams) q.set("run_id", runIdOrParams);
+      if (benchmarkId) q.set("benchmark_id", benchmarkId);
+    } else if (runIdOrParams) {
+      if (runIdOrParams.runId) q.set("run_id", runIdOrParams.runId);
+      if (runIdOrParams.benchmarkId) q.set("benchmark_id", runIdOrParams.benchmarkId);
+      if (runIdOrParams.includeGhosts !== undefined) {
+        q.set("include_ghosts", runIdOrParams.includeGhosts.toString());
+      }
+      if (runIdOrParams.filterStatus) q.set("filter_status", runIdOrParams.filterStatus);
+    }
+    const query = q.toString() ? `?${q.toString()}` : "";
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(evaluationId)}/graph-overlay${query}`
+    );
+    return handleResponse(res);
+  },
+
+  async getAdjudicationQueue(
+    evaluationId: string,
+    params?: {
+      status?: "all" | "pending" | "adjudicated";
+      min_similarity?: number;
+      max_similarity?: number;
+      min_sim?: number;
+      max_sim?: number;
+    }
+  ): Promise<AdjudicationQueueResponse> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    const minVal = params?.min_sim ?? params?.min_similarity;
+    if (minVal !== undefined) q.set("min_sim", minVal.toString());
+    const maxVal = params?.max_sim ?? params?.max_similarity;
+    if (maxVal !== undefined) q.set("max_sim", maxVal.toString());
+    const query = q.toString() ? `?${q.toString()}` : "";
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(evaluationId)}/adjudication-queue${query}`
+    );
+    return handleResponse(res);
+  },
+
+  async adjudicateAndRecalculate(
+    evaluationId: string,
+    payload: AdjudicateAndRecalculateRequest
+  ): Promise<AdjudicateAndRecalculateResponse> {
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(evaluationId)}/adjudicate-and-recalculate`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+    return handleResponse(res);
+  },
+
+  async getCalibrationReport(
+    evaluationId: string,
+    params?: {
+      num_bins?: number;
+      run_id?: string;
+      min_confidence?: number;
+      limit?: number;
+    }
+  ): Promise<CalibrationReportDetail> {
+    const q = new URLSearchParams();
+    if (params?.num_bins !== undefined) q.set("num_bins", params.num_bins.toString());
+    if (params?.run_id) q.set("run_id", params.run_id);
+    if (params?.min_confidence !== undefined) q.set("min_confidence", params.min_confidence.toString());
+    if (params?.limit !== undefined) q.set("limit", params.limit.toString());
+    const query = q.toString() ? `?${q.toString()}` : "";
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(evaluationId)}/calibration${query}`
+    );
+    return handleResponse(res);
+  },
+
+  async getGroundingEvidence(
+    evaluationId: string,
+    componentId: string
+  ): Promise<GroundingEvaluationDetail> {
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(
+        evaluationId
+      )}/evidence/${encodeURIComponent(componentId)}`
+    );
+    return handleResponse(res);
+  },
+
+  async getLeaderboard(params?: {
+    benchmark_id?: string;
+    sort_by?: string;
+    ascending?: boolean;
+  }): Promise<LeaderboardResponse> {
+    const q = new URLSearchParams();
+    if (params?.benchmark_id) q.set("benchmark_id", params.benchmark_id);
+    if (params?.sort_by) q.set("sort_by", params.sort_by);
+    if (params?.ascending !== undefined) q.set("ascending", params.ascending.toString());
+    const query = q.toString() ? `?${q.toString()}` : "";
+    const res = await fetch(`${BASE_URL}/api/evaluation/leaderboard${query}`);
+    return handleResponse(res);
+  },
+
+  async getLeaderboardPost(payload: LeaderboardRequest): Promise<LeaderboardResponse> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/leaderboard`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  async stressTestEvaluation(payload: StressTestRequest): Promise<NoiseRobustnessReportDetail> {
+    const res = await fetch(`${BASE_URL}/api/evaluation/stress-test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  async getNoiseRobustness(evaluationId: string): Promise<NoiseRobustnessReportDetail> {
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(evaluationId)}/robustness`
+    );
+    return handleResponse(res);
+  },
+
+  async getRetrievalDiagnostics(
+    evaluationId: string,
+    params?: { failed_only?: boolean; limit?: number }
+  ): Promise<RetrievalDiagnosticsResponse> {
+    const q = new URLSearchParams();
+    if (params?.failed_only !== undefined) q.set("failed_only", params.failed_only.toString());
+    if (params?.limit !== undefined) q.set("limit", params.limit.toString());
+    const query = q.toString() ? `?${q.toString()}` : "";
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(
+        evaluationId
+      )}/retrieval-diagnostics${query}`
+    );
+    return handleResponse(res);
+  },
+
+  async exportEvaluationReport(
+    evaluationId: string,
+    format: "latex" | "csv" | "jsonld" = "latex"
+  ): Promise<string> {
+    const res = await fetch(
+      `${BASE_URL}/api/evaluation/reports/${encodeURIComponent(evaluationId)}/export?format=${format}`
+    );
+    return handleTextResponse(res);
+  },
 };
+
+export const apiClient = api;
 

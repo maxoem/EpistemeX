@@ -6,8 +6,12 @@
 | **Component(s)** | `packages/episteme-pipeline/evaluation`, `packages/epistemetrics` |
 | **Roadmap Horizon** | **Horizon 2** (Dialectical Modeling & Benchmarks) |
 | **Priority** | High |
-| **Status** | Open |
+| **Status** | `Superseded` (by [ISSUE-028](../09-stnb-evaluation-capabilities/ISSUE-028-evaluation-orchestrator-theorynet-execution.md) and [ISSUE-033](../09-stnb-evaluation-capabilities/ISSUE-033-comparative-baselines-zero-shot-naive-rag.md)) |
 | **Source Ref** | [`review/26/09/evaluation_credibility_review.md §4, §5`](review/26/09/evaluation_credibility_review.md#L171-L230), [`ADR 0007`](docs/adr/0007-tf-structural-correspondence.md) |
+
+> [!NOTE]
+> **SUPERSEDED**: This issue has been superseded by [`ISSUE-028`](../09-stnb-evaluation-capabilities/ISSUE-028-evaluation-orchestrator-theorynet-execution.md) (Level 4 Pipeline & Evaluation Execution) and [`ISSUE-033`](../09-stnb-evaluation-capabilities/ISSUE-033-comparative-baselines-zero-shot-naive-rag.md) (Comparative Baselines Harness).
+
 
 ---
 

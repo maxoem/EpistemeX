@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -12,6 +13,7 @@ class OverlayKind(StrEnum):
     """Supported and reserved graph overlay kinds."""
 
     GRADUAL_STRENGTH = "gradual_strength"
+    MODAL_STRENGTH = "modal_strength"
     INTERNAL_CORRELATION = "internal_correlation"
     DEGREE = "degree"
     COMPONENT = "component"

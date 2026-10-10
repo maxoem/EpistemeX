@@ -1,0 +1,26 @@
+{
+  "artifact_id": "doc_festinger1959",
+  "identity_key": "doc_festinger1959",
+  "kind": "document",
+  "run_id": "run-demo-festinger1959",
+  "phase_name": "Phase 1: Data Foundation",
+  "payload": {
+    "id": "festinger_carlsmith_1959",
+    "title": "Cognitive Consequences of Forced Compliance",
+    "filename": "festinger_carlsmith_1959.md",
+    "author": "Leon Festinger & James M. Carlsmith",
+    "year": 1959,
+    "journal": "Journal of Abnormal and Social Psychology",
+    "volume": 58,
+    "issue": 2,
+    "pages": "203-210",
+    "doi": "10.1037/h0041593"
+  },
+  "provenance": {
+    "source_path": "datasets/run-demo-festinger1959.cypher",
+    "notes": {
+      "generated": "demo_fixture"
+    }
+  },
+  "created_at": "2026-09-01T10:00:00Z"
+}

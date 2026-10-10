@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { computeEdgeStyle } from "./edgeStyling.ts";
-import { computeNodeStyle } from "./nodeStyling.ts";
-import type { NodeStyleContext, EdgeStyleContext } from "./types.ts";
-import type { StudioEdge, StudioNode } from "../../api/types.ts";
+import {computeEdgeStyle} from "./edgeStyling.ts";
+import {computeNodeStyle} from "./nodeStyling.ts";
+import type {EdgeStyleContext, NodeStyleContext} from "./types.ts";
+import type {StudioEdge, StudioNode} from "../../api/types.ts";
 
 const BASE_GRAPH_SETTINGS = {
   nodeSizeMultiplier: 1.0,

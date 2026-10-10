@@ -25,7 +25,7 @@ def _is_fully_serializable(value: Any) -> bool:
     """Recursively check if a value is JSON-serializable by our constraints."""
     if isinstance(value, _SimpleTypes):
         return True
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return all(_is_fully_serializable(item) for item in value)
     if isinstance(value, dict):
         return all(
@@ -97,9 +97,8 @@ def _fingerprint_nested_leafs(obj: Any, prefix: str) -> dict[str, str]:
                     result[new_key] = stable_fingerprint(item)
             elif _is_fully_serializable(item):
                 result[new_key] = stable_fingerprint(item)
-    elif _is_fully_serializable(obj):
-        if prefix:
-            result[prefix] = stable_fingerprint(obj)
+    elif _is_fully_serializable(obj) and prefix:
+        result[prefix] = stable_fingerprint(obj)
     return result
 
 
@@ -133,7 +132,6 @@ def fingerprint_method(method_obj: Any) -> str | None:
                 )
         except Exception as ex:
             logger.exception(ex)
-            pass
 
     fingerprint_data: dict[str, Any] = {"class": method_obj.__class__.__name__}
     model_name = getattr(method_obj, "model_name", None)

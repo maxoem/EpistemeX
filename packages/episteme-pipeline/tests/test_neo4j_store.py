@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
+from typing import Self
 
+import pytest
 from episteme_pipeline.graph.neo4j_store import _Neo4jWriteMixin
 
 
@@ -11,7 +12,7 @@ class _RecordingTransaction:
     def __init__(self, session: _RecordingSession) -> None:
         self.session = session
 
-    async def __aenter__(self) -> "_RecordingTransaction":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
@@ -28,7 +29,7 @@ class _RecordingSession:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict]] = []
 
-    async def __aenter__(self) -> "_RecordingSession":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
@@ -118,7 +119,12 @@ async def test_upsert_argument_components_serializes_complex_fields() -> None:
     as JSON strings so they persist in Neo4j without violating property type rules.
     """
     import json
-    from episteme_pipeline.contracts.domain import Measurement, TenabilityResult, TheoryAtom
+
+    from episteme_pipeline.contracts.domain import (
+        Measurement,
+        TenabilityResult,
+        TheoryAtom,
+    )
 
     writer = _RecordingWriter()
     atom = TheoryAtom(
@@ -165,6 +171,7 @@ async def test_upsert_argument_components_serializes_complex_fields() -> None:
 def test_writable_props_sanitization() -> None:
     """Direct verification of _writable_props with various property types."""
     import json
+
     from episteme_pipeline.graph.neo4j_store import _writable_props
 
     raw = {
@@ -198,6 +205,7 @@ def test_writable_props_sanitization() -> None:
 async def test_get_theory_atoms_deserialization() -> None:
     """Verify that get_theory_atoms reconstructs complex objects from JSON."""
     import json
+
     from episteme_pipeline.graph.neo4j_store import _Neo4jReadMixin
 
     class _MockResult:
@@ -211,7 +219,7 @@ async def test_get_theory_atoms_deserialization() -> None:
         def __init__(self, data: list[dict]) -> None:
             self._data = data
 
-        async def __aenter__(self) -> "_MockReadSession":
+        async def __aenter__(self) -> Self:
             return self
 
         async def __aexit__(self, exc_type, exc, tb) -> None:
@@ -269,6 +277,7 @@ async def test_get_theory_atoms_deserialization() -> None:
 def test_heterogeneous_lists_are_serialized_to_json() -> None:
     """Heterogeneous lists must serialize to JSON to prevent Neo4j array type errors."""
     import json
+
     from episteme_pipeline.graph.neo4j_store import _serialize_prop_value
 
     # Mixed primitive types
@@ -304,7 +313,7 @@ async def test_upsert_argument_components_omits_empty_entity_ids() -> None:
 @pytest.mark.asyncio
 async def test_get_theory_atoms_resilient_deserialization() -> None:
     """Verify that get_theory_atoms gracefully handles non-string and malformed inputs."""
-    from episteme_pipeline.contracts.domain import Measurement, TenabilityResult
+    from episteme_pipeline.contracts.domain import Measurement
     from episteme_pipeline.graph.neo4j_store import _Neo4jReadMixin
 
     class _MockResult:
@@ -318,7 +327,7 @@ async def test_get_theory_atoms_resilient_deserialization() -> None:
         def __init__(self, data: list[dict]) -> None:
             self._data = data
 
-        async def __aenter__(self) -> "_MockReadSession":
+        async def __aenter__(self) -> Self:
             return self
 
         async def __aexit__(self, exc_type, exc, tb) -> None:
@@ -379,7 +388,7 @@ async def test_get_all_theory_relations_includes_tenability() -> None:
         def __init__(self, data: list[dict]) -> None:
             self._data = data
 
-        async def __aenter__(self) -> "_MockReadSession":
+        async def __aenter__(self) -> Self:
             return self
 
         async def __aexit__(self, exc_type, exc, tb) -> None:
@@ -429,8 +438,8 @@ async def test_mark_chunks_processed_sanitizes_phase_identifier() -> None:
 @pytest.mark.asyncio
 async def test_item_checkpoints_sanitize_phase_identifier() -> None:
     """Ensure filter_unprocessed_items, commit_phase_batch, clear_phase_checkpoints reject unsafe phase names."""
-    from episteme_pipeline.graph.neo4j_store import _Neo4jCheckpointMixin
     from episteme_pipeline.contracts.domain import PhaseItemRecord
+    from episteme_pipeline.graph.neo4j_store import _Neo4jCheckpointMixin
 
     class _MockCheckpointStore(_Neo4jCheckpointMixin):
         def _session(self):

@@ -1,10 +1,11 @@
 """Tests for TAGRelationExtractor candidate pair logic (pure Python, no LLM)."""
 
 import pytest
-
 from episteme_pipeline.config import Phase3Config
 from episteme_pipeline.contracts.domain import L2Entity, L2Triple, SubGraph
-from episteme_pipeline.phases.phase3_global_relations.tag_extractor import TAGRelationExtractor
+from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
+    TAGRelationExtractor,
+)
 from episteme_pipeline.utils import format_envelope
 
 

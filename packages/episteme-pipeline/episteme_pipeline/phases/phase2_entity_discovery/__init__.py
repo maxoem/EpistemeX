@@ -30,27 +30,56 @@ import asyncio
 import logging
 from collections import defaultdict
 
+from episteme_pipeline.artifacts.builders import (
+    build_entity_mention_artifact,
+    build_linked_entity_artifact,
+    build_local_relation_artifact,
+)
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+    Phase1ArtifactsView,
+)
 from episteme_pipeline.config import Phase2Config
 from episteme_pipeline.contracts.domain import (
+    GlobalStructuralAnchor,
     L1Chunk,
     L2Entity,
     L2Triple,
 )
-from episteme_pipeline.events import ProgressStarted, ProgressAdvanced, ProgressCompleted
-from episteme_pipeline.phases.phase2_entity_discovery.entity_linker import NameEntityLinker
-from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import DenseEntityLinker
-from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import LLMNERExtractor
-from episteme_pipeline.protocols.extractors import EntityLinker, NERExtractor, CrossEncoder, EmbeddingModel
+from episteme_pipeline.events import (
+    ProgressAdvanced,
+    ProgressCompleted,
+    ProgressStarted,
+)
+from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.phases.chunk_selection import select_pending_chunks
+from episteme_pipeline.phases.phase2_entity_discovery.entity_linker import (
+    NameEntityLinker,
+)
+from episteme_pipeline.phases.phase2_entity_discovery.jev_entity_linker import (
+    CascadingEntityLinker,
+    JevEntityLinker,
+)
+from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import (
+    LLMNERExtractor,
+)
+from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import (
+    DenseEntityLinker,
+)
+from episteme_pipeline.phases.phase2_entity_discovery.working_memory import (
+    EpisodicWorkingMemoryManager,
+)
+from episteme_pipeline.protocols import DecisionEngine
+from episteme_pipeline.protocols.extractors import (
+    CrossEncoder,
+    EmbeddingModel,
+    EntityLinker,
+    NERExtractor,
+)
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
-from episteme_pipeline.events.bus import EventEmitter, NoOpEventEmitter
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext, Phase1ArtifactsView
-from episteme_pipeline.artifacts.builders import build_entity_mention_artifact, build_linked_entity_artifact, build_local_relation_artifact
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.schema.default_schema import SchemaConfig
-
-from episteme_pipeline.phases.phase2_entity_discovery.working_memory import EpisodicWorkingMemoryManager
-from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
 
 logger = logging.getLogger(__name__)
 
@@ -89,25 +118,58 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         entity_linker: EntityLinker | None = None,
         working_memory_manager: EpisodicWorkingMemoryManager | None = None,
         cross_encoder: CrossEncoder | None = None,
+        decision_engine: DecisionEngine | None = None,
     ) -> None:
+        """Initialize the Phase 2 runner.
+
+        Parameters
+        ----------
+        config : Phase2Config
+            Configuration settings for Phase 2.
+        schema : SchemaConfig
+            Graph ontology schema configuration.
+        llm : object
+            LLM instance used for named entity recognition.
+        embedding_model : EmbeddingModel or None, optional
+            Embedding model for dense retrieval and entity linking.
+        graph_store : ProcessingGraph
+            Underlying graph database interface.
+        ner_extractor : NERExtractor or None, optional
+            Custom NER extractor. Defaults to LLMNERExtractor if None.
+        entity_linker : EntityLinker or None, optional
+            Custom entity linker. If None, defaults to DenseEntityLinker when
+            an embedding_model is provided, or NameEntityLinker otherwise.
+        working_memory_manager : EpisodicWorkingMemoryManager or None, optional
+            Custom episodic working memory manager.
+        cross_encoder : CrossEncoder or None, optional
+            Cross encoder for candidate reranking in dense linking.
+        decision_engine : DecisionEngine or None, optional
+            Optional System 1 decision engine.
+        """
         self.config = config
         self.schema = schema
         self.llm = llm
         self.embedding_model = embedding_model
         self.graph_store = graph_store
-        self.ner_extractor = ner_extractor or LLMNERExtractor(
-            llm, 
-            max_gleanings=config.max_gleanings,
-            prompts=config.ner_prompts,
-            strategy=config.ner_decoding_strategy,
+        self.decision_engine = decision_engine
+
+        self.ner_extractor = ner_extractor or LLMNERExtractor.from_config(
+            llm=llm,
+            config=config,
+            decision_engine=decision_engine,
         )
         self.cross_encoder = cross_encoder
-        self.entity_linker = entity_linker or DenseEntityLinker(
-            embedding_model=self.embedding_model,
-            cross_encoder=self.cross_encoder,
-            tau=config.linking_confidence_threshold,
-            top_k=config.top_k_linking_candidates,
-        )
+        if entity_linker is not None:
+            self.entity_linker = entity_linker
+        elif self.embedding_model is not None:
+            self.entity_linker = DenseEntityLinker(
+                embedding_model=self.embedding_model,
+                cross_encoder=self.cross_encoder,
+                tau=config.linking_confidence_threshold,
+                top_k=config.top_k_linking_candidates,
+            )
+        else:
+            self.entity_linker = NameEntityLinker()
 
         self.working_memory_manager = working_memory_manager or EpisodicWorkingMemoryManager()
 

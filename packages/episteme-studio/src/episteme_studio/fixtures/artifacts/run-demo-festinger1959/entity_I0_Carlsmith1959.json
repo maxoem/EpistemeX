@@ -1,0 +1,24 @@
+{
+  "artifact_id": "entity_I0_Carlsmith1959",
+  "identity_key": "entity_I0_Carlsmith1959",
+  "kind": "linked_entity",
+  "run_id": "run-demo-festinger1959",
+  "phase_name": "Phase 2: Entity & Local Relation Discovery",
+  "payload": {
+    "entity_id": "str:I0_Carlsmith1959",
+    "entity_type": "Paradigm",
+    "canonical_name": "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm",
+    "description": "Paradigm intended application using peg-turning spools and confederate interview.",
+    "confidence": 1.0,
+    "source_chunk_ids": [
+      "chunk_fc1959_ratio_law"
+    ]
+  },
+  "provenance": {
+    "source_path": "datasets/run-demo-festinger1959.cypher",
+    "notes": {
+      "generated": "demo_fixture"
+    }
+  },
+  "created_at": "2026-09-01T10:00:00Z"
+}

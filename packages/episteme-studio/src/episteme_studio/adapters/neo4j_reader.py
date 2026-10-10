@@ -11,7 +11,8 @@ import hashlib
 import inspect
 import logging
 import time
-from datetime import date, datetime, time as dt_time
+from datetime import date, datetime
+from datetime import time as dt_time
 from typing import Any
 from uuid import uuid4
 
@@ -279,7 +280,7 @@ class Neo4jReader:
 
         except ResultTooLargeError:
             raise
-        except (asyncio.TimeoutError, TimeoutError):
+        except TimeoutError:
             raise QueryTimeoutError(
                 f"Cypher query exceeded timeout limit of {timeout}s."
             )
@@ -453,6 +454,8 @@ class Neo4jReader:
             if parameters_prop is not None:
                 clean_props["parameters"] = parameters_prop
 
+            base_sc = props.get("base_score", props.get("plausibility"))
+            tier_node = props.get("decision_tier", "system_1" if props.get("is_fast_exit") else "legacy")
             nodes.append(
                 StudioNode(
                     id=node_id,
@@ -460,8 +463,23 @@ class Neo4jReader:
                     type=semantic_type,
                     label=label,
                     partition=partition,
-                    plausibility=props.get("plausibility"),
+                    plausibility=base_sc,
                     confidence=props.get("confidence"),
+                    empirical_accuracy=props.get("empirical_accuracy"),
+                    modal_strength=props.get("modal_strength", base_sc),
+                    base_score=base_sc,
+                    scope_type=props.get("scope_type"),
+                    epistemic_status=props.get("epistemic_status"),
+                    modal_resolver=props.get("modal_resolver") or props.get("resolver_type"),
+                    raw_modal_score=props.get("raw_modal_score") or props.get("raw_engine_score"),
+                    is_modal_clamped=props.get("is_modal_clamped") or props.get("clamped"),
+                    qbaf_tau=props.get("qbaf_tau"),
+                    total_weight_of_evidence=props.get("total_weight_of_evidence"),
+                    volatility_index=props.get("volatility_index"),
+                    decision_tier=tier_node,
+                    conformal_set_size=props.get("conformal_set_size"),
+                    is_out_of_ontology=bool(props.get("is_out_of_ontology", False)),
+                    decision_id=props.get("decision_id"),
                     parameters=parameters_prop if isinstance(parameters_prop, dict) else None,
                     tenability=tenability_prop if isinstance(tenability_prop, dict) else None,
                     resolved=True,
@@ -493,6 +511,8 @@ class Neo4jReader:
                 except (ValueError, TypeError):
                     edge_tenability = None
 
+            tier_edge = props.get("decision_tier", "system_1" if props.get("is_fast_exit") else "legacy")
+            inf_force = props.get("inferential_force", props.get("modal_strength"))
             edges.append(
                 StudioEdge(
                     id=rel_id,
@@ -504,6 +524,17 @@ class Neo4jReader:
                     weight=props.get("weight"),
                     confidence=props.get("confidence"),
                     tenability=edge_tenability,
+                    empirical_accuracy=props.get("empirical_accuracy"),
+                    model_confidence=props.get("model_confidence", props.get("calibrated_confidence")),
+                    stance_probability=props.get("stance_probability", props.get("class_probability")),
+                    inferential_force=inf_force,
+                    active_weight=props.get("active_weight", props.get("weight")),
+                    is_admissible=bool(props.get("is_admissible", True)),
+                    modal_strength=props.get("modal_strength"),
+                    qbaf_tau=props.get("qbaf_tau"),
+                    decision_tier=tier_edge,
+                    conformal_set_size=props.get("conformal_set_size"),
+                    decision_id=props.get("decision_id"),
                     props=props,
                 )
             )
@@ -679,6 +710,8 @@ class Neo4jReader:
             if parameters_prop is not None:
                 clean_props["parameters"] = parameters_prop
 
+            base_sc = props.get("base_score", props.get("plausibility"))
+            tier_node = props.get("decision_tier", "system_1" if props.get("is_fast_exit") else "legacy")
             nodes.append(
                 StudioNode(
                     id=node_id,
@@ -686,8 +719,23 @@ class Neo4jReader:
                     type=semantic_type,
                     label=label,
                     partition=partition,
-                    plausibility=props.get("plausibility"),
+                    plausibility=base_sc,
                     confidence=props.get("confidence"),
+                    empirical_accuracy=props.get("empirical_accuracy"),
+                    modal_strength=props.get("modal_strength", base_sc),
+                    base_score=base_sc,
+                    scope_type=props.get("scope_type"),
+                    epistemic_status=props.get("epistemic_status"),
+                    modal_resolver=props.get("modal_resolver") or props.get("resolver_type"),
+                    raw_modal_score=props.get("raw_modal_score") or props.get("raw_engine_score"),
+                    is_modal_clamped=props.get("is_modal_clamped") or props.get("clamped"),
+                    qbaf_tau=props.get("qbaf_tau"),
+                    total_weight_of_evidence=props.get("total_weight_of_evidence"),
+                    volatility_index=props.get("volatility_index"),
+                    decision_tier=tier_node,
+                    conformal_set_size=props.get("conformal_set_size"),
+                    is_out_of_ontology=bool(props.get("is_out_of_ontology", False)),
+                    decision_id=props.get("decision_id"),
                     parameters=parameters_prop if isinstance(parameters_prop, dict) else None,
                     tenability=tenability_prop if isinstance(tenability_prop, dict) else None,
                     resolved=True,
@@ -719,6 +767,8 @@ class Neo4jReader:
                 except (ValueError, TypeError):
                     edge_tenability = None
 
+            tier_edge = props.get("decision_tier", "system_1" if props.get("is_fast_exit") else "legacy")
+            inf_force = props.get("inferential_force", props.get("modal_strength"))
             edges.append(
                 StudioEdge(
                     id=rel_id,
@@ -730,6 +780,17 @@ class Neo4jReader:
                     weight=props.get("weight"),
                     confidence=props.get("confidence"),
                     tenability=edge_tenability,
+                    empirical_accuracy=props.get("empirical_accuracy"),
+                    model_confidence=props.get("model_confidence", props.get("calibrated_confidence")),
+                    stance_probability=props.get("stance_probability", props.get("class_probability")),
+                    inferential_force=inf_force,
+                    active_weight=props.get("active_weight", props.get("weight")),
+                    is_admissible=bool(props.get("is_admissible", True)),
+                    modal_strength=props.get("modal_strength"),
+                    qbaf_tau=props.get("qbaf_tau"),
+                    decision_tier=tier_edge,
+                    conformal_set_size=props.get("conformal_set_size"),
+                    decision_id=props.get("decision_id"),
                     props=props,
                 )
             )

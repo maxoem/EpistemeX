@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
+
 from fastapi import FastAPI
 
 from episteme_studio.runtime.broker import EventBroker
@@ -45,6 +46,7 @@ def create_lifespan(settings: StudioSettings):
         if driver is None and settings.neo4j_url:
             try:
                 import asyncio
+
                 from neo4j import AsyncGraphDatabase
                 auth = (
                     (settings.neo4j_user, settings.neo4j_password)

@@ -1,17 +1,6 @@
-import React, { useState, useMemo } from "react";
-import { MetricDescriptor } from "../api/types";
-import {
-  Scale,
-  TrendingUp,
-  Share2,
-  Boxes,
-  Network,
-  Activity,
-  Search,
-  Check,
-  AlertTriangle,
-  X,
-} from "lucide-react";
+import React, {useMemo, useState} from "react";
+import {MetricDescriptor} from "../api/types";
+import {Activity, AlertTriangle, Boxes, Check, Network, Scale, Search, Share2, TrendingUp, X,} from "lucide-react";
 
 interface AlgorithmPickerProps {
   descriptors: MetricDescriptor[];

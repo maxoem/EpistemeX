@@ -3,14 +3,12 @@
 from pathlib import Path
 
 import pytest
-
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
     Phase1ArtifactsView,
     Phase2ArtifactsView,
     Phase3ArtifactsView,
-    Phase4ArtifactsView,
 )
 from episteme_pipeline.artifacts.mappers import (
     map_phase1_output_to_artifacts,
@@ -25,20 +23,18 @@ from episteme_pipeline.contracts.domain import (
     L1Document,
     L2Entity,
     L2Triple,
-        )
-from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
+    TheoryAtom,
+    TheoryRelation,
+)
 from episteme_pipeline.contracts.phase_contracts import (
-    PipelineInput,
     Phase1Output,
     Phase2Output,
     Phase3Output,
-    Phase4Output,
+    PipelineInput,
 )
 from episteme_pipeline.pipeline import Pipeline
 from episteme_pipeline.runs.models import (
     ExecutionResult,
-    RunManifest,
-    RunPhaseRecord,
     RunStatus,
 )
 

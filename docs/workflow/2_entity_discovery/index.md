@@ -31,8 +31,13 @@ and [Episodic Working Memory](../../concepts/episodic_working_memory.md) for the
   relation taxonomies.
 - **Reasoning-First Chain-of-Thought**: CoT prompts prime the LLM to identify logical connectives before assigning
   entity labels and triples.
-- **Iterative Gleaning**: When `max_gleanings > 0`, the extractor runs an iterative refinement pass with previously
-  extracted entities to capture overlooked concepts.
+- **Iterative Gleaning & Actor-Critic Stopping Oracle**: When `enable_jev_gleaning_gate` is enabled, gleaning is
+  governed by [`JevGleaningGate`](file:///Users/max.oehmichen/PycharmProjects/episteme/packages/episteme-pipeline/episteme_pipeline/decision/gleaning.py),
+  decoupling the generative extraction *Actor* (LLM) from an objective non-generative *Critic* (TypeSafe Jev `Noul` evaluator).
+  The gate budgets context to $\le 1024$ tokens / 3200 characters for ModernBERT compatibility, evaluates extraction completeness,
+  and stops continuation as soon as $P(\text{unextracted}) < \tau_{\text{glean}}$ (eliminating redundant LLM tokens).
+  A stochastic false-negative audit rate (default 2%) occasionally forces an additional pass to monitor stopping calibration.
+  When disabled or when the decision engine is omitted, the loop falls back to legacy fixed `max_gleanings` bounds.
 - **Deterministic ID Generation**: `_stable_entity_id(label, name)` generates deterministic SHA-256 hashes
   (`entity_<hash>`), ensuring identical names with identical labels map to the same node ID.
 
@@ -88,7 +93,8 @@ Phase 2 behavior is configured via `Phase2Config` in `pipeline/config.py` (model
 | `ner_confidence_threshold`            | `float`                      | `0.0`          | Minimum confidence threshold for entity acceptance.                  |
 | `local_relation_confidence_threshold` | `float`                      | `0.0`          | Minimum confidence threshold for local triple acceptance.            |
 | `ner_decoding_strategy`               | `StructuredDecodingStrategy` | `NL_TO_FORMAT` | Decoding strategy (`DIRECT`, `NL_TO_FORMAT`, `TRIGGER_TOKEN`).       |
-| `max_gleanings`                       | `int`                        | `0`            | Iterative gleaning passes to capture missed entities.                |
+| `max_gleanings`                       | `int`                        | `0`            | Legacy fixed gleaning passes to capture missed entities.             |
+| `gleaning`                            | `GleaningConfig`             | `default`      | Encapsulated gleaning config (`enabled`, `confidence_threshold`, `audit_rate`, `max_passes`). |
 
 ## Phase Contract
 

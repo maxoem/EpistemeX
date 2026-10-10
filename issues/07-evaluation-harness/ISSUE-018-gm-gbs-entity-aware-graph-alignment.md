@@ -6,8 +6,12 @@
 | **Component(s)** | `packages/episteme-pipeline` (`evaluation/scorers/gm_gbs.py`) |
 | **Roadmap Horizon** | **Horizon 1** (Evaluation Integrity & Benchmark Harness) |
 | **Priority** | Critical / Blocker |
-| **Status** | Open |
+| **Status** | `Superseded` (by [ISSUE-030](../09-stnb-evaluation-capabilities/ISSUE-030-intrinsic-model-component-and-property-evaluation.md)) |
 | **Source Ref** | [`review/26/09/evaluation_credibility_review.md §2.1`](review/26/09/evaluation_credibility_review.md#L30-L75) |
+
+> [!NOTE]
+> **SUPERSEDED**: This issue has been superseded by [`ISSUE-030: Comprehensive Intrinsic Evaluation: Model Component Decomposition & Full Property Subsumption`](../09-stnb-evaluation-capabilities/ISSUE-030-intrinsic-model-component-and-property-evaluation.md).
+
 
 ---
 

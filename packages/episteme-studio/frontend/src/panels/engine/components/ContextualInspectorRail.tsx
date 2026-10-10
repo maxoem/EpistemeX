@@ -1,16 +1,8 @@
 import React from "react";
-import {
-  Save,
-  RotateCcw,
-  CheckCircle2,
-  X,
-  Link2,
-  Activity,
-  Loader2,
-} from "lucide-react";
-import { SelectedItem } from "../types";
-import { SchemaConfig, UnmappedPredicateInfo } from "../../../api/types";
-import { DemoValidationRules, DemoEditHistory } from "./DemoMetadataInspector";
+import {Activity, CheckCircle2, Loader2, RotateCcw, Save, X,} from "lucide-react";
+import {SelectedItem} from "../types";
+import {SchemaConfig, UnmappedPredicateInfo} from "../../../api/types";
+import {DemoEditHistory, DemoValidationRules} from "./DemoMetadataInspector";
 
 interface ContextualInspectorRailProps {
   selectedItem: SelectedItem | null;
@@ -31,6 +23,8 @@ interface ContextualInspectorRailProps {
   totalRelationCount: number;
   totalAliasesCount: number;
   draftModels: any;
+  draftDecisionEngine?: any;
+  activeCategory?: string;
 }
 
 export const ContextualInspectorRail: React.FC<ContextualInspectorRailProps> = ({
@@ -52,6 +46,8 @@ export const ContextualInspectorRail: React.FC<ContextualInspectorRailProps> = (
   totalRelationCount,
   totalAliasesCount,
   draftModels,
+  draftDecisionEngine,
+  activeCategory,
 }) => {
   // Helper to extract item definition based on type
   const getItemDefinition = (): string => {
@@ -628,21 +624,51 @@ export const ContextualInspectorRail: React.FC<ContextualInspectorRailProps> = (
               </div>
             </div>
 
-            {/* Model Telemetry (Unboxed) */}
-            <div className="space-y-1.5 pt-2 border-t border-app-border/70">
-              <div className="font-sans text-[12px] font-semibold text-app-text">
-                Active Engine LLM
-              </div>
-              <div className="space-y-1 text-xs">
-                <div className="font-mono text-xs text-app-text truncate font-medium" title={draftModels.llm_model}>
-                  {draftModels.llm_model || "openai/gpt-4o-mini"}
+            {/* Model / Decision Engine Telemetry */}
+            {activeCategory === "decision" ? (
+              <div className="space-y-2 pt-2 border-t border-app-border/70">
+                <div className="flex items-center justify-between">
+                  <div className="font-sans text-[12px] font-semibold text-app-text">
+                    Decision Engine Telemetry
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20 font-medium">
+                    Dual-Process
+                  </span>
                 </div>
-                <div className="text-[10px] font-mono text-app-muted flex items-center justify-between">
-                  <span>Temperature: {draftModels.temperature ?? 0}</span>
-                  <span className="uppercase">Thinking: {draftModels.thinking_level || "off"}</span>
+                <div className="space-y-1.5 text-xs">
+                  <div className="font-mono text-xs text-app-text truncate font-medium" title={draftDecisionEngine?.model_checkpoint}>
+                    {draftDecisionEngine?.model_checkpoint || "aac6fef/laya-mlx"}
+                  </div>
+                  <div className="text-[10px] font-mono text-app-muted flex items-center justify-between">
+                    <span>Provider: {(draftDecisionEngine?.provider || "laya").toUpperCase()}</span>
+                    <span>Device: {draftDecisionEngine?.device || "auto"}</span>
+                  </div>
+                  <div className="text-[10px] font-mono text-app-muted flex items-center justify-between">
+                    <span>Fast-Exit: {((draftDecisionEngine?.fast_exit_threshold ?? 0.92) * 100).toFixed(0)}%</span>
+                    <span>Uncertainty: {((draftDecisionEngine?.uncertainty_threshold ?? 0.55) * 100).toFixed(0)}%</span>
+                  </div>
+                  <div className="text-[10px] font-mono text-app-muted flex items-center justify-between">
+                    <span>Audit Rate: {((draftDecisionEngine?.stochastic_audit_rate ?? 0.05) * 100).toFixed(1)}%</span>
+                    <span>Active Gates: {["phase2_entity_discovery", "phase3_global_relations", "phase4_argument_mining", "phase4_entity_maturation", "phase5_fusion", "phase6_theorynet"].filter(k => (draftDecisionEngine?.phase_gates as any)?.[k] !== false).length}/6</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-1.5 pt-2 border-t border-app-border/70">
+                <div className="font-sans text-[12px] font-semibold text-app-text">
+                  Active Engine LLM
+                </div>
+                <div className="space-y-1 text-xs">
+                  <div className="font-mono text-xs text-app-text truncate font-medium" title={draftModels?.llm_model}>
+                    {draftModels?.llm_model || "openai/gpt-4o-mini"}
+                  </div>
+                  <div className="text-[10px] font-mono text-app-muted flex items-center justify-between">
+                    <span>Temperature: {draftModels?.temperature ?? 0}</span>
+                    <span className="uppercase">Thinking: {draftModels?.thinking_level || "off"}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -10,7 +10,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from episteme_pipeline.llm.structured import StructuredLLM
-from episteme_pipeline.runs.fingerprints import stable_fingerprint, fingerprint_method
+from episteme_pipeline.runs.fingerprints import fingerprint_method, stable_fingerprint
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,25 @@ class DiskCachedStructuredLLM(StructuredLLM):
         # Attempt to fingerprint the underlying LlamaIndex LLM object if it exists
         self._llm_method = getattr(base_llm, "base_llm", base_llm)
         self._method_fp = fingerprint_method(self._llm_method) or "unknown_llm"
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic disk-cached structured LLM configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing cache version and base LLM fingerprint.
+        """
+        base_fp = (
+            self.base_llm.fingerprint()
+            if hasattr(self.base_llm, "fingerprint") and callable(self.base_llm.fingerprint)
+            else fingerprint_method(self._llm_method)
+        )
+        return {
+            "class": self.__class__.__name__,
+            "cache_version": CACHE_VERSION,
+            "base_llm": base_fp,
+        }
 
     def _get_cache_path(
         self,

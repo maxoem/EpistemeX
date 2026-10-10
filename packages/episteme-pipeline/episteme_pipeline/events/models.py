@@ -9,14 +9,14 @@ correlation and filtering.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import List, Optional, Any
+from datetime import UTC, datetime
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
 class UnlinkableMentionError(Exception):
     """Raised when a mention cannot be linked to the graph (e.g., missing envelope)."""
-    pass
 
 # Event base class
 class BaseEvent(BaseModel):
@@ -31,9 +31,9 @@ class BaseEvent(BaseModel):
     phase : str, optional
         Name of the pipeline phase when this event occurred.
     """
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    run_id: Optional[str] = None
-    phase: Optional[str] = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    run_id: str | None = None
+    phase: str | None = None
 
 
 # Entity-related events
@@ -71,7 +71,7 @@ class DenseCandidatesGenerated(BaseEvent):
         Number of entities used to generate candidates.
     """
     candidate_count: int
-    candidates: List[dict]  # Simplified representation
+    candidates: list[dict]  # Simplified representation
     entities_count: int
 
 
@@ -106,11 +106,11 @@ class RerankerScoreAssigned(BaseEvent):
     score: float
     accepted: bool
     threshold: float
-    entity_a: Optional[dict[str, Any]] = None
-    entity_b: Optional[dict[str, Any]] = None
-    reranker_input: Optional[dict[str, Any]] = None
-    reranker_payload: Optional[dict[str, str]] = None
-    recovery_attempts: Optional[List[dict[str, Any]]] = None
+    entity_a: dict[str, Any] | None = None
+    entity_b: dict[str, Any] | None = None
+    reranker_input: dict[str, Any] | None = None
+    reranker_payload: dict[str, str] | None = None
+    recovery_attempts: list[dict[str, Any]] | None = None
 
 
 class CandidateRejectedByThreshold(BaseEvent):
@@ -154,7 +154,7 @@ class EntityLinkingCandidatesRetrieved(BaseEvent):
     mention_id: str
     mention_name: str
     candidate_count: int
-    candidates: List[dict]
+    candidates: list[dict]
 
 
 class EntityLinkingReranked(BaseEvent):
@@ -263,10 +263,10 @@ class LLMRelationDecoded(BaseEvent):
         Raw response from the LLM (may contain sensitive data).
     """
     candidate_pair: tuple[str, str]  # entity IDs
-    relation: Optional[str]
-    direction: Optional[str]
-    confidence: Optional[float]
-    raw_response: Optional[Any] = None
+    relation: str | None
+    direction: str | None
+    confidence: float | None
+    raw_response: Any | None = None
 
 
 class SchemaValidationRejectedRelation(BaseEvent):
@@ -333,10 +333,10 @@ class FusionDecisionMade(BaseEvent):
     reason : str, optional
         Optional human-readable rationale.
     """
-    entities_fused: List[str]
+    entities_fused: list[str]
     fusion_type: str
     confidence: float
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 # Performance and metrics events
@@ -362,7 +362,7 @@ class PhaseCompleted(BaseEvent):
     duration_seconds: float
     artifact_count: int
     success: bool
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class ComponentStarted(BaseEvent):
@@ -378,7 +378,7 @@ class ComponentStarted(BaseEvent):
         Description of the input data.
     """
     component_name: str
-    input_description: Optional[str] = None
+    input_description: str | None = None
 
 
 class ComponentCompleted(BaseEvent):
@@ -401,9 +401,9 @@ class ComponentCompleted(BaseEvent):
     """
     component_name: str
     duration_seconds: float
-    output_description: Optional[str] = None
+    output_description: str | None = None
     success: bool
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class LLMDurationMeasured(BaseEvent):
@@ -464,17 +464,17 @@ class LLMGenerationCompleted(BaseEvent):
     model_name: str
     prompt: Any
     output_text: str
-    output_json: Optional[Any] = None
+    output_json: Any | None = None
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
     duration_seconds: float = 0.0
     operation: str = "structured_predict"
     cached: bool = False
-    model_parameters: Optional[dict[str, Any]] = None
-    prompt_name: Optional[str] = None
-    prompt_version: Optional[str | int] = None
-    prompt_label: Optional[str] = None
+    model_parameters: dict[str, Any] | None = None
+    prompt_name: str | None = None
+    prompt_version: str | int | None = None
+    prompt_label: str | None = None
 
 
 class EmbeddingGenerationCompleted(BaseEvent):
@@ -510,7 +510,7 @@ class EmbeddingGenerationCompleted(BaseEvent):
     prompt_tokens: int = 0
     total_tokens: int = 0
     duration_seconds: float = 0.0
-    vector_dim: Optional[int] = None
+    vector_dim: int | None = None
     operation: str = "embedding"
     cached: bool = False
 
@@ -567,7 +567,7 @@ class ProgressStarted(BaseEvent):
         Optional description of the task.
     """
     task_name: str
-    total_items: Optional[int] = None
+    total_items: int | None = None
     description: str = ""
 
 
@@ -636,8 +636,8 @@ class EvaluationScoreLogged(BaseEvent):
     """
     metric_name: str
     score: float
-    comment: Optional[str] = None
-    target_id: Optional[str] = None
+    comment: str | None = None
+    target_id: str | None = None
 
 
 class ValidationViolationDetected(BaseEvent):
@@ -660,6 +660,142 @@ class ValidationViolationDetected(BaseEvent):
     description: str
 
 
+# Decision engine & System 1 events
+class DecisionEvaluationStarted(BaseEvent):
+    """Event emitted when a System 1 decision engine evaluation begins.
+
+    Attributes
+    ----------
+    engine_name : str
+        Identifier or class name of the decision engine.
+    primitive : str
+        Decision primitive kind ("noul", "choice", "score").
+    question : str
+        Evaluation question or proposition text.
+    state_hash : str
+        Stable SHA-256 hash of the input state block.
+    state_character_count : int
+        Character length of the serialized state block.
+    """
+
+    engine_name: str
+    primitive: str
+    question: str
+    state_hash: str
+    state_character_count: int
+
+
+class DecisionEvaluationCompleted(BaseEvent):
+    """Event emitted when a System 1 decision engine evaluation completes.
+
+    Attributes
+    ----------
+    engine_name : str
+        Identifier or class name of the decision engine.
+    primitive : str
+        Decision primitive kind ("noul", "choice", "score").
+    question : str
+        Evaluation question or proposition text.
+    prompt_name : str, optional
+        Name of the prompt bundle if resolved via prompt management.
+    prompt_version : str or int, optional
+        Version of the prompt bundle.
+    prompt_label : str, optional
+        Deployment label of the prompt (e.g., 'production').
+    selected_value : Any
+        Evaluation output value (selected option, boolean passed, or score level).
+    class_probability : float
+        Softmax probability P(y=c|x) of the selected option.
+    empirical_accuracy : float
+        Calibrated empirical accuracy frequency (Laya action.act_probability).
+    probabilities : dict of str to float, optional
+        Categorical probability distribution.
+    prediction_set : list of str, optional
+        Conformal prediction set guaranteeing 1 - alpha coverage.
+    is_stochastic_audit : bool
+        Whether this evaluation was randomly routed for System 2 validation.
+    duration_seconds : float
+        Inference latency in seconds.
+    tokens_saved_estimate : int
+        Estimated generative LLM tokens saved by System 1 fast-exit.
+    """
+
+    engine_name: str
+    primitive: str
+    question: str
+    prompt_name: str | None = None
+    prompt_version: str | int | None = None
+    prompt_label: str | None = None
+    selected_value: Any = None
+    class_probability: float = 0.0
+    empirical_accuracy: float = 0.0
+    probabilities: dict[str, float] | None = None
+    prediction_set: list[str] | None = None
+    is_stochastic_audit: bool = False
+    duration_seconds: float = 0.0
+    tokens_saved_estimate: int = 0
+
+
+class DecisionGatingTriggered(BaseEvent):
+    """Event emitted when dynamic decision gating or fast-exit routing triggers.
+
+    Attributes
+    ----------
+    gate_name : str
+        Name of the gating checkpoint (e.g., 'gleaning_check', 'acc_triage',
+        'cartesian_pair_filter', 'fusion_gate').
+    action_taken : str
+        Action triggered ('fast_exit', 'escalated_to_llm', 'stochastic_audit',
+        'loop_terminated').
+    empirical_accuracy : float
+        Empirical accuracy estimate of the underlying decision.
+    threshold : float
+        Decision threshold used to gate the action.
+    prediction_set_size : int, optional
+        Size of the conformal prediction set at gating time.
+    """
+
+    gate_name: str
+    action_taken: str
+    empirical_accuracy: float
+    threshold: float
+    prediction_set_size: int | None = None
+
+
+class ModalStrengthResolved(BaseEvent):
+    """An authorial propositional modal strength was resolved for a TheoryAtom.
+
+    Grounding:
+    - Toulmin (1958): Modal Qualifier Q on claims.
+    - Schurz (2014): Propositional structuralist scope and epistemic status.
+
+    Attributes
+    ----------
+    atom_id : str
+        Identifier of the target TheoryAtom.
+    modal_strength : float
+        Resolved authorial propositional modal certainty M(phi) in [0.0, 1.0].
+    resolver_type : str
+        Strategy/resolver used ('structural', 'decision_engine', 'hybrid').
+    scope_type : str, optional
+        Structuralist scope type (e.g. 'Essentieller Allsatz').
+    epistemic_status : str, optional
+        Epistemic status (e.g. 'Synthetisch', 'Analytisch').
+    raw_engine_score : float, optional
+        Unclamped linguistic certitude score from DecisionEngine, if evaluated.
+    clamped : bool, default False
+        Whether the engine score was clamped by structuralist syntactic bounds.
+    """
+
+    atom_id: str
+    modal_strength: float
+    resolver_type: str
+    scope_type: str | None = None
+    epistemic_status: str | None = None
+    raw_engine_score: float | None = None
+    clamped: bool = False
+
+
 # Type union for event handling
 PipelineEvent = (
     EntityProcessed |
@@ -670,7 +806,9 @@ PipelineEvent = (
     EntityLinkingCandidatesRetrieved | EntityLinkingReranked | EntityMaturationSynthesized |
     EnvelopeInjectionAttempted | EnvelopeInjectionFailed |
     ProgressStarted | ProgressAdvanced | ProgressCompleted |
-    EvaluationCompleted | EvaluationScoreLogged | ValidationViolationDetected
+    EvaluationCompleted | EvaluationScoreLogged | ValidationViolationDetected |
+    DecisionEvaluationStarted | DecisionEvaluationCompleted | DecisionGatingTriggered |
+    ModalStrengthResolved
 )
 
 

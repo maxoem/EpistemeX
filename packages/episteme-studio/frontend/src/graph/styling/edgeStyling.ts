@@ -1,5 +1,5 @@
-import type { StudioEdge } from "../../api/types.ts";
-import type { EdgeStyleContext } from "./types.ts";
+import type {StudioEdge} from "../../api/types.ts";
+import type {EdgeStyleContext} from "./types.ts";
 
 export interface ComputedEdgeStyle {
   stroke: string;
@@ -57,10 +57,13 @@ export function computeEdgeStyle(edge: StudioEdge, ctx: EdgeStyleContext): Compu
     }
   }
 
-  let lineWidth =
-    edge.weight !== null && edge.weight !== undefined
-      ? Math.max(1, Math.min(3.5, Math.round(edge.weight * 3)))
-      : 1.5;
+  // Line width mapping prioritizing empirical accuracy / inferential force
+  let lineWidth = 1.5;
+  if (edge.empirical_accuracy !== null && edge.empirical_accuracy !== undefined) {
+    lineWidth = Math.max(1, Math.min(4, Math.round(edge.empirical_accuracy * 3.5)));
+  } else if (edge.weight !== null && edge.weight !== undefined) {
+    lineWidth = Math.max(1, Math.min(3.5, Math.round(edge.weight * 3)));
+  }
 
   if (isDiffActive && diffData) {
     const edgeStatus = diffData.edge_diff[edge.id];
@@ -116,8 +119,22 @@ export function computeEdgeStyle(edge: StudioEdge, ctx: EdgeStyleContext): Compu
     }
   }
 
-  // 4. Active Overlay edge styling (e.g. Tenability TS_edge)
-  if (activeOverlay?.edge_values) {
+  // 4. Active Overlay edge styling (Tenability TS_edge or Conformal Uncertainty)
+  if (activeOverlay?.kind === "conformal_uncertainty") {
+    const isAmbiguous = (edge.conformal_set_size !== null && edge.conformal_set_size !== undefined && edge.conformal_set_size > 1);
+    const isLowAcc = (edge.empirical_accuracy !== null && edge.empirical_accuracy !== undefined && edge.empirical_accuracy < 0.85);
+    if (isAmbiguous) {
+      stroke = "#f59e0b"; // amber for ambiguous multi-class set
+      lineDash = [6, 3];
+      lineWidth = Math.max(2.5, lineWidth);
+    } else if (isLowAcc) {
+      stroke = "#ef4444"; // red warning for low empirical accuracy
+      lineDash = [4, 4];
+      lineWidth = Math.max(2, lineWidth);
+    } else {
+      stroke = "#10b981"; // calibrated green
+    }
+  } else if (activeOverlay?.edge_values) {
     const val = activeOverlay.edge_values[edge.id];
     if (val !== undefined && val !== null) {
       if (activeOverlay.kind === "tenability") {
@@ -137,20 +154,48 @@ export function computeEdgeStyle(edge: StudioEdge, ctx: EdgeStyleContext): Compu
     }
   }
 
+  // 5. Decision Tier Styling (System 1 Fast-Exit dashed vs System 2 Escalation halo)
+  let halo = false;
+  let haloStroke = "transparent";
+  let haloLineWidth = 0;
+
+  if (edge.decision_tier === "fast_exit" || edge.decision_tier === "system1") {
+    if (!lineDash) {
+      lineDash = [5, 4];
+    }
+  } else if (edge.decision_tier === "system2") {
+    halo = true;
+    haloStroke = isDark ? "rgba(59, 130, 246, 0.35)" : "rgba(37, 99, 235, 0.25)";
+    haloLineWidth = 3.5;
+  }
+
+  // Dual-Attribute Label Text [Acc • I]
+  let labelText = "";
+  if (graphSettings.showEdgeLabels) {
+    labelText = edge.type;
+    const hasAcc = edge.empirical_accuracy !== null && edge.empirical_accuracy !== undefined;
+    const hasInf = edge.inferential_force !== null && edge.inferential_force !== undefined;
+    if (hasAcc && hasInf) {
+      labelText += ` [${edge.empirical_accuracy!.toFixed(2)} • ${edge.inferential_force!.toFixed(2)}]`;
+    } else if (hasAcc) {
+      labelText += ` [Acc: ${edge.empirical_accuracy!.toFixed(2)}]`;
+    }
+  }
+
   return {
     stroke,
     lineDash,
     lineWidth,
     endArrow: true,
-    labelText: graphSettings.showEdgeLabels ? edge.type : "",
+    labelText,
     labelFill: isDark ? "#8b949e" : "#57606a",
     labelFontSize: 9,
     labelBackground: true,
     labelBackgroundFill: isDark ? "#161b22" : "#ffffff",
     labelBackgroundRadius: 2,
     cursor: "pointer",
-    halo: false,
-    haloStroke: "transparent",
-    haloLineWidth: 0,
+    halo,
+    haloStroke,
+    haloLineWidth,
   };
 }

@@ -3,24 +3,23 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 import json
-import multiprocessing
-from pathlib import Path
 import queue
 import time
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
-import pytest
-from httpx import ASGITransport, AsyncClient
 
-from episteme_studio.adapters.event_mapper import serialize_pipeline_event, to_studio_event
+import pytest
+from episteme_pipeline.events.models import BaseEvent, ComponentStarted
+from episteme_studio.adapters.event_mapper import to_studio_event
 from episteme_studio.app import create_app
 from episteme_studio.domain.runs import RunStatus
 from episteme_studio.runtime.broker import EventBroker
 from episteme_studio.runtime.observer import StudioEventObserver
-from episteme_studio.runtime.registry import RunHandle, RunRegistry
+from episteme_studio.runtime.registry import RunRegistry
 from episteme_studio.settings import StudioSettings
-from episteme_pipeline.events.models import BaseEvent, ComponentStarted
+from httpx import ASGITransport, AsyncClient
 
 
 class UnseenCustomEvent(BaseEvent):
@@ -92,7 +91,7 @@ def test_saturated_queue_surfaces_dropped_before_and_does_not_block() -> None:
     observer.on_event(event)
     assert observer.dropped_count == 0
 
-    item1 = q.get_nowait()
+    q.get_nowait()
     item2 = q.get_nowait()
     assert item2["_dropped_before"] == 2
 
@@ -290,7 +289,7 @@ async def test_sse_stream_broadcast_to_multiple_subscribers() -> None:
                 "kind": f"test.event.{i}",
                 "run_id": run_id,
                 "message": f"Message {i}",
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
             },
         )
 
@@ -316,7 +315,7 @@ async def test_sse_stream_replays_history_via_last_event_id_or_since() -> None:
                 "kind": f"phase.step.{i}",
                 "run_id": run_id,
                 "message": f"Step {i}",
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
             },
         )
 
@@ -480,6 +479,7 @@ def test_stream_tee_batches_lines_into_single_message() -> None:
     None
     """
     from io import StringIO
+
     from episteme_studio.adapters.worker import StreamTee
 
     orig = StringIO()

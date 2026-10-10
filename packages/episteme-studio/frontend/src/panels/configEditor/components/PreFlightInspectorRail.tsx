@@ -1,24 +1,25 @@
 import React from "react";
 import {
-  Activity,
-  Play,
-  RefreshCw,
-  AlertTriangle,
-  Clock,
-  DollarSign,
-  Terminal,
-  ChevronDown,
-  ChevronRight,
-  Check,
-  Copy,
-  Database,
-  ShieldCheck,
-  ArrowRight,
-  Layers,
-  Loader2,
+    Activity,
+    AlertTriangle,
+    ArrowRight,
+    Check,
+    ChevronDown,
+    ChevronRight,
+    Clock,
+    Copy,
+    Database,
+    DollarSign,
+    Layers,
+    Loader2,
+    Play,
+    RefreshCw,
+    ShieldCheck,
+    Terminal,
+    Zap,
 } from "lucide-react";
-import { GlobalStructuralAnchor, InvalidationPreview } from "../../../api/types";
-import { PhaseExecutionStatusMap } from "../phaseExecution";
+import {DecisionEngineSettings, GlobalStructuralAnchor, InvalidationPreview} from "../../../api/types";
+import {PhaseExecutionStatusMap} from "../phaseExecution";
 
 interface PreFlightInspectorRailProps {
   hasRunBaseline: boolean;
@@ -42,6 +43,8 @@ interface PreFlightInspectorRailProps {
   cliCommand: string;
   copiedCli: boolean;
   handleCopyCli: () => void;
+  decisionEngineSettings?: DecisionEngineSettings;
+  hasDecisionOverrides?: boolean;
 }
 
 export const PreFlightInspectorRail: React.FC<PreFlightInspectorRailProps> = ({
@@ -62,6 +65,8 @@ export const PreFlightInspectorRail: React.FC<PreFlightInspectorRailProps> = ({
   cliCommand,
   copiedCli,
   handleCopyCli,
+  decisionEngineSettings,
+  hasDecisionOverrides,
 }) => {
   // Derived diagnostic metrics
   const totalPhases = Math.max(1, corePhaseKeys.length);
@@ -353,7 +358,55 @@ export const PreFlightInspectorRail: React.FC<PreFlightInspectorRailProps> = ({
         </div>
 
         {/* ───────────────────────────────────────────────────────────────── */}
-        {/* 5. ARCHITECTURAL INVARIANTS                                       */}
+        {/* 5. DECISION ENGINE (JEV) ROUTING                                 */}
+        {/* ───────────────────────────────────────────────────────────────── */}
+        {decisionEngineSettings && (
+          <div className="p-4 border-b border-app-border space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                <h3 className="text-xs font-semibold text-app-heading tracking-tight font-display">
+                  Decision Engine Routing
+                </h3>
+              </div>
+              {hasDecisionOverrides && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-blue-500/10 text-blue-500 border border-blue-500/20 font-medium">
+                  Overridden
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
+              <div>
+                <span className="text-[11px] text-app-muted font-sans block">Provider · Device</span>
+                <span className="text-xs font-semibold text-app-heading font-mono">
+                  {decisionEngineSettings.provider.toUpperCase()} · {decisionEngineSettings.device.toUpperCase()}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-app-muted font-sans block">Fast-Exit Threshold</span>
+                <span className="text-xs font-semibold text-app-heading font-mono" style={{ fontFeatureSettings: '"tnum" 1' }}>
+                  {Math.round(decisionEngineSettings.fast_exit_threshold * 100)}%
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-app-muted font-sans block">Active Phase Gates</span>
+                <span className="text-xs font-semibold text-app-heading font-mono">
+                  {Object.values(decisionEngineSettings.phase_gates || {}).filter(Boolean).length}/6 Active
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-app-muted font-sans block">Audit Rate</span>
+                <span className="text-xs font-semibold text-app-heading font-mono" style={{ fontFeatureSettings: '"tnum" 1' }}>
+                  {Math.round(decisionEngineSettings.stochastic_audit_rate * 100)}%
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ───────────────────────────────────────────────────────────────── */}
+        {/* 6. ARCHITECTURAL INVARIANTS                                       */}
         {/* ───────────────────────────────────────────────────────────────── */}
         <div className="p-4 border-b border-app-border space-y-2.5">
           <h3 className="text-xs font-semibold text-app-heading tracking-tight font-display">

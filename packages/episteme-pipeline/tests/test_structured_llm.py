@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
-from llama_index.core import PromptTemplate
-
 from episteme_pipeline.llm import (
     LlamaIndexStructuredLLMAdapter,
     StructuredPredictionError,
     ensure_structured_llm,
 )
 from episteme_pipeline.llm.structured import sanitize_structured_output
-from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import LLMNERExtractor
+from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import (
+    LLMNERExtractor,
+)
 from episteme_pipeline.schema.default_schema import SchemaConfig
+from llama_index.core import PromptTemplate
+from pydantic import BaseModel
 
 
 class _SimpleOutput(BaseModel):
@@ -150,7 +151,10 @@ async def test_llm_ner_extractor_recovers_wrapped_assistant_json() -> None:
     entities, triples, *_ = await extractor.extract(
         chunk_id="chunk_1",
         chunk_text="ignored",
-        schema=SchemaConfig(node_types=["AXIOM", "KONZEPT"]),
+        schema=SchemaConfig(
+            node_types=["AXIOM", "KONZEPT"],
+            relation_types=["TEIL_VON", "BEHANDELT_THEMA"],
+        ),
     )
 
 

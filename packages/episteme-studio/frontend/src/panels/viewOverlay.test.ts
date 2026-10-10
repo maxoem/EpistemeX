@@ -1,10 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  CURATED_LENSES,
-  extractTheoriesFromGraph,
-  useViewOverlayStore,
-} from "../store/viewOverlayStore.ts";
+import {CURATED_LENSES, extractTheoriesFromGraph, useViewOverlayStore,} from "../store/viewOverlayStore.ts";
 
 test("CURATED_LENSES contains only domain-agnostic lenses and no hardcoded domain theories", () => {
   const lensIds = CURATED_LENSES.map((l) => l.id);

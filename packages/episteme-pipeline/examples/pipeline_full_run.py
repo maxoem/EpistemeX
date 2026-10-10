@@ -53,18 +53,19 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-
 # Ensure project root is on sys.path when run directly from examples/ directory
 _PROJECT_ROOT = str(Path(__file__).resolve().parents[1])
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 from dotenv import load_dotenv
-from llama_index.embeddings.litellm import LiteLLMEmbedding
-from llama_index.llms.litellm import LiteLLM
-
-from episteme_pipeline import Pipeline, Phase3Config, Phase2Config
-from episteme_pipeline.config import ExecutionConfig, PipelineConfig, Phase3bConfig, Phase5Config, StructuredPromptBundle
+from episteme_pipeline import Phase2Config, Phase3Config, Pipeline
+from episteme_pipeline.config import (
+    ExecutionConfig,
+    Phase3bConfig,
+    Phase5Config,
+    PipelineConfig,
+)
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.graph import (
     Neo4jGraphReader,
@@ -75,13 +76,19 @@ from episteme_pipeline.phases.phase3_global_relations.rerankers import (
     SentenceTransformerCrossEncoderReranker,
 )
 from episteme_pipeline.runs.reporting import format_text
+from llama_index.embeddings.litellm import LiteLLMEmbedding
+from llama_index.llms.litellm import LiteLLM
 
 if TYPE_CHECKING:
     from episteme_pipeline.events import EventEmitter
     from episteme_pipeline.runs.models import ExecutionResult
 
-from episteme_pipeline.events import SimpleEventEmitter, RichProgressObserver, LangfuseObserver
 from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
+from episteme_pipeline.events import (
+    LangfuseObserver,
+    RichProgressObserver,
+    SimpleEventEmitter,
+)
 
 _SOURCE_ROOT = Path(__file__).resolve().parents[1]
 

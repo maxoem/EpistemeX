@@ -14,7 +14,11 @@ except ImportError as e:
     print(f"✗ Failed to import DenseCandidatesGenerated: {e}")
 
 try:
-    from episteme_pipeline.events.observers import LoggingObserver, JsonlRunObserver, MetricsObserver
+    from episteme_pipeline.events.observers import (
+        JsonlRunObserver,
+        LoggingObserver,
+        MetricsObserver,
+    )
     print("✓ Observers imported successfully")
 except ImportError as e:
     print(f"✗ Failed to import observers: {e}")

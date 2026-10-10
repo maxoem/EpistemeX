@@ -1,6 +1,0 @@
-run_id: "stnb_cpm_pilot_eval_01"
-corpus:
-  dataset_type: "structuralist"
-  gold_standard_path: "packages/episteme-pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
-  texts_dir: "packages/episteme-pipeline/evaluation/data"
-  limit: 10

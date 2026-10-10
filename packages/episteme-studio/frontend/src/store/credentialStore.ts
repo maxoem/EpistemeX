@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import {create} from "zustand";
 
 export interface RunNeo4jCredentials {
   url: string;

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 

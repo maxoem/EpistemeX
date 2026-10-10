@@ -45,19 +45,19 @@ __all__ = [
     # Adaptive dispatch entry points
     "betweenness_centrality",
     "eigenvector_centrality",
-    "louvain_communities",
-    "page_rank",
-    "weakly_connected_components",
-    # NetworkX direct implementations
-    "networkx_betweenness",
-    "networkx_eigenvector",
-    "networkx_louvain",
-    "networkx_pagerank",
-    "networkx_wcc",
     # GDS direct procedures
     "gds_betweenness",
     "gds_eigenvector",
     "gds_louvain",
     "gds_pagerank",
     "gds_wcc",
+    "louvain_communities",
+    # NetworkX direct implementations
+    "networkx_betweenness",
+    "networkx_eigenvector",
+    "networkx_louvain",
+    "networkx_pagerank",
+    "networkx_wcc",
+    "page_rank",
+    "weakly_connected_components",
 ]

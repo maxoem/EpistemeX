@@ -1,27 +1,29 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from episteme_pipeline.runs.models import RunManifest, RunReport
 
 from episteme_pipeline.contracts.domain import (
+    CandidatePair,
     GlobalStructuralAnchor,
     L1Chunk,
     L1Document,
     L2Entity,
     L2Triple,
-    TheoryAtom,
-    TheoryRelation,
-    TheoryNet,
+    PhaseItemRecord,
     SearchResult,
     SubGraph,
-    CandidatePair,
-    PhaseItemRecord,
+    TheoryAtom,
+    TheoryNet,
+    TheoryRelation,
 )
+
+
 class PipelineInput(BaseModel):
     """
     Entry point for the full pipeline.
@@ -66,7 +68,7 @@ class Phase4Output(BaseModel):
     theory_net: TheoryNet | None = None
     qbaf: Any = None
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, context: Any, /) -> None:
         if self.argument_relations and not self.theory_relations:
             object.__setattr__(self, "theory_relations", self.argument_relations)
         elif self.theory_relations and not self.argument_relations:
@@ -79,27 +81,31 @@ class Phase5Output(BaseModel):
 
 class PipelineResult(BaseModel):
     """Result envelope for running (part of) the pipeline."""
+
     # Use explicit models to ensure required fields (e.g., run_id) exist.
-    manifest: "RunManifest | None" = None
+    manifest: RunManifest | None = None
     artifacts: list[object] = Field(default_factory=list)
-    report: "RunReport | None" = None
+    report: RunReport | None = None
 
 
 __all__ = [
+    "CandidatePair",
+    "GlobalStructuralAnchor",
     "L1Chunk",
     "L1Document",
     "L2Entity",
     "L2Triple",
-    "TheoryAtom",
-    "TheoryRelation",
-    "TheoryNet",
-    "SearchResult",
-    "SubGraph",
-    "PipelineInput",
     "Phase1Output",
     "Phase2Output",
     "Phase3Output",
     "Phase4Output",
     "Phase5Output",
+    "PhaseItemRecord",
+    "PipelineInput",
     "PipelineResult",
+    "SearchResult",
+    "SubGraph",
+    "TheoryAtom",
+    "TheoryNet",
+    "TheoryRelation",
 ]

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
-import logging
+
 import igraph as ig
 import networkx as nx
 
@@ -20,6 +21,7 @@ from epistemetrics.graph.algorithms import (
     page_rank,
     weakly_connected_components,
 )
+
 from episteme_studio.domain.graph import GraphView, Layer
 from episteme_studio.domain.metrics import (
     AffectedEdgeDetail,
@@ -68,14 +70,19 @@ def compute_gradual_strength(
     edge_values: dict[str, float | str | None] = {}
     incomplete_inputs = 0
 
-    # Map nodes and track missing tau
+    # Map nodes and track missing tau (prioritizing modal_strength / base_score over legacy plausibility)
     tau_map: dict[str, float | None] = {}
     for node in graph.nodes:
-        if node.plausibility is None:
+        tau_val = (
+            node.modal_strength
+            if node.modal_strength is not None
+            else (node.base_score if node.base_score is not None else node.plausibility)
+        )
+        if tau_val is None:
             incomplete_inputs += 1
             tau_map[node.id] = None
         else:
-            tau_map[node.id] = float(node.plausibility)
+            tau_map[node.id] = float(tau_val)
 
     # Track incoming edges and missing phi
     incoming_edges: dict[str, list[tuple[str, float, int]]] = defaultdict(list)
@@ -126,8 +133,7 @@ def compute_gradual_strength(
 
             clamped = max(0.0, min(1.0, score))
             delta = abs(clamped - rho_current.get(nid, tau))
-            if delta > max_delta:
-                max_delta = delta
+            max_delta = max(max_delta, delta)
             rho_next[nid] = clamped
 
         rho_current = rho_next
@@ -149,7 +155,58 @@ def compute_gradual_strength(
         edge_values=edge_values,
         scale="continuous",
         domain=[0.0, 1.0],
-        computed_at=datetime.now(timezone.utc),
+        computed_at=datetime.now(UTC),
+        graph_version=graph.graph_version,
+        incomplete_inputs=incomplete_inputs,
+    )
+
+
+def compute_modal_strength(
+    graph: GraphView,
+    params: dict[str, Any] | None = None,
+) -> Overlay:
+    """Compute Propositional Modal Strength M(phi) overlay across nodes.
+
+    Extracts authorial certainty M(phi) = tau_0 from nodes resolved via
+    the ModalStrengthResolver (Structuralist syntax priors + System 1 Jev calibration).
+
+    Parameters
+    ----------
+    graph : GraphView
+        The graph snapshot view to analyze.
+    params : dict of str to Any, optional
+        Optional parameter overrides.
+
+    Returns
+    -------
+    Overlay
+        Computed modal strength overlay.
+    """
+    node_values: dict[str, float | str | None] = {}
+    edge_values: dict[str, float | str | None] = {}
+    incomplete_inputs = 0
+
+    for node in graph.nodes:
+        val = (
+            node.modal_strength
+            if node.modal_strength is not None
+            else (node.base_score if node.base_score is not None else node.plausibility)
+        )
+        if val is None:
+            incomplete_inputs += 1
+            node_values[node.id] = None
+        else:
+            node_values[node.id] = round(float(val), 4)
+
+    return Overlay(
+        id=f"overlay-modal_strength-{uuid4().hex[:8]}",
+        kind=OverlayKind.MODAL_STRENGTH,
+        params=params or {},
+        node_values=node_values,
+        edge_values=edge_values,
+        scale="continuous",
+        domain=[0.0, 1.0],
+        computed_at=datetime.now(UTC),
         graph_version=graph.graph_version,
         incomplete_inputs=incomplete_inputs,
     )
@@ -214,7 +271,7 @@ def compute_internal_correlation(
             edge_values={},
             scale="continuous",
             domain=[0.0, 1.0],
-            computed_at=datetime.now(timezone.utc),
+            computed_at=datetime.now(UTC),
             graph_version=graph.graph_version,
             incomplete_inputs=0,
         )
@@ -256,7 +313,7 @@ def compute_internal_correlation(
         edge_values={},
         scale="continuous",
         domain=[0.0, 1.0],
-        computed_at=datetime.now(timezone.utc),
+        computed_at=datetime.now(UTC),
         graph_version=graph.graph_version,
         incomplete_inputs=0,
     )
@@ -304,7 +361,7 @@ def compute_degree(
         edge_values={},
         scale="continuous",
         domain=[min_deg, max_deg],
-        computed_at=datetime.now(timezone.utc),
+        computed_at=datetime.now(UTC),
         graph_version=graph.graph_version,
         incomplete_inputs=0,
     )
@@ -338,7 +395,7 @@ def compute_component(
             edge_values={},
             scale="categorical",
             domain=[],
-            computed_at=datetime.now(timezone.utc),
+            computed_at=datetime.now(UTC),
             graph_version=graph.graph_version,
             incomplete_inputs=0,
         )
@@ -351,7 +408,7 @@ def compute_component(
         if node.id not in node_values:
             node_values[node.id] = "c_0"
 
-    domain_vals = sorted(list({str(v) for v in node_values.values() if v is not None}))
+    domain_vals = sorted({str(v) for v in node_values.values() if v is not None})
 
     return Overlay(
         id=f"overlay-component-{uuid4().hex[:8]}",
@@ -361,7 +418,7 @@ def compute_component(
         edge_values={},
         scale="categorical",
         domain=domain_vals,
-        computed_at=datetime.now(timezone.utc),
+        computed_at=datetime.now(UTC),
         graph_version=graph.graph_version,
         incomplete_inputs=0,
     )
@@ -400,7 +457,7 @@ def compute_pagerank(
             edge_values={},
             scale="continuous",
             domain=[0.0, 1.0],
-            computed_at=datetime.now(timezone.utc),
+            computed_at=datetime.now(UTC),
             graph_version=graph.graph_version,
             incomplete_inputs=0,
         )
@@ -452,7 +509,7 @@ def compute_pagerank(
         edge_values={},
         scale="continuous",
         domain=[min_val, max_val],
-        computed_at=datetime.now(timezone.utc),
+        computed_at=datetime.now(UTC),
         graph_version=graph.graph_version,
         incomplete_inputs=0,
     )
@@ -496,7 +553,7 @@ def compute_leiden(
             edge_values={},
             scale="categorical",
             domain=[],
-            computed_at=datetime.now(timezone.utc),
+            computed_at=datetime.now(UTC),
             graph_version=graph.graph_version,
             incomplete_inputs=0,
         )
@@ -535,7 +592,7 @@ def compute_leiden(
         node.id: str(membership[idx])
         for idx, node in enumerate(graph.nodes)
     }
-    unique_communities = sorted(list({str(v) for v in node_values.values() if v is not None}))
+    unique_communities = sorted({str(v) for v in node_values.values() if v is not None})
 
     return Overlay(
         id=f"overlay-leiden-{uuid4().hex[:8]}",
@@ -545,7 +602,7 @@ def compute_leiden(
         edge_values={},
         scale="categorical",
         domain=unique_communities,
-        computed_at=datetime.now(timezone.utc),
+        computed_at=datetime.now(UTC),
         graph_version=graph.graph_version,
         incomplete_inputs=0,
     )
@@ -592,7 +649,7 @@ def compute_local_gradual_strength(
     max_iterations = int(opts.get("iterations", 20))
     exec_id = execution_id or f"exec-{uuid4().hex[:8]}"
 
-    start_time = datetime.now(timezone.utc)
+    start_time = datetime.now(UTC)
     warnings: list[str] = []
 
     # Verify focus node exists
@@ -646,8 +703,7 @@ def compute_local_gradual_strength(
 
             src_id = edge.source
             hop = curr_dist + 1
-            if hop > max_hop_reached:
-                max_hop_reached = hop
+            max_hop_reached = max(max_hop_reached, hop)
 
             if src_id not in node_distance or hop < node_distance[src_id]:
                 node_distance[src_id] = hop
@@ -739,8 +795,7 @@ def compute_local_gradual_strength(
 
                 clamped = max(0.0, min(1.0, score))
                 delta = abs(clamped - rho.get(nid, tau))
-                if delta > max_delta:
-                    max_delta = delta
+                max_delta = max(max_delta, delta)
                 rho_next[nid] = clamped
 
             rho = rho_next
@@ -801,7 +856,7 @@ def compute_local_gradual_strength(
 
     # Build affected nodes with marginal contributions
     affected_nodes: dict[str, AffectedNodeDetail] = {}
-    for nid, node in sub_nodes.items():
+    for nid in sub_nodes:
         if nid == focus_node_id:
             affected_nodes[nid] = AffectedNodeDetail(
                 roles=["focus"],
@@ -810,7 +865,7 @@ def compute_local_gradual_strength(
             )
             continue
 
-        raw_roles = sorted(list(node_roles.get(nid, set())))
+        raw_roles = sorted(node_roles.get(nid, set()))
         if not raw_roles:
             # Fallback based on incoming edge type if path sign unresolved
             raw_roles = ["neutral"]
@@ -867,7 +922,7 @@ def compute_local_gradual_strength(
             )
         )
 
-    end_time = datetime.now(timezone.utc)
+    end_time = datetime.now(UTC)
     duration_ms = max(1, int((end_time - start_time).total_seconds() * 1000))
 
     return MetricResult(
@@ -919,7 +974,7 @@ def compute_tenability(
     """
     opts = params or {}
     theory_filter = opts.get("theory_id")
-    threshold = float(opts.get("tenability_threshold", 0.5))
+    float(opts.get("tenability_threshold", 0.5))
 
     node_values: dict[str, float | str | None] = {}
     edge_values: dict[str, float | str | None] = {}
@@ -967,7 +1022,7 @@ def compute_tenability(
         edge_values=edge_values,
         scale="continuous",
         domain=[0.0, 1.0],
-        computed_at=datetime.now(timezone.utc),
+        computed_at=datetime.now(UTC),
         graph_version=graph.graph_version,
         incomplete_inputs=incomplete_inputs,
     )

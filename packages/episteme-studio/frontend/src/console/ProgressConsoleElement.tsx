@@ -1,10 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { SubtaskProgress, useRunsStore } from "../store/runsStore";
-import {
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+import React, {useEffect, useState} from "react";
+import {SubtaskProgress, useRunsStore} from "../store/runsStore";
+import {CheckCircle2, ChevronDown, ChevronRight,} from "lucide-react";
 
 export interface ProgressConsoleElementProps {
   tasks?: SubtaskProgress[];

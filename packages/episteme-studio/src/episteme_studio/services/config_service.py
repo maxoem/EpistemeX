@@ -7,6 +7,13 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from episteme_studio.adapters.artifact_reader import ArtifactReader
+from episteme_pipeline.config import PipelineConfig
+from episteme_pipeline.prompts.providers import (
+    DefaultPromptProvider,
+    FilePromptProvider,
+    LangfusePromptProvider,
+)
+
 from episteme_studio.adapters.config_adapter import (
     DEFAULT_PHASE_ARTIFACT_ESTIMATES,
     PHASE_INDEX_TO_NAME,
@@ -21,12 +28,6 @@ from episteme_studio.domain.config import (
     LangfuseStatusResponse,
     PromptResolveResponse,
     ResolvedPromptItem,
-)
-from episteme_pipeline.config import PipelineConfig
-from episteme_pipeline.prompts.providers import (
-    DefaultPromptProvider,
-    FilePromptProvider,
-    LangfusePromptProvider,
 )
 from episteme_studio.settings import check_env_var_set, get_env_var
 
@@ -261,13 +262,13 @@ class ConfigService:
                 if prior_fp != after_fp:
                     changed_fps[key] = (prior_fp, after_fp)
 
-            has_schema_changes = any(k.startswith("graph_schema.") for k in patch.keys())
+            has_schema_changes = any(k.startswith("graph_schema.") for k in patch)
             if has_schema_changes and (earliest_invalid is None or earliest_invalid > 2):
                 earliest_invalid = 2
                 changed_fps["graph_schema"] = (None, "modified")
 
             if earliest_invalid is None and changed_fps:
-                phase_keys = [k for k in changed_fps.keys() if k.startswith("phase_")]
+                phase_keys = [k for k in changed_fps if k.startswith("phase_")]
                 if phase_keys:
                     earliest_invalid = min(int(k.split("_")[1]) for k in phase_keys)
                     phase_name = PHASE_INDEX_TO_NAME.get(earliest_invalid, f"Phase {earliest_invalid}")
@@ -301,7 +302,7 @@ class ConfigService:
             if before != after:
                 changed_fps[f"phase_{ordinal}"] = (before, after)
 
-        has_schema_changes = any(k.startswith("graph_schema.") for k in patch.keys())
+        has_schema_changes = any(k.startswith("graph_schema.") for k in patch)
 
         if not changed_fps and not has_schema_changes:
             return InvalidationPreview(
@@ -315,7 +316,7 @@ class ConfigService:
         # Find the earliest invalidated phase (schema changes affect Phase 2 onwards)
         if changed_fps:
             earliest_invalid = min(
-                int(key.split("_")[1]) for key in changed_fps.keys()
+                int(key.split("_")[1]) for key in changed_fps
             )
             if has_schema_changes and earliest_invalid > 2:
                 earliest_invalid = 2
@@ -427,7 +428,7 @@ class ConfigService:
                     gleaning_template=bundle.gleaning_template,
                     metadata=bundle.metadata or {},
                 )
-            except Exception as exc:
+            except Exception:
                 # Fallback to default bundle for this specific prompt
                 def_bundle = DefaultPromptProvider().get_bundle(name)
                 bundles[name] = ResolvedPromptItem(
@@ -459,7 +460,6 @@ class ConfigService:
         list of AvailableInputDoc
             Discovered markdown and text files suitable for pipeline execution.
         """
-        import os
         from pathlib import Path
 
         discovered: list[AvailableInputDoc] = []

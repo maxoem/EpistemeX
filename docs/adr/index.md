@@ -30,6 +30,9 @@ approach: [ADR 0008: Diátaxis Documentation Framework](0008-diataxis-documentat
 
 ### Recent Changes
 
+- **0020** - Propositional Modal Strength Resolver, Structuralist Syntax Priors, and Neuro-Symbolic Hybrid Estimation (2026-10-07)
+- **0019** - TypeSafe Jev Client Implementation, System 1 Adapters, and Decision Observability (2026-10-01)
+- **0018** - Core Decision Engine Architecture, Contracts, and Composition Root (2026-10-01)
 - **0017** - Explicit Batch Contracts, Cypher UNWIND Bulk I/O, and Decoupled Embedding Operations (2026-08-18)
 - **0016** - Phase 3 Within-Phase Checkpointing, Atomic Batch Recovery, and Poison-Pill Quarantine (2026-09-12)
 - **0015** - Post-Processing Theoretical Enrichment and Tenability Evaluation (2026-09-08)

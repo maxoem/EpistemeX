@@ -1,47 +1,35 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useRunsStore } from "../store/runsStore";
-import { useThemeStore } from "../store/themeStore";
-import { useGraphSettingsStore } from "../store/graphSettingsStore";
-import { useDiffStore } from "../store/diffStore";
-import { useViewOverlayStore } from "../store/viewOverlayStore";
-import { useMetricsStore } from "../store/metricsStore";
-import { useEngineSchema } from "../store/engineSettingsStore";
-import { StudioNode, StudioEdge } from "../api/types";
-import {
-  AlertCircle,
-  HardDrive,
-  Database,
-  Loader2,
-  Check,
-  Info,
-} from "lucide-react";
-import { UnmappedPredicatesPanel } from "../panels/UnmappedPredicatesPanel";
-import { NodeInspectorPanel } from "../panels/NodeInspectorPanel";
-import { MetricsDrawer } from "../panels/MetricsDrawer";
-import { NodeContextMenu } from "./NodeContextMenu";
-import { EdgeContextMenu } from "./EdgeContextMenu";
-import { EdgeInspectorModal } from "../panels/EdgeInspectorModal";
-import { EdgeInspectorPanel } from "../panels/EdgeInspectorPanel";
-import { GraphCanvasHud, LayoutType } from "./GraphCanvasHud";
-import { ConfigDiffDrawer } from "../panels/ConfigDiffDrawer";
-import { PolarityInversionModal } from "../panels/PolarityInversionModal";
-import { ViewOverlayDrawer } from "../panels/ViewOverlayDrawer";
-import { ResizablePanel } from "../panels/ResizablePanel";
-import {
-  exportGraphToJson,
-  exportGraphToGraphML,
-  exportGraphToGexf,
-  exportGraphImage,
-} from "./exportUtils";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
+import {useRunsStore} from "../store/runsStore";
+import {useThemeStore} from "../store/themeStore";
+import {useGraphSettingsStore} from "../store/graphSettingsStore";
+import {useDiffStore} from "../store/diffStore";
+import {useViewOverlayStore} from "../store/viewOverlayStore";
+import {useMetricsStore} from "../store/metricsStore";
+import {useEngineSchema} from "../store/engineSettingsStore";
+import {StudioEdge, StudioNode} from "../api/types";
+import {AlertCircle, Check, Database, HardDrive, Info, Loader2,} from "lucide-react";
+import {UnmappedPredicatesPanel} from "../panels/UnmappedPredicatesPanel";
+import {NodeInspectorPanel} from "../panels/NodeInspectorPanel";
+import {MetricsDrawer} from "../panels/MetricsDrawer";
+import {NodeContextMenu} from "./NodeContextMenu";
+import {EdgeContextMenu} from "./EdgeContextMenu";
+import {EdgeInspectorModal} from "../panels/EdgeInspectorModal";
+import {EdgeInspectorPanel} from "../panels/EdgeInspectorPanel";
+import {GraphCanvasHud, LayoutType} from "./GraphCanvasHud";
+import {ConfigDiffDrawer} from "../panels/ConfigDiffDrawer";
+import {PolarityInversionModal} from "../panels/PolarityInversionModal";
+import {ViewOverlayDrawer} from "../panels/ViewOverlayDrawer";
+import {ResizablePanel} from "../panels/ResizablePanel";
+import {exportGraphImage, exportGraphToGexf, exportGraphToGraphML, exportGraphToJson,} from "./exportUtils";
 
 // Modular Domain Hooks & Pure Styling Pipeline
-import { useGraphData } from "./hooks/useGraphData";
-import { useGraphFiltering } from "./hooks/useGraphFiltering";
-import { useG6Instance } from "./hooks/useG6Instance";
-import { useHullClustering } from "./hooks/useHullClustering";
-import { computeNodeStyle } from "./styling/nodeStyling";
-import { computeEdgeStyle } from "./styling/edgeStyling";
-import { NodeStyleContext, EdgeStyleContext } from "./styling/types";
+import {useGraphData} from "./hooks/useGraphData";
+import {useGraphFiltering} from "./hooks/useGraphFiltering";
+import {useG6Instance} from "./hooks/useG6Instance";
+import {useHullClustering} from "./hooks/useHullClustering";
+import {computeNodeStyle} from "./styling/nodeStyling";
+import {computeEdgeStyle} from "./styling/edgeStyling";
+import {EdgeStyleContext, NodeStyleContext} from "./styling/types";
 
 interface GraphCanvasProps {
   onNavigateToCypher?: () => void;

@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  resolvePhaseKey,
-  resolvePhaseConfig,
-  extractPromptVariables,
-  getAvailablePhaseTabs,
+    extractPromptVariables,
+    getAvailablePhaseTabs,
+    resolvePhaseConfig,
+    resolvePhaseKey,
 } from "./phaseConfigResolver.ts";
 
 const SAMPLE_CONFIG_SNAPSHOT = {

@@ -1,5 +1,5 @@
-import type { StudioNode } from "../../api/types.ts";
-import type { NodeStyleContext } from "./types.ts";
+import type {StudioNode} from "../../api/types.ts";
+import type {NodeStyleContext} from "./types.ts";
 
 export interface ComputedNodeStyle {
   fill: string;

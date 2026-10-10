@@ -1,0 +1,154 @@
+{
+  "@context": {
+    "str": "https://structuralism.org/ontology#",
+    "Episteme": "https://grund.ai/schema#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "specializes": {
+      "@id": "str:specializes",
+      "@type": "@id"
+    },
+    "hasPotentialModel": {
+      "@id": "str:hasPotentialModel",
+      "@type": "@id"
+    },
+    "hasActualModel": {
+      "@id": "str:hasActualModel",
+      "@type": "@id"
+    },
+    "hasPartialPotentialModel": {
+      "@id": "str:hasPartialPotentialModel",
+      "@type": "@id"
+    },
+    "hasConstraint": {
+      "@id": "str:hasConstraint",
+      "@type": "@id"
+    },
+    "hasParadigm": {
+      "@id": "str:hasParadigm",
+      "@type": "@id"
+    },
+    "hasIntendedApplication": {
+      "@id": "str:hasIntendedApplication",
+      "@type": "@id"
+    },
+    "presupposes": {
+      "@id": "str:presupposes",
+      "@type": "@id"
+    },
+    "attacks": {
+      "@id": "str:attacks",
+      "@type": "@id"
+    },
+    "textAnchor": "Episteme:textAnchor"
+  },
+  "@graph": [
+    {
+      "@id": "str:TE_DissF",
+      "@type": "TheoryElement",
+      "rdfs:label": "T(DissF) - Forced Compliance Domain Core"
+    },
+    {
+      "@id": "str:TE_DissF6",
+      "@type": "TheoryElement",
+      "rdfs:label": "T(DissF6) - Festinger-Carlsmith Forced Compliance Reward Model",
+      "str:specializes": "str:TE_DissF",
+      "str:hasPotentialModel": "str:MP_DissF6",
+      "str:hasActualModel": [
+        "str:M_DissF6_RatioLaw",
+        "str:M_DissF6_InverseRewardLaw",
+        "str:M_DissF6_Corroboration"
+      ],
+      "str:hasParadigm": "str:I0_Carlsmith1959"
+    },
+    {
+      "@id": "str:MP_DissF6",
+      "@type": "PotentialModel",
+      "rdfs:label": "M_p(DissF6) - Potential Models of Forced Compliance",
+      "str:formalTypification": "M_p(DissF6) = <S, X, notX, Reward, Dissonance, Consonance, OpinionChange>",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_carlsmith_1959",
+        "chunkId": "chunk_fc1959_ratio_law",
+        "charStart": 3723,
+        "charEnd": 4072,
+        "verbatimQuote": "In evaluating the total magnitude of dissonance, one must take account of both dissonances and consonances. Let us think of the sum of all the dissonances involving some particular cognition as \"D\" and the sum of all the consonances as \"C.\" Then we might think of the total magnitude of dissonance as being a function of \"D\" divided by \"D\" plus \"C.\""
+      }
+    },
+    {
+      "@id": "str:M_DissF6_RatioLaw",
+      "@type": "ActualModel",
+      "rdfs:label": "M(DissF6) - Dissonance Magnitude Ratio Law",
+      "str:formalAxiom": "diss_magnitude = f(D / (D + C))",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_carlsmith_1959",
+        "chunkId": "chunk_fc1959_ratio_law",
+        "charStart": 3723,
+        "charEnd": 4072,
+        "verbatimQuote": "In evaluating the total magnitude of dissonance, one must take account of both dissonances and consonances. Let us think of the sum of all the dissonances involving some particular cognition as \"D\" and the sum of all the consonances as \"C.\" Then we might think of the total magnitude of dissonance as being a function of \"D\" divided by \"D\" plus \"C.\""
+      }
+    },
+    {
+      "@id": "str:M_DissF6_InverseRewardLaw",
+      "@type": "ActualModel",
+      "rdfs:label": "M(DissF6) - Inverse Reward Prediction Law",
+      "str:formalAxiom": "forall s in S: reward(s) > reward_min -> d(opinion_change)/d(reward) < 0",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_carlsmith_1959",
+        "chunkId": "chunk_fc1959_inverse_reward_prediction",
+        "charStart": 5565,
+        "charEnd": 5703,
+        "verbatimQuote": "The prediction [from 3 and 4 above] is that the larger the reward given to the subject, the smaller will be the subsequent opinion change."
+      }
+    },
+    {
+      "@id": "str:M_DissF6_Corroboration",
+      "@type": "ActualModel",
+      "rdfs:label": "M(DissF6) - Experimental Corroboration Law",
+      "str:formalAxiom": "opinion_change(s | reward=1) > opinion_change(s | reward=20) >= opinion_change(s | control)",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_carlsmith_1959",
+        "chunkId": "chunk_fc1959_corroboration_finding",
+        "charStart": 23586,
+        "charEnd": 23892,
+        "verbatimQuote": "In short, when an S was induced, by offer of reward, to say something contrary to his private opinion, this private opinion tended to change so as to correspond more closely with what he had said. The greater the reward offered (beyond what was necessary to elicit the behavior) the smaller was the effect."
+      }
+    },
+    {
+      "@id": "str:I0_Carlsmith1959",
+      "@type": "Paradigm",
+      "rdfs:label": "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_carlsmith_1959",
+        "chunkId": "chunk_fc1959_procedure_summary",
+        "charStart": 31652,
+        "charEnd": 31983,
+        "verbatimQuote": "A laboratory experiment was designed to test these derivations. Subjects were subjected to a boring experience and then paid to tell someone that the experience had been interesting and enjoyable. The amount of money paid the subject was varied. The private opinions of the subjects concerning the experiences were then determined."
+      }
+    },
+    {
+      "@id": "str:TE_Alternative_Rehearsal",
+      "@type": "Hypothesis",
+      "rdfs:label": "Hypothesis: Janis-King Mental Rehearsal Alternative Explanation",
+      "str:attacks": "str:TE_DissF6",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_carlsmith_1959",
+        "chunkId": "chunk_fc1959_rehearsal_hypothesis",
+        "charStart": 28025,
+        "charEnd": 28417,
+        "verbatimQuote": "Specifically, as applied to our results, this alternative explanation would maintain that perhaps, for some reason, the Ss in the One Dollar condition worked harder at telling the waiting girl that the tasks were fun and enjoyable. That is, in the One Dollar condition they may have rehearsed it more mentally, thought up more ways of saying it, may have said it more convincingly, and so on."
+      }
+    },
+    {
+      "@id": "str:EV_Rehearsal_Defeated",
+      "@type": "Evidence",
+      "rdfs:label": "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal",
+      "str:attacks": "str:TE_Alternative_Rehearsal",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_carlsmith_1959",
+        "chunkId": "chunk_fc1959_rehearsal_defeated",
+        "charStart": 30394,
+        "charEnd": 30608,
+        "verbatimQuote": "We are certainly justified in concluding that the Ss in the One Dollar condition did not improvise more nor act more convincingly. Hence, the alternative explanation discussed above cannot account for the findings."
+      }
+    }
+  ]
+}

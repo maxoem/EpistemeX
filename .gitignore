@@ -24,10 +24,17 @@ opencode.json
 .pipeline_engine_settings.json
 **/logs/
 /evaluation/data/
+/evaluation/reports/
 packages/episteme-pipeline/evaluation/data/
 **/.cache/
 /.uv-cache/
 /.venv/
+
+# Stand-Off Annotation Corpora & Copyrighted Source Texts (Pattern A)
+datasets/*.md
+datasets/restricted/
+packages/episteme-pipeline/episteme_pipeline/evaluation/data/restricted/
+packages/episteme-pipeline/episteme_pipeline/evaluation/data/festinger_carlsmith_1959.txt
 
 # Python Build & Bytecode
 **/__pycache__/

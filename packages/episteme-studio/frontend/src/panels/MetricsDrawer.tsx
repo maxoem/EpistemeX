@@ -1,26 +1,25 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useMetricsStore, computeStyleConflicts, extractDescriptorDefaults } from "../store/metricsStore";
-import { StudioNode, MetricDescriptor, MetricRunInstance, MetricSizeStrength } from "../api/types";
-import { AlgorithmPicker } from "./AlgorithmPicker";
-import { CompactMultiSelect } from "./CompactMultiSelect";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
+import {computeStyleConflicts, extractDescriptorDefaults, useMetricsStore} from "../store/metricsStore";
+import {MetricRunInstance, MetricSizeStrength, StudioNode} from "../api/types";
+import {AlgorithmPicker} from "./AlgorithmPicker";
+import {CompactMultiSelect} from "./CompactMultiSelect";
 import {
-  Square,
-  RotateCcw,
-  AlertTriangle,
-  Activity,
-  ChevronDown,
-  ChevronRight,
-  ArrowLeft,
-  Loader2,
-  Search,
-  Boxes,
-  Copy,
-  Check,
-  Play,
-  Settings,
-  Plus,
-  Trash2,
-  X,
+    Activity,
+    AlertTriangle,
+    ArrowLeft,
+    Boxes,
+    Check,
+    ChevronDown,
+    ChevronRight,
+    Copy,
+    Loader2,
+    Play,
+    Plus,
+    RotateCcw,
+    Search,
+    Settings,
+    Square,
+    Trash2,
 } from "lucide-react";
 
 interface MetricsDrawerProps {

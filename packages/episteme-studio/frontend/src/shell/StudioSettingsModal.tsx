@@ -1,22 +1,21 @@
-import React, { useState, useEffect } from "react";
-import { useThemeStore, ThemePreference } from "../store/themeStore";
-import { useRunsStore } from "../store/runsStore";
-import { useGraphSettingsStore } from "../store/graphSettingsStore";
-import { useProjectSettingsStore } from "../store/projectSettingsStore";
+import React, {useEffect, useState} from "react";
+import {ThemePreference, useThemeStore} from "../store/themeStore";
+import {useRunsStore} from "../store/runsStore";
+import {useGraphSettingsStore} from "../store/graphSettingsStore";
+import {useProjectSettingsStore} from "../store/projectSettingsStore";
 import {
-  X,
-  Sun,
-  Moon,
-  Laptop,
-  Check,
-  HardDrive,
-  Database,
-  Cpu,
-  SlidersHorizontal,
-  Info,
-  Network,
-  RotateCcw,
-  BarChart3,
+    BarChart3,
+    Check,
+    Cpu,
+    Database,
+    HardDrive,
+    Laptop,
+    Moon,
+    Network,
+    RotateCcw,
+    SlidersHorizontal,
+    Sun,
+    X,
 } from "lucide-react";
 import {APP_CONFIG} from "@/config/app.ts";
 

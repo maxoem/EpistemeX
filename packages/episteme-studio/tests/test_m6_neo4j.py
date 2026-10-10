@@ -5,16 +5,10 @@ from __future__ import annotations
 import ast
 import asyncio
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from typing import Any, Self
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-from neo4j import RoutingControl
-from neo4j.exceptions import ClientError, TransientError
-
 from episteme_studio.adapters.neo4j_reader import Neo4jReader
-from episteme_studio.adapters.schema_mapper import SchemaMapper
 from episteme_studio.app import create_app
 from episteme_studio.domain.errors import Neo4jUnavailableError
 from episteme_studio.domain.graph import (
@@ -24,6 +18,9 @@ from episteme_studio.domain.graph import (
     reify_inferences,
 )
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
+from neo4j import RoutingControl
+from neo4j.exceptions import ClientError
 
 
 class _MockAsyncResult:
@@ -66,7 +63,7 @@ class _MockAsyncSession:
     def __init__(self, run_handler) -> None:
         self.run_handler = run_handler
 
-    async def __aenter__(self) -> "_MockAsyncSession":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:

@@ -1,22 +1,23 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { useDiffStore } from "../store/diffStore";
-import { api } from "../api/client";
-import { RunDetail } from "../api/types";
-import { resolvePhaseConfig } from "@/panels/phaseConfig";
-import { PHASE_REGISTRY } from "@/panels/phaseConfig";
-import { PhaseConfigDescriptor } from "./phaseConfig/types";
+import React, {useEffect, useMemo, useState} from "react";
+import {useDiffStore} from "../store/diffStore";
+import {api} from "../api/client";
+import {RunDetail} from "../api/types";
+import {PHASE_REGISTRY, resolvePhaseConfig} from "@/panels/phaseConfig";
+import {PhaseConfigDescriptor} from "./phaseConfig/types";
 import {
-  Sliders,
-  CheckCircle2,
-  AlertTriangle,
-  FileCode,
-  ArrowRight,
-  Filter,
-  BarChart3,
-  Network,
-  GitCompare,
+    AlertTriangle,
+    ArrowRight,
+    BarChart3,
+    CheckCircle2,
+    Cpu,
+    FileCode,
+    Filter,
+    Network,
+    Scale,
+    Sliders,
+    Zap,
 } from "lucide-react";
-import { ConfidenceKdeChart } from "./EpistemicCharts";
+import {ConfidenceKdeChart} from "./EpistemicCharts";
 
 interface PhaseConfigDiffViewProps {
   onSwitchToStaging?: () => void;
@@ -70,30 +71,329 @@ export const PhaseConfigDiffView: React.FC<PhaseConfigDiffViewProps> = ({
     };
   }, [baseRunId, targetRunId]);
 
-  const phaseDivergenceMap = useMemo(() => {
-    const map: Record<string, boolean> = {};
+  const phaseDivergenceInfoMap = useMemo(() => {
+    const map: Record<
+      string,
+      {
+        diverged: boolean;
+        reasons: string[];
+        hasDecisionEngineDivergence: boolean;
+        hasModalResolverDivergence: boolean;
+        hasRerankerDivergence: boolean;
+        componentDivergences: {
+          componentType: "decision_engine" | "modal_resolver" | "reranker" | "config" | "other";
+          label: string;
+          change: string;
+          description: string;
+        }[];
+      }
+    > = {};
+
+    const dePhases = new Set(["phase2", "phase3", "phase4", "phase5", "phase6"]);
+    const mrPhases = new Set(["phase2", "phase4", "phase6"]);
+    const rrPhases = new Set(["phase3", "phase3b", "phase4"]);
+
+    // Extract all fingerprints for Run A and Run B
+    const fpsA: Record<string, any> = {
+      ...(detailA?.fingerprints || {}),
+      ...(detailA?.method_fingerprints || {}),
+    };
+    const fpsB: Record<string, any> = {
+      ...(detailB?.fingerprints || {}),
+      ...(detailB?.method_fingerprints || {}),
+    };
+
+    // Global component hash divergence
+    const globalDeA = fpsA["decision_engine"];
+    const globalDeB = fpsB["decision_engine"];
+    const globalDeDiverged = Boolean(globalDeA && globalDeB && globalDeA !== globalDeB);
+
+    const globalMrA = fpsA["modal_resolver"];
+    const globalMrB = fpsB["modal_resolver"];
+    const globalMrDiverged = Boolean(globalMrA && globalMrB && globalMrA !== globalMrB);
+
+    const globalRrA = fpsA["relation_reranker"] || fpsA["reranker"] || fpsA["cross_encoder"];
+    const globalRrB = fpsB["relation_reranker"] || fpsB["reranker"] || fpsB["cross_encoder"];
+    const globalRrDiverged = Boolean(globalRrA && globalRrB && globalRrA !== globalRrB);
 
     for (const key of ORDERED_PHASE_KEYS) {
+      const reasons: string[] = [];
+      const componentDivergences: {
+        componentType: "decision_engine" | "modal_resolver" | "reranker" | "config" | "other";
+        label: string;
+        change: string;
+        description: string;
+      }[] = [];
+      let diverged = false;
+      let hasDe = false;
+      let hasMr = false;
+      let hasRr = false;
+
+      // 1. Direct phase fingerprint
       const fpA = detailA?.fingerprints?.[key];
       const fpB = detailB?.fingerprints?.[key];
-      let diverged = Boolean(fpA && fpB && fpA !== fpB);
-
-      if (!diverged && diffData?.config_diff) {
-        const mentionsKey = diffData.config_diff.some((item) => {
-          const pathLower = item.path.toLowerCase();
-          return (
-            pathLower.includes(key.toLowerCase()) ||
-            (key === "phase0" && (pathLower.startsWith("models.") || pathLower.startsWith("llm_model")))
-          );
-        });
-        if (mentionsKey) diverged = true;
+      if (fpA && fpB && fpA !== fpB) {
+        diverged = true;
+        reasons.push("Phase config hash diverged");
       }
 
-      map[key] = diverged;
+      // 2. Component method fingerprints specific to this phase
+      const phaseCompKeys = new Set([
+        ...Object.keys(fpsA).filter((k) => k.startsWith(`${key}.`)),
+        ...Object.keys(fpsB).filter((k) => k.startsWith(`${key}.`)),
+      ]);
+
+      for (const compKey of phaseCompKeys) {
+        const valA = fpsA[compKey];
+        const valB = fpsB[compKey];
+        if (valA && valB && valA !== valB) {
+          diverged = true;
+          const sub = compKey.slice(key.length + 1);
+          if (sub.includes("decision_engine")) {
+            hasDe = true;
+            reasons.push("Decision Engine component hash mismatch");
+            componentDivergences.push({
+              componentType: "decision_engine",
+              label: "Decision Engine",
+              change: `${String(valA).slice(0, 7)} ≠ ${String(valB).slice(0, 7)}`,
+              description: `Component hash changed: ${valA} vs ${valB}`,
+            });
+          } else if (sub.includes("modal_resolver")) {
+            hasMr = true;
+            reasons.push("Modal Resolver component hash mismatch");
+            componentDivergences.push({
+              componentType: "modal_resolver",
+              label: "Modal Resolver",
+              change: `${String(valA).slice(0, 7)} ≠ ${String(valB).slice(0, 7)}`,
+              description: `Component hash changed: ${valA} vs ${valB}`,
+            });
+          } else if (sub.includes("rerank") || sub.includes("cross_encoder")) {
+            hasRr = true;
+            reasons.push("Reranker component hash mismatch");
+            componentDivergences.push({
+              componentType: "reranker",
+              label: "Reranker",
+              change: `${String(valA).slice(0, 7)} ≠ ${String(valB).slice(0, 7)}`,
+              description: `Component hash changed: ${valA} vs ${valB}`,
+            });
+          } else {
+            reasons.push(`Component '${sub}' hash changed`);
+            componentDivergences.push({
+              componentType: "other",
+              label: sub,
+              change: `${String(valA).slice(0, 7)} ≠ ${String(valB).slice(0, 7)}`,
+              description: `Component hash changed: ${valA} vs ${valB}`,
+            });
+          }
+        }
+      }
+
+      // 3. Global component hash propagation
+      if (dePhases.has(key) && globalDeDiverged && !hasDe) {
+        diverged = true;
+        hasDe = true;
+        reasons.push("Global Decision Engine hash changed");
+        componentDivergences.push({
+          componentType: "decision_engine",
+          label: "Decision Engine",
+          change: `${String(globalDeA).slice(0, 7)} ≠ ${String(globalDeB).slice(0, 7)}`,
+          description: `Global Decision Engine hash changed: ${globalDeA} vs ${globalDeB}`,
+        });
+      }
+
+      if (mrPhases.has(key) && globalMrDiverged && !hasMr) {
+        diverged = true;
+        hasMr = true;
+        reasons.push("Global Modal Resolver hash changed");
+        componentDivergences.push({
+          componentType: "modal_resolver",
+          label: "Modal Resolver",
+          change: `${String(globalMrA).slice(0, 7)} ≠ ${String(globalMrB).slice(0, 7)}`,
+          description: `Global Modal Resolver hash changed: ${globalMrA} vs ${globalMrB}`,
+        });
+      }
+
+      if (rrPhases.has(key) && globalRrDiverged && !hasRr) {
+        diverged = true;
+        hasRr = true;
+        reasons.push("Global Reranker hash changed");
+        componentDivergences.push({
+          componentType: "reranker",
+          label: "Reranker",
+          change: `${String(globalRrA).slice(0, 7)} ≠ ${String(globalRrB).slice(0, 7)}`,
+          description: `Global Reranker hash changed: ${globalRrA} vs ${globalRrB}`,
+        });
+      }
+
+      // 4. Config Diff changes from diffData
+      if (diffData?.config_diff) {
+        for (const item of diffData.config_diff) {
+          const pathLower = item.path.toLowerCase();
+          const isDirect =
+            pathLower.includes(key.toLowerCase()) ||
+            (key === "phase0" && (pathLower.startsWith("models.") || pathLower.startsWith("llm_model")));
+
+          const isDeParam = dePhases.has(key) && pathLower.includes("decision_engine");
+          const isMrParam = mrPhases.has(key) && pathLower.includes("modal_resolver");
+          const isRrParam = rrPhases.has(key) && (pathLower.includes("rerank") || pathLower.includes("cross_encoder"));
+
+          if (isDeParam) {
+            diverged = true;
+            hasDe = true;
+            const paramLabel = item.path.split(".").pop() || item.path;
+            const reasonStr = `Decision Engine: ${paramLabel} changed (${String(item.value_a ?? "—")} → ${String(item.value_b ?? "—")})`;
+            if (!reasons.includes(reasonStr)) reasons.push(reasonStr);
+            componentDivergences.push({
+              componentType: "decision_engine",
+              label: `Decision Engine (${paramLabel})`,
+              change: `${String(item.value_a ?? "—")} → ${String(item.value_b ?? "—")}`,
+              description: `${item.path} changed from ${String(item.value_a)} to ${String(item.value_b)}`,
+            });
+          } else if (isMrParam) {
+            diverged = true;
+            hasMr = true;
+            const paramLabel = item.path.split(".").pop() || item.path;
+            const reasonStr = `Modal Resolver: ${paramLabel} changed (${String(item.value_a ?? "—")} → ${String(item.value_b ?? "—")})`;
+            if (!reasons.includes(reasonStr)) reasons.push(reasonStr);
+            componentDivergences.push({
+              componentType: "modal_resolver",
+              label: `Modal Resolver (${paramLabel})`,
+              change: `${String(item.value_a ?? "—")} → ${String(item.value_b ?? "—")}`,
+              description: `${item.path} changed from ${String(item.value_a)} to ${String(item.value_b)}`,
+            });
+          } else if (isRrParam) {
+            diverged = true;
+            hasRr = true;
+            const paramLabel = item.path.split(".").pop() || item.path;
+            const reasonStr = `Reranker: ${paramLabel} changed (${String(item.value_a ?? "—")} → ${String(item.value_b ?? "—")})`;
+            if (!reasons.includes(reasonStr)) reasons.push(reasonStr);
+            componentDivergences.push({
+              componentType: "reranker",
+              label: `Reranker (${paramLabel})`,
+              change: `${String(item.value_a ?? "—")} → ${String(item.value_b ?? "—")}`,
+              description: `${item.path} changed from ${String(item.value_a)} to ${String(item.value_b)}`,
+            });
+          } else if (isDirect) {
+            diverged = true;
+            const paramLabel = item.path.split(".").pop() || item.path;
+            const reasonStr = `Config: ${paramLabel} changed (${String(item.value_a ?? "—")} → ${String(item.value_b ?? "—")})`;
+            if (!reasons.includes(reasonStr)) reasons.push(reasonStr);
+            componentDivergences.push({
+              componentType: "config",
+              label: paramLabel,
+              change: `${String(item.value_a ?? "—")} → ${String(item.value_b ?? "—")}`,
+              description: `${item.path} changed from ${String(item.value_a)} to ${String(item.value_b)}`,
+            });
+          }
+        }
+      }
+
+      map[key] = {
+        diverged,
+        reasons,
+        hasDecisionEngineDivergence: hasDe,
+        hasModalResolverDivergence: hasMr,
+        hasRerankerDivergence: hasRr,
+        componentDivergences,
+      };
     }
 
     return map;
   }, [detailA, detailB, diffData]);
+
+  const phaseDivergenceMap = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    for (const key of ORDERED_PHASE_KEYS) {
+      map[key] = phaseDivergenceInfoMap[key]?.diverged ?? false;
+    }
+    return map;
+  }, [phaseDivergenceInfoMap]);
+
+  const selectedPhaseDivergence = useMemo(() => {
+    return phaseDivergenceInfoMap[selectedPhaseKey];
+  }, [phaseDivergenceInfoMap, selectedPhaseKey]);
+
+  const attachedComponents = useMemo(() => {
+    const list: {
+      name: string;
+      type: "decision_engine" | "modal_resolver" | "reranker" | "other";
+      hashA?: string;
+      hashB?: string;
+      diverged: boolean;
+    }[] = [];
+
+    const fpsA = { ...(detailA?.method_fingerprints || {}), ...(detailA?.fingerprints || {}) };
+    const fpsB = { ...(detailB?.method_fingerprints || {}), ...(detailB?.fingerprints || {}) };
+
+    const dePhases = new Set(["phase2", "phase3", "phase4", "phase5", "phase6"]);
+    const mrPhases = new Set(["phase2", "phase4", "phase6"]);
+    const rrPhases = new Set(["phase3", "phase3b", "phase4"]);
+
+    if (dePhases.has(selectedPhaseKey)) {
+      const hA = fpsA[`${selectedPhaseKey}.decision_engine`] || fpsA["decision_engine"];
+      const hB = fpsB[`${selectedPhaseKey}.decision_engine`] || fpsB["decision_engine"];
+      const div = Boolean((hA && hB && hA !== hB) || selectedPhaseDivergence?.hasDecisionEngineDivergence);
+      list.push({
+        name: "Decision Engine",
+        type: "decision_engine",
+        hashA: hA ? String(hA).slice(0, 8) : undefined,
+        hashB: hB ? String(hB).slice(0, 8) : undefined,
+        diverged: div,
+      });
+    }
+
+    if (mrPhases.has(selectedPhaseKey)) {
+      const hA = fpsA[`${selectedPhaseKey}.modal_resolver`] || fpsA["modal_resolver"];
+      const hB = fpsB[`${selectedPhaseKey}.modal_resolver`] || fpsB["modal_resolver"];
+      const div = Boolean((hA && hB && hA !== hB) || selectedPhaseDivergence?.hasModalResolverDivergence);
+      list.push({
+        name: "Modal Strength Resolver",
+        type: "modal_resolver",
+        hashA: hA ? String(hA).slice(0, 8) : undefined,
+        hashB: hB ? String(hB).slice(0, 8) : undefined,
+        diverged: div,
+      });
+    }
+
+    if (rrPhases.has(selectedPhaseKey)) {
+      const hA = fpsA[`${selectedPhaseKey}.relation_reranker`] || fpsA[`${selectedPhaseKey}.reranker`] || fpsA["relation_reranker"] || fpsA["reranker"];
+      const hB = fpsB[`${selectedPhaseKey}.relation_reranker`] || fpsB[`${selectedPhaseKey}.reranker`] || fpsB["relation_reranker"] || fpsB["reranker"];
+      const div = Boolean((hA && hB && hA !== hB) || selectedPhaseDivergence?.hasRerankerDivergence);
+      list.push({
+        name: "Relation Reranker",
+        type: "reranker",
+        hashA: hA ? String(hA).slice(0, 8) : undefined,
+        hashB: hB ? String(hB).slice(0, 8) : undefined,
+        diverged: div,
+      });
+    }
+
+    // Phase-specific method fingerprints
+    const allKeys = Array.from(new Set([...Object.keys(fpsA), ...Object.keys(fpsB)]));
+    for (const k of allKeys) {
+      if (
+        k.startsWith(`${selectedPhaseKey}.`) &&
+        !k.includes("decision_engine") &&
+        !k.includes("modal_resolver") &&
+        !k.includes("rerank")
+      ) {
+        const subName = k.slice(selectedPhaseKey.length + 1);
+        const hA = fpsA[k];
+        const hB = fpsB[k];
+        if (!list.some((item) => item.name === subName)) {
+          list.push({
+            name: subName,
+            type: "other",
+            hashA: hA ? String(hA).slice(0, 8) : undefined,
+            hashB: hB ? String(hB).slice(0, 8) : undefined,
+            diverged: Boolean(hA && hB && hA !== hB),
+          });
+        }
+      }
+    }
+
+    return list;
+  }, [detailA, detailB, selectedPhaseKey, selectedPhaseDivergence]);
 
   const descriptorA = useMemo<PhaseConfigDescriptor | null>(() => {
     if (!detailA) return null;
@@ -232,7 +532,31 @@ export const PhaseConfigDiffView: React.FC<PhaseConfigDiffViewProps> = ({
               <span>{meta.shortLabel}</span>
 
               {isDiverged ? (
-                <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" title="Configuration Diverged" />
+                <div className="flex items-center gap-1">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full bg-[#D97706]"
+                    title={
+                      phaseDivergenceInfoMap[key]?.reasons?.length
+                        ? `Diverged:\n• ${phaseDivergenceInfoMap[key].reasons.join("\n• ")}`
+                        : "Configuration Diverged"
+                    }
+                  />
+                  {phaseDivergenceInfoMap[key]?.hasDecisionEngineDivergence && (
+                    <span title="Decision Engine Diverged" className="inline-flex items-center">
+                      <Zap className="w-2.5 h-2.5 text-[#D97706]" />
+                    </span>
+                  )}
+                  {phaseDivergenceInfoMap[key]?.hasModalResolverDivergence && (
+                    <span title="Modal Resolver Diverged" className="inline-flex items-center">
+                      <Scale className="w-2.5 h-2.5 text-[#D97706]" />
+                    </span>
+                  )}
+                  {phaseDivergenceInfoMap[key]?.hasRerankerDivergence && (
+                    <span title="Reranker / Threshold Diverged" className="inline-flex items-center">
+                      <Sliders className="w-2.5 h-2.5 text-[#D97706]" />
+                    </span>
+                  )}
+                </div>
               ) : (
                 <span className="w-1.5 h-1.5 rounded-full bg-[#059669]/40" title="Configuration Identical" />
               )}
@@ -245,6 +569,73 @@ export const PhaseConfigDiffView: React.FC<PhaseConfigDiffViewProps> = ({
       <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
         {/* Left Sub-Panel: Structural Configuration Parameter Diff (4 cols / ~33%) */}
         <aside className="lg:col-span-4 flex flex-col h-full bg-app-surface border-r border-app-border overflow-hidden">
+          {/* Attached Component Fingerprints */}
+          {attachedComponents.length > 0 && (
+            <div className="border-b border-app-border bg-app-subtle/30 shrink-0">
+              <div className="h-8 px-4 flex items-center justify-between border-b border-app-border/60 bg-app-surface/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-app-muted flex items-center gap-1.5">
+                  <Cpu className="w-3 h-3 text-app-muted" />
+                  Component Hashes & Fingerprints
+                </span>
+                <span className="font-mono text-[10px] text-app-muted">
+                  {attachedComponents.length} component{attachedComponents.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              <div className="divide-y divide-app-border/60">
+                {attachedComponents.map((comp) => (
+                  <div
+                    key={comp.name}
+                    className={`p-2.5 transition-colors ${
+                      comp.diverged ? "bg-[#FFFDF5] dark:bg-amber-950/20" : "bg-transparent"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-[11px] font-medium text-app-text flex items-center gap-1.5 truncate">
+                        {comp.type === "decision_engine" ? (
+                          <Zap className="w-3 h-3 text-purple-500 shrink-0" />
+                        ) : comp.type === "modal_resolver" ? (
+                          <Scale className="w-3 h-3 text-indigo-500 shrink-0" />
+                        ) : comp.type === "reranker" ? (
+                          <Sliders className="w-3 h-3 text-blue-500 shrink-0" />
+                        ) : (
+                          <Cpu className="w-3 h-3 text-app-muted shrink-0" />
+                        )}
+                        <span className="truncate">{comp.name}</span>
+                      </span>
+                      {comp.diverged ? (
+                        <span className="inline-flex items-center gap-0.5 text-[9px] font-mono font-medium text-[#D97706] bg-[#FFFBEB] dark:bg-amber-950/40 px-1.5 py-0.2 rounded border border-[#FDE68A] dark:border-amber-800/40 shrink-0">
+                          <AlertTriangle className="w-2.5 h-2.5" />
+                          Diverged
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-0.5 text-[9px] font-mono text-[#059669] bg-[#ECFDF5] dark:bg-emerald-950/40 px-1.5 py-0.2 rounded border border-[#A7F3D0] dark:border-emerald-800/40 shrink-0">
+                          <CheckCircle2 className="w-2.5 h-2.5" />
+                          Identical
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono">
+                      <div className="bg-app-bg px-1.5 py-0.5 rounded border border-app-border truncate">
+                        <span className="text-[9px] text-[#2563EB] font-sans font-medium block">Baseline (A)</span>
+                        <span className="text-app-text">{comp.hashA ?? "default"}</span>
+                      </div>
+                      <div
+                        className={`px-1.5 py-0.5 rounded border truncate ${
+                          comp.diverged
+                            ? "bg-[#FFFBEB] dark:bg-amber-950/30 border-[#FDE68A] dark:border-amber-800/40 text-[#92400E] dark:text-amber-200"
+                            : "bg-app-bg border-app-border text-app-text"
+                        }`}
+                      >
+                        <span className="text-[9px] text-[#059669] font-sans font-medium block">Candidate (B)</span>
+                        <span>{comp.hashB ?? "default"}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="h-9 px-4 border-b border-app-border flex items-center justify-between bg-app-surface shrink-0">
             <span className="text-[11px] font-bold uppercase tracking-wider text-app-muted flex items-center gap-1.5">
               <FileCode className="w-3.5 h-3.5 text-app-muted" />
@@ -318,6 +709,45 @@ export const PhaseConfigDiffView: React.FC<PhaseConfigDiffViewProps> = ({
               <h2 className="text-base font-semibold text-app-text">
                 {currentPhaseMeta?.displayName ?? selectedPhaseKey}
               </h2>
+              {selectedPhaseDivergence?.diverged && (
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-[#D97706] bg-[#FFFBEB] dark:bg-amber-950/30 px-2 py-0.5 rounded border border-[#FDE68A] dark:border-amber-800/40">
+                    <AlertTriangle className="w-3 h-3" />
+                    <span>Diverged</span>
+                  </span>
+                  {selectedPhaseDivergence.hasDecisionEngineDivergence && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/30 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800/40">
+                      <Zap className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                      <span>Decision Engine Changed</span>
+                    </span>
+                  )}
+                  {selectedPhaseDivergence.hasModalResolverDivergence && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/30 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800/40">
+                      <Scale className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                      <span>Modal Resolver Changed</span>
+                    </span>
+                  )}
+                  {selectedPhaseDivergence.hasRerankerDivergence && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800/40">
+                      <Sliders className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                      <span>Reranker / Threshold Changed</span>
+                    </span>
+                  )}
+                  {selectedPhaseDivergence.componentDivergences
+                    .filter((c) => !["decision_engine", "modal_resolver", "reranker"].includes(c.componentType))
+                    .slice(0, 3)
+                    .map((c, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 text-[11px] font-mono text-app-muted bg-app-surface px-2 py-0.5 rounded border border-app-border"
+                        title={c.description}
+                      >
+                        <span>{c.label}:</span>
+                        <span className="text-app-text">{c.change}</span>
+                      </span>
+                    ))}
+                </div>
+              )}
             </div>
             <div className="text-right">
               <span className="font-mono text-xs text-app-muted block">Jaccard Node Similarity</span>

@@ -31,18 +31,16 @@ from episteme_pipeline.contracts.domain import (
     L2Entity,
     L2Triple,
     Measurement,
+    PhaseItemRecord,
     SearchResult,
     SubGraph,
     TenabilityResult,
     TheoryAtom,
     TheoryRelation,
-    PhaseItemRecord,
 )
 from episteme_pipeline.protocols.graph_store import (
     EntityGraph,
     FusionGraph,
-    GraphReader,
-    GraphWriter,
     PhaseCheckpointStore,
     ProcessingGraph,
     ProjectionGraph,
@@ -535,6 +533,49 @@ class _Neo4jWriteMixin:
         """
         await self.upsert_argument_components([component])
 
+    async def upsert_theory_relations(self, relations: list[TheoryRelation]) -> None:
+        """Upsert a batch of TheoryRelation edges into Neo4j between TheoryAtom nodes.
+
+        Parameters
+        ----------
+        relations : list of TheoryRelation
+            Domain relations to persist into the graph store.
+        """
+        if not relations:
+            return
+        rels_by_type: dict[str, list[dict]] = {}
+        for rel in relations:
+            rel_safe = _cypher_identifier(rel.relation_type, kind="relationship type")
+            props = rel.to_graph_properties()
+            rels_by_type.setdefault(rel_safe, []).append({
+                "from_id": rel.source_id,
+                "to_id": rel.target_id,
+                "props": _writable_props(props),
+            })
+
+        async with self._session() as session:
+            async with await session.begin_transaction() as tx:
+                for rel_type, batch_data in rels_by_type.items():
+                    query = f"""
+                    UNWIND $batch AS rel
+                    MATCH (a {{id: rel.from_id}})
+                    MATCH (b {{id: rel.to_id}})
+                    MERGE (a)-[r:`{rel_type}`]->(b)
+                    SET r += rel.props
+                    """
+                    await tx.run(query, batch=batch_data)
+                await tx.commit()
+
+    async def upsert_theory_relation(self, relation: TheoryRelation) -> None:
+        """Upsert a single TheoryRelation edge into Neo4j.
+
+        Parameters
+        ----------
+        relation : TheoryRelation
+            Domain relation to persist into the graph store.
+        """
+        await self.upsert_theory_relations([relation])
+
     async def upsert_communities(self, communities: list[dict]) -> None:
         if not communities:
             return
@@ -782,20 +823,25 @@ class _Neo4jReadMixin:
             "MATCH (a:TheoryAtom)-[r]->(b:TheoryAtom) "
             "RETURN a.id as source_id, type(r) as relation_type, b.id as target_id, "
             "coalesce(r.confidence, 1.0) as confidence, coalesce(r.scope, 'global') as scope, "
-            "r.weight as weight, r.tenability as tenability"
+            "r.weight as weight, r.tenability as tenability, properties(r) as props"
         )
         async with self._session() as session:
             result = await session.run(query)
             rows = await result.data()
         return [
-            TheoryRelation(
+            TheoryRelation.from_graph_properties(
                 source_id=row["source_id"],
-                target_id=row["target_id"],
                 relation_type=row["relation_type"],
-                confidence=row["confidence"],
-                scope=row["scope"],
-                weight=row.get("weight"),
-                tenability=row.get("tenability"),
+                target_id=row["target_id"],
+                properties={
+                    **row.get("props", {}),
+                    **{
+                        k: v
+                        for k, v in row.items()
+                        if k not in ("source_id", "relation_type", "target_id", "props")
+                        and v is not None
+                    },
+                },
             )
             for row in rows
         ]
@@ -968,11 +1014,26 @@ class _Neo4jReadMixin:
             result = await session.run(query, node_id=node_id, depth=depth)
             return await result.data()
 
-    async def vector_search(self, embedding: list[float], top_k: int, node_label: str | None = None) -> list[SearchResult]:
-        where_clause = ""
+    async def vector_search(
+        self,
+        embedding: list[float],
+        top_k: int,
+        node_label: str | None = None,
+        run_id: str | None = None,
+    ) -> list[SearchResult]:
+        where_conditions: list[str] = []
+        params: dict[str, Any] = {"index": "chunk_embedding", "k": top_k, "embedding": embedding}
         if node_label:
             safe_label = _cypher_identifier(node_label, kind="label")
-            where_clause = f"WHERE node:`{safe_label}` "
+            where_conditions.append(f"node:`{safe_label}`")
+        if run_id:
+            where_conditions.append("node.run_id = $run_id")
+            params["run_id"] = run_id
+
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions) + " "
+
         query = (
             "CALL db.index.vector.queryNodes($index, $k, $embedding) "
             "YIELD node, score "
@@ -982,7 +1043,7 @@ class _Neo4jReadMixin:
             "coalesce(node.name, node.id) as node_name"
         )
         async with self._session() as session:
-            result = await session.run(query, index="chunk_embedding", k=top_k, embedding=embedding)
+            result = await session.run(query, **params)
             rows = await result.data()
         return [
             SearchResult(node_id=row["node_id"], score=row["score"], node_label=row["node_label"], node_name=row["node_name"])

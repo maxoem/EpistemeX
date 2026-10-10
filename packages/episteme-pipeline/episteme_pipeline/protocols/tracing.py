@@ -6,9 +6,9 @@ but are kept for backward compatibility during the transition.
 """
 from __future__ import annotations
 
-from typing import Protocol, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Dict, Any, Optional
+from typing import Any, Protocol
 
 
 class TraceSpan(Protocol):
@@ -27,7 +27,7 @@ class TraceSink(Protocol):
         self,
         *,
         name: str,
-        input: Optional[Dict[str, Any]] = None,
+        input: dict[str, Any] | None = None,
         enabled: bool = True,
     ) -> Iterator[TraceSpan]:
         """Create a tracing span."""
@@ -42,7 +42,7 @@ class NoOpTraceSink:
         self,
         *,
         name: str,
-        input: Optional[Dict[str, Any]] = None,
+        input: dict[str, Any] | None = None,
         enabled: bool = True,
     ) -> Iterator[TraceSpan]:
         """No-op span context manager."""
@@ -54,4 +54,3 @@ class _NoOpSpan:
     
     def update(self, **kwargs: Any) -> None:
         """Ignore span updates."""
-        pass

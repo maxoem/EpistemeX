@@ -13,16 +13,15 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel
 
 from episteme_pipeline.config import StructuredDecodingStrategy
-from episteme_pipeline.events.bus import EventEmitter, NoOpEventEmitter
+from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.events.context import get_event_emitter
 from episteme_pipeline.events.models import LLMDurationMeasured, LLMGenerationCompleted
 from episteme_pipeline.llm.metadata import LLMResponseMetadataExtractor
-
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +65,7 @@ class BaseOutputDecodingStrategyHandler(ABC):
     @abstractmethod
     async def decode(
         self,
-        adapter: "LlamaIndexStructuredLLMAdapter",
+        adapter: LlamaIndexStructuredLLMAdapter,
         output_cls: type[ModelT],
         prompt_bundle: Any,
         fallback_behavior: Any,
@@ -96,7 +95,7 @@ class DirectDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
 
     async def decode(
         self,
-        adapter: "LlamaIndexStructuredLLMAdapter",
+        adapter: LlamaIndexStructuredLLMAdapter,
         output_cls: type[ModelT],
         prompt_bundle: Any,
         fallback_behavior: Any,
@@ -180,7 +179,7 @@ class NlToFormatDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
 
     async def decode(
         self,
-        adapter: "LlamaIndexStructuredLLMAdapter",
+        adapter: LlamaIndexStructuredLLMAdapter,
         output_cls: type[ModelT],
         prompt_bundle: Any,
         fallback_behavior: Any,
@@ -205,7 +204,7 @@ class TriggerTokenDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
 
     async def decode(
         self,
-        adapter: "LlamaIndexStructuredLLMAdapter",
+        adapter: LlamaIndexStructuredLLMAdapter,
         output_cls: type[ModelT],
         prompt_bundle: Any,
         fallback_behavior: Any,
@@ -225,14 +224,14 @@ class TriggerTokenDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
 
 
 # Decoding Strategy Registry
-DECODING_STRATEGY_HANDLERS: Dict[str, BaseOutputDecodingStrategyHandler] = {
+DECODING_STRATEGY_HANDLERS: dict[str, BaseOutputDecodingStrategyHandler] = {
     "direct_constrained": DirectDecodingStrategyHandler(),
     "nl_to_format": NlToFormatDecodingStrategyHandler(),
     "trigger_token": TriggerTokenDecodingStrategyHandler(),
 }
 
 
-async def execute_nl_to_format(
+async def execute_nl_to_format[ModelT: BaseModel](
     llm: StructuredLLM,
     output_cls: type[ModelT],
     prompt_bundle: Any,

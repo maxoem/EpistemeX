@@ -1,8 +1,9 @@
 import React from "react";
-import { GitRailNode } from "./types";
-import { EPISTEMIC_TAXONOMY } from "../epistemicTheme";
-import { getShortStageLabel } from "../stageModel";
-import { ChevronDown, ChevronRight, Boxes } from "lucide-react";
+import {GitRailNode} from "./types";
+import {EPISTEMIC_TAXONOMY} from "../epistemicTheme";
+import {getShortStageLabel} from "../stageModel";
+import {ChevronDown, ChevronRight, Zap} from "lucide-react";
+import {useRunsStore} from "../../store/runsStore";
 
 interface GitRailRowProps {
   node: GitRailNode;
@@ -57,6 +58,9 @@ export const GitRailRow: React.FC<GitRailRowProps> = ({
   const durationStr = formatDuration(duration);
   const yieldCount =
     node.phaseRecord?.artifact_count ?? node.aggregateArtifactCount ?? 0;
+
+  const selectedRunDetail = useRunsStore((s) => s.selectedRunDetail);
+  const phaseDecision = selectedRunDetail?.decision_metrics?.by_phase?.[node.key.toLowerCase()];
 
   const shortTitle = node.isCompound
     ? node.phaseName
@@ -130,6 +134,17 @@ export const GitRailRow: React.FC<GitRailRowProps> = ({
         >
           {shortTitle}
         </span>
+
+        {/* Dual-Process System 1 Triage Badge */}
+        {phaseDecision && phaseDecision.total_decisions > 0 && (
+          <span
+            className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-mono font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0"
+            title={`${phaseDecision.fast_exit_count} Fast-Exits, ${phaseDecision.llm_escalation_count} LLM Escalations (${Math.round((phaseDecision.fast_exit_count / Math.max(phaseDecision.total_decisions, 1)) * 100)}% S1)`}
+          >
+            <Zap className="w-2 h-2 text-emerald-500" />
+            <span>{Math.round((phaseDecision.fast_exit_count / Math.max(phaseDecision.total_decisions, 1)) * 100)}% S1</span>
+          </span>
+        )}
 
         {/* Epistemic Delta / Yield delta in micro-typography strictly reserved for secondary deltas */}
         {node.deltaLabel && (

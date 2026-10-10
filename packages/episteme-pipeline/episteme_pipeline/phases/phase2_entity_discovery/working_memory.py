@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Sequence
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from episteme_pipeline.contracts.domain import L1Chunk, GlobalStructuralAnchor
+from episteme_pipeline.contracts.domain import GlobalStructuralAnchor, L1Chunk
 from episteme_pipeline.protocols.memory import EvictionSignal, WorkingMemoryState
 
 logger = logging.getLogger(__name__)
@@ -87,10 +87,10 @@ class JsonPatchWorkingMemoryState(WorkingMemoryState):
             if isinstance(new_refs, list):
                 self._state["unresolved_references"] = new_refs[-10:]
 
-        if "current_argument_branch" in state_delta and state_delta["current_argument_branch"]:
+        if state_delta.get("current_argument_branch"):
             self._state["current_argument_branch"] = str(state_delta["current_argument_branch"])
 
-        if "transitional_summary" in state_delta and state_delta["transitional_summary"]:
+        if state_delta.get("transitional_summary"):
             self._state["transitional_summary"] = str(state_delta["transitional_summary"])
 
     def reset(self, transitional_summary: str | None = None) -> None:
@@ -164,10 +164,10 @@ class PydanticWorkingMemoryState(WorkingMemoryState):
         if "unresolved_references" in state_delta and isinstance(state_delta["unresolved_references"], list):
             current_dict["unresolved_references"] = state_delta["unresolved_references"][-10:]
 
-        if "current_argument_branch" in state_delta and state_delta["current_argument_branch"]:
+        if state_delta.get("current_argument_branch"):
             current_dict["current_argument_branch"] = str(state_delta["current_argument_branch"])
 
-        if "transitional_summary" in state_delta and state_delta["transitional_summary"]:
+        if state_delta.get("transitional_summary"):
             current_dict["transitional_summary"] = str(state_delta["transitional_summary"])
 
         self._schema = WorkingMemorySchema(**current_dict)
@@ -305,9 +305,7 @@ class EpisodicEvictionHandler:
         parent_header = meta.get("parent_header") or meta.get("header")
 
         structural_boundary = False
-        if self._last_section_path is not None and section_path != self._last_section_path:
-            structural_boundary = True
-        elif self._last_parent_header is not None and parent_header != self._last_parent_header:
+        if self._last_section_path is not None and section_path != self._last_section_path or self._last_parent_header is not None and parent_header != self._last_parent_header:
             structural_boundary = True
 
         # Update last tracked structural coordinates

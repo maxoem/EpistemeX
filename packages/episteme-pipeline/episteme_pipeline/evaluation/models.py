@@ -8,14 +8,17 @@ Evaluation results are always linked to concrete runs, artifacts, and datasets.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
+from episteme_pipeline.evaluation.comparison import RunComparison
+
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class EvaluationLevel(StrEnum):
@@ -71,6 +74,8 @@ class EvaluationResult(BaseModel):
     notes: dict[str, str] = Field(default_factory=dict)
     outcome: EvaluationOutcome = EvaluationOutcome.INCONCLUSIVE
     evaluated_at: datetime = Field(default_factory=utc_now)
+    reliability_diagram: list[dict[str, Any]] | None = None
+    robustness_factor: float | None = None
 
 
 class EvaluationReport(BaseModel):
@@ -93,5 +98,6 @@ class EvaluationReport(BaseModel):
     schema_version: str | None = None
     pipeline_version: str | None = None
     results_by_level: dict[str, list[EvaluationResult]] = Field(default_factory=dict)
+    pairwise_comparisons: list[RunComparison] = Field(default_factory=list)
     summary: str = ""
     created_at: datetime = Field(default_factory=utc_now)

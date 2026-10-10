@@ -3,8 +3,8 @@
 from unittest.mock import MagicMock
 
 from episteme_pipeline.artifacts.builders import (
-    build_document_artifact,
     build_chunk_artifact,
+    build_document_artifact,
 )
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
@@ -12,13 +12,16 @@ from episteme_pipeline.artifacts.execution import (
     Phase3ArtifactsView,
     Phase4ArtifactsView,
 )
-from episteme_pipeline.artifacts.invalidate import ArtifactDependencyGraph, _compare_dag_structures
-from episteme_pipeline.config import PipelineConfig, ExecutionConfig
+from episteme_pipeline.artifacts.invalidate import (
+    ArtifactDependencyGraph,
+    _compare_dag_structures,
+)
+from episteme_pipeline.config import ExecutionConfig, PipelineConfig
 from episteme_pipeline.contracts.domain import (
-    TheoryAtom,
-    TheoryRelation,
     L1Chunk,
     L1Document,
+    TheoryAtom,
+    TheoryRelation,
 )
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline

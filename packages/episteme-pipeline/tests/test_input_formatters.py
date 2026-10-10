@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 
 from episteme_pipeline.contracts.domain import L2Entity, L2Triple, SubGraph
-from episteme_pipeline.prompts.input_formatters import InputFormatStrategy, format_subgraph_envelope
+from episteme_pipeline.prompts.input_formatters import (
+    InputFormatStrategy,
+    format_subgraph_envelope,
+)
 
 
 def test_format_subgraph_envelope_json() -> None:

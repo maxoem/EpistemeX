@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { Database, X, Check, Trash2, Key, Loader2, Info, AlertTriangle } from "lucide-react";
-import { useCredentialStore, RunNeo4jCredentials } from "../store/credentialStore";
-import { api } from "../api/client";
-import { useRunsStore } from "../store/runsStore";
+import React, {useEffect, useMemo, useState} from "react";
+import {AlertTriangle, Check, Database, Info, Loader2, Trash2, X} from "lucide-react";
+import {RunNeo4jCredentials, useCredentialStore} from "../store/credentialStore";
+import {api} from "../api/client";
+import {useRunsStore} from "../store/runsStore";
 
 interface RunCredentialsModalProps {
   isOpen: boolean;

@@ -59,14 +59,17 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 from dotenv import load_dotenv
-
 from episteme_pipeline.runs.reporting import format_text
 
 if TYPE_CHECKING:
     from episteme_pipeline.events import EventEmitter
     from episteme_pipeline.runs.models import ExecutionResult
 
-from episteme_pipeline.events import SimpleEventEmitter, RichProgressObserver, LangfuseObserver
+from episteme_pipeline.events import (
+    LangfuseObserver,
+    RichProgressObserver,
+    SimpleEventEmitter,
+)
 from episteme_pipeline.runs.observability import run_observability_context
 
 _SOURCE_ROOT = Path(__file__).resolve().parents[1]
@@ -78,7 +81,7 @@ async def run_pipeline(
     source_paths: list[str] | None = None,
     *,
     event_emitter: EventEmitter | None = None,
-    run_id: str = None,
+    run_id: str | None = None,
 ) -> ExecutionResult:
     """Run a complete 7-runner pipeline pass using LiteLLM, CrossEncoder, and Neo4j.
 

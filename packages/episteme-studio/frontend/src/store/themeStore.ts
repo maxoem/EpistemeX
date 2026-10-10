@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import {create} from "zustand";
 
 export type Theme = "dark" | "light";
 export type ThemePreference = "dark" | "light" | "system";

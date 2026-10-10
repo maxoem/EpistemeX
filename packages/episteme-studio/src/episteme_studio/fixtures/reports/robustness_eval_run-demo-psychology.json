@@ -1,0 +1,75 @@
+{
+  "evaluation_id": "stress_eval_run-demo-psychology",
+  "run_id": "eval_run-demo-psychology",
+  "overall_rdf": 0.22,
+  "is_resilient": false,
+  "baseline_f1": 0.9,
+  "worst_case_f1": 0.702,
+  "breakdown_by_perturbation": {
+    "typo_insertion": [
+      {
+        "noise_level": 0.05,
+        "f1_score": 0.8618,
+        "mcc_score": 0.1,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.0424
+      },
+      {
+        "noise_level": 0.1,
+        "f1_score": 0.8235,
+        "mcc_score": 0.1,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.085
+      },
+      {
+        "noise_level": 0.2,
+        "f1_score": 0.747,
+        "mcc_score": 0.1,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.17
+      }
+    ],
+    "synonym_replacement": [
+      {
+        "noise_level": 0.05,
+        "f1_score": 0.8505,
+        "mcc_score": 0.1,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.055
+      },
+      {
+        "noise_level": 0.1,
+        "f1_score": 0.801,
+        "mcc_score": 0.1,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.11
+      },
+      {
+        "noise_level": 0.2,
+        "f1_score": 0.702,
+        "mcc_score": 0.1,
+        "poset_dag_valid": true,
+        "rdf_delta": 0.22
+      }
+    ]
+  },
+  "chart_series": {
+    "noise_levels": [
+      0.05,
+      0.1,
+      0.2
+    ],
+    "series": {
+      "typo_insertion": [
+        0.8618,
+        0.8235,
+        0.747
+      ],
+      "synonym_replacement": [
+        0.8505,
+        0.801,
+        0.702
+      ]
+    }
+  }
+}

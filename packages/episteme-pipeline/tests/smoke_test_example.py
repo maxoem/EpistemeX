@@ -2,6 +2,7 @@
 """Smoke test for the example script to verify all imports work."""
 
 import sys
+
 sys.path.insert(0, '..')
 
 def test_imports():
@@ -10,9 +11,13 @@ def test_imports():
     print("Testing example script imports...")
     
     # Core imports from example 
-    from episteme_pipeline.runs.reporting import format_text, format_markdown, format_json
+    from episteme_pipeline.runs.models import RunManifest, RunReport, RunStatus
     from episteme_pipeline.runs.observability import LangfusePublisher
-    from episteme_pipeline.runs.models import RunManifest, RunStatus, RunReport
+    from episteme_pipeline.runs.reporting import (
+        format_json,
+        format_markdown,
+        format_text,
+    )
     
     # Verify functions exist
     assert callable(format_text)

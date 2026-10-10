@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class RunStatus(StrEnum):
@@ -58,6 +58,7 @@ class RunManifest(BaseModel):
     phase_records: list[RunPhaseRecord] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     parent_run_id: str | None = None
+    decision_metrics: dict[str, object] | None = None
 
 
 class ResumePoint(BaseModel):

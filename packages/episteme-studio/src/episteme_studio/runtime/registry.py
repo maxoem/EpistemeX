@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 from episteme_studio.domain.errors import ProblemDetail
@@ -54,7 +55,7 @@ class RunHandle(BaseModel):
 
     run_id: str
     status: RunStatus = RunStatus.PLANNED
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     completed_at: datetime | None = None
     phase_records: list[PhaseStatus] = Field(default_factory=list)
@@ -86,7 +87,7 @@ class RunHandle(BaseModel):
 
         duration = None
         if self.started_at:
-            end = self.completed_at or datetime.now(timezone.utc)
+            end = self.completed_at or datetime.now(UTC)
             duration = max(0.0, (end - self.started_at).total_seconds())
 
         total_arts = sum(p.artifact_count for p in self.phase_records) or sum(self.artifact_counts_by_kind.values())
@@ -134,6 +135,7 @@ class RunHandle(BaseModel):
             graph_schema=self.config_snapshot.get("graph_schema", {}),
             config_snapshot=self.config_snapshot,
             fingerprints={},
+            method_fingerprints={},
             unresolved_count=0,
             failure=self.failure,
         )

@@ -1,31 +1,19 @@
-import React, { useEffect, useState } from "react";
-import { useRunsStore } from "../store/runsStore";
-import { useProjectSettingsStore } from "../store/projectSettingsStore";
-import { AppLogo } from "./AppLogo";
-import { StudioSettingsModal } from "./StudioSettingsModal";
-import { ProjectSettingsModal } from "./ProjectSettingsModal";
-import { RunCredentialsModal } from "../panels/RunCredentialsModal";
-import { GlobalCommandOmnibar } from "./GlobalCommandOmnibar";
-import { ConnectionProvenancePill } from "./ConnectionProvenancePill";
-import {
-  Activity,
-  ChevronDown,
-  Cpu,
-  Database,
-  Laptop,
-  Layers,
-  Moon,
-  Network,
-  Settings,
-  Sliders,
-  Sun,
-  Terminal,
-} from "lucide-react";
+import React, {useEffect, useState} from "react";
+import {useRunsStore} from "../store/runsStore";
+import {useProjectSettingsStore} from "../store/projectSettingsStore";
+import {AppLogo} from "./AppLogo";
+import {StudioSettingsModal} from "./StudioSettingsModal";
+import {ProjectSettingsModal} from "./ProjectSettingsModal";
+import {RunCredentialsModal} from "../panels/RunCredentialsModal";
+import {GlobalCommandOmnibar} from "./GlobalCommandOmnibar";
+import {ConnectionProvenancePill} from "./ConnectionProvenancePill";
+import {Activity, Cpu, Layers, Network, Sliders, Terminal,} from "lucide-react";
 
 interface AppShellProps {
   children: React.ReactNode;
-  activeTab: "runs" | "graph" | "cypher" | "config" | "engine";
-  setActiveTab: (tab: "runs" | "graph" | "cypher" | "config" | "engine") => void;
+  activeTab: "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation";
+  setActiveTab: (tab: "runs" | "graph" | "cypher" | "config" | "engine" | "evaluation") => void;
+  contextSelector?: React.ReactNode;
 }
 
 const NAV_TABS = [
@@ -40,6 +28,12 @@ const NAV_TABS = [
     label: "Corpus",
     title: "Corpus & Pipeline Runs: Artifact Provenance & Execution Manifests",
     icon: Layers,
+  },
+  {
+    id: "evaluation" as const,
+    label: "Evaluation",
+    title: "Evaluation Workbench: Benchmark Verification, Calibration & Alignment",
+    icon: Activity,
   },
   {
     id: "cypher" as const,
@@ -61,7 +55,12 @@ const NAV_TABS = [
   },
 ];
 
-export const AppShell: React.FC<AppShellProps> = ({ children, activeTab, setActiveTab }) => {
+export const AppShell: React.FC<AppShellProps> = ({
+  children,
+  activeTab,
+  setActiveTab,
+  contextSelector,
+}) => {
   const { capabilities, selectedRunDetail, searchableNodes, setFocusedNodeId } = useRunsStore();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCredsModalOpen, setIsCredsModalOpen] = useState(false);
@@ -141,8 +140,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activeTab, setActi
           />
         </div>
 
-        {/* Right: The Unified Context (4px status dot + Primary · Researcher) */}
-        <div className="flex items-center justify-end shrink-0">
+        {/* Right: The Unified Context & Global State Selectors */}
+        <div className="flex items-center justify-end shrink-0 gap-3">
+          {contextSelector && (
+            <div className="flex items-center">{contextSelector}</div>
+          )}
           <ConnectionProvenancePill
             onOpenCreds={() => setIsCredsModalOpen(true)}
             onOpenSettings={() => setIsSettingsOpen(true)}

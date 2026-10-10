@@ -8,21 +8,24 @@ schema validation, graph commits, and emitted global-relation artifacts.
 from __future__ import annotations
 
 import pytest
-
-from episteme_pipeline.artifacts.execution import ArtifactExecutionContext, Phase2ArtifactsView
+from episteme_pipeline.artifacts.execution import (
+    ArtifactExecutionContext,
+    Phase2ArtifactsView,
+)
 from episteme_pipeline.config import Phase3Config
-from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
 from episteme_pipeline.contracts.phase_contracts import (
+    CandidatePair,
     L2Entity,
     L2Triple,
-    SubGraph,
-    PipelineInput,
-    CandidatePair,
     PhaseItemRecord,
+    PipelineInput,
+    SubGraph,
 )
 from episteme_pipeline.phases.phase3_global_relations import Phase3Runner
 from episteme_pipeline.phases.phase3_global_relations.models import GlobalRelationOutput
-from episteme_pipeline.phases.phase3_global_relations.tag_extractor import TAGRelationExtractor
+from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
+    TAGRelationExtractor,
+)
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.runs.models import RunManifest
@@ -255,7 +258,6 @@ async def test_phase3_resumes_and_skips_premarked_pairs(graph_store, phase2_view
     class MockExtractor(GlobalRelationExtractor):
         async def extract_pair(self, pair, store, schema):
             extracted_pairs.append(pair)
-            return None
 
     runner = make_runner(graph_store, schema, extractor=MockExtractor())
     result = await runner.run(phase2_view, make_context())
@@ -277,7 +279,7 @@ async def test_phase3_atomic_commit_per_batch(graph_store, phase2_view, schema):
         source_chunk_id="chunk_a",
     )
     runner = make_runner(graph_store, schema, extractor=StubGlobalExtractor([triple]))
-    result = await runner.run(phase2_view, make_context())
+    await runner.run(phase2_view, make_context())
 
     # Check that triple was committed
     committed = await graph_store.get_all_entity_triples()
@@ -306,10 +308,9 @@ async def test_phase3_poison_pill_quarantine(graph_store, phase2_view, schema):
             if "e_kant" in pair.key and "e_space" in pair.key:
                 raise ValueError("Poison pill token limit exceeded")
             succeeded_calls += 1
-            return None
 
     runner = make_runner(graph_store, schema, extractor=SelectiveCrashingExtractor())
-    result = await runner.run(three_view, make_context())
+    await runner.run(three_view, make_context())
 
     # The poison pill pair was quarantined as failed
     pair = CandidatePair(entity_a=phase2_view.entities[0], entity_b=phase2_view.entities[1])

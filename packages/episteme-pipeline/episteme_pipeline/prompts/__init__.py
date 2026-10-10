@@ -1,10 +1,3 @@
-from episteme_pipeline.prompts.models import StructuredPromptBundle
-from episteme_pipeline.protocols.prompts import PromptProvider
-from episteme_pipeline.prompts.providers import (
-    DefaultPromptProvider,
-    LangfusePromptProvider,
-    FilePromptProvider,
-)
 from episteme_pipeline.prompts.default_prompts import (
     ACC_DIRECT_PROMPT,
     ACC_FORMAT_PROMPT,
@@ -13,6 +6,12 @@ from episteme_pipeline.prompts.default_prompts import (
     ARC_DIRECT_PROMPT,
     ARC_FORMAT_PROMPT,
     ARC_REASONING_PROMPT,
+    DECISION_BORDERLINE_MERGE_CRITERIA,
+    DECISION_BORDERLINE_MERGE_QUESTION,
+    DECISION_CANONICAL_ELECTION_QUESTION,
+    DECISION_GLEANING_QUESTION,
+    DECISION_THEORY_FUSION_CRITERIA,
+    DECISION_THEORY_FUSION_QUESTION,
     ENTITY_LINKING_PROMPT,
     ENTITY_SYNTHESIS_PROMPT,
     GLOBAL_RELATION_DIRECT_PROMPT,
@@ -22,14 +21,17 @@ from episteme_pipeline.prompts.default_prompts import (
     NER_FORMAT_PROMPT,
     NER_GLEANING_PROMPT,
     NER_REASONING_PROMPT,
+    PAIR_GATING_DECISION_PROMPT,
 )
+from episteme_pipeline.prompts.models import StructuredPromptBundle
+from episteme_pipeline.prompts.providers import (
+    DefaultPromptProvider,
+    FilePromptProvider,
+    LangfusePromptProvider,
+)
+from episteme_pipeline.protocols.prompts import PromptProvider
 
 __all__ = [
-    "StructuredPromptBundle",
-    "PromptProvider",
-    "DefaultPromptProvider",
-    "LangfusePromptProvider",
-    "FilePromptProvider",
     "ACC_DIRECT_PROMPT",
     "ACC_FORMAT_PROMPT",
     "ACC_REASONING_PROMPT",
@@ -37,6 +39,12 @@ __all__ = [
     "ARC_DIRECT_PROMPT",
     "ARC_FORMAT_PROMPT",
     "ARC_REASONING_PROMPT",
+    "DECISION_BORDERLINE_MERGE_CRITERIA",
+    "DECISION_BORDERLINE_MERGE_QUESTION",
+    "DECISION_CANONICAL_ELECTION_QUESTION",
+    "DECISION_GLEANING_QUESTION",
+    "DECISION_THEORY_FUSION_CRITERIA",
+    "DECISION_THEORY_FUSION_QUESTION",
     "ENTITY_LINKING_PROMPT",
     "ENTITY_SYNTHESIS_PROMPT",
     "GLOBAL_RELATION_DIRECT_PROMPT",
@@ -46,4 +54,10 @@ __all__ = [
     "NER_FORMAT_PROMPT",
     "NER_GLEANING_PROMPT",
     "NER_REASONING_PROMPT",
+    "PAIR_GATING_DECISION_PROMPT",
+    "DefaultPromptProvider",
+    "FilePromptProvider",
+    "LangfusePromptProvider",
+    "PromptProvider",
+    "StructuredPromptBundle",
 ]

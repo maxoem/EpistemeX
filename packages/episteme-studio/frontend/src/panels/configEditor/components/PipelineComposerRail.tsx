@@ -1,18 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, {useEffect, useState} from "react";
 import {
-  Layers,
-  Plus,
-  Compass,
-  Settings,
-  GripVertical,
-  Sparkles,
-  MoreHorizontal,
-  Copy,
-  RotateCcw,
-  X,
+    Compass,
+    Copy,
+    GripVertical,
+    Layers,
+    MoreHorizontal,
+    Plus,
+    RotateCcw,
+    Settings,
+    Sparkles,
+    X,
+    Zap,
 } from "lucide-react";
-import { PHASE_REGISTRY, isPhaseMandatory } from "../../phaseConfig/phaseRegistry";
-import { PhaseExecutionStatusMap } from "../phaseExecution";
+import {isPhaseMandatory, PHASE_REGISTRY} from "../../phaseConfig/phaseRegistry";
+import {PhaseExecutionStatusMap} from "../phaseExecution";
 
 interface PipelineComposerRailProps {
   selectedPhaseKey: string;
@@ -32,6 +33,9 @@ interface PipelineComposerRailProps {
   handleTogglePhase: (phaseKey: string, nextActive: boolean) => void;
   handleResetStageOverrides: (phaseKey: string) => void;
   setIsPhaseDrawerOpen: (open: boolean) => void;
+  hasDecisionOverrides?: boolean;
+  decisionProvider?: string;
+  decisionFastExitThreshold?: number;
 }
 
 const STAGE_ROLE_MAP: Record<string, string> = {
@@ -64,6 +68,9 @@ export const PipelineComposerRail: React.FC<PipelineComposerRailProps> = ({
   handleTogglePhase,
   handleResetStageOverrides,
   setIsPhaseDrawerOpen,
+  hasDecisionOverrides = false,
+  decisionProvider = "laya",
+  decisionFastExitThreshold = 0.92,
 }) => {
   const [contextMenuKey, setContextMenuKey] = useState<string | null>(null);
 
@@ -196,6 +203,48 @@ export const PipelineComposerRail: React.FC<PipelineComposerRailProps> = ({
                   </span>
                 )}
                 {selectedPhaseKey === "phase0" && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block shrink-0" />
+                )}
+              </div>
+            </button>
+
+            {/* Decision Engine (Jev) */}
+            <button
+              type="button"
+              onClick={() => setSelectedPhaseKey("decision_engine")}
+              className={`w-full px-2.5 py-2 rounded text-left transition-colors cursor-pointer relative group flex items-center justify-between gap-2 ${
+                selectedPhaseKey === "decision_engine"
+                  ? "bg-app-subtle text-app-heading font-medium"
+                  : "hover:bg-app-subtle/50 text-app-muted hover:text-app-heading"
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-5 flex justify-center shrink-0">
+                  <Zap className="w-3.5 h-3.5 text-app-muted" />
+                </div>
+                <div className="min-w-0">
+                  <div
+                    className={`text-xs truncate ${
+                      selectedPhaseKey === "decision_engine"
+                        ? "font-semibold text-app-heading"
+                        : "text-app-text font-normal"
+                    }`}
+                  >
+                    Decision Engine (Jev)
+                  </div>
+                  <div className="text-[11px] text-app-muted font-sans truncate">
+                    Provider: {decisionProvider.toUpperCase()} · τ: {(decisionFastExitThreshold * 100).toFixed(0)}%
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                {hasDecisionOverrides && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold border border-blue-500/20">
+                    Overridden
+                  </span>
+                )}
+                {selectedPhaseKey === "decision_engine" && (
                   <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block shrink-0" />
                 )}
               </div>

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from episteme_pipeline.artifacts.models import (
-    TheoryAtomArtifact,
-    TheoryRelationArtifact,
     ArtifactEnvelope,
     ArtifactKind,
     ArtifactProvenance,
@@ -14,8 +12,17 @@ from episteme_pipeline.artifacts.models import (
     GlobalRelationArtifact,
     LinkedEntityArtifact,
     LocalRelationArtifact,
+    TheoryAtomArtifact,
+    TheoryRelationArtifact,
 )
-from episteme_pipeline.contracts.domain import L1Chunk, L1Document, L2Entity, L2Triple, TheoryAtom, TheoryRelation
+from episteme_pipeline.contracts.domain import (
+    L1Chunk,
+    L1Document,
+    L2Entity,
+    L2Triple,
+    TheoryAtom,
+    TheoryRelation,
+)
 from episteme_pipeline.runs.fingerprints import stable_fingerprint
 
 
@@ -184,7 +191,24 @@ def build_argument_relation_artifact(relation: TheoryRelation, *, run_id: str, p
         phase_name=phase_name,
         method=method,
         provenance=ArtifactProvenance(upstream_artifact_ids=[f"artifact::{relation.source_id}", f"artifact::{relation.target_id}"]),
-        payload=TheoryRelationArtifact(relation_id=relation_id, source_component_id=relation.source_id, target_component_id=relation.target_id, relation_type=relation.relation_type, scope=relation.scope, confidence=relation.confidence, weight=relation.weight),
+        payload=TheoryRelationArtifact(
+            relation_id=relation_id,
+            source_component_id=relation.source_id,
+            target_component_id=relation.target_id,
+            relation_type=relation.relation_type,
+            scope=relation.scope,
+            confidence=relation.confidence,
+            weight=relation.weight,
+            class_probability=relation.class_probability,
+            empirical_accuracy=relation.empirical_accuracy,
+            modal_strength=relation.modal_strength,
+            effective_weight=relation.effective_weight,
+            decision_engine_provider=relation.decision_engine_provider,
+            tenability=relation.tenability,
+            calibrated_confidence=relation.calibrated_confidence,
+            weight_support=relation.weight_support,
+            weight_attack=relation.weight_attack,
+        ),
         dependency_fingerprint=stable_fingerprint({"relation_id": relation_id, "relation_type": relation.relation_type, "scope": relation.scope}),
     )
 

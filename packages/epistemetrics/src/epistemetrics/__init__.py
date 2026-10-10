@@ -1,5 +1,4 @@
-"""
-Epistemetrics: Formal Theory Graph Evaluation and Epistemic Metrics.
+"""Epistemetrics: Formal Theory Graph Evaluation and Epistemic Metrics.
 
 A sovereign Python library for structural, argumentation, and epistemic
 evaluation of scientific theory graphs.
@@ -7,6 +6,10 @@ evaluation of scientific theory graphs.
 
 from __future__ import annotations
 
+from epistemetrics.analysis import (
+    EpistemicReport,
+    analyze_theory_graph,
+)
 from epistemetrics.core.exceptions import (
     AdapterError,
     AlgorithmConvergenceError,
@@ -21,7 +24,33 @@ from epistemetrics.core.exceptions import (
 from epistemetrics.core.models import (
     AlgorithmExecutionMode,
     CentralityResult,
+    EpistemicStatus,
+    NodeType,
     PartitionResult,
+    RelationType,
+    TheoryEdge,
+    TheoryNode,
+)
+from epistemetrics.epistemic import (
+    DynamicsEvaluationResult,
+    GradualSemanticsModel,
+    ModelComponentEvaluationResult,
+    PosetEvaluationResult,
+    QBAFComparisonResult,
+    QBAFGradualSemanticsSolver,
+    QBAFSolverResult,
+    ReductionEvaluationResult,
+    WeightedQuadraticEnergySolver,
+    WeightNormalizationMode,
+    calculate_anchor_iou,
+    compare_qbaf_weight_modes,
+    evaluate_diachronic_dynamics,
+    evaluate_intertheoretical_links,
+    evaluate_model_components,
+    evaluate_specialization_poset,
+    solve_continuous_qbaf,
+    solve_qbaf_gradual_semantics,
+    verify_hard_core_invariance,
 )
 from epistemetrics.graph.algorithms import (
     AdaptiveAlgorithmsEngine,
@@ -33,32 +62,66 @@ from epistemetrics.graph.algorithms import (
     page_rank,
     weakly_connected_components,
 )
+from epistemetrics.graph.theory_graph import TheoryGraph
 
 __version__ = "0.1.0"
 
 __all__ = [
+    # Exceptions
+    "AdapterError",
     # Engines
     "AdaptiveAlgorithmsEngine",
-    "GraphAlgorithmsEngine",
-    "NetworkXAlgorithmsEngine",
-    # Algorithm entry points
-    "betweenness_centrality",
-    "eigenvector_centrality",
-    "louvain_communities",
-    "page_rank",
-    "weakly_connected_components",
+    "AlgorithmConvergenceError",
+    "AlgorithmError",
     # Result models
     "AlgorithmExecutionMode",
     "CentralityResult",
-    "PartitionResult",
-    # Exceptions
-    "AdapterError",
-    "AlgorithmConvergenceError",
-    "AlgorithmError",
     "DomainValidationError",
+    # Diachronic dynamics & degeneration
+    "DynamicsEvaluationResult",
     "EpistemetricsError",
+    "EpistemicReport",
+    "EpistemicStatus",
     "GDSNotAvailableError",
     "GDSProjectionError",
+    # QBAF Gradual Semantics
+    "GradualSemanticsModel",
+    "GraphAlgorithmsEngine",
     "GraphNotFoundError",
+    # Epistemic model component evaluation
+    "ModelComponentEvaluationResult",
+    "NetworkXAlgorithmsEngine",
+    "NodeType",
+    "PartitionResult",
+    # Poset specialization hierarchies
+    "PosetEvaluationResult",
+    "QBAFComparisonResult",
+    "QBAFGradualSemanticsSolver",
+    "QBAFSolverResult",
+    # Intertheoretical link prediction
+    "ReductionEvaluationResult",
+    "RelationType",
     "RepositoryConnectionError",
+    "TheoryEdge",
+    # Core domain graph and analysis
+    "TheoryGraph",
+    "TheoryNode",
+    "WeightNormalizationMode",
+    "WeightedQuadraticEnergySolver",
+    "analyze_theory_graph",
+    # Algorithm entry points
+    "betweenness_centrality",
+    "calculate_anchor_iou",
+    "compare_qbaf_weight_modes",
+    "eigenvector_centrality",
+    "evaluate_diachronic_dynamics",
+    "evaluate_intertheoretical_links",
+    "evaluate_model_components",
+    "evaluate_specialization_poset",
+    "louvain_communities",
+    "page_rank",
+    "solve_continuous_qbaf",
+    "solve_qbaf_gradual_semantics",
+    "verify_hard_core_invariance",
+    "weakly_connected_components",
 ]

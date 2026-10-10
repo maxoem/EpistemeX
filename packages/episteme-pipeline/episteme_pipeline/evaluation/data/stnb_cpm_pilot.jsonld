@@ -1,0 +1,285 @@
+{
+  "@context": {
+    "str": "https://structuralism.org/ontology#",
+    "Episteme": "https://grund.ai/schema#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "specializes": {
+      "@id": "str:specializes",
+      "@type": "@id"
+    },
+    "reducesTo": {
+      "@id": "str:reducesTo",
+      "@type": "@id"
+    },
+    "hasActualModel": {
+      "@id": "str:hasActualModel",
+      "@type": "@id"
+    },
+    "hasPotentialModel": {
+      "@id": "str:hasPotentialModel",
+      "@type": "@id"
+    },
+    "hasPartialPotentialModel": {
+      "@id": "str:hasPartialPotentialModel",
+      "@type": "@id"
+    },
+    "hasConstraint": {
+      "@id": "str:hasConstraint",
+      "@type": "@id"
+    },
+    "hasParadigm": {
+      "@id": "str:hasParadigm",
+      "@type": "@id"
+    },
+    "presupposes": {
+      "@id": "str:presupposes",
+      "@type": "@id"
+    },
+    "empiricallyEquivalent": {
+      "@id": "str:empiricallyEquivalent",
+      "@type": "@id"
+    },
+    "textAnchor": "Episteme:textAnchor"
+  },
+  "@graph": [
+    {
+      "@id": "str:T_CPM_Base",
+      "@type": "TheoryElement",
+      "rdfs:label": "Classical Particle Mechanics (Base)",
+      "str:hasPotentialModel": "str:Mp_CPM",
+      "str:hasActualModel": [
+        "str:M_CPM_Newton1",
+        "str:M_CPM_Newton2",
+        "str:M_CPM_Newton3"
+      ],
+      "str:hasPartialPotentialModel": "str:Mpp_CPM",
+      "str:hasConstraint": [
+        "str:GC_Mass",
+        "str:GC_Force"
+      ],
+      "str:hasParadigm": [
+        "str:I0_PlanetaryOrbits",
+        "str:I0_TerrestrialFreeFall"
+      ]
+    },
+    {
+      "@id": "str:T_CPM_Grav",
+      "@type": "TheoryElement",
+      "rdfs:label": "CPM with Gravitational Force",
+      "str:specializes": "str:T_CPM_Base",
+      "str:hasPotentialModel": "str:Mp_Grav",
+      "str:hasActualModel": "str:M_CPM_Grav",
+      "str:hasParadigm": "str:I0_PlanetaryOrbits"
+    },
+    {
+      "@id": "str:T_CPM_Harmonic",
+      "@type": "TheoryElement",
+      "rdfs:label": "CPM with Hookean Force",
+      "str:specializes": "str:T_CPM_Base",
+      "str:hasPotentialModel": "str:Mp_Harmonic",
+      "str:hasActualModel": "str:M_CPM_Hooke",
+      "str:hasParadigm": "str:I0_HarmonicSpring"
+    },
+    {
+      "@id": "str:T_CPM_Free",
+      "@type": "TheoryElement",
+      "rdfs:label": "CPM Free Particle Systems",
+      "str:specializes": "str:T_CPM_Base",
+      "str:hasPotentialModel": "str:Mp_CPM",
+      "str:hasActualModel": "str:M_CPM_Free",
+      "str:hasParadigm": "str:I0_TerrestrialFreeFall"
+    },
+    {
+      "@id": "str:Mp_CPM",
+      "@type": "PotentialModel",
+      "rdfs:label": "M_p(CPM) Potential Models",
+      "str:formalAxiom": "Mp(CPM) = <P, T, s, m, f> where s: P x T -> R3, m: P -> R+, f: P x T x N -> R3",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_def_1",
+        "charStart": 223,
+        "charEnd": 319,
+        "verbatimQuote": "The quantity of matter is the measure of the same, arising from its density and bulk conjunctly."
+      }
+    },
+    {
+      "@id": "str:Mp_Grav",
+      "@type": "PotentialModel",
+      "rdfs:label": "M_p(CPM_Grav) Gravitational Potential Models",
+      "str:formalAxiom": "Mp(Grav) = <P, T, s, m, f, G> where G in R+",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_def_8",
+        "charStart": 1002,
+        "charEnd": 1143,
+        "verbatimQuote": "The accelerative quantity of a centripetal force is the measure of the same, proportional to the velocity which it generates in a given time."
+      }
+    },
+    {
+      "@id": "str:Mp_Harmonic",
+      "@type": "PotentialModel",
+      "rdfs:label": "M_p(CPM_Harmonic) Hookean Potential Models",
+      "str:formalAxiom": "Mp(Harmonic) = <P, T, s, m, f, k> where k in R+",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_def_5",
+        "charStart": 869,
+        "charEnd": 984,
+        "verbatimQuote": "A centripetal force is that by which bodies are drawn or impelled, or any way tend, towards a point as to a centre."
+      }
+    },
+    {
+      "@id": "str:Mpp_CPM",
+      "@type": "PartialPotentialModel",
+      "rdfs:label": "M_pp(CPM) Kinematic Observational Base",
+      "str:formalAxiom": "Mpp(CPM) = <P, T, s> where s: P x T -> R3",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_scholium_space_time",
+        "charStart": 1188,
+        "charEnd": 1691,
+        "verbatimQuote": "Absolute, true, and mathematical time, of itself, and from its own nature flows equably without regard to anything external, and by another name is called duration: relative, apparent, and common time, is some sensible and external (whether accurate or unequable) measure of duration by the means of motion, which is commonly used instead of true time; such as an hour, a day, a month, a year. Absolute space, in its own nature, without regard to anything external, remains always similar and immovable."
+      }
+    },
+    {
+      "@id": "str:M_CPM_Newton1",
+      "@type": "ActualModel",
+      "rdfs:label": "M(CPM) Newton's First Law",
+      "str:formalAxiom": "forall p in P, t in T: (sum_i f(p, t, i) = 0) -> d2/dt2(s(p, t)) = 0",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_law_1",
+        "charStart": 1906,
+        "charEnd": 2059,
+        "verbatimQuote": "Every body continues in its state of rest, or of uniform motion in a right line, unless it is compelled to change that state by forces impressed upon it."
+      }
+    },
+    {
+      "@id": "str:M_CPM_Newton2",
+      "@type": "ActualModel",
+      "rdfs:label": "M(CPM) Newton's Second Law",
+      "str:formalAxiom": "forall p in P, t in T: m(p) * d2/dt2(s(p, t)) = sum_i f(p, t, i)",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_law_2",
+        "charStart": 2068,
+        "charEnd": 2225,
+        "verbatimQuote": "The alteration of motion is ever proportional to the motive force impressed; and is made in the direction of the right line in which that force is impressed."
+      }
+    },
+    {
+      "@id": "str:M_CPM_Newton3",
+      "@type": "ActualModel",
+      "rdfs:label": "M(CPM) Newton's Third Law (Action-Reaction)",
+      "str:formalAxiom": "forall p, p' in P, t in T: f(p, p', t) = -f(p', p, t)",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_law_3",
+        "charStart": 2235,
+        "charEnd": 2395,
+        "verbatimQuote": "To every action there is always opposed an equal reaction: or the mutual actions of two bodies upon each other are always equal, and directed to contrary parts."
+      }
+    },
+    {
+      "@id": "str:M_CPM_Grav",
+      "@type": "ActualModel",
+      "rdfs:label": "M(CPM_Grav) Universal Gravitation Law",
+      "str:formalAxiom": "forall p1, p2 in P: f_G(p1, p2) = -G * (m(p1) * m(p2) / ||s(p1) - s(p2)||^2) * r_hat",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_prop_74",
+        "charStart": 3319,
+        "charEnd": 3625,
+        "verbatimQuote": "The force of gravity towards the whole planet arises from and is compounded of the forces of gravity towards all its parts. Every particle of matter attracts every other particle with a force proportional to the product of their masses and inversely proportional to the square of the distance between them."
+      }
+    },
+    {
+      "@id": "str:M_CPM_Hooke",
+      "@type": "ActualModel",
+      "rdfs:label": "M(CPM_Harmonic) Hooke's Law",
+      "str:formalAxiom": "forall p in P: f_H(p) = -k * s(p)",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_prop_10",
+        "charStart": 3099,
+        "charEnd": 3284,
+        "verbatimQuote": "If a body revolves in an ellipse; it is required to find the law of the centripetal force tending to the centre of the ellipse. The force is as the distance of the body from the centre."
+      }
+    },
+    {
+      "@id": "str:M_CPM_Free",
+      "@type": "ActualModel",
+      "rdfs:label": "M(CPM_Free) Free Particle Equation",
+      "str:formalAxiom": "forall p in P, t in T: m(p) * d2/dt2(s(p, t)) = 0",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_def_3",
+        "charStart": 463,
+        "charEnd": 692,
+        "verbatimQuote": "The vis insita, or innate force of matter, is a power of resisting, by which every body, as much as in it lies, endeavours to persevere in its present state, whether it be of rest, or of moving uniformly forwards in a right line."
+      }
+    },
+    {
+      "@id": "str:GC_Mass",
+      "@type": "Constraint",
+      "rdfs:label": "GC(Mass) Cross-Model Mass Invariance",
+      "str:formalAxiom": "forall p in P, forall x, x' in I: m_x(p) = m_x'(p)",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_rule_3",
+        "charStart": 3910,
+        "charEnd": 4392,
+        "verbatimQuote": "The qualities of bodies, which admit neither intensification nor remission of degrees, and which are found to belong to all bodies within the reach of our experiments, are to be esteemed the universal qualities of all bodies whatsoever. The extension, hardness, impenetrability, mobility, and inertia of the whole, result from the extension, hardness, impenetrability, mobility, and inertia of the parts; and therefore we conclude that every particle of matter is possessed of mass."
+      }
+    },
+    {
+      "@id": "str:GC_Force",
+      "@type": "Constraint",
+      "rdfs:label": "GC(Force) Internal Action-Reaction Conservation",
+      "str:formalAxiom": "forall p, p' in P: f(p, p') + f(p', p) = 0",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_cor_3",
+        "charStart": 2593,
+        "charEnd": 2833,
+        "verbatimQuote": "The quantity of motion, which is obtained by taking the sum of the motions directed towards the same parts, and the difference of those that are directed towards contrary parts, suffers no change from the actions of bodies among themselves."
+      }
+    },
+    {
+      "@id": "str:I0_PlanetaryOrbits",
+      "@type": "Paradigm",
+      "rdfs:label": "I_0(PlanetaryOrbits) Keplerian Celestial Systems",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_prop_1",
+        "charStart": 2884,
+        "charEnd": 3072,
+        "verbatimQuote": "The areas which revolving bodies describe by radii drawn to an immovable centre of force do lie in the same immovable planes, and are proportional to the times in which they are described."
+      }
+    },
+    {
+      "@id": "str:I0_TerrestrialFreeFall",
+      "@type": "Paradigm",
+      "rdfs:label": "I_0(TerrestrialFreeFall) Terrestrial Projectile Applications",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_free_fall",
+        "charStart": 3672,
+        "charEnd": 3855,
+        "verbatimQuote": "By the force of gravity, bodies falling in vacuo accelerate uniformly, and their motions follow the parabolic trajectory of free projectiles under constant gravitational acceleration."
+      }
+    },
+    {
+      "@id": "str:I0_HarmonicSpring",
+      "@type": "Paradigm",
+      "rdfs:label": "I_0(HarmonicSpring) Mechanical Oscillators",
+      "Episteme:textAnchor": {
+        "sourceDocId": "newton_principia_1687",
+        "chunkId": "chunk_principia_prop_10",
+        "charStart": 3099,
+        "charEnd": 3284,
+        "verbatimQuote": "If a body revolves in an ellipse; it is required to find the law of the centripetal force tending to the centre of the ellipse. The force is as the distance of the body from the centre."
+      }
+    }
+  ]
+}

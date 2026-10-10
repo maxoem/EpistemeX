@@ -107,7 +107,7 @@ flowchart TD
 
 ```bash
 # Clone the repository
-git clone https://github.com/maxoehm/episteme.git
+git clone https://github.com/maxoem/episteme.git
 cd episteme
 
 # Sync workspace dependencies across all packages
@@ -223,8 +223,8 @@ If you use Episteme or Epistemetrics in your research, please cite:
 ```bibtex
 @article{oehmichen2026episteme,
   title={Episteme: A Neuro-Symbolic Engine for Scientific Theory Graph Construction and Evaluation},
-  author={Oehmichen, Max},
+  author={MAOEM},
   year={2026},
-  url={https://github.com/maxoehm/episteme}
+  url={https://github.com/maxoem/episteme}
 }
 ```

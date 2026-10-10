@@ -3,16 +3,32 @@ from __future__ import annotations
 import os
 from enum import Enum
 from typing import Any, Literal
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel, Field, SecretStr
 
 from episteme_pipeline.prompts.default_prompts import (
-    ACC_DIRECT_PROMPT, ACC_REASONING_PROMPT, ACC_FORMAT_PROMPT,
+    ACC_DIRECT_PROMPT,
+    ACC_FORMAT_PROMPT,
+    ACC_REASONING_PROMPT,
     ADU_SEGMENTATION_PROMPT,
-    ARC_DIRECT_PROMPT, ARC_REASONING_PROMPT, ARC_FORMAT_PROMPT,
+    ARC_DIRECT_PROMPT,
+    ARC_FORMAT_PROMPT,
+    ARC_REASONING_PROMPT,
+    DECISION_ACC_CRITERIA,
+    DECISION_ACC_QUESTION,
+    DECISION_ARC_CRITERIA,
+    DECISION_ARC_QUESTION,
+    DECISION_GLEANING_QUESTION,
     ENTITY_LINKING_PROMPT,
-    GLOBAL_RELATION_DIRECT_PROMPT, GLOBAL_RELATION_REASONING_PROMPT, GLOBAL_RELATION_FORMAT_PROMPT,
-    NER_DIRECT_PROMPT, NER_REASONING_PROMPT, NER_FORMAT_PROMPT, NER_GLEANING_PROMPT,
     ENTITY_SYNTHESIS_PROMPT,
+    GLOBAL_RELATION_DIRECT_PROMPT,
+    GLOBAL_RELATION_FORMAT_PROMPT,
+    GLOBAL_RELATION_REASONING_PROMPT,
+    NER_DIRECT_PROMPT,
+    NER_FORMAT_PROMPT,
+    NER_GLEANING_PROMPT,
+    NER_REASONING_PROMPT,
+    PAIR_GATING_DECISION_PROMPT,
 )
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
@@ -84,7 +100,7 @@ class ModelConfig(BaseModel):
     thinking_level: str = "off"
 
     @classmethod
-    def from_env(cls, **overrides: Any) -> "ModelConfig":
+    def from_env(cls, **overrides: Any) -> ModelConfig:
         """Resolve model selection from the environment, then apply overrides.
 
         Reads ``LLM_MODEL``, ``EMBED_MODEL``, ``RERANKER_MODEL``,
@@ -122,6 +138,29 @@ class Phase1Config(BaseModel):
     provenance_enabled: bool = True
 
 
+class GleaningConfig(BaseModel):
+    """Configuration for iterative extraction gleaning passes.
+
+    Parameters
+    ----------
+    enabled : bool, default False
+        Whether the objective Jev Actor-Critic gleaning stopping oracle is enabled.
+    confidence_threshold : float, default 0.65
+        Minimum confidence / empirical accuracy threshold P(unextracted) required to
+        trigger an additional extraction pass.
+    audit_rate : float, default 0.02
+        Stochastic false-negative audit rate (e.g. 2%) forcing an extra pass on stopped
+        extractions to monitor calibration.
+    max_passes : int, default 3
+        Maximum allowed gleaning iterations.
+    """
+
+    enabled: bool = False
+    confidence_threshold: float = 0.65
+    audit_rate: float = 0.02
+    max_passes: int = 3
+
+
 class Phase2Config(BaseModel):
     top_k_linking_candidates: int = 10
     linking_confidence_threshold: float = 0.85
@@ -133,6 +172,7 @@ class Phase2Config(BaseModel):
         reasoning_template=NER_REASONING_PROMPT,
         format_template=NER_FORMAT_PROMPT,
         gleaning_template=NER_GLEANING_PROMPT,
+        decision_template=DECISION_GLEANING_QUESTION,
         name="ner_extraction",
     ))
     ner_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
@@ -141,7 +181,9 @@ class Phase2Config(BaseModel):
         direct_template=ENTITY_LINKING_PROMPT,
         name="entity_linking",
     ))
-    max_gleanings: int = 0
+    jev_ooo_threshold: float = 0.75
+    conformal_linking_alpha: float = 0.05
+    gleaning: GleaningConfig = Field(default_factory=GleaningConfig)
 
 
 
@@ -154,12 +196,43 @@ class Phase3Config(BaseModel):
         direct_template=GLOBAL_RELATION_DIRECT_PROMPT,
         reasoning_template=GLOBAL_RELATION_REASONING_PROMPT,
         format_template=GLOBAL_RELATION_FORMAT_PROMPT,
+        decision_template=PAIR_GATING_DECISION_PROMPT,
         name="global_relation",
     ))
     global_relation_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
     dense_similarity_threshold: float = 0.5
     reranker_threshold: float = 0.6
     trace_dense_retrieval: bool = True
+    use_jev_reranker: bool = False
+    use_jev_pair_gating: bool = False
+    pair_gating_threshold: float = 0.60
+    pair_gating_audit_rate: float = 0.02
+
+
+class ConsolidationVerificationConfig(BaseModel):
+    """Configuration for calibrated Phase 3b cluster verification.
+
+    Parameters
+    ----------
+    enabled : bool, default False
+        Whether Jev decision verification is enabled for borderline pairs.
+    similarity_lower : float, default 0.75
+        Lower bound of the borderline vector similarity band.
+    similarity_upper : float, default 0.88
+        Upper bound of the borderline vector similarity band.
+    confidence_threshold : float, default 0.80
+        Empirical accuracy threshold required to confirm a borderline merge.
+    conformal_alpha : float, default 0.05
+        Conformal significance level for borderline merge prediction sets.
+    """
+
+    enabled: bool = False
+    similarity_lower: float = 0.75
+    similarity_upper: float = 0.88
+    confidence_threshold: float = 0.80
+    conformal_alpha: float = 0.05
+    borderline_merge_prompts: StructuredPromptBundle | None = None
+    canonical_election_prompts: StructuredPromptBundle | None = None
 
 
 class Phase3bConfig(BaseModel):
@@ -167,6 +240,8 @@ class Phase3bConfig(BaseModel):
 
     Attributes
     ----------
+    enabled : bool, default True
+        Whether Phase 3b latent consolidation is enabled.
     dense_similarity_threshold : float, default 0.85
         The minimum cosine similarity between L2 entity embeddings to consider
         them candidates for consolidation.
@@ -174,10 +249,14 @@ class Phase3bConfig(BaseModel):
         The minimum Jaccard similarity of Phase 3 relation edges required to
         commit a SAME_AS edge between candidates. A conservative default
         ensures distinct but related entities are not incorrectly merged.
+    verification : ConsolidationVerificationConfig
+        Sub-configuration for calibrated borderline pair and cluster verification.
     """
+
     enabled: bool = True
     dense_similarity_threshold: float = 0.85
     relation_overlap_threshold: float = 0.8
+    verification: ConsolidationVerificationConfig = Field(default_factory=ConsolidationVerificationConfig)
 
 
 class Phase4EntityMaturationConfig(BaseModel):
@@ -206,6 +285,28 @@ class Phase4EntityMaturationConfig(BaseModel):
 
 
 
+class ModalResolverConfig(BaseModel):
+    """Configuration for authorial propositional modal strength estimation.
+
+    Parameters
+    ----------
+    mode : Literal["guardrail", "convex", "structural_only", "engine_only"], default "guardrail"
+        Integration mode for combining structuralist syntax with linguistic scoring:
+        - "guardrail": Clips decision engine score within structuralist syntax bounds.
+        - "convex": Computes weighted average between structural prior and engine score.
+        - "structural_only": Strictly evaluates structuralist syntax.
+        - "engine_only": Strictly evaluates decision engine score.
+    fusion_alpha : float, default 0.50
+        Relative weight of structuralist syntax in convex fusion mode (in [0.0, 1.0]).
+    default_base_score : float, default 0.60
+        Default modal certainty fallback when attributes are absent.
+    """
+
+    mode: Literal["guardrail", "convex", "structural_only", "engine_only"] = "guardrail"
+    fusion_alpha: float = 0.50
+    default_base_score: float = 0.60
+
+
 class Phase4Config(BaseModel):
     adu_segmentation_prompt_template: str = ADU_SEGMENTATION_PROMPT
     adu_segmentation_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
@@ -215,10 +316,13 @@ class Phase4Config(BaseModel):
     adu_confidence_threshold: float = 0.0
     acc_confidence_threshold: float = 0.0
     batch_size: int = 10
+    modal_resolver: ModalResolverConfig = Field(default_factory=lambda: ModalResolverConfig())
     acc_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
         direct_template=ACC_DIRECT_PROMPT,
         reasoning_template=ACC_REASONING_PROMPT,
         format_template=ACC_FORMAT_PROMPT,
+        decision_template=DECISION_ACC_QUESTION,
+        decision_criteria=DECISION_ACC_CRITERIA,
         name="acc_classification",
     ))
     acc_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
@@ -226,6 +330,8 @@ class Phase4Config(BaseModel):
         direct_template=ARC_DIRECT_PROMPT,
         reasoning_template=ARC_REASONING_PROMPT,
         format_template=ARC_FORMAT_PROMPT,
+        decision_template=DECISION_ARC_QUESTION,
+        decision_criteria=DECISION_ARC_CRITERIA,
         name="arc_classification",
     ))
     arc_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
@@ -235,17 +341,83 @@ class Phase4Config(BaseModel):
     arc_use_priority_rank: bool = False
     adu_markup_open: str = "<AC"
     adu_markup_close: str = ">"
+    triage_confidence_threshold: float = 0.85
+    conformal_alpha: float = 0.05
+    stochastic_audit_rate: float = 0.02
+    pass_priors_to_llm: bool = True
+    gleaning: GleaningConfig = Field(default_factory=GleaningConfig)
+
+
+class FusionGatingConfig(BaseModel):
+    """Configuration for calibrated Phase 5 theory fusion gating.
+
+    Parameters
+    ----------
+    enabled : bool, default False
+        Whether inter-document theory fusion gating is enabled.
+    confidence_threshold : float, default 0.85
+        Calibrated empirical accuracy threshold for approving inter-document fusion.
+    conformal_alpha : float, default 0.05
+        Conformal error significance level for prediction set coverage.
+    audit_rate : float, default 0.02
+        Stochastic false-negative audit rate (e.g. 2%).
+    """
+
+    enabled: bool = False
+    confidence_threshold: float = 0.85
+    conformal_alpha: float = 0.05
+    audit_rate: float = 0.02
+    prompt_bundle: StructuredPromptBundle | None = None
 
 
 class Phase5Config(BaseModel):
+    """Configuration for Phase 5: Argument Web & Theory Fusion."""
+
     argument_clustering_enabled: bool = True
     theory_fusion_enabled: bool = False
     fusion_similarity_threshold: float = 0.85
     cluster_layer: Literal["theory_atoms", "l2_entities", "both"] = "theory_atoms"
+    gating: FusionGatingConfig = Field(default_factory=FusionGatingConfig)
 
 
 class Phase6Config(BaseModel):
+    """Configuration for Phase 6: TheoryNet Materialization & Projection.
+
+    Attributes
+    ----------
+    enabled : bool, default True
+        Whether Phase 6 TheoryNet materialization is executed.
+    admissibility_threshold : float, default 0.0
+        Calibrated empirical accuracy threshold (tau_admissibility) for filtering or
+        flagging theoretical relations. Edges with empirical_accuracy below this
+        threshold are pruned or assigned low tenability.
+    prune_inadmissible : bool, default False
+        Whether to discard inadmissible edges instead of retaining them with
+        flagged tenability.
+    iterations : int, default 20
+        Maximum iteration limit for QBAF gradual semantics equilibrium solving.
+    tolerance : float, default 1e-4
+        Numerical convergence threshold epsilon for justification degrees.
+    semantics_model : str, default "quadratic"
+        Iterative semantics model ('quadratic', 'euler', 'categorizer', or 'linear').
+    admissibility_mode : Literal["hard", "soft"], default "hard"
+        Bivariate gating mode (normative hard database pruning vs. continuous sigmoidal relaxation).
+    tau_p : float, default 0.0
+        Perception stance probability threshold.
+    tau_c : float, default 0.0
+        Perception calibration confidence threshold.
+    """
+
     enabled: bool = True
+    admissibility_threshold: float = 0.0
+    prune_inadmissible: bool = False
+    iterations: int = 20
+    tolerance: float = 1e-4
+    semantics_model: str = "quadratic"
+    admissibility_mode: Literal["hard", "soft"] = "hard"
+    tau_p: float = 0.0
+    tau_c: float = 0.0
+    modal_resolver: ModalResolverConfig = Field(default_factory=lambda: ModalResolverConfig())
 
 
 class TheoreticalEnrichmentConfig(BaseModel):
@@ -323,6 +495,63 @@ class ExecutionConfig(BaseModel):
     artifacts_dir: str = ".pipeline_artifacts"
 
 
+class DecisionEngineConfig(BaseModel):
+    """Configuration for the System 1 Decision Engine (e.g. TypeSafe Jev / Laya).
+
+    Attributes
+    ----------
+    provider : str, default "none"
+        Provider backend identifier ("none", "laya", "transformers", "mock").
+    api_key : SecretStr or None, default None
+        Optional API key or secret token for remote decision services.
+    endpoint_url : str or None, default None
+        Optional HTTP/gRPC endpoint for remote decision services.
+    timeout_seconds : float, default 2.0
+        Per-decision inference timeout in seconds.
+    default_confidence_threshold : float, default 0.85
+        Default empirical accuracy threshold for fast-exit routing.
+    conformal_alpha : float, default 0.05
+        Significance level for conformal prediction sets (guaranteeing 1 - alpha coverage).
+    stochastic_audit_rate : float, default 0.02
+        Proportion of fast-exit decisions randomly escalated to System 2 to audit calibration drift.
+    fallback_to_llm : bool, default True
+        Whether to fall back to generative LLM execution if the decision engine fails or has low confidence.
+    model_checkpoint : str, default "aac6fef/laya-mlx"
+        Local weight directory or Hugging Face repository identifier.
+    device : str, default "auto"
+        Target hardware compute accelerator ('auto', 'mps', 'mlx', 'cuda', 'cpu').
+    fast_exit_threshold : float, default 0.92
+        Calibrated score threshold for immediate System 1 exit without generative LLM.
+    uncertainty_threshold : float, default 0.55
+        Uncertainty cutoff below which execution escalates to generative LLM reasoning.
+    phase_gates : dict of str to bool, optional
+        Per-phase gating enablement toggles.
+    """
+
+    provider: str = "none"
+    api_key: SecretStr | None = None
+    endpoint_url: str | None = None
+    timeout_seconds: float = 2.0
+    default_confidence_threshold: float = 0.85
+    conformal_alpha: float = 0.05
+    stochastic_audit_rate: float = 0.02
+    fallback_to_llm: bool = True
+    model_checkpoint: str = "aac6fef/laya-mlx"
+    device: str = "auto"
+    fast_exit_threshold: float = 0.92
+    uncertainty_threshold: float = 0.55
+    phase_gates: dict[str, bool] = Field(
+        default_factory=lambda: {
+            "phase2_entity_discovery": True,
+            "phase3_global_relations": True,
+            "phase4_argument_mining": True,
+            "phase4_entity_maturation": True,
+            "phase5_fusion": True,
+            "phase6_theorynet": True,
+        }
+    )
+
+
 class PipelineConfig(BaseModel):
     """
     Top-level pipeline configuration. Each phase receives only its sub-config.
@@ -344,9 +573,11 @@ class PipelineConfig(BaseModel):
     phase6: Phase6Config = Field(default_factory=Phase6Config)
     theoretical_enrichment: TheoreticalEnrichmentConfig = Field(default_factory=TheoreticalEnrichmentConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
+    decision_engine: DecisionEngineConfig | None = Field(default=None)
+    modal_resolver: ModalResolverConfig = Field(default_factory=ModalResolverConfig)
 
     @classmethod
-    def from_env(cls, **overrides: Any) -> "PipelineConfig":
+    def from_env(cls, **overrides: Any) -> PipelineConfig:
         """Build a config whose model selection is resolved from the environment.
 
         This is the one supported way to turn ambient environment state into a

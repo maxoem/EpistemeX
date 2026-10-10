@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+
 from epistemetrics.core.exceptions import (
     AdapterError,
     GDSNotAvailableError,

@@ -1,0 +1,48 @@
+# STNB Classical Particle Mechanics (CPM) Competency Query Testbed
+# Grounded in Balzer et al. (1987) structuralist reconstruction of Newton's Principia (1687)
+queries:
+  - id: "cpm_q01"
+    query: "What governing law establishes the proportionality between impressed force and change of motion?"
+    gold_target_ids:
+      - "str:M_CPM_Newton2"
+    category: "core_law"
+    description: "Newton's Second Law of Motion establishing F = m * a."
+
+  - id: "cpm_q02"
+    query: "Which invariance constraint demands that body mass remains constant across different experimental setups?"
+    gold_target_ids:
+      - "str:GC_Mass"
+    category: "constraint"
+    description: "Global cross-model mass invariance constraint GC(Mass)."
+
+  - id: "cpm_q03"
+    query: "Which theoretical specialization describes restoring force in a spring?"
+    gold_target_ids:
+      - "str:T_CPM_Harmonic"
+      - "str:M_CPM_Hooke"
+    category: "specialization"
+    description: "Harmonic oscillator Hookean force specialization."
+
+  - id: "cpm_q04"
+    query: "Which actual model formalizes Newton's third law of mutual action and reaction?"
+    gold_target_ids:
+      - "str:M_CPM_Newton3"
+    category: "core_law"
+    description: "Action-reaction equilibrium law for interacting particles."
+
+  - id: "cpm_q05"
+    query: "Which exemplar application models celestial planetary orbits under central gravitational force?"
+    gold_target_ids:
+      - "str:I0_PlanetaryOrbits"
+      - "str:T_CPM_Grav"
+      - "str:M_CPM_Grav"
+    category: "paradigm"
+    description: "Keplerian celestial planetary orbit paradigm under inverse-square gravitation."
+
+  - id: "cpm_q06"
+    query: "What potential model formalizes the kinematic base structure of particle mechanics?"
+    gold_target_ids:
+      - "str:Mp_CPM"
+      - "str:Mpp_CPM"
+    category: "potential_model"
+    description: "Potential model framework and kinematic observational base sets."

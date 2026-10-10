@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from "react";
-import { GraphView, StudioEdge, StudioNode } from "../api/types";
-import { AlertCircle, Copy, Check, ArrowRight, HelpCircle } from "lucide-react";
+import React, {useMemo, useState} from "react";
+import {GraphView, StudioEdge, StudioNode} from "../api/types";
+import {AlertCircle, ArrowRight, Check, Copy, HelpCircle} from "lucide-react";
 
 interface UnmappedPredicatesPanelProps {
   graphView: GraphView | null;

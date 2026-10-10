@@ -1,11 +1,16 @@
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 import torch
-from unittest.mock import MagicMock, AsyncMock
-
-from episteme_pipeline.phases.phase2_entity_discovery.mention_context_injector import DefaultMentionContextInjector
-from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import EnvelopeBiEncoder, DenseEntityLinker
-from episteme_pipeline.contracts.domain import L2Entity, SubGraph, L2Triple
+from episteme_pipeline.contracts.domain import L2Entity, L2Triple, SubGraph
 from episteme_pipeline.events.models import UnlinkableMentionError
+from episteme_pipeline.phases.phase2_entity_discovery.mention_context_injector import (
+    DefaultMentionContextInjector,
+)
+from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import (
+    DenseEntityLinker,
+    EnvelopeBiEncoder,
+)
 
 
 class DummyStructuredLLM:
@@ -56,19 +61,65 @@ def test_envelope_bi_encoder_guard():
 
 
 @pytest.mark.asyncio
-async def test_envelope_bi_encoder_pooling_with_checkpoint():
+async def test_envelope_bi_encoder_pooling_with_checkpoint(monkeypatch):
+    """Verify EnvelopeBiEncoder pools at [ENT] marker when present and falls back to [CLS]."""
+    hidden_dim = 384
+    seq_len = 5
+    ent_token_id = 999
+
+    mock_tokenizer = MagicMock()
+    input_ids = torch.tensor([
+        [101, 10, ent_token_id, 20, 102],
+        [101, 10, 30, 40, 102],
+    ])
+    mock_tokenizer.return_value = {"input_ids": input_ids}
+    mock_tokenizer.convert_tokens_to_ids.side_effect = lambda t: ent_token_id if t == "[ENT]" else 0
+    mock_tokenizer.__len__ = lambda self: 1000
+    mock_tokenizer.add_special_tokens.return_value = 2
+
+    mock_model = MagicMock()
+    last_hidden = torch.randn(2, seq_len, hidden_dim)
+    mock_output = MagicMock()
+    mock_output.last_hidden_state = last_hidden
+    mock_model.return_value = mock_output
+    mock_model.to.return_value = mock_model
+    mock_model.eval.return_value = mock_model
+
+    from transformers import AutoModel, AutoTokenizer
+    monkeypatch.setattr(AutoTokenizer, "from_pretrained", lambda *args, **kwargs: mock_tokenizer)
+    monkeypatch.setattr(AutoModel, "from_pretrained", lambda *args, **kwargs: mock_model)
+
     encoder = EnvelopeBiEncoder(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
         trained_checkpoint=True,
     )
-    
+
     text_with_ent = "The philosopher [ENT] Kant [\\ENT] argued..."
     text_without_ent = "The philosopher Kant argued..."
-    
+
     embeddings = encoder.encode([text_with_ent, text_without_ent])
-    
-    assert embeddings.shape[0] == 2
-    assert embeddings.shape[1] == 384  # MiniLM hidden size
+
+    assert embeddings.shape == (2, hidden_dim)
+    assert torch.equal(embeddings[0], last_hidden[0, 2, :])
+    assert torch.equal(embeddings[1], last_hidden[1, 0, :])
+
+
+def test_phase2_runner_defaults_to_name_linker_when_no_embedding_model():
+    """Verify Phase2Runner defaults to NameEntityLinker when embedding_model is None."""
+    from episteme_pipeline.config import Phase2Config
+    from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
+    from episteme_pipeline.phases.phase2_entity_discovery.entity_linker import (
+        NameEntityLinker,
+    )
+
+    runner = Phase2Runner(
+        config=Phase2Config(),
+        schema=MagicMock(),
+        llm=DummyStructuredLLM(),
+        embedding_model=None,
+        graph_store=AsyncMock(),
+    )
+    assert isinstance(runner.entity_linker, NameEntityLinker)
 
 
 @pytest.mark.asyncio
@@ -124,7 +175,7 @@ async def test_dense_entity_linker_retrieval_and_cross_encoding():
     assert result.id == "e_kant"
     assert "e_kant" in linker._candidate_cache
     # Verify candidate formatting has type grounding
-    cached_text, cached_vec = linker._candidate_cache["e_kant"]
+    cached_text, _cached_vec = linker._candidate_cache["e_kant"]
     assert "[PERSON] Immanuel Kant: German philosopher" == cached_text
 
 
@@ -141,8 +192,8 @@ async def test_dense_entity_linker_missing_envelope_raises():
 
 
 def test_dense_entity_linker_reranker_propagation():
-    from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
     from episteme_pipeline.config import Phase2Config
+    from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
 
     mock_cross_encoder = MagicMock()
     mock_embed = AsyncMock()
@@ -167,8 +218,10 @@ def test_dense_entity_linker_reranker_propagation():
 
 
 def test_phase4_entity_maturation_bi_encoder_propagation():
-    from episteme_pipeline.phases.phase4_entity_maturation import Phase4EntityMaturationRunner
     from episteme_pipeline.config import Phase4EntityMaturationConfig
+    from episteme_pipeline.phases.phase4_entity_maturation import (
+        Phase4EntityMaturationRunner,
+    )
 
     mock_bi_encoder = AsyncMock()
     dummy_llm = DummyStructuredLLM()
@@ -188,7 +241,7 @@ def test_phase4_entity_maturation_bi_encoder_propagation():
 @pytest.mark.asyncio
 async def test_embedding_model_protocol_adherence():
     """The single embedding contract is async and returns list[float]."""
-    from episteme_pipeline.protocols.extractors import EmbeddingModel, CrossEncoder
+    from episteme_pipeline.protocols.extractors import CrossEncoder, EmbeddingModel
 
     class AsyncEmbeddingModel:
         async def aget_text_embedding(self, text: str) -> list[float]:
@@ -264,7 +317,12 @@ def test_ensure_embedding_model_rejects_incompatible_objects():
 def test_configs_pure_json_serializable():
     """W-05: configs must be purely JSON-serializable and not contain live model slots."""
     import json
-    from episteme_pipeline.config import PipelineConfig, Phase2Config, Phase4EntityMaturationConfig
+
+    from episteme_pipeline.config import (
+        Phase2Config,
+        Phase4EntityMaturationConfig,
+        PipelineConfig,
+    )
 
     p2 = Phase2Config()
     assert not hasattr(p2, "embedding_model")

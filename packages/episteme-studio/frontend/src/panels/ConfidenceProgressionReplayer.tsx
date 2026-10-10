@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { Play, Pause, SkipBack, SkipForward, RotateCcw, Activity, X } from "lucide-react";
-import { ProgressionSnapshot } from "../store/runsStore";
+import React, {useEffect, useState} from "react";
+import {Activity, Pause, Play, RotateCcw, SkipBack, SkipForward, X} from "lucide-react";
+import {ProgressionSnapshot} from "../store/runsStore";
 
 export interface ConfidenceProgressionReplayerProps {
   snapshots: ProgressionSnapshot[];

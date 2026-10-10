@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
 
 
@@ -36,6 +37,51 @@ class SchemaMapper:
         payload = self.schema.model_dump()
         if self.predicate_aliases:
             payload["predicate_aliases"] = self.predicate_aliases
+
+        payload["property_definitions"] = {
+            "empirical_accuracy": {
+                "type": "float",
+                "label": "Empirical Accuracy P(correct)",
+                "description": "Calibrated extraction accuracy frequency from System 1 decision engine",
+                "domain": [0.0, 1.0],
+            },
+            "modal_strength": {
+                "type": "float",
+                "label": "Modal Strength M(φ)",
+                "description": "Authorial propositional modal certainty (necessity □ vs possibility ◊)",
+                "domain": [0.0, 1.0],
+            },
+            "inferential_force": {
+                "type": "float",
+                "label": "Inferential Warrant Force I_(j->i)",
+                "description": "Toulminian conditional warrant validity across dialectical schemes",
+                "domain": [0.0, 1.0],
+            },
+            "qbaf_tau": {
+                "type": "float",
+                "label": "QBAF Equilibrium Standing τ*",
+                "description": "Asymptotic justification standing evaluated by continuous Quadratic Energy semantics",
+                "domain": [0.0, 1.0],
+            },
+            "total_weight_of_evidence": {
+                "type": "float",
+                "label": "Gross Evidentiary Volume E_total",
+                "description": "Gross weight of evidence across all supporting and attacking warrants (Keynes/Gärdenfors)",
+                "domain": [0.0, None],
+            },
+            "volatility_index": {
+                "type": "float",
+                "label": "Epistemic Controversy V",
+                "description": "Controversy tension index quantifying evenly contested evidence",
+                "domain": [0.0, 1.0],
+            },
+            "decision_tier": {
+                "type": "string",
+                "label": "Decision Tier",
+                "description": "Execution origin: System 1 fast-exit vs System 2 generative synthesis",
+                "enum": ["system_1", "system_2", "legacy"],
+            },
+        }
         return payload
 
     def resolve_polarity(self, relation_type: str) -> int | None:

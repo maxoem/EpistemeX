@@ -11,8 +11,8 @@ contested scientific literature.
 
 The Theory Graph is formally defined as a labeled, directed multigraph:
 
-\[ G = (V, E, \lambda_v, \lambda_e)
-\]
+$$G = (V, E, \lambda_v, \lambda_e)
+$$
 
 Where:
 
@@ -25,8 +25,8 @@ Where:
 
 The logical framework of the scientific theory—the **TheoryNet**—is defined as a relational tuple:
 
-\[ TF = (At, R)
-\]
+$$ TF = (At, R)
+$$
 
 where $At$ denotes the set of argumentative atoms and $R$ denotes the set of argumentative relations. To unify
 computational graph storage (in Neo4j) with model-theoretic argumentation, we enforce a strict **isomorphism**:
@@ -47,7 +47,7 @@ base $\Delta = (B, A)$:
 
 Consequently, the global vertex set satisfies:
 
-\[ V = B \cup A \quad \text{where} \quad B \cap A = \emptyset \]
+$$ V = B \cup A \quad \text{where} \quad B \cap A = \emptyset $$
 
 ---
 
@@ -88,8 +88,8 @@ flowchart TD
 
 Represents raw document chunks, unstructured token sequences $S \in \Sigma^*$, and exact provenance offsets:
 
-\[ L1 = (C, \lambda_c, \pi)
-\]
+$$ L1 = (C, \lambda_c, \pi)
+$$
 
 Where:
 
@@ -102,8 +102,8 @@ Where:
 
 Captures entity-centric factual relationships extracted directly from the literature:
 
-\[ L2 = (\mathcal{V}_{\text{L2}}, \mathcal{E}_{\text{L2}}, \gamma, \delta)
-\]
+$$ L2 = (\mathcal{V}_{\text{L2}}, \mathcal{E}_{\text{L2}}, \gamma, \delta)
+$$
 
 Where:
 
@@ -119,8 +119,8 @@ Where:
 
 Encodes argumentative, defeasible, and theoretical dependencies as a Quantitative Bipolar Argumentation Framework (QBAF):
 
-\[ L3 \equiv \Lambda = \langle A, \mathcal{R}_{att}, \mathcal{R}_{sup}, \tau, \phi \rangle
-\]
+$$ L3 \equiv \Lambda = \langle A, \mathcal{R}_{att}, \mathcal{R}_{sup}, \tau, \phi \rangle
+$$
 
 Where:
 
@@ -150,11 +150,11 @@ Any fine-grained relational predicate identified in the scientific text
 (e.g., $r_k \in \{\text{REFUTES}, \text{CRITICIZES}, \text{UNDERMINES}\}$) is treated as a role inclusion inheriting the
 formal semantics of its parent super-class:
 
-\[ r_k \sqsubseteq \mathcal{R} _{att} \quad \text{or} \quad r_k \sqsubseteq \mathcal{R}_{sup} \]
+$$ r_k \sqsubseteq \mathcal{R} _{att} \quad \text{or} \quad r_k \sqsubseteq \mathcal{R}_{sup} $$
 
 The complete argumentation space is defined as the tuple:
 
-\[ \Lambda = \langle A, \mathcal{R} _{att}, \mathcal{R}_{sup}, \tau, \phi \rangle \]
+$$ \Lambda = \langle A, \mathcal{R} _{att}, \mathcal{R}_{sup}, \tau, \phi \rangle $$
 
 Where:
 
@@ -171,15 +171,85 @@ The ultimate acceptability of any scientific premise within the Theory Graph is 
 function $\rho: A \to [0, 1]$ that combines its prior plausibility $\tau (a_i)$ with the aggregated strengths of
 incoming relations.
 
-For any premise $a_i \in A$, the framework calculates an aggregation function $\alpha (a_i)$ summing incoming support
-and subtractive attack:
+#### Decoupled Quantitative Bipolar Argumentation Framework (D-QBAF)
 
-\[ \alpha (a_i) = \sum_{ (a_j, a_i) \in \mathcal{R} _{sup}} \rho (a_j) \cdot \phi (a_j, a_i) \; - \sum_{ (a_k, a_i) \in
-\mathcal{R}_{att}} \rho (a_k) \cdot \phi (a_k, a_i)
-\]
+A foundational vulnerability in earlier theory graph implementations was conflating the model's **epistemic extraction confidence** with the author's **propositional modal strength**:
+1. **The Pseudo-Decoupling Contradiction ($w = M \times P$):** Multiplying propositional modal strength $M(\phi)$ by perception classifier probability $P(\text{stance})$ into a single scalar edge weight algebraically coupled orthogonal dimensions. A deductive proof ($M = 1.0$) extracted with moderate confidence ($P = 0.5$) received $w = 0.5$, identical to a tentative conjecture ($M = 0.5$) extracted with certainty ($P = 1.0$).
+2. **Double-Penalization of Premise Uncertainty:** Placing modal strength on the edge penalized conjectural premises twice: once when computing the premise's own standing ($s_j \le 0.3$), and a second time by scaling the outgoing edge $w = 0.3 \times P$, yielding an artificial compounding penalty ($0.3 \times 0.3 = 0.09$).
 
-Using gradual semantics (e.g., Quadratic Energy or Euler-based convergence), this yields the final stability
-score $\rho (a_i)$, iteratively propagated through the network until convergence.
+To resolve this, the dialectical theory graph layer is formalized as a **Decoupled Quantitative Bipolar Argumentation Framework (D-QBAF)**:
+
+$$\mathcal{Q} = \langle \mathcal{A}, \mathcal{R}_{att}, \mathcal{R}_{sup}, \tau_0, \mathcal{I}, \mathcal{P}, \mathcal{C} \rangle$$
+
+where:
+1. $\mathcal{A} = \{a_1, a_2, \dots, a_n\}$ is a finite set of theoretical argument atoms, formally partitioned into empirical observations $B$ and theoretical hypotheses $A$ such that $\mathcal{A} = B \cup A$ and $B \cap A = \emptyset$ (Schurz, 2014).
+2. $\mathcal{R}_{att} \subseteq \mathcal{A} \times \mathcal{A}$ is a binary relation representing dialectical attack, rebuttal, or undercutting.
+3. $\mathcal{R}_{sup} \subseteq \mathcal{A} \times \mathcal{A}$ is a binary relation representing dialectical warrant, verification, or inductive support, with $\mathcal{R}_{att} \cap \mathcal{R}_{sup} = \emptyset$.
+4. $\tau_0: \mathcal{A} \to [0, 1]$ is the **intrinsic propositional base score function**, mapping each claim $a \in \mathcal{A}$ to the authorial modal certainty asserted in the text:
+   $$\tau_0(a) \equiv M(\phi_a)$$
+5. $\mathcal{I}: \mathcal{R} \to [0, 1]$ is the **inferential warrant force function**, quantifying the conditional validity of the inferential link under Toulminian argument schemes (deductive entailment vs. empirical corroboration vs. defeasible analogy).
+6. $\mathcal{P}: \mathcal{R} \to [0, 1]$ is the **stance class probability function**, mapping an edge $r \in \mathcal{R}$ to the perception engine's softmax probability $P(\text{stance} \mid \text{text})$.
+7. $\mathcal{C}: \mathcal{R} \to [0, 1]$ is the **perception calibration confidence score**, representing the expected empirical precision under calibrated temperature buckets (e.g., Conformal Prediction / Jev).
+
+```
+                      ONTOLOGICAL STRATIFICATION OF UNCERTAINTY
+
+  Epistemic Layer           Entity / Target              Formal Metric       Literature Grounding
+  ───────────────────────────────────────────────────────────────────────────────────────────────
+  Claim / Proposition       TheoryAtom (Node a)          M(φ_a) ∈ [0, 1]     Toulmin (1958) Modal Qualifier
+                                                         τ_0(a) ∈ [0, 1]     Schurz (2014) Epistemic Status
+  
+  Inferential Warrant       TheoryRelation (Edge j -> i) I_(j->i) ∈ [0, 1]   Toulmin (1958) Warrant & Backing
+  
+  Perception Extraction     Classifier Output (j -> i)   P(stance) ∈ [0, 1]  Prakken (2020) Constellations
+                                                         C ∈ [0, 1]          Conformal Prediction / Jev
+```
+
+##### Admissibility Gating Modes
+
+The effective edge weight $W_{ji} = \mathcal{W}(a_j \xrightarrow{r} a_i)$ is modulated via an admissibility filter $\mathcal{F}: \mathcal{R} \to [0, 1]$:
+
+$$W_{ji} = \mathcal{I}(a_j \xrightarrow{r} a_i) \cdot \mathcal{F}(a_j \xrightarrow{r} a_i)$$
+
+1. **Mode 1: Hard Bivariate Admissibility Filter (Normative Pipeline Standard)**  
+   For database subgraph projection and normative dialectical evaluation, admissibility is strictly binary:
+   $$\mathcal{F}_{\text{hard}}(r) = \begin{cases} 1 & \text{if } \mathcal{P}(r) \ge \tau_P \quad \land \quad \mathcal{C}(r) \ge \tau_C \\ 0 & \text{otherwise} \end{cases}$$
+   Inferential warrant force $\mathcal{I}$ is never diluted by perception probability. Unadmitted edges are pruned at database level via Cypher filtering.
+
+2. **Mode 2: Continuous Sigmoidal Relaxation (Numerical Optimization Regularizer)**  
+   To prevent discontinuous Filippov vector fields and bifurcation catastrophes during continuous optimization, `epistemetrics` provides an opt-in smooth relaxation ($k_1 = k_2 = 20$):
+   $$\mathcal{F}_{\text{soft}}(r) = \left( \frac{1}{1 + e^{-k_1 (\mathcal{P}(r) - \tau_P)}} \right) \cdot \left( \frac{1}{1 + e^{-k_2 (\mathcal{C}(r) - \tau_C)}} \right)$$
+
+##### Continuous Quadratic Energy Dynamical System
+
+Let $\mathbf{s}(t) = (s_1(t), \dots, s_n(t))^T \in [0, 1]^n$ denote the justification degree vector. For any claim $a_i \in \mathcal{A}$, the net continuous energy $E_i(t) \in \mathbb{R}$ is:
+
+$$E_i(t) = \sum_{j:(a_j, a_i) \in \mathcal{R}_{sup}} W_{ji} \cdot s_j(t) - \sum_{k:(a_k, a_i) \in \mathcal{R}_{att}} W_{ki} \cdot s_k(t)$$
+
+With rational impact function $h(x) = \frac{\max\{x, 0\}^2}{1 + \max\{x, 0\}^2}$, justification degrees evolve via the continuous autonomous ODE:
+
+$$\frac{ds_i}{dt} = w(i) - s_i(t) + (1 - w(i)) \cdot h(E_i(t)) - w(i) \cdot h(-E_i(t))$$
+
+initialized at $s_i(0) = w(i) = \tau_0(a_i)$.
+
+##### Theoretical Guarantees and Propositions
+
+1. **Proposition 1 (Heaviside Asymptotics):** $\lim_{k \to \infty} \sigma(k(x - \tau)) = H(x - \tau)$ almost everywhere.
+2. **Proposition 2 (Positive Forward Invariance of $[0, 1]^n$):** By Nagumo's subtangential condition, $\left. \frac{ds_i}{dt} \right|_{s_i=1} \le 0$ and $\left. \frac{ds_i}{dt} \right|_{s_i=0} \ge 0$, guaranteeing that all trajectories initialized in $[0, 1]^n$ remain strictly bounded in $[0, 1]^n$ for all $t \ge 0$.  
+   *Note on Convergence:* Forward invariance guarantees boundedness in the state space, not the non-existence of limit cycles on arbitrary cyclic networks. Convergence is analytically proven for DAGs (Proposition 5) and support-only graphs (Hirsch's Monotone Flow Theorem), while mixed cyclic networks converge empirically.
+3. **Proposition 3 (Balance & Epistemic Duality):** If incoming support exactly cancels attack ($E_i(t) = 0$), $h(E_i) = h(-E_i) = 0$, so $s_i(t) = w(i)$ identically for all $t \ge 0$.
+4. **Proposition 4 (Jacobian Spectral Radius & Correction to Potyka 2018):** By Gershgorin's Circle Theorem, the Jacobian spectral radius satisfies $\rho(J) \le 1 + 0.65 \cdot \text{indegree}(i) \cdot \bar{W}$. Potyka (2018) claimed fixed-step RK4 ($\delta = 0.01$) is unconditionally safe because $|\dot{s}_i| \le 1$. Proposition 4 refutes this: high-degree citation hubs ($\text{indegree} \gg 50$) cause $\delta \cdot \rho(J) > 2.78$, producing explosive numerical divergence. Adaptive-step solvers (`solve_ivp` RK45 / Radau fallback) with root-finding stationary termination events are mathematically mandatory.
+5. **Proposition 5 (Exact Closed-Form Solution on DAGs):** On any directed acyclic graph, predecessors reach constant equilibrium $s_j^*$. The ODE yields exact stationary closed form:
+   $$s_i^* = w(i) + (1 - w(i)) \cdot h(E_i^*) - w(i) \cdot h(-E_i^*)$$
+   evaluating in $O(|\mathcal{A}| + |\mathcal{R}|)$ time along a topological sort without numerical ODE integration.
+
+##### Orthogonal Epistemic Dimensions (Keynes-Gärdenfors Formulation)
+
+To distinguish heavily contested scientific controversies from unevidenced claims having identical justification $\tau^* = 0.5$:
+- **Gross Epistemic Weight ($E_{\text{total}} \ge 0$):** Total evidentiary volume:
+  $$E_{\text{total}}(a_i) = \sum_{j:(a_j, a_i) \in \mathcal{R}_{sup}} W_{ji} \cdot \tau^*(a_j) + \sum_{k:(a_k, a_i) \in \mathcal{R}_{att}} W_{ki} \cdot \tau^*(a_k)$$
+- **Epistemic Volatility Index ($\mathcal{V}(a_i) \in [0, 1]$):** Evidentiary controversy:
+  $$\mathcal{V}(a_i) = \left( \frac{E_{\text{total}}(a_i)}{1 + E_{\text{total}}(a_i)} \right) \cdot \left( 1 - 2 \cdot |\tau^*(a_i) - 0.5| \right)$$
 
 ### Dung Abstract Argumentation Mapping
 
@@ -197,18 +267,19 @@ For an abstract theory core ($A$) to possess empirical creativity rather than re
 anchor to the empirical base ($B$). This anchoring is mediated by formal **Mapping Laws** (*Zuordnungsgesetze*, Schurz,
 2014):
 
-\[ Z: A \times B \to [0, 1]
-\]
+$$ Z: A \times B \to [0, 1]
+$$
 
 Between an empirical observation $b \in B$ and a theoretical antecedent $a \in A$, the mapping law is governed by two
 complementary functions:
 
 1. **Correlational Mapping ($Z_1$):**
-   \[ Z_1: A \times B \to \mathcal{P} \] Models the probabilistic correlation between theoretical constructs and
+$$ Z_1: A \times B \to \mathcal{P} $$ Models the probabilistic correlation between theoretical constructs and
    observable indicators, mapped to the continuous $[0, 1]$ interval of the QBAF.
 2. **Structural Isomorphism ($Z_2$):**
-   \[ Z_2: A \times B \to \sigma (\kappa (a), \kappa (b))
-   \] Measures the structural overlap $\sigma$ between the theoretical model structure $\kappa (a)$ and the empirical
+$$ Z_2: A \times B \to \sigma (\kappa (a), \kappa (b))
+$$
+Measures the structural overlap $\sigma$ between the theoretical model structure $\kappa (a)$ and the empirical
    domain $\kappa (b)$.
 
 ### Epistemic Justification Paths ($J (at)$)
@@ -217,7 +288,7 @@ Rather than storing justifications as static, ungrounded node attributes, the se
 for any atom $at \in At$ is **dynamically inferred** via directed graph traversal through supportive and mapping edges
 terminating in $B$:
 
-\[ J (at) = \{ p = (a_0, e_1, a_1, \dots, e_k, b) \mid a_0 = at, \; b \in B, \; e_i \in \mathcal{R}_{sup} \cup Z \} \]
+$$ J (at) = \{ p = (a_0, e_1, a_1, \dots, e_k, b) \mid a_0 = at, \; b \in B, \; e_i \in \mathcal{R}_{sup} \cup Z \} $$
 
 This ensures that logical inferences remain provably grounded in empirical textual evidence.
 
@@ -251,8 +322,9 @@ via a **Uniform Space** $(M_p, \mathcal{U})$:
   composition ($v \circ v \subseteq u$).
 - **Admissible Blurs ($\mathcal{A} \subseteq \mathcal{U}$):** A pragmatically restricted sub-collection of entourages
   bounded by an upper tolerance limit:
-  \[ \text{Bound} (\mathcal{A})
-  \] If observational discrepancy exceeds $\text{Bound} (\mathcal{A})$, the theory is falsified; conversely,
+$$ \text{Bound} (\mathcal{A})
+$$
+If observational discrepancy exceeds $\text{Bound} (\mathcal{A})$, the theory is falsified; conversely,
   if $\mathcal{A}$ were allowed to be arbitrarily large, the theory would become empirically vacuous.
 
 ### Tenability and Adequacy
@@ -261,12 +333,12 @@ These model-theoretic structures define two critical validity conditions:
 
 * **Tenability (*Haltbarkeit*):** The requirement that intended applications can be formulated in the non-theoretical
   empirical vocabulary:
-  \[ I \subseteq M_{pp} \] If an intended application cannot be expressed within $M_{pp}$, the theory is conceptually
+$$ I \subseteq M_{pp} $$ If an intended application cannot be expressed within $M_{pp}$, the theory is conceptually
   untenable for that domain.
 * **Approximative Empirical Adequacy (*Adäquatheit*):** The condition that empirical observations $I$ can be enriched
   with theoretical functions such that the resulting model lies within an admissible blur $u \in \mathcal{A}$ of an
   actual model $M$:
-  \[ \exists X \in M \quad \text{such that} \quad (I, X) \in u, \quad u \in \mathcal{A} \]
+$$ \exists X \in M \quad \text{such that} \quad (I, X) \in u, \quad u \in \mathcal{A} $$
 
 ---
 
@@ -278,8 +350,8 @@ Scientific knowledge is non-static; theories evolve, revise hypotheses, and enco
 
 The graph evolves over chronological time $t$:
 
-\[ G (t) = (V (t), E (t), \lambda_v (t), \lambda_e (t))
-\]
+$$ G (t) = (V (t), E (t), \lambda_v (t), \lambda_e (t))
+$$
 
 * **Description Versioning:** When an entity or premise matures into a more specialized conceptualization, earlier
   descriptions are not overwritten. Instead, the graph retains an immutable historical semantic trace. This ensures that

@@ -1,0 +1,23 @@
+{
+  "artifact_id": "chunk_fc1959_rehearsal_defeated",
+  "identity_key": "chunk_fc1959_rehearsal_defeated",
+  "kind": "chunk",
+  "run_id": "run-demo-festinger1959",
+  "phase_name": "Phase 1: Data Foundation",
+  "payload": {
+    "id": "chunk_fc1959_rehearsal_defeated",
+    "text": "We are certainly justified in concluding that the Ss in the One Dollar condition did not improvise more nor act more convincingly. Hence, the alternative explanation discussed above cannot account for the findings.",
+    "chunk_index": 6,
+    "char_start": 30394,
+    "char_end": 30608,
+    "confidence": 1.0,
+    "doc_id": "festinger_carlsmith_1959"
+  },
+  "provenance": {
+    "source_path": "datasets/run-demo-festinger1959.cypher",
+    "notes": {
+      "generated": "demo_fixture"
+    }
+  },
+  "created_at": "2026-09-01T10:00:00Z"
+}

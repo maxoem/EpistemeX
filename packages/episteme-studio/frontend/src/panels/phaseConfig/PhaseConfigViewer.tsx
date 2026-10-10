@@ -1,22 +1,22 @@
-import React, { useState, useMemo } from "react";
-import { PhaseConfigDescriptor, PhaseConfigField } from "./types";
-import { PromptTemplateViewer } from "./PromptTemplateViewer";
+import React, {useMemo, useState} from "react";
+import {PhaseConfigDescriptor, PhaseConfigField} from "./types";
+import {PromptTemplateViewer} from "./PromptTemplateViewer";
 import {
-  Sliders,
-  Sparkles,
-  FileCode,
-  Copy,
-  Check,
-  Search,
-  CheckCircle2,
-  XCircle,
-  HardDrive,
-  Percent,
-  Gauge,
-  Eye,
-  EyeOff,
-  ChevronDown,
-  ChevronRight,
+    Check,
+    CheckCircle2,
+    ChevronDown,
+    ChevronRight,
+    Copy,
+    Eye,
+    EyeOff,
+    FileCode,
+    Gauge,
+    HardDrive,
+    Percent,
+    Search,
+    Sliders,
+    Sparkles,
+    XCircle,
 } from "lucide-react";
 
 interface PhaseConfigViewerProps {

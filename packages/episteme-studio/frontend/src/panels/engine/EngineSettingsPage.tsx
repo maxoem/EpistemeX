@@ -1,34 +1,37 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, {useEffect, useMemo, useState} from "react";
 import {
-  Plus,
-  Trash2,
   AlertCircle,
-  Link2,
-  Cpu,
-  Layers,
-  Search,
-  Database,
-  RefreshCw,
-  X,
-  ChevronDown,
-  Network,
+  Brain,
   Compass,
-  Sliders,
-  Save,
+  Cpu,
+  Database,
+  Layers,
+  Link2,
+  Network,
+  Play,
+  Plus,
+  RefreshCw,
   RotateCcw,
+  Save,
+  Search,
+  Sliders,
+  X,
+  Zap,
 } from "lucide-react";
-import { useEngineSettingsStore } from "../../store/engineSettingsStore";
-import { SchemaConfig } from "../../api/types";
-import { SelectedItem } from "./types";
-import { ContextualInspectorRail } from "./components/ContextualInspectorRail";
-import { ResizablePanel } from "../ResizablePanel";
+import {useEngineSettingsStore} from "../../store/engineSettingsStore";
+import {SchemaConfig} from "../../api/types";
+import {SelectedItem} from "./types";
+import {ContextualInspectorRail} from "./components/ContextualInspectorRail";
+import {DecisionEngineConfigPanel} from "./components/DecisionEngineConfigPanel";
+import {DecisionPlaygroundModal} from "./components/DecisionPlaygroundModal";
+import {ResizablePanel} from "../ResizablePanel";
 import {
+  OntologyArgRelationsTable,
+  OntologyComponentsTable,
   OntologyNodesTable,
   OntologyRelationsTable,
-  OntologyComponentsTable,
-  OntologyArgRelationsTable,
-  UnmappedDiscoveredTable,
   UnmappedAliasesTable,
+  UnmappedDiscoveredTable,
 } from "./components/EngineTanStackTables";
 
 export const EngineSettingsPage: React.FC = () => {
@@ -39,6 +42,16 @@ export const EngineSettingsPage: React.FC = () => {
     isLoading,
     isSaving,
     error,
+    activeCategory,
+    setActiveCategory,
+    ontologySubTab,
+    setOntologySubTab,
+    unmappedSubTab,
+    setUnmappedSubTab,
+    selectedItem,
+    setSelectedItem,
+    selectedUnmapped,
+    setSelectedUnmapped,
     fetchEngineSettings,
     fetchUnmappedPredicates,
     updateEngineSettings,
@@ -46,28 +59,13 @@ export const EngineSettingsPage: React.FC = () => {
     mapPredicate,
   } = useEngineSettingsStore();
 
-  // Rail 1: Top-Level Configuration Tree Category
-  const [activeCategory, setActiveCategory] = useState<"ontology" | "unmapped" | "models">("ontology");
-
-  // Rail 2: Zero-Box Sub-Tab Scoping (Localized Compact Controls)
-  const [ontologySubTab, setOntologySubTab] = useState<
-    "nodes" | "relations" | "components" | "arg_relations"
-  >("nodes");
-  const [unmappedSubTab, setUnmappedSubTab] = useState<"discovered" | "aliases">("discovered");
-
-  // Rail 3: Contextual Inspector Selection (Master-Detail Pattern)
-  const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(() => ({
-    type: "node",
-    id: "Concept",
-  }));
-
   // Search filters
   const [searchFilter, setSearchFilter] = useState("");
   const [unmappedSearch, setUnmappedSearch] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isDecisionPlaygroundOpen, setIsDecisionPlaygroundOpen] = useState(false);
 
-  // Multi-select state for unmapped predicates
-  const [selectedUnmapped, setSelectedUnmapped] = useState<Set<string>>(new Set());
+  // Multi-select state for unmapped predicates batch canonical
   const [batchCanonical, setBatchCanonical] = useState<string>("");
   const [isBatchMapping, setIsBatchMapping] = useState(false);
 
@@ -80,6 +78,22 @@ export const EngineSettingsPage: React.FC = () => {
     reranker_model: "Alibaba-NLP/gte-reranker-modernbert-base",
     temperature: 0.0,
     thinking_level: "off",
+  });
+  const [draftDecisionEngine, setDraftDecisionEngine] = useState<any>({
+    provider: "laya",
+    model_checkpoint: "aac6fef/laya-mlx",
+    device: "auto",
+    fast_exit_threshold: 0.92,
+    uncertainty_threshold: 0.55,
+    stochastic_audit_rate: 0.05,
+    phase_gates: {
+      phase2_entity_discovery: true,
+      phase3_global_relations: true,
+      phase4_argument_mining: true,
+      phase4_entity_maturation: true,
+      phase5_fusion: true,
+      phase6_theorynet: true,
+    },
   });
 
   // Sync draft from loaded settings
@@ -96,6 +110,9 @@ export const EngineSettingsPage: React.FC = () => {
       setDraftAliases(settings.predicate_aliases || {});
       if (settings.models) {
         setDraftModels(settings.models);
+      }
+      if (settings.decision_engine) {
+        setDraftDecisionEngine(settings.decision_engine);
       }
     }
   }, [schema, settings]);
@@ -131,7 +148,7 @@ export const EngineSettingsPage: React.FC = () => {
           setSelectedItem({ type: "alias", id: firstAlias });
         }
       }
-    } else if (activeCategory === "models") {
+    } else if (activeCategory === "models" || activeCategory === "decision") {
       setSelectedItem(null);
     }
   }, [activeCategory, ontologySubTab, unmappedSubTab]);
@@ -153,8 +170,10 @@ export const EngineSettingsPage: React.FC = () => {
     const aliasesChanged =
       JSON.stringify(draftAliases) !== JSON.stringify(settings.predicate_aliases || {});
     const modelsChanged = JSON.stringify(draftModels) !== JSON.stringify(settings.models || {});
-    return schemaChanged || aliasesChanged || modelsChanged;
-  }, [draftSchema, draftAliases, draftModels, settings]);
+    const decisionChanged =
+      JSON.stringify(draftDecisionEngine) !== JSON.stringify(settings.decision_engine || {});
+    return schemaChanged || aliasesChanged || modelsChanged || decisionChanged;
+  }, [draftSchema, draftAliases, draftModels, draftDecisionEngine, settings]);
 
   const handleSave = async () => {
     try {
@@ -162,6 +181,7 @@ export const EngineSettingsPage: React.FC = () => {
         schema_config: draftSchema,
         predicate_aliases: draftAliases,
         models: draftModels,
+        decision_engine: draftDecisionEngine,
       });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -692,6 +712,43 @@ export const EngineSettingsPage: React.FC = () => {
                   )}
                 </div>
               </button>
+
+              {/* Decision Engine (Jev) */}
+              <button
+                type="button"
+                onClick={() => setActiveCategory("decision")}
+                className={`w-full px-2.5 py-2 rounded-md text-left transition-colors cursor-pointer relative group flex items-center justify-between gap-2 ${
+                  activeCategory === "decision"
+                    ? "bg-app-subtle text-app-heading font-medium"
+                    : "hover:bg-app-subtle/50 text-app-muted hover:text-app-heading"
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-5 flex justify-center shrink-0">
+                    <Zap className="w-3.5 h-3.5 text-app-muted" />
+                  </div>
+                  <div className="min-w-0">
+                    <div
+                      className={`text-xs truncate ${
+                        activeCategory === "decision"
+                          ? "font-semibold text-app-heading"
+                          : "text-app-text font-normal"
+                      }`}
+                    >
+                      Decision Engine (System 1)
+                    </div>
+                    <div className="text-[11px] text-app-muted font-sans truncate">
+                      System 1/2 Dual Process
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {activeCategory === "decision" && (
+                    <span className="w-1.5 h-1.5 rounded-full text-app-muted inline-block shrink-0" />
+                  )}
+                </div>
+              </button>
             </div>
           </div>
         </div>
@@ -726,7 +783,9 @@ export const EngineSettingsPage: React.FC = () => {
                   ? "Epistemic Ontology"
                   : activeCategory === "unmapped"
                   ? "Open-Vocabulary"
-                  : "Runtime Inference"}
+                  : activeCategory === "models"
+                  ? "Runtime Inference"
+                  : "Decision Engine (Jev)"}
               </span>
               <span className="text-app-muted">/</span>
               <span className="font-semibold text-app-text truncate">
@@ -737,6 +796,7 @@ export const EngineSettingsPage: React.FC = () => {
                 {activeCategory === "unmapped" && unmappedSubTab === "discovered" && "Discovered In Runs"}
                 {activeCategory === "unmapped" && unmappedSubTab === "aliases" && "Configured Aliases"}
                 {activeCategory === "models" && "Model & Reasoning Defaults"}
+                {activeCategory === "decision" && "System 1/2 Dual Process & Calibration"}
               </span>
             </div>
 
@@ -755,9 +815,14 @@ export const EngineSettingsPage: React.FC = () => {
                 {unmappedSubTab === "aliases" && `${totalAliasesCount} active`}
               </span>
             )}
+            {activeCategory === "decision" && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-app-border text-app-muted">
+                {(draftDecisionEngine?.provider || "laya").toUpperCase()} · {((draftDecisionEngine?.fast_exit_threshold ?? 0.92) * 100).toFixed(0)}% fast-exit
+              </span>
+            )}
 
             {/* Keyboard shortcut hint */}
-            {activeCategory !== "models" && (
+            {activeCategory !== "models" && activeCategory !== "decision" && (
               <div className="hidden lg:flex items-center gap-1 text-[11px] text-app-muted font-mono ml-2 pl-3 border-l border-app-border">
                 <kbd className="px-1.5 py-0.5 rounded bg-app-subtle border border-app-border text-[10px] text-app-muted">j</kbd>
                 <kbd className="px-1.5 py-0.5 rounded bg-app-subtle border border-app-border text-[10px] text-app-muted">k</kbd>
@@ -768,7 +833,7 @@ export const EngineSettingsPage: React.FC = () => {
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-2 shrink-0">
-            {activeCategory !== "models" && (
+            {activeCategory !== "models" && activeCategory !== "decision" && (
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-app-muted/60 dark:text-app-muted pointer-events-none" />
                 <input
@@ -864,6 +929,18 @@ export const EngineSettingsPage: React.FC = () => {
               >
                 <RefreshCw className="w-3 h-3" />
                 <span>Rescan</span>
+              </button>
+            )}
+
+            {activeCategory === "decision" && (
+              <button
+                type="button"
+                onClick={() => setIsDecisionPlaygroundOpen(true)}
+                className="h-7 px-2.5 rounded-[4px] border border-app-border bg-app-surface hover:bg-app-subtle text-app-text text-xs font-sans font-medium transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                title="Open interactive decision playground"
+              >
+                <Play className="w-3.5 h-3.5 text-[#2563EB]" />
+                <span>Launch Playground</span>
               </button>
             )}
 
@@ -1339,209 +1416,216 @@ export const EngineSettingsPage: React.FC = () => {
 
             {/* ── WORKSPACE C: Model & Inference Defaults ── */}
             {activeCategory === "models" && (
-              <div className="w-full flex flex-col">
-                {/* Flush Section Header Banner */}
-                <div className="px-6 py-4 border-b border-app-border bg-app-surface flex items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="type-h1 text-app-text font-display text-base font-semibold">
-                        Pipeline Model & Reasoning Defaults
+              <div className="p-6 sm:p-8 lg:p-10 select-text">
+                <div className="max-w-4xl w-full mx-auto space-y-6">
+                  {/* Title & Description */}
+                  <div className="pb-5 border-b border-app-border/80">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="type-h1 text-app-heading">
+                        Pipeline Defaults
                       </h3>
-                      <span className="type-caption text-app-muted font-mono text-[11px]">
-                        pipeline.models
+                      <span className="type-caption text-app-muted">
+                        Inherited across all stages
                       </span>
                     </div>
-                    <p className="type-body text-app-muted mt-0.5 text-xs font-sans">
-                      Baseline foundation models and inference parameters inherited across all pipeline stages.
+                    <p className="type-body text-app-muted mt-1.5 max-w-2xl">
+                      Establishes baseline foundation models and inference parameters inherited across all pipeline stages.
+                      Individual stages can inherit these defaults or specify targeted custom overrides.
                     </p>
                   </div>
-                </div>
 
-                {/* Edge-to-Edge Docked Parameter Grid */}
-                <div className="w-full divide-y divide-app-border">
-                  {/* Section Header: Foundation Models */}
-                  <div className="px-6 py-2.5 bg-app-surface border-b border-app-border font-sans text-[11px] font-semibold uppercase tracking-[0.05em] text-app-muted">
-                    Foundation Models & Latent Embeddings
-                  </div>
+                  {/* 1. Global Foundational Inference Stack */}
+                  <div className="space-y-4">
+                    <h4 className="type-h2 text-app-heading">
+                      Foundational Inference Stack
+                    </h4>
 
-                  {/* Row 1: Generative LLM Model */}
-                  <div className="px-6 py-3.5 grid grid-cols-1 lg:grid-cols-[280px_1fr] items-center gap-4 hover:bg-app-surface dark:hover:bg-app-subtle/40 transition-colors">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-sans text-xs font-medium text-app-text">
-                          Generative LLM Model
-                        </span>
-                        <span className="font-mono text-[10px] text-[#2563EB] dark:text-blue-400 bg-blue-500/10 px-1 py-0.2 rounded border border-blue-500/20">
-                          LLM
-                        </span>
+                    {/* Generative Model Input */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-app-heading">
+                          Default Generative Model (LLM)
+                        </label>
+                        <span className="font-mono text-[10px] text-app-muted/80">models.llm_model</span>
                       </div>
-                      <span className="font-mono text-[11px] text-app-muted block mt-0.5">
-                        models.llm_model
-                      </span>
-                      <p className="text-[11px] font-sans text-app-muted mt-1">
-                        Primary generative model for extraction, synthesis, and argument mining.
-                      </p>
-                    </div>
-                    <div className="max-w-xl">
                       <input
                         type="text"
                         value={draftModels.llm_model || ""}
                         onChange={(e) => setDraftModels({ ...draftModels, llm_model: e.target.value })}
                         placeholder="e.g. openai/gpt-4o-mini"
-                        className="w-full h-8 px-3 rounded-[4px] bg-app-surface text-app-text text-xs font-mono border border-app-border focus:border-[#2563EB] focus:outline-none shadow-2xs"
+                        className="w-full h-8 px-3 rounded-md bg-app-subtle/50 hover:bg-app-subtle/80 focus:bg-app-surface text-app-heading border border-app-border text-xs font-mono transition-all focus:outline-none focus:border-blue-500/80"
                       />
-                    </div>
-                  </div>
-
-                  {/* Row 2: Dense Vector Embedding Model */}
-                  <div className="px-6 py-3.5 grid grid-cols-1 lg:grid-cols-[280px_1fr] items-center gap-4 hover:bg-app-surface dark:hover:bg-app-subtle/40 transition-colors">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-sans text-xs font-medium text-app-text">
-                          Dense Vector Embedding Model
-                        </span>
-                        <span className="font-mono text-[10px] text-purple-600 dark:text-purple-400 bg-purple-500/10 px-1 py-0.2 rounded border border-purple-500/20">
-                          Vectors
-                        </span>
-                      </div>
-                      <span className="font-mono text-[11px] text-app-muted block mt-0.5">
-                        models.embedding_model
+                      <span className="text-[11px] text-app-muted block">
+                        Inherited by extraction, entity classification, and argument relation mining stages.
                       </span>
-                      <p className="text-[11px] font-sans text-app-muted mt-1">
-                        Uniform vector latent space for chunking and candidate retrieval.
-                      </p>
                     </div>
-                    <div className="max-w-xl">
+
+                    {/* Model Thinking Level Selector */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Brain className="w-3.5 h-3.5 text-blue-500" />
+                          <label className="text-xs font-medium text-app-heading">
+                            Model Thinking Level
+                          </label>
+                        </div>
+                        <span className="font-mono text-[10px] text-app-muted/80">models.thinking_level</span>
+                      </div>
+
+                      {/* Inset Pill Track */}
+                      <div className="p-0.5 inline-flex flex-wrap items-center bg-app-subtle rounded-md border border-app-border/60 gap-0.5">
+                        {[
+                          { id: "off", label: "Off", description: "Standard non-reasoning mode" },
+                          { id: "low", label: "Low", description: "Fast concise thinking (~1024 tokens)" },
+                          { id: "medium", label: "Medium", description: "Balanced deliberate reasoning (~2048 tokens)" },
+                          { id: "high", label: "High", description: "Deep dialectical analysis (~4096 tokens)" },
+                        ].map((preset) => {
+                          const isSelected = (draftModels.thinking_level || "off").toLowerCase() === preset.id;
+                          return (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => setDraftModels({ ...draftModels, thinking_level: preset.id })}
+                              title={preset.description}
+                              className={`h-6 px-3 rounded text-[11px] font-medium transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                                isSelected
+                                  ? "bg-app-surface text-app-heading shadow-xs font-semibold border border-app-border/80"
+                                  : "text-app-muted hover:text-app-heading hover:bg-app-hover/50"
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <span className="text-[11px] text-app-muted block">
+                        Controls test-time compute and chain-of-thought depth across entity discovery and argumentation phases.
+                      </span>
+                    </div>
+
+                    {/* Dense Embedding Model Input */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-app-heading">
+                          Dense Embedding Model
+                        </label>
+                        <span className="font-mono text-[10px] text-app-muted/80">models.embedding_model</span>
+                      </div>
                       <input
                         type="text"
                         value={draftModels.embedding_model || ""}
                         onChange={(e) => setDraftModels({ ...draftModels, embedding_model: e.target.value })}
                         placeholder="e.g. sentence-transformers/all-MiniLM-L6-v2"
-                        className="w-full h-8 px-3 rounded-[4px] bg-app-surface text-app-text text-xs font-mono border border-app-border focus:border-[#2563EB] focus:outline-none shadow-2xs"
+                        className="w-full h-8 px-3 rounded-md bg-app-subtle/50 hover:bg-app-subtle/80 focus:bg-app-surface text-app-heading border border-app-border text-xs font-mono transition-all focus:outline-none focus:border-blue-500/80"
                       />
-                    </div>
-                  </div>
-
-                  {/* Row 3: Cross-Encoder Reranker Model */}
-                  <div className="px-6 py-3.5 grid grid-cols-1 lg:grid-cols-[280px_1fr] items-center gap-4 hover:bg-app-surface dark:hover:bg-app-subtle/40 transition-colors">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-sans text-xs font-medium text-app-text">
-                          Cross-Encoder Reranker Model
-                        </span>
-                        <span className="font-mono text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20">
-                          Reranker
-                        </span>
-                      </div>
-                      <span className="font-mono text-[11px] text-app-muted block mt-0.5">
-                        models.reranker_model
+                      <span className="text-[11px] text-app-muted block">
+                        Uniform vector latent space used across chunking, candidate retrieval, and consolidation.
                       </span>
-                      <p className="text-[11px] font-sans text-app-muted mt-1">
-                        Cross-encoder scoring and relevance thresholding across candidate spans.
-                      </p>
                     </div>
-                    <div className="max-w-xl">
+
+                    {/* Cross-Encoder Reranker Model */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-app-heading">
+                          Cross-Encoder Reranker Model
+                        </label>
+                        <span className="font-mono text-[10px] text-app-muted/80">models.reranker_model</span>
+                      </div>
                       <input
                         type="text"
                         value={draftModels.reranker_model || ""}
                         onChange={(e) => setDraftModels({ ...draftModels, reranker_model: e.target.value })}
                         placeholder="e.g. Alibaba-NLP/gte-reranker-modernbert-base"
-                        className="w-full h-8 px-3 rounded-[4px] bg-app-surface text-app-text text-xs font-mono border border-app-border focus:border-[#2563EB] focus:outline-none shadow-2xs"
+                        className="w-full h-8 px-3 rounded-md bg-app-subtle/50 hover:bg-app-subtle/80 focus:bg-app-surface text-app-heading border border-app-border text-xs font-mono transition-all focus:outline-none focus:border-blue-500/80"
                       />
                     </div>
-                  </div>
 
-                  {/* Section Header: Inference & Budget */}
-                  <div className="px-6 py-2.5 bg-app-surface border-y border-app-border font-sans text-[11px] font-semibold uppercase tracking-[0.05em] text-app-muted">
-                    Inference Telemetry & Reasoning Budget
-                  </div>
+                    {/* Paired Micro-Inputs: Sampling Temperature & Seed */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-app-heading">
+                          Sampling Temperature
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={Number(draftModels.temperature ?? 0)}
+                            onChange={(e) =>
+                              setDraftModels({
+                                ...draftModels,
+                                temperature: parseFloat(e.target.value),
+                              })
+                            }
+                            className="flex-1 precision-slider accent-blue-600 cursor-pointer"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={Number(draftModels.temperature ?? 0).toFixed(2)}
+                            onChange={(e) =>
+                              setDraftModels({
+                                ...draftModels,
+                                temperature: parseFloat(e.target.value) || 0,
+                              })
+                            }
+                            className="w-16 h-7 px-2 text-right font-mono text-xs rounded-md bg-app-subtle/50 text-app-heading border border-app-border focus:outline-none focus:border-blue-500"
+                          />
+                        </div>
+                      </div>
 
-                  {/* Row 4: Generation Temperature */}
-                  <div className="px-6 py-3.5 grid grid-cols-1 lg:grid-cols-[280px_1fr] items-center gap-4 hover:bg-app-surface dark:hover:bg-app-subtle/40 transition-colors">
-                    <div>
-                      <span className="font-sans text-xs font-medium text-app-text">
-                        Generation Temperature
-                      </span>
-                      <span className="font-mono text-[11px] text-app-muted block mt-0.5">
-                        models.temperature
-                      </span>
-                      <p className="text-[11px] font-sans text-app-muted mt-1">
-                        Stochastic sampling variance (0.00 for deterministic epistemic extraction).
-                      </p>
-                    </div>
-                    <div className="max-w-md flex items-center gap-3">
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={Number(draftModels.temperature ?? 0)}
-                        onChange={(e) =>
-                          setDraftModels({
-                            ...draftModels,
-                            temperature: parseFloat(e.target.value),
-                          })
-                        }
-                        className="flex-1 accent-blue-600 cursor-pointer h-1.5 bg-app-border dark:bg-app-subtle rounded-lg"
-                      />
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="1"
-                        value={Number(draftModels.temperature ?? 0).toFixed(2)}
-                        onChange={(e) =>
-                          setDraftModels({
-                            ...draftModels,
-                            temperature: parseFloat(e.target.value) || 0,
-                          })
-                        }
-                        className="w-16 h-7 px-1.5 text-right font-mono text-xs rounded-[4px] bg-app-surface text-app-text border border-app-border focus:border-[#2563EB] focus:outline-none"
-                        style={{ fontFeatureSettings: '"tnum" 1' }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Row 5: Reasoning Thinking Budget */}
-                  <div className="px-6 py-3.5 grid grid-cols-1 lg:grid-cols-[280px_1fr] items-center gap-4 hover:bg-app-surface dark:hover:bg-app-subtle/40 transition-colors">
-                    <div>
-                      <span className="font-sans text-xs font-medium text-app-text">
-                        Reasoning Thinking Budget
-                      </span>
-                      <span className="font-mono text-[11px] text-app-muted block mt-0.5">
-                        models.thinking_level
-                      </span>
-                      <p className="text-[11px] font-sans text-app-muted mt-1">
-                        Deliberate token budget allocation for extended dialectical reasoning.
-                      </p>
-                    </div>
-                    <div className="max-w-md">
-                      <div className="h-7 p-0.5 inline-flex items-center bg-app-subtle/60 rounded-[4px] border border-app-border/60 text-xs w-full gap-0.5">
-                        {[
-                          { id: "off", label: "Off" },
-                          { id: "low", label: "Low" },
-                          { id: "medium", label: "Med" },
-                          { id: "high", label: "High" },
-                        ].map((tier) => {
-                          const isSelected = (draftModels.thinking_level || "off").toLowerCase() === tier.id;
-                          return (
-                            <button
-                              key={tier.id}
-                              type="button"
-                              onClick={() => setDraftModels({ ...draftModels, thinking_level: tier.id })}
-                              className={`flex-1 h-6 rounded-[3px] text-xs transition-all cursor-pointer text-center font-mono ${
-                                isSelected
-                                  ? "bg-app-surface text-app-text font-semibold border border-app-border/80 shadow-2xs"
-                                  : "text-app-muted hover:text-app-text dark:hover:text-app-heading hover:bg-app-bg/50"
-                              }`}
-                            >
-                              {tier.label}
-                            </button>
-                          );
-                        })}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-app-heading">
+                          Global Determinism Seed
+                        </label>
+                        <input
+                          type="number"
+                          value={draftModels.seed ?? 42}
+                          onChange={(e) =>
+                            setDraftModels({
+                              ...draftModels,
+                              seed: parseInt(e.target.value, 10) || 0,
+                            })
+                          }
+                          className="w-full h-7 px-2.5 font-mono text-xs rounded-md bg-app-subtle/50 text-app-heading border border-app-border focus:outline-none focus:border-blue-500"
+                        />
                       </div>
                     </div>
                   </div>
+
+                  {/* 2. Infrastructure & Telemetry Notice Card */}
+                  <div className="p-3.5 rounded-lg border border-app-border/80 bg-app-subtle/30 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Database className="w-4 h-4 text-blue-500 shrink-0" />
+                      <div>
+                        <h5 className="font-semibold text-xs text-app-heading">
+                          Langfuse Observability & Host Credentials
+                        </h5>
+                        <p className="text-[11px] text-app-muted mt-0.5">
+                          Infrastructure credentials, port numbers, and authentication keys are managed in Project Settings.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── WORKSPACE D: Decision Engine (Jev) Calibration & Routing ── */}
+            {activeCategory === "decision" && (
+              <div className="p-6 sm:p-8 lg:p-10 select-text">
+                <div className="max-w-4xl w-full mx-auto">
+                  <DecisionEngineConfigPanel
+                    draftSettings={draftDecisionEngine}
+                    onChange={(patch) =>
+                      setDraftDecisionEngine((prev: any) => ({ ...prev, ...patch }))
+                    }
+                  />
                 </div>
               </div>
             )}
@@ -1581,6 +1665,8 @@ export const EngineSettingsPage: React.FC = () => {
           totalRelationCount={totalRelationCount}
           totalAliasesCount={totalAliasesCount}
           draftModels={draftModels}
+          draftDecisionEngine={draftDecisionEngine}
+          activeCategory={activeCategory}
         />
       </ResizablePanel>
       {/* ─────────────────────────────────────────────────────────────────── */}
@@ -1842,6 +1928,13 @@ export const EngineSettingsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Decision Playground Modal */}
+      <DecisionPlaygroundModal
+        isOpen={isDecisionPlaygroundOpen}
+        onClose={() => setIsDecisionPlaygroundOpen(false)}
+        config={draftDecisionEngine}
+      />
     </div>
   );
 };

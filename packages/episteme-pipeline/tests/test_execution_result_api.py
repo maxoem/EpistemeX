@@ -1,13 +1,22 @@
 from pathlib import Path
 
 import pytest
-
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext, Phase1ArtifactsView, Phase2ArtifactsView
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+    Phase1ArtifactsView,
+    Phase2ArtifactsView,
+)
 from episteme_pipeline.config import PipelineConfig
-from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.contracts.domain import L1Chunk, L1Document, L2Entity, L2Triple
+from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
-from episteme_pipeline.runs.models import ExecutionResult, RunManifest, RunPhaseRecord, RunStatus
+from episteme_pipeline.runs.models import (
+    ExecutionResult,
+    RunManifest,
+    RunPhaseRecord,
+    RunStatus,
+)
 
 
 class StubPhase1:
@@ -31,7 +40,10 @@ class StubPhase1:
                 sequence_index=0,
                 token_count=1,
             )
-            from episteme_pipeline.artifacts.builders import build_document_artifact, build_chunk_artifact
+            from episteme_pipeline.artifacts.builders import (
+                build_chunk_artifact,
+                build_document_artifact,
+            )
             artifacts.append(build_document_artifact(document, run_id=context.run_id, phase_name=self.name, method="test.phase1"))
             artifacts.append(build_chunk_artifact(chunk, run_id=context.run_id, phase_name=self.name, method="test.phase1"))
         return ArtifactCollection(artifacts)
@@ -43,10 +55,14 @@ class StubPhase2:
     async def run(self, input: Phase1ArtifactsView, context: ArtifactExecutionContext):
         entity = L2Entity(id="entity-1", label="PERSON", name="Kant", source_chunk_ids=["chunk-1"])
         triple = L2Triple(subject_id="entity-1", predicate="MENTIONS", object_id="entity-1", confidence=1.0, scope="local", source_chunk_id="chunk-1")
-        from episteme_pipeline.artifacts.builders import build_entity_mention_artifact, build_linked_entity_artifact, build_local_relation_artifact
+        from episteme_pipeline.artifacts.builders import (
+            build_entity_mention_artifact,
+            build_linked_entity_artifact,
+            build_local_relation_artifact,
+        )
         mention = build_entity_mention_artifact(entity, "chunk-1", run_id=context.run_id, phase_name=self.name, method="test.phase2")
         linked = build_linked_entity_artifact(entity, [mention.artifact_id], run_id=context.run_id, phase_name=self.name, method="test.phase2")
-        relation = build_local_relation_artifact(triple, 0, run_id=context.run_id, phase_name=self.name, method="test.phase2")
+        relation = build_local_relation_artifact(triple, run_id=context.run_id, phase_name=self.name, method="test.phase2")
         return ArtifactCollection([mention, linked, relation])
 
 

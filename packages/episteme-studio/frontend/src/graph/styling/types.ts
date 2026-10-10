@@ -1,5 +1,5 @@
-import type { Overlay, MetricResult, GraphDiffView, MetricRunInstance } from "../../api/types.ts";
-import type { GraphSettings } from "../../store/graphSettingsStore.ts";
+import type {GraphDiffView, MetricResult, MetricRunInstance, Overlay} from "../../api/types.ts";
+import type {GraphSettings} from "../../store/graphSettingsStore.ts";
 
 export interface NodeStyleContext {
   isDark: boolean;

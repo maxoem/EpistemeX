@@ -1,0 +1,24 @@
+{
+  "artifact_id": "entity_M_DissF6_Corroboration",
+  "identity_key": "entity_M_DissF6_Corroboration",
+  "kind": "linked_entity",
+  "run_id": "run-demo-festinger1959",
+  "phase_name": "Phase 2: Entity & Local Relation Discovery",
+  "payload": {
+    "entity_id": "str:M_DissF6_Corroboration",
+    "entity_type": "ActualModel",
+    "canonical_name": "M(DissF6) - Experimental Corroboration Law",
+    "description": "Observed empirical model: opinion change in $1 condition exceeds $20 condition.",
+    "confidence": 1.0,
+    "source_chunk_ids": [
+      "chunk_fc1959_ratio_law"
+    ]
+  },
+  "provenance": {
+    "source_path": "datasets/run-demo-festinger1959.cypher",
+    "notes": {
+      "generated": "demo_fixture"
+    }
+  },
+  "created_at": "2026-09-01T10:00:00Z"
+}

@@ -1,0 +1,149 @@
+{
+  "run_id": "run-demo-festinger1959",
+  "pipeline_version": "0.1.0",
+  "schema_version": "v1",
+  "status": "completed",
+  "created_at": "2026-09-02T14:00:00Z",
+  "started_at": "2026-09-02T14:00:05Z",
+  "completed_at": "2026-09-02T14:03:45Z",
+  "duration_seconds": 220.0,
+  "primary_input": "festinger_carlsmith_1959.md",
+  "input_sources": [
+    "datasets/festinger_carlsmith_1959.md"
+  ],
+  "tags": [
+    "demo",
+    "psychology",
+    "cognitive-dissonance",
+    "festinger-carlsmith",
+    "structuralism"
+  ],
+  "models": {
+    "llm_model": "anthropic/claude-3-5-sonnet",
+    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "reranker_model": "Alibaba-NLP/gte-reranker-modernbert-base",
+    "thinking_level": "high"
+  },
+  "phase_records": [
+    {
+      "ordinal": 1,
+      "phase_name": "Phase 1: Data Foundation",
+      "status": "completed",
+      "reused": false,
+      "artifact_count": 7
+    },
+    {
+      "ordinal": 2,
+      "phase_name": "Phase 2: Entity & Local Relation Discovery",
+      "status": "completed",
+      "reused": false,
+      "artifact_count": 9
+    },
+    {
+      "ordinal": 3,
+      "phase_name": "Phase 3: Global Relation Extraction",
+      "status": "completed",
+      "reused": false,
+      "artifact_count": 0
+    },
+    {
+      "ordinal": 4,
+      "phase_name": "Phase 3b: Latent Graph Consolidation",
+      "status": "completed",
+      "reused": false,
+      "artifact_count": 3
+    },
+    {
+      "ordinal": 5,
+      "phase_name": "Phase 4: Entity Maturation",
+      "status": "completed",
+      "reused": false,
+      "artifact_count": 9
+    },
+    {
+      "ordinal": 6,
+      "phase_name": "Phase 4: Argument Mining",
+      "status": "completed",
+      "reused": false,
+      "artifact_count": 9
+    },
+    {
+      "ordinal": 7,
+      "phase_name": "Phase 5: Inter-Document Argument Web",
+      "status": "completed",
+      "reused": false,
+      "artifact_count": 8
+    },
+    {
+      "ordinal": 8,
+      "phase_name": "Phase 6: TheoryNet Projection",
+      "status": "completed",
+      "reused": false,
+      "artifact_count": 9
+    }
+  ],
+  "artifact_counts_by_kind": {
+    "document": 1,
+    "chunk": 6,
+    "entity": 9,
+    "theory_atom": 9,
+    "theory_relation": 8
+  },
+  "config_snapshot": {
+    "default_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "models": {
+      "llm_model": "anthropic/claude-3-5-sonnet",
+      "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+      "reranker_model": "Alibaba-NLP/gte-reranker-modernbert-base"
+    },
+    "graph_schema": {
+      "version": "v1",
+      "node_types": [
+        "TheoryElement",
+        "PotentialModel",
+        "ActualModel",
+        "Paradigm",
+        "Hypothesis",
+        "Evidence"
+      ],
+      "relation_types": [
+        "specializes",
+        "hasPotentialModel",
+        "hasActualModel",
+        "hasParadigm",
+        "attacks"
+      ],
+      "component_types": [
+        "TheoryElement",
+        "PotentialModel",
+        "ActualModel",
+        "Paradigm",
+        "Hypothesis",
+        "Evidence"
+      ],
+      "argument_relation_types": [
+        "specializes",
+        "hasPotentialModel",
+        "hasActualModel",
+        "hasParadigm",
+        "attacks"
+      ],
+      "relation_polarities": {
+        "specializes": 1,
+        "hasPotentialModel": 1,
+        "hasActualModel": 1,
+        "hasParadigm": 1,
+        "attacks": -1
+      },
+      "component_partitions": {
+        "TheoryElement": "A",
+        "PotentialModel": "A",
+        "ActualModel": "A",
+        "Hypothesis": "A",
+        "Paradigm": "B",
+        "Evidence": "B"
+      }
+    }
+  },
+  "fingerprints": {}
+}

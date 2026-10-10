@@ -4,19 +4,18 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-import pytest
-from httpx import ASGITransport, AsyncClient
 
+import pytest
 from episteme_studio.adapters.metrics_adapter import compute_leiden
 from episteme_studio.adapters.neo4j_reader import Neo4jReader
 from episteme_studio.app import create_app
-from episteme_studio.domain.errors import Neo4jUnavailableError
 from episteme_studio.domain.graph import GraphView, Layer, StudioEdge, StudioNode
 from episteme_studio.domain.metrics import MetricScope
 from episteme_studio.domain.overlays import OverlayKind
 from episteme_studio.services.metric_service import MetricService
 from episteme_studio.services.overlay_service import OverlayService
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
 
 
 class _MockNeo4jDriver:
@@ -225,7 +224,7 @@ async def test_metric_service_leiden_fallback_to_igraph() -> None:
     assert result.scope == MetricScope.GLOBAL
     assert result.result_value >= 2
     assert len(result.affected_nodes) == 6
-    for nid, detail in result.affected_nodes.items():
+    for detail in result.affected_nodes.values():
         assert "cluster" in detail.roles
         assert "community" in detail.metadata
 

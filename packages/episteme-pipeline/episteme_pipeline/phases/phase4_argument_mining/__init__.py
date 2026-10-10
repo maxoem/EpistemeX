@@ -26,40 +26,51 @@ See: docs/workflow/4_argument_mining/
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from collections import defaultdict
 
-from episteme_pipeline.config import Phase4Config
-from episteme_pipeline.contracts.domain import (
-    TheoryAtom,
-    TheoryRelation,
+from episteme_pipeline.artifacts.builders import (
+    build_argument_component_artifact,
+    build_argument_relation_artifact,
 )
-from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import LLMACCClassifier
-from episteme_pipeline.phases.phase4_argument_mining.adu_segmenter import LLMADUSegmenter
-from episteme_pipeline.phases.phase4_argument_mining.arc_classifier import TAGARCClassifier
-from episteme_pipeline.protocols.argument_mining import (
-    ACCClassifier,
-    ADUSegmenter,
-    ARCClassifier,
-)
-from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
-from episteme_pipeline.phases.chunk_selection import select_pending_chunks
-from episteme_pipeline.protocols.graph_store import ProcessingGraph
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
     Phase3ArtifactsView,
 )
-from episteme_pipeline.artifacts.builders import (
-    build_argument_component_artifact,
-    build_argument_relation_artifact,
+from episteme_pipeline.config import Phase4Config
+from episteme_pipeline.contracts.domain import (
+    TheoryAtom,
+    TheoryRelation,
 )
-from episteme_pipeline.events.bus import EventEmitter, NoOpEventEmitter
+from episteme_pipeline.decision.gleaning import GleaningStoppingOracle, JevGleaningGate
+from episteme_pipeline.decision.modal_resolver import HybridModalResolver
+from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.events.models import (
     ProgressAdvanced,
     ProgressCompleted,
     ProgressStarted,
+)
+from episteme_pipeline.phases.chunk_selection import select_pending_chunks
+from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import (
+    LLMACCClassifier,
+)
+from episteme_pipeline.phases.phase4_argument_mining.adu_segmenter import (
+    LLMADUSegmenter,
+)
+from episteme_pipeline.phases.phase4_argument_mining.arc_classifier import (
+    TAGARCClassifier,
+)
+from episteme_pipeline.protocols.argument_mining import (
+    ACCClassifier,
+    ADUSegmenter,
+    ARCClassifier,
+)
+from episteme_pipeline.protocols.decision import DecisionEngine
+from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
+from episteme_pipeline.protocols.graph_store import ProcessingGraph
+from episteme_pipeline.protocols.modality import (
+    ModalStrengthResolver,
+    ensure_modal_strength_resolver,
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.schema.default_schema import SchemaConfig
@@ -87,16 +98,59 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         acc_classifier: ACCClassifier | None = None,
         arc_classifier: ARCClassifier | None = None,
         global_extractor: GlobalRelationExtractor | None = None,
+        decision_engine: DecisionEngine | None = None,
+        stopping_oracle: GleaningStoppingOracle | None = None,
+        modal_resolver: ModalStrengthResolver | None = None,
     ) -> None:
+        """Initialize Phase 4 Argument Mining runner.
+
+        Parameters
+        ----------
+        config : Phase4Config
+            Phase 4 configuration parameters.
+        schema : SchemaConfig
+            Schema taxonomy containing allowable component and relation types.
+        llm : Any
+            Language model instance.
+        embedding_model : Any
+            Embedding model for semantic similarity or candidate blocking.
+        graph_store : ProcessingGraph
+            Active graph store for reading and writing components and relations.
+        adu_segmenter : ADUSegmenter or None, default None
+            Optional segmenter override. If omitted, constructed per chunk.
+        acc_classifier : ACCClassifier or None, default None
+            Optional component classifier override.
+        arc_classifier : ARCClassifier or None, default None
+            Optional relation classifier override.
+        global_extractor : GlobalRelationExtractor or None, default None
+            Optional global relation extractor used for graph context.
+        decision_engine : DecisionEngine or None, default None
+            Optional calibrated decision engine for System 1 triage or cascading.
+        stopping_oracle : GleaningStoppingOracle or None, default None
+            Stopping oracle for actor-critic gleaning passes.
+        modal_resolver : ModalStrengthResolver or None, default None
+            Propositional modal strength resolver. If None, initialized from config and decision engine.
+        """
         self.config = config
         self.schema = schema
         self.llm = llm
         self.embedding_model = embedding_model
         self.graph_store = graph_store
-        # adu_segmenter and acc_classifier are chunk-scoped; they're created
-        # per-chunk in _process_chunk if not injected.
+        self.global_extractor = global_extractor
+        self.decision_engine = decision_engine
         self._adu_segmenter_override = adu_segmenter
         self._acc_classifier_override = acc_classifier
+
+        self.modal_resolver = ensure_modal_strength_resolver(modal_resolver) or HybridModalResolver.create(
+            config=config.modal_resolver,
+            decision_engine=self.decision_engine,
+        )
+
+        self.stopping_oracle = stopping_oracle or JevGleaningGate.create(
+            decision_engine=decision_engine,
+            config=config.gleaning,
+            prompts=config.acc_prompts,
+        )
         self.arc_classifier = arc_classifier or (
             TAGARCClassifier(
                 llm=llm,
@@ -111,7 +165,10 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             if global_extractor is not None
             else None
         )
-        self.global_extractor = global_extractor
+
+    @property
+    def gleaning_gate(self) -> GleaningStoppingOracle:
+        return self.stopping_oracle
 
     @property
     def event_emitter(self) -> EventEmitter:
@@ -128,8 +185,8 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         all_components: list[TheoryAtom] = await self.graph_store.get_theory_atoms()
         all_local_relations: list[TheoryRelation] = []
 
-        from itertools import batched
         import asyncio
+        from itertools import batched
 
         progress_task = f"Phase 4: Chunk ADU Extraction ({len(chunks)} chunks)"
         if chunks:
@@ -141,9 +198,8 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 )
             )
 
-        # Process and checkpoint in batches of config.batch_size (defaulting to 50 if missing)
-        batch_size = getattr(self.config, "batch_size", 50)
-        
+        batch_size = self.config.batch_size
+
         for batch_idx, chunk_batch in enumerate(batched(chunks, batch_size)):
             logger.info(f"Mining arguments for chunk batch {batch_idx + 1}...")
             tasks = [self._process_chunk(chunk.id, chunk.text) for chunk in chunk_batch]
@@ -182,24 +238,15 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                             "to_id": entity_id,
                             "properties": {"confidence": 1.0},
                         })
-                for rel in local_rels:
-                    relations_to_upsert.append({
-                        "from_id": rel.source_id,
-                        "relation_type": rel.relation_type,
-                        "to_id": rel.target_id,
-                        "properties": {
-                            "confidence": rel.confidence,
-                            "scope": rel.scope,
-                            "weight": rel.weight,
-                        },
-                    })
-    
             all_components.extend(new_components)
             all_local_relations.extend(new_local_relations)
     
             # Batch persist local findings for this checkpoint
             for comp_batch in batched(new_components, 500):
                 await self.graph_store.upsert_argument_components(list(comp_batch))
+
+            for rel_batch in batched(new_local_relations, 500):
+                await self.graph_store.upsert_theory_relations(list(rel_batch))
             
             for rel_batch in batched(relations_to_upsert, 500):
                 await self.graph_store.upsert_relations(list(rel_batch))
@@ -251,20 +298,8 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 self.event_emitter.emit(ProgressCompleted(task_name=arc_task))
             
             # Commit global argument relations
-            global_relations_to_upsert = []
-            for rel in global_relations:
-                global_relations_to_upsert.append({
-                    "from_id": rel.source_id,
-                    "relation_type": rel.relation_type,
-                    "to_id": rel.target_id,
-                    "properties": {
-                        "confidence": rel.confidence,
-                        "scope": rel.scope,
-                        "weight": rel.weight,
-                    },
-                })
-            for rel_batch in batched(global_relations_to_upsert, 500):
-                await self.graph_store.upsert_relations(list(rel_batch))
+            for rel_batch in batched(global_relations, 500):
+                await self.graph_store.upsert_theory_relations(list(rel_batch))
 
         if processed_chunk_ids:
             for chunk_batch in batched(processed_chunk_ids, 500):
@@ -334,7 +369,62 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 if r.source_id in valid_component_ids and r.target_id in valid_component_ids
             ]
 
+        # Step 3: Optional Actor-Critic Gleaning Refinement
+        pass_count = 0
+        while True:
+            should_continue, _ = await self.stopping_oracle.should_glean(
+                chunk_text=chunk_text,
+                current_extractions=components,
+                pass_count=pass_count,
+            )
+            if not should_continue:
+                break
+            pass_count += 1
+
+            prior_components_text = "\n".join([f"- {c.text}" for c in components])
+            refinement_input = (
+                f"{chunk_text}\n\n"
+                f"Previously identified argument components:\n{prior_components_text}\n"
+                f"Please identify any additional missed Argumentative Discourse Units."
+            )
+            refine_tagged_text, new_adu_ids = await segmenter.segment(
+                f"{chunk_id}_refine_{pass_count}", refinement_input
+            )
+            if not new_adu_ids:
+                break
+
+            new_components, new_rels = await classifier.classify(
+                chunk_id=chunk_id,
+                tagged_text=refine_tagged_text,
+                adu_ids=new_adu_ids,
+                schema=self.schema,
+                chunk_entities=chunk_entities,
+            )
+            if not new_components:
+                break
+
+            existing_ids = {c.id for c in components}
+            added_any = False
+            for nc in new_components:
+                if nc.id not in existing_ids:
+                    components.append(nc)
+                    existing_ids.add(nc.id)
+                    added_any = True
+            for nr in new_rels:
+                if nr.source_id in existing_ids and nr.target_id in existing_ids:
+                    local_relations.append(nr)
+
+            if not added_any:
+                break
+
         if not components:
             return [], [], chunk_id
+
+        # Resolve authorial propositional modal strength on newly mined components
+        if self.modal_resolver:
+            for c in components:
+                if "modal_strength" not in c.model_fields_set and "base_score" not in c.model_fields_set:
+                    c.modal_strength = await self.modal_resolver.resolve_modality(c, context=chunk_text)
+                    c.base_score = c.modal_strength
 
         return components, local_relations, chunk_id

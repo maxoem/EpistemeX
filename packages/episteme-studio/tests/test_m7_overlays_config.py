@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from episteme_studio.adapters.metrics_adapter import (
     compute_component,
     compute_degree,
@@ -21,6 +18,7 @@ from episteme_studio.domain.overlays import OverlayKind
 from episteme_studio.services.config_service import ConfigService
 from episteme_studio.services.overlay_service import OverlayService
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
 
 
 def create_sample_graph(

@@ -2,9 +2,9 @@
  * Stage lifecycle grouping and artifact yield definitions for dynamic pipeline stages.
  */
 
-import type { PhaseStatus } from "../api/types.ts";
-import { resolvePhaseKey } from "./phaseConfig/phaseConfigResolver.ts";
-import { PHASE_REGISTRY } from "./phaseConfig/phaseRegistry.ts";
+import type {PhaseStatus} from "../api/types.ts";
+import {resolvePhaseKey} from "./phaseConfig/phaseConfigResolver.ts";
+import {PHASE_REGISTRY} from "./phaseConfig/phaseRegistry.ts";
 
 export type PipelineLifecycleGroup = "ingest" | "extraction" | "synthesis" | "post";
 

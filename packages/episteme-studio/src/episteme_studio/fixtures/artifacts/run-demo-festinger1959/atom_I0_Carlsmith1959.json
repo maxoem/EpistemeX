@@ -1,0 +1,28 @@
+{
+  "artifact_id": "atom_I0_Carlsmith1959",
+  "identity_key": "atom_I0_Carlsmith1959",
+  "kind": "theory_atom",
+  "run_id": "run-demo-festinger1959",
+  "phase_name": "Phase 4: Argument Mining",
+  "payload": {
+    "component_id": "str:I0_Carlsmith1959",
+    "component_type": "Paradigm",
+    "text": "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm",
+    "confidence": 1.0,
+    "source_chunk_id": "chunk_fc1959_procedure_summary",
+    "text_anchor": {
+      "sourceDocId": "festinger_carlsmith_1959",
+      "chunkId": "chunk_fc1959_procedure_summary",
+      "charStart": 31652,
+      "charEnd": 31983,
+      "verbatimQuote": "A laboratory experiment was designed to test these derivations. Subjects were subjected to a boring experience and then paid to tell someone that the experience had been interesting and enjoyable. The amount of money paid the subject was varied. The private opinions of the subjects concerning the experiences were then determined."
+    }
+  },
+  "provenance": {
+    "source_path": "datasets/run-demo-festinger1959.cypher",
+    "notes": {
+      "generated": "demo_fixture"
+    }
+  },
+  "created_at": "2026-09-01T10:00:00Z"
+}

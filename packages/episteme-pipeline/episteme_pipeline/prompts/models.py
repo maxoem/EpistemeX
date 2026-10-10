@@ -7,6 +7,7 @@ prompt templates across extraction and classification phases.
 from __future__ import annotations
 
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -23,6 +24,10 @@ class StructuredPromptBundle(BaseModel):
         Format conversion prompt template (NL-to-Format pass 2).
     gleaning_template : str or None, optional
         Secondary extraction pass template for missed mentions/triples.
+    decision_template : str or None, optional
+        Decision question or rubric template for System 1 decision engine.
+    decision_criteria : dict or list or None, optional
+        Rubric criteria definitions or categorical option explanations.
     name : str or None, optional
         Canonical prompt name in prompt store (e.g. 'ner_extraction').
     version : int or str or None, optional
@@ -39,8 +44,41 @@ class StructuredPromptBundle(BaseModel):
     reasoning_template: str | None = None
     format_template: str | None = None
     gleaning_template: str | None = None
+    decision_template: str | None = None
+    decision_criteria: dict[str, str] | list[str] | None = None
     name: str | None = None
     version: int | str | None = None
     label: str | None = None
     provider: str = "default"
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    def to_decision_question(
+        self,
+        type: str = "choice",
+        format_kwargs: dict[str, Any] | None = None,
+        alpha: float | None = None,
+    ) -> Any:
+        """Convert this bundle into a strongly-typed DecisionQuestion contract.
+
+        Parameters
+        ----------
+        type : str, default "choice"
+            Evaluation modality ('choice', 'noul', or 'score').
+        format_kwargs : dict of str to Any or None, optional
+            Keyword formatting arguments to interpolate into the template.
+        alpha : float or None, optional
+            Conformal prediction significance level.
+
+        Returns
+        -------
+        DecisionQuestion
+            Instantiated typed decision question specification.
+        """
+        from episteme_pipeline.protocols.decision import DecisionQuestion
+
+        return DecisionQuestion.from_bundle(
+            bundle=self,
+            type=type,  # type: ignore[arg-type]
+            format_kwargs=format_kwargs,
+            alpha=alpha,
+        )

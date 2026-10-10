@@ -6,7 +6,7 @@ prompt bundles into pipeline configurations.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 

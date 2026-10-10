@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Self
 
 try:
     from rich.console import Console
@@ -75,12 +76,12 @@ class RichProgressObserver(EventObserver):
 
     def __init__(
         self,
-        progress: Optional[Progress] = None,
-        console: Optional[Console] = None,
-        third_party_log_level: Optional[int] = logging.WARNING,
+        progress: Progress | None = None,
+        console: Console | None = None,
+        third_party_log_level: int | None = logging.WARNING,
         auto_refresh: bool = True,
         transient: bool = False,
-        columns: Optional[Sequence[Any]] = None,
+        columns: Sequence[Any] | None = None,
         sync_root_handlers: bool = True,
     ) -> None:
         if Progress is None:
@@ -95,7 +96,7 @@ class RichProgressObserver(EventObserver):
         self.sync_root_handlers = sync_root_handlers
 
         self._owns_progress = False
-        self._tasks: Dict[str, TaskID] = {}
+        self._tasks: dict[str, TaskID] = {}
 
     @property
     def console(self) -> Console:
@@ -140,7 +141,7 @@ class RichProgressObserver(EventObserver):
             **kwargs,
         )
 
-    def __enter__(self) -> RichProgressObserver:
+    def __enter__(self) -> Self:
         """Start the progress display and configure logger coordination.
 
         Returns

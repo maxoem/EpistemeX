@@ -4,15 +4,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from episteme_pipeline.prompts.input_formatters import InputFormatStrategy, format_subgraph_envelope
+from episteme_pipeline.prompts.input_formatters import (
+    InputFormatStrategy,
+    format_subgraph_envelope,
+)
 
 if TYPE_CHECKING:
     from episteme_pipeline.contracts.domain import SubGraph
 
 
 def format_envelope(
-    env_a: "SubGraph", 
-    env_b: "SubGraph", 
+    env_a: SubGraph, 
+    env_b: SubGraph, 
     include_description: bool = True,
     strategy: InputFormatStrategy = InputFormatStrategy.JSON,
 ) -> str:

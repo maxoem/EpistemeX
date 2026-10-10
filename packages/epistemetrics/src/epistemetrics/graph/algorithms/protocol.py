@@ -8,6 +8,7 @@ Decouples epistemic evaluators and metrics from specific graph computation backe
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
+
 from epistemetrics.core.models import CentralityResult, PartitionResult
 
 

@@ -1,0 +1,49 @@
+services:
+  studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/maxoem/episteme-studio:latest
+    container_name: episteme-studio
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - EPISTEME_STUDIO_NEO4J_URL=bolt://neo4j:7687
+      - EPISTEME_STUDIO_NEO4J_USER=neo4j
+      - EPISTEME_STUDIO_NEO4J_PASSWORD=episteme_password
+      - EPISTEME_STUDIO_EXECUTION_ENABLED=false
+    volumes:
+      # Mount local manifests and artifact stores
+      - ./.pipeline_runs:/app/.pipeline_runs
+      - ./.pipeline_artifacts:/app/.pipeline_artifacts
+      - ./evaluation/reports:/app/evaluation/reports
+    command: ["serve", "--host", "0.0.0.0", "--port", "8000", "--demo"]
+    depends_on:
+      neo4j:
+        condition: service_healthy
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: episteme-neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/episteme_password
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+volumes:
+  neo4j_data:

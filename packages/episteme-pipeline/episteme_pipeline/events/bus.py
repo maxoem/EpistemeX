@@ -10,8 +10,8 @@ The event system follows the Observer pattern:
 """
 from __future__ import annotations
 
-from typing import Protocol, List, Optional, Dict, Any
 from abc import abstractmethod
+from typing import Any, Protocol
 
 from .models import BaseEvent, PipelineEvent
 
@@ -34,7 +34,7 @@ class EventEmitter(Protocol):
         ...
         
     @abstractmethod
-    def register_observer(self, observer: "EventObserver") -> None:
+    def register_observer(self, observer: EventObserver) -> None:
         """Register an observer to receive events.
         
         Parameters
@@ -45,7 +45,7 @@ class EventEmitter(Protocol):
         ...
         
     @abstractmethod
-    def unregister_observer(self, observer: "EventObserver") -> None:
+    def unregister_observer(self, observer: EventObserver) -> None:
         """Unregister an observer.
         
         Parameters
@@ -89,7 +89,6 @@ class NoOpEventEmitter(EventEmitter):
         event : PipelineEvent
             The event to discard.
         """
-        pass
         
     def register_observer(self, observer: EventObserver) -> None:
         """No-op registration.
@@ -99,7 +98,6 @@ class NoOpEventEmitter(EventEmitter):
         observer : EventObserver
             The observer to register (ignored).
         """
-        pass
         
     def unregister_observer(self, observer: EventObserver) -> None:
         """No-op unregistration.
@@ -109,7 +107,6 @@ class NoOpEventEmitter(EventEmitter):
         observer : EventObserver
             The observer to unregister (ignored).
         """
-        pass
 
 
 class SimpleEventEmitter(EventEmitter):
@@ -120,7 +117,7 @@ class SimpleEventEmitter(EventEmitter):
     """
     
     def __init__(self, debug: bool = False) -> None:
-        self._observers: List[EventObserver] = []
+        self._observers: list[EventObserver] = []
         self._debug = debug
         if debug:
             import logging
@@ -177,22 +174,22 @@ class ContextualEventEmitter(EventEmitter):
         Default fields to inject (e.g., {"run_id": "...", "phase": "..."}).
     """
 
-    def __init__(self, base: EventEmitter, defaults: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, base: EventEmitter, defaults: dict[str, Any] | None = None) -> None:
         self.base = base
         self.defaults = defaults or {}
 
     def emit(self, event: PipelineEvent) -> None:
         # Pydantic BaseModel: create a shallow copy with missing defaults filled
         if isinstance(event, BaseEvent):
-            updates: Dict[str, Any] = {}
+            updates: dict[str, Any] = {}
             for k, v in self.defaults.items():
                 if getattr(event, k, None) is None:
                     updates[k] = v
             event = event.model_copy(update=updates) if updates else event
         self.base.emit(event)
 
-    def register_observer(self, observer: "EventObserver") -> None:
+    def register_observer(self, observer: EventObserver) -> None:
         self.base.register_observer(observer)
 
-    def unregister_observer(self, observer: "EventObserver") -> None:
+    def unregister_observer(self, observer: EventObserver) -> None:
         self.base.unregister_observer(observer)

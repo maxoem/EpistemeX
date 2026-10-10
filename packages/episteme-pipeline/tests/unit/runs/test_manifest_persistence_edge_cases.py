@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-from episteme_pipeline.runs.models import RunManifest, RunStatus, RunReport
+from episteme_pipeline.runs.models import RunManifest, RunReport, RunStatus
 from episteme_pipeline.runs.persistence import JsonRunManifestStore
 
 
@@ -82,7 +80,7 @@ class TestManifestPersistenceEdgeCases:
             store = JsonRunManifestStore(runs_dir)
             
             # Create a report that would represent a run with no artifacts
-            report = RunReport(
+            RunReport(
                 run_id="empty-report-run",
                 status=RunStatus.COMPLETED,
                 artifact_counts_by_kind={},  # No artifacts of any kind

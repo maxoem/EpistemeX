@@ -1,10 +1,19 @@
 from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
-from episteme_pipeline.protocols.data_source import DataSourceAdapter
+from episteme_pipeline.decision.observable import ObservableDecisionEngine
 from episteme_pipeline.protocols.argument_mining import (
     ACCClassifier,
     ADUSegmenter,
     ARCClassifier,
     ARIIdentifier,
+)
+from episteme_pipeline.protocols.data_source import DataSourceAdapter
+from episteme_pipeline.protocols.decision import (
+    DecisionEngine,
+    DecisionNoulResult,
+    DecisionQuestion,
+    DecisionScore,
+    ensure_decision_engine,
+    ensure_decision_question,
 )
 from episteme_pipeline.protocols.extractors import (
     CrossEncoder,
@@ -18,42 +27,72 @@ from episteme_pipeline.protocols.extractors import (
     SyncEncoderEmbeddingModel,
     ensure_embedding_model,
 )
-from episteme_pipeline.protocols.fusion import ArgumentClustering, InstanceFusion, TheoryFusion
-from episteme_pipeline.protocols.graph_store import EntityGraph, FusionGraph, GraphReader, GraphWriter, PhaseCheckpointStore, ProcessingGraph, ProjectionGraph
-from episteme_pipeline.protocols.phase_runner import PhaseRunner
+from episteme_pipeline.protocols.fingerprint import (
+    Fingerprintable,
+    find_components,
+)
+from episteme_pipeline.protocols.fusion import (
+    ArgumentClustering,
+    InstanceFusion,
+    TheoryFusion,
+)
+from episteme_pipeline.protocols.graph_store import (
+    EntityGraph,
+    FusionGraph,
+    GraphReader,
+    GraphWriter,
+    PhaseCheckpointStore,
+    ProcessingGraph,
+    ProjectionGraph,
+)
 from episteme_pipeline.protocols.memory import EvictionSignal, WorkingMemoryState
-
+from episteme_pipeline.protocols.modality import (
+    ModalStrengthResolver,
+    ensure_modal_strength_resolver,
+)
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 
 __all__ = [
-    "TraceSink",
-    "NoOpTraceSink",
-    "PhaseRunner",
-    "GraphReader",
-    "ProjectionGraph",
-    "EntityGraph",
-    "ProcessingGraph",
-    "FusionGraph",
-    "GraphWriter",
-    "PhaseCheckpointStore",
-    "DataSourceAdapter",
-    "NERExtractor",
-    "GlobalRelationExtractor",
-    "EntityLinker",
-    "EmbeddingModel",
-    "CrossEncoder",
-    "RelationReranker",
-    "HuggingFaceEmbeddingModel",
-    "SyncEncoderEmbeddingModel",
-    "ObservableEmbeddingModel",
-    "ensure_embedding_model",
-    "ADUSegmenter",
     "ACCClassifier",
-    "ARIIdentifier",
+    "ADUSegmenter",
     "ARCClassifier",
-    "InstanceFusion",
+    "ARIIdentifier",
     "ArgumentClustering",
-    "TheoryFusion",
-    "GlobalStructuralAnchor",
+    "CrossEncoder",
+    "DataSourceAdapter",
+    "DecisionEngine",
+    "DecisionNoulResult",
+    "DecisionQuestion",
+    "DecisionScore",
+    "EmbeddingModel",
+    "EntityGraph",
+    "EntityLinker",
     "EvictionSignal",
+    "Fingerprintable",
+    "FusionGraph",
+    "GlobalRelationExtractor",
+    "GlobalStructuralAnchor",
+    "GraphReader",
+    "GraphWriter",
+    "HuggingFaceEmbeddingModel",
+    "InstanceFusion",
+    "ModalStrengthResolver",
+    "NERExtractor",
+    "NoOpTraceSink",
+    "ObservableDecisionEngine",
+    "ObservableEmbeddingModel",
+    "PhaseCheckpointStore",
+    "PhaseRunner",
+    "ProcessingGraph",
+    "ProjectionGraph",
+    "RelationReranker",
+    "SyncEncoderEmbeddingModel",
+    "TheoryFusion",
+    "TraceSink",
     "WorkingMemoryState",
+    "ensure_decision_engine",
+    "ensure_decision_question",
+    "ensure_embedding_model",
+    "ensure_modal_strength_resolver",
+    "find_components",
 ]

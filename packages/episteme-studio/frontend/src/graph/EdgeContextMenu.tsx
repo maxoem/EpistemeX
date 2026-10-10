@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from "react";
-import { StudioEdge } from "../api/types";
-import { Search, Filter, Copy, ArrowUpRight } from "lucide-react";
-import { useEngineSchema } from "../store/engineSettingsStore";
+import React, {useEffect, useRef} from "react";
+import {StudioEdge} from "../api/types";
+import {Copy, Filter, Search} from "lucide-react";
+import {useEngineSchema} from "../store/engineSettingsStore";
 
 interface EdgeContextMenuProps {
   edge: StudioEdge;

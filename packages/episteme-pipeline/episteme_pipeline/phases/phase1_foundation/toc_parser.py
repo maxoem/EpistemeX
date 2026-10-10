@@ -9,8 +9,9 @@ global structural anchors from incoming documents during Phase 1 ingestion.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Protocol, Sequence
+from typing import Protocol
 
 from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
 

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from typing import Any
+
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
-from episteme_studio.adapters.schema_mapper import SchemaMapper
 from episteme_studio.api.deps import get_engine_settings_service, get_settings
 from episteme_studio.domain.overlays import OverlayKind
 from episteme_studio.services.engine_settings_service import EngineSettingsService

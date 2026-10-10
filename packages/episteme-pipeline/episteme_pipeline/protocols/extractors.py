@@ -44,11 +44,11 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from episteme_pipeline.contracts.domain import (
+    CandidatePair,
     L2Entity,
     L2Triple,
-    SubGraph,
-    CandidatePair,
     PhaseItemRecord,
+    SubGraph,
 )
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.schema.default_schema import SchemaConfig
@@ -105,7 +105,7 @@ class CrossEncoder(Protocol):
 # ----------------------------------------------------------------------
 
 
-def as_tensor(embeddings: Sequence[Sequence[float]]) -> "torch.Tensor":
+def as_tensor(embeddings: Sequence[Sequence[float]]) -> torch.Tensor:
     """Convert protocol-shaped embeddings into a ``[n, dim]`` float tensor.
 
     Kept out of the :class:`EmbeddingModel` contract on purpose: only two
@@ -200,6 +200,7 @@ class HuggingFaceEmbeddingModel:
     ) -> None:
         import torch
         from transformers import AutoModel, AutoTokenizer
+
         from episteme_pipeline.config import PipelineConfig
 
         selected_model = model_name or PipelineConfig().default_embedding_model
@@ -213,7 +214,22 @@ class HuggingFaceEmbeddingModel:
             self.model.config.hidden_size if hasattr(self.model, "config") else None
         )
 
-    def encode(self, texts: list[str]) -> "torch.Tensor":
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic Hugging Face embedding model configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing model name, device, and embedding dimension.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "model_name": str(self.model_name),
+            "device": str(self.device) if self.device else None,
+            "dimension": self.dimension,
+        }
+
+    def encode(self, texts: list[str]) -> torch.Tensor:
         """Synchronous forward pass returning a ``[n, hidden]`` tensor."""
         import torch
 
@@ -266,6 +282,29 @@ class ObservableEmbeddingModel:
         self.device = getattr(inner, "device", None)
         self.dimension = getattr(inner, "dimension", None)
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic observable embedding model configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing model name, device, dimension, and inner fingerprint.
+        """
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        inner_fp = (
+            self.inner.fingerprint()
+            if hasattr(self.inner, "fingerprint") and callable(self.inner.fingerprint)
+            else fingerprint_method(self.inner)
+        )
+        return {
+            "class": self.__class__.__name__,
+            "model_name": str(self.model_name) if self.model_name else None,
+            "device": str(self.device) if self.device else None,
+            "dimension": self.dimension,
+            "inner": inner_fp,
+        }
+
     async def aget_text_embedding(self, text: str) -> list[float]:
         """Compute embedding vector for a single text with observability."""
         batch = await self.aget_text_embedding_batch([text])
@@ -277,6 +316,7 @@ class ObservableEmbeddingModel:
             return []
 
         import time
+
         from episteme_pipeline.events.context import get_event_emitter
         from episteme_pipeline.events.models import EmbeddingGenerationCompleted
         from episteme_pipeline.llm.metadata import LLMResponseMetadataExtractor

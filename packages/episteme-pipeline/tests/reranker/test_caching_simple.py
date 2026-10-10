@@ -2,12 +2,13 @@
 Simple test script to demonstrate the model caching mechanism without downloading models.
 """
 
-import time
 import weakref
 from unittest.mock import Mock
 
 # Import the module to test the caching mechanism
-from episteme_pipeline.phases.phase3_global_relations.rerankers import SentenceTransformerCrossEncoderReranker
+from episteme_pipeline.phases.phase3_global_relations.rerankers import (
+    SentenceTransformerCrossEncoderReranker,
+)
 
 
 def test_caching_mechanism():

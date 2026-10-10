@@ -23,6 +23,36 @@ export interface GlobalStructuralAnchor {
   global_thesis?: string | null;
 }
 
+export interface DecisionPhaseSummary {
+  phase_name: string;
+  total_decisions: number;
+  fast_exit_count: number;
+  llm_escalation_count: number;
+  tokens_saved: number;
+  cost_saved_usd: number;
+  avg_latency_ms: number;
+  avg_confidence: number;
+  avg_empirical_accuracy: number;
+}
+
+export interface DecisionRunMetrics {
+  total_decisions: number;
+  fast_exit_count: number;
+  fast_exit_ratio: number;
+  llm_escalation_count: number;
+  llm_escalation_ratio: number;
+  stochastic_audit_count: number;
+  tokens_saved_estimate: number;
+  cost_saved_usd_estimate: number;
+  latency_p50_ms: number;
+  latency_p95_ms: number;
+  latency_p99_ms: number;
+  audit_ratio?: number;
+  stochastic_concordance_rate?: number;
+  by_phase?: Record<string, DecisionPhaseSummary>;
+  by_primitive?: Record<string, number>;
+}
+
 export interface RunSummary {
   run_id: string;
   status: RunStatus;
@@ -43,6 +73,7 @@ export interface RunSummary {
   total_phase_count?: number;
   tags: string[];
   parent_run_id?: string | null;
+  decision_metrics?: DecisionRunMetrics | null;
 }
 
 export interface ProblemDetail {
@@ -60,6 +91,7 @@ export interface RunDetail extends RunSummary {
   graph_schema: Record<string, any>;
   config_snapshot: Record<string, any>;
   fingerprints: Record<string, any>;
+  method_fingerprints?: Record<string, string>;
   unresolved_count: number;
   langfuse_url?: string | null;
   failure?: ProblemDetail | null;
@@ -91,6 +123,22 @@ export interface StudioNode {
   parameters?: Record<string, number> | null;
   tenability?: Record<string, any> | null;
   props: Record<string, any>;
+  // Calibrated decision engine & QBAF attributes
+  empirical_accuracy?: number | null;
+  modal_strength?: number | null;
+  base_score?: number | null;
+  scope_type?: string | null;
+  epistemic_status?: string | null;
+  modal_resolver?: string | null;
+  raw_modal_score?: number | null;
+  is_modal_clamped?: boolean | null;
+  qbaf_tau?: number | null;
+  total_weight_of_evidence?: number | null;
+  volatility_index?: number | null;
+  decision_tier?: "fast_exit" | "system1" | "system2" | "adjudicated" | null;
+  conformal_set_size?: number | null;
+  is_out_of_ontology?: boolean;
+  decision_id?: string | null;
 }
 
 export interface StudioEdge {
@@ -105,13 +153,42 @@ export interface StudioEdge {
   confidence?: number | null;
   tenability?: number | null;
   props: Record<string, any>;
+  // Calibrated decision engine & QBAF attributes
+  empirical_accuracy?: number | null;
+  model_confidence?: number | null;
+  stance_probability?: number | null;
+  inferential_force?: number | null;
+  active_weight?: number | null;
+  is_admissible?: boolean;
+  modal_strength?: number | null;
+  qbaf_tau?: number | null;
+  decision_tier?: "fast_exit" | "system1" | "system2" | "adjudicated" | null;
+  conformal_set_size?: number | null;
+  decision_id?: string | null;
+}
+
+export interface TextAnchor {
+  source_doc_id?: string | null;
+  char_start?: number | null;
+  char_end?: number | null;
+  verbatim_quote?: string | null;
+  bbox?: number[] | null;
+  page?: number | null;
+  formula_id?: string | null;
+  table_id?: string | null;
+  figure_id?: string | null;
 }
 
 export interface EvidenceSpan {
   start_char?: number | null;
   end_char?: number | null;
   text: string;
-  mode: "exact" | "substring" | "whole_chunk";
+  mode: "exact" | "substring" | "whole_chunk" | "visual" | "tabular" | "formula";
+  bbox?: number[] | null;
+  page?: number | null;
+  formula_id?: string | null;
+  table_id?: string | null;
+  figure_id?: string | null;
 }
 
 export interface EvidenceChunk {
@@ -126,6 +203,7 @@ export interface EvidenceTrail {
   node_id: string;
   layer: number;
   chunks: EvidenceChunk[];
+  anchors?: TextAnchor[];
 }
 
 export interface GraphView {
@@ -195,6 +273,7 @@ export interface CypherResult {
 
 export type OverlayKind =
   | "gradual_strength"
+  | "modal_strength"
   | "internal_correlation"
   | "degree"
   | "component"
@@ -202,7 +281,8 @@ export type OverlayKind =
   | "leiden"
   | "tenability"
   | "b_consistency"
-  | "stable_extension";
+  | "stable_extension"
+  | "conformal_uncertainty";
 
 export interface Overlay {
   id: string;
@@ -507,6 +587,115 @@ export interface UnmappedPredicateInfo {
   sample_runs: string[];
 }
 
+export interface DecisionPhaseGates {
+  phase2_entity_discovery: boolean;
+  phase3_global_relations: boolean;
+  phase4_argument_mining: boolean;
+  phase4_entity_maturation: boolean;
+  phase5_fusion: boolean;
+  phase6_theorynet: boolean;
+}
+
+export interface DecisionEngineSettings {
+  provider: "laya" | "auto" | "mlx" | "transformers" | "onnx" | "stub" | "none";
+  model_checkpoint: string;
+  device: "auto" | "mps" | "cuda" | "cpu";
+  fast_exit_threshold: number;
+  uncertainty_threshold: number;
+  stochastic_audit_rate: number;
+  phase_gates: DecisionPhaseGates;
+}
+
+export interface DecisionEngineStatusResponse {
+  provider: string;
+  model_checkpoint: string;
+  device: string;
+  mlx_available: boolean;
+  cuda_available: boolean;
+  checkpoint_cached: boolean;
+  checkpoint_path?: string | null;
+  vram_allocated_mb?: number | null;
+  latency_benchmark_ms?: number | null;
+  benchmark_latency_p50_ms?: number | null;
+  active: boolean;
+  available?: boolean;
+  model_metadata?: Record<string, any>;
+}
+
+export interface DecisionTestRequest {
+  primitive: "noul" | "choice" | "score";
+  input_text: string;
+  question?: string | null;
+  candidate_labels?: string[];
+  hypothesis_text?: string | null;
+  provider?: string;
+  model_checkpoint?: string;
+  device?: string;
+  fast_exit_threshold?: number;
+  uncertainty_threshold?: number;
+}
+
+
+export interface DecisionTestResponse {
+  decision_id: string;
+  primitive: "noul" | "choice" | "score";
+  prediction: string | number;
+  confidence: number;
+  empirical_accuracy: number;
+  conformal_set: string[];
+  tier: "fast_exit" | "system1" | "system2";
+  latency_ms: number;
+  tokens_saved: number;
+  is_mock?: boolean;
+  probabilities?: Record<string, number>;
+  engine_backend?: string;
+  warning?: string | null;
+}
+
+export interface BorderlineDecisionItem {
+  decision_id: string;
+  run_id: string;
+  phase: string;
+  primitive: "noul" | "choice" | "score";
+  tier: "fast_exit" | "system1" | "system2" | "stochastic_audit";
+  timestamp: string;
+  confidence: number;
+  empirical_accuracy: number;
+  margin: number;
+  conformal_set: string[];
+  prediction: string | number;
+  context: {
+    input_text?: string;
+    candidate_labels?: string[];
+    hypothesis?: string;
+    source_name?: string;
+    target_name?: string;
+  };
+  adjudicated_value?: string | number | null;
+  adjudicated_by?: string | null;
+  adjudicated_at?: string | null;
+  adjudication_notes?: string | null;
+}
+
+export interface DecisionAdjudicationRequest {
+  adjudicated_value: string | number;
+  adjudicated_by?: string;
+  notes?: string;
+}
+
+export interface ActiveLearningExportResponse {
+  status: "success";
+  exported_count: number;
+  target_file: string;
+  format: "jsonl";
+}
+
+export interface ModalResolverSettings {
+  mode: "guardrail" | "convex" | "structural_only" | "engine_only";
+  fusion_alpha: number;
+  default_base_score: number;
+}
+
 export interface EngineSettings {
   schema_config: SchemaConfig;
   predicate_aliases: Record<string, any>;
@@ -519,6 +708,8 @@ export interface EngineSettings {
     llm_api_base?: string | null;
     thinking_level: string;
   };
+  decision_engine: DecisionEngineSettings;
+  modal_resolver?: ModalResolverSettings;
   updated_at: string;
 }
 
@@ -526,5 +717,618 @@ export interface EngineSettingsPatch {
   schema_config?: Partial<SchemaConfig>;
   predicate_aliases?: Record<string, any>;
   models?: Partial<EngineSettings["models"]>;
+  decision_engine?: Partial<DecisionEngineSettings>;
+  modal_resolver?: Partial<ModalResolverSettings>;
 }
+
+export type EvaluationOutcome = "pass" | "fail" | "warning" | "inconclusive";
+
+export interface EvaluationMetricValue {
+  name: string;
+  value: number;
+  unit?: string;
+  threshold?: number | null;
+  passes_threshold?: boolean | null;
+}
+
+export interface ModelDecompositionEntry {
+  class_name: string;
+  symbol: string;
+  reference_count: number;
+  predicted_count: number;
+  matched_count: number;
+  completeness: number;
+}
+
+export interface PosetEvaluationDetail {
+  is_dag: boolean;
+  root_element?: string | null;
+  root_conformity: boolean;
+  transitive_reduction_f1: number;
+  reachability_f1: number;
+  predicted_edge_count: number;
+  reference_edge_count: number;
+}
+
+export interface PolarityConcordanceDetail {
+  polarity_accuracy: number;
+  polarity_conflict_rate: number;
+  conflicting_pairs_count: number;
+  agreed_pairs_count: number;
+}
+
+export interface RetrievalEvaluationDetail {
+  mrr: number;
+  hits_at_1: number;
+  hits_at_3: number;
+  hits_at_10: number;
+  ndcg: number;
+  num_queries: number;
+}
+
+export interface ComparativeMetricDelta {
+  metric_name: string;
+  value_baseline: number;
+  value_pipeline: number;
+  delta: number;
+  favorable?: boolean | null;
+  winner?: string;
+}
+
+export interface EvaluationLevelResult {
+  run_id: string;
+  level: string;
+  phase_name?: string | null;
+  dataset_ref?: string | null;
+  outcome: EvaluationOutcome;
+  metrics: EvaluationMetricValue[];
+  notes?: Record<string, any>;
+  evaluated_at: string;
+}
+
+export interface EvaluationReportSummary {
+  evaluation_id: string;
+  run_ids: string[];
+  dataset_ref?: string | null;
+  dataset_type: string;
+  outcome: EvaluationOutcome;
+  created_at: string;
+  key_metrics: Record<string, number>;
+  has_markdown: boolean;
+  has_baseline: boolean;
+}
+
+export interface EvaluationReportDetail extends EvaluationReportSummary {
+  results_by_level: Record<string, EvaluationLevelResult[]>;
+  model_decomposition: ModelDecompositionEntry[];
+  poset_detail?: PosetEvaluationDetail | null;
+  polarity_detail?: PolarityConcordanceDetail | null;
+  retrieval_detail?: RetrievalEvaluationDetail | null;
+  comparative_deltas: ComparativeMetricDelta[];
+  summary_markdown: string;
+  omitted_components: string[];
+  violations: Record<string, any>[];
+}
+
+export interface BenchmarkSplitResource {
+  name: string;
+  path: string;
+  format: string;
+  item_count?: number | null;
+  size_bytes?: number | null;
+}
+
+export interface BourbakiInvariantsSummary {
+  mp_count: number;
+  m_count: number;
+  mpp_count: number;
+  c_count: number;
+  i_count: number;
+  total_atoms: number;
+  total_relations: number;
+  is_dag: boolean;
+  root_elements: string[];
+  specialization_depth: number;
+}
+
+export interface PosetPreviewNode {
+  id: string;
+  label: string;
+  class_name: string;
+  level: number;
+}
+
+export interface PosetPreviewEdge {
+  source: string;
+  target: string;
+  predicate: string;
+}
+
+export interface PosetPreviewGraph {
+  nodes: PosetPreviewNode[];
+  edges: PosetPreviewEdge[];
+}
+
+export interface StructuralistSpecialization {
+  formal_framework: string;
+  invariants: BourbakiInvariantsSummary;
+  poset_preview: PosetPreviewGraph;
+  bound_document_id?: string | null;
+  bound_document_pages?: number | null;
+  annotated_bbox_count: number;
+}
+
+export interface RetrievalSpecialization {
+  query_count: number;
+  query_categories: string[];
+  target_metrics: string[];
+  sample_queries: Array<{
+    id: string;
+    text: string;
+    category?: string;
+    target_nodes?: string[];
+  }>;
+}
+
+export interface ExtractionSpecialization {
+  entity_types: string[];
+  relation_types: string[];
+  document_count: number;
+  sentence_count: number;
+}
+
+export interface BenchmarkPreviewRecord {
+  record_id: string;
+  type: string;
+  class_or_category: string;
+  label_or_text: string;
+  source_doc?: string | null;
+  page?: number | null;
+  bbox?: number[] | null;
+  extra?: Record<string, any>;
+}
+
+export interface BenchmarkPreviewResponse {
+  benchmark_id: string;
+  total_records: number;
+  columns: string[];
+  records: BenchmarkPreviewRecord[];
+  format: string;
+}
+
+export interface BenchmarkDescriptor {
+  id: string;
+  name: string;
+  description: string;
+  task_type: string;
+  gold_standard_path: string;
+  queries_path?: string | null;
+  available: boolean;
+  version?: string;
+  domain?: string;
+  level?: number;
+  splits?: Record<string, BenchmarkSplitResource>;
+  target_metrics?: string[];
+  license?: string;
+  citation?: string | null;
+  structuralist_details?: StructuralistSpecialization | null;
+  retrieval_details?: RetrievalSpecialization | null;
+  extraction_details?: ExtractionSpecialization | null;
+}
+
+export interface EvaluateRunRequest {
+  run_id: string;
+  benchmark_id?: string | null;
+  gold_standard_path?: string | null;
+  queries_path?: string | null;
+  strategy?: string | null;
+  baseline?: string | null;
+  min_mcc?: number;
+  min_pfs?: number;
+  sim_threshold?: number;
+  delta_star?: number;
+  mode?: string;
+  evaluate_retrieval?: boolean;
+  persist?: boolean;
+  llm_model?: string | null;
+  embedding_model?: string | null;
+}
+
+export interface CompareRunsRequest {
+  run_id_a: string;
+  run_id_b: string;
+  gold_standard_path?: string | null;
+  axis?: string;
+}
+
+export interface ComparativeEvaluationResponse {
+  comparison_id: string;
+  run_id_a: string;
+  run_id_b: string;
+  axis: string;
+  dataset_ref?: string | null;
+  deltas: ComparativeMetricDelta[];
+  summary_markdown: string;
+}
+
+export interface EvaluateManifestRequest {
+  manifest_path: string;
+  baseline?: string | null;
+  build_graph?: boolean;
+}
+
+export type EvaluationSubTab =
+  | "canvas"
+  | "epistemics"
+  | "adjudication"
+  | "calibration"
+  | "grounding"
+  | "retrieval";
+
+export type EvaluationMode =
+  | "catalog"
+  | "leaderboard"
+  | "inspector"
+  | "longitudinal"
+  | "execute";
+
+export interface DynamicsStepDetail {
+  step: string;
+  delta_auxiliary: number;
+  anomalies_count: number;
+  delta_empirical: number;
+  step_degeneration_index: number;
+}
+
+export interface DynamicsTrajectoryRequest {
+  run_ids?: string[];
+  snapshots?: Record<string, any>[];
+  core_node_ids?: string[];
+  epsilon?: number;
+}
+
+export interface DynamicsTrajectoryResponse {
+  degeneration_index: number;
+  is_progressive: boolean;
+  core_invariant: boolean;
+  delta_auxiliary: number;
+  anomalies_count: number;
+  delta_empirical_content: number;
+  violated_invariance: Record<string, any>[];
+  node_immunization_scores: Record<string, number>;
+  trajectory: DynamicsStepDetail[];
+  chart_data: {
+    epochs: string[];
+    steps: string[];
+    di_series: number[];
+    delta_auxiliary_series: number[];
+    delta_empirical_series: number[];
+    anomalies_series: number[];
+    overall_degeneration_index: number;
+    progressive_threshold: number;
+    is_progressive: boolean;
+    core_invariant: boolean;
+  };
+  summary_markdown: string;
+}
+
+export type AdjudicationDecision = "true_positive" | "false_positive" | "schema_alias";
+
+export interface EdgeAdjudicationItem {
+  adjudication_id: string;
+  predicted_edge: Record<string, any>;
+  reference_edge?: Record<string, any> | null;
+  similarity_score?: number;
+  decision: AdjudicationDecision;
+  alias_target?: string | null;
+  rationale?: string | null;
+  adjudicated_by?: string | null;
+  adjudicated_at?: string;
+}
+
+export interface AdjudicationRequest {
+  items: EdgeAdjudicationItem[];
+  gold_standard_path?: string | null;
+  export_dataset_path?: string | null;
+}
+
+export interface AdjudicationResponse {
+  adjudicated_count: number;
+  stored_items: EdgeAdjudicationItem[];
+  exported_gold_path?: string | null;
+  message: string;
+}
+
+export type EvaluationJobStatus = "pending" | "running" | "completed" | "failed" | "aborted";
+
+export interface EvaluationJobDescriptor {
+  job_id: string;
+  status: EvaluationJobStatus;
+  created_at: string;
+  completed_at?: string | null;
+  request_type: string;
+  report_id?: string | null;
+  error?: string | null;
+  report?: any | null;
+}
+
+export interface CancelEvaluationJobResponse {
+  job_id: string;
+  status: EvaluationJobStatus;
+  message: string;
+}
+
+// =============================================================================
+// Evaluation Workbench Types (ISSUE-026 - ISSUE-033)
+// =============================================================================
+
+export type NodeAlignmentStatus = "true_positive" | "false_positive" | "false_negative" | "borderline";
+
+export type EdgeAlignmentStatus =
+  | "true_positive"
+  | "false_positive"
+  | "false_negative"
+  | "borderline"
+  | "polarity_conflict";
+
+export interface EvaluationNodeOverlay {
+  id: string;
+  label: string;
+  class_name?: string | null;
+  symbol?: string | null;
+  alignment_status: NodeAlignmentStatus;
+  gold_id?: string | null;
+  similarity_score: number;
+  is_ghost: boolean;
+  properties?: Record<string, any>;
+}
+
+export interface EvaluationEdgeOverlay {
+  id: string;
+  source: string;
+  target: string;
+  predicate: string;
+  alignment_status: EdgeAlignmentStatus;
+  gold_predicate?: string | null;
+  similarity_score: number;
+  is_ghost: boolean;
+  evidence_snippet?: string | null;
+}
+
+export interface EvaluationGraphOverlay {
+  evaluation_id: string;
+  run_id: string;
+  benchmark_id?: string | null;
+  nodes: EvaluationNodeOverlay[];
+  edges: EvaluationEdgeOverlay[];
+  summary_counts: Record<string, number>;
+}
+
+export interface AdjudicationQueueItem {
+  candidate_id: string;
+  evaluation_id: string;
+  predicted_edge: Record<string, any>;
+  reference_edge?: Record<string, any> | null;
+  similarity_score: number;
+  status: "pending" | "adjudicated";
+  current_decision?: AdjudicationDecision | null;
+  alias_target?: string | null;
+  evidence_snippet?: string | null;
+  confidence: number;
+}
+
+export interface AdjudicationQueueResponse {
+  evaluation_id: string;
+  total_candidates: number;
+  pending_count: number;
+  adjudicated_count: number;
+  candidates: AdjudicationQueueItem[];
+}
+
+export interface AdjudicateAndRecalculateRequest {
+  items: EdgeAdjudicationItem[];
+  export_dataset_path?: string | null;
+}
+
+export interface AdjudicateAndRecalculateResponse {
+  evaluation_id: string;
+  adjudicated_count: number;
+  updated_report: any;
+  metric_deltas: Record<string, number>;
+  message: string;
+}
+
+export interface CalibrationBinDetail {
+  bin_index: number;
+  bin_lower: number;
+  bin_upper: number;
+  sample_count: number;
+  mean_confidence: number;
+  empirical_accuracy: number;
+  calibration_gap: number;
+}
+
+export interface MiscalibratedAssertionItem {
+  assertion_id: string;
+  assertion_type: string;
+  descriptor: string;
+  confidence: number;
+  empirical_match: boolean;
+  discrepancy: number;
+  evidence_text?: string | null;
+  rationale?: string | null;
+}
+
+export interface CalibrationReportDetail {
+  evaluation_id: string;
+  run_id: string;
+  expected_calibration_error: number;
+  maximum_calibration_error: number;
+  brier_score: number;
+  is_well_calibrated: boolean;
+  num_samples: number;
+  bins: CalibrationBinDetail[];
+  high_confidence_hallucinations: MiscalibratedAssertionItem[];
+  chart_series: Record<string, any>;
+}
+
+export interface BoundingBoxCoordinates {
+  page: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+export interface TextSpanCoordinates {
+  page: number;
+  bbox: [number, number, number, number]; // [x0, y0, x1, y1] normalized
+  is_continuation?: boolean;
+}
+
+export interface MultiModalEvidenceAnchor {
+  anchor_id: string;
+  doc_id: string;
+  media_type: "text" | "figure" | "equation" | "table";
+  verbatim_text?: string | null;
+  char_start?: number | null;
+  char_end?: number | null;
+  bbox?: BoundingBoxCoordinates | null;
+  spans?: TextSpanCoordinates[] | null;
+  formula_latex?: string | null;
+  image_uri?: string | null;
+}
+
+export interface GroundingEvaluationDetail {
+  component_id: string;
+  component_type: string;
+  label: string;
+  predicted_anchor?: MultiModalEvidenceAnchor | null;
+  reference_anchor?: MultiModalEvidenceAnchor | null;
+  iou_score: number;
+  grounding_passed: boolean;
+  failure_reason?: string | null;
+}
+
+export interface LeaderboardEntry {
+  run_id: string;
+  evaluation_id: string;
+  benchmark_id: string;
+  model_name?: string | null;
+  prompt_strategy?: string | null;
+  outcome: string;
+  evaluated_at: string;
+  metrics: Record<string, number>;
+  total_cost_usd?: number | null;
+  duration_seconds?: number | null;
+  is_pareto_optimal: boolean;
+}
+
+export interface ParetoFrontierPoint {
+  run_id: string;
+  coordinates: Record<string, number>;
+  dominated_by: string[];
+}
+
+export interface LeaderboardRequest {
+  benchmark_id?: string | null;
+  run_ids?: string[];
+  pareto_axes?: string[];
+  sort_by?: string;
+  ascending?: boolean;
+}
+
+export interface LeaderboardResponse {
+  benchmark_id?: string | null;
+  total_runs: number;
+  entries: LeaderboardEntry[];
+  pareto_frontier: ParetoFrontierPoint[];
+  summary_markdown: string;
+}
+
+export type PerturbationType = "typo_insertion" | "synonym_replacement" | "sentence_shuffle" | "composite";
+
+export interface PerturbationSweepPoint {
+  noise_level: number;
+  f1_score: number;
+  mcc_score: number;
+  poset_dag_valid: boolean;
+  rdf_delta: number;
+}
+
+export interface NoiseRobustnessReportDetail {
+  evaluation_id: string;
+  run_id: string;
+  overall_rdf: number;
+  is_resilient: boolean;
+  baseline_f1: number;
+  worst_case_f1: number;
+  breakdown_by_perturbation: Record<string, PerturbationSweepPoint[]>;
+  chart_series: Record<string, any>;
+}
+
+export interface StressTestRequest {
+  run_id: string;
+  benchmark_id?: string | null;
+  perturbation_types?: PerturbationType[];
+  noise_levels?: number[];
+}
+
+export interface RetrievedCandidateItem {
+  rank: number;
+  node_id: string;
+  label: string;
+  class_name?: string | null;
+  similarity_score: number;
+  is_gold_target: boolean;
+}
+
+export interface CompetencyQueryDiagnosticItem {
+  query_id: string;
+  query_text: string;
+  target_category?: string | null;
+  expected_gold_nodes: string[];
+  retrieved_candidates: RetrievedCandidateItem[];
+  first_hit_rank?: number | null;
+  reciprocal_rank: number;
+  hits_at_1: boolean;
+  hits_at_3: boolean;
+  hits_at_10: boolean;
+  failure_mode?: string | null;
+}
+
+export interface RetrievalDiagnosticsResponse {
+  evaluation_id: string;
+  total_queries: number;
+  mrr: number;
+  hits_at_1: number;
+  hits_at_10: number;
+  queries: CompetencyQueryDiagnosticItem[];
+}
+
+export interface BenchmarkValidationIssue {
+  severity: "error" | "warning";
+  rule_id: string;
+  message: string;
+  location?: string | null;
+}
+
+export interface BenchmarkValidationResult {
+  is_valid: boolean;
+  total_entities: number;
+  total_triples: number;
+  is_dag: boolean;
+  root_element?: string | null;
+  issues: BenchmarkValidationIssue[];
+}
+
+export interface RegisterBenchmarkRequest {
+  id: string;
+  name: string;
+  description: string;
+  task_type?: string;
+  gold_standard_jsonld: string;
+  queries_yaml?: string | null;
+}
+
 

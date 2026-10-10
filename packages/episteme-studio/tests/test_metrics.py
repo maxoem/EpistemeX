@@ -4,17 +4,16 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-import pytest
-from httpx import ASGITransport, AsyncClient
 
+import pytest
 from episteme_studio.adapters.metrics_adapter import compute_local_gradual_strength
 from episteme_studio.adapters.neo4j_reader import Neo4jReader
 from episteme_studio.app import create_app
-from episteme_studio.domain.errors import QueryTimeoutError
 from episteme_studio.domain.graph import GraphView, Layer, StudioEdge, StudioNode
 from episteme_studio.domain.metrics import MetricScope
 from episteme_studio.services.metric_service import MetricService
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
 
 
 class _MockNeo4jDriver:
@@ -169,7 +168,7 @@ async def test_cooperative_cancellation() -> None:
     metric_service: MetricService = app.state.metric_service
     graph = _make_sample_graph()
 
-    job, is_fast = await metric_service.submit_execution(
+    job, _is_fast = await metric_service.submit_execution(
         metric_id="gradual_strength_local",
         graph_view=graph,
         focus_node_id="focus",

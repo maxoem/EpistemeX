@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-import pytest
-from httpx import ASGITransport, AsyncClient
 
+import pytest
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.app import create_app
 from episteme_studio.domain.config import ConfigPatch
 from episteme_studio.services.config_service import ConfigService
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture

@@ -1,6 +1,6 @@
-import { create } from "zustand";
-import { api } from "../api/client";
-import { GraphDiffView } from "../api/types";
+import {create} from "zustand";
+import {api} from "../api/client";
+import {GraphDiffView} from "../api/types";
 
 export type DiffScrubMode = "run_a" | "diff" | "run_b";
 export type DiffFilter = "all" | "polarity_inversions" | "gained" | "lost" | "arg_drift";

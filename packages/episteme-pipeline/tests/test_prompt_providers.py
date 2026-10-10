@@ -2,17 +2,17 @@
 
 import json
 from unittest.mock import MagicMock
-import pytest
 
+import pytest
 from episteme_pipeline.config import PipelineConfig, StructuredPromptBundle
+from episteme_pipeline.pipeline import Pipeline
 from episteme_pipeline.prompts.providers import (
     DefaultPromptProvider,
-    LangfusePromptProvider,
     FilePromptProvider,
+    LangfusePromptProvider,
     _mustache_to_python_format,
 )
 from episteme_pipeline.protocols.prompts import PromptProvider
-from episteme_pipeline.pipeline import Pipeline
 
 
 def test_mustache_to_python_format_conversion():

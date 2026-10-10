@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import copy
 from typing import Any
+
+from episteme_pipeline.config import PipelineConfig
+from episteme_pipeline.runs.fingerprints import fingerprint_phase_config
 from pydantic import ValidationError
 
 from episteme_studio.domain.errors import InvalidConfigPatchError
-from episteme_pipeline.config import PipelineConfig
-from episteme_pipeline.runs.fingerprints import fingerprint_phase_config
 
 PHASE_INDEX_TO_NAME: dict[int, str] = {
     1: "Phase 1: Data Foundation",
@@ -131,10 +131,16 @@ class ConfigAdapter:
                     raise InvalidConfigPatchError(
                         f"Unknown configuration path '{key_path}' (invalid segment '{part}')."
                     )
+                if part == "decision_engine" and target.get(part) is None or part == "phase_gates" and target.get(part) is None or part == "modal_resolver" and target.get(part) is None:
+                    target[part] = {}
                 target = target[part]
 
             leaf = parts[-1]
-            if not isinstance(target, dict) or leaf not in target:
+            if not isinstance(target, dict) or (
+                leaf not in target
+                and "decision_engine" not in key_path
+                and "modal_resolver" not in key_path
+            ):
                 raise InvalidConfigPatchError(
                     f"Unknown configuration path '{key_path}' (unknown property '{leaf}')."
                 )

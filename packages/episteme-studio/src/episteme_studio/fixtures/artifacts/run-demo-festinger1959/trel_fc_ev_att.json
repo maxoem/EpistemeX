@@ -1,0 +1,23 @@
+{
+  "artifact_id": "trel_fc_ev_att",
+  "identity_key": "trel_fc_ev_att",
+  "kind": "theory_relation",
+  "run_id": "run-demo-festinger1959",
+  "phase_name": "Phase 5: Inter-Document Argument Web",
+  "payload": {
+    "relation_id": "trel_fc_ev_att",
+    "source_component_id": "str:EV_Rehearsal_Defeated",
+    "relation_type": "attacks",
+    "target_component_id": "str:TE_Alternative_Rehearsal",
+    "weight": -1.0,
+    "confidence": 1.0,
+    "scope": "global"
+  },
+  "provenance": {
+    "source_path": "datasets/run-demo-festinger1959.cypher",
+    "notes": {
+      "generated": "demo_fixture"
+    }
+  },
+  "created_at": "2026-09-01T10:00:00Z"
+}

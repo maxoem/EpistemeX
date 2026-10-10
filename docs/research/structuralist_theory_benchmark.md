@@ -32,20 +32,20 @@ historical primary texts.
 | **Primary Tasks**               | Core Law Extraction, Specialization DAG Assembly, $T$-Theoreticity Discrimination, Intertheoretical Reduction, Diachronic Evolution Tracking |
 | **Ground-Truth Representation** | JSON-LD Graph Envelope with Token-Level Character Anchors                                                                                    |
 | **Evaluation Scaffolding**      | GM-GBS (`scorers/gm_gbs.py`), OEP (`scorers/oep.py`), Epistemic Metrics Suite (`epistemetrics`)                                              |
-| **License**                     | Creative Commons Attribution 4.0 International (CC-BY 4.0); Primary historical source texts reside in the Public Domain                      |
+| **License & Distribution**      | Creative Commons Attribution 4.0 International (CC-BY 4.0) for graph schemas, annotations, and formal structuralist models. Historical primary texts prior to 1929 (Newton, Freud, Wundt) reside in the Public Domain. Mid-20th-century texts under active copyright (e.g., Festinger & Carlsmith 1959) follow the **Stand-Off Annotation Model (Pattern A)**: public distribution includes only character offsets, structural DAGs, and brief Fair Use quotation snippets, with local acquisition verified via `scripts/fetch_stnb_corpora.py`. |
 
 ### Corpus Breakdown Portfolio
 
 Each benchmark entry pairs a formal structuralist reconstruction from scientific literature with clean, digitized
 historical primary texts:
 
-| Theory Reconstruction                        | Domain         | Primary Historical Source Text                                                  | Formal Monograph Reference              | Lang    | Annotated Units (Elements / Laws / Constraints) | Status         |
-|:---------------------------------------------|:---------------|:--------------------------------------------------------------------------------|:----------------------------------------|:--------|:------------------------------------------------|:---------------|
-| **Classical Particle Mechanics (CPM)**       | Physics        | Newton, *Philosophiae Naturalis Principia Mathematica* (1687)                   | Balzer, Moulines, & Sneed (1987, Ch. 2) | EN / LA | 8 elements, 12 laws, 3 constraints              | Active (Pilot) |
-| **Theory of the Unconscious**                | Psychoanalysis | Freud, *Das Unbewußte* (1915); *Jenseits des Lustprinzips* (1920)               | Balzer & Marcou (1989)                  | DE      | 5 elements, 7 laws, 2 constraints               | Curated        |
-| **Cognitive Dissonance Theory**              | Psychology     | Festinger, *A Theory of Cognitive Dissonance* (1957)                            | Balzer et al. (1987, Ch. 1)             | EN      | 4 elements, 6 laws, 2 constraints               | Curated        |
-| **Structural Psychology**                    | Psychology     | Wundt, *Grundriss der Psychologie* (1896)                                       | Westmeyer (1989)                        | DE      | 6 elements, 9 laws, 4 constraints               | Curated        |
-| **Simple Equilibrium Thermodynamics (SETH)** | Physics        | Carathéodory (1909); Giles, *Mathematical Foundations of Thermodynamics* (1964) | Balzer et al. (1987, Ch. 4)             | EN / DE | 7 elements, 11 laws, 5 constraints              | In Preparation |
+| Theory Reconstruction                        | Domain         | Primary Historical Source Text                                                  | Formal Monograph Reference                      | Lang    | Annotated Units (Elements / Laws / Constraints / Paradigms) | Status              |
+|:---------------------------------------------|:---------------|:--------------------------------------------------------------------------------|:------------------------------------------------|:--------|:------------------------------------------------------------|:--------------------|
+| **Classical Particle Mechanics (CPM)**       | Physics        | Newton, *Philosophiae Naturalis Principia Mathematica* (1687)                   | Balzer, Moulines, & Sneed (1987, Ch. 2)         | EN / LA | 8 elements, 12 laws, 3 constraints, 3 paradigms             | Active (Pilot)      |
+| **Theory of the Unconscious**                | Psychoanalysis | Freud, *Das Unbewußte* (1915); *Jenseits des Lustprinzips* (1920)               | Balzer & Marcou (1989)                          | DE      | 5 elements, 7 laws, 2 constraints                           | Curated             |
+| **Cognitive Dissonance Theory**              | Psychology     | Festinger (1957); Festinger & Carlsmith (1959, DOI: `10.1037/h0041593`)         | Balzer et al. (1987, Ch. 1); Westermann (2000)  | EN      | 12 elements, 6 laws, 1 constraint, 3 paradigms              | Curated (Pattern A) |
+| **Structural Psychology**                    | Psychology     | Wundt, *Grundriss der Psychologie* (1896)                                       | Westmeyer (1989)                                | DE      | 6 elements, 9 laws, 4 constraints                           | Curated             |
+| **Simple Equilibrium Thermodynamics (SETH)** | Physics        | Carathéodory (1909); Giles, *Mathematical Foundations of Thermodynamics* (1964) | Balzer et al. (1987, Ch. 4)                     | EN / DE | 7 elements, 11 laws, 5 constraints                          | In Preparation      |
 
 ---
 
@@ -118,7 +118,7 @@ Every empirical node contains a `Episteme:textAnchor` object establishing direct
 ```
 
 The complete machine-readable specification and sample graph for Classical Particle Mechanics is maintained in [
-`packages/episteme-pipeline/evaluation/data/stnb_cpm_pilot.jsonld`](packages/episteme-pipeline/evaluation/data/stnb_cpm_pilot.jsonld).
+`packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld`](packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld).
 
 ---
 
@@ -209,6 +209,31 @@ Domain annotators map mathematical structures to textual spans according to five
 * **Equations & Glosses:** When a governing equation is accompanied by explanatory natural language, both the formula
   and its definitional gloss are bound into a single `Episteme:textAnchor`.
 
+### Stand-Off Annotation Protocol & Copyright Compliance (Pattern A)
+
+To maintain absolute copyright compliance across diverse historical eras, STNB enforces a strict separation between
+the formal benchmark envelopes and the raw underlying literature:
+
+1. **Public Domain Corpora:** Historical primary sources published before 1929 (e.g., Newton 1687, Wundt 1896, Freud 1915,
+   Carathéodory 1909) are in the Public Domain worldwide. Clean, digitized texts are bundled directly within the repository
+   under `packages/episteme-pipeline/episteme_pipeline/evaluation/data/`.
+2. **Copyrighted 20th-Century Literature (Pattern A):** Landmark mid-20th-century empirical psychology literature (such as
+   Festinger 1957 and Festinger & Carlsmith 1959, published by the American Psychological Association, DOI: `10.1037/h0041593`)
+   is protected under active copyright law. In accordance with open science best practices (e.g., SQuAD, GLUE):
+   * **Public Distribution:** Only the JSON-LD ground-truth envelopes (`datasets/stnb_festinger_carlsmith_1959.jsonld`)
+     are tracked in Git. These files contain formal Bourbaki structural models, specialization DAG topologies, exact
+     0-indexed token/character offsets, and brief `verbatimQuote` proposition spans permitted under U.S. Fair Use
+     (17 U.S.C. § 107) and EU/German UrhG § 51 (*Großes wissenschaftliches Zitat*).
+   * **Exclusion of Raw Texts:** Full-text reproductions (`.md` / `.txt`) of copyrighted sources are strictly excluded
+     from Git tracking via `.gitignore` (`datasets/*.md`, `datasets/restricted/`).
+   * **Local Acquisition & Integrity Verification:** Researchers acquire lawful copies of the primary source texts
+     through their institutional library subscriptions and use the consolidated verification CLI to validate alignment:
+     ```bash
+     rtk python3 scripts/fetch_stnb_corpora.py --verify --corpus festinger_carlsmith_1959
+     ```
+     The verification tool validates the SHA-256 cryptographic digest of the local source text and guarantees 100%
+     boundary alignment of all benchmark character spans prior to evaluation execution.
+
 ---
 
 ## Benchmark Task Suite
@@ -272,29 +297,68 @@ STNB interfaces directly with Episteme's native evaluation subsystem ([
 ### Benchmark Adapter
 
 The dedicated adapter [
-`packages/episteme-pipeline/evaluation/adapters/structuralist.py`](packages/episteme-pipeline/evaluation/adapters/structuralist.py)
+`packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/structuralist.py`](packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/structuralist.py)
 normalizes STNB JSON-LD into pipeline input chunks and a gold-standard `nx.DiGraph`:
 
 ```python
-from pipeline.evaluation.adapters.structuralist import load_structuralist_benchmark
+from episteme_pipeline.evaluation.benchmarks.structuralist import load_structuralist_benchmark
 
-chunks, gold_graph = load_structuralist_benchmark("packages/episteme-pipeline/evaluation/data/stnb_cpm_pilot.jsonld")
+chunks, gold_graph = load_structuralist_benchmark(
+    "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
+)
 ```
 
 ### Scoring Engine Matrix
 
 | Layer / Metric               | Implementation Component                                                                                                        | Target Evaluated Property                                                                                                |
 |:-----------------------------|:--------------------------------------------------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------------------------------------------------|
-| **GM-GBS (Graph BERTScore)** | [`scorers/gm_gbs.py`](packages/episteme-pipeline/evaluation/scorers/gm_gbs.py) | Soft semantic alignment on predicted axioms, law definitions, and specialization links ($\tau = 0.95$).                  |
-| **OEP (Optimal Edit Paths)** | [`scorers/oep.py`](packages/episteme-pipeline/evaluation/scorers/oep.py)       | Diagnoses **Hallucination Rate ($HR$)** (spurious theoretical claims) vs. **Omission Rate ($OR$)** (missed core axioms). |
-| **Epistemic Metrics Suite**  | [`packages/epistemetrics/`](packages/epistemetrics/)                      | Evaluates structural DAG properties, Modesty, Structural Elegance, System Coherence, and Tenability.                     |
+| **Intrinsic Model Component Decomposition ($G_{\text{pred}} \succeq_{\text{cap}} G_{\text{ref}}$)** | [`epistemetrics.evaluate_model_components`](packages/epistemetrics/src/epistemetrics/epistemic/model_evaluation.py) | Bourbaki structuralist model decomposition across $\mathcal{M}_p, \mathcal{M}, \mathcal{M}_{pp}, GC, I_0$. Zero-Omission ($AOR=0.0$), $MCC$, $PFS$, and $AG_{\text{IoU}}$ character span IoU. |
+| **Model Scorer Bridge**      | [`ModelScorer`](packages/episteme-pipeline/episteme_pipeline/evaluation/scorers/model_scorer.py)                               | Bridges `epistemetrics` sovereign model component evaluation to pipeline `ArtifactCollection` and `TheoryNet`.          |
+| **GM-GBS (Graph BERTScore)** | [`GraphBERTScoreEvaluator`](packages/episteme-pipeline/episteme_pipeline/evaluation/scorers/gm_gbs.py)                           | Soft semantic alignment on predicted axioms, law definitions, and specialization links ($\tau = 0.95$).                  |
+| **OEP (Optimal Edit Paths)** | [`OptimalEditPathEvaluator`](packages/episteme-pipeline/episteme_pipeline/evaluation/scorers/oep.py)                            | Diagnoses **Hallucination Rate ($HR$)** (spurious theoretical claims) vs. **Omission Rate ($OR$)** (missed core axioms). |
+| **Epistemic Metrics Suite**  | [`packages/epistemetrics/`](packages/epistemetrics/)                                                                             | Evaluates structural DAG properties, Modesty, Structural Elegance, System Coherence, and Tenability.                     |
+
+### In-Memory Sovereign Evaluation Workflow
+
+Intrinsic model evaluation executes purely in memory via NetworkX-backed sovereign containers without requiring a running Neo4j database:
+
+```python
+import epistemetrics as em
+from epistemetrics.epistemic import evaluate_model_components
+
+# Construct or load theory graphs
+pred_graph = em.TheoryGraph(name="PredictedCPM")
+gold_graph = em.TheoryGraph(name="GoldCPM")
+
+# Evaluate capability subsumption (G_pred >=cap G_ref)
+result = evaluate_model_components(pred_graph, gold_graph, min_mcc=1.0, min_pfs=0.8)
+
+print(f"Subsumes Capabilities: {result.is_subsumed}")
+print(f"Model Component Completeness (MCC): {result.mcc:.4f}")
+print(f"Axiomatic Omission Rate (AOR): {result.aor:.4f}")
+print(f"Property Fidelity Score (PFS): {result.pfs:.4f}")
+print(f"Text Anchor IoU: {result.ag_iou:.4f}")
+print(result.to_markdown())
+```
+
+### Quantitative Metrics Formulation
+
+1. **Model Component Completeness ($MCC$):**
+   $\text{MCC}(T) = \frac{|\mathcal{M}_{p, \text{matched}}| + |\mathcal{M}_{\text{matched}}| + |\mathcal{M}_{pp, \text{matched}}| + |GC_{\text{matched}}| + |I_{0, \text{matched}}|}{|\text{Total Reference Components}(T)|}$
+2. **Axiomatic Omission Rate ($AOR$):**
+   $AOR = \frac{| \mathcal{M}_{\text{ref}} \setminus \mathcal{M}_{\text{pred, matched}} |}{| \mathcal{M}_{\text{ref}} |}$
+   *Capability Criterion:* Strict $AOR = 0.0$ (Zero-Omission of foundational substantive laws).
+3. **Property Fidelity Score ($PFS$):**
+   Macro average across node types, epistemic stances, edge semantics, weights, and polarities.
+4. **Text Anchor Grounding IoU ($AG_{\text{IoU}}$):**
+   Average character span Intersection over Union ($\text{IoU} = \frac{|S_{\text{pred}} \cap S_{\text{ref}}|}{|S_{\text{pred}} \cup S_{\text{ref}}|}$) across empirical nodes.
 
 ### CLI Execution
 
-Evaluation runs are executed deterministically through the harness orchestrator:
+Evaluation runs are executed deterministically through the consolidated harness orchestrator:
 
 ```bash
-rtk python packages/episteme-pipeline/evaluation/run_eval.py --manifest packages/episteme-pipeline/evaluation/manifests/eval_stnb.yaml
+rtk uv run python -m episteme_pipeline.evaluation.harness --manifest packages/episteme-pipeline/episteme_pipeline/evaluation/manifests/eval_stnb.yaml
 ```
 
 ---
@@ -302,13 +366,17 @@ rtk python packages/episteme-pipeline/evaluation/run_eval.py --manifest packages
 ## Implementation Status & Pilot Roadmap
 
 | Component                          | Status                       | Deliverable & Location                                                                                                                                                                                          |
-|:-----------------------------------|:-----------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Structuralist Graph Taxonomy**   | `Planned`       | Fully aligned with [`docs/concepts/theory_nets_and_topologies.md`](../concepts/theory_nets_and_topologies.md).                                                                                                  |
-| **JSON-LD Schema Specification**   | `Planned`       | Formal contract verified in [`packages/episteme-pipeline/evaluation/data/stnb_cpm_pilot.jsonld`](packages/episteme-pipeline/evaluation/data/stnb_cpm_pilot.jsonld). |
-| **Structuralist Adapter**          | `Planned`     | [`packages/episteme-pipeline/evaluation/adapters/structuralist.py`](packages/episteme-pipeline/evaluation/adapters/structuralist.py).                               |
-| **CPM Pilot Corpus (Principia)**   | `Planned`           | Newton *Principia* Book 1 Axioms and Propositions annotated.                                                                                                                                                    |
-| **Scorer Pipeline Integration**    | `Planned`      | Wired into `GraphBERTScoreEvaluator`, `OEPScoreEvaluator`, and `epistemetrics`.                                                                                                                                 |
-| **Multi-Theory Inter-Net Harness** | `Planned / Research Track` | Cross-theory registry for automated $T$-theoreticity and reduction link resolution.                                                                                                                             |
+|:-------------------|:-------------------|:-----------------------------------|
+| **Structuralist Graph Taxonomy**   | `Implemented`  | Formal enums (`NodeType`, `EpistemicStatus`, `RelationType`) in [`packages/epistemetrics/core/models.py`](packages/epistemetrics/src/epistemetrics/core/models.py). |
+| **TheoryGraph Domain Model**       | `Implemented`  | NetworkX MultiDiGraph runtime container in [`packages/epistemetrics/graph/theory_graph.py`](packages/epistemetrics/src/epistemetrics/graph/theory_graph.py). |
+| **Intrinsic Model Component Evaluator** | `Implemented` | In-memory evaluation suite in [`packages/epistemetrics/epistemic/model_evaluation.py`](packages/epistemetrics/src/epistemetrics/epistemic/model_evaluation.py). |
+| **JSON-LD Schema Specification**   | `Implemented`  | Formal contract verified in [`packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld`](packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld). |
+| **Structuralist Adapter Fixes**    | `Implemented`  | Edge decoding, array targets, resilient anchors, and poset orientation in [`packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/structuralist.py`](packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/structuralist.py). |
+| **CPM Pilot Corpus (Principia)**   | `Implemented`  | Newton *Principia* Book 1 Axioms, Laws, and Corollaries in [`packages/episteme-pipeline/episteme_pipeline/evaluation/data/newton_principia_1687.txt`](packages/episteme-pipeline/episteme_pipeline/evaluation/data/newton_principia_1687.txt). |
+| **Consolidated In-Memory Harness** | `Implemented`  | `EvaluationHarness` & in-memory pipeline runners in [`packages/episteme-pipeline/episteme_pipeline/evaluation/`](packages/episteme-pipeline/episteme_pipeline/evaluation/). |
+| **Specialization Poset Verification** | `Implemented`  | Specialization DAG acyclicity, root conformity, and transitive reduction in `epistemetrics` (`poset_evaluation.py`, `dynamics.py`). |
+| **Competency Query Testbed**       | `Implemented`  | Extrinsic scientific retrieval testbed for STNB with domain query suites in [`packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_queries.yaml`](packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_queries.yaml). |
+| **Comparative Baselines & Strategies** | `Implemented`  | Pluggable evaluation strategies and baselines (Zero-Shot LLM, Naive KG, Text RAG) in [`packages/episteme-pipeline/episteme_pipeline/evaluation/`](packages/episteme-pipeline/episteme_pipeline/evaluation/). |
 
 ---
 

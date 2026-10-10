@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from fastapi import HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
@@ -118,6 +119,30 @@ class InvalidConfigPatchException(StudioProblemException):
             status=422,
             detail=detail or "The provided configuration patch failed validation.",
             extra=extra,
+        )
+
+
+class EvaluationReportNotFoundException(StudioProblemException):
+    """Raised when an evaluation report cannot be found."""
+
+    def __init__(self, evaluation_id: str) -> None:
+        super().__init__(
+            type="evaluation-report-not-found",
+            title="Evaluation Report Not Found",
+            status=404,
+            detail=f"Evaluation report '{evaluation_id}' was not found.",
+        )
+
+
+class BenchmarkNotFoundException(StudioProblemException):
+    """Raised when a requested evaluation benchmark cannot be resolved."""
+
+    def __init__(self, benchmark_id: str) -> None:
+        super().__init__(
+            type="benchmark-not-found",
+            title="Benchmark Not Found",
+            status=404,
+            detail=f"Evaluation benchmark '{benchmark_id}' was not found on the filesystem.",
         )
 
 

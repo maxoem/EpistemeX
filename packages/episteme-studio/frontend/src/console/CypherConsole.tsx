@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
-import { CypherEditor } from "@neo4j-cypher/react-codemirror";
-import { Play, Database, AlertTriangle, ChevronDown, Loader2 } from "lucide-react";
-import { api } from "../api/client";
-import { CypherResult } from "../api/types";
-import { useRunsStore } from "../store/runsStore";
-import { useThemeStore } from "../store/themeStore";
+import React, {useEffect, useMemo, useRef, useState} from "react";
+import {CypherEditor} from "@neo4j-cypher/react-codemirror";
+import {AlertTriangle, ChevronDown, Database, Loader2, Play} from "lucide-react";
+import {api} from "../api/client";
+import {CypherResult} from "../api/types";
+import {useRunsStore} from "../store/runsStore";
+import {useThemeStore} from "../store/themeStore";
 
 interface CypherConsoleProps {
   neo4jAvailable: boolean;

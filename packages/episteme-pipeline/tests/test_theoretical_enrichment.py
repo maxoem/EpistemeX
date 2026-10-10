@@ -8,12 +8,10 @@ dynamic pipeline runner / post-processor plugging with ZERO hardcoded theories.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
 
+import pytest
 from episteme_pipeline.artifacts.execution import (
-    ArtifactCollection,
     ArtifactExecutionContext,
     Phase4ArtifactsView,
 )
@@ -28,7 +26,6 @@ from episteme_pipeline.events.bus import SimpleEventEmitter
 from episteme_pipeline.events.context import use_event_emitter
 from episteme_pipeline.post_processing.theoretical_enrichment import (
     ClusterProjectionOutput,
-    CompositeTheoryProjector,
     EmpiricalCluster,
     GenericTheoryProjector,
     InducedTheoryElement,
@@ -36,7 +33,6 @@ from episteme_pipeline.post_processing.theoretical_enrichment import (
     LLMTheoryInducer,
     LLMTheoryProjector,
     SafeFormulaEvaluator,
-    TenabilityAnomalyDetected,
     TenabilityEvaluationCompleted,
     TenabilitySolver,
     TheoreticalClusterIdentified,
@@ -46,7 +42,6 @@ from episteme_pipeline.post_processing.theoretical_enrichment import (
     TheoryInductionOutput,
     TheoryLaw,
     TheoryRegistry,
-    evaluate_formula_safely,
 )
 from episteme_pipeline.runs.models import RunManifest
 
@@ -227,6 +222,64 @@ def test_multi_theory_lens_projections(mixed_empirical_atoms, seeded_theories):
     assert freud_params["UnconsciousResistance"] == pytest.approx(0.85, abs=0.05)
 
 
+def test_generic_projector_text_token_fallback() -> None:
+    """Verify that GenericTheoryProjector extracts parameters from textual mentions when measurements are absent."""
+    cluster = EmpiricalCluster(
+        cluster_id="cluster-text-only",
+        observations=[
+            TheoryAtom(
+                id="obs_text_1",
+                text="Patient exhibits high dopamine depletion of 65% in recent scans.",
+                component_type="ObservationUnit",
+                source_chunk_id="chunk_001",
+                confidence=0.9,
+                measurements=[],
+            )
+        ],
+        claimant_theory_ids=["neurology"],
+    )
+    theory = TheoryElementDefinition(
+        theory_id="neurology",
+        name="Neurology",
+        required_dimensions=["unrelated_dim"],
+        parameter_names=["DopamineDepletion"],
+        laws=[],
+    )
+    projector = GenericTheoryProjector()
+    params = projector.project(cluster, theory)
+    assert params["DopamineDepletion"] == pytest.approx(0.65, abs=0.01)
+
+
+def test_generic_projector_ordinal_positional_fallback() -> None:
+    """Verify positional alignment when parameter names and dimension names are disjoint."""
+    cluster = EmpiricalCluster(
+        cluster_id="cluster-disjoint",
+        observations=[
+            TheoryAtom(
+                id="obs_disjoint_1",
+                text="Empirical observation with disjoint vocabulary.",
+                component_type="ObservationUnit",
+                source_chunk_id="chunk_002",
+                confidence=0.9,
+                measurements=[
+                    Measurement(dimension="x_dim", value=0.42, unit="ratio"),
+                ],
+            )
+        ],
+        claimant_theory_ids=["abstract_theory"],
+    )
+    theory = TheoryElementDefinition(
+        theory_id="abstract_theory",
+        name="AbstractTheory",
+        required_dimensions=["x_dim"],
+        parameter_names=["LatentTheta"],
+        laws=[],
+    )
+    projector = GenericTheoryProjector()
+    params = projector.project(cluster, theory)
+    assert params["LatentTheta"] == pytest.approx(0.42, abs=0.01)
+
+
 def test_local_tenability_solver(seeded_theories):
     """Test Step 3: Local Tenability optimization (TS_local = sup { 1 - delta })."""
     solver = TenabilitySolver(anomaly_threshold=0.5)
@@ -242,7 +295,7 @@ def test_local_tenability_solver(seeded_theories):
     assert len(anomalies) == 0
 
     # Incoherent parameters
-    ts_bad, delta_bad, anomalies_bad = solver.solve_local_tenability(
+    ts_bad, delta_bad, _anomalies_bad = solver.solve_local_tenability(
         {"DopamineDepletion": 1.0, "AmygdalaHyperactivity": 0.0}, neuro_def
     )
     assert ts_bad <= 0.60
@@ -270,7 +323,7 @@ def test_edge_tenability_and_anomaly_detection():
     assert len(anomalies) == 0
 
     # Incompatible mixed model
-    ts_bad, delta_bad, bad_anomalies = solver.solve_edge_tenability(
+    ts_bad, _delta_bad, bad_anomalies = solver.solve_edge_tenability(
         {"RepressionMagnitude": 0.90}, {"AmygdalaHyperactivity": 0.10}, rel
     )
     assert ts_bad < 0.5
@@ -458,8 +511,8 @@ def test_dynamic_pipeline_runner_injection():
     custom_runner = TheoreticalEnrichmentRunner(config=config.theoretical_enrichment)
 
     phases = [custom_runner]
-    from episteme_pipeline.pipeline import Pipeline
     from episteme_pipeline.events.bus import NoOpEventEmitter
+    from episteme_pipeline.pipeline import Pipeline
 
     pipe = Pipeline(
         phases=phases,
@@ -480,6 +533,7 @@ def test_dynamic_pipeline_runner_injection():
 def test_pipeline_for_task_with_post_processors():
     """Verify that Pipeline.for_task accepts and appends post_processors cleanly."""
     from unittest.mock import MagicMock
+
     from episteme_pipeline.pipeline import Pipeline
     from episteme_pipeline.protocols.phase_runner import PhaseRunner
 

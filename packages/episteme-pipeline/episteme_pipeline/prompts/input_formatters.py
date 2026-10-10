@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Type
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from episteme_pipeline.contracts.domain import SubGraph
@@ -27,8 +27,8 @@ class BaseSubgraphFormatter(ABC):
     @abstractmethod
     def format(
         self, 
-        env_a: "SubGraph", 
-        env_b: "SubGraph", 
+        env_a: SubGraph, 
+        env_b: SubGraph, 
         include_description: bool = True
     ) -> str:
         """Render two subgraph envelopes as a formatted string."""
@@ -36,8 +36,8 @@ class BaseSubgraphFormatter(ABC):
 
     @staticmethod
     def _extract_payload(
-        env_a: "SubGraph", 
-        env_b: "SubGraph", 
+        env_a: SubGraph, 
+        env_b: SubGraph, 
         include_description: bool = True
     ) -> dict[str, Any]:
         """Extract merged node and edge dictionaries from subgraph envelopes."""
@@ -70,8 +70,8 @@ class JsonSubgraphFormatter(BaseSubgraphFormatter):
 
     def format(
         self, 
-        env_a: "SubGraph", 
-        env_b: "SubGraph", 
+        env_a: SubGraph, 
+        env_b: SubGraph, 
         include_description: bool = True
     ) -> str:
         payload = self._extract_payload(env_a, env_b, include_description)
@@ -83,8 +83,8 @@ class YamlSubgraphFormatter(BaseSubgraphFormatter):
 
     def format(
         self, 
-        env_a: "SubGraph", 
-        env_b: "SubGraph", 
+        env_a: SubGraph, 
+        env_b: SubGraph, 
         include_description: bool = True
     ) -> str:
         payload = self._extract_payload(env_a, env_b, include_description)
@@ -100,8 +100,8 @@ class TextSubgraphFormatter(BaseSubgraphFormatter):
 
     def format(
         self, 
-        env_a: "SubGraph", 
-        env_b: "SubGraph", 
+        env_a: SubGraph, 
+        env_b: SubGraph, 
         include_description: bool = True
     ) -> str:
         lines: list[str] = []
@@ -122,7 +122,7 @@ class TextSubgraphFormatter(BaseSubgraphFormatter):
 
 
 # Strategy Registry
-_FORMATTERS: Dict[InputFormatStrategy, BaseSubgraphFormatter] = {
+_FORMATTERS: dict[InputFormatStrategy, BaseSubgraphFormatter] = {
     InputFormatStrategy.JSON: JsonSubgraphFormatter(),
     InputFormatStrategy.YAML: YamlSubgraphFormatter(),
     InputFormatStrategy.TEXT: TextSubgraphFormatter(),
@@ -130,8 +130,8 @@ _FORMATTERS: Dict[InputFormatStrategy, BaseSubgraphFormatter] = {
 
 
 def format_subgraph_envelope(
-    env_a: "SubGraph", 
-    env_b: "SubGraph", 
+    env_a: SubGraph, 
+    env_b: SubGraph, 
     strategy: InputFormatStrategy = InputFormatStrategy.JSON, 
     include_description: bool = True
 ) -> str:

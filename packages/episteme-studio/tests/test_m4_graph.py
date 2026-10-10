@@ -4,17 +4,23 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import pytest
-from httpx import ASGITransport, AsyncClient
 
+import pytest
 from episteme_studio.app import create_app
 from episteme_studio.domain.graph import Layer
 from episteme_studio.settings import StudioSettings
+from httpx import ASGITransport, AsyncClient
 
 LARGEST_RUN_ID = "run-4dd7b5fb-21b9-4236-8e67-ea4363408387"
+RUN_EXISTS = (Path(".pipeline_runs") / f"{LARGEST_RUN_ID}.json").exists()
+require_largest_run = pytest.mark.skipif(
+    not RUN_EXISTS,
+    reason=f"Historical run {LARGEST_RUN_ID} not present in .pipeline_runs",
+)
 
 
 @pytest.mark.asyncio
+@require_largest_run
 async def test_largest_run_graph_materialization() -> None:
     """The 2.3 MB run must render ~100 entities, 260 global relations, 62 local relations."""
     app = create_app(StudioSettings())
@@ -47,6 +53,7 @@ async def test_largest_run_graph_materialization() -> None:
 
 
 @pytest.mark.asyncio
+@require_largest_run
 async def test_chunk_embedding_never_in_response() -> None:
     """L1Chunk.embedding must NEVER appear in any response over the wire (SPEC §8 point 6)."""
     app = create_app(StudioSettings())
@@ -54,7 +61,6 @@ async def test_chunk_embedding_never_in_response() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(f"/api/runs/{LARGEST_RUN_ID}/graph?budget=1000")
         assert response.status_code == 200
-        raw_text = response.text
 
         # Ensure embedding keyword never appears as a property
         data = response.json()
@@ -63,6 +69,7 @@ async def test_chunk_embedding_never_in_response() -> None:
 
 
 @pytest.mark.asyncio
+@require_largest_run
 async def test_node_budget_and_truncation() -> None:
     """Exceeding the node budget sets truncated=True and dropped_count."""
     app = create_app(StudioSettings())
@@ -140,6 +147,7 @@ async def test_dangling_component_materialization(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+@require_largest_run
 async def test_evidence_trail_endpoint() -> None:
     """GET /api/runs/{id}/evidence/{node_id} traces spans with mode label (D-19)."""
     app = create_app(StudioSettings())

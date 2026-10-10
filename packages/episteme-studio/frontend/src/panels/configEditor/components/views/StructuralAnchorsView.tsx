@@ -1,23 +1,20 @@
-import React, { useState } from "react";
+import React, {useState} from "react";
 import {
-  Compass,
-  Anchor,
-  FileText,
-  BookOpen,
-  Tag,
-  Upload,
-  Plus,
-  Trash2,
-  RotateCcw,
-  Sparkles,
-  Check,
-  Loader2,
-  X,
-  Layers,
-  Info,
+    BookOpen,
+    Check,
+    Compass,
+    FileText,
+    Loader2,
+    Plus,
+    RotateCcw,
+    Sparkles,
+    Tag,
+    Trash2,
+    Upload,
+    X,
 } from "lucide-react";
-import { AvailableInputDoc, GlobalStructuralAnchor } from "../../../../api/types";
-import { RunMetadataItem } from "../../types";
+import {AvailableInputDoc, GlobalStructuralAnchor} from "../../../../api/types";
+import {RunMetadataItem} from "../../types";
 
 interface StructuralAnchorsViewProps {
   // Effective data

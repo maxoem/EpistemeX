@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import TYPE_CHECKING
+
 from episteme_studio.adapters.artifact_reader import ArtifactReader, ArtifactStoreError
 from episteme_studio.api.errors import StudioProblemException
-from episteme_studio.domain.runs import RunDetail, RunStatus, RunSummary, StartRunRequest
+from episteme_studio.domain.runs import (
+    RunDetail,
+    RunStatus,
+    RunSummary,
+    StartRunRequest,
+)
 from episteme_studio.runtime.executor import PipelineExecutor, RunAlreadyActiveError
 from episteme_studio.runtime.registry import RunRegistry
 
@@ -32,6 +39,7 @@ class RunService:
         registry: RunRegistry | None = None,
         executor: PipelineExecutor | None = None,
         config_service: Any = None,
+        settings: StudioSettings | None = None,
     ) -> None:
         from episteme_studio.services.config_service import ConfigService
 
@@ -39,6 +47,7 @@ class RunService:
         self.registry = registry
         self.executor = executor
         self.config_service = config_service or ConfigService()
+        self.settings = settings
 
     @classmethod
     def from_settings(
@@ -73,7 +82,13 @@ class RunService:
             extra_runs_dirs=settings.extra_runs_dirs,
             extra_artifacts_dirs=settings.extra_artifacts_dirs,
         )
-        return cls(reader, registry=registry, executor=executor, config_service=config_service)
+        return cls(
+            reader,
+            registry=registry,
+            executor=executor,
+            config_service=config_service,
+            settings=settings,
+        )
 
     def list_runs(self) -> list[RunSummary]:
         """List all available pipeline runs, combining disk manifests and active runs.
@@ -92,7 +107,11 @@ class RunService:
 
         # In-memory handles take precedence for active or recently completed runs
         for handle in active_handles:
-            if handle.status == RunStatus.RUNNING and handle.process and not handle.process.is_alive():
+            if (
+                handle.status == RunStatus.RUNNING
+                and handle.process
+                and not handle.process.is_alive()
+            ):
                 handle.status = RunStatus.FAILED
                 handle.completed_at = datetime.now(timezone.utc)
             summary = handle.to_summary()
@@ -125,13 +144,17 @@ class RunService:
         total_arts = sum(merged_counts.values())
         if total_arts > 0:
             detail.artifact_count = max(detail.artifact_count, total_arts)
-        detail.size_bytes = max(detail.size_bytes, self.reader._calculate_run_size_bytes(run_id))
+        detail.size_bytes = max(
+            detail.size_bytes, self.reader._calculate_run_size_bytes(run_id)
+        )
 
         # If on-disk intermediate manifest exists, sync phase records from it
         try:
             disk_run = self.reader.get_run(run_id)
             if disk_run and disk_run.phase_records:
-                disk_phases_by_ord = {p.phase_ordinal: p for p in disk_run.phase_records}
+                disk_phases_by_ord = {
+                    p.phase_ordinal: p for p in disk_run.phase_records
+                }
                 for i, p in enumerate(detail.phase_records):
                     dp = disk_phases_by_ord.get(p.phase_ordinal)
                     if dp and dp.status in (RunStatus.COMPLETED, RunStatus.FAILED):
@@ -163,7 +186,8 @@ class RunService:
         if self.registry:
             handle = self.registry.get(run_id)
             if handle and (
-                handle.status in (RunStatus.PLANNED, RunStatus.RUNNING, RunStatus.ABORTED)
+                handle.status
+                in (RunStatus.PLANNED, RunStatus.RUNNING, RunStatus.ABORTED)
                 or handle.failure is not None
             ):
                 return self._enrich_handle_detail(handle)
@@ -215,6 +239,28 @@ class RunService:
         StudioProblemException
             If executor is unavailable or another run is already active.
         """
+        if self.settings and self.settings.read_only:
+            raise StudioProblemException(
+                type="read-only-mode",
+                title="Read-Only Mode",
+                status=403,
+                detail="Pipeline execution is disabled on this read-only instance.",
+                instance="/api/runs",
+            )
+
+        if (
+            not getattr(request, "demo_mode", False)
+            and self.settings
+            and not self.settings.execution_enabled
+        ):
+            raise StudioProblemException(
+                type="execution-disabled",
+                title="Pipeline Execution Disabled",
+                status=403,
+                detail="Real pipeline execution is disabled on this instance. Set EPISTEME_STUDIO_EXECUTION_ENABLED=true to enable.",
+                instance="/api/runs",
+            )
+
         if not self.executor:
             raise StudioProblemException(
                 type="execution-unavailable",
@@ -321,7 +367,7 @@ class RunService:
         StudioProblemException
             If run is not found in active registry or on disk.
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # 1. Terminate any lingering OS process
         self._terminate_orphaned_run_process(run_id)
@@ -361,7 +407,7 @@ class RunService:
                     "run_id": run_id,
                     "level": "warning",
                     "message": f"Run '{run_id}' was cancelled by user.",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 },
             )
             self.executor.broker.close_run(run_id)
@@ -386,7 +432,7 @@ class RunService:
         list of ArtifactRef
             Artifact references.
         """
-        run = self.get_run(run_id)
+        self.get_run(run_id)
         return self.reader.list_artifacts(run_id, kind=kind)
 
     def get_run_langfuse_stats(
@@ -418,6 +464,7 @@ class RunService:
             Dictionary with configured, connected, count, and observations list.
         """
         import hashlib
+
         from episteme_studio.settings import get_env_var
 
         active_host = (
@@ -427,8 +474,16 @@ class RunService:
             or get_env_var("LANGFUSE_BASE_URL")
             or "http://localhost:3000"
         )
-        active_pk = public_key if public_key is not None else (get_env_var("LANGFUSE_PUBLIC_KEY") or "")
-        active_sk = secret_key if secret_key is not None else (get_env_var("LANGFUSE_SECRET_KEY") or "")
+        active_pk = (
+            public_key
+            if public_key is not None
+            else (get_env_var("LANGFUSE_PUBLIC_KEY") or "")
+        )
+        active_sk = (
+            secret_key
+            if secret_key is not None
+            else (get_env_var("LANGFUSE_SECRET_KEY") or "")
+        )
 
         has_pk = bool(active_pk.strip())
         has_sk = bool(active_sk.strip())
@@ -448,7 +503,9 @@ class RunService:
         try:
             from langfuse import Langfuse
 
-            client = Langfuse(public_key=active_pk, secret_key=active_sk, host=active_host)
+            client = Langfuse(
+                public_key=active_pk, secret_key=active_sk, host=active_host
+            )
         except Exception as exc:
             return {
                 "configured": True,
@@ -514,7 +571,9 @@ class RunService:
             cost_details = d.get("costDetails") or {}
             inp_tok = int(usage.get("input") or d.get("inputUsage") or 0)
             out_tok = int(usage.get("output") or d.get("outputUsage") or 0)
-            tot_tok = int(usage.get("total") or d.get("totalUsage") or (inp_tok + out_tok))
+            tot_tok = int(
+                usage.get("total") or d.get("totalUsage") or (inp_tok + out_tok)
+            )
             cost_usd = float(d.get("totalCost") or cost_details.get("total") or 0.0)
 
             start_t = d.get("startTime")
@@ -532,23 +591,29 @@ class RunService:
             else:
                 level_str = str(level_val) if level_val else None
 
-            parsed.append({
-                "id": obs_id,
-                "name": d.get("name") or "unnamed_call",
-                "type": d.get("type") or "GENERATION",
-                "startTime": start_t.isoformat() if hasattr(start_t, "isoformat") else str(start_t or ""),
-                "endTime": end_t.isoformat() if hasattr(end_t, "isoformat") else (str(end_t) if end_t else None),
-                "latencySeconds": float(lat or 0.0),
-                "model": d.get("model") or "",
-                "inputTokens": inp_tok,
-                "outputTokens": out_tok,
-                "totalTokens": tot_tok,
-                "costUsd": cost_usd,
-                "promptName": d.get("promptName"),
-                "promptVersion": d.get("promptVersion"),
-                "statusMessage": d.get("statusMessage"),
-                "level": level_str,
-            })
+            parsed.append(
+                {
+                    "id": obs_id,
+                    "name": d.get("name") or "unnamed_call",
+                    "type": d.get("type") or "GENERATION",
+                    "startTime": start_t.isoformat()
+                    if hasattr(start_t, "isoformat")
+                    else str(start_t or ""),
+                    "endTime": end_t.isoformat()
+                    if hasattr(end_t, "isoformat")
+                    else (str(end_t) if end_t else None),
+                    "latencySeconds": float(lat or 0.0),
+                    "model": d.get("model") or "",
+                    "inputTokens": inp_tok,
+                    "outputTokens": out_tok,
+                    "totalTokens": tot_tok,
+                    "costUsd": cost_usd,
+                    "promptName": d.get("promptName"),
+                    "promptVersion": d.get("promptVersion"),
+                    "statusMessage": d.get("statusMessage"),
+                    "level": level_str,
+                }
+            )
 
         # Sort chronological
         parsed.sort(key=lambda x: x["startTime"])
@@ -561,4 +626,3 @@ class RunService:
             "count": len(parsed),
             "observations": parsed,
         }
-

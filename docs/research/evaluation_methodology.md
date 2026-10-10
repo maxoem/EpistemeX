@@ -29,7 +29,7 @@ To address these challenges, our methodology strictly stratifies evaluation into
 | **1. Intrinsic Evaluation**      | Layer 1 & 2 (Entities & Triples) | Structural and semantic alignment against Gold Standard graphs.     | GM-GBS (Soft F1), OEP (Hallucination Rate, Omission Rate).        | NetworkX Scorers (`gm_gbs.py`, `oep.py`).  |
 | **2. Extrinsic Evaluation**      | Layer 2 & Downstream Graph       | Downstream utility in information retrieval and question answering. | MRR, Hits@k, nDCG@k, Mean Average Precision (MAP).                | Retrieval Scorer (`retrieval_scorer.py`).  |
 | **3. Reference-Free Evaluation** | Layer 1 & 2 (Extraction Quality) | Direct alignment between extracted triples and source text chunks.  | Faithfulness (% supported), Comprehensiveness (% major claims).   | Calibrated LLM-as-a-Judge (`run_eval.py`). |
-| **4. Theory Layer Evaluation**   | Layer 3 (TheoryNet & Arguments)  | Argumentative validity, epistemic coherence, and tenability.        | Human Expert Rubrics, Krippendorff's $\alpha$, Epistemic Metrics. | Expert Review, `epistemetrics`, [STNB](structuralist_theory_benchmark.md). |
+| **4. Theory Layer Evaluation**   | Layer 3 & Level 4 (TheoryNet)    | Bourbaki model decomposition ($\mathcal{M}_p, \mathcal{M}, \mathcal{M}_{pp}, GC, I_0$) & capability subsumption ($G_{\text{pred}} \succeq_{\text{cap}} G_{\text{ref}}$). | $MCC$, $AOR$ (Zero Omission), $PFS$, $AG_{\text{IoU}}$, Lakatosian resilience. | `epistemetrics` sovereign evaluator, [STNB](structuralist_theory_benchmark.md). |
 
 ---
 

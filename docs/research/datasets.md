@@ -28,15 +28,15 @@ and stress testing:
 
 | Dataset Name                       | Domain & Source                                                 | Lang    | Primary Target Tasks                                           | Size & Volume                                 | License                   | Adapter Reference                                                                                                                           |
 |:-----------------------------------|:----------------------------------------------------------------|:--------|:---------------------------------------------------------------|:----------------------------------------------|:--------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------|
-| **SciERC**                         | Computer Science & AI abstracts                                 | EN      | Scientific NER, Relation Extraction                            | 500 abstracts, 8K entities, 4.7K relations    | Open Research (MIT)       | [`adapters/scierc.py`](packages/episteme-pipeline/evaluation/adapters/scierc.py)                 |
-| **SciFact**                        | Biomedical & Scientific claims                                  | EN      | Evidence Retrieval, Claim Verification                         | 1.4K claims, 5K evidence snippets             | CC-BY 4.0                 | [`adapters/scifact.py`](packages/episteme-pipeline/evaluation/adapters/scifact.py)               |
-| **Arg-Microtexts**                 | Argumentative discourse & editorials                            | DE / EN | Argument Component (ACC) & Relation (ARC) Classification       | 112 microtexts, 576 ADUs                      | CC-BY 4.0                 | [`adapters/arg_microtexts.py`](packages/episteme-pipeline/evaluation/adapters/arg_microtexts.py) |
-| **PhilPapers Corpus**              | Philosophy of Science & Epistemology                            | EN      | Concept Discovery, Theoretical Relation Extraction             | 500 papers, ~2,000 annotated constructs       | CC-BY with attribution    | `adapters/philpapers.py`                                                                                                                    |
-| **SEP Corpus**                     | Stanford Encyclopedia of Philosophy                             | EN      | Concept Hierarchy, Defeasible Argument Structure               | 100 entries, extensive argument webs          | Educational / Research    | `adapters/sep.py`                                                                                                                           |
-| **Deutsches Philosophenlexikon**   | Reference work excerpts in German philosophy                    | DE      | Multilingual Concept Alignment, Cross-Lingual Linking          | 300 passages, bilingual terminology           | Educational use           | `adapters/philosophenlexikon.py`                                                                                                            |
-| **CoNLL-2003 (Adapted)**           | General & domain-adapted NER                                    | EN      | Baseline Named Entity Recognition                              | 1,393 news/academic documents                 | Permissive Research       | `adapters/conll_adapted.py`                                                                                                                 |
-| **STNB (Structuralist Benchmark)** | Formal structuralist scientific reconstructions (Balzer et al.) | DE / EN | TheoryNet Topology, Specialization Trees, Axiom Identification | 40+ theory-nets (CPM, Freud, Festinger, SETH) | Academic / CC-BY 4.0      | [`adapters/structuralist.py`](packages/episteme-pipeline/evaluation/adapters/structuralist.py) & [STNB Spec](structuralist_theory_benchmark.md) |
-| **Domain Review Collection**       | Curated German/English philosophy edge cases                    | DE / EN | Long-range relations, ambiguous naming, contested claims       | 500 sampled passages with expert rubrics      | In-house scholarly review | [`evaluation/rubrics/`](packages/episteme-pipeline/evaluation/rubrics/)                          |
+| **SciERC**                         | Computer Science & AI abstracts                                 | EN      | Scientific NER, Relation Extraction                            | 500 abstracts, 8K entities, 4.7K relations    | Open Research (MIT)       | [`benchmarks/scierc.py`](packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/scierc.py)                 |
+| **SciFact**                        | Biomedical & Scientific claims                                  | EN      | Evidence Retrieval, Claim Verification                         | 1.4K claims, 5K evidence snippets             | CC-BY 4.0                 | [`benchmarks/scifact.py`](packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/scifact.py)               |
+| **Arg-Microtexts**                 | Argumentative discourse & editorials                            | DE / EN | Argument Component (ACC) & Relation (ARC) Classification       | 112 microtexts, 576 ADUs                      | CC-BY 4.0                 | [`benchmarks/arg_microtexts.py`](packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/arg_microtexts.py) |
+| **PhilPapers Corpus**              | Philosophy of Science & Epistemology                            | EN      | Concept Discovery, Theoretical Relation Extraction             | 500 papers, ~2,000 annotated constructs       | CC-BY with attribution    | `benchmarks/philpapers.py`                                                                                                                  |
+| **SEP Corpus**                     | Stanford Encyclopedia of Philosophy                             | EN      | Concept Hierarchy, Defeasible Argument Structure               | 100 entries, extensive argument webs          | Educational / Research    | `benchmarks/sep.py`                                                                                                                         |
+| **Deutsches Philosophenlexikon**   | Reference work excerpts in German philosophy                    | DE      | Multilingual Concept Alignment, Cross-Lingual Linking          | 300 passages, bilingual terminology           | Educational use           | `benchmarks/philosophenlexikon.py`                                                                                                          |
+| **CoNLL-2003 (Adapted)**           | General & domain-adapted NER                                    | EN      | Baseline Named Entity Recognition                              | 1,393 news/academic documents                 | Permissive Research       | `benchmarks/conll_adapted.py`                                                                                                               |
+| **STNB (Structuralist Benchmark)** | Formal structuralist scientific reconstructions (Balzer et al.) | DE / EN | TheoryNet Topology, Specialization Trees, Axiom Identification | 40+ theory-nets (CPM, Freud, Festinger, SETH) | Academic / CC-BY 4.0      | [`benchmarks/structuralist.py`](packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/structuralist.py) & [STNB Spec](structuralist_theory_benchmark.md) |
+| **Domain Review Collection**       | Curated German/English philosophy edge cases                    | DE / EN | Long-range relations, ambiguous naming, contested claims       | 500 sampled passages with expert rubrics      | In-house scholarly review | [`evaluation/rubrics/`](packages/episteme-pipeline/episteme_pipeline/evaluation/rubrics/)                          |
 
 ---
 
@@ -59,7 +59,7 @@ graph TD
   Retrieval metrics:
 	- *Layer 1 & 2 (Extraction & Relations):* `SciERC`, `SciFact`.
 	- *Layer 3 (Argument Components):* `Arg-Microtexts`.
-	- *Layer 4 (TheoryNet & Architectonic Structure):* [Structuralist Theory-Net Benchmark (STNB)](structuralist_theory_benchmark.md). Evaluates formal model classes ($\mathcal{M}_p, \mathcal{M}, \mathcal{M}_{pp}$), constraints ($GC$), and specialization trees ($\alpha$). Ground truth pairs human-authored reconstructions (Balzer et al.) with a **Model-Assisted Human Verification (HITL)** protocol where candidate text anchors are model-proposed, double-blind audited, and adjudicated by domain scholars ($\alpha \ge 0.80$).
+	- *Layer 4 (TheoryNet & Architectonic Structure):* [Structuralist Theory-Net Benchmark (STNB)](structuralist_theory_benchmark.md). Evaluates formal model classes ($\mathcal{M}_p, \mathcal{M}, \mathcal{M}_{pp}$), constraints ($GC$), and specialization trees ($\alpha$). Ground truth pairs human-authored reconstructions (Balzer et al.) with a **Model-Assisted Human Verification (HITL)** protocol where candidate text anchors are model-proposed, double-blind audited, and adjudicated by domain scholars ($\alpha \ge 0.80$). Non-public-domain empirical literature (e.g., Festinger 1957, 1959) is distributed using the **Stand-Off Annotation Model (Pattern A)** with local verification via `scripts/fetch_stnb_corpora.py`.
 * **Silver Datasets:** Larger corpora used for triage, ablation studies, and broad sensitivity sweeps.
 * **Review Datasets:** Targeted passages where domain experts execute structured rubric assessments
   (`EvaluationRubric`).
@@ -74,7 +74,7 @@ graph TD
 ## Adapter Architecture
 
 To prevent coupling between external dataset schemas and the internal Episteme graph model, all datasets interface
-through dedicated adapters in [`packages/episteme-pipeline/evaluation/adapters/`](packages/episteme-pipeline/evaluation/adapters/).
+through dedicated adapters in [`packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/`](packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/).
 
 ### Adapter Responsibilities
 
@@ -89,14 +89,14 @@ Each adapter performs three normalization steps:
 
 ### Active Adapter Implementations
 
-* **Layer 1 & 2 (Factual Extraction):** [`adapters/scierc.py`](packages/episteme-pipeline/evaluation/adapters/scierc.py) and [`adapters/scifact.py`](packages/episteme-pipeline/evaluation/adapters/scifact.py) normalize entity and factual relation benchmarks.
-* **Layer 3 (Argumentation):** [`adapters/arg_microtexts.py`](packages/episteme-pipeline/evaluation/adapters/arg_microtexts.py) maps argument component and relation classification tasks.
-* **Layer 4 (Theory-Nets):** [`adapters/structuralist.py`](packages/episteme-pipeline/evaluation/adapters/structuralist.py) normalizes JSON-LD structuralist graph records (`TheoryNet`, `TheoryElement`, `ActualModel`, `Constraint`) into canonical `(list[L1Chunk], nx.DiGraph)` representations with preserved `Episteme:textAnchor` coordinates.
+* **Layer 1 & 2 (Factual Extraction):** [`benchmarks/scierc.py`](packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/scierc.py) and [`benchmarks/scifact.py`](packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/scifact.py) normalize entity and factual relation benchmarks.
+* **Layer 3 (Argumentation):** [`benchmarks/arg_microtexts.py`](packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/arg_microtexts.py) maps argument component and relation classification tasks.
+* **Layer 4 (Theory-Nets):** [`benchmarks/structuralist.py`](packages/episteme-pipeline/episteme_pipeline/evaluation/benchmarks/structuralist.py) normalizes JSON-LD structuralist graph records (`TheoryNet`, `TheoryElement`, `ActualModel`, `Constraint`) into canonical `(list[L1Chunk], nx.DiGraph)` representations with preserved `Episteme:textAnchor` coordinates.
 
 ### Adapter Implementation Pattern
 
 ```python
-"""Typical Adapter Structure (e.g. evaluation/adapters/scierc.py or structuralist.py)"""
+"""Typical Adapter Structure (e.g. episteme_pipeline/evaluation/benchmarks/scierc.py or structuralist.py)"""
 
 from pathlib import Path
 import json
@@ -152,4 +152,4 @@ Every evaluation execution is cryptographically reproducible:
 * **Evaluation Methodology & Scaffolding**: [Evaluation Methodology](evaluation_methodology.md)
 * **Evaluation Harness Architecture**: [Evaluation Harness](evaluation_harness.md)
 * **Empirical Construction Metrics**: [Empirical Metrics & Validation](metrics.md)
-* **Run Manifest Specification**: [`run_manifest.schema.yaml`](packages/episteme-pipeline/evaluation/run_manifest.schema.yaml)
+* **Run Manifest Specification**: [`run_manifest.schema.yaml`](packages/episteme-pipeline/episteme_pipeline/evaluation/run_manifest.schema.yaml)

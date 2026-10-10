@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.domain.diff import (
     ConfigDeltaItem,
@@ -236,8 +237,7 @@ class DiffService:
                     if isinstance(rho_a, (int, float)) and isinstance(rho_b, (int, float)):
                         delta = round(float(rho_b) - float(rho_a), 4)
                         rho_deltas[nid] = delta
-                        if abs(delta) > max_rho_drift:
-                            max_rho_drift = abs(delta)
+                        max_rho_drift = max(max_rho_drift, abs(delta))
 
         # 4. Configuration Delta Isolation
         flat_cfg_a = _flatten_dict(detail_a.config_snapshot or {})

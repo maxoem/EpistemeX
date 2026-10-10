@@ -210,6 +210,8 @@ Output strictly valid JSON:
 }}
 """
 
+PAIR_GATING_DECISION_PROMPT = """Is there a direct theoretical or semantic relationship between {entity_a} and {entity_b}?"""
+
 # ---------------------------------------------------------------------------
 # Phase 4 — ADU Segmentation
 # ---------------------------------------------------------------------------
@@ -482,4 +484,135 @@ Cluster Observations:
 3. Provide a brief rationale for the fit.
 4. Output strictly valid JSON matching the schema.
 """
+
+
+# ---------------------------------------------------------------------------
+# Decision Engine Prompts & Rubrics (System 1 Gating & Classification)
+# ---------------------------------------------------------------------------
+
+DECISION_EPISTEMIC_RELEVANCE_QUESTION = """\
+Is this text chunk substantively relevant to philosophical, theoretical, or scientific arguments and concepts, as opposed to metadata, index, bibliography, acknowledgments, or administrative boilerplate?
+"""
+
+DECISION_EPISTEMIC_RELEVANCE_CRITERIA = {
+    "relevant": (
+        "Substantive content containing philosophical, theoretical, or scientific claims, "
+        "premises, arguments, definitions, or conceptual analysis."
+    ),
+    "non_relevant": (
+        "Bibliographic references, table of contents, index, copyright notices, "
+        "author biographies, publication metadata, or administrative boilerplate text."
+    ),
+}
+
+DECISION_ACC_QUESTION = """\
+What is the functional argumentative component type of the following text unit?
+"""
+
+DECISION_ACC_CRITERIA = {
+    "CLAIM": (
+        "A central proposition, thesis, conclusion, or assertion put forward by an author "
+        "that requires justification or evidence."
+    ),
+    "PREMISE": (
+        "A statement, piece of evidence, reason, or assumption offered in support of "
+        "or in opposition to a claim."
+    ),
+    "CONCLUSION": (
+        "A statement derived logically from one or more premises within a reasoning chain."
+    ),
+    "MAJOR_CLAIM": (
+        "The overarching, primary thesis or contention of the entire philosophical text or work."
+    ),
+    "NONE": (
+        "Non-argumentative, expository, narrative, or background discourse without "
+        "an inferential argumentative role."
+    ),
+}
+
+DECISION_ARC_QUESTION = """\
+What argumentative or dialectical relation holds from the source proposition to the target proposition?
+"""
+
+DECISION_ARC_CRITERIA = {
+    "SUPPORTS": (
+        "The source proposition provides evidence, justification, entailment, or logical backing "
+        "for the target proposition."
+    ),
+    "SUPPORTS_ARG": (
+        "The source proposition provides evidence, justification, entailment, or logical backing "
+        "for the target proposition."
+    ),
+    "ATTACKS": (
+        "The source proposition directly refutes, contradicts, or rebuts the target proposition."
+    ),
+    "UNDERCUTS": (
+        "The source proposition challenges the inferential link, premise applicability, or relevance "
+        "between the target and its premises without necessarily denying the target directly."
+    ),
+    "NEUTRAL": (
+        "No inferential, supporting, or defeating relation holds between source and target."
+    ),
+}
+
+DECISION_BOUNDARY_QUESTION = """\
+Does the current text segment mark a semantic or argumentative boundary indicating a shift in topic, argument branch, or structural section?
+"""
+
+DECISION_BOUNDARY_CRITERIA = {
+    "BOUNDARY": (
+        "A clear transition, topical break, conclusion of a proof or argument branch, "
+        "or shift to a new dialectical context."
+    ),
+    "CONTINUATION": (
+        "The text continues the active argument, elaboration, or logical deduction of "
+        "the current context."
+    ),
+}
+
+DECISION_GLEANING_QUESTION = """\
+Does the source text contain salient theoretical assertions, definitions, or argument components that are missing from the current extraction list?
+"""
+
+DECISION_BORDERLINE_MERGE_QUESTION = """\
+What is the ontological relationship between the following two concepts?
+"""
+
+DECISION_BORDERLINE_MERGE_CRITERIA = {
+    "IDENTICAL_MERGE": (
+        "The two entities refer to the identical underlying philosophical concept or term "
+        "and should be merged into a single canonical node."
+    ),
+    "HIERARCHICAL_SUBSUMPTION": (
+        "One entity is a subspecies, subconcept, or hierarchical variant of the other "
+        "and must remain structurally distinct."
+    ),
+    "DISTINCT_SEPARATE": (
+        "The entities are conceptually distinct, contrasting, or independent concepts "
+        "and must not be merged."
+    ),
+}
+
+DECISION_CANONICAL_ELECTION_QUESTION = """\
+Which of the following candidate entity names is the standard canonical scholarly designation?
+"""
+
+DECISION_THEORY_FUSION_QUESTION = """\
+Determine whether the theoretical constructs from different document contexts are semantically equivalent for knowledge graph fusion:
+"""
+
+DECISION_THEORY_FUSION_CRITERIA = {
+    "EQUIVALENT_FUSION": (
+        "The constructs express the same underlying theory, core thesis, or foundational framework "
+        "across documents and should be fused."
+    ),
+    "COMPETING_THEORIES": (
+        "The constructs represent competing, rival, or mutually incompatible philosophical theories "
+        "and must remain separate in the knowledge graph."
+    ),
+    "DISTINCT_APPLICATIONS": (
+        "The constructs represent distinct contextual applications or disparate concepts "
+        "and must not be collapsed into a single macro-cluster."
+    ),
+}
 

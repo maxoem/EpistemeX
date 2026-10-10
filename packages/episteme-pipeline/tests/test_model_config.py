@@ -10,7 +10,6 @@ fingerprints (model identity is already covered by ``fingerprint_method``).
 from __future__ import annotations
 
 import pytest
-
 from episteme_pipeline.config import ModelConfig, PipelineConfig
 from episteme_pipeline.runs.fingerprints import fingerprint_phase_config
 

@@ -1,6 +1,6 @@
-import { useCallback, useEffect } from "react";
-import { Graph, GraphEvent } from "@antv/g6";
-import { MetricResult, Overlay, StudioNode } from "../../api/types";
+import {useCallback, useEffect} from "react";
+import {Graph, GraphEvent} from "@antv/g6";
+import {MetricResult, Overlay, StudioNode} from "../../api/types";
 
 const HULL_PALETTE = [
   { fill: "#3b82f6", stroke: "#2563eb" }, // Blue

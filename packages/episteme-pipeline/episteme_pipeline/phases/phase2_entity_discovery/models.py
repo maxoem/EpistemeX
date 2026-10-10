@@ -80,7 +80,7 @@ class NERExtractionOutput(BaseModel):
         description="Optional working memory state updates and boundary eviction signals.",
     )
 
-    def validate_references(self) -> "NERExtractionOutput":
+    def validate_references(self) -> NERExtractionOutput:
         """
         Removes triples whose subject_id or object_id references a non-existent
         entity. Called after parsing to ensure downstream consistency.

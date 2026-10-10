@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateProgressionSnapshots } from "./progressionUtils.ts";
-import { useCredentialStore } from "../store/credentialStore.ts";
+import {calculateProgressionSnapshots} from "./progressionUtils.ts";
+import {useCredentialStore} from "../store/credentialStore.ts";
 
 test("calculateProgressionSnapshots generates snapshots at specified intervals", () => {
   // Empty or missing scores

@@ -1,0 +1,65 @@
+# ISAAC NEWTON - PHILOSOPHIAE NATURALIS PRINCIPIA MATHEMATICA (1687)
+# Book 1: The Motion of Bodies (Axioms and Definitions)
+# Translated by Andrew Motte (1729), revised by Florian Cajori (1934).
+
+DEFINITIONS
+
+Definition I
+The quantity of matter is the measure of the same, arising from its density and bulk conjunctly.
+
+Definition II
+The quantity of motion is the measure of the same, arising from the velocity and quantity of matter conjunctly.
+
+Definition III
+The vis insita, or innate force of matter, is a power of resisting, by which every body, as much as in it lies, endeavours to persevere in its present state, whether it be of rest, or of moving uniformly forwards in a right line.
+
+Definition IV
+An impressed force is an action exerted upon a body, in order to change its state, either of rest, or of moving uniformly forward in a right line.
+
+Definition V
+A centripetal force is that by which bodies are drawn or impelled, or any way tend, towards a point as to a centre.
+
+Definition VIII
+The accelerative quantity of a centripetal force is the measure of the same, proportional to the velocity which it generates in a given time.
+
+Scholium on Time, Space, Place, and Motion
+Absolute, true, and mathematical time, of itself, and from its own nature flows equably without regard to anything external, and by another name is called duration: relative, apparent, and common time, is some sensible and external (whether accurate or unequable) measure of duration by the means of motion, which is commonly used instead of true time; such as an hour, a day, a month, a year. Absolute space, in its own nature, without regard to anything external, remains always similar and immovable. Relative space is some movable dimension or measure of the absolute spaces; which our senses determine by its position to bodies; and which is vulgarly taken for immovable space.
+
+
+AXIOMS, OR LAWS OF MOTION
+
+Law I
+Every body continues in its state of rest, or of uniform motion in a right line, unless it is compelled to change that state by forces impressed upon it.
+
+Law II
+The alteration of motion is ever proportional to the motive force impressed; and is made in the direction of the right line in which that force is impressed.
+
+Law III
+To every action there is always opposed an equal reaction: or the mutual actions of two bodies upon each other are always equal, and directed to contrary parts.
+
+Corollary I
+A body, acted on by two forces simultaneously, will describe the diagonal of a parallelogram in the same time as it would describe the sides by those forces separately.
+
+Corollary III
+The quantity of motion, which is obtained by taking the sum of the motions directed towards the same parts, and the difference of those that are directed towards contrary parts, suffers no change from the actions of bodies among themselves.
+
+
+PROPOSITIONS (BOOK 1)
+
+Proposition I. Theorem I
+The areas which revolving bodies describe by radii drawn to an immovable centre of force do lie in the same immovable planes, and are proportional to the times in which they are described.
+
+Proposition X. Problem V
+If a body revolves in an ellipse; it is required to find the law of the centripetal force tending to the centre of the ellipse. The force is as the distance of the body from the centre.
+
+Proposition LXXIV. Theorem XXXIV
+The force of gravity towards the whole planet arises from and is compounded of the forces of gravity towards all its parts. Every particle of matter attracts every other particle with a force proportional to the product of their masses and inversely proportional to the square of the distance between them.
+
+Scholium on Terrestrial Motion and Free Fall
+By the force of gravity, bodies falling in vacuo accelerate uniformly, and their motions follow the parabolic trajectory of free projectiles under constant gravitational acceleration.
+
+
+RULES OF REASONING IN PHILOSOPHY (BOOK 3)
+
+Rule III
+The qualities of bodies, which admit neither intensification nor remission of degrees, and which are found to belong to all bodies within the reach of our experiments, are to be esteemed the universal qualities of all bodies whatsoever. The extension, hardness, impenetrability, mobility, and inertia of the whole, result from the extension, hardness, impenetrability, mobility, and inertia of the parts; and therefore we conclude that every particle of matter is possessed of mass.

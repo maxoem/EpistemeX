@@ -4,15 +4,15 @@
  * Decoupled from React, DOM, and UI state.
  */
 
-import type { PhaseStatus } from "../../api/types.ts";
-import { PHASE_REGISTRY, type PhaseMetadata } from "./phaseRegistry.ts";
+import type {PhaseStatus} from "../../api/types.ts";
+import {PHASE_REGISTRY, type PhaseMetadata} from "./phaseRegistry.ts";
 import type {
-  ConfigValueType,
-  PhaseConfigDescriptor,
-  PhaseConfigField,
-  PhaseTabOption,
-  PromptRole,
-  PromptTemplateItem,
+    ConfigValueType,
+    PhaseConfigDescriptor,
+    PhaseConfigField,
+    PhaseTabOption,
+    PromptRole,
+    PromptTemplateItem,
 } from "./types.ts";
 
 /**

@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """Standalone test to reproduce and verify the FileNotFoundError issue."""
 
-import tempfile
-import os
-from pathlib import Path
 import json
-from uuid import uuid4
+import os
 
 # Import our models and persistence
 import sys
+import tempfile
+from pathlib import Path
+from uuid import uuid4
+
 sys.path.insert(0, '..')
 
 from episteme_pipeline.runs.models import RunManifest, RunStatus
 from episteme_pipeline.runs.persistence import JsonRunManifestStore
+
 
 def test_file_creation_scenario():
     """Test the exact scenario that caused the FileNotFoundError."""

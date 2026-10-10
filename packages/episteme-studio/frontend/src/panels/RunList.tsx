@@ -1,23 +1,11 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { useRunsStore } from "../store/runsStore";
-import { RunSummary, RunStatus, PhaseStatus } from "../api/types";
-import {
-  FileText,
-  RotateCcw,
-  Scale,
-  Search,
-  X,
-  Copy,
-  Check,
-  Layers,
-  List,
-  Sliders,
-  Terminal,
-} from "lucide-react";
-import { AboutModal } from "../shell/AboutModal";
-import { APP_CONFIG } from "@/config/app";
-import { resolvePhaseKey } from "./phaseConfig/phaseConfigResolver";
-import { PipelineDagViewer } from "./PipelineDagViewer";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
+import {useRunsStore} from "../store/runsStore";
+import {RunStatus, RunSummary} from "../api/types";
+import {Check, Copy, List, RotateCcw, Scale, Search, Sliders, X,} from "lucide-react";
+import {AboutModal} from "../shell/AboutModal";
+import {APP_CONFIG} from "@/config/app";
+import {resolvePhaseKey} from "./phaseConfig/phaseConfigResolver";
+import {PipelineDagViewer} from "./PipelineDagViewer";
 
 const formatDuration = (seconds?: number | null): string => {
   if (seconds === null || seconds === undefined) return "";

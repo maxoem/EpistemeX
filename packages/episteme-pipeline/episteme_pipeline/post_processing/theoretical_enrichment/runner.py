@@ -24,7 +24,6 @@ from episteme_pipeline.artifacts.models import (
 )
 from episteme_pipeline.config import TheoreticalEnrichmentConfig
 from episteme_pipeline.contracts.domain import (
-    TenabilityResult,
     TheoryAtom,
     TheoryRelation,
 )
@@ -50,7 +49,9 @@ from episteme_pipeline.post_processing.theoretical_enrichment.projectors import 
     LLMTheoryProjector,
     TheoryProjector,
 )
-from episteme_pipeline.post_processing.theoretical_enrichment.solvers import TenabilitySolver
+from episteme_pipeline.post_processing.theoretical_enrichment.solvers import (
+    TenabilitySolver,
+)
 from episteme_pipeline.protocols.graph_store import ProjectionGraph
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.schema.default_schema import SchemaConfig
@@ -220,7 +221,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         atoms_to_update: list[TheoryAtom] = []
         relations_to_update: list[dict[str, Any]] = []
 
-        atom_by_id = {a.id: a for a in input.theory_atoms}
+        {a.id: a for a in input.theory_atoms}
 
         for cluster in clusters:
             for theory_id in cluster.claimant_theory_ids:
@@ -274,7 +275,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                         rel.target_id, clusters, cluster_theory_params, theory_id
                     )
 
-                    ts_edge, delta_c, anoms = self.solver.solve_edge_tenability(
+                    ts_edge, _delta_c, anoms = self.solver.solve_edge_tenability(
                         source_params=projected_params,
                         target_params=target_params,
                         relation=rel,

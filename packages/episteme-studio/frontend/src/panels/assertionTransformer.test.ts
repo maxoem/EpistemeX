@@ -1,22 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  classifyEpistemicRole,
-  isCanonicalPredicate,
-  inferPhaseForEdge,
-  transformGraphToTriples,
-  computePredicateRows,
-  computeDegreeDistribution,
-  computeCrossLayerHeatmap,
-  truncateLeading,
-  truncateTrailing,
-  truncateMiddle,
-  findPhraseSpan,
-  findRelationSpan,
-  formatSingleChunkProvenance,
-  formatMultiChunkProvenance,
+    classifyEpistemicRole,
+    computeCrossLayerHeatmap,
+    computeDegreeDistribution,
+    computePredicateRows,
+    findPhraseSpan,
+    findRelationSpan,
+    formatMultiChunkProvenance,
+    formatSingleChunkProvenance,
+    inferPhaseForEdge,
+    isCanonicalPredicate,
+    transformGraphToTriples,
+    truncateLeading,
+    truncateMiddle,
+    truncateTrailing,
 } from "./assertionTransformer.ts";
-import type { GraphView } from "../api/types.ts";
+import type {GraphView} from "../api/types.ts";
 
 test("classifyEpistemicRole accurately categorizes predicates", () => {
   assert.equal(classifyEpistemicRole("part_of"), "Hierarchical");

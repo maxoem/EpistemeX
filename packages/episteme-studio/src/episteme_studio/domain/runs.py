@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 from .errors import ProblemDetail
@@ -77,6 +78,87 @@ class GlobalStructuralAnchor(BaseModel):
     global_thesis: str | None = None
 
 
+class DecisionPhaseSummary(BaseModel):
+    """Aggregated decision statistics for a single pipeline phase.
+
+    Parameters
+    ----------
+    phase_name : str
+        Name of the pipeline phase.
+    total_evaluations : int, default 0
+        Count of discrete decisions evaluated in this phase.
+    fast_exits : int, default 0
+        Count of decisions resolved by System 1 without LLM invocation.
+    escalations_to_llm : int, default 0
+        Count of decisions escalated to System 2 generative LLM.
+    stochastic_audits : int, default 0
+        Count of decisions randomly validated by System 2.
+    tokens_saved_estimate : int, default 0
+        Estimated generative LLM tokens saved.
+    duration_seconds : float, default 0.0
+        Total cumulative execution time spent in decision evaluations.
+    avg_empirical_accuracy : float, default 0.0
+        Average calibrated empirical accuracy across phase decisions.
+    """
+
+    phase_name: str
+    total_evaluations: int = 0
+    fast_exits: int = 0
+    escalations_to_llm: int = 0
+    stochastic_audits: int = 0
+    tokens_saved_estimate: int = 0
+    duration_seconds: float = 0.0
+    avg_empirical_accuracy: float = 0.0
+
+
+class DecisionRunMetrics(BaseModel):
+    """Overall run telemetry metrics for System 1 / System 2 execution.
+
+    Parameters
+    ----------
+    total_decisions : int, default 0
+        Total discrete decisions evaluated across the run.
+    fast_exit_count : int, default 0
+        Count of fast-exit evaluations.
+    fast_exit_ratio : float, default 0.0
+        Proportion of decisions fast-exited (fast_exit_count / total_decisions).
+    llm_escalation_count : int, default 0
+        Count of escalated evaluations.
+    llm_escalation_ratio : float, default 0.0
+        Proportion of decisions escalated.
+    stochastic_audit_count : int, default 0
+        Count of stochastic audits performed.
+    tokens_saved_estimate : int, default 0
+        Estimated total LLM tokens saved by System 1.
+    cost_saved_usd_estimate : float, default 0.0
+        Estimated financial savings in USD based on bypassed tokens.
+    latency_p50_ms : float, default 0.0
+        Median System 1 evaluation latency in milliseconds.
+    latency_p95_ms : float, default 0.0
+        95th percentile latency in milliseconds.
+    latency_p99_ms : float, default 0.0
+        99th percentile latency in milliseconds.
+    by_phase : dict of str to DecisionPhaseSummary, optional
+        Phase-level decision breakdown.
+    by_primitive : dict of str to int, optional
+        Counts by primitive ('noul', 'choice', 'score').
+    """
+
+    total_decisions: int = 0
+    fast_exit_count: int = 0
+    fast_exit_ratio: float = 0.0
+    llm_escalation_count: int = 0
+    llm_escalation_ratio: float = 0.0
+    stochastic_audit_count: int = 0
+    tokens_saved_estimate: int = 0
+    cost_saved_usd_estimate: float = 0.0
+    latency_p50_ms: float = 0.0
+    latency_p95_ms: float = 0.0
+    latency_p99_ms: float = 0.0
+    by_phase: dict[str, DecisionPhaseSummary] = Field(default_factory=dict)
+    by_primitive: dict[str, int] = Field(default_factory=dict)
+
+
 class RunSummary(BaseModel):
     """Summary record of a pipeline run for table listings.
 
@@ -120,6 +202,8 @@ class RunSummary(BaseModel):
         Categorical labels or tags assigned to the run.
     parent_run_id : str or None, optional
         Identifier of parent run if resumed from a previous checkpoint.
+    decision_metrics : DecisionRunMetrics or None, optional
+        Aggregated System 1 decision engine execution metrics.
     """
 
     run_id: str
@@ -141,6 +225,7 @@ class RunSummary(BaseModel):
     total_phase_count: int = 0
     tags: list[str] = Field(default_factory=list)
     parent_run_id: str | None = None
+    decision_metrics: DecisionRunMetrics | None = None
 
 
 class RunDetail(RunSummary):
@@ -158,6 +243,8 @@ class RunDetail(RunSummary):
         Snapshot of the full pipeline configuration (secrets redacted).
     fingerprints : dict of str to Any
         Phase and method fingerprint hashes.
+    method_fingerprints : dict of str to str, default dict
+        Fine-grained fingerprints of models, extractors, decision engines, and prompts.
     unresolved_count : int, default 0
         Number of dangling components referenced in this run.
     langfuse_url : str or None, optional
@@ -171,6 +258,7 @@ class RunDetail(RunSummary):
     graph_schema: dict[str, Any] = Field(default_factory=dict)
     config_snapshot: dict[str, Any] = Field(default_factory=dict)
     fingerprints: dict[str, Any] = Field(default_factory=dict)
+    method_fingerprints: dict[str, str] = Field(default_factory=dict)
     unresolved_count: int = 0
     langfuse_url: str | None = None
     failure: ProblemDetail | None = None
@@ -203,8 +291,44 @@ class ArtifactRef(BaseModel):
     size_bytes: int = 0
 
 
+class TextAnchor(BaseModel):
+    """Multi-modal source evidence anchor for textual, tabular, or visual grounding.
+
+    Parameters
+    ----------
+    source_doc_id : str or None, optional
+        Identifier of the parent document.
+    char_start : int or None, optional
+        0-indexed character start offset in document/chunk text.
+    char_end : int or None, optional
+        0-indexed character end offset in document/chunk text.
+    verbatim_quote : str or None, optional
+        Verbatim textual quote.
+    bbox : list of float or None, optional
+        2D bounding box region [x0, y0, x1, y1] or [x0, y0, x1, y1, page].
+    page : int or None, optional
+        Document page number.
+    formula_id : str or None, optional
+        Formula identifier for mathematical equation blocks.
+    table_id : str or None, optional
+        Table identifier for tabular data grounding.
+    figure_id : str or None, optional
+        Figure identifier for diagrammatic and image grounding.
+    """
+
+    source_doc_id: str | None = None
+    char_start: int | None = None
+    char_end: int | None = None
+    verbatim_quote: str | None = None
+    bbox: list[float] | None = None
+    page: int | None = None
+    formula_id: str | None = None
+    table_id: str | None = None
+    figure_id: str | None = None
+
+
 class EvidenceSpan(BaseModel):
-    """Character span offset within a source text chunk and the resolution mode used.
+    """Multi-modal evidence region offset within a source text chunk, figure, or table.
 
     Parameters
     ----------
@@ -214,14 +338,29 @@ class EvidenceSpan(BaseModel):
         0-indexed end character offset in chunk text.
     text : str or None, optional
         Extracted text snippet.
-    mode : Literal["exact", "substring", "whole_chunk"]
+    mode : Literal["exact", "substring", "whole_chunk", "visual", "tabular", "formula"]
         Resolution mode used to locate the span (D-19).
+    bbox : list of float or None, optional
+        Spatial bounding box region [x0, y0, x1, y1] or [x0, y0, x1, y1, page].
+    page : int or None, optional
+        Document page number.
+    formula_id : str or None, optional
+        Formula identifier for mathematical equations.
+    table_id : str or None, optional
+        Table identifier for tabular grounding.
+    figure_id : str or None, optional
+        Figure identifier for diagram grounding.
     """
 
     start_char: int | None = None
     end_char: int | None = None
     text: str | None = None
     mode: str = "exact"
+    bbox: list[float] | None = None
+    page: int | None = None
+    formula_id: str | None = None
+    table_id: str | None = None
+    figure_id: str | None = None
 
 
 class EvidenceChunk(BaseModel):
@@ -246,7 +385,7 @@ class EvidenceChunk(BaseModel):
 
 
 class EvidenceTrail(BaseModel):
-    """Complete provenance trail tracing a graph node back to source chunks.
+    """Complete provenance trail tracing a graph node back to source chunks and multimodal anchors.
 
     Parameters
     ----------
@@ -256,11 +395,14 @@ class EvidenceTrail(BaseModel):
         Graph layer (1, 2, or 3).
     chunks : list of EvidenceChunk, optional
         Grounding source chunks with highlighted spans.
+    anchors : list of TextAnchor, optional
+        Explicit multimodal anchors (text, bbox, formula, table).
     """
 
     node_id: str
     layer: int
     chunks: list[EvidenceChunk] = Field(default_factory=list)
+    anchors: list[TextAnchor] = Field(default_factory=list)
 
 
 class StartRunRequest(BaseModel):

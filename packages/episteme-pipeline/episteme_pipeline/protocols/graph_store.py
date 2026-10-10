@@ -4,12 +4,13 @@ from episteme_pipeline.contracts.domain import (
     L1Chunk,
     L2Entity,
     L2Triple,
-    TheoryAtom,
-    TheoryRelation,
+    PhaseItemRecord,
     SearchResult,
     SubGraph,
-    PhaseItemRecord,
+    TheoryAtom,
+    TheoryRelation,
 )
+
 
 class GraphHandle(ABC):
     """Lifecycle surface shared by every graph-backed handle.
@@ -78,6 +79,7 @@ class GraphReader(GraphHandle, ABC):
         embedding: list[float],
         top_k: int,
         node_label: str | None = None,
+        run_id: str | None = None,
     ) -> list[SearchResult]: ...
 
     @abstractmethod
@@ -190,6 +192,16 @@ class GraphWriter(GraphHandle, ABC):
     ) -> None: ...
 
     @abstractmethod
+    async def upsert_theory_relation(
+        self, relation: TheoryRelation
+    ) -> None: ...
+
+    @abstractmethod
+    async def upsert_theory_relations(
+        self, relations: list[TheoryRelation]
+    ) -> None: ...
+
+    @abstractmethod
     async def upsert_community(self, community_id: str, level: int, entity_ids: list[str]) -> None: ...
 
     @abstractmethod
@@ -277,12 +289,12 @@ class FusionGraph(GraphReader, GraphWriter, ABC):
 
 
 __all__ = [
+    "EntityGraph",
+    "FusionGraph",
     "GraphHandle",
     "GraphReader",
     "GraphWriter",
     "PhaseCheckpointStore",
-    "EntityGraph",
-    "ProjectionGraph",
     "ProcessingGraph",
-    "FusionGraph",
+    "ProjectionGraph",
 ]

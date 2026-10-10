@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
+
 from episteme_studio.adapters.metrics_adapter import (
     compute_component,
     compute_degree,
     compute_gradual_strength,
     compute_internal_correlation,
     compute_leiden,
+    compute_modal_strength,
     compute_pagerank,
     compute_tenability,
 )
@@ -36,6 +39,7 @@ class OverlayService:
     def __init__(self) -> None:
         self._plugins: dict[OverlayKind, OverlayComputeFn] = {
             OverlayKind.GRADUAL_STRENGTH: compute_gradual_strength,
+            OverlayKind.MODAL_STRENGTH: compute_modal_strength,
             OverlayKind.INTERNAL_CORRELATION: compute_internal_correlation,
             OverlayKind.DEGREE: compute_degree,
             OverlayKind.COMPONENT: compute_component,

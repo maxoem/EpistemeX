@@ -74,3 +74,70 @@ We implement an end-to-end declarative metrics architecture across `Episteme_stu
 - `packages/episteme-studio/src/Episteme_studio/services/metric_service.py` — Metric registry and lifecycle manager
 - `packages/episteme-studio/src/Episteme_studio/adapters/metrics_adapter.py` — QBAF gradual strength semantics engine
 - `packages/episteme-studio/frontend/src/panels/MetricsDrawer.tsx` — Dynamic schema metrics drawer
+
+---
+
+## Addendum (2026-10-02): Calibrated System 1 Priors and Decoupled Modal Edge Weighting
+
+### Context & Theoretical Rationale
+In initial iterations of the pipeline and metrics, edge weights in Quantitative Bipolar Argumentation Frameworks (QBAF) were often either uniform ($w = 1.0$) or set to uncalibrated heuristic scores (e.g., verbalized generative LLM confidences). This caused two primary failure modes:
+1. **Mathematical Distortion**: Uncalibrated inputs distorted gradual semantics solvers (Eulerian, quadratic energy, or categorization models) and degraded epistemic coherence calculations.
+2. **Epistemic Conflation**: Extraction confidence ($P(\text{correct})$ or stance softmax probability) was conflated with propositional modal strength ($M(\phi) \in [0, 1]$). If an author posits a tentative hypothesis ("It is conceivable that space is an illusion"), a high extraction confidence ($P=0.99$) must not elevate a contingent conjecture ($M=0.30$) into an unassailable axiom ($w=0.99$).
+
+### Decision Amendment
+We extend the QBAF and TheoryNet architecture to systematically ingest and propagate calibrated System 1 priors:
+
+1. **Decoupled Mathematical Edge Weighting**:
+$$w = M(\text{modal\_strength}) \times P(\text{stance})$$
+   where $M(\text{modal\_strength}) \in [0, 1]$ encodes philosophical modality (1.0 for deductive necessity/axioms, 0.75 for assertoric claims, 0.30 for tentative conjectures) and $P(\text{stance})$ is the calibrated softmax probability from System 1 Jev.
+2. **Admissibility Gating**:
+   Empirical expected accuracy ($\text{empirical\_accuracy}$ / `act_probability`) acts as an admissibility gate $\tau_{\text{admissibility}}$. Relations failing the threshold are pruned or marked with zero epistemic tenability (`tenable = False`), protecting gradual equilibrium calculations from uncalibrated noise.
+3. **Graph Projection & Persistence**:
+   Cypher projection templates in Phase 6 persist `class_probability`, `empirical_accuracy`, `modal_strength`, `effective_weight`, `weight_support`, and `weight_attack` onto `:SUPPORTS` and `:ATTACKS` relationships in the Neo4j Projection Graph.
+4. **Sovereign Epistemetrics QBAF Solvers**:
+   Gradual semantics solvers are formalized in `epistemetrics.epistemic.qbaf` (`QBAFGradualSemanticsSolver`) supporting Quadratic Energy, Euler, Categorizer, and Linear models, alongside normalization mode comparisons (`compare_qbaf_weight_modes`) between `CALIBRATED_MODAL` and `UNWEIGHTED_BINARY`.
+5. **Evaluation Metric Scaffolding**:
+   Expected Calibration Error (ECE), Maximum Calibration Error (MCE), and Brier Score are integrated into `CalibrationScorer` and evaluation strategies to continuously audit extraction calibration.
+
+### Consequences
+- Gradual semantics solvers converge deterministically without numerical instability under continuous, calibrated weights.
+- Dialectical justification degrees $\tau(a)$ reflect both evidentiary empirical accuracy and propositional modality.
+- Research benchmarks can isolate the exact contribution of calibrated modal weights vs unweighted binary graphs.
+
+---
+
+## Addendum 2 (2026-10-06): Decoupled QBAF Ontologies, Adaptive Continuous Solvers, and Corrected Step-Size Dynamics
+
+### Context & Structural Refactoring
+Following rigorous theoretical and numerical evaluation of ticket ISSUE-041 and its formal action plan, several critical defects in earlier gradual semantics models and graph projection pipelines were identified and resolved:
+1. **Conflation of Ontological Layers**: Earlier formulations ($w = M \times P$) conflated node-level propositional modality with relational extraction confidence, creating a pseudo-decoupling that quadratically double-penalized tentative premises ($M^2$).
+2. **DF-QuAD vs. Quadratic Energy Discontinuity**: Routing DAGs to DF-QuAD and cyclic graphs to Quadratic Energy created an unacceptable semantic discontinuity where adding a single cycle-completing edge shifted equilibrium scores across unrelated acyclic branches.
+3. **Numerical Stiffness in High-Degree Networks**: Fixed-step integration ($\delta = 0.01$) on Quadratic Energy models violates stability bounds on dense citation hubs ($\text{indegree} \gg 50$). Potyka's (2018) assertion that bounded derivatives $|\dot{s}_j| \le 1$ imply constant step stability is refuted via Gershgorin Circle bounds: the Jacobian spectral radius grows linearly with in-degree ($\rho(J) \le 1 + 0.65 \cdot \text{indegree}(i) \cdot \bar{W}$), necessitating adaptive step sizes.
+4. **Redundant Iterations past Equilibrium**: Integrating cyclic networks out to $t_{\max} = 50.0$ without stationary root-finding performed hundreds of redundant Jacobian evaluations on networks that stabilize by $t \approx 5.5$–$7.0$.
+
+### Decision Amendments
+
+1. **Formal Renaming & Ontological Stratification**:
+   - The dialectical theory graph layer is formally standardized as **Quantitative Bipolar Argumentation Frameworks (QBAF)**.
+   - Decoupled into three distinct physical layers:
+     - **Propositional Modality ($M(\phi) \in [0, 1]$)** on `TheoryAtom` as prior plausibility $\tau_0 \equiv w(a)$.
+     - **Inferential Warrant Force ($I_{j \to i} \in [0, 1]$)** on `TheoryRelation` as Toulminian inferential validity.
+     - **Perception Calibration ($P(\text{stance}), C \in [0, 1]$)** on `TheoryRelation` as extraction confidence.
+2. **Unified Continuous Quadratic Energy Semantics**:
+   - Eliminated DF-QuAD dual routing; standardized on Quadratic Energy semantics across all topologies.
+   - **Acyclic Graphs (DAGs)**: Evaluated in closed form in $O(|V| + |E|)$ along a single topological pass (Proposition 5), eliminating numerical ODE integration on DAGs.
+   - **Cyclic Graphs**: Evaluated via continuous adaptive ODE integration (`WeightedQuadraticEnergySolver` using `scipy.integrate.solve_ivp` RK45 with implicit Radau fallback) equipped with terminal root-finding stationary event detection ($\|\dot{\mathbf{s}}\|_\infty < \text{atol}$ with `terminal=True, direction=-1`), halting integration when equilibrium is reached.
+3. **Correction to Potyka (2018) Stability Claim**:
+   - Proved that the Jacobian spectral radius $\rho(J)$ grows with in-degree, refuting the claim that fixed step size $\delta=0.01$ is unconditionally stable. Adaptive step control is strictly required.
+4. **Harmonized Bivariate Admissibility Gating**:
+   - **Mode 1 (`hard`)**: Enforces database-level pruning in Neo4j GDS projections via Cypher filtering (`WHERE r.stance_probability >= $tau_p AND r.model_confidence >= $tau_c`), delivering strictly qualified subgraphs.
+   - **Mode 2 (`soft`)**: Passes candidate subgraphs without Cypher `WHERE` filtering and applies continuous sigmoidal relaxation $\mathcal{F}_{\text{soft}}(r) = \sigma(20(P - \tau_P)) \cdot \sigma(20(C - \tau_C))$ in `epistemetrics`.
+5. **Keynes-Gärdenfors Orthogonal Telemetry**:
+   - `QBAFSolverResult` tracks gross epistemic weight of evidence $E_{\text{total}}$ and controversy volatility index $\mathcal{V}$, enabling Episteme Studio to differentiate heavily contested claims from unevidenced claims.
+6. **Explicit Scoping Decision**:
+   - Analytical right inverses are formally excluded from solver scope in favor of marginal graph ablation ($\Delta(u) = \rho(\text{focus}) - \rho_{-u}(\text{focus})$).
+
+### Consequences
+- Eliminates double-penalization of tentative premises while maintaining rigorous Toulmin warrant accounting.
+- Guarantees $O(|V| + |E|)$ execution for acyclic theory graphs while ensuring numerically stable, early-halting ODE relaxation for cyclic structures.
+- Provides complete mathematical harmony between database projections, runtime solvers, and visualization telemetry.

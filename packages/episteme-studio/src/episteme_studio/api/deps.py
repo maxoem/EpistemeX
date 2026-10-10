@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import cast
+
 from fastapi import Depends, Request
 
 from episteme_studio.runtime.broker import EventBroker
@@ -292,6 +293,32 @@ def get_engine_settings_service(
         request.app.state.engine_settings_service = EngineSettingsService(
             storage=storage,
             reader=reader,
+            settings=settings,
         )
     return cast(EngineSettingsService, request.app.state.engine_settings_service)
+
+
+def get_evaluation_service(
+    request: Request,
+    settings: StudioSettings = Depends(get_settings),
+) -> Any:
+    """Retrieve the EvaluationService instance from application state.
+
+    Parameters
+    ----------
+    request : Request
+        Incoming request.
+    settings : StudioSettings
+        Current application settings.
+
+    Returns
+    -------
+    EvaluationService
+        Configured evaluation service.
+    """
+    from episteme_studio.services.evaluation_service import EvaluationService
+
+    if not hasattr(request.app.state, "evaluation_service") or request.app.state.evaluation_service is None:
+        request.app.state.evaluation_service = EvaluationService.from_settings(settings)
+    return request.app.state.evaluation_service
 

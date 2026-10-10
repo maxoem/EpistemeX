@@ -3,14 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
-from episteme_pipeline.pipeline import Pipeline
-from episteme_pipeline.runs.persistence import JsonRunManifestStore
-from episteme_pipeline.runs.models import RunStatus
 from episteme_pipeline.phases.phase1_foundation import Phase1Runner
 from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
+from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.runs.models import RunStatus
+from episteme_pipeline.runs.persistence import JsonRunManifestStore
 
 
 class _NoopPhase:

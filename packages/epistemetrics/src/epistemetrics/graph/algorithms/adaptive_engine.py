@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+
 from epistemetrics.adapters.neo4j.gds_engine import Neo4jGDSAlgorithmsEngine
 from epistemetrics.core.models import CentralityResult, PartitionResult
 from epistemetrics.graph.algorithms.networkx_engine import NetworkXAlgorithmsEngine
@@ -76,8 +77,8 @@ class AdaptiveAlgorithmsEngine:
             if isinstance(graph, str):
                 return self.neo4j_engine.has_projection(graph)
 
-            if hasattr(graph, "projection_name") and getattr(graph, "projection_name"):
-                return self.neo4j_engine.has_projection(getattr(graph, "projection_name"))
+            if hasattr(graph, "projection_name") and graph.projection_name:
+                return self.neo4j_engine.has_projection(graph.projection_name)
 
             return False
         except Exception as exc:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.adapters.neo4j_reader import Neo4jReader
 from episteme_studio.api.errors import StudioProblemException

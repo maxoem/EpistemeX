@@ -3,12 +3,6 @@
 from __future__ import annotations
 
 import logging
-from unittest.mock import MagicMock
-
-import pytest
-from rich.console import Console
-from rich.logging import RichHandler
-from rich.progress import Progress
 
 from episteme_pipeline.events.bus import SimpleEventEmitter
 from episteme_pipeline.events.models import (
@@ -17,6 +11,8 @@ from episteme_pipeline.events.models import (
     ProgressStarted,
 )
 from episteme_pipeline.events.progress_observer import RichProgressObserver
+from rich.console import Console
+from rich.logging import RichHandler
 
 
 def test_progress_observer_lifecycle() -> None:
@@ -77,7 +73,7 @@ def test_progress_observer_syncs_existing_rich_handler() -> None:
     root_logger.addHandler(existing_handler)
 
     try:
-        with RichProgressObserver(console=custom_console, sync_root_handlers=True) as observer:
+        with RichProgressObserver(console=custom_console, sync_root_handlers=True):
             assert existing_handler.console is custom_console
     finally:
         root_logger.removeHandler(existing_handler)

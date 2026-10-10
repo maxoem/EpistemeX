@@ -16,9 +16,7 @@ from __future__ import annotations
 import hashlib
 import logging
 
-from llama_index.core import PromptTemplate
-
-from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation, L2Entity
+from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom, TheoryRelation
 from episteme_pipeline.llm import ensure_structured_llm
 from episteme_pipeline.phases.phase4_argument_mining.models import ACCOutput
 from episteme_pipeline.protocols.argument_mining import ACCClassifier
@@ -42,6 +40,22 @@ class LLMACCClassifier(ACCClassifier):
         self.llm = ensure_structured_llm(llm)
         self.prompts = prompts
         self.strategy = strategy
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic ACC classifier configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing strategy and LLM fingerprint.
+        """
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        return {
+            "class": self.__class__.__name__,
+            "strategy": str(getattr(self.strategy, "value", self.strategy)),
+            "llm": fingerprint_method(self.llm),
+        }
 
     async def classify(
         self,

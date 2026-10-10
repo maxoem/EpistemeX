@@ -7,9 +7,9 @@ described in `docs/architecture/artifact_run_model.md` and `docs/architecture/ov
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -17,7 +17,7 @@ from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class ArtifactKind(StrEnum):
@@ -136,6 +136,47 @@ class TheoryAtomArtifact(BaseModel):
 
 
 class TheoryRelationArtifact(BaseModel):
+    """Artifact payload capturing a dialectical TheoryRelation.
+
+    Preserves decoupled calibration metrics, modal strengths, and mathematical
+    weights across pipeline phase boundaries.
+
+    Parameters
+    ----------
+    relation_id : str
+        Canonical unique identifier of the relation.
+    source_component_id : str
+        Source component identifier.
+    target_component_id : str
+        Target component identifier.
+    relation_type : str
+        Relational classification.
+    scope : str
+        Local or global scope.
+    confidence : float
+        Extraction confidence score.
+    weight : float | None, optional
+        Relational edge weight.
+    class_probability : float | None, optional
+        Softmax stance probability.
+    empirical_accuracy : float | None, optional
+        Calibrated empirical accuracy frequency from decision engine.
+    modal_strength : float, default 1.0
+        Propositional modal strength in [0.0, 1.0].
+    effective_weight : float | None, optional
+        Decoupled mathematical edge weight.
+    decision_engine_provider : str | None, optional
+        Provenance identifier of decision provider.
+    tenability : float | None, optional
+        Epistemic tenability score.
+    calibrated_confidence : float | None, optional
+        Empirically calibrated confidence score.
+    weight_support : float | None, optional
+        Directed support weight contribution in [0.0, 1.0].
+    weight_attack : float | None, optional
+        Directed attack weight contribution in [0.0, 1.0].
+    """
+
     relation_id: str
     source_component_id: str
     target_component_id: str
@@ -143,6 +184,70 @@ class TheoryRelationArtifact(BaseModel):
     scope: str
     confidence: float
     weight: float | None = None
+    class_probability: float | None = None
+    empirical_accuracy: float | None = None
+    modal_strength: float = 1.0
+    effective_weight: float | None = None
+    decision_engine_provider: str | None = None
+    tenability: float | None = None
+    calibrated_confidence: float | None = None
+    weight_support: float | None = None
+    weight_attack: float | None = None
+
+    def to_graph_properties(self, polarity: int = 0) -> dict[str, Any]:
+        """Convert artifact payload into serialized projection properties.
+
+        Parameters
+        ----------
+        polarity : int, default 0
+            Epistemic polarity (+1, -1, 0).
+
+        Returns
+        -------
+        dict of str to Any
+            Graph edge properties conforming to the projection schema.
+        """
+        eff_w = (
+            self.effective_weight
+            if self.effective_weight is not None
+            else (self.weight if self.weight is not None else 1.0)
+        )
+        cal_conf = (
+            self.calibrated_confidence
+            if self.calibrated_confidence is not None
+            else (
+                self.empirical_accuracy
+                if self.empirical_accuracy is not None
+                else self.confidence
+            )
+        )
+        w_supp = (
+            self.weight_support
+            if self.weight_support is not None
+            else (eff_w if polarity > 0 else 0.0)
+        )
+        w_att = (
+            self.weight_attack
+            if self.weight_attack is not None
+            else (eff_w if polarity < 0 else 0.0)
+        )
+
+        props: dict[str, Any] = {
+            "scope": self.scope,
+            "confidence": self.confidence,
+            "calibrated_confidence": cal_conf,
+            "class_probability": self.class_probability,
+            "empirical_accuracy": self.empirical_accuracy,
+            "modal_strength": self.modal_strength,
+            "effective_weight": eff_w,
+            "weight": self.weight if self.weight is not None else eff_w,
+            "decision_engine_provider": self.decision_engine_provider,
+            "weight_support": w_supp,
+            "weight_attack": w_att,
+        }
+        if self.tenability is not None:
+            props["tenability"] = self.tenability
+        return props
 
 
 class TheoreticalEnrichmentArtifact(BaseModel):
@@ -175,7 +280,7 @@ ArtifactPayload = (
 ArtifactPayloadT = TypeVar("ArtifactPayloadT", bound=ArtifactPayload)
 
 
-class ArtifactEnvelope(BaseModel, Generic[ArtifactPayloadT]):
+class ArtifactEnvelope[ArtifactPayloadT: ArtifactPayload](BaseModel):
     artifact_id: str
     identity_key: str | None = None
     kind: ArtifactKind

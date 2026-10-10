@@ -5,14 +5,14 @@ eliminating the need to pass `event_emitter` through every function and class co
 """
 from __future__ import annotations
 
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from typing import Generator, Optional
 
 from .bus import EventEmitter, NoOpEventEmitter
 
 _DEFAULT_EMITTER = NoOpEventEmitter()
-_CURRENT_EVENT_EMITTER: ContextVar[Optional[EventEmitter]] = ContextVar(
+_CURRENT_EVENT_EMITTER: ContextVar[EventEmitter | None] = ContextVar(
     "_CURRENT_EVENT_EMITTER", default=None
 )
 
@@ -30,7 +30,7 @@ def get_event_emitter() -> EventEmitter:
     return emitter if emitter is not None else _DEFAULT_EMITTER
 
 
-def set_event_emitter(emitter: Optional[EventEmitter]) -> Token:
+def set_event_emitter(emitter: EventEmitter | None) -> Token:
     """Set the active `EventEmitter` for the current task-local context.
 
     Parameters
@@ -47,7 +47,7 @@ def set_event_emitter(emitter: Optional[EventEmitter]) -> Token:
 
 
 @contextmanager
-def use_event_emitter(emitter: Optional[EventEmitter]) -> Generator[EventEmitter, None, None]:
+def use_event_emitter(emitter: EventEmitter | None) -> Generator[EventEmitter]:
     """Context manager to bind an `EventEmitter` for the duration of a code block.
 
     Parameters

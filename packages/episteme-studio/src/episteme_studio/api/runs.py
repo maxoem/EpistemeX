@@ -5,7 +5,21 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Request
 from sse_starlette.sse import EventSourceResponse
 
-from episteme_studio.api.deps import get_broker, get_run_service, get_settings
+from episteme_studio.api.deps import (
+    get_broker,
+    get_evaluation_service,
+    get_run_service,
+    get_settings,
+)
+from episteme_studio.domain.evaluation import (
+    ActiveLearningExportResponse,
+    BorderlineDecisionItem,
+    CalibrationReportDetail,
+    DecisionAdjudicationRequest,
+    EvaluationGraphOverlay,
+    EvaluationReportDetail,
+    GroundingEvaluationDetail,
+)
 from episteme_studio.domain.graph import GraphView
 from episteme_studio.domain.runs import (
     ArtifactRef,
@@ -15,6 +29,7 @@ from episteme_studio.domain.runs import (
     StartRunRequest,
 )
 from episteme_studio.runtime.broker import EventBroker
+from episteme_studio.services.evaluation_service import EvaluationService
 from episteme_studio.services.graph_service import GraphService
 from episteme_studio.services.run_service import RunService
 from episteme_studio.settings import StudioSettings
@@ -282,4 +297,191 @@ async def get_run_langfuse_stats(
     return service.get_run_langfuse_stats(
         run_id, host=host, public_key=public_key, secret_key=secret_key, limit=limit
     )
+
+
+@router.get("/{run_id}/evaluation", response_model=EvaluationReportDetail | None)
+async def get_run_evaluation(
+    run_id: str,
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationReportDetail | None:
+    """Retrieve evaluation report associated with this run, if available.
+
+    Parameters
+    ----------
+    run_id : str
+        Run identifier.
+    eval_service : EvaluationService
+        Evaluation service.
+
+    Returns
+    -------
+    EvaluationReportDetail or None
+        Evaluation report detail if evaluated, None otherwise.
+    """
+    return eval_service.get_run_evaluation(run_id)
+
+
+@router.get("/{run_id}/evaluation/graph-overlay", response_model=EvaluationGraphOverlay)
+async def get_run_evaluation_graph_overlay(
+    run_id: str,
+    include_ghosts: bool = Query(True, description="Whether to include synthesized ghost nodes for omissions"),
+    filter_status: str | None = Query(None, description="Optional alignment status filter"),
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationGraphOverlay:
+    """Retrieve interactive graph canvas overlay projecting evaluation alignment for this run.
+
+    Parameters
+    ----------
+    run_id : str
+        Run identifier.
+    include_ghosts : bool, default True
+        Whether to include synthesized ghost nodes.
+    filter_status : str or None, optional
+        Filter status.
+    eval_service : EvaluationService
+        Evaluation service.
+
+    Returns
+    -------
+    EvaluationGraphOverlay
+        Evaluation graph overlay.
+    """
+    return eval_service.build_graph_overlay(
+        evaluation_id=run_id,
+        include_ghosts=include_ghosts,
+        filter_status=filter_status,
+    )
+
+
+@router.get("/{run_id}/evaluation/calibration", response_model=CalibrationReportDetail)
+async def get_run_evaluation_calibration(
+    run_id: str,
+    min_confidence: float = Query(0.85, description="Threshold for highlighting overconfident assertions"),
+    limit: int = Query(50, description="Max miscalibrated assertions to return"),
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> CalibrationReportDetail:
+    """Retrieve confidence calibration metrics and reliability diagram data for this run.
+
+    Parameters
+    ----------
+    run_id : str
+        Run identifier.
+    min_confidence : float, default 0.85
+        Overconfidence threshold.
+    limit : int, default 50
+        Max errors to return.
+    eval_service : EvaluationService
+        Evaluation service.
+
+    Returns
+    -------
+    CalibrationReportDetail
+        Calibration report detail.
+    """
+    return eval_service.get_calibration_report(
+        evaluation_id=run_id,
+        min_confidence_filter=min_confidence,
+        limit=limit,
+    )
+
+
+@router.get("/{run_id}/evaluation/evidence/{component_id}", response_model=GroundingEvaluationDetail)
+async def get_run_component_evidence(
+    run_id: str,
+    component_id: str,
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> GroundingEvaluationDetail:
+    """Retrieve multi-modal primary source evidence grounding for a construct in this run.
+
+    Parameters
+    ----------
+    run_id : str
+        Run identifier.
+    component_id : str
+        Target construct or axiom identifier.
+    eval_service : EvaluationService
+        Evaluation service.
+
+    Returns
+    -------
+    GroundingEvaluationDetail
+        Multi-modal evidence anchors and IoU score.
+    """
+    return eval_service.get_evidence_detail(evaluation_id=run_id, component_id=component_id)
+
+
+@router.get("/{run_id}/decisions/borderline", response_model=list[BorderlineDecisionItem])
+async def get_run_borderline_decisions(
+    run_id: str,
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> list[BorderlineDecisionItem]:
+    """Retrieve borderline, high-entropy, or divergent decisions for a run.
+
+    Parameters
+    ----------
+    run_id : str
+        Pipeline run identifier.
+    eval_service : EvaluationService
+        Injected evaluation service.
+
+    Returns
+    -------
+    list of BorderlineDecisionItem
+        Curatable discrete decisions.
+    """
+    return eval_service.get_borderline_decisions(run_id=run_id)
+
+
+@router.post("/{run_id}/decisions/{decision_id}/adjudicate", response_model=BorderlineDecisionItem)
+async def adjudicate_run_decision(
+    run_id: str,
+    decision_id: str,
+    request: DecisionAdjudicationRequest,
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> BorderlineDecisionItem:
+    """Submit human adjudication for a borderline decision item.
+
+    Parameters
+    ----------
+    run_id : str
+        Pipeline run identifier.
+    decision_id : str
+        Target decision identifier.
+    request : DecisionAdjudicationRequest
+        Curator verdict payload.
+    eval_service : EvaluationService
+        Injected evaluation service.
+
+    Returns
+    -------
+    BorderlineDecisionItem
+        Updated decision item with recorded adjudication.
+    """
+    return eval_service.adjudicate_decision(run_id=run_id, decision_id=decision_id, request=request)
+
+
+@router.post("/{run_id}/decisions/export-active-learning", response_model=ActiveLearningExportResponse)
+async def export_run_active_learning(
+    run_id: str,
+    dataset_name: str | None = Query(None, description="Optional dataset identifier"),
+    eval_service: EvaluationService = Depends(get_evaluation_service),
+) -> ActiveLearningExportResponse:
+    """Export curated borderline decisions as an active learning dataset.
+
+    Parameters
+    ----------
+    run_id : str
+        Pipeline run identifier.
+    dataset_name : str or None, optional
+        Target dataset name.
+    eval_service : EvaluationService
+        Injected evaluation service.
+
+    Returns
+    -------
+    ActiveLearningExportResponse
+        Export metadata and payload.
+    """
+    return eval_service.export_active_learning(run_id=run_id, dataset_name=dataset_name)
+
 

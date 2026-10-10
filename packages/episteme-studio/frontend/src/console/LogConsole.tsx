@@ -1,21 +1,21 @@
-import React, { useRef, useMemo, useState, useEffect } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { useRunsStore } from "../store/runsStore";
-import { StudioEvent } from "../api/types";
+import React, {useEffect, useMemo, useRef, useState} from "react";
+import {useVirtualizer} from "@tanstack/react-virtual";
+import {useRunsStore} from "../store/runsStore";
+import {StudioEvent} from "../api/types";
 import {
-  Search,
-  AlertTriangle,
-  ArrowDown,
-  ChevronDown,
-  ChevronRight,
-  Terminal,
-  Activity,
-  Copy,
-  Check,
-  FileText,
+    Activity,
+    AlertTriangle,
+    ArrowDown,
+    Check,
+    ChevronDown,
+    ChevronRight,
+    Copy,
+    FileText,
+    Search,
+    Terminal,
 } from "lucide-react";
 
-import { ProgressConsoleElement } from "./ProgressConsoleElement";
+import {ProgressConsoleElement} from "./ProgressConsoleElement";
 
 export interface LogConsoleProps {
   resizable?: boolean;

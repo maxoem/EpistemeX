@@ -1,4 +1,4 @@
-import { GraphView, StudioNode, StudioEdge } from "../api/types";
+import {GraphView} from "../api/types";
 
 function escapeXml(unsafe: any): string {
   if (unsafe === null || unsafe === undefined) return "";

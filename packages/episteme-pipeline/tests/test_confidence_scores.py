@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import pytest
-
-from episteme_pipeline.config import Phase2Config, Phase3Config, Phase4Config
-from episteme_pipeline.contracts.domain import L2Entity, L2Triple, TheoryAtom, TheoryRelation
-from episteme_pipeline.artifacts.models import TheoryAtomArtifact, EntityMentionArtifact, LinkedEntityArtifact
 from episteme_pipeline.artifacts.builders import build_argument_component_artifact
+from episteme_pipeline.artifacts.models import TheoryAtomArtifact
+from episteme_pipeline.config import Phase2Config, Phase3Config, Phase4Config
+from episteme_pipeline.contracts.domain import L2Entity, L2Triple, TheoryAtom
 from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
 from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
 
@@ -67,6 +66,7 @@ def test_phase_configs_confidence_threshold_defaults():
 @pytest.mark.asyncio
 async def test_phase2_runner_confidence_filtering():
     from unittest.mock import AsyncMock, MagicMock
+
     from episteme_pipeline.contracts.domain import L1Chunk
     from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
@@ -97,7 +97,8 @@ async def test_phase2_runner_confidence_filtering():
     chunk = L1Chunk(id="c1", text="Sample text", source_doc_id="d1", sequence_index=0, token_count=10)
     
     # Run _process_chunk
-    entities, triples = await runner._process_chunk(chunk)
+    res_entities, triples, _ = await runner._process_chunk(chunk)
+    entities = [e for e, _ in res_entities]
 
     # Low confidence entity (0.4) and low confidence triple (0.3) should be filtered out
     assert len(entities) == 1
@@ -109,6 +110,7 @@ async def test_phase2_runner_confidence_filtering():
 @pytest.mark.asyncio
 async def test_phase4_runner_acc_confidence_filtering():
     from unittest.mock import AsyncMock, MagicMock
+
     from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
     graph_store = AsyncMock()
@@ -133,7 +135,7 @@ async def test_phase4_runner_acc_confidence_filtering():
     mock_classifier.classify.return_value = ([c1, c2], [])
     runner._acc_classifier_override = mock_classifier
 
-    components, _ = await runner._process_chunk("chk1", "Sample text")
+    components, _, _ = await runner._process_chunk("chk1", "Sample text")
 
     # c1 (0.5 < 0.7) should be filtered out, leaving only c2 (0.9 >= 0.7)
     assert len(components) == 1

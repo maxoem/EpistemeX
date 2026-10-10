@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .models import RunReport, RunManifest
+    from .models import RunManifest, RunReport
 
 
 def _outputs(manifest: RunManifest | None) -> dict[str, Any]:
@@ -99,7 +99,7 @@ def format_markdown(report: RunReport | None, manifest: RunManifest | None) -> s
         if report.invalidated_phase_ordinals:
             lines.append(f"- **Executed Phases**: `{sorted(report.invalidated_phase_ordinals)}`")
     else:
-        lines.append(f"- **Status**: `unknown`")
+        lines.append("- **Status**: `unknown`")
 
     if report is not None and report.artifact_counts_by_kind:
         lines.append("")

@@ -77,13 +77,17 @@ python3 scripts/convert_callouts.py docs/research/metrics.md docs/concepts/assum
 
 ### `format_math_environments.py`
 
-Verifies and standardizes LaTeX math environments (`$$ ... $$`) across Markdown documentation.
+Verifies and standardizes LaTeX math environments (`\[ ... \]`, `$$ ... $$`) across Markdown documentation.
 
 #### Key Functions
 
-1. **Table Math Sanitization (`fix_tables`)**:
-   Replaces display math `$$ ... $$` with inline math `$ ... $` inside Markdown table cells. Display math inside table rows frequently breaks Markdown table layout across renderers (KaTeX, MathJax, Zensical).
-2. **Line-Start Display Math (`fix_line_start`)**:
+1. **Bracket Math Transformation (`fix_brackets`)**:
+   Transforms raw LaTeX bracket display math (`\[ ... \]`) to standard Markdown math syntax **before** executing other normalization rules:
+   - Inside Markdown table rows: transforms `\[` and `\]` into inline math (`$ ... $`), preventing broken table layout across renderers (KaTeX, MathJax, Zensical).
+   - Outside tables: transforms `\[` and `\]` into display math (`$$ ... $$`), allowing downstream column-0 alignment and block-collapsing rules to format them consistently.
+2. **Table Math Sanitization (`fix_tables`)**:
+   Replaces display math `$$ ... $$` with inline math `$ ... $` inside Markdown table cells. Display math inside table rows frequently breaks Markdown table layout across renderers.
+3. **Line-Start Display Math (`fix_line_start`)**:
    Verifies and ensures that every display math environment (`$$ ... $$` or multiline `$$\n...\n$$`) starts at column 0 with **no leading whitespaces** (or blockquote `> ` markers only), stripping any indentation that would cause Markdown parsers to misidentify the equation as an indented code block.
 
 #### Usage & Commands
@@ -102,11 +106,14 @@ python3 scripts/format_math_environments.py docs/ --dry-run
 
 ##### 3. Apply Fixes In-Place
 ```bash
-# Fix both table math and line-start formatting (multiline format)
+# Fix bracket math, table math, and line-start formatting (multiline format)
 python3 scripts/format_math_environments.py docs/
 
 # Collapse single equations to one line ($$ formula $$)
 python3 scripts/format_math_environments.py docs/ --collapse
+
+# Only convert LaTeX bracket math (\[ ... \] -> $$ or $)
+python3 scripts/format_math_environments.py docs/ --only-brackets
 
 # Only convert table math ($$ -> $)
 python3 scripts/format_math_environments.py docs/ --only-tables
@@ -123,7 +130,9 @@ python3 scripts/format_math_environments.py docs/ --only-line-start
 | `--check` | `False` | Validates files without writing, prints detected issues, and exits with code 1 on failure. |
 | `--dry-run` | `False` | Displays unified diffs without modifying files. |
 | `--collapse` | `False` | Collapses single-equation multiline blocks into a single line (`$$ formula $$`) with column 0 alignment. |
+| `--only-brackets` | `False` | Restricts transformation to converting `\[ ... \]` to `$$` (or `$` in tables). |
 | `--only-tables` | `False` | Restricts transformation to converting `$$` to `$` in table rows. |
 | `--only-line-start` | `False` | Restricts transformation to placing opening `$$` at line beginnings with no whitespace. |
+
 
 

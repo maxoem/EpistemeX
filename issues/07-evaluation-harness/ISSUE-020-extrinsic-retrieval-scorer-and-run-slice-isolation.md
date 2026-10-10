@@ -6,8 +6,12 @@
 | **Component(s)** | `packages/episteme-pipeline` (`evaluation/scorers/retrieval_scorer.py`, `evaluation/eval_pipelines.py`) |
 | **Roadmap Horizon** | **Horizon 1** (Evaluation Integrity & Benchmark Harness) |
 | **Priority** | Critical / Blocker |
-| **Status** | Open |
+| **Status** | `Superseded` (by [ISSUE-028](../09-stnb-evaluation-capabilities/ISSUE-028-evaluation-orchestrator-theorynet-execution.md) and [ISSUE-032](../09-stnb-evaluation-capabilities/ISSUE-032-extrinsic-retrieval-attribute-fix-and-competency-testbed.md)) |
 | **Source Ref** | [`review/26/09/evaluation_credibility_review.md §2.3, §3`](review/26/09/evaluation_credibility_review.md#L121-L170) |
+
+> [!NOTE]
+> **SUPERSEDED**: This issue has been superseded by [`ISSUE-028`](../09-stnb-evaluation-capabilities/ISSUE-028-evaluation-orchestrator-theorynet-execution.md) (In-Memory Evaluation & Packaging Consolidation) and [`ISSUE-032`](../09-stnb-evaluation-capabilities/ISSUE-032-extrinsic-retrieval-attribute-fix-and-competency-testbed.md) (Extrinsic Retrieval Attribute Fix & Competency Testbed).
+
 
 ---
 

@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, Database, X, ArrowRight } from "lucide-react";
+import {AlertTriangle, ArrowRight, Database, X} from "lucide-react";
 
 export interface DatabaseCollisionModalProps {
   isOpen: boolean;

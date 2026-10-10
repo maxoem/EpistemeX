@@ -30,9 +30,8 @@ from __future__ import annotations
 
 import argparse
 import difflib
-from pathlib import Path
 import re
-from typing import Optional
+from pathlib import Path
 
 CALLOUT_BLOCK_REGEX = re.compile(r"^(\s*)((?:> ?)+) *\[!([^\]]*)\]([\-\+]?)(.*)?")
 # (1): leading whitespace (all tabs and 4x spaces get reused)
@@ -89,7 +88,7 @@ class CalloutParser:
         indent_spaces: int = 4,
         handle_lazy_continuation: bool = True,
     ) -> None:
-        self.indent_levels: list[int] = list()
+        self.indent_levels: list[int] = []
         self.convert_aliases: bool = convert_aliases
         self.breakless_lists: bool = breakless_lists
         self.indent_spaces: int = indent_spaces
@@ -97,7 +96,7 @@ class CalloutParser:
 
         self.text_in_prev_line: bool = False
         self.list_in_prev_line: bool = False
-        self.in_codefence: list[int] = list()
+        self.in_codefence: list[int] = []
 
         self.title_from_first_bold: bool = title_from_first_bold
         self.look_for_title: bool = False
@@ -186,7 +185,7 @@ class CalloutParser:
         self.list_in_prev_line = bool(is_list)
         return line
 
-    def _convert_block(self, line: str) -> Optional[str | list[str]]:
+    def _convert_block(self, line: str) -> str | list[str] | None:
         """Match and convert a callout header block."""
         match = re.search(CALLOUT_BLOCK_REGEX, line)
         if match:
@@ -198,7 +197,7 @@ class CalloutParser:
 
     def _reset_states(self) -> None:
         """Reset parser state."""
-        self.indent_levels = list()
+        self.indent_levels = []
         self.look_for_title = False
         self.backup_title = ""
         self.temp_block_syntax = ""

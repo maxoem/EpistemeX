@@ -6,6 +6,7 @@ Retrieval (e.g., Semantic Search, QA).
 """
 
 from __future__ import annotations
+
 import math
 
 
@@ -83,7 +84,7 @@ def calculate_ndcg(rankings: list[list[str]], gold_standards: list[dict[str, flo
             dcg += rel / math.log2(i + 2)  # i+2 because i is 0-indexed and log2(1) = 0
             
         # Calculate Ideal DCG (IDCG)
-        ideal_rankings = sorted(list(gold_dict.values()), reverse=True)[:k]
+        ideal_rankings = sorted(gold_dict.values(), reverse=True)[:k]
         idcg = 0.0
         for i, rel in enumerate(ideal_rankings):
             idcg += rel / math.log2(i + 2)

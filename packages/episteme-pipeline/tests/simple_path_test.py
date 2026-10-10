@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Simple test for path creation without dependencies."""
 
-import tempfile
 import os
+import tempfile
 from pathlib import Path
+
 
 def test_path_creation():
     """Test if directories are created properly."""

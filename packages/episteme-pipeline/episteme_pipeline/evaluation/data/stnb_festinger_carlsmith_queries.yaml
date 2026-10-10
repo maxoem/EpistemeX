@@ -1,0 +1,44 @@
+# STNB Festinger & Carlsmith (1959) Cognitive Dissonance Competency Query Testbed
+# Grounded in Festinger & Carlsmith (1959) "Cognitive Consequences of Forced Compliance"
+queries:
+  - id: "fc_q01"
+    query: "What governing law establishes the inverse relationship between financial reward and magnitude of opinion change in forced compliance?"
+    gold_target_ids:
+      - "str:M_DissF6_InverseRewardLaw"
+    category: "core_law"
+    description: "Inverse reward prediction law: forall s in S: reward(s) > reward_min -> d(opinion_change)/d(reward) < 0."
+
+  - id: "fc_q02"
+    query: "How is the total magnitude of dissonance formalized as a ratio of dissonant to consonant cognitive elements?"
+    gold_target_ids:
+      - "str:M_DissF6_RatioLaw"
+    category: "core_law"
+    description: "Dissonance magnitude ratio law: diss_magnitude = f(D / (D + C))."
+
+  - id: "fc_q03"
+    query: "Which actual model formalizes the experimental corroboration that $1 subjects show greater private opinion change than $20 subjects?"
+    gold_target_ids:
+      - "str:M_DissF6_Corroboration"
+    category: "empirical_corroboration"
+    description: "Corroboration law: opinion_change(s | reward=1) > opinion_change(s | reward=20) >= opinion_change(s | control)."
+
+  - id: "fc_q04"
+    query: "What experimental paradigm was designed to test derivations of forced compliance using peg-turning and spool-packing tasks?"
+    gold_target_ids:
+      - "str:I0_Carlsmith1959"
+    category: "paradigm"
+    description: "$1/$20 forced compliance experimental procedure and measurement protocol."
+
+  - id: "fc_q05"
+    query: "Which alternative hypothesis argued that opinion change results from mental rehearsal and self-persuasion rather than dissonance?"
+    gold_target_ids:
+      - "str:TE_Alternative_Rehearsal"
+    category: "competing_hypothesis"
+    description: "Janis-King mental rehearsal and improvisation alternative explanation."
+
+  - id: "fc_q06"
+    query: "What empirical evidence from Table 2 observer ratings defeats the Janis-King mental rehearsal counter-explanation?"
+    gold_target_ids:
+      - "str:EV_Rehearsal_Defeated"
+    category: "refuting_evidence"
+    description: "Table 2 observer ratings showing no difference in improvisation or persuasiveness between conditions."

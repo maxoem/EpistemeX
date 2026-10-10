@@ -7,7 +7,14 @@ from collections.abc import Callable
 from typing import Any
 
 from episteme_pipeline.contracts.domain import L2Entity, SubGraph
-from episteme_pipeline.protocols.extractors import CrossEncoder, RelationReranker, normalize_scores
+from episteme_pipeline.prompts.default_prompts import PAIR_GATING_DECISION_PROMPT
+from episteme_pipeline.prompts.models import StructuredPromptBundle
+from episteme_pipeline.protocols.decision import DecisionEngine
+from episteme_pipeline.protocols.extractors import (
+    CrossEncoder,
+    RelationReranker,
+    normalize_scores,
+)
 from episteme_pipeline.utils import format_envelope
 
 _model_cache: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
@@ -141,6 +148,24 @@ class CrossEncoderRelationReranker(RelationReranker):
             )
         self.cross_encoder = cross_encoder
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic cross-encoder relation reranker configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier and wrapped cross encoder fingerprint.
+        """
+        ce_fp = (
+            self.cross_encoder.fingerprint()
+            if hasattr(self.cross_encoder, "fingerprint") and callable(self.cross_encoder.fingerprint)
+            else {"class": self.cross_encoder.__class__.__name__}
+        )
+        return {
+            "class": self.__class__.__name__,
+            "cross_encoder": ce_fp,
+        }
+
     async def score_relation(
         self,
         entity_a: L2Entity,
@@ -246,6 +271,25 @@ class SentenceTransformerCrossEncoderReranker(RelationReranker):
             )
             if cache_model:
                 _model_cache[cache_key] = self.model
+        self.model_name = model_name
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic sentence transformer reranker configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing model name, prompt name, sequence length, and model arguments.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "model_name": self.model_name,
+            "prompt_name": self.prompt_name,
+            "max_length": self.max_length,
+            "device": str(self.device) if self.device else None,
+            "trust_remote_code": self.trust_remote_code,
+            "model_kwargs": self.model_kwargs,
+        }
 
     async def score_relation(
         self,
@@ -438,3 +482,80 @@ def _qwen_reranker_prompts() -> dict[str, str]:
             "Query and the Instruct provided."
         )
     }
+
+class JevRelationReranker(RelationReranker):
+    """Relation reranker backed by the TypeSafe Jev Decision Engine.
+
+    Evaluates relation plausibility and returns the empirical accuracy score.
+
+    Parameters
+    ----------
+    decision_engine : DecisionEngine
+        The calibrated decision engine instance.
+    prompts : StructuredPromptBundle or None, default None
+        Optional prompt bundle carrying the decision question template.
+    """
+
+    def __init__(
+        self,
+        decision_engine: DecisionEngine,
+        prompts: StructuredPromptBundle | None = None,
+    ) -> None:
+        self.decision_engine = decision_engine
+        self.prompts = prompts
+        if prompts is not None:
+            template = prompts.decision_template
+        else:
+            template = PAIR_GATING_DECISION_PROMPT
+
+        if not template or not template.strip():
+            raise ValueError("No decision prompt configured for JevRelationReranker.")
+        self.decision_template = template.strip()
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic Jev relation reranker configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, decision template, and decision engine fingerprint.
+        """
+        eng_fp = (
+            self.decision_engine.fingerprint()
+            if hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            else {"class": self.decision_engine.__class__.__name__}
+        )
+        return {
+            "class": self.__class__.__name__,
+            "decision_template": self.decision_template,
+            "decision_engine": eng_fp,
+        }
+
+    async def score_relation(
+        self,
+        entity_a: L2Entity,
+        env_a: SubGraph,
+        entity_b: L2Entity,
+        env_b: SubGraph,
+    ) -> float:
+        # Context window guard - limit tokens to < 800 (or characters approx 3200)
+        # Using a simple character truncation for envelope
+        query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
+        
+        # Simple truncation to stay within budget
+        if len(query) > 1600:
+            query = query[:1600] + "..."
+        if len(doc_text) > 1600:
+            doc_text = doc_text[:1600] + "..."
+
+        context = f"Entity A:\n{query}\n\nEntity B:\n{doc_text}"
+        question = self.decision_template.format(entity_a=entity_a.name, entity_b=entity_b.name)
+
+        decision = await self.decision_engine.evaluate_noul(
+            state=context,
+            question=question,
+        )
+        
+        # return calibrated probability or empirical accuracy
+        return decision.probability if decision.passed else (1.0 - decision.probability) * 0.1
+

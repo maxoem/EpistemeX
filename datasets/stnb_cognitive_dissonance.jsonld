@@ -1,0 +1,353 @@
+{
+  "@context": {
+    "str": "https://structuralism.org/ontology#",
+    "Episteme": "https://grund.ai/schema#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "specializes": {
+      "@id": "str:specializes",
+      "@type": "@id"
+    },
+    "presupposes": {
+      "@id": "str:presupposes",
+      "@type": "@id"
+    },
+    "hasPotentialModel": {
+      "@id": "str:hasPotentialModel",
+      "@type": "@id"
+    },
+    "hasActualModel": {
+      "@id": "str:hasActualModel",
+      "@type": "@id"
+    },
+    "hasPartialPotentialModel": {
+      "@id": "str:hasPartialPotentialModel",
+      "@type": "@id"
+    },
+    "hasConstraint": {
+      "@id": "str:hasConstraint",
+      "@type": "@id"
+    },
+    "hasParadigm": {
+      "@id": "str:hasParadigm",
+      "@type": "@id"
+    },
+    "hasIntendedApplication": {
+      "@id": "str:hasIntendedApplication",
+      "@type": "@id"
+    },
+    "textAnchor": "Episteme:textAnchor"
+  },
+  "@graph": [
+    {
+      "@id": "str:TE_DissB",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(DissB) - Basic Dissonance Core",
+      "str:hasPotentialModel": "str:MP_DissB",
+      "str:hasActualModel": "str:M_DissB",
+      "str:hasPartialPotentialModel": "str:MPP_DissB",
+      "str:hasConstraint": "str:GC_Diss",
+      "str:hasParadigm": "str:I_DissB",
+      "str:hasIntendedApplication": "str:I_DissB",
+      "str:presupposes": "str:TE_ACT"
+    },
+    {
+      "@id": "str:MP_DissB",
+      "@type": "PotentialModel",
+      "rdfs:label": "M_p(DissB) - Potential Models of Dissonance Theory",
+      "str:formalTypification": "M_p(DissB) = {<Time, Rawcog, Cognition, Disscog, Conscog, pairdiss, paircons, pairimp, diss, redpress>}",
+      "Episteme:textAnchor": {
+        "sourceDocId": "westermann_2000_dissonance_net",
+        "chunkId": "chunk_dissb_potential_model_def1",
+        "charStart": 190,
+        "charEnd": 340,
+        "verbatimQuote": "x = <Time, Rawcog, Cognition, Disscog, Conscog, pairdiss, paircons, pairimp, diss, redpress> in M_p(DissB) iff (1) Time subset of IR is a finite, non-empty set ('points of time') (2) Rawcog is a finite, non-empty set ('raw elements of cognition') (3) Cognition subset of Rawcog x Time ('actual elements of cognition') (4) Disscog subset of Cognition x Cognition ('dissonant cognitions')"
+      }
+    },
+    {
+      "@id": "str:M_DissB",
+      "@type": "ActualModel",
+      "rdfs:label": "M(DissB) - Fundamental Dissonance Magnitude & Reduction Laws",
+      "str:formalAxiom": "For all (c_it, c_jt), (c_ku, c_lu) in Disscog: if pairimp(c_it, c_jt) < pairimp(c_ku, c_lu) then pairdiss(c_it, c_jt) < pairdiss(c_ku, c_lu); and for all c_it, c_ju in Cognition: if diss(c_it) < diss(c_ju) then redpress(c_it) < redpress(c_ju)",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_1957_dissonance",
+        "chunkId": "chunk_dissb_fundamental_laws",
+        "charStart": 105,
+        "charEnd": 412,
+        "verbatimQuote": "The presence of dissonance gives rise to pressures to reduce that dissonance ... The strength of the pressure to reduce the dissonance is a function of the magnitude of the existing dissonance ... By the term cognition ... I mean any knowledge, opinion, or belief about the environment, about oneself, or about one's behavior"
+      }
+    },
+    {
+      "@id": "str:MPP_DissB",
+      "@type": "PartialPotentialModel",
+      "rdfs:label": "M_pp(DissB) - Diss-Non-Theoretical Empirical Basis",
+      "str:formalStructure": "M_pp(DissB) = {<Time, Rawcog, Cognition, Disscog, Conscog, pairimp>}",
+      "Episteme:textAnchor": {
+        "sourceDocId": "westermann_2000_dissonance_net",
+        "chunkId": "chunk_dissb_nontheoretical_terms",
+        "charStart": 67,
+        "charEnd": 285,
+        "verbatimQuote": "the base sets Time and Rawcog and the sets Cognition, Disscog, and Conscog are clearly not theoretical with respect to dissonance theory. As is shown in the explications and interpretations given above, the meaning of these terms is known either from other psychological theories or from everyday usage. The function pairimp, too, is a Diss-non-theoretical term"
+      }
+    },
+    {
+      "@id": "str:GC_Diss",
+      "@type": "Constraint",
+      "rdfs:label": "GC(Diss) - Cognitive Valuation Cross-Model Invariance Constraint",
+      "str:formalConstraint": "GC(Diss) subset of Powerset(M_p(DissB)) requiring: forall x, y in I: c in (Cognition_x cap Cognition_y) -> pairimp_x(c) = pairimp_y(c)",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_1957_dissonance",
+        "chunkId": "chunk_gc_diss_invariance",
+        "charStart": 18,
+        "charEnd": 210,
+        "verbatimQuote": "These cognitive elements correspond to knowledge about things people do, see, and feel. The reality of these elements is defined in terms of their correspondence with the actual existing state of affairs."
+      }
+    },
+    {
+      "@id": "str:I_DissB",
+      "@type": "Paradigm",
+      "rdfs:label": "I(DissB) - Intended Applications of Dissonance Theory",
+      "str:domainRestriction": "I(DissB) subset of M_pp(DissB)",
+      "Episteme:textAnchor": {
+        "sourceDocId": "westermann_2000_dissonance_net",
+        "chunkId": "chunk_dissb_intended_apps",
+        "charStart": 194,
+        "charEnd": 350,
+        "verbatimQuote": "The basic element DissB represents the fundamental law of the theory i.e. the substantial axioms that define the models of DissB are assumed to hold in all applications of dissonance theory."
+      }
+    },
+    {
+      "@id": "str:TE_DissBStar",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(DissB*) - Generic Theoretical Revision Core",
+      "str:specializes": "str:TE_DissB"
+    },
+    {
+      "@id": "str:TE_DissBS",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(DissB.S) - Aronson's Self-Concept Revision",
+      "str:specializes": "str:TE_DissBStar",
+      "Episteme:textAnchor": {
+        "sourceDocId": "westermann_2000_dissonance_net",
+        "chunkId": "chunk_aronson_revision_self",
+        "charStart": 205,
+        "charEnd": 380,
+        "verbatimQuote": "suggests that there is cognitive dissonance only if the individual's open behavior is not only inconsistent with personal opinions but also with his or her self-concept. ... For DissB.S, for example, we introduce a subset Contraself subset of Cognition of cognitions that contradict or threaten the personal self-concept"
+      }
+    },
+    {
+      "@id": "str:TE_DissBA",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(DissB.A) - Cooper-Fazio Attributional Revision",
+      "str:specializes": "str:TE_DissBStar",
+      "Episteme:textAnchor": {
+        "sourceDocId": "westermann_2000_dissonance_net",
+        "chunkId": "chunk_cooper_fazio_attribution",
+        "charStart": 205,
+        "charEnd": 395,
+        "verbatimQuote": "stress that dissonance reduction activities are the result of a multistage attribution process: the dissonance aroused must be labeled negatively and the subjects must attribute this negative state to their freely produced behavior."
+      }
+    },
+    {
+      "@id": "str:TE_DissD",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(DissD) - Postdecision Dissonance Domain",
+      "str:specializes": "str:TE_DissB",
+      "str:hasActualModel": "str:M_DissD",
+      "str:presupposes": "str:TE_Tversky"
+    },
+    {
+      "@id": "str:M_DissD",
+      "@type": "ActualModel",
+      "rdfs:label": "M(DissD) - Postdecision Dissonance Law",
+      "str:formalAxiom": "forall d in Decision(x, y): pairdiss(choice(x), rejected(y)) > 0",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_1957_dissonance",
+        "chunkId": "chunk_dissd_postdecision_domain",
+        "charStart": 36,
+        "charEnd": 240,
+        "verbatimQuote": "dissonance is an almost inevitable consequence of a decision between two (or more) alternatives, because all those elements that, considered alone, would lead to action other than the one taken are dissonant with the cognitive elements corresponding to the action taken"
+      }
+    },
+    {
+      "@id": "str:TE_DissDR",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(DissD.R) - Postdecision Regret Specialization",
+      "str:specializes": "str:TE_DissD",
+      "Episteme:textAnchor": {
+        "sourceDocId": "westermann_2000_dissonance_net",
+        "chunkId": "chunk_dissdr_regret_effect",
+        "charStart": 200,
+        "charEnd": 360,
+        "verbatimQuote": "Instead, the attractions of the alternatives seem to converge immediately after the decisions. As these so-called regret effects do not contradict dissonance theory in general ... A time limit tmin is introduced and Axiom (4) of M(DissD) is modified so that it holds only for t+ > t + tmin"
+      }
+    },
+    {
+      "@id": "str:TE_DissD1",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(DissD1) - Brehm Product Rating Model",
+      "str:specializes": "str:TE_DissD",
+      "str:hasParadigm": "str:I0_Brehm"
+    },
+    {
+      "@id": "str:I0_Brehm",
+      "@type": "Paradigm",
+      "rdfs:label": "Paradigm: I_0(Brehm1956) - Postdecision Consumer Choice",
+      "Episteme:textAnchor": {
+        "sourceDocId": "brehm_1956_postdecision",
+        "chunkId": "chunk_brehm_paradigm_1956",
+        "charStart": 384,
+        "charEnd": 520,
+        "verbatimQuote": "Brehm had subjects choose between two products. In one experimental condition preference ratings between chosen and rejected objects differed by about one point, whereas the difference was, on the average, two and a half point in the other condition."
+      }
+    },
+    {
+      "@id": "str:TE_DissF",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(DissF) - Forced Compliance Domain",
+      "str:specializes": "str:TE_DissB",
+      "str:hasActualModel": "str:M_DissF"
+    },
+    {
+      "@id": "str:M_DissF",
+      "@type": "ActualModel",
+      "rdfs:label": "M(DissF) - Forced Compliance Dissonance Law",
+      "str:formalAxiom": "forall s in S: public_statement(s, notX) & private_opinion(s, X) -> diss(s) > 0",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_1957_dissonance",
+        "chunkId": "chunk_dissf_forced_compliance_domain",
+        "charStart": 84,
+        "charEnd": 280,
+        "verbatimQuote": "there are circumstances in which persons will behave in a manner counter to their convictions or will publicly make statements which they do not really believe. Such a public compliance without private acceptance is called a forced compliance and such a state of affairs is accompanied by dissonance"
+      }
+    },
+    {
+      "@id": "str:TE_DissFS",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(DissF.S) - Forced Compliance Self-Revision",
+      "str:specializes": "str:TE_DissF"
+    },
+    {
+      "@id": "str:TE_DissF6",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(DissF6) - Festinger-Carlsmith $1/$20 Paradigm Model",
+      "str:specializes": "str:TE_DissF",
+      "str:hasActualModel": "str:M_DissF6",
+      "str:hasParadigm": "str:I0_Carlsmith"
+    },
+    {
+      "@id": "str:M_DissF6",
+      "@type": "ActualModel",
+      "rdfs:label": "M(DissF6) - Inverse Reward & Opinion Change Law",
+      "str:formalAxiom": "forall s in S: reward(s) > reward_min -> d(opinion_change)/d(reward) < 0",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_carlsmith_1959",
+        "chunkId": "chunk_festinger_carlsmith_law_prediction",
+        "charStart": 5565,
+        "charEnd": 5703,
+        "verbatimQuote": "The prediction [from 3 and 4 above] is that the larger the reward given to the subject, the smaller will be the subsequent opinion change."
+      }
+    },
+    {
+      "@id": "str:I0_Carlsmith",
+      "@type": "Paradigm",
+      "rdfs:label": "Paradigm: I_0(FestingerCarlsmith1959) - Forced Compliance Task",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_carlsmith_1959",
+        "chunkId": "chunk_festinger_carlsmith_procedure",
+        "charStart": 31652,
+        "charEnd": 31983,
+        "verbatimQuote": "A laboratory experiment was designed to test these derivations. Subjects were subjected to a boring experience and then paid to tell someone that the experience had been interesting and enjoyable. The amount of money paid the subject was varied. The private opinions of the subjects concerning the experiences were then determined."
+      }
+    },
+    {
+      "@id": "str:TE_FI72",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(F&I72) - Frey-Irle Experimental Model",
+      "str:specializes": "str:TE_DissF6",
+      "str:presupposes": "str:TE_INC",
+      "Episteme:textAnchor": {
+        "sourceDocId": "westermann_2000_dissonance_net",
+        "chunkId": "chunk_frey_irle_1972_model",
+        "charStart": 206,
+        "charEnd": 380,
+        "verbatimQuote": "F&I72 in Figure 2 is an illustrative example. It refers to Frey and Irle's experiment on 'the relation of reward and attitude change after a person has performed some counter-attitudinal behavior' ... Therefore, the experimental element F&I72 is not only a specialization of dissonance theory-elements (especially DissF.S6) but also a specialization of an appropriate theory-element INC from an incentive theory of attitude change"
+      }
+    },
+    {
+      "@id": "str:TE_DissI",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(DissI) - Information Exposure Domain",
+      "str:specializes": "str:TE_DissB",
+      "str:hasActualModel": "str:M_DissI"
+    },
+    {
+      "@id": "str:M_DissI",
+      "@type": "ActualModel",
+      "rdfs:label": "M(DissI) - Selective Information Exposure Law",
+      "str:formalAxiom": "forall s in S: diss(s) > 0 -> seeking_supportive_info(s) > seeking_dissonant_info(s)",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_1957_dissonance",
+        "chunkId": "chunk_dissi_information_exposure",
+        "charStart": 126,
+        "charEnd": 320,
+        "verbatimQuote": "One would then expect that in the presence of dissonance, one would observe the seeking out of information which might reduce the existing dissonance. The degree to which this kind of behavior manifests itself would, of course, depend upon the magnitude of the dissonance which exists and also upon the person's expectations concerning what content any potential information source would yield"
+      }
+    },
+    {
+      "@id": "str:TE_DissS",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(DissS) - Social Disagreement Domain",
+      "str:specializes": "str:TE_DissB",
+      "str:hasActualModel": "str:M_DissS"
+    },
+    {
+      "@id": "str:M_DissS",
+      "@type": "ActualModel",
+      "rdfs:label": "M(DissS) - Social Disagreement Dissonance Law",
+      "str:formalAxiom": "forall g in Group: disagreement(members(g)) -> diss(members(g)) > 0",
+      "Episteme:textAnchor": {
+        "sourceDocId": "festinger_1957_dissonance",
+        "chunkId": "chunk_disss_social_disagreement",
+        "charStart": 177,
+        "charEnd": 330,
+        "verbatimQuote": "The social group is at once a major source of cognitive dissonance for the individual and a major vehicle for eliminating and reducing the dissonance which may exist in him ... the existence of disagreement among members of a group on some issue or opinion, if perceived by the members, certainly produces cognitive dissonance"
+      }
+    },
+    {
+      "@id": "str:TE_ACT",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(ACT*) - Anderson Cognitive Architecture",
+      "Episteme:textAnchor": {
+        "sourceDocId": "westermann_2000_dissonance_net",
+        "chunkId": "chunk_act_star_link",
+        "charStart": 192,
+        "charEnd": 340,
+        "verbatimQuote": "Thus it is possible to define an interpretative link cf. Architectonic or between dissonance theory and ACT*, J.R. Anderson's (1983) well-known theory of cognitive architecture ... The set Rawcog in DissB can be linked to the set Cu of declarative cognitive units in the basic element ACT*-B. The set Cognition of actual cognitions can be linked to the set DM of declarative memory units in ACT*."
+      }
+    },
+    {
+      "@id": "str:TE_Tversky",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(Tversky) - Feature-Matching Model of Similarity",
+      "Episteme:textAnchor": {
+        "sourceDocId": "westermann_2000_dissonance_net",
+        "chunkId": "chunk_tversky_similarity_link",
+        "charStart": 196,
+        "charEnd": 320,
+        "verbatimQuote": "To assess the values of this function we can establish a link to the feature matching models of similarity (Tversky 1977) that are formulated in set-theoretical terms"
+      }
+    },
+    {
+      "@id": "str:TE_INC",
+      "@type": "TheoryElement",
+      "rdfs:label": "TheoryElement: T(INC) - Incentive Theory of Attitude Change",
+      "Episteme:textAnchor": {
+        "sourceDocId": "westermann_2000_dissonance_net",
+        "chunkId": "chunk_inc_incentive_theory",
+        "charStart": 207,
+        "charEnd": 310,
+        "verbatimQuote": "specialization of an appropriate theory-element INC from an incentive theory of attitude change which in turn can be conceived as a specialization of the basic element (OPR) of Skinner's theory of operant behavior"
+      }
+    }
+  ]
+}

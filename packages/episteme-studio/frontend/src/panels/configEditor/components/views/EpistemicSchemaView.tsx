@@ -1,14 +1,14 @@
-import React, { useState, useMemo } from "react";
-import { Search, Plus, X } from "lucide-react";
+import React, {useMemo, useState} from "react";
+import {Plus, Search, X} from "lucide-react";
 import {
-  DEFAULT_L2_NODE_DEFINITIONS,
-  DEFAULT_L2_RELATION_DEFINITIONS,
-  DEFAULT_L3_COMPONENT_DEFINITIONS,
-  DEFAULT_L3_ARGUMENT_RELATION_DEFINITIONS,
-  DEFAULT_COMPONENT_PARTITIONS,
-  DEFAULT_RELATION_POLARITIES,
+    DEFAULT_COMPONENT_PARTITIONS,
+    DEFAULT_L2_NODE_DEFINITIONS,
+    DEFAULT_L2_RELATION_DEFINITIONS,
+    DEFAULT_L3_ARGUMENT_RELATION_DEFINITIONS,
+    DEFAULT_L3_COMPONENT_DEFINITIONS,
+    DEFAULT_RELATION_POLARITIES,
 } from "../../constants";
-import { SchemaFilterState } from "../../types";
+import {SchemaFilterState} from "../../types";
 
 interface EpistemicSchemaViewProps {
   patch: Record<string, any>;

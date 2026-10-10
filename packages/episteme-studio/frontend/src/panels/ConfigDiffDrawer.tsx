@@ -1,6 +1,6 @@
 import React from "react";
-import { useDiffStore } from "../store/diffStore";
-import { Sliders, X, Cpu, Layers, MessageSquare, Settings2, CheckCircle2 } from "lucide-react";
+import {useDiffStore} from "../store/diffStore";
+import {CheckCircle2, Cpu, Layers, MessageSquare, Settings2, Sliders, X} from "lucide-react";
 
 export const ConfigDiffDrawer: React.FC = () => {
   const { isConfigDrawerOpen, setIsConfigDrawerOpen, diffData, baseRunId, targetRunId } =

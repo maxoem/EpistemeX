@@ -1,25 +1,39 @@
 from pathlib import Path
 
 import pytest
-
-from episteme_pipeline.artifacts.builders import build_chunk_artifact, build_document_artifact
-from episteme_pipeline.artifacts.execution import ArtifactCollection, ArtifactExecutionContext
+from episteme_pipeline.artifacts.builders import (
+    build_chunk_artifact,
+    build_document_artifact,
+)
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    ArtifactExecutionContext,
+)
 from episteme_pipeline.artifacts.mappers import (
     map_phase3_output_to_artifacts,
     map_phase4_output_to_artifacts,
 )
 from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
-from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
+from episteme_pipeline.contracts.domain import (
+    L1Chunk,
+    L1Document,
+    TheoryAtom,
+    TheoryRelation,
+)
 from episteme_pipeline.contracts.phase_contracts import (
     L2Triple,
-            Phase3Output,
+    Phase3Output,
     Phase4Output,
     PipelineInput,
 )
-from episteme_pipeline.contracts.domain import L1Chunk, L1Document
 from episteme_pipeline.pipeline import Pipeline
-from episteme_pipeline.runs.models import ExecutionResult, RunManifest, RunPhaseRecord, RunStatus
+from episteme_pipeline.runs.models import (
+    ExecutionResult,
+    RunManifest,
+    RunPhaseRecord,
+    RunStatus,
+)
 
 
 def test_phase3_mapper_emits_global_relation_artifacts() -> None:

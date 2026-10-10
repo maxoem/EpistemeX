@@ -8,9 +8,14 @@ They do NOT test LLM accuracy — the mock returns fixed structured output.
 
 from __future__ import annotations
 
-import pytest
+from datetime import UTC
 
-from episteme_pipeline.artifacts.execution import ArtifactExecutionContext, Phase1ArtifactsView, Phase2ArtifactsView
+import pytest
+from episteme_pipeline.artifacts.execution import (
+    ArtifactExecutionContext,
+    Phase1ArtifactsView,
+    Phase2ArtifactsView,
+)
 from episteme_pipeline.config import Phase2Config
 from episteme_pipeline.contracts.domain import L1Chunk, L1Document, L2Entity, L2Triple
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
@@ -23,7 +28,6 @@ from episteme_pipeline.phases.phase2_entity_discovery.models import (
 from episteme_pipeline.protocols.extractors import EntityLinker, NERExtractor
 from episteme_pipeline.runs.models import RunManifest
 from episteme_pipeline.schema.default_schema import SchemaConfig
-
 
 # ---------------------------------------------------------------------------
 # Stub implementations
@@ -39,7 +43,9 @@ class StubNERExtractor(NERExtractor):
     async def extract(
         self, chunk_id, chunk_text, schema, memory=None, anchor=None
     ) -> tuple[list[L2Entity], list[L2Triple], dict | None, bool, str | None]:
-        from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import _stable_entity_id
+        from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import (
+            _stable_entity_id,
+        )
 
         id_map: dict[str, str] = {}
         entities: list[L2Entity] = []
@@ -99,6 +105,14 @@ class StubLinkingEntityLinker(EntityLinker):
 
 
 @pytest.fixture
+def schema() -> SchemaConfig:
+    return SchemaConfig(
+        node_types=["PERSON", "KONZEPT", "Person", "Concept"],
+        relation_types=["IMPLIZIERT", "IMPLIES"],
+    )
+
+
+@pytest.fixture
 def two_chunks() -> list[L1Chunk]:
     return [
         L1Chunk(id="chunk_0001", text="Kant discussed space.", source_doc_id="doc1", sequence_index=0, token_count=4),
@@ -108,13 +122,13 @@ def two_chunks() -> list[L1Chunk]:
 
 @pytest.fixture
 def phase1_view(two_chunks) -> Phase1ArtifactsView:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     document = L1Document(
         id="doc1",
         title="Test",
         source_path="test.tex",
-        ingested_at=datetime.now(timezone.utc),
+        ingested_at=datetime.now(UTC),
         chapter_count=1,
         chunk_count=2,
     )
@@ -132,7 +146,10 @@ def make_context() -> ArtifactExecutionContext:
 
 def make_runner(graph_store, ner_extractor=None, entity_linker=None, schema=None):
     config = Phase2Config(batch_size=10)
-    schema = schema or SchemaConfig()
+    schema = schema or SchemaConfig(
+        node_types=["PERSON", "KONZEPT", "Person", "Concept"],
+        relation_types=["IMPLIZIERT", "IMPLIES"],
+    )
     return Phase2Runner(
         config=config,
         schema=schema,

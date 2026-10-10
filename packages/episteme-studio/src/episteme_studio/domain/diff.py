@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from enum import StrEnum
 from typing import Any
+
 from pydantic import BaseModel, Field
 
-from episteme_studio.domain.graph import GraphView, StudioEdge, StudioNode
+from episteme_studio.domain.graph import GraphView
 
 
 class NodeDiffStatus(StrEnum):

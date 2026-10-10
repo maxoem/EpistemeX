@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import re
+from datetime import UTC, datetime
 from typing import Any, Literal
 
-from episteme_studio.domain.events import StudioEvent
-from episteme_pipeline.events.models import BaseEvent, get_event_type_name, serialize_event
+from episteme_pipeline.events.models import (
+    BaseEvent,
+    get_event_type_name,
+    serialize_event,
+)
 
+from episteme_studio.domain.events import StudioEvent
 
 _EVENT_KIND_MAP: dict[str, str] = {
     "ComponentStarted": "phase.component_started",
@@ -42,6 +46,10 @@ _EVENT_KIND_MAP: dict[str, str] = {
     "TheoreticalParametersProjected": "theory.parameters_projected",
     "TenabilityEvaluationCompleted": "theory.tenability_completed",
     "TenabilityAnomalyDetected": "theory.anomaly_detected",
+    "DecisionEvaluationStarted": "decision.started",
+    "DecisionEvaluationCompleted": "decision.completed",
+    "DecisionGatingTriggered": "decision.gating_triggered",
+    "ModalStrengthResolved": "modal.resolved",
     "TerminalOutput": "terminal.output",
 }
 
@@ -152,9 +160,9 @@ def to_studio_event(
         try:
             ts = datetime.fromisoformat(ts_val)
         except Exception:
-            ts = datetime.now(timezone.utc)
+            ts = datetime.now(UTC)
     else:
-        ts = datetime.now(timezone.utc)
+        ts = datetime.now(UTC)
 
     run_id = str(event_data.get("run_id") or "unknown_run")
     phase = event_data.get("phase")
@@ -174,7 +182,24 @@ def to_studio_event(
         elif raw_type == "ProgressCompleted":
             task = event_data.get("task_name") or "task"
             message = f"Subtask completed: {task}"
-        elif "description" in event_data and event_data["description"]:
+        elif raw_type == "DecisionEvaluationCompleted":
+            prim = event_data.get("primitive", "decision")
+            sel = event_data.get("selected_value")
+            acc = float(event_data.get("empirical_accuracy", 0.0) or 0.0)
+            dur = float(event_data.get("duration_seconds", 0.0) or 0.0)
+            message = f"Decision {prim}: {sel} (acc={acc:.1%}, {dur*1000:.1f}ms)"
+        elif raw_type == "DecisionGatingTriggered":
+            gate = event_data.get("gate_name", "gate")
+            act = event_data.get("action_taken", "action")
+            message = f"Gating [{gate}]: {act}"
+        elif raw_type == "ModalStrengthResolved":
+            atom_id = event_data.get("atom_id", "atom")
+            m_val = float(event_data.get("modal_strength", 0.0) or 0.0)
+            res_type = event_data.get("resolver_type", "resolver")
+            scope = event_data.get("scope_type") or "none"
+            clamped_str = " (clamped)" if event_data.get("clamped") else ""
+            message = f"Modality resolved [{atom_id}]: M(φ)={m_val:.3f} via {res_type} [scope={scope}]{clamped_str}"
+        elif event_data.get("description"):
             message = str(event_data["description"])
         elif "phase_name" in event_data:
             message = f"Phase '{event_data['phase_name']}' event: {raw_type}"

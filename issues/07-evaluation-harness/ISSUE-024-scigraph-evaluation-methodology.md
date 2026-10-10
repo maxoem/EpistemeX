@@ -6,8 +6,12 @@
 | **Component(s)** | `packages/episteme-pipeline` (`pipeline/evaluation/`, `evaluation/scorers/`), `packages/epistemetrics` |
 | **Roadmap Horizon** | **Horizon 1 & 2** (Evaluation Integrity & Benchmark Harness) |
 | **Priority** | High |
-| **Status** | Open |
+| **Status** | `Superseded` (by [ISSUE-030](../09-stnb-evaluation-capabilities/ISSUE-030-intrinsic-model-component-and-property-evaluation.md) and [ISSUE-032](../09-stnb-evaluation-capabilities/ISSUE-032-extrinsic-retrieval-attribute-fix-and-competency-testbed.md)) |
 | **Source Ref** | Formerly tracked in `docs/TODO_FUTURE.md §1`, `docs/concepts/formal_graph_model.md` |
+
+> [!NOTE]
+> **SUPERSEDED**: This issue has been superseded by [`ISSUE-030`](../09-stnb-evaluation-capabilities/ISSUE-030-intrinsic-model-component-and-property-evaluation.md) (Model Component & Property Evaluation) and [`ISSUE-032`](../09-stnb-evaluation-capabilities/ISSUE-032-extrinsic-retrieval-attribute-fix-and-competency-testbed.md) (Competency Querying).
+
 
 ---
 

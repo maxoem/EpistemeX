@@ -1,6 +1,6 @@
 import React from "react";
-import { FieldProvenance } from "../../../api/types";
-import { ParameterFieldMeta } from "../../phaseConfig/phaseRegistry";
+import {FieldProvenance} from "../../../api/types";
+import {ParameterFieldMeta} from "../../phaseConfig/phaseRegistry";
 
 interface ParameterRowProps {
   paramKey: string;
