@@ -49,9 +49,11 @@ epistemetrics = { workspace = true }
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio==1.4.0",
+    "pytest-socket>=0.8.1",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "--disable-socket --allow-unix-socket --allow-hosts=127.0.0.1,localhost"

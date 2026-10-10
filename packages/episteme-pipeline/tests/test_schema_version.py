@@ -74,6 +74,7 @@ def test_build_manifest_includes_schema_version(config):
             config.phase4_maturation,
             llm=llm,
             graph_store=graph_reader,
+            embedding_model=emb,
         ),
         Phase4Runner(
             config.phase4,
@@ -165,6 +166,7 @@ def test_build_manifest_schema_version_tracks_config_change(config):
             config.phase4_maturation,
             llm=llm,
             graph_store=graph_reader,
+            embedding_model=emb,
         ),
         Phase4Runner(
             config.phase4,

@@ -171,6 +171,7 @@ def test_build_manifest_captures_source_fingerprint(simple_config):
             simple_config.phase4_maturation,
             llm=llm,
             graph_store=graph_reader,
+            embedding_model=emb,
         ),
         Phase4Runner(
             simple_config.phase4,
@@ -266,6 +267,7 @@ def test_build_manifest_captures_config_snapshot(simple_config):
             simple_config.phase4_maturation,
             llm=llm,
             graph_store=graph_reader,
+            embedding_model=emb,
         ),
         Phase4Runner(
             simple_config.phase4,
@@ -364,6 +366,7 @@ def test_build_manifest_captures_input_sources(simple_config):
             simple_config.phase4_maturation,
             llm=llm,
             graph_store=graph_reader,
+            embedding_model=emb,
         ),
         Phase4Runner(
             simple_config.phase4,
@@ -462,6 +465,7 @@ def test_method_fingerprints_not_empty(simple_config):
             simple_config.phase4_maturation,
             llm=llm,
             graph_store=graph_reader,
+            embedding_model=emb,
         ),
         Phase4Runner(
             simple_config.phase4,

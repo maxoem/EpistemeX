@@ -61,19 +61,65 @@ def test_envelope_bi_encoder_guard():
 
 
 @pytest.mark.asyncio
-async def test_envelope_bi_encoder_pooling_with_checkpoint():
+async def test_envelope_bi_encoder_pooling_with_checkpoint(monkeypatch):
+    """Verify EnvelopeBiEncoder pools at [ENT] marker when present and falls back to [CLS]."""
+    hidden_dim = 384
+    seq_len = 5
+    ent_token_id = 999
+
+    mock_tokenizer = MagicMock()
+    input_ids = torch.tensor([
+        [101, 10, ent_token_id, 20, 102],
+        [101, 10, 30, 40, 102],
+    ])
+    mock_tokenizer.return_value = {"input_ids": input_ids}
+    mock_tokenizer.convert_tokens_to_ids.side_effect = lambda t: ent_token_id if t == "[ENT]" else 0
+    mock_tokenizer.__len__ = lambda self: 1000
+    mock_tokenizer.add_special_tokens.return_value = 2
+
+    mock_model = MagicMock()
+    last_hidden = torch.randn(2, seq_len, hidden_dim)
+    mock_output = MagicMock()
+    mock_output.last_hidden_state = last_hidden
+    mock_model.return_value = mock_output
+    mock_model.to.return_value = mock_model
+    mock_model.eval.return_value = mock_model
+
+    from transformers import AutoModel, AutoTokenizer
+    monkeypatch.setattr(AutoTokenizer, "from_pretrained", lambda *args, **kwargs: mock_tokenizer)
+    monkeypatch.setattr(AutoModel, "from_pretrained", lambda *args, **kwargs: mock_model)
+
     encoder = EnvelopeBiEncoder(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
         trained_checkpoint=True,
     )
-    
+
     text_with_ent = "The philosopher [ENT] Kant [\\ENT] argued..."
     text_without_ent = "The philosopher Kant argued..."
-    
+
     embeddings = encoder.encode([text_with_ent, text_without_ent])
-    
-    assert embeddings.shape[0] == 2
-    assert embeddings.shape[1] == 384  # MiniLM hidden size
+
+    assert embeddings.shape == (2, hidden_dim)
+    assert torch.equal(embeddings[0], last_hidden[0, 2, :])
+    assert torch.equal(embeddings[1], last_hidden[1, 0, :])
+
+
+def test_phase2_runner_defaults_to_name_linker_when_no_embedding_model():
+    """Verify Phase2Runner defaults to NameEntityLinker when embedding_model is None."""
+    from episteme_pipeline.config import Phase2Config
+    from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
+    from episteme_pipeline.phases.phase2_entity_discovery.entity_linker import (
+        NameEntityLinker,
+    )
+
+    runner = Phase2Runner(
+        config=Phase2Config(),
+        schema=MagicMock(),
+        llm=DummyStructuredLLM(),
+        embedding_model=None,
+        graph_store=AsyncMock(),
+    )
+    assert isinstance(runner.entity_linker, NameEntityLinker)
 
 
 @pytest.mark.asyncio

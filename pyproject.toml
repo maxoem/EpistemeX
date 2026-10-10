@@ -25,12 +25,14 @@ dev = [
     "mkdocstrings-python>=1.10.0",
     "pytest>=9.0.3",
     "pytest-asyncio==1.4.0",
+    "pytest-socket>=0.8.1",
     "ruff>=0.17.0",
     "zensical==0.0.64",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+addopts = "--disable-socket --allow-unix-socket --allow-hosts=127.0.0.1,localhost"
 testpaths = [
     "packages/episteme-pipeline/tests",
     "packages/epistemetrics/tests",

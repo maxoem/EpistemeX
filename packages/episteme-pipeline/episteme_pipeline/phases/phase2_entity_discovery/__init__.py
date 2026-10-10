@@ -120,6 +120,32 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         cross_encoder: CrossEncoder | None = None,
         decision_engine: DecisionEngine | None = None,
     ) -> None:
+        """Initialize the Phase 2 runner.
+
+        Parameters
+        ----------
+        config : Phase2Config
+            Configuration settings for Phase 2.
+        schema : SchemaConfig
+            Graph ontology schema configuration.
+        llm : object
+            LLM instance used for named entity recognition.
+        embedding_model : EmbeddingModel or None, optional
+            Embedding model for dense retrieval and entity linking.
+        graph_store : ProcessingGraph
+            Underlying graph database interface.
+        ner_extractor : NERExtractor or None, optional
+            Custom NER extractor. Defaults to LLMNERExtractor if None.
+        entity_linker : EntityLinker or None, optional
+            Custom entity linker. If None, defaults to DenseEntityLinker when
+            an embedding_model is provided, or NameEntityLinker otherwise.
+        working_memory_manager : EpisodicWorkingMemoryManager or None, optional
+            Custom episodic working memory manager.
+        cross_encoder : CrossEncoder or None, optional
+            Cross encoder for candidate reranking in dense linking.
+        decision_engine : DecisionEngine or None, optional
+            Optional System 1 decision engine.
+        """
         self.config = config
         self.schema = schema
         self.llm = llm
@@ -133,12 +159,17 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             decision_engine=decision_engine,
         )
         self.cross_encoder = cross_encoder
-        self.entity_linker = entity_linker or DenseEntityLinker(
-            embedding_model=self.embedding_model,
-            cross_encoder=self.cross_encoder,
-            tau=config.linking_confidence_threshold,
-            top_k=config.top_k_linking_candidates,
-        )
+        if entity_linker is not None:
+            self.entity_linker = entity_linker
+        elif self.embedding_model is not None:
+            self.entity_linker = DenseEntityLinker(
+                embedding_model=self.embedding_model,
+                cross_encoder=self.cross_encoder,
+                tau=config.linking_confidence_threshold,
+                top_k=config.top_k_linking_candidates,
+            )
+        else:
+            self.entity_linker = NameEntityLinker()
 
         self.working_memory_manager = working_memory_manager or EpisodicWorkingMemoryManager()
 

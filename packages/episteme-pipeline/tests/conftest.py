@@ -4,6 +4,12 @@ Shared test fixtures and in-memory graph store for pipeline unit tests.
 
 from __future__ import annotations
 
+import os
+
+# Ensure Hugging Face and Transformers operate in offline mode during unit tests
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
 import pytest
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
