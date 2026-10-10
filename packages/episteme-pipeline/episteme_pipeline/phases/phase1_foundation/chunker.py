@@ -36,6 +36,9 @@ def _get_encoder() -> tiktoken.Encoding | None:
     tiktoken.Encoding or None
         The cl100k_base encoding instance if available offline, otherwise None.
     """
+    import os
+    if os.environ.get("TIKTOKEN_OFFLINE") == "1" or os.environ.get("HF_HUB_OFFLINE") == "1":
+        return None
     try:
         return tiktoken.get_encoding("cl100k_base")
     except Exception:

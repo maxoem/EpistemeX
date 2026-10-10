@@ -185,6 +185,27 @@ class LLMResponseMetadataExtractor:
             total_tokens=total_tokens,
         )
 
+    _encoding: Any = None
+    _encoding_failed: bool = False
+
+    @classmethod
+    def _get_encoding(cls) -> Any | None:
+        """Get or lazily load tiktoken encoding, caching failures and respecting offline flags."""
+        if cls._encoding_failed:
+            return None
+        if cls._encoding is None:
+            import os
+            if os.environ.get("TIKTOKEN_OFFLINE") == "1" or os.environ.get("HF_HUB_OFFLINE") == "1":
+                cls._encoding_failed = True
+                return None
+            try:
+                import tiktoken
+                cls._encoding = tiktoken.get_encoding("cl100k_base")
+            except Exception:
+                cls._encoding_failed = True
+                return None
+        return cls._encoding
+
     @classmethod
     def estimate_tokens(cls, text: str) -> int:
         """Estimate token count for a text string using tiktoken or heuristic.
@@ -201,12 +222,13 @@ class LLMResponseMetadataExtractor:
         """
         if not text:
             return 0
-        try:
-            import tiktoken
-            enc = tiktoken.get_encoding("cl100k_base")
-            return len(enc.encode(text))
-        except Exception:
-            return max(1, len(text) // 4)
+        enc = cls._get_encoding()
+        if enc is not None:
+            try:
+                return len(enc.encode(text))
+            except Exception:
+                pass
+        return max(1, len(text) // 4)
 
     @staticmethod
     def _estimate_usage(prompt_text: str | None, output_text: str | None) -> TokenUsage:
