@@ -300,8 +300,8 @@ class EpisodicEvictionHandler:
         EvictionSignal
             Eviction signal containing boundary detection status and type.
         """
-        meta = getattr(chunk, "metadata", {}) if hasattr(chunk, "metadata") and isinstance(chunk.metadata, dict) else {}
-        section_path = meta.get("section_path") or meta.get("chapter") or getattr(chunk, "chapter_id", None)
+        meta = chunk.metadata if isinstance(chunk.metadata, dict) else {}
+        section_path = meta.get("section_path") or meta.get("chapter") or chunk.chapter_id
         parent_header = meta.get("parent_header") or meta.get("header")
 
         structural_boundary = False

@@ -34,7 +34,11 @@ from episteme_pipeline.protocols.extractors import (
     ensure_embedding_model,
     normalize_scores,
 )
+from episteme_pipeline.phases.phase2_entity_discovery.candidate_cache import (
+    CandidateEmbeddingCache,
+)
 from episteme_pipeline.protocols.graph_store import GraphReader
+from episteme_pipeline.utils.similarity import cosine_similarity_matrix
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel, PreTrainedTokenizer
@@ -160,10 +164,7 @@ class DenseEntityLinker(EntityLinker):
         self.cross_encoder: CrossEncoder | None = cross_encoder
         self.tau = tau
         self.top_k = top_k
-        # Candidate envelope cache
-        # Key: entity.id
-        # Value: (bi-encoder_text, bi-encoder_vector)
-        self._candidate_cache: dict[str, tuple[str, list[float]]] = {}
+        self._candidate_cache = CandidateEmbeddingCache(self.embedding_model)
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic dense entity linker configuration.
@@ -192,30 +193,15 @@ class DenseEntityLinker(EntityLinker):
     @staticmethod
     def _canonical_entity_string(candidate: L2Entity) -> str:
         """Format candidate entity for bi-encoder embedding with explicit type grounding."""
-        return f"[{candidate.label}] {candidate.name}: {candidate.description or ''}"
+        return CandidateEmbeddingCache.canonical_entity_string(candidate)
 
-    async def _populate_candidate_cache(self, candidates: list[L2Entity], graph_store: GraphReader) -> None:
+    async def _populate_candidate_cache(self, candidates: list[L2Entity], graph_store: GraphReader | None = None) -> None:
         """Pre-fetch basic texts and embeddings for new or stale candidates."""
-        stale_candidates = []
-        stale_basic_texts = []
-        for c in candidates:
-            basic_text = self._canonical_entity_string(c)
-            cached = self._candidate_cache.get(c.id)
-            if not cached or cached[0] != basic_text:
-                stale_candidates.append(c)
-                stale_basic_texts.append(basic_text)
-
-        if not stale_candidates:
-            return
-
-        fresh_vectors = await self.embedding_model.aget_text_embedding_batch(stale_basic_texts)
-        for c, b_text, vec in zip(stale_candidates, stale_basic_texts, fresh_vectors):
-            self._candidate_cache[c.id] = (b_text, vec)
+        await self._candidate_cache.populate(candidates)
 
     async def _candidate_embeddings(self, candidates: list[L2Entity]) -> torch.Tensor:
         """Return vectors from cache as float tensor."""
-        embs = [self._candidate_cache[c.id][1] for c in candidates]
-        return as_tensor(embs)
+        return self._candidate_cache.get_embeddings(candidates)
 
     async def link(
         self,
@@ -236,22 +222,17 @@ class DenseEntityLinker(EntityLinker):
         T_n = f"[{mention.label}] {mention.textual_envelope}"
         raw_T_n_emb = await self.embedding_model.aget_text_embedding_batch([T_n])
         T_n_emb = as_tensor(raw_T_n_emb)[0]
-        # L2-normalize mention vector
-        T_n_emb = torch.nn.functional.normalize(T_n_emb, p=2, dim=0)
 
         candidates = await graph_store.get_entities()
         if not candidates:
             return None
 
         # Pre-fetch and cache vectors
-        await self._populate_candidate_cache(candidates, graph_store)
-        G_embs = await self._candidate_embeddings(candidates)
+        await self._candidate_cache.populate(candidates)
+        G_embs = self._candidate_cache.get_embeddings(candidates)
 
-        # L2-normalize candidate vectors
-        G_embs = torch.nn.functional.normalize(G_embs, p=2, dim=1)
-
-        # Cosine similarity (since both are normalized, dot product = cosine)
-        scores = torch.matmul(G_embs, T_n_emb)
+        scores_arr = cosine_similarity_matrix(G_embs.numpy(), T_n_emb.numpy())
+        scores = torch.as_tensor(scores_arr)
         top_k_indices = torch.topk(scores, min(effective_top_k, len(candidates))).indices
 
         top_candidates = [candidates[i] for i in top_k_indices]

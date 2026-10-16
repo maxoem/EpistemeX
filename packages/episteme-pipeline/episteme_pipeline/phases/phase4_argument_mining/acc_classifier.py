@@ -19,15 +19,13 @@ import logging
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom, TheoryRelation
 from episteme_pipeline.llm import ensure_structured_llm
 from episteme_pipeline.phases.phase4_argument_mining.models import ACCOutput
+from episteme_pipeline.phases.phase4_argument_mining.pairing import stable_component_id
 from episteme_pipeline.protocols.argument_mining import ACCClassifier
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
 
-
-def _stable_component_id(chunk_id: str, ac_tag: str) -> str:
-    key = f"{chunk_id}:{ac_tag}"
-    return f"ac_{hashlib.sha256(key.encode()).hexdigest()[:14]}"
+_stable_component_id = stable_component_id
 
 
 class LLMACCClassifier(ACCClassifier):
@@ -49,11 +47,13 @@ class LLMACCClassifier(ACCClassifier):
         dict of str to Any
             Dictionary containing strategy and LLM fingerprint.
         """
+        from enum import Enum
         from episteme_pipeline.runs.fingerprints import fingerprint_method
 
+        strategy_str = self.strategy.value if isinstance(self.strategy, Enum) else str(self.strategy)
         return {
             "class": self.__class__.__name__,
-            "strategy": str(getattr(self.strategy, "value", self.strategy)),
+            "strategy": strategy_str,
             "llm": fingerprint_method(self.llm),
         }
 

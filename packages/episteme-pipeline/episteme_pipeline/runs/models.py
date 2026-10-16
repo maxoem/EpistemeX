@@ -59,6 +59,7 @@ class RunManifest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     parent_run_id: str | None = None
     decision_metrics: dict[str, object] | None = None
+    invalidation_reason: str | None = None
 
 
 class ResumePoint(BaseModel):

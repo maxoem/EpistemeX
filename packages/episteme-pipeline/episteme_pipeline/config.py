@@ -376,6 +376,7 @@ class Phase5Config(BaseModel):
     argument_clustering_enabled: bool = True
     theory_fusion_enabled: bool = False
     fusion_similarity_threshold: float = 0.85
+    max_cluster_size: int = 100
     cluster_layer: Literal["theory_atoms", "l2_entities", "both"] = "theory_atoms"
     gating: FusionGatingConfig = Field(default_factory=FusionGatingConfig)
 
@@ -494,6 +495,33 @@ class ExecutionConfig(BaseModel):
     runs_dir: str = ".pipeline_runs"
     artifacts_dir: str = ".pipeline_artifacts"
 
+    def should_persist_artifacts(self, phase_key: str) -> bool:
+        """Check whether artifacts should be persisted for a given phase key.
+
+        Parameters
+        ----------
+        phase_key : str
+            The phase identifier (e.g. 'phase1', 'phase2', etc.).
+
+        Returns
+        -------
+        bool
+            True if persistence is enabled for this phase, False otherwise.
+        """
+        mapping: dict[str, bool] = {
+            "phase1": self.persist_phase1_artifacts,
+            "phase2": self.persist_phase2_artifacts,
+            "phase3": self.persist_phase3_artifacts,
+            "phase3b": self.persist_phase3b_artifacts,
+            "phase4_maturation": self.persist_phase4_maturation_artifacts,
+            "phase4": self.persist_phase4_artifacts,
+            "phase5": self.persist_phase5_artifacts,
+            "phase6": self.persist_phase6_artifacts,
+            "theoretical_enrichment": self.persist_theoretical_enrichment_artifacts,
+        }
+        return mapping.get(phase_key, True)
+
+
 
 class DecisionEngineConfig(BaseModel):
     """Configuration for the System 1 Decision Engine (e.g. TypeSafe Jev / Laya).
@@ -595,3 +623,30 @@ class PipelineConfig(BaseModel):
     def default_reranker_model(self) -> str:
         """Deprecated alias for ``config.models.reranker_model``."""
         return self.models.reranker_model
+
+    def get_phase_config(self, phase_key: str) -> BaseModel | None:
+        """Retrieve the configuration model for a phase key without reflection.
+
+        Parameters
+        ----------
+        phase_key : str
+            The phase identifier.
+
+        Returns
+        -------
+        BaseModel or None
+            The corresponding phase config model, or None if unknown.
+        """
+        mapping: dict[str, BaseModel] = {
+            "phase1": self.phase1,
+            "phase2": self.phase2,
+            "phase3": self.phase3,
+            "phase3b": self.phase3b,
+            "phase4_maturation": self.phase4_maturation,
+            "phase4": self.phase4,
+            "phase5": self.phase5,
+            "phase6": self.phase6,
+            "theoretical_enrichment": self.theoretical_enrichment,
+        }
+        return mapping.get(phase_key)
+

@@ -46,7 +46,11 @@ from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
     TAGRelationExtractor,
 )
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
-from episteme_pipeline.protocols.graph_store import EntityGraph, ProcessingGraph
+from episteme_pipeline.protocols.graph_store import (
+    EntityGraph,
+    PhaseCheckpointStore,
+    ProcessingGraph,
+)
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
@@ -83,6 +87,19 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
         self.global_extractor: GlobalRelationExtractor = (
             global_extractor or TAGRelationExtractor(llm, embedding_model, config)
         )
+
+    @property
+    def checkpoint_store(self) -> PhaseCheckpointStore | None:
+        """Return the graph store if it satisfies PhaseCheckpointStore.
+
+        Returns
+        -------
+        PhaseCheckpointStore or None
+            Checkpoint store instance, or None if not supported.
+        """
+        if isinstance(self.graph_store, PhaseCheckpointStore):
+            return self.graph_store
+        return None
 
     @property
     def event_emitter(self) -> EventEmitter:
@@ -162,7 +179,7 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
             logger.info("Phase 3: 0 candidate pairs generated — skipping extraction.")
             return ArtifactCollection([])
 
-        batch_size = getattr(self.config, "batch_size", 50)
+        batch_size = self.config.batch_size
         progress_task = f"Phase 3: {len(candidates)} global candidate pairs"
         self.event_emitter.emit(
             ProgressStarted(
@@ -174,13 +191,14 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
 
         all_triples: list[L2Triple] = []
         succeeded_total = 0
+        checkpoint_store = self.checkpoint_store
 
         for batch in batched(candidates, batch_size):
             batch_list = list(batch)
-            if hasattr(self.graph_store, "filter_unprocessed_items"):
+            if checkpoint_store is not None:
                 batch_keys = [c.key for c in batch_list]
                 pending_keys = set(
-                    await self.graph_store.filter_unprocessed_items(batch_keys, _PHASE_TAG)
+                    await checkpoint_store.filter_unprocessed_items(batch_keys, _PHASE_TAG)
                 )
                 pending_batch = [c for c in batch_list if c.key in pending_keys]
             else:
@@ -193,8 +211,8 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
                 self._guard_systematic_failure(pending_batch, batch_records, succeeded_total)
                 succeeded_total += len([r for r in batch_records if r.status == "completed"])
 
-                if hasattr(self.graph_store, "commit_phase_batch"):
-                    await self.graph_store.commit_phase_batch(
+                if checkpoint_store is not None:
+                    await checkpoint_store.commit_phase_batch(
                         _PHASE_TAG, batch_triples, batch_records
                     )
                 else:

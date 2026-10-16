@@ -14,13 +14,14 @@ from pathlib import Path
 from typing import Protocol
 
 from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 # ---------------------------------------------------------------------------
 # Protocol / Interface
 # ---------------------------------------------------------------------------
 
 
-class ToCParserStrategy(Protocol):
+class ToCParserStrategy(Fingerprintable, Protocol):
     """Protocol for Table of Contents parser strategies."""
 
     def can_handle(self, path: Path | str | None, text: str) -> bool:
@@ -97,6 +98,16 @@ class MarkdownToCParser(ToCParserStrategy):
             document_summary=f"Markdown Table of Contents for '{document_title}' ({len(lines)} section headers)",
         )
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint representation of the parser strategy.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        return {"type": self.__class__.__name__}
+
 
 _LATEX_SECTION_RE = re.compile(
     r"\\(part|chapter|section|subsection|subsubsection)\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}",
@@ -143,6 +154,16 @@ class LaTeXToCParser(ToCParserStrategy):
             document_summary=f"LaTeX Table of Contents for '{document_title}' ({len(lines)} section commands)",
         )
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint representation of the parser strategy.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        return {"type": self.__class__.__name__}
+
 
 class FallbackToCParser(ToCParserStrategy):
     """Fallback strategy for plain unformatted text or unknown file types."""
@@ -157,6 +178,16 @@ class FallbackToCParser(ToCParserStrategy):
             document_summary=f"Fallback Anchor for '{document_title}'",
         )
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint representation of the parser strategy.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        return {"type": self.__class__.__name__}
+
 
 # Default strategy registry order
 DEFAULT_TOC_PARSERS: list[ToCParserStrategy] = [
@@ -170,7 +201,7 @@ DEFAULT_TOC_PARSERS: list[ToCParserStrategy] = [
 # ---------------------------------------------------------------------------
 
 
-class AutoToCParser:
+class AutoToCParser(Fingerprintable):
     """
     Registry & Dispatcher for ToC parser strategies.
 
@@ -180,6 +211,22 @@ class AutoToCParser:
 
     def __init__(self, parsers: Sequence[ToCParserStrategy] | None = None) -> None:
         self.parsers: list[ToCParserStrategy] = list(parsers or DEFAULT_TOC_PARSERS)
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint representation of the ToC parser.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        return {
+            "type": self.__class__.__name__,
+            "parsers": [
+                p.fingerprint() if isinstance(p, Fingerprintable) else p.__class__.__name__
+                for p in self.parsers
+            ],
+        }
 
     def register(self, parser: ToCParserStrategy, prepend: bool = True) -> None:
         """

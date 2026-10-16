@@ -18,6 +18,7 @@ from episteme_pipeline.contracts.domain import TenabilityResult, TheoryRelation
 from episteme_pipeline.post_processing.theoretical_enrichment.enrichment_models import (
     TheoryElementDefinition,
 )
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ class SafeFormulaEvaluator:
             raise ValueError(f"Unsupported binary operator: {type(node.op)}")
 
         if isinstance(node, ast.Call):
-            func_name = getattr(node.func, "id", None)
+            func_name = node.func.id if isinstance(node.func, ast.Name) else None
             if func_name in cls._ALLOWED_CALLS:
                 args = [cls._eval_node(arg, param_lower, raw_params) for arg in node.args]
                 return float(cls._ALLOWED_CALLS[func_name](*args))
@@ -130,7 +131,7 @@ def evaluate_formula_safely(expression: str, parameters: dict[str, Any]) -> floa
     return SafeFormulaEvaluator.evaluate(expression, parameters)
 
 
-class TenabilitySolver:
+class TenabilitySolver(Fingerprintable):
     """Solver for local and intertheoretical tenability optimization.
 
     Parameters
@@ -153,6 +154,21 @@ class TenabilitySolver:
         total_w = weight_local + weight_edge
         self.weight_local = weight_local / total_w if total_w > 0 else 0.5
         self.weight_edge = weight_edge / total_w if total_w > 0 else 0.5
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint representation of the solver.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        return {
+            "type": self.__class__.__name__,
+            "anomaly_threshold": self.anomaly_threshold,
+            "weight_local": self.weight_local,
+            "weight_edge": self.weight_edge,
+        }
 
     def solve_local_tenability(
         self,

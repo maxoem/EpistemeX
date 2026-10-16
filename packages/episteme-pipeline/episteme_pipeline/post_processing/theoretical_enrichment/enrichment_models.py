@@ -84,6 +84,33 @@ class InducedTheoryElement(BaseModel):
     )
     max_admissible_blur: float = Field(default=1.0, ge=0.0)
 
+    def to_definition(self) -> TheoryElementDefinition:
+        """Convert induced theory element to formal TheoryElementDefinition.
+
+        Returns
+        -------
+        TheoryElementDefinition
+            Formal theory-element definition.
+        """
+        laws = [
+            TheoryLaw(
+                law_id=law.law_id,
+                description=law.description,
+                formula_expression=law.formula_expression,
+                involved_parameters=law.involved_parameters,
+            )
+            for law in self.laws
+        ]
+        return TheoryElementDefinition(
+            theory_id=self.theory_id,
+            name=self.name,
+            required_dimensions=self.required_dimensions,
+            parameter_names=self.parameter_names,
+            laws=laws,
+            max_admissible_blur=self.max_admissible_blur,
+            claimant_hypothesis_ids=self.claimant_hypothesis_ids,
+        )
+
 
 class TheoryInductionOutput(BaseModel):
     """Structured LLM output schema for Theory-Element induction."""
@@ -276,24 +303,7 @@ class TheoryRegistry:
         """
         registered: list[TheoryElementDefinition] = []
         for item in induced:
-            laws = [
-                TheoryLaw(
-                    law_id=law.law_id,
-                    description=law.description,
-                    formula_expression=law.formula_expression,
-                    involved_parameters=law.involved_parameters,
-                )
-                for law in item.laws
-            ]
-            theory_def = TheoryElementDefinition(
-                theory_id=item.theory_id,
-                name=item.name,
-                required_dimensions=item.required_dimensions,
-                parameter_names=item.parameter_names,
-                laws=laws,
-                max_admissible_blur=item.max_admissible_blur,
-                claimant_hypothesis_ids=item.claimant_hypothesis_ids,
-            )
+            theory_def = item.to_definition()
             self.register(theory_def)
             registered.append(theory_def)
         return registered

@@ -9,7 +9,7 @@ from episteme_pipeline.artifacts.invalidate import (
     build_prior_fingerprints,
     find_stale_nodes,
 )
-from episteme_pipeline.artifacts.mappers import map_phase1_output_to_artifacts
+from tests.helpers.artifact_mappers import map_phase1_output_to_artifacts
 from episteme_pipeline.artifacts.models import ArtifactEnvelope, ArtifactKind
 from episteme_pipeline.contracts.phase_contracts import (
     L1Chunk,

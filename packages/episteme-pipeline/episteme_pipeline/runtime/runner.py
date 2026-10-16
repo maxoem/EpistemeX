@@ -123,9 +123,9 @@ async def run_pipeline(
             logger.warning("Could not populate config from Langfuse prompt provider: %s", exc)
 
     # 2. OpenAILike / LiteLLM Generation Model
-    model_name = getattr(cfg.models, "llm_model", None) or os.getenv("LLM_MODEL", "openai/gpt-4o-mini")
-    api_base = getattr(cfg.models, "llm_api_base", None) or os.getenv("LITELLM_API_BASE")
-    temperature = getattr(cfg.models, "temperature", 0.0)
+    model_name = cfg.models.llm_model or os.getenv("LLM_MODEL", "openai/gpt-4o-mini")
+    api_base = cfg.models.llm_api_base or os.getenv("LITELLM_API_BASE")
+    temperature = cfg.models.temperature
 
     llm_kwargs: dict[str, Any] = {
         "model": model_name,
@@ -138,7 +138,7 @@ async def run_pipeline(
     llm = LiteLLM(**llm_kwargs)
 
     # 3. OpenAILike / LiteLLM Embedding Model
-    embed_name = getattr(cfg.models, "embedding_model", None) or os.getenv("EMBED_MODEL", "openai/text-embedding-3-small")
+    embed_name = cfg.models.embedding_model or os.getenv("EMBED_MODEL", "openai/text-embedding-3-small")
     embed_kwargs: dict[str, Any] = {
         "model_name": embed_name,
         "api_key": os.getenv("LITELLM_API_KEY") or os.getenv("OPENAI_API_KEY"),
@@ -149,7 +149,7 @@ async def run_pipeline(
     embed_model = LiteLLMEmbedding(**embed_kwargs)
 
     # 4. HuggingFace CrossEncoder Reranker Model
-    reranker_name = getattr(cfg.models, "reranker_model", None) or os.getenv("RERANKER_MODEL", "Qwen/Qwen3-Reranker-0.6B")
+    reranker_name = cfg.models.reranker_model or os.getenv("RERANKER_MODEL", "Qwen/Qwen3-Reranker-0.6B")
     reranker = SentenceTransformerCrossEncoderReranker(
         model_name=reranker_name,
         cache_model=True,

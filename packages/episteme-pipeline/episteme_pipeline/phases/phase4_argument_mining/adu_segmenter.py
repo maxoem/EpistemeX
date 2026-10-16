@@ -55,3 +55,27 @@ class LLMADUSegmenter(ADUSegmenter):
             return chunk_text, []
 
         return raw.tagged_text, raw.adu_ids
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic ADU segmenter configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, prompt template, and LLM fingerprint.
+        """
+        from typing import Any
+
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        return {
+            "class": self.__class__.__name__,
+            "prompt_template": self.prompt_template,
+            "llm": (
+                self.llm.fingerprint()
+                if isinstance(self.llm, Fingerprintable)
+                else fingerprint_method(self.llm)
+            ),
+        }
+

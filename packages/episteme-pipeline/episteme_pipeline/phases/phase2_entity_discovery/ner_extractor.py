@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from enum import Enum
 from typing import Any
 
 from episteme_pipeline.config import StructuredPromptBundle
@@ -36,6 +37,8 @@ from episteme_pipeline.prompts import (
 )
 from episteme_pipeline.protocols.decision import DecisionEngine, GleaningStoppingOracle
 from episteme_pipeline.protocols.extractors import NERExtractor
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
+from episteme_pipeline.protocols.prompts import PromptContextual
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
@@ -108,13 +111,14 @@ class LLMNERExtractor(NERExtractor):
 
         oracle_fp = (
             self.stopping_oracle.fingerprint()
-            if hasattr(self.stopping_oracle, "fingerprint") and callable(self.stopping_oracle.fingerprint)
+            if isinstance(self.stopping_oracle, Fingerprintable)
             else fingerprint_method(self.stopping_oracle)
         )
+        strategy_str = self.strategy.value if isinstance(self.strategy, Enum) else str(self.strategy)
         return {
             "class": self.__class__.__name__,
             "max_gleanings": self.max_gleanings,
-            "strategy": str(getattr(self.strategy, "value", self.strategy)),
+            "strategy": strategy_str,
             "llm": fingerprint_method(self.llm),
             "stopping_oracle": oracle_fp,
         }
@@ -170,8 +174,8 @@ class LLMNERExtractor(NERExtractor):
         memory: Any | None = None,
         anchor: Any | None = None,
     ) -> tuple[list[L2Entity], list[L2Triple], dict | None, bool, str | None]:
-        global_structural_anchor_str = anchor.to_prompt_context() if anchor and hasattr(anchor, "to_prompt_context") else ""
-        working_memory_str = memory.to_prompt_context() if memory and hasattr(memory, "to_prompt_context") else ""
+        global_structural_anchor_str = anchor.to_prompt_context() if isinstance(anchor, PromptContextual) else ""
+        working_memory_str = memory.to_prompt_context() if isinstance(memory, PromptContextual) else ""
 
         all_raw_entities = []
         all_raw_triples = []

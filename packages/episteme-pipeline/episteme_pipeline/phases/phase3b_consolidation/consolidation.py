@@ -20,44 +20,10 @@ from episteme_pipeline.phases.phase3b_consolidation.clustering import (
 from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.fusion import InstanceFusion
 from episteme_pipeline.protocols.graph_store import FusionGraph
+from episteme_pipeline.utils.graph_algorithms import union_find_components
+from episteme_pipeline.utils.similarity import cosine_similarity_matrix
 
 logger = logging.getLogger(__name__)
-
-
-def _union_find_components(n: int, edges: list[tuple[int, int]]) -> list[list[int]]:
-    """Compute connected components of a graph using Union-Find.
-
-    Parameters
-    ----------
-    n : int
-        The number of nodes in the graph (indexed from 0 to n-1).
-    edges : list[tuple[int, int]]
-        A list of undirected edges represented as pairs of node indices.
-
-    Returns
-    -------
-    list[list[int]]
-        A list of lists, where each sublist contains the node indices belonging to
-        the same connected component.
-    """
-    parent = list(range(n))
-
-    def find(x: int) -> int:
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    def union(x: int, y: int) -> None:
-        parent[find(x)] = find(y)
-
-    for i, j in edges:
-        union(i, j)
-
-    groups: dict[int, list[int]] = defaultdict(list)
-    for i in range(n):
-        groups[find(i)].append(i)
-    return list(groups.values())
 
 
 class LatentGraphConsolidation(InstanceFusion):
@@ -153,7 +119,7 @@ class LatentGraphConsolidation(InstanceFusion):
             verifier = BorderlinePairVerifier.from_config(config.verification, decision_engine)
             canonical_elector = CanonicalRepresentativeElector(
                 decision_engine=decision_engine,
-                prompt_bundle=getattr(config.verification, "canonical_election_prompts", None),
+                prompt_bundle=config.verification.canonical_election_prompts,
             )
 
         return cls(
@@ -247,12 +213,7 @@ class LatentGraphConsolidation(InstanceFusion):
         embeddings_list = await self.embedding_model.aget_text_embedding_batch(texts)
         embeddings = np.array(embeddings_list)
 
-        # Normalize for cosine similarity via dot product
-        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-        # Avoid division by zero
-        norms[norms == 0] = 1e-10
-        embeddings_normalized = embeddings / norms
-        sim_matrix = np.dot(embeddings_normalized, embeddings_normalized.T)
+        sim_matrix = cosine_similarity_matrix(embeddings)
 
         n = len(entities)
         edges = []
@@ -295,7 +256,7 @@ class LatentGraphConsolidation(InstanceFusion):
                         edges.append((i, j))
 
         # 4. Cluster connected components
-        clusters = _union_find_components(n, edges)
+        clusters = union_find_components(n, edges)
 
         # 5. Build fused map
         fused_map: dict[str, str] = {}

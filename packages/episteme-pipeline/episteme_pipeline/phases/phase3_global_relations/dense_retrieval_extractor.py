@@ -69,10 +69,13 @@ from episteme_pipeline.protocols.extractors import (
     GlobalRelationExtractor,
     RelationReranker,
 )
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.protocols.tracing import NoOpTraceSink, TraceSink
 from episteme_pipeline.schema.default_schema import SchemaConfig
 from episteme_pipeline.utils import format_envelope
+from episteme_pipeline.utils.similarity import cosine_similarity_matrix
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -224,12 +227,12 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
 
         reranker_fp = (
             self.reranker.fingerprint()
-            if hasattr(self.reranker, "fingerprint") and callable(self.reranker.fingerprint)
+            if isinstance(self.reranker, Fingerprintable)
             else fingerprint_method(self.reranker)
         )
         de_fp = (
             self.decision_engine.fingerprint()
-            if self.decision_engine and hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            if self.decision_engine and isinstance(self.decision_engine, Fingerprintable)
             else fingerprint_method(self.decision_engine) if self.decision_engine else None
         )
         return {
@@ -409,10 +412,7 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         #
         # For scaling beyond 100-200 entities, we'd switch to FAISS/ANN search.
         entity_vectors = np.array(embeddings)
-        norms = np.linalg.norm(entity_vectors, axis=1, keepdims=True)
-        normalized_vectors = entity_vectors / norms
-
-        similarity_matrix = np.dot(normalized_vectors, normalized_vectors.T)
+        similarity_matrix = cosine_similarity_matrix(entity_vectors)
 
         # Collect top-k pairs per entity, or globally if preferred
         candidates: list[_DenseCandidate] = []
@@ -467,11 +467,8 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         if not self.config.use_jev_pair_gating or not self.decision_engine:
             return pairs
 
-        prompts = getattr(self.config, "global_relation_prompts", None)
-        if prompts is not None:
-            template = prompts.decision_template
-        else:
-            template = PAIR_GATING_DECISION_PROMPT
+        prompts = self.config.global_relation_prompts
+        template = prompts.decision_template if prompts else PAIR_GATING_DECISION_PROMPT
 
         if not template or not template.strip():
             raise ValueError(
@@ -742,7 +739,7 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
                 relation=raw.relation,
                 direction=raw.direction,
                 confidence=raw.confidence,
-                raw_response=raw.model_dump() if hasattr(raw, 'model_dump') else str(raw),
+                raw_response=raw.model_dump() if isinstance(raw, BaseModel) else str(raw),
                 run_id=None,
                 phase="phase3_dense"
             ))
@@ -973,21 +970,10 @@ def _reranker_input_summary(
     dict[str, object]
         Size metadata for the reranker pair.
     """
-    describe_input = getattr(reranker, "describe_relation_input", None)
-    if callable(describe_input):
-        return describe_input(entity_a, env_a, entity_b, env_b)
-
-    query, doc_text = build_relation_reranker_inputs(
-        entity_a,
-        env_a,
-        entity_b,
-        env_b,
-    )
-    return summarize_reranker_text_pair(
-        query,
-        doc_text,
-        max_length=getattr(reranker, "max_length", None),
-    )
+    if isinstance(reranker, RelationReranker):
+        return reranker.describe_relation_input(entity_a, env_a, entity_b, env_b)
+    query, doc = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
+    return summarize_reranker_text_pair(query, doc)
 
 
 def _reranker_trace_payload(

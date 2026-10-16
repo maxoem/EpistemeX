@@ -37,12 +37,14 @@ logger = logging.getLogger(__name__)
 
 def _extract_node_spec(node: Any, default_type: str) -> tuple[str, str]:
     """Extract node identifier and label type."""
-    if isinstance(node, L2Entity):
-        return node.id, node.label
-    if isinstance(node, TheoryAtom):
-        return node.id, node.component_type
-    node_id = str(node.id) if hasattr(node, "id") else str(node)
-    return node_id, default_type
+    match node:
+        case L2Entity():
+            return node.id, node.label
+        case TheoryAtom():
+            return node.id, node.component_type
+        case _:
+            return str(node), default_type
+
 
 
 def _extract_edge_spec(edge: Any) -> tuple[str, str, float] | None:
@@ -113,10 +115,33 @@ class LeidenTheoryClustering(TheoryFusion):
                 decision_engine,
             )
         return cls(
-            max_cluster_size=getattr(config, "max_cluster_size", 100),
+            max_cluster_size=config.max_cluster_size,
             cluster_layer=config.cluster_layer,
             cluster_verifier=cluster_verifier,
         )
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic Leiden theory clustering configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, max cluster size, cluster layer,
+            and cluster verifier fingerprint.
+        """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        return {
+            "class": self.__class__.__name__,
+            "max_cluster_size": self.max_cluster_size,
+            "cluster_layer": self.cluster_layer,
+            "cluster_verifier": (
+                self.cluster_verifier.fingerprint()
+                if isinstance(self.cluster_verifier, Fingerprintable)
+                else fingerprint_method(self.cluster_verifier)
+            ),
+        }
 
     async def fuse(self, graph_store: FusionGraph) -> None:
         if self.cluster_layer in ("l2_entities", "both"):

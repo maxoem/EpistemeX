@@ -230,10 +230,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                     continue
 
                 # Step 2: Project cluster through the theory-specific lens (Phi_spec)
-                if hasattr(self.projector, "aproject"):
-                    projected_params = await self.projector.aproject(cluster, theory)
-                else:
-                    projected_params = self.projector.project(cluster, theory)
+                projected_params = await self.projector.aproject(cluster, theory)
                 cluster_theory_params[(cluster.cluster_id, theory_id)] = projected_params
 
                 self.event_emitter.emit(

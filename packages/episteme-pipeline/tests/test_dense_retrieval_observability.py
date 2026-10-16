@@ -17,6 +17,7 @@ from episteme_pipeline.phases.phase3_global_relations.dense_retrieval_extractor 
     make_reduce_depth_overflow_handler,
 )
 from episteme_pipeline.phases.phase3_global_relations.models import GlobalRelationOutput
+from episteme_pipeline.protocols.extractors import RelationReranker
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 
@@ -104,7 +105,7 @@ class FakeEmbedModel:
         return [[1.0, 0.0], [0.8, 0.6]]
 
 
-class FakeReranker:
+class FakeReranker(RelationReranker):
     """Relation reranker with a fixed score."""
 
     async def score_relation(self, *args: Any, **kwargs: Any) -> float:
@@ -116,6 +117,10 @@ class FakeReranker:
             Fixed reranker score.
         """
         return 0.9
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return fingerprint."""
+        return {"type": "FakeReranker"}
 
 
 class FakeLLM:
@@ -190,7 +195,7 @@ class RecordingGraphStore:
         return []
 
 
-class OverflowOnceReranker:
+class OverflowOnceReranker(RelationReranker):
     """Reranker that overflows once before succeeding on shallower inputs."""
 
     def __init__(self) -> None:
@@ -205,6 +210,10 @@ class OverflowOnceReranker:
         if env_a.depth >= 2:
             raise ValueError("Invalid buffer size: 50.00 GiB")
         return 0.91
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return fingerprint."""
+        return {"type": "OverflowOnceReranker"}
 
 
 @pytest.mark.asyncio

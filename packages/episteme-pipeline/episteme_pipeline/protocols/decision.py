@@ -13,6 +13,8 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
+
 
 @dataclass(frozen=True, slots=True)
 class DecisionQuestion:
@@ -173,7 +175,7 @@ class DecisionNoulResult(BaseModel):
 
 
 @runtime_checkable
-class DecisionEngine(Protocol):
+class DecisionEngine(Fingerprintable, Protocol):
     """Structural protocol for non-generative, typed System 1 decision engines.
 
     Implementations evaluate state blocks against typed questions or rubrics,

@@ -21,29 +21,6 @@ logger = logging.getLogger(__name__)
 
 _PRIMITIVE_TYPES = (int, float, str, bool, bytes, type(None), type)
 
-_CORE_COMPONENT_NAMES = frozenset({
-    "llm",
-    "embedding_model",
-    "global_extractor",
-    "decision_engine",
-    "modal_resolver",
-    "entity_linker",
-    "ner_extractor",
-    "cross_encoder",
-    "reranker",
-    "acc_classifier",
-    "arc_classifier",
-    "adu_segmenter",
-    "stopping_oracle",
-    "working_memory_manager",
-    "instance_fusion",
-    "argument_clustering",
-    "theory_fusion",
-    "cluster_verifier",
-    "projector",
-})
-
-
 @runtime_checkable
 class Fingerprintable(Protocol):
     """Protocol for components that expose deterministic state for cache invalidation.
@@ -84,16 +61,17 @@ def is_component(val: Any, attr_name: str | None = None) -> bool:
     if val is None or isinstance(val, _PRIMITIVE_TYPES):
         return False
 
-    # Explicit protocol conformance (structural typing)
-    if isinstance(val, Fingerprintable) and callable(getattr(val, "fingerprint", None)):
-        return True
-
     # Pydantic models (configs, schemas, data contracts) are fingerprinted separately
     if isinstance(val, BaseModel):
         return False
 
-    # Core runner component attributes (backwards compatibility for test doubles)
-    return attr_name in _CORE_COMPONENT_NAMES
+    # Explicit protocol conformance (structural typing)
+    if isinstance(val, Fingerprintable):
+        fp = val.fingerprint
+        return callable(fp)
+
+    # External model bindings injected directly on runners
+    return attr_name in {"llm", "embedding_model", "cross_encoder"}
 
 
 def find_components(
@@ -134,7 +112,11 @@ def find_components(
     discovered: dict[str, Any] = {}
 
     # Extract instance attributes
-    raw_dict = getattr(root, "__dict__", None)
+    try:
+        raw_dict = vars(root)
+    except TypeError:
+        return {}
+
     if not isinstance(raw_dict, dict):
         return {}
 
@@ -161,7 +143,7 @@ def find_components(
             for k, item in value.items():
                 if isinstance(k, str) and not k.startswith("_"):
                     sub_path = f"{full_path}.{k}"
-                    if is_component(item):
+                    if is_component(item, attr_name=k):
                         discovered[sub_path] = item
                     discovered.update(find_components(item, prefix=sub_path, visited=visited))
 

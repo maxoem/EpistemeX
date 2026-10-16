@@ -79,3 +79,19 @@ class PromptProvider(Protocol):
             The modified configuration instance with resolved prompt bundles.
         """
         ...
+
+
+@runtime_checkable
+class PromptContextual(Protocol):
+    """Protocol for objects that format themselves into prompt context strings."""
+
+    def to_prompt_context(self) -> str:
+        """Format the object's state into a prompt context string.
+
+        Returns
+        -------
+        str
+            Formatted prompt context representation.
+        """
+        ...
+

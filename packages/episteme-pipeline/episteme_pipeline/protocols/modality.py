@@ -11,10 +11,11 @@ from __future__ import annotations
 from typing import Any, Protocol, runtime_checkable
 
 from episteme_pipeline.contracts.domain import TheoryAtom
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 
 @runtime_checkable
-class ModalStrengthResolver(Protocol):
+class ModalStrengthResolver(Fingerprintable, Protocol):
     """Structural protocol for resolving author propositional modal certainty M(phi).
 
     Implementations resolve the author's epistemic commitment to a claim, combining

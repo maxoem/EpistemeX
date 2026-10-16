@@ -15,6 +15,7 @@ from episteme_pipeline.protocols.extractors import (
     RelationReranker,
     normalize_scores,
 )
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.utils import format_envelope
 
 _model_cache: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
@@ -140,13 +141,13 @@ class CrossEncoderRelationReranker(RelationReranker):
         Any object satisfying the ``CrossEncoder`` protocol.
     """
 
-    def __init__(self, cross_encoder: CrossEncoder) -> None:
-        if not hasattr(cross_encoder, "predict"):
+    def __init__(self, cross_encoder: CrossEncoder, max_length: int | None = None) -> None:
+        if not isinstance(cross_encoder, CrossEncoder):
             raise TypeError(
-                f"{type(cross_encoder).__name__} has no .predict(pairs) method; "
-                "it does not satisfy the CrossEncoder protocol."
+                f"{type(cross_encoder).__name__} does not satisfy the CrossEncoder protocol."
             )
         self.cross_encoder = cross_encoder
+        self.max_length = max_length
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic cross-encoder relation reranker configuration.
@@ -158,11 +159,12 @@ class CrossEncoderRelationReranker(RelationReranker):
         """
         ce_fp = (
             self.cross_encoder.fingerprint()
-            if hasattr(self.cross_encoder, "fingerprint") and callable(self.cross_encoder.fingerprint)
+            if isinstance(self.cross_encoder, Fingerprintable)
             else {"class": self.cross_encoder.__class__.__name__}
         )
         return {
             "class": self.__class__.__name__,
+            "max_length": self.max_length,
             "cross_encoder": ce_fp,
         }
 
@@ -175,6 +177,39 @@ class CrossEncoderRelationReranker(RelationReranker):
     ) -> float:
         query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
         return normalize_scores(self.cross_encoder.predict([(query, doc_text)]))[0]
+
+    def describe_relation_input(
+        self,
+        entity_a: L2Entity,
+        env_a: SubGraph,
+        entity_b: L2Entity,
+        env_b: SubGraph,
+    ) -> dict[str, object]:
+        """Summarize the current reranker input without executing inference.
+
+        Parameters
+        ----------
+        entity_a : L2Entity
+            Query-side entity.
+        env_a : SubGraph
+            Query-side envelope.
+        entity_b : L2Entity
+            Document-side entity.
+        env_b : SubGraph
+            Document-side envelope.
+
+        Returns
+        -------
+        dict[str, object]
+            Size metadata for the reranker query/document pair.
+        """
+        query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
+        return summarize_reranker_text_pair(
+            query,
+            doc_text,
+            max_length=self.max_length,
+        )
+
 
 
 class SentenceTransformerCrossEncoderReranker(RelationReranker):
@@ -522,7 +557,7 @@ class JevRelationReranker(RelationReranker):
         """
         eng_fp = (
             self.decision_engine.fingerprint()
-            if hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            if isinstance(self.decision_engine, Fingerprintable)
             else {"class": self.decision_engine.__class__.__name__}
         )
         return {
@@ -530,6 +565,21 @@ class JevRelationReranker(RelationReranker):
             "decision_template": self.decision_template,
             "decision_engine": eng_fp,
         }
+
+    def describe_relation_input(
+        self,
+        entity_a: L2Entity,
+        env_a: SubGraph,
+        entity_b: L2Entity,
+        env_b: SubGraph,
+    ) -> dict[str, object]:
+        """Summarize the current reranker input without executing inference."""
+        query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
+        return summarize_reranker_text_pair(
+            query,
+            doc_text,
+            max_length=self.max_length,
+        )
 
     async def score_relation(
         self,

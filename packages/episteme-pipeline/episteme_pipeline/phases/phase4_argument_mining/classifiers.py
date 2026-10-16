@@ -16,6 +16,7 @@ from collections import defaultdict
 
 from episteme_pipeline.config import Phase4Config
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom, TheoryRelation
+from episteme_pipeline.phases.phase4_argument_mining.pairing import stable_component_id
 from episteme_pipeline.prompts.default_prompts import (
     DECISION_ACC_CRITERIA,
     DECISION_ACC_QUESTION,
@@ -38,25 +39,6 @@ from episteme_pipeline.protocols.modality import ModalStrengthResolver
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
-
-
-def _stable_component_id(chunk_id: str, ac_tag: str) -> str:
-    """Generate a deterministic, content-addressable ID for an argument component.
-
-    Parameters
-    ----------
-    chunk_id : str
-        The unique ID of the source chunk.
-    ac_tag : str
-        The local tag identifier (e.g. "AC1").
-
-    Returns
-    -------
-    str
-        Stable component ID.
-    """
-    key = f"{chunk_id}:{ac_tag}"
-    return f"ac_{hashlib.sha256(key.encode('utf-8')).hexdigest()[:14]}"
 
 
 def _extract_adu_text(tagged_text: str, adu_id: str) -> str:
@@ -168,7 +150,7 @@ class JevACCClassifier(ACCClassifier):
             confidence = decision.class_probability
             empirical_accuracy = decision.empirical_accuracy
 
-            stable_id = _stable_component_id(chunk_id, adu_id)
+            stable_id = stable_component_id(chunk_id, adu_id)
             atom = TheoryAtom(
                 id=stable_id,
                 text=adu_text,
@@ -218,12 +200,12 @@ class CascadingACCClassifier(ACCClassifier):
         self.llm_classifier = llm_classifier
         self.config = config
         self.triage_confidence_threshold = (
-            getattr(config, "triage_confidence_threshold", triage_confidence_threshold)
+            config.triage_confidence_threshold
             if config is not None
             else triage_confidence_threshold
         )
         self.stochastic_audit_rate = (
-            getattr(config, "stochastic_audit_rate", stochastic_audit_rate)
+            config.stochastic_audit_rate
             if config is not None
             else stochastic_audit_rate
         )
@@ -606,7 +588,7 @@ class CascadingARCClassifier(ARCClassifier):
         self.llm_classifier = llm_classifier
         self.config = config
         self.stochastic_audit_rate = (
-            getattr(config, "stochastic_audit_rate", stochastic_audit_rate)
+            config.stochastic_audit_rate
             if config is not None
             else stochastic_audit_rate
         )

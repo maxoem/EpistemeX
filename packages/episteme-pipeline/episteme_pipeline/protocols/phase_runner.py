@@ -47,6 +47,18 @@ class PhaseRunner[InputT](ABC):
     @abstractmethod
     async def run(self, input: InputT, context: ArtifactExecutionContext) -> ArtifactCollection: ...
 
+    @property
+    def checkpoint_store(self) -> object | None:
+        """Return the checkpoint store if supported by this runner's backend.
+
+        Returns
+        -------
+        PhaseCheckpointStore or None
+            Checkpoint store instance, or None if not supported.
+        """
+        return None
+
+
     def components(self) -> dict[str, object]:
         """Discover all injected computational components attached to this runner.
 

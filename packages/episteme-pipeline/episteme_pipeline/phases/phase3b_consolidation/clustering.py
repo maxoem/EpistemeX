@@ -122,13 +122,35 @@ class BorderlinePairVerifier:
         BorderlinePairVerifier
             Configured verifier instance.
         """
-        bundle = prompt_bundle or getattr(config, "borderline_merge_prompts", None)
+        bundle = prompt_bundle or config.borderline_merge_prompts
         return cls(
             decision_engine=decision_engine,
             confidence_threshold=config.confidence_threshold,
             conformal_alpha=config.conformal_alpha,
             prompt_bundle=bundle,
         )
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic borderline pair verifier configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, thresholds, and decision engine fingerprint.
+        """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        return {
+            "class": self.__class__.__name__,
+            "confidence_threshold": self.confidence_threshold,
+            "conformal_alpha": self.conformal_alpha,
+            "decision_engine": (
+                self.decision_engine.fingerprint()
+                if isinstance(self.decision_engine, Fingerprintable)
+                else fingerprint_method(self.decision_engine)
+            ),
+        }
 
     async def verify(
         self,
@@ -236,6 +258,27 @@ class CanonicalRepresentativeElector:
     ) -> None:
         self.decision_engine = decision_engine
         self.prompt_bundle = prompt_bundle
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic canonical representative elector configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier and decision engine fingerprint.
+        """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        de_fp = (
+            self.decision_engine.fingerprint()
+            if isinstance(self.decision_engine, Fingerprintable)
+            else (fingerprint_method(self.decision_engine) if self.decision_engine is not None else None)
+        )
+        return {
+            "class": self.__class__.__name__,
+            "decision_engine": de_fp,
+        }
 
     async def elect(self, cluster_entities: list[L2Entity]) -> L2Entity:
         """Elect the canonical representative from candidate cluster entities.

@@ -21,6 +21,9 @@ from episteme_pipeline.events.models import (
     EntityLinkingReranked,
     UnlinkableMentionError,
 )
+from episteme_pipeline.phases.phase2_entity_discovery.candidate_cache import (
+    CandidateEmbeddingCache,
+)
 from episteme_pipeline.protocols.decision import (
     DecisionEngine,
     DecisionScore,
@@ -32,7 +35,9 @@ from episteme_pipeline.protocols.extractors import (
     as_tensor,
     ensure_embedding_model,
 )
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.graph_store import GraphReader
+from episteme_pipeline.utils.similarity import cosine_similarity_matrix
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +87,7 @@ class JevEntityLinker(EntityLinker):
         self.top_k = top_k
         self.ooo_threshold = ooo_threshold
 
-        # Candidate envelope cache: entity_id -> (text, embedding)
-        self._candidate_cache: dict[str, tuple[str, list[float]]] = {}
+        self._candidate_cache = CandidateEmbeddingCache(self.embedding_model)
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic Jev entity linker configuration.
@@ -98,7 +102,7 @@ class JevEntityLinker(EntityLinker):
 
         de_fp = (
             self.decision_engine.fingerprint()
-            if hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            if isinstance(self.decision_engine, Fingerprintable)
             else fingerprint_method(self.decision_engine)
         )
         return {
@@ -106,7 +110,11 @@ class JevEntityLinker(EntityLinker):
             "alpha": self.alpha,
             "top_k": self.top_k,
             "ooo_threshold": self.ooo_threshold,
-            "embedding_model": fingerprint_method(self.embedding_model),
+            "embedding_model": (
+                self.embedding_model.fingerprint()
+                if isinstance(self.embedding_model, Fingerprintable)
+                else fingerprint_method(self.embedding_model)
+            ),
             "decision_engine": de_fp,
         }
 
@@ -114,34 +122,6 @@ class JevEntityLinker(EntityLinker):
     def event_emitter(self) -> EventEmitter:
         """Return the bound domain event emitter."""
         return get_event_emitter()
-
-    @staticmethod
-    def _canonical_entity_string(candidate: L2Entity) -> str:
-        """Format candidate entity for bi-encoder embedding with explicit type grounding."""
-        return f"[{candidate.label}] {candidate.name}: {candidate.description or ''}"
-
-    async def _populate_candidate_cache(self, candidates: list[L2Entity]) -> None:
-        """Pre-fetch embeddings for new or stale candidates."""
-        stale_candidates = []
-        stale_basic_texts = []
-        for c in candidates:
-            basic_text = self._canonical_entity_string(c)
-            cached = self._candidate_cache.get(c.id)
-            if not cached or cached[0] != basic_text:
-                stale_candidates.append(c)
-                stale_basic_texts.append(basic_text)
-
-        if not stale_candidates:
-            return
-
-        fresh_vectors = await self.embedding_model.aget_text_embedding_batch(stale_basic_texts)
-        for c, b_text, vec in zip(stale_candidates, stale_basic_texts, fresh_vectors):
-            self._candidate_cache[c.id] = (b_text, vec)
-
-    async def _candidate_embeddings(self, candidates: list[L2Entity]) -> torch.Tensor:
-        """Return cached embeddings as a torch Tensor."""
-        embs = [self._candidate_cache[c.id][1] for c in candidates]
-        return as_tensor(embs)
 
     async def link_with_decision(
         self,
@@ -191,13 +171,12 @@ class JevEntityLinker(EntityLinker):
         t_n = f"[{mention.label}] {mention.textual_envelope}"
         raw_t_n_emb = await self.embedding_model.aget_text_embedding_batch([t_n])
         t_n_emb = as_tensor(raw_t_n_emb)[0]
-        t_n_emb = torch.nn.functional.normalize(t_n_emb, p=2, dim=0)
 
-        await self._populate_candidate_cache(candidates)
-        g_embs = await self._candidate_embeddings(candidates)
-        g_embs = torch.nn.functional.normalize(g_embs, p=2, dim=1)
+        await self._candidate_cache.populate(candidates)
+        g_embs = self._candidate_cache.get_embeddings(candidates)
 
-        scores = torch.matmul(g_embs, t_n_emb)
+        scores_arr = cosine_similarity_matrix(g_embs.numpy(), t_n_emb.numpy())
+        scores = torch.as_tensor(scores_arr)
         top_k_indices = torch.topk(scores, min(effective_top_k, len(candidates))).indices
 
         top_candidates = [candidates[i] for i in top_k_indices]
@@ -368,12 +347,12 @@ class CascadingEntityLinker(EntityLinker):
             "audit_rate": self.audit_rate,
             "primary": (
                 self.primary.fingerprint()
-                if hasattr(self.primary, "fingerprint") and callable(self.primary.fingerprint)
+                if isinstance(self.primary, Fingerprintable)
                 else fingerprint_method(self.primary)
             ),
             "fallback": (
                 self.fallback.fingerprint()
-                if hasattr(self.fallback, "fingerprint") and callable(self.fallback.fingerprint)
+                if isinstance(self.fallback, Fingerprintable)
                 else fingerprint_method(self.fallback)
             ),
         }

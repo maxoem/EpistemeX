@@ -107,15 +107,18 @@ def test_is_component_ignores_pydantic_models() -> None:
     assert is_component(cfg) is False
 
 
-def test_is_component_identifies_core_names_fallback() -> None:
+def test_is_component_requires_fingerprintable_protocol() -> None:
     class UnannotatedModel:
         pass
 
     obj = UnannotatedModel()
     assert is_component(obj) is False
-    assert is_component(obj, attr_name="llm") is True
-    assert is_component(obj, attr_name="reranker") is True
-    assert is_component(obj, attr_name="unrelated") is False
+
+    class AnnotatedComponent:
+        def fingerprint(self) -> dict[str, str]:
+            return {"type": "annotated"}
+
+    assert is_component(AnnotatedComponent()) is True
 
 
 def test_is_component_rejects_non_callable_fingerprint() -> None:
@@ -144,6 +147,7 @@ def test_find_components_handles_mocks_safely() -> None:
         def __init__(self) -> None:
             self.mock_service = MagicMock()
             self.llm = Mock()
+            self.llm.fingerprint = Mock(return_value={"model": "test"})
             self.real_comp = CustomLeafComponent("real", 0.7)
 
     runner = RunnerWithMocks()

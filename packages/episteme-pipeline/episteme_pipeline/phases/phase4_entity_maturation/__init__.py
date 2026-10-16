@@ -115,7 +115,7 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
         from episteme_pipeline.artifacts.builders import build_linked_entity_artifact
         
         all_entities = await self.graph_store.get_entities()
-        immature_entities = [e for e in all_entities if not getattr(e, "is_mature", False)]
+        immature_entities = [e for e in all_entities if not e.is_mature]
         
         logger.info(f"Found {len(immature_entities)} immature entities out of {len(all_entities)} total.")
         
@@ -133,7 +133,7 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
                 )
             )
 
-        batch_size = getattr(self.config, "batch_size", 10)
+        batch_size = self.config.batch_size
         
         # Process and checkpoint in batches to ensure crash resilience
         for batch_idx, entity_batch in enumerate(batched(immature_entities, batch_size)):

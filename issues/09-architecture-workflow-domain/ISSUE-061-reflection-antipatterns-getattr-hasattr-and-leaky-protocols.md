@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Clean Code, Static Typing, Hexagonal Ports & Protocols, SOLID / ISP / LSP) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`pipeline.py`, `runtime/runner.py`, `protocols/`, `phases/`, `post_processing/`) |
 | **Priority** | **High** |
-| **Status** | `Open` |
+| **Status** | `Resolved` |
 | **Evaluated Docs & ADRs** | [`AGENTS.md §2`](../../AGENTS.md), [`docs/architecture/design_patterns_and_standards.md §4.1`](../../docs/architecture/design_patterns_and_standards.md) |
 
 ---
@@ -103,6 +103,6 @@ Follow **[Design Patterns & Standards §3.1 & §4.1](../../docs/architecture/des
 
 ## 4. Acceptance Criteria
 
-- [ ] `rtk grep "getattr\|hasattr" packages/episteme-pipeline/episteme_pipeline/` returns zero occurrences in `pipeline.py`, `runtime/`, `phases/`, and `post_processing/`.
-- [ ] Custom `PhaseRunner`s and post-processors retain their declared `phase_key` in `Pipeline.__init__` without ever being reassigned to `"phase1"`.
-- [ ] All phase strategy protocols inherit from `Fingerprintable`, and `find_components()` discovers `toc_parser`, `adu_segmenter`, `acc_classifier`, `inducer`, `projector`, and `solver` without relying on `_CORE_COMPONENT_NAMES`.
+- [x] `rtk grep "getattr\|hasattr" packages/episteme-pipeline/episteme_pipeline/` returns zero occurrences in `pipeline.py`, `runtime/`, `phases/`, and `post_processing/`.
+- [x] Custom `PhaseRunner`s and post-processors retain their declared `phase_key` in `Pipeline.__init__` without ever being reassigned to `"phase1"`.
+- [x] All phase strategy protocols inherit from `Fingerprintable`, and `find_components()` discovers `toc_parser`, `adu_segmenter`, `acc_classifier`, `inducer`, `projector`, and `solver` without relying on `_CORE_COMPONENT_NAMES`.

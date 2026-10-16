@@ -17,21 +17,6 @@ from episteme_pipeline.events.models import (
 
 logger = logging.getLogger(__name__)
 
-import unicodedata
-
-
-def _normalize_string(text: str) -> str:
-    """Normalize typography, dashes, and whitespace for robust matching."""
-    # Handle Unicode NFKC (Normalizes ligatures, full-width chars, etc.)
-    text = unicodedata.normalize("NFKC", text)
-    text = text.replace("„", '"').replace("“", '"').replace("”", '"').replace("«", '"').replace("»", '"')
-    text = text.replace("–", "-").replace("—", "-")
-    text = text.replace("…", "...")
-    # Condense whitespace
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip()
-
-
 class MentionContextInjector(Protocol):
     def inject(
         self,

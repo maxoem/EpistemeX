@@ -104,6 +104,10 @@ class ConformingMockDecisionEngine:
         """Evaluate batch questions."""
         return {}
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return engine fingerprint."""
+        return {"name": self.name}
+
 
 class IncompleteMockDecisionEngine:
     """Mock missing evaluate_score method."""

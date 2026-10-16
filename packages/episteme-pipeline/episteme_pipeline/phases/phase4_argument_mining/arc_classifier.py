@@ -24,11 +24,15 @@ import numpy as np
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom, TheoryRelation
 from episteme_pipeline.llm import ensure_structured_llm
 from episteme_pipeline.phases.phase4_argument_mining.models import ARCRelationOutput
+from episteme_pipeline.phases.phase4_argument_mining.pairing import (
+    build_cross_chunk_candidate_pairs,
+)
 from episteme_pipeline.protocols.argument_mining import ARCClassifier
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.schema.default_schema import SchemaConfig
 from episteme_pipeline.utils import format_envelope
+from episteme_pipeline.utils.similarity import cosine_similarity_matrix
 
 logger = logging.getLogger(__name__)
 
@@ -117,11 +121,13 @@ class TAGARCClassifier(ARCClassifier):
             Dictionary containing thresholds, subgraph depth, strategy,
             and fingerprints of LLM and embedding model.
         """
+        from enum import Enum
         from episteme_pipeline.runs.fingerprints import fingerprint_method
 
+        strategy_str = self.strategy.value if isinstance(self.strategy, Enum) else str(self.strategy)
         return {
             "class": self.__class__.__name__,
-            "strategy": str(getattr(self.strategy, "value", self.strategy)),
+            "strategy": strategy_str,
             "confidence_threshold": self.confidence_threshold,
             "subgraph_depth": self.subgraph_depth,
             "max_candidates_per_component": self.max_candidates_per_component,
@@ -231,36 +237,9 @@ class TAGARCClassifier(ARCClassifier):
         list[tuple[TheoryAtom, TheoryAtom]]
             The selected pairs of components.
         """
-        partner_count: dict[str, int] = defaultdict(int)
-        seen: set[tuple[str, str]] = set()
-        pairs: list[tuple[TheoryAtom, TheoryAtom]] = []
-
-        priority_rank = {
-            ctype: idx for idx, ctype in enumerate(schema.component_types)
-        }
-        sorted_components = sorted(
-            components,
-            key=lambda c: priority_rank.get(c.component_type, 99),
+        return build_cross_chunk_candidate_pairs(
+            components, schema, max_candidates_per_component=self.max_candidates_per_component
         )
-
-        for i, a in enumerate(sorted_components):
-            for b in sorted_components[i + 1 :]:
-                if a.source_chunk_id == b.source_chunk_id:
-                    continue
-                key = (min(a.id, b.id), max(a.id, b.id))
-                if key in seen:
-                    continue
-                if (
-                    partner_count[a.id] >= self.max_candidates_per_component
-                    or partner_count[b.id] >= self.max_candidates_per_component
-                ):
-                    continue
-                seen.add(key)
-                pairs.append((a, b))
-                partner_count[a.id] += 1
-                partner_count[b.id] += 1
-                
-        return pairs
 
     async def _get_pairs_by_embedding(
         self, components: list[TheoryAtom]
@@ -285,12 +264,7 @@ class TAGARCClassifier(ARCClassifier):
         texts = [c.text for c in components]
         embeddings = await self.embedding_model.aget_text_embedding_batch(texts)
         
-        emb_matrix = np.array(embeddings)
-        norms = np.linalg.norm(emb_matrix, axis=1, keepdims=True)
-        norms[norms == 0] = 1e-10
-        emb_matrix = emb_matrix / norms
-        
-        sim_matrix = np.dot(emb_matrix, emb_matrix.T)
+        sim_matrix = cosine_similarity_matrix(np.array(embeddings))
         
         num_comp = len(components)
         i_indices, j_indices = np.triu_indices(num_comp, k=1)

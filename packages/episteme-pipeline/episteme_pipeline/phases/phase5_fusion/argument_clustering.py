@@ -40,30 +40,10 @@ from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.fusion import ArgumentClustering
 from episteme_pipeline.protocols.graph_store import GraphReader
+from episteme_pipeline.utils.graph_algorithms import union_find_components
+from episteme_pipeline.utils.similarity import cosine_similarity_matrix
 
 logger = logging.getLogger(__name__)
-
-
-def _union_find_components(n: int, edges: list[tuple[int, int]]) -> list[list[int]]:
-    """Union-find connected components from a list of (i, j) edges."""
-    parent = list(range(n))
-
-    def find(x: int) -> int:
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    def union(x: int, y: int) -> None:
-        parent[find(x)] = find(y)
-
-    for i, j in edges:
-        union(i, j)
-
-    groups: dict[int, list[int]] = defaultdict(list)
-    for i in range(n):
-        groups[find(i)].append(i)
-    return list(groups.values())
 
 
 class EmbeddingArgumentClustering(ArgumentClustering):
@@ -83,6 +63,29 @@ class EmbeddingArgumentClustering(ArgumentClustering):
         self.embedding_model = embedding_model
         self.similarity_threshold = similarity_threshold
         self.max_components = max_components
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic argument clustering configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, similarity threshold, max components,
+            and embedding model fingerprint.
+        """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        return {
+            "class": self.__class__.__name__,
+            "similarity_threshold": self.similarity_threshold,
+            "max_components": self.max_components,
+            "embedding_model": (
+                self.embedding_model.fingerprint()
+                if isinstance(self.embedding_model, Fingerprintable)
+                else (fingerprint_method(self.embedding_model) if self.embedding_model is not None else None)
+            ),
+        }
 
     async def cluster(
         self,
@@ -116,15 +119,7 @@ class EmbeddingArgumentClustering(ArgumentClustering):
         # The EmbeddingModel contract is async-only; no sync fallback needed.
         raw_embeddings = await self.embedding_model.aget_text_embedding_batch(texts)
 
-        import numpy as np
-
-        matrix = np.array(raw_embeddings, dtype=np.float32)
-        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-        norms[norms == 0] = 1.0
-        matrix = matrix / norms
-
-        # Pairwise cosine similarity (N×N, vectorized)
-        sim = matrix @ matrix.T
+        sim = cosine_similarity_matrix(raw_embeddings)
 
         # Collect edges where similarity ≥ threshold (upper triangle only)
         edges = [
@@ -137,7 +132,7 @@ class EmbeddingArgumentClustering(ArgumentClustering):
         if not edges:
             return []
 
-        groups = _union_find_components(n, edges)
+        groups = union_find_components(n, edges)
         ids = [c.id for c in components]
 
         clusters = [[ids[i] for i in group] for group in groups if len(group) > 1]
@@ -165,23 +160,24 @@ def _format_cluster_summary(cluster_nodes: list[TheoryAtom | L2Entity]) -> dict[
     """
     items = []
     for node in cluster_nodes[:10]:
-        if hasattr(node, "text"):
-            items.append({
-                "id": node.id,
-                "type": getattr(node, "component_type", "TheoryAtom"),
-                "text": node.text,
-                "epistemic_status": getattr(node, "epistemic_status", None),
-                "scope_type": getattr(node, "scope_type", None),
-            })
-        elif hasattr(node, "name"):
-            items.append({
-                "id": node.id,
-                "type": getattr(node, "label", "L2Entity"),
-                "name": node.name,
-                "envelope": getattr(node, "textual_envelope", "") or "",
-            })
-        else:
-            items.append({"id": getattr(node, "id", "unknown"), "summary": str(node)})
+        match node:
+            case TheoryAtom():
+                items.append({
+                    "id": node.id,
+                    "type": node.component_type,
+                    "text": node.text,
+                    "epistemic_status": node.epistemic_status,
+                    "scope_type": node.scope_type,
+                })
+            case L2Entity():
+                items.append({
+                    "id": node.id,
+                    "type": node.label,
+                    "name": node.name,
+                    "envelope": node.textual_envelope or "",
+                })
+            case _:
+                items.append({"id": str(node), "summary": str(node)})
     return {
         "cluster_node_count": len(cluster_nodes),
         "cluster_members": items,
@@ -222,6 +218,29 @@ class InterDocumentClusterVerifier:
         self.audit_rate = audit_rate
         self.prompt_bundle = prompt_bundle
         self.calibrator = calibrator
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic cluster verifier configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, thresholds, and decision engine fingerprint.
+        """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        return {
+            "class": self.__class__.__name__,
+            "confidence_threshold": self.confidence_threshold,
+            "conformal_alpha": self.conformal_alpha,
+            "audit_rate": self.audit_rate,
+            "decision_engine": (
+                self.decision_engine.fingerprint()
+                if isinstance(self.decision_engine, Fingerprintable)
+                else fingerprint_method(self.decision_engine)
+            ),
+        }
 
     @classmethod
     def from_config(

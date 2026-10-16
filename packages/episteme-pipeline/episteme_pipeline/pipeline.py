@@ -7,9 +7,14 @@ This module defines the core Pipeline class and high-level construction function
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC
+from enum import Enum
 from typing import Any, cast
+
+from pydantic import BaseModel
 
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
@@ -38,6 +43,7 @@ from episteme_pipeline.protocols.extractors import (
     RelationReranker,
     ensure_embedding_model,
 )
+from episteme_pipeline.protocols.graph_store import PhaseCheckpointStore
 from episteme_pipeline.protocols.modality import (
     ModalStrengthResolver,
     ensure_modal_strength_resolver,
@@ -65,7 +71,22 @@ from episteme_pipeline.runs.persistence import JsonRunManifestStore
 logger = logging.getLogger(__name__)
 
 
+def _artifact_kind_str(kind: Any) -> str:
+    """Format an artifact kind value safely without reflection.
 
+    Parameters
+    ----------
+    kind : Any
+        Enum member or string representation of artifact kind.
+
+    Returns
+    -------
+    str
+        Normalized string name of the artifact kind.
+    """
+    if isinstance(kind, Enum):
+        return str(kind.value)
+    return str(kind)
 
 
 #: Tasks ``Pipeline.for_task`` knows how to build. Adding a task-specific phase
@@ -128,9 +149,14 @@ class Pipeline:
         # wrong config block.
         entries: list[_PhaseEntry] = []
         for i, runner in enumerate(self.phases, start=1):
-            phase_key = getattr(runner, "phase_key", None)
-            if not phase_key:
-                name_str = str(getattr(runner, "name", ""))
+            try:
+                phase_key = runner.phase_key
+            except AttributeError:
+                try:
+                    name_str = str(runner.name)
+                except AttributeError:
+                    name_str = str(runner)
+
                 if "Phase 1" in name_str:
                     phase_key = "phase1"
                 elif "Phase 2" in name_str:
@@ -150,15 +176,22 @@ class Pipeline:
                 elif "Theoretical Enrichment" in name_str:
                     phase_key = "theoretical_enrichment"
                 else:
-                    phase_key = f"phase{i}" if hasattr(config, f"phase{i}") else "phase1"
-            if not hasattr(config, phase_key):
-                phase_key = "phase1"
+                    phase_key = f"phase{i}"
+
+            try:
+                input_view = runner.input_view
+            except AttributeError:
+                try:
+                    input_view = runner.input_view_type
+                except AttributeError:
+                    input_view = None
+
             entries.append(
                 _PhaseEntry(
                     index=i,
                     runner=runner,
                     phase_key=phase_key,
-                    input_view=getattr(runner, "input_view", getattr(runner, "input_view_type", None)),
+                    input_view=input_view,
                 )
             )
         self._phase_entries = entries
@@ -298,7 +331,7 @@ class Pipeline:
                 cache_dir=default_cache_dir(config.execution.runs_dir),
             )
 
-        if getattr(config.phase3, "use_jev_reranker", False) and decision_engine is not None:
+        if config.phase3.use_jev_reranker and decision_engine is not None:
             from episteme_pipeline.phases.phase3_global_relations.rerankers import (
                 JevRelationReranker,
             )
@@ -389,7 +422,7 @@ class Pipeline:
         ]
 
         if (
-            getattr(config, "theoretical_enrichment", None)
+            config.theoretical_enrichment is not None
             and config.theoretical_enrichment.enabled
         ):
             from episteme_pipeline.post_processing.theoretical_enrichment import (
@@ -452,6 +485,27 @@ class Pipeline:
             return None
         return ArtifactCollection(all_artifacts)
 
+    @contextmanager
+    def _run_observability_scope(self, run_id: str) -> Iterator[None]:
+        """Establish contextual event emission and run-scoped folder logging.
+
+        Parameters
+        ----------
+        run_id : str
+            Unique execution run identifier.
+
+        Yields
+        ------
+        None
+            Yields execution context within active event emitter and logger contexts.
+        """
+        contextual_emitter = ContextualEventEmitter(
+            self.event_emitter, defaults={"run_id": run_id}
+        )
+        with use_event_emitter(contextual_emitter):
+            with run_folder_logger(self.config.execution.runs_dir, run_id):
+                yield
+
     async def run(
         self,
         input: PipelineInput,
@@ -480,38 +534,37 @@ class Pipeline:
             from uuid import uuid4
 
             run_id = f"run-{uuid4()}"
-        contextual_emitter = ContextualEventEmitter(self.event_emitter, defaults={"run_id": run_id})
-        with use_event_emitter(contextual_emitter):
-            with run_folder_logger(self.config.execution.runs_dir, run_id):
-                manifest = self._build_manifest(run_id=run_id, pipeline_input=input)
-                if parent_run_id:
-                    manifest.parent_run_id = parent_run_id
-                decision = await self._choose_reuse_source(manifest)
-                effective_start = (
-                    decision.invalidated_phase_ordinals[0]
-                    if decision.invalidated_phase_ordinals
-                    else len(self._phase_entries) + 1
+
+        with self._run_observability_scope(run_id):
+            manifest = self._build_manifest(run_id=run_id, pipeline_input=input)
+            if parent_run_id:
+                manifest.parent_run_id = parent_run_id
+            decision = await self._choose_reuse_source(manifest)
+            effective_start = (
+                decision.invalidated_phase_ordinals[0]
+                if decision.invalidated_phase_ordinals
+                else len(self._phase_entries) + 1
+            )
+            allow_hydration = self.config.execution.allow_artifact_hydration
+            previous_collection = (
+                await self._hydrate_previous_collection(
+                    effective_start, source_run_id=decision.resume_point.run_id
                 )
-                allow_hydration = self.config.execution.allow_artifact_hydration
-                previous_collection = (
-                    await self._hydrate_previous_collection(
-                        effective_start, source_run_id=decision.resume_point.run_id
-                    )
-                    if allow_hydration
-                    and decision.resume_point.run_id
-                    and effective_start <= len(self._phase_entries)
-                    else None
-                )
-                if decision.reused_phase_ordinals:
-                    manifest.parent_run_id = decision.resume_point.run_id
-                return await self._execute(
-                    run_id=run_id,
-                    manifest=manifest,
-                    start_index=effective_start,
-                    pipeline_input=input,
-                    initial_previous_collection=previous_collection,
-                    invalidation_decision=decision,
-                )
+                if allow_hydration
+                and decision.resume_point.run_id
+                and effective_start <= len(self._phase_entries)
+                else None
+            )
+            if decision.reused_phase_ordinals:
+                manifest.parent_run_id = decision.resume_point.run_id
+            return await self._execute(
+                run_id=run_id,
+                manifest=manifest,
+                start_index=effective_start,
+                pipeline_input=input,
+                initial_previous_collection=previous_collection,
+                invalidation_decision=decision,
+            )
 
     def phase_boundaries(self) -> list[tuple[int, str]]:
         return [(entry.index, entry.runner.name) for entry in self._phase_entries]
@@ -568,37 +621,36 @@ class Pipeline:
             from uuid import uuid4
 
             run_id = f"run-{uuid4()}"
-        contextual_emitter = ContextualEventEmitter(self.event_emitter, defaults={"run_id": run_id})
-        with use_event_emitter(contextual_emitter):
-            with run_folder_logger(self.config.execution.runs_dir, run_id):
-                manifest = self._build_manifest(run_id=run_id, pipeline_input=input)
-                if parent_run_id:
-                    manifest.parent_run_id = parent_run_id
-                decision = await self._choose_reuse_source(manifest)
-                effective_start = phase_number
-                if (
-                    phase_number in decision.reused_phase_ordinals
-                    and decision.invalidated_phase_ordinals
-                ):
-                    effective_start = decision.invalidated_phase_ordinals[0]
-                allow_hydration = self.config.execution.allow_artifact_hydration
-                previous_collection = (
-                    await self._hydrate_previous_collection(
-                        effective_start, source_run_id=decision.resume_point.run_id
-                    )
-                    if allow_hydration and decision.resume_point.run_id
-                    else None
+
+        with self._run_observability_scope(run_id):
+            manifest = self._build_manifest(run_id=run_id, pipeline_input=input)
+            if parent_run_id:
+                manifest.parent_run_id = parent_run_id
+            decision = await self._choose_reuse_source(manifest)
+            effective_start = phase_number
+            if (
+                phase_number in decision.reused_phase_ordinals
+                and decision.invalidated_phase_ordinals
+            ):
+                effective_start = decision.invalidated_phase_ordinals[0]
+            allow_hydration = self.config.execution.allow_artifact_hydration
+            previous_collection = (
+                await self._hydrate_previous_collection(
+                    effective_start, source_run_id=decision.resume_point.run_id
                 )
-                if decision.reused_phase_ordinals:
-                    manifest.parent_run_id = decision.resume_point.run_id
-                return await self._execute(
-                    run_id=run_id,
-                    manifest=manifest,
-                    start_index=effective_start,
-                    pipeline_input=input,
-                    initial_previous_collection=previous_collection,
-                    invalidation_decision=decision,
-                )
+                if allow_hydration and decision.resume_point.run_id
+                else None
+            )
+            if decision.reused_phase_ordinals:
+                manifest.parent_run_id = decision.resume_point.run_id
+            return await self._execute(
+                run_id=run_id,
+                manifest=manifest,
+                start_index=effective_start,
+                pipeline_input=input,
+                initial_previous_collection=previous_collection,
+                invalidation_decision=decision,
+            )
 
 
     # -------------------- Helper methods --------------------
@@ -612,14 +664,14 @@ class Pipeline:
         re-embedding every chunk.
         """
         def _fp_item(item: Any) -> str:
-            if hasattr(item, "model_dump"):
+            if isinstance(item, BaseModel):
                 return stable_fingerprint(item.model_dump(mode="json"))
             return stable_fingerprint(str(item))
 
         prompts_by_phase: dict[str, dict[str, Any]] = {
             "phase2": {
                 "ner_extraction": self.config.phase2.ner_prompts,
-                "entity_linking": getattr(self.config.phase2, "entity_linking_prompts", self.config.phase2.entity_linking_prompt_template),
+                "entity_linking": self.config.phase2.entity_linking_prompts,
             },
             "phase3": {
                 "global_relation": self.config.phase3.global_relation_prompts,
@@ -628,7 +680,7 @@ class Pipeline:
                 "entity_synthesis": self.config.phase4_maturation.entity_synthesis_prompts,
             },
             "phase4": {
-                "adu_segmentation": getattr(self.config.phase4, "adu_segmentation_prompts", self.config.phase4.adu_segmentation_prompt_template),
+                "adu_segmentation": self.config.phase4.adu_segmentation_prompts,
                 "acc_classification": self.config.phase4.acc_prompts,
                 "arc_classification": self.config.phase4.arc_prompts,
             },
@@ -643,38 +695,41 @@ class Pipeline:
         prompt_fps = self._prompt_fingerprints()
         for entry in self._phase_entries:
             runner = entry.runner
-            prefix = getattr(runner, "name", None)
-            if prefix is None or not isinstance(prefix, str):
-                prefix = getattr(entry, "name", "phase")
-            if not isinstance(prefix, str):
-                prefix = "phase"
+            try:
+                prefix = str(runner.name)
+            except AttributeError:
+                prefix = f"phase{entry.index}"
+            if not prefix:
+                prefix = f"phase{entry.index}"
+
             # Recursively discover and fingerprint all attached components
             from episteme_pipeline.protocols.fingerprint import find_components
 
-            comps = (
-                runner.components()
-                if hasattr(runner, "components") and callable(runner.components)
-                else find_components(runner)
-            )
+            if isinstance(runner, PhaseRunner):
+                comps = runner.components()
+            else:
+                comps = find_components(runner)
+
             for comp_name, comp_obj in comps.items():
                 fp = fingerprint_method(comp_obj)
                 if fp:
                     fps[f"{prefix}.{comp_name}"] = fp
-            phase_key = getattr(entry, "phase_key", getattr(runner, "phase_key", ""))
-            for pname, pfp in prompt_fps.get(phase_key, {}).items():
+            for pname, pfp in prompt_fps.get(entry.phase_key, {}).items():
                 fps[f"{prefix}.prompt.{pname}"] = pfp
         return fps
 
 
-    def _phase_config(self, entry: _PhaseEntry):
+    def _phase_config(self, entry: _PhaseEntry) -> BaseModel | None:
         """The config block this phase runs on, resolved from ``phase_key``."""
-        return getattr(self.config, entry.phase_key)
+        return self.config.get_phase_config(entry.phase_key)
 
     def _phase_config_fingerprints(self) -> dict[int, str]:
-        return {
-            entry.index: fingerprint_phase_config(self._phase_config(entry))
-            for entry in self._phase_entries
-        }
+        fps: dict[int, str] = {}
+        for entry in self._phase_entries:
+            cfg = self._phase_config(entry)
+            if cfg is not None:
+                fps[entry.index] = fingerprint_phase_config(cfg)
+        return fps
 
     def _build_manifest(self, *, run_id: str, pipeline_input: PipelineInput) -> RunManifest:
         # Assemble manifest with fingerprints and config snapshot
@@ -932,9 +987,13 @@ class Pipeline:
 
             if ordinal in invalidation_decision.invalidated_phase_ordinals:
                 if not (invalidation_decision.reason and invalidation_decision.reason.startswith("prior-phase-incomplete")):
-                    store = getattr(entry.runner, "graph_store", None)
-                    if store is not None and hasattr(store, "clear_phase_checkpoints"):
-                        await store.clear_phase_checkpoints(entry.phase_key)
+                    chk_store = None
+                    try:
+                        chk_store = entry.runner.checkpoint_store
+                    except AttributeError:
+                        pass
+                    if isinstance(chk_store, PhaseCheckpointStore):
+                        await chk_store.clear_phase_checkpoints(entry.phase_key)
 
             record = records_by_ordinal.get(ordinal)
             if record is not None:
@@ -976,9 +1035,7 @@ class Pipeline:
                     self._manifest_store.write_manifest(manifest)
                 raise
 
-            if getattr(
-                self.config.execution, f"persist_{entry.phase_key}_artifacts", True
-            ):
+            if self.config.execution.should_persist_artifacts(entry.phase_key):
                 for art in collection.artifacts:
                     await self._artifact_store.write_artifact(art)
 
@@ -1155,7 +1212,7 @@ class Pipeline:
             ArtifactReportEntry(
                 artifact_id=artifact.artifact_id,
                 identity_key=artifact.identity_key or artifact.artifact_id,
-                kind=artifact.kind.value if hasattr(artifact.kind, "value") else str(artifact.kind),
+                kind=_artifact_kind_str(artifact.kind),
                 phase_name=artifact.phase_name,
                 run_id=artifact.run_id,
                 reused=True,
@@ -1212,7 +1269,6 @@ class Pipeline:
         new_by_phase: dict[str, int] = {}
         reused_by_kind: dict[str, int] = {}
         reused_by_phase: dict[str, int] = {}
-        entries: list[ArtifactReportEntry] = []
 
         reused_phase_ordinals = [
             rec.phase_ordinal for rec in manifest.phase_records if rec.reused
@@ -1221,43 +1277,18 @@ class Pipeline:
             rec.phase_ordinal for rec in manifest.phase_records if not rec.reused
         ]
 
-        for a in artifacts:
-            is_reused = False
-            if a.run_id != run_id:
-                is_reused = True
-            else:
-                for rec in manifest.phase_records:
-                    if rec.reused and a.artifact_id in rec.artifact_ids:
-                        is_reused = True
-                        break
-                else:
-                    for rec in manifest.phase_records:
-                        if rec.phase_name == a.phase_name and rec.reused and not rec.artifact_ids:
-                            is_reused = True
-                            break
-
-            kind_val = a.kind.value if hasattr(a.kind, "value") else str(a.kind)
-            
+        entries = self._collect_run_artifact_entries(artifacts, manifest, run_id)
+        for entry in entries:
+            kind_val = entry.kind
             self._increment_count(by_kind, kind_val)
-            self._increment_count(by_phase, a.phase_name)
+            self._increment_count(by_phase, entry.phase_name)
 
-            if is_reused:
+            if entry.reused:
                 self._increment_count(reused_by_kind, kind_val)
-                self._increment_count(reused_by_phase, a.phase_name)
+                self._increment_count(reused_by_phase, entry.phase_name)
             else:
                 self._increment_count(new_by_kind, kind_val)
-                self._increment_count(new_by_phase, a.phase_name)
-
-            entries.append(
-                ArtifactReportEntry(
-                    artifact_id=a.artifact_id,
-                    identity_key=a.identity_key or a.artifact_id,
-                    kind=kind_val,
-                    phase_name=a.phase_name,
-                    run_id=a.run_id,
-                    reused=is_reused,
-                )
-            )
+                self._increment_count(new_by_phase, entry.phase_name)
 
         return RunReport(
             manifest=manifest,
@@ -1274,25 +1305,52 @@ class Pipeline:
             reused_artifact_counts_by_phase=reused_by_phase,
             reused_phase_ordinals=reused_phase_ordinals,
             invalidated_phase_ordinals=invalidated_phase_ordinals,
-            invalidation_reason=getattr(manifest, "invalidation_reason", None),
+            invalidation_reason=manifest.invalidation_reason,
             artifact_entries=entries,
         )
 
-    async def get_run_artifacts(self, run_id: str, *, phase_name: str | None = None, kind: str | None = None) -> list[ArtifactReportEntry]:
-        manifest = self._manifest_store.read_manifest(run_id)
-        artifacts = await self._get_run_artifacts_raw(run_id)
-        result: list[ArtifactReportEntry] = []
+    def _collect_run_artifact_entries(
+        self,
+        artifacts: list[Any],
+        manifest: RunManifest | None,
+        run_id: str,
+        *,
+        phase_name: str | None = None,
+        kind: str | None = None,
+    ) -> list[ArtifactReportEntry]:
+        """Collect and tag typed ArtifactReportEntry items indicating reuse status.
+
+        Parameters
+        ----------
+        artifacts : list of Any
+            Artifact envelopes to process.
+        manifest : RunManifest or None
+            Associated run manifest containing phase records.
+        run_id : str
+            Current run identifier.
+        phase_name : str or None, optional
+            Filter for specific phase name.
+        kind : str or None, optional
+            Filter for specific artifact kind.
+
+        Returns
+        -------
+        list of ArtifactReportEntry
+            Processed and tagged artifact report entries.
+        """
+        entries: list[ArtifactReportEntry] = []
         for a in artifacts:
-            if phase_name and a.phase_name != phase_name:
-                continue
-            if kind and a.kind.value != kind:
+            if phase_name is not None and a.phase_name != phase_name:
                 continue
 
-            # Determine if reused
+            kind_str = _artifact_kind_str(a.kind)
+            if kind is not None and kind_str != kind:
+                continue
+
             is_reused = False
             if a.run_id != run_id:
                 is_reused = True
-            elif manifest:
+            elif manifest is not None:
                 for rec in manifest.phase_records:
                     if rec.reused and a.artifact_id in rec.artifact_ids:
                         is_reused = True
@@ -1303,37 +1361,92 @@ class Pipeline:
                             is_reused = True
                             break
 
-            result.append(
+            entries.append(
                 ArtifactReportEntry(
                     artifact_id=a.artifact_id,
                     identity_key=a.identity_key or a.artifact_id,
-                    kind=a.kind.value if hasattr(a.kind, "value") else str(a.kind),
+                    kind=kind_str,
                     phase_name=a.phase_name,
                     run_id=a.run_id,
                     reused=is_reused,
                 )
             )
-        return result
+        return entries
 
-    async def resume_from_run(self, run_id: str, input: PipelineInput, from_phase: int | None = None) -> ExecutionResult:
-        # Simple resume: reuse phases before from_phase, invalidate from from_phase onward
-        manifest = self._build_manifest(run_id=f"run-resume-{run_id}", pipeline_input=input)
-        if from_phase is None:
-            from_phase = 1
-        decision = InvalidationDecision(
-            resume_point=ResumePoint(run_id=run_id),
-            reused_phase_ordinals=[i for i in range(1, from_phase)],
-            invalidated_phase_ordinals=[i for i in range(from_phase, len(self._phase_entries) + 1)],
-            reason="explicit-resume-boundary",
+    async def get_run_artifacts(
+        self,
+        run_id: str,
+        *,
+        phase_name: str | None = None,
+        kind: str | None = None,
+    ) -> list[ArtifactReportEntry]:
+        """Retrieve all report-level artifact entries associated with a run.
+
+        Parameters
+        ----------
+        run_id : str
+            Unique run identifier.
+        phase_name : str or None, optional
+            Optional phase name filter.
+        kind : str or None, optional
+            Optional artifact kind filter.
+
+        Returns
+        -------
+        list of ArtifactReportEntry
+            Matching artifact report entries.
+        """
+        manifest = self._manifest_store.read_manifest(run_id)
+        artifacts = await self._get_run_artifacts_raw(run_id)
+        return self._collect_run_artifact_entries(
+            artifacts, manifest, run_id, phase_name=phase_name, kind=kind
         )
-        if decision.reused_phase_ordinals:
-            manifest.parent_run_id = run_id
-        previous_collection = await self._hydrate_previous_collection(from_phase, source_run_id=run_id)
-        return await self._execute(
-            run_id=manifest.run_id,
-            manifest=manifest,
-            start_index=from_phase,
-            pipeline_input=input,
-            initial_previous_collection=previous_collection,
-            invalidation_decision=decision,
-        )
+
+    async def resume_from_run(
+        self,
+        run_id: str,
+        input: PipelineInput,
+        from_phase: int | None = None,
+    ) -> ExecutionResult:
+        """Resume pipeline execution from a prior run within observability context.
+
+        Parameters
+        ----------
+        run_id : str
+            Identifier of the prior run to resume from.
+        input : PipelineInput
+            Pipeline input holding source documents and metadata.
+        from_phase : int or None, optional
+            Phase ordinal from which to resume execution, by default 1.
+
+        Returns
+        -------
+        ExecutionResult
+            The execution result containing the run manifest and report.
+        """
+        target_run_id = f"run-resume-{run_id}"
+        with self._run_observability_scope(target_run_id):
+            manifest = self._build_manifest(run_id=target_run_id, pipeline_input=input)
+            if from_phase is None:
+                from_phase = 1
+            decision = InvalidationDecision(
+                resume_point=ResumePoint(run_id=run_id),
+                reused_phase_ordinals=[i for i in range(1, from_phase)],
+                invalidated_phase_ordinals=[
+                    i for i in range(from_phase, len(self._phase_entries) + 1)
+                ],
+                reason="explicit-resume-boundary",
+            )
+            if decision.reused_phase_ordinals:
+                manifest.parent_run_id = run_id
+            previous_collection = await self._hydrate_previous_collection(
+                from_phase, source_run_id=run_id
+            )
+            return await self._execute(
+                run_id=target_run_id,
+                manifest=manifest,
+                start_index=from_phase,
+                pipeline_input=input,
+                initial_previous_collection=previous_collection,
+                invalidation_decision=decision,
+            )

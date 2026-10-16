@@ -220,10 +220,6 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             
         self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
 
-        entity_count_by_type: dict[str, int] = defaultdict(int)
-        for e in all_entities:
-            entity_count_by_type[e.label] += 1
-
         artifacts = []
         for entity in all_entities:
             mention_artifact_ids = []

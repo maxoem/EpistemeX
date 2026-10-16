@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.graph_store import FusionGraph
 
 
-class InstanceFusion(ABC):
+class InstanceFusion(Fingerprintable, ABC):
     """
     Phase 5 — Graph-based Instance-Level Fusion.
 
@@ -31,7 +32,7 @@ class InstanceFusion(ABC):
         ...
 
 
-class ArgumentClustering(ABC):
+class ArgumentClustering(Fingerprintable, ABC):
     """
     Phase 5 — Global Argument Resolution via clustering (Key Point Analysis).
 
@@ -55,7 +56,7 @@ class ArgumentClustering(ABC):
         ...
 
 
-class TheoryFusion(ABC):
+class TheoryFusion(Fingerprintable, ABC):
     """
     Phase 5 — Theory-Level Fusion.
 

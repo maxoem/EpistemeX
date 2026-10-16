@@ -6,11 +6,12 @@ from episteme_pipeline.contracts.domain import (
     TheoryRelation,
 )
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 
-class ADUSegmenter(ABC):
+class ADUSegmenter(Fingerprintable, ABC):
     """
     Phase 4 Step 1: Identifies Argumentative Discourse Units (ADUs) in text,
     wrapping them in markup tags (<AC1>...<AC1>) for downstream ACC.
@@ -29,7 +30,7 @@ class ADUSegmenter(ABC):
         ...
 
 
-class ACCClassifier(ABC):
+class ACCClassifier(Fingerprintable, ABC):
     """
     Phase 4 Step 2: Argument Component Classification.
 
@@ -49,7 +50,7 @@ class ACCClassifier(ABC):
     ) -> tuple[list[TheoryAtom], list[TheoryRelation]]: ...
 
 
-class ARIIdentifier(ABC):
+class ARIIdentifier(Fingerprintable, ABC):
     """
     Phase 4 Step 3 (optional): Standalone local Argument Relation Identification.
 
@@ -66,7 +67,7 @@ class ARIIdentifier(ABC):
     ) -> list[TheoryRelation]: ...
 
 
-class ARCClassifier(ABC):
+class ARCClassifier(Fingerprintable, ABC):
     """
     Phase 4 Step 4: Global Argument Relation Classification.
 

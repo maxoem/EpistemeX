@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (DRY / YAGNI Principles, Shared Mathematical Utilities, Orchestrator Hygiene) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`utils/`, `pipeline.py`, `artifacts/mappers.py`, `phases/`) |
 | **Priority** | **Medium** |
-| **Status** | `Open` |
+| **Status** | `Resolved` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/design_patterns_and_standards.md §2 & §4.3`](../../docs/architecture/design_patterns_and_standards.md), [`AGENTS.md §2`](../../AGENTS.md) |
 
 ---
@@ -64,6 +64,6 @@ Remove `artifacts/mappers.py`, `phases/phase1_foundation/adapters/base.py`, `pha
 
 ## 3. Acceptance Criteria
 
-- [ ] `cosine_similarity_matrix` and `union_find_components` exist in `episteme_pipeline/utils/` with unit tests covering zero-norm vectors and disconnected/connected components, replacing all 6 inline copies.
-- [ ] `Pipeline.resume_from_run()` executes inside `use_event_emitter` and `run_folder_logger`.
-- [ ] Dead modules (`artifacts/mappers.py`, `phase1_foundation/adapters/base.py`, `phase5_fusion/models.py`) and unused functions/variables are removed.
+- [x] `cosine_similarity_matrix` and `union_find_components` exist in `episteme_pipeline/utils/` with unit tests covering zero-norm vectors and disconnected/connected components, replacing all 6 inline copies.
+- [x] `Pipeline.resume_from_run()` executes inside `use_event_emitter` and `run_folder_logger`.
+- [x] Dead modules (`artifacts/mappers.py`, `phase1_foundation/adapters/base.py`, `phase5_fusion/models.py`) and unused functions/variables are removed.

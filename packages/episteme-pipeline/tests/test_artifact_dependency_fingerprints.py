@@ -1,4 +1,4 @@
-from episteme_pipeline.artifacts.mappers import (
+from tests.helpers.artifact_mappers import (
     map_phase1_output_to_artifacts,
     map_phase2_output_to_artifacts,
 )

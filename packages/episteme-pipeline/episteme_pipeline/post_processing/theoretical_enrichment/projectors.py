@@ -19,11 +19,12 @@ from episteme_pipeline.post_processing.theoretical_enrichment.enrichment_models 
 )
 from episteme_pipeline.prompts.default_prompts import CLUSTER_PROJECTION_DIRECT_PROMPT
 from episteme_pipeline.prompts.models import StructuredPromptBundle
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 logger = logging.getLogger(__name__)
 
 
-class TheoryProjector(ABC):
+class TheoryProjector(Fingerprintable, ABC):
     """Abstract base protocol for theory-specific projectors (Phi_spec)."""
 
     @abstractmethod
@@ -45,6 +46,35 @@ class TheoryProjector(ABC):
             Dictionary of parameter name to postulated value.
         """
         ...
+
+    async def aproject(
+        self, cluster: EmpiricalCluster, theory: TheoryElementDefinition
+    ) -> dict[str, Any]:
+        """Asynchronously project an empirical cluster into candidate theoretical parameters.
+
+        Parameters
+        ----------
+        cluster : EmpiricalCluster
+            Target empirical cluster.
+        theory : TheoryElementDefinition
+            Theory-element specifying M_pp and M_p signatures.
+
+        Returns
+        -------
+        dict[str, Any]
+            Dictionary of parameter name to postulated value.
+        """
+        return self.project(cluster, theory)
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint dictionary for caching.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        return {"type": self.__class__.__name__}
 
 
 def extract_matching_measurements(
@@ -116,6 +146,19 @@ class GenericTheoryProjector(TheoryProjector):
 
     def __init__(self, fallback_default: float = 0.5) -> None:
         self.fallback_default = fallback_default
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint dictionary for caching.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        return {
+            "type": self.__class__.__name__,
+            "fallback_default": self.fallback_default,
+        }
 
     def project(
         self, cluster: EmpiricalCluster, theory: TheoryElementDefinition
@@ -194,6 +237,23 @@ class LLMTheoryProjector(TheoryProjector):
         self.prompts = prompts or CLUSTER_PROJECTION_DIRECT_PROMPT
         self.strategy = strategy
         self._fallback = GenericTheoryProjector()
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint dictionary for caching.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        llm_fp = self.llm.fingerprint() if isinstance(self.llm, Fingerprintable) else str(self.llm)
+        prompts_fp = self.prompts.fingerprint() if isinstance(self.prompts, Fingerprintable) else str(self.prompts)
+        return {
+            "type": self.__class__.__name__,
+            "strategy": str(self.strategy),
+            "llm": llm_fp,
+            "prompts": prompts_fp,
+        }
 
     async def aproject(
         self, cluster: EmpiricalCluster, theory: TheoryElementDefinition
@@ -344,9 +404,23 @@ class CompositeTheoryProjector(TheoryProjector):
             Postulated parameter values.
         """
         projector = self._projectors.get(theory.theory_id, self._default)
-        if hasattr(projector, "aproject"):
-            return await projector.aproject(cluster, theory)
-        return projector.project(cluster, theory)
+        return await projector.aproject(cluster, theory)
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint dictionary for caching.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        return {
+            "type": self.__class__.__name__,
+            "default": self._default.fingerprint(),
+            "projectors": {
+                k: p.fingerprint() for k, p in sorted(self._projectors.items())
+            },
+        }
 
     def project(
         self, cluster: EmpiricalCluster, theory: TheoryElementDefinition

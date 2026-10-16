@@ -50,6 +50,7 @@ from episteme_pipeline.contracts.domain import (
     PhaseItemRecord,
     SubGraph,
 )
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
@@ -390,7 +391,7 @@ def ensure_embedding_model(model: Any | None) -> EmbeddingModel | None:
 # ----------------------------------------------------------------------
 
 
-class RelationReranker(ABC):
+class RelationReranker(Fingerprintable, ABC):
     """
     Scores the likelihood of a relationship existing between two entities
     based on their contextual subgraph envelopes.
@@ -405,6 +406,8 @@ class RelationReranker(ABC):
     the two slots explicitly at the composition root.
     """
 
+    max_length: int | None = None
+
     @abstractmethod
     async def score_relation(
         self,
@@ -414,8 +417,45 @@ class RelationReranker(ABC):
         env_b: SubGraph,
     ) -> float: ...
 
+    def describe_relation_input(
+        self,
+        entity_a: L2Entity,
+        env_a: SubGraph,
+        entity_b: L2Entity,
+        env_b: SubGraph,
+    ) -> dict[str, object]:
+        """Summarize the current reranker input without executing inference.
 
-class NERExtractor(ABC):
+        Parameters
+        ----------
+        entity_a : L2Entity
+            Query-side entity.
+        env_a : SubGraph
+            Query-side envelope.
+        entity_b : L2Entity
+            Document-side entity.
+        env_b : SubGraph
+            Document-side envelope.
+
+        Returns
+        -------
+        dict[str, object]
+            Size metadata for the reranker query/document pair.
+        """
+        from episteme_pipeline.phases.phase3_global_relations.rerankers import (
+            build_relation_reranker_inputs,
+            summarize_reranker_text_pair,
+        )
+
+        query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
+        return summarize_reranker_text_pair(
+            query,
+            doc_text,
+            max_length=self.max_length,
+        )
+
+
+class NERExtractor(Fingerprintable, ABC):
     """
     Local Relation & Entity Extractor (Phase 2).
 
@@ -435,7 +475,7 @@ class NERExtractor(ABC):
     ) -> tuple[list[L2Entity], list[L2Triple], dict | None, bool, str | None]: ...
 
 
-class GlobalRelationExtractor(ABC):
+class GlobalRelationExtractor(Fingerprintable, ABC):
     """
     Global Relation Extractor (Phase 3).
 
@@ -582,7 +622,7 @@ class GlobalRelationExtractor(ABC):
         return await graph_store.get_neighborhood(entity.id, depth=depth)
 
 
-class EntityLinker(ABC):
+class EntityLinker(Fingerprintable, ABC):
     """
     Phase 2 Step 3: Links extracted entity mentions to canonical graph nodes.
     Bi-encoder retrieval + cross-encoder reranking.
