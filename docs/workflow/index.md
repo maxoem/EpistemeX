@@ -115,6 +115,25 @@ flowchart TD
 
 ---
 
+## Software Design Patterns Across Workflow Phases
+
+To keep the pipeline extensible for rapid research iteration while serving as a readable knowledge project, each phase applies canonical software design patterns defined in **[Design Patterns, Clean Code & Architectural Standards](../architecture/design_patterns_and_standards.md)**:
+
+| Phase / Subsystem | Primary Design Patterns Applied | Core Ports & Abstractions (`episteme_pipeline/protocols/`) |
+| :--- | :--- | :--- |
+| **Orchestrator (`Pipeline`)** | **Composition Root / Facade**, **Decorator (`ensure_*`)**, **Visitor (`Fingerprintable`)** | `PhaseRunner[ViewT]`, `Fingerprintable`, `ArtifactViewProtocol[ViewT]` |
+| **Phase 1: Data Foundation** | **Adapter Pattern** (`TexAdapter`, `MarkdownAdapter`), **Strategy / Chain of Responsibility** (`AutoToCParser`) | `DataSourceAdapter`, `ToCParserStrategy`, `EmbeddingModel` |
+| **Phase 2: Entity Discovery** | **Strategy Pattern** (`NERExtractor`, `EntityLinker`), **Calibrated Cascade** (`CascadingEntityLinker`, `JevGleaningGate`), **Stateful Reducer** (`EpisodicWorkingMemoryManager`) | `NERExtractor`, `EntityLinker`, `GleaningStoppingOracle`, `WorkingMemoryState` |
+| **Phase 3: Global Relations** | **Retrieve $\to$ Rerank $\to$ Decode Pipeline**, **Calibrated Cascade** (System 1 pair gating), **Unit-of-Work Batch Checkpointing** (`ADR-0016`) | `GlobalRelationExtractor`, `RelationReranker`, `PhaseCheckpointStore` |
+| **Phase 3b: Consolidation** | **Strategy Pattern** (`InstanceFusion`), **Conformal Triage Gate** (borderline verification & canonical surface election) | `InstanceFusion`, `DecisionEngine` |
+| **Phase 4: Entity Maturation** | **Two-Stage Batch Synthesis** (latent geometric centroid + top-$K$ LLM synthesis) | `PhaseRunner[Phase3ArtifactsView]`, `StructuredLLM`, `EmbeddingModel` |
+| **Phase 4b: Argument Mining** | **Strategy Pattern** (`ADUSegmenter`, `ACCClassifier`, `ARCClassifier`, `ModalStrengthResolver`), **Calibrated Cascade** (`CascadingACCClassifier`, `CascadingARCClassifier`) | `ADUSegmenter`, `ACCClassifier`, `ARCClassifier`, `ModalStrengthResolver` |
+| **Phase 5: Theory Fusion** | **Strategy Pattern** (`ArgumentClustering`, `TheoryFusion`), **Conformal Triage Gate** (`InterDocumentClusterVerifier`) | `ArgumentClustering`, `TheoryFusion`, `DecisionEngine` |
+| **Phase 6: TheoryNet** | **Projector / Builder Pattern** (`TheoryNetProjector`), **Topology-Adaptive Solver Strategy** (DAG closed-form vs. cyclic ODE QBAF) | `TheoryNetProjector`, `ModalStrengthResolver` |
+| **Post-Processing ($\Phi_{\text{spec}}$)** | **Open/Closed Plugin Runner** (`PhaseRunner[ViewT]`), **Strategy Pattern** (`TheoryInducer`, `TheoryProjector`, `TenabilitySolver`) | `PhaseRunner`, `TheoryProjector`, `TenabilitySolver` |
+
+---
+
 ## Event System & Observability
 
 The pipeline uses an event-driven architecture for telemetry and monitoring:
@@ -124,7 +143,7 @@ The pipeline uses an event-driven architecture for telemetry and monitoring:
 
 ## Configuration
 
-All phases are configured through `pipeline/config.py`. See:
+All phases are configured through `episteme_pipeline/config.py`. See:
 
 - [Configuration Guide](../getting_started/configuration.md) - Setup and environment configuration
 - [Customizing Configuration](../how_to/customize_config.md) - Advanced phase overrides and custom prompts
@@ -133,6 +152,8 @@ All phases are configured through `pipeline/config.py`. See:
 
 ## Related Documentation
 
+- **Architecture & Standards**: [Design Patterns, Clean Code & Architectural Standards](../architecture/design_patterns_and_standards.md) - Canonical engineering patterns and anti-pattern guide
 - **Theory**: [Concepts](../concepts/) - Mathematical and epistemological foundations
 - **API**: [Reference](../reference/) - Technical API documentation and contracts
 - **Decisions**: [ADRs](../adr/) - Architectural Decision Records
+

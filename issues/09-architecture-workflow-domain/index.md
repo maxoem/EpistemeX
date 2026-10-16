@@ -51,12 +51,35 @@ These issues translate the 7 macro-level architectural concepts from [**`HIGH-LE
 
 ---
 
-## 4. Recommended Staged Roadmap
+## 4. Part III: Clean Code, Design Pattern & Phase Implementation Issues (`ISSUE-059` – `ISSUE-065`)
+
+Grounded in **[Design Patterns, Clean Code & Architectural Standards (`docs/architecture/design_patterns_and_standards.md`)](../../docs/architecture/design_patterns_and_standards.md)**, these issues catalogue concrete design-pattern violations, anti-patterns (`getattr`/`hasattr` proliferation, silent exception swallowing, mid-loop instantiation), and phase-specific workflow/domain bugs across the orchestrator and Phases 1–6 + Post-Processing, complete with direct code fixes:
+
+| Issue ID | Clean Code, Pattern & Workflow Defect Title | Primary Pattern / Principle | Priority | Core Defect & Direct Remediation Summary |
+| :--- | :--- | :--- | :--- | :--- |
+| [**ISSUE-059**](ISSUE-059-phase-runner-template-method-lifecycle-and-component-wiring.md) | **Missing `PhaseRunner` Template Method, Unscoped Progress Lifecycle, Silent Exception Swallowing & Invisible Component Fingerprinting** | Template Method, DIP & Fingerprinting | **High** | `event_emitter` duplicated 12x; unguarded `ProgressStarted` leaves dangling progress bars on crash; `LLMNERExtractor`/`LLMADUSegmenter`/`LLMACCClassifier` swallow exceptions into `[]` (bypassing `_guard_systematic_failure` and permanently marking failed Phase 4 chunks processed); `Phase4Runner` instantiates segmenter/classifier inside `_process_chunk` (hiding them from `find_components()`); `Phase1Runner` stores unused `self.llm` (falsely invalidating Phase 1). |
+| [**ISSUE-060**](ISSUE-060-broken-system1-system2-cascades-and-flawed-audit-semantics.md) | **Broken System 1 $\to$ System 2 Cascading Classifiers, Inverted Stochastic Audit Semantics & Protocol-Breaking `isinstance` Dispatch** | Chain of Responsibility / `CalibratedCascade` | **Critical** | `CascadingACCClassifier` checks `or not relations:` while `JevACCClassifier` always returns `relations=[]`, causing a **100% LLM fallback rate**; `CascadingARCClassifier` re-runs the entire corpus on a single audit coin flip; `InterDocumentClusterVerifier.should_fuse` sets `is_confirmed = True` on rejected merges when `audit_rate` triggers; `CascadingEntityLinker` uses `isinstance(self.primary, JevEntityLinker)`. |
+| [**ISSUE-061**](ISSUE-061-reflection-antipatterns-getattr-hasattr-and-leaky-protocols.md) | **Proliferation of `getattr`/`hasattr` Reflection Anti-Patterns (`AGENTS.md` Violation) & Incomplete Port Protocols** | Hexagonal Ports, ISP, LSP & Static Typing | **High** | 50+ `getattr`/`hasattr` calls across `pipeline.py`, `phases/`, and `post_processing/`; `Pipeline.__init__` overwrites unknown `phase_key`s to `"phase1"`; `TheoryProjector` ABC omits `async def aproject`; `Phase5Config` omits `max_cluster_size`; strategy protocols lack `Fingerprintable` inheritance, relying on hardcoded `_CORE_COMPONENT_NAMES`. |
+| [**ISSUE-062**](ISSUE-062-lossy-artifact-codecs-corrupted-maturation-mentions-and-empty-phase6-artifacts.md) | **Lossy Domain–Artifact–Graph Codecs, Corrupted Phase 4 Maturation `source_chunk_ids`, and Empty Phase 6 Artifact Output** | Bidirectional Codec (`ArtifactCodec`) | **Critical** | `Phase4EntityMaturationRunner` passes `artifact::{cid}` instead of `artifact::mention::{entity_id}::{cid}`, causing `parse_mention_id` to wipe `source_chunk_ids = []` on all matured entities; `ChunkArtifact` drops `embedding` & `metadata` (breaking Phase 2 section eviction on resume); `TheoryAtomArtifact` drops `entity_ids` & `modal_strength`; `Phase6Runner` returns `ArtifactCollection([])` and logs `0 TheoryRelations`; `TheoreticalEnrichmentRunner` overwrites graph edges via raw dicts. |
+| [**ISSUE-063**](ISSUE-063-phase1-to-phase3-domain-and-concurrency-bugs.md) | **Phase 1–3 Domain & Concurrency Defects: LaTeX ToC Post-Conversion Bug, Word-Count Token Overwrite, Concurrent Working Memory Race Condition, Unchecked `CrossEncoder`, and Missing Confidence Filter** | Stateful Reducer ($S_t = f(S_{t-1}, x_t)$) & Domain Invariants | **Critical** | Phase 1 runs `LaTeXToCParser` on Pandoc-converted Markdown (finding 0 `\section`s) and overwrites `tiktoken` counts with `len(raw.text.split())`; Phase 2 runs `asyncio.gather` concurrently mutating shared `EpisodicWorkingMemoryManager.state` out of order and emits duplicate `LinkedEntityArtifact`s per batch; `DenseEntityLinker.link` crashes when `cross_encoder=None`; Phase 3 `DenseRetrievalGlobalRelationExtractor` ignores `global_relation_confidence_threshold` and zero-norm guards. |
+| [**ISSUE-064**](ISSUE-064-phase4-to-postprocessing-domain-bugs-and-hardcoded-heuristics.md) | **Phase 4–6 & Post-Processing Defects: `processed_chunk_ids` `UnboundLocalError`, Fake `L2Entity` Adapter, Order-Dependent Tenability Lookup & Hardcoded Psychology Parameters** | Two-Pass Map-Reduce, LSP & OCP | **Critical** | `Phase4Runner.run` raises `UnboundLocalError: processed_chunk_ids` when `chunks` is empty; `TAGARCClassifier._component_as_entity` fabricates a fake `L2Entity` to call Phase 3's `global_extractor`; `TheoreticalEnrichmentRunner._find_target_parameters` queries `cluster_theory_params` in a single-pass loop before target clusters are populated; `TenabilitySolver.solve_edge_tenability` hardcodes `"RepressionMagnitude"` / `"AmygdalaHyperactivity"` / `"DopamineDepletion"`. |
+| [**ISSUE-065**](ISSUE-065-dry-consolidation-of-vector-graph-and-pairing-primitives.md) | **DRY Violations Across Mathematical & Graph Primitives, Orchestrator Entrypoint Duplication & Dead Legacy Code** | DRY, YAGNI & Shared Domain Utilities | **Medium** | Consolidates 6 copies of L2-normalized cosine similarity, 2 copies of Union-Find, 2 copies of `_stable_component_id`, 2 copies of cross-chunk priority pairing, and 2 copies of candidate embedding caches into `episteme_pipeline/utils/`; fixes `Pipeline.resume_from_run()` missing `use_event_emitter` & `run_folder_logger`; removes dead `artifacts/mappers.py` and `phase5_fusion/models.py`. |
+
+---
+
+## 5. Recommended Staged Roadmap
 
 ```mermaid
 flowchart LR
-    subgraph Stage1 ["Stage 1: Boundary & State Integrity"]
-        I47["ISSUE-047<br/>Identity-Resolved Views"] --> I46["ISSUE-046<br/>Hexagonal Artifact Isolation"]
+    subgraph Stage0 ["Stage 0: Critical Phase Bug & Cascade Fixes"]
+        I60["ISSUE-060<br/>Fix System 1/2 Cascades"] --> I62["ISSUE-062<br/>Lossless Artifact Codecs"]
+        I63["ISSUE-063<br/>Phase 1-3 Concurrency & Domain Fixes"] --> I64["ISSUE-064<br/>Phase 4-6 & Enrichment Fixes"]
+    end
+
+    subgraph Stage1 ["Stage 1: Clean Code, Ports & State Integrity"]
+        I59["ISSUE-059<br/>PhaseRunner Template & Exceptions"] --> I61["ISSUE-061<br/>Eliminate getattr & Strict Protocols"]
+        I65["ISSUE-065<br/>Shared Math Utils & DRY"] --> I47["ISSUE-047<br/>Identity-Resolved Views"]
+        I47 --> I46["ISSUE-046<br/>Hexagonal Artifact Isolation"]
     end
 
     subgraph Stage2 ["Stage 2: Determinism & Observability"]
@@ -76,5 +99,6 @@ flowchart LR
         I56["ISSUE-056<br/>Non-Transitive Clustering & RCPS"]
     end
 
-    Stage1 --> Stage2 --> Stage3 --> Stage4
+    Stage0 --> Stage1 --> Stage2 --> Stage3 --> Stage4
 ```
+

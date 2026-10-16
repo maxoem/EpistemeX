@@ -150,13 +150,17 @@ flowchart TD
 
 ---
 
-## Architectural Governance
+## Architectural Governance & Engineering Standards
 
-Engineering and architectural decisions made over the evolution of this project are documented in detail in our ADR
-repository:
+Engineering and architectural decisions made over the evolution of this project are documented in detail in our architecture guides and ADR repository:
 
-- See the full index in [Architecture Decision Records (ADRs)](../adr/index.md).
-- Key architectural choices:
+- **[Design Patterns, Clean Code & Architectural Standards](design_patterns_and_standards.md)** — Canonical pattern catalog (Hexagonal Ports, Template Method & Batch Executor, Decorator, Calibrated Cascade, Bidirectional Artifact Codec, Stateful Reducers), SOLID rules, and forbidden anti-patterns.
+- **[Cross-Cutting Concerns & System Hooks](cross_cutting_concerns.md)** — Caching, fingerprinting, structured logging, event publishing, and observability invariants.
+- **[Architecture Decision Records (ADRs)](../adr/index.md)** — Full historical decision index:
     - **ADR 0001**: Neo4j Async Graph Backend
     - **ADR 0005**: Two-Pass Fusion Strategy
     - **ADR 0008**: Diátaxis Documentation Framework
+    - **ADR 0016**: Within-Phase Checkpointing and Atomicity
+    - **ADR 0017**: Artifact-Native Execution and Selective Invalidation
+    - **ADR 0018**: System 1 Calibrated Decision Engine
+

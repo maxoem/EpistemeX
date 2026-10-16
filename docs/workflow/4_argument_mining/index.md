@@ -29,26 +29,26 @@ See [Formal Graph Schema (TheoryNet)](../../concepts/formal_graph_model.md) and 
 - **Span Demarcation**: Prompts the LLM with chunk text to identify argumentative discourse spans, wrapping them in
   explicit markup tags (e.g. `<AC1>...</AC1>`).
 - **Clean Skipping**: If no argumentative content is found in a chunk, it is skipped cleanly.
-- **Actor-Critic Gleaning Gating**: When `enable_jev_gleaning_gate` is enabled, [`JevGleaningGate`](file:///Users/max.oehmichen/PycharmProjects/episteme/packages/episteme-pipeline/episteme_pipeline/decision/gleaning.py)
+- **Actor-Critic Gleaning Gating**: When `gleaning.enabled` is active, `JevGleaningGate` (`episteme_pipeline/decision/gleaning.py`)
   evaluates whether the extracted ADU spans and theoretical assertions completely cover the source chunk. If missed
   claims remain and $\text{empirical\_accuracy} \ge \tau_{\text{glean}}$, an additional gleaning pass is executed up to
-  `max_gleaning_passes`. A 2% stochastic audit rate routes stopped chunks for false-negative evaluation.
+  `gleaning.max_passes`. A 2% stochastic audit rate routes stopped chunks for false-negative evaluation.
 
-### 2. Component Classification & Local Relations (`LLMACCClassifier`)
+### 2. Component Classification & Local Relations (`ACCClassifier` Strategy & Cascade)
 
 - **Fused Single-Pass Execution (ADR 0004)**: The annotated text and extracted ADU spans are passed to
-  `LLMACCClassifier`. The LLM outputs:
-    - Per-ADU `component_type`: `CLAIM`, `MAJOR_CLAIM`, `PREMISE`.
+  `LLMACCClassifier` (or `CascadingACCClassifier` when System 1 triage is configured). The classifier outputs:
+    - Per-ADU `component_type`: `CLAIM`, `MAJOR_CLAIM`, `PREMISE` (and TF types `THEORETICAL_HYPOTHESIS`, `EMPIRICAL_STATEMENT`, `OBSERVATION_UNIT`).
     - Local relation triples: `(source_id, relation, target_id, confidence)`.
+- **Propositional Modal Strength Resolution (`ModalStrengthResolver`, ADR 0020)**: Each extracted `TheoryAtom` is evaluated via `HybridModalResolver` to initialize authorial propositional certainty `modal_strength` ($M(\phi) \in [0, 1]$) and `base_score`.
 - **Deterministic Component IDs**:
   `_stable_component_id(chunk_id, ac_tag) = "ac_" + sha256("{chunk_id}:{ac_tag}")[:14]`.
 
-### 3. Cross-Chunk Argument Relation Classification (`TAGARCClassifier`)
+### 3. Cross-Chunk Argument Relation Classification (`ARCClassifier` Strategy & Cascade)
 
 - **Global Stance Classification**: After all chunks are processed, cross-chunk candidate pairs are formed between
-  components from different chunks.
-- **Topological Grounding**: Reuses `GlobalRelationExtractor.get_subgraph_envelope()` to retrieve Text-Attributed Graph
-  (TAG) context up to `arc_subgraph_depth` hops.
+  components from different chunks (`TAGARCClassifier` / `CascadingARCClassifier`).
+- **Topological Grounding**: Retrieves 1-to-$k$ hop Text-Attributed Graph (TAG) neighborhood context up to `arc_subgraph_depth` hops.
 - **Priority Ranking**: Candidate pairs are prioritized by `SchemaConfig.component_types` order (e.g. evaluating
   high-centrality claim types first) up to `arc_max_candidates_per_component`.
 
@@ -61,15 +61,15 @@ See [Formal Graph Schema (TheoryNet)](../../concepts/formal_graph_model.md) and 
 
 ```mermaid
 flowchart TD
-    A[Layer 1 Chunks] --> B[LLMADUSegmenter<br>Tag Spans: <AC1>...</AC1>]
-    B --> C[LLMACCClassifier<br>Fused ACC + ARI Single Pass]
-    C --> D[Assign Stable Component IDs<br>Validate Types against SchemaConfig]
+    A[Layer 1 Chunks] --> B[ADUSegmenter<br>Tag Spans: <AC1>...</AC1>]
+    B --> C[ACCClassifier<br>Fused ACC + ARI Single Pass]
+    C --> D[HybridModalResolver<br>Assign Modal Strength & Base Score]
     D --> E[Graph Commit Per Chunk:<br>ArgumentComponent Nodes, Local SUPPORTS/ATTACKS]
     E --> F[Mark Chunk: phase4_processed = True]
     F --> G{All Chunks Processed?}
-    G -->|Yes| H[TAGARCClassifier<br>Cross-Chunk Candidate Pairing]
+    G -->|Yes| H[ARCClassifier<br>Cross-Chunk Candidate Pairing]
     H --> I[Retrieve TAG Subgraph Envelopes]
-    I --> J[LLM Cross-Chunk Stance Classification]
+    I --> J[Cross-Chunk Stance Classification]
     J --> K[Graph Commit:<br>Global SUPPORTS/ATTACKS Relations]
     K --> L[TF Projection Layer]
 ```
@@ -77,10 +77,11 @@ flowchart TD
 ## Implementation Details
 
 - [`pipeline_explanation.md`](pipeline_explanation.md) - Step-by-step pipeline execution walkthrough
+- [Design Patterns, Clean Code & Architectural Standards](../../architecture/design_patterns_and_standards.md) - Strategy & Calibrated Cascade patterns for `ADUSegmenter`, `ACCClassifier`, and `ARCClassifier`
 
 ## Configuration
 
-Configuration is managed via `Phase4Config` in `pipeline/config.py`:
+Configuration is managed via `Phase4Config` in `episteme_pipeline/config.py`:
 
 | Parameter                          | Type                         | Default        | Description                                                               |
 |:-----------------------------------|:-----------------------------|:---------------|:--------------------------------------------------------------------------|
@@ -94,6 +95,10 @@ Configuration is managed via `Phase4Config` in `pipeline/config.py`:
 | `acc_decoding_strategy`            | `StructuredDecodingStrategy` | `NL_TO_FORMAT` | Decoding strategy for ACC classification.                                 |
 | `arc_decoding_strategy`            | `StructuredDecodingStrategy` | `NL_TO_FORMAT` | Decoding strategy for ARC classification.                                 |
 | `gleaning`                         | `GleaningConfig`             | `default`      | Encapsulated gleaning config (`enabled`, `confidence_threshold`, `audit_rate`, `max_passes`). |
+| `modal_resolver`                   | `ModalResolverConfig`        | `default`      | Configuration for `HybridModalResolver` propositional certainty scoring.  |
+| `triage_confidence_threshold`      | `float`                      | `0.85`         | Empirical accuracy threshold for System 1 ACC/ARC fast-exit triage.       |
+| `conformal_alpha`                  | `float`                      | `0.05`         | Significance level $\alpha$ for conformal prediction sets ($95\%$ coverage). |
+| `stochastic_audit_rate`            | `float`                      | `0.02`         | Rate at which System 1 fast-exit decisions are audited by System 2.       |
 
 ## Phase Contract
 
