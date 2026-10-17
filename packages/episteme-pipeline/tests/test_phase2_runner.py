@@ -313,11 +313,28 @@ async def test_unknown_entity_labels_are_dropped(graph_store, phase1_view, schem
 
 
 @pytest.mark.asyncio
-async def test_empty_extraction_leaves_chunks_unprocessed(graph_store, phase1_view, two_chunks):
-    # With empty extraction, chunks remain unprocessed for retry
+async def test_empty_extraction_marks_chunks_processed(graph_store, phase1_view, two_chunks):
+    # Legitimate empty extraction marks chunks processed (ISSUE-059)
     runner = make_runner(graph_store, ner_extractor=StubNERExtractor([], []))
     for chunk in two_chunks:
         await graph_store.upsert_chunk(chunk)
     await runner.run(phase1_view, make_context())
     unprocessed = await graph_store.get_unprocessed_chunks("phase2")
-    assert sorted([c.id for c in unprocessed]) == sorted([c.id for c in two_chunks])
+    assert unprocessed == []
+
+
+@pytest.mark.asyncio
+async def test_failed_extraction_leaves_chunks_unprocessed(graph_store, phase1_view, two_chunks):
+    # When extraction fails with an exception, the failed chunk remains unprocessed for retry
+    class SelectiveFailingNERExtractor(StubNERExtractor):
+        async def extract(self, chunk_id, *args, **kwargs):
+            if chunk_id == "chunk_0002":
+                raise RuntimeError("Extraction failed for chunk 2")
+            return [], [], None, False, None
+
+    runner = make_runner(graph_store, ner_extractor=SelectiveFailingNERExtractor([], []))
+    for chunk in two_chunks:
+        await graph_store.upsert_chunk(chunk)
+    await runner.run(phase1_view, make_context())
+    unprocessed = await graph_store.get_unprocessed_chunks("phase2")
+    assert [c.id for c in unprocessed] == ["chunk_0002"]

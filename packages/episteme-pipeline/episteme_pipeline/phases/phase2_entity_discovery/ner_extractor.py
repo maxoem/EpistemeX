@@ -183,56 +183,49 @@ class LLMNERExtractor(NERExtractor):
         boundary_detected = False
         transitional_summary: str | None = None
 
-        try:
-            raw: NERExtractionOutput = await self.llm.predict_structured(
-                NERExtractionOutput,
-                self.prompts,
-                strategy=self.strategy,
-                global_structural_anchor=global_structural_anchor_str,
-                working_memory_context=working_memory_str,
-                entity_types=schema.node_types_str(),
-                relation_types=schema.relation_types_str(),
+        raw: NERExtractionOutput = await self.llm.predict_structured(
+            NERExtractionOutput,
+            self.prompts,
+            strategy=self.strategy,
+            global_structural_anchor=global_structural_anchor_str,
+            working_memory_context=working_memory_str,
+            entity_types=schema.node_types_str(),
+            relation_types=schema.relation_types_str(),
+            chunk_text=chunk_text,
+        )
+        raw = raw.validate_references()
+        all_raw_entities.extend(raw.entities)
+        all_raw_triples.extend(raw.triples)
+        if raw.working_memory:
+            memory_update = raw.working_memory.state_delta
+            boundary_detected = raw.working_memory.boundary_detected
+            transitional_summary = raw.working_memory.transitional_summary
+
+        # Unified gleanings loop via stopping oracle
+        gleaning_prompt = self.prompts.gleaning_template or NER_GLEANING_PROMPT
+        pass_count = 0
+        while True:
+            should_continue, _ = await self.stopping_oracle.should_glean(
                 chunk_text=chunk_text,
+                current_extractions=all_raw_entities,
+                pass_count=pass_count,
             )
-            raw = raw.validate_references()
-            all_raw_entities.extend(raw.entities)
-            all_raw_triples.extend(raw.triples)
-            if raw.working_memory:
-                memory_update = raw.working_memory.state_delta
-                boundary_detected = raw.working_memory.boundary_detected
-                transitional_summary = raw.working_memory.transitional_summary
-
-            # Unified gleanings loop via stopping oracle
-            gleaning_prompt = self.prompts.gleaning_template or NER_GLEANING_PROMPT
-            pass_count = 0
-            while True:
-                should_continue, _ = await self.stopping_oracle.should_glean(
-                    chunk_text=chunk_text,
-                    current_extractions=all_raw_entities,
-                    pass_count=pass_count,
-                )
-                if not should_continue:
-                    break
-                pass_count += 1
-                prior_text = ", ".join([e.name for e in all_raw_entities])
-                raw_glean: NERExtractionOutput = await self.llm.predict_structured(
-                    NERExtractionOutput,
-                    gleaning_prompt,
-                    chunk_text=chunk_text,
-                    prior_extractions=prior_text,
-                )
-                raw_glean = raw_glean.validate_references()
-                if not raw_glean.entities and not raw_glean.triples:
-                    break  # model found nothing new
-
-                all_raw_entities.extend(raw_glean.entities)
-                all_raw_triples.extend(raw_glean.triples)
-
-        except Exception as exc:
-            logger.warning(
-                "NER extraction failed for chunk %s: %s", chunk_id, exc
+            if not should_continue:
+                break
+            pass_count += 1
+            prior_text = ", ".join([e.name for e in all_raw_entities])
+            raw_glean: NERExtractionOutput = await self.llm.predict_structured(
+                NERExtractionOutput,
+                gleaning_prompt,
+                chunk_text=chunk_text,
+                prior_extractions=prior_text,
             )
-            return [], [], None, False, None
+            raw_glean = raw_glean.validate_references()
+            if not raw_glean.entities and not raw_glean.triples:
+                break  # model found nothing new
+
+            all_raw_entities.extend(raw_glean.entities)
+            all_raw_triples.extend(raw_glean.triples)
 
         # Validate labels against schema (drop unknown types silently)
         valid_node_types = set(schema.node_types)

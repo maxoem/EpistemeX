@@ -36,12 +36,7 @@ from episteme_pipeline.artifacts.execution import (
 )
 from episteme_pipeline.config import Phase3Config
 from episteme_pipeline.contracts.domain import CandidatePair, L2Triple, PhaseItemRecord
-from episteme_pipeline.events.bus import EventEmitter
-from episteme_pipeline.events.models import (
-    ProgressAdvanced,
-    ProgressCompleted,
-    ProgressStarted,
-)
+
 from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
     TAGRelationExtractor,
 )
@@ -101,18 +96,6 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
             return self.graph_store
         return None
 
-    @property
-    def event_emitter(self) -> EventEmitter:
-        """Event emitter for publishing phase execution lifecycle events.
-
-        Returns
-        -------
-        EventEmitter
-            Context-bound event emitter.
-        """
-        from episteme_pipeline.events.context import get_event_emitter
-
-        return get_event_emitter()
 
     @staticmethod
     def _guard_systematic_failure(
@@ -181,52 +164,45 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
 
         batch_size = self.config.batch_size
         progress_task = f"Phase 3: {len(candidates)} global candidate pairs"
-        self.event_emitter.emit(
-            ProgressStarted(
-                task_name=progress_task,
-                total_items=len(candidates),
-                description="Global Relations",
-            )
-        )
-
         all_triples: list[L2Triple] = []
         succeeded_total = 0
         checkpoint_store = self.checkpoint_store
 
-        for batch in batched(candidates, batch_size):
-            batch_list = list(batch)
-            if checkpoint_store is not None:
-                batch_keys = [c.key for c in batch_list]
-                pending_keys = set(
-                    await checkpoint_store.filter_unprocessed_items(batch_keys, _PHASE_TAG)
-                )
-                pending_batch = [c for c in batch_list if c.key in pending_keys]
-            else:
-                pending_batch = batch_list
-
-            if pending_batch:
-                batch_triples, batch_records = await self.global_extractor.extract_pairs(
-                    pending_batch, self.graph_store, self.schema
-                )
-                self._guard_systematic_failure(pending_batch, batch_records, succeeded_total)
-                succeeded_total += len([r for r in batch_records if r.status == "completed"])
-
+        with self.progress_scope(
+            progress_task,
+            total_items=len(candidates),
+            description="Global Relations",
+        ) as advance:
+            for batch in batched(candidates, batch_size):
+                batch_list = list(batch)
                 if checkpoint_store is not None:
-                    await checkpoint_store.commit_phase_batch(
-                        _PHASE_TAG, batch_triples, batch_records
+                    batch_keys = [c.key for c in batch_list]
+                    pending_keys = set(
+                        await checkpoint_store.filter_unprocessed_items(batch_keys, _PHASE_TAG)
                     )
+                    pending_batch = [c for c in batch_list if c.key in pending_keys]
                 else:
-                    if batch_triples:
-                        for triple_chunk in batched(batch_triples, 20):
-                            await self.graph_store.upsert_triples(list(triple_chunk))
+                    pending_batch = batch_list
 
-                all_triples.extend(batch_triples)
+                if pending_batch:
+                    batch_triples, batch_records = await self.global_extractor.extract_pairs(
+                        pending_batch, self.graph_store, self.schema
+                    )
+                    self._guard_systematic_failure(pending_batch, batch_records, succeeded_total)
+                    succeeded_total += len([r for r in batch_records if r.status == "completed"])
 
-            self.event_emitter.emit(
-                ProgressAdvanced(task_name=progress_task, advance=len(batch_list))
-            )
+                    if checkpoint_store is not None:
+                        await checkpoint_store.commit_phase_batch(
+                            _PHASE_TAG, batch_triples, batch_records
+                        )
+                    else:
+                        if batch_triples:
+                            for triple_chunk in batched(batch_triples, 20):
+                                await self.graph_store.upsert_triples(list(triple_chunk))
 
-        self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
+                    all_triples.extend(batch_triples)
+
+                advance(len(batch_list))
 
         relation_dist: dict[str, int] = defaultdict(int)
         for t in all_triples:

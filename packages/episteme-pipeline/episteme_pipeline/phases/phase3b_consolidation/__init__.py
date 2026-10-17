@@ -7,8 +7,7 @@ from episteme_pipeline.artifacts.execution import (
     Phase3ArtifactsView,
 )
 from episteme_pipeline.config import Phase3bConfig
-from episteme_pipeline.events.bus import EventEmitter
-from episteme_pipeline.events.models import ProgressCompleted, ProgressStarted
+
 from episteme_pipeline.phases.phase3b_consolidation.clustering import (
     elect_canonical_representative,
     verify_borderline_pair,
@@ -70,11 +69,6 @@ class Phase3bLatentConsolidationRunner(PhaseRunner[Phase3ArtifactsView]):
             decision_engine=decision_engine,
         )
 
-    @property
-    def event_emitter(self) -> EventEmitter:
-        from episteme_pipeline.events.context import get_event_emitter
-        return get_event_emitter()
-
     async def run(self, input: Phase3ArtifactsView, context: ArtifactExecutionContext) -> ArtifactCollection:
         """Run the Latent Graph Consolidation phase.
 
@@ -95,13 +89,13 @@ class Phase3bLatentConsolidationRunner(PhaseRunner[Phase3ArtifactsView]):
         """
         if not self.config.enabled:
             return ArtifactCollection([])
-        
+
         progress_task = "Phase 3b: Latent Consolidation"
-        self.event_emitter.emit(
-            ProgressStarted(task_name=progress_task, total_items=1, description="Latent Consolidation")
-        )
-        fused_map = await self.instance_fusion.fuse(self.graph_store)
-        self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
+        with self.progress_scope(
+            progress_task, total_items=1, description="Latent Consolidation"
+        ) as advance:
+            fused_map = await self.instance_fusion.fuse(self.graph_store)
+            advance(1)
 
         artifacts = []
         for original_id, canonical_id in fused_map.items():

@@ -365,7 +365,7 @@ def test_phase4_runner_respects_user_overrides() -> None:
         decision_engine=mock_engine,
     )
 
-    assert runner._acc_classifier_override is custom_acc
+    assert runner.acc_classifier is custom_acc
     assert runner.arc_classifier is custom_arc
 
 

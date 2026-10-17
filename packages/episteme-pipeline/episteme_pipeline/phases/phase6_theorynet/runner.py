@@ -10,6 +10,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from episteme_pipeline.artifacts.builders import (
+    build_theory_atom_artifact,
+    build_theory_relation_artifact,
+)
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
@@ -101,19 +105,6 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             modal_resolver=self.modal_resolver,
         )
 
-    @property
-    def event_emitter(self) -> Any:
-        """Retrieve contextual telemetry event emitter.
-
-        Returns
-        -------
-        EventEmitter
-            Active event bus emitter.
-        """
-        from episteme_pipeline.events.context import get_event_emitter
-
-        return get_event_emitter()
-
     async def run(
         self, input: Phase4ArtifactsView, context: ArtifactExecutionContext
     ) -> ArtifactCollection:
@@ -129,45 +120,55 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
         Returns
         -------
         ArtifactCollection
-            Empty collection upon projection completion.
+            TheoryAtomArtifact and TheoryRelationArtifact envelopes.
         """
         logger.info("Phase 6: Projecting formal TheoryNet with calibrated weights")
 
-        # Resolve propositional modal certainty for atoms missing explicit scores
-        for atom in input.theory_atoms:
-            if "modal_strength" not in atom.model_fields_set and "base_score" not in atom.model_fields_set:
-                atom.modal_strength = await self.modal_resolver.resolve_modality(atom)
-                atom.base_score = atom.modal_strength
+        total_items = len(input.theory_atoms) + len(input.theory_relations)
+        with self.progress_scope(
+            "Phase 6: TheoryNet Projection",
+            total_items=total_items,
+            description="TheoryNet Projection",
+        ) as advance:
+            # Resolve propositional modal certainty for atoms missing explicit scores
+            for atom in input.theory_atoms:
+                if "modal_strength" not in atom.model_fields_set and "base_score" not in atom.model_fields_set:
+                    atom.modal_strength = await self.modal_resolver.resolve_modality(atom)
+                    atom.base_score = atom.modal_strength
 
-        theory_net: TheoryNet = self.projector.project(input)
+            theory_net: TheoryNet = self.projector.project(input)
 
-        if not self.graph_store:
-            logger.warning("Phase 6: No graph store configured; skipping Neo4j write.")
-            return ArtifactCollection([])
+            if not self.graph_store:
+                logger.warning("Phase 6: No graph store configured; skipping Neo4j write.")
+                return ArtifactCollection([])
 
-        atoms_updated = 0
-        relations_updated = 0
+            atoms_updated = 0
+            relations_updated = 0
 
-        atoms_to_upsert: list[TheoryAtom] = []
-        for atom in theory_net.atoms:
-            if atom.plausibility is None:
-                atom.plausibility = atom.confidence if atom.confidence is not None else 1.0
-            atoms_to_upsert.append(atom)
-            atoms_updated += 1
+            atoms_to_upsert: list[TheoryAtom] = []
+            for atom in theory_net.atoms:
+                if atom.plausibility is None:
+                    atom.plausibility = atom.confidence if atom.confidence is not None else 1.0
+                atoms_to_upsert.append(atom)
+                atoms_updated += 1
 
-        from itertools import batched
+            from itertools import batched
 
-        for atom_batch in batched(atoms_to_upsert, 500):
-            await self.graph_store.upsert_argument_components(list(atom_batch))
+            for atom_batch in batched(atoms_to_upsert, 500):
+                await self.graph_store.upsert_argument_components(list(atom_batch))
 
-        for rel_batch in batched(theory_net.relations, 500):
-            await self.graph_store.upsert_theory_relations(list(rel_batch))
+            for rel_batch in batched(theory_net.relations, 500):
+                batch_list = list(rel_batch)
+                await self.graph_store.upsert_theory_relations(batch_list)
+                relations_updated += len(batch_list)
 
-        logger.info(
-            "Phase 6: Projected %d TheoryAtoms and %d TheoryRelations with calibrated weights",
-            atoms_updated,
-            relations_updated,
-        )
+            advance(atoms_updated + relations_updated)
+
+            logger.info(
+                "Phase 6: Projected %d TheoryAtoms and %d TheoryRelations with calibrated weights",
+                atoms_updated,
+                relations_updated,
+            )
 
         # Baseline empirical content ratio calculation (Z1 path from theoretical antecedents to empirical base)
         a_atoms = {
@@ -210,4 +211,22 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             len(a_atoms),
         )
 
-        return ArtifactCollection([])
+        artifacts = [
+            build_theory_atom_artifact(
+                atom,
+                run_id=context.run_id,
+                phase_name=self.name,
+                method="phase6.theorynet",
+            )
+            for atom in theory_net.atoms
+        ]
+        artifacts.extend(
+            build_theory_relation_artifact(
+                rel,
+                run_id=context.run_id,
+                phase_name=self.name,
+                method="phase6.theorynet",
+            )
+            for rel in theory_net.relations
+        )
+        return ArtifactCollection(artifacts)

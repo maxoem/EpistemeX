@@ -47,12 +47,7 @@ from episteme_pipeline.contracts.domain import (
     L2Entity,
     L2Triple,
 )
-from episteme_pipeline.events import (
-    ProgressAdvanced,
-    ProgressCompleted,
-    ProgressStarted,
-)
-from episteme_pipeline.events.bus import EventEmitter
+
 from episteme_pipeline.phases.chunk_selection import select_pending_chunks
 from episteme_pipeline.phases.phase2_entity_discovery.entity_linker import (
     NameEntityLinker,
@@ -162,12 +157,26 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         if entity_linker is not None:
             self.entity_linker = entity_linker
         elif self.embedding_model is not None:
-            self.entity_linker = DenseEntityLinker(
+            dense_linker = DenseEntityLinker(
                 embedding_model=self.embedding_model,
                 cross_encoder=self.cross_encoder,
                 tau=config.linking_confidence_threshold,
                 top_k=config.top_k_linking_candidates,
             )
+            if self.decision_engine is not None:
+                fast_linker = JevEntityLinker(
+                    decision_engine=self.decision_engine,
+                    embedding_model=self.embedding_model,
+                    alpha=config.conformal_linking_alpha,
+                    top_k=config.top_k_linking_candidates,
+                    ooo_threshold=config.jev_ooo_threshold,
+                )
+                self.entity_linker = CascadingEntityLinker(
+                    primary=fast_linker,
+                    fallback=dense_linker,
+                )
+            else:
+                self.entity_linker = dense_linker
         else:
             self.entity_linker = NameEntityLinker()
 
@@ -196,11 +205,6 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                     state_strategy=self.working_memory_manager.state_strategy,
                 )
         return self._doc_memory_managers[doc_id]
-
-    @property
-    def event_emitter(self) -> EventEmitter:
-        from episteme_pipeline.events.context import get_event_emitter
-        return get_event_emitter()
 
     async def run(self, input: Phase1ArtifactsView, context: ArtifactExecutionContext) -> ArtifactCollection:
         """
@@ -234,18 +238,19 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
 
         succeeded = 0
         progress_task = f"Phase 2: {len(chunks)} chunks"
-        self.event_emitter.emit(ProgressStarted(task_name=progress_task, total_items=len(chunks), description="Entity Discovery"))
-        
-        for i in range(0, len(chunks), self.config.batch_size):
-            batch = chunks[i : i + self.config.batch_size]
-            batch_entities, batch_triples, failures = await self._process_batch(batch, anchor=anchor)
-            succeeded += len(batch) - len(failures)
-            self._guard_systematic_failure(batch, failures, succeeded)
-            all_entities.extend(batch_entities)
-            all_triples.extend(batch_triples)
-            self.event_emitter.emit(ProgressAdvanced(task_name=progress_task, advance=len(batch)))
-            
-        self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
+        with self.progress_scope(
+            progress_task, total_items=len(chunks), description="Entity Discovery"
+        ) as advance:
+            for i in range(0, len(chunks), self.config.batch_size):
+                batch = chunks[i : i + self.config.batch_size]
+                batch_entities, batch_triples, failures = await self._process_batch(
+                    batch, anchor=anchor
+                )
+                succeeded += len(batch) - len(failures)
+                self._guard_systematic_failure(batch, failures, succeeded)
+                all_entities.extend(batch_entities)
+                all_triples.extend(batch_triples)
+                advance(len(batch))
 
         # Deduplicate all_entities by entity.id, merging source_chunk_ids across all occurrences
         merged_entities: dict[str, L2Entity] = {}
@@ -363,9 +368,8 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             for triple in triples:
                 triples_to_upsert.append(triple)
                 batch_triples.append(triple)
-                
-            if resolved_entities:
-                processed_chunks.append(chunk_id)
+
+            processed_chunks.append(chunk_id)
 
         from itertools import batched
         if entities_to_upsert:

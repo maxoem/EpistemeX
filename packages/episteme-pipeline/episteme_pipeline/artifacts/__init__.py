@@ -1,5 +1,14 @@
-"""Artifact domain models for durable, run-scoped pipeline outputs."""
-
+from episteme_pipeline.artifacts.codecs import (
+    ArtifactCodec,
+    ChunkCodec,
+    DocumentCodec,
+    GlobalRelationCodec,
+    LinkedEntityCodec,
+    LocalRelationCodec,
+    TheoryAtomCodec,
+    TheoryRelationCodec,
+    TripleCodec,
+)
 from episteme_pipeline.artifacts.models import (
     ArtifactEnvelope,
     ArtifactKind,
@@ -18,18 +27,27 @@ from episteme_pipeline.artifacts.models import (
 )
 
 __all__ = [
+    "ArtifactCodec",
     "ArtifactEnvelope",
     "ArtifactKind",
     "ArtifactProvenance",
     "ArtifactRef",
     "CanonicalizationArtifact",
     "ChunkArtifact",
+    "ChunkCodec",
     "DocumentArtifact",
+    "DocumentCodec",
     "EntityMentionArtifact",
     "FusionDecisionArtifact",
     "GlobalRelationArtifact",
+    "GlobalRelationCodec",
     "LinkedEntityArtifact",
+    "LinkedEntityCodec",
     "LocalRelationArtifact",
+    "LocalRelationCodec",
     "TheoryAtomArtifact",
+    "TheoryAtomCodec",
     "TheoryRelationArtifact",
+    "TheoryRelationCodec",
+    "TripleCodec",
 ]

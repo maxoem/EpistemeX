@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Design Patterns, Bidirectional Codec, Artifact Hydration, Graph Projection) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`artifacts/models.py`, `artifacts/builders.py`, `artifacts/execution.py`, `projection/artifact_projector.py`, `phases/phase4_entity_maturation/`, `phases/phase6_theorynet/`, `post_processing/theoretical_enrichment/`) |
 | **Priority** | **Critical** |
-| **Status** | `Open` |
+| **Status** | `Resolved` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/design_patterns_and_standards.md §3.5`](../../docs/architecture/design_patterns_and_standards.md), [`docs/architecture/artifact_run_model.md`](../../docs/architecture/artifact_run_model.md), [`docs/workflow/4_entity_maturation/index.md`](../../docs/workflow/4_entity_maturation/index.md), [`docs/workflow/6_theorynet/index.md`](../../docs/workflow/6_theorynet/index.md), [`ADR-0017`](../../docs/adr/0017-artifact-native-execution-and-selective-invalidation.md) |
 
 ---
@@ -124,7 +124,7 @@ And in `TheoreticalEnrichmentRunner.run()` (`post_processing/theoretical_enrichm
 
 ## 4. Acceptance Criteria
 
-- [ ] Round-trip property tests verify `Codec.to_domain(Codec.to_payload(x)) == x` for `L1Document`, `L1Chunk`, `L2Entity`, `L2Triple`, `TheoryAtom`, and `TheoryRelation`.
-- [ ] `Phase4EntityMaturationRunner` preserves `matured_entity.source_chunk_ids` across `Phase2ArtifactsView` and `ArtifactGraphProjector`.
-- [ ] `Phase6Runner.run()` increments `relations_updated` and returns updated `TheoryAtomArtifact` and `TheoryRelationArtifact` envelopes consumed by `TheoreticalEnrichmentRunner`.
-- [ ] `TheoreticalEnrichmentRunner` persists enriched relations via `upsert_theory_relations` without dropping D-QBAF edge properties.
+- [x] Round-trip property tests verify `Codec.to_domain(Codec.to_payload(x)) == x` for `L1Document`, `L1Chunk`, `L2Entity`, `L2Triple`, `TheoryAtom`, and `TheoryRelation`.
+- [x] `Phase4EntityMaturationRunner` preserves `matured_entity.source_chunk_ids` across `Phase2ArtifactsView` and `ArtifactGraphProjector`.
+- [x] `Phase6Runner.run()` increments `relations_updated` and returns updated `TheoryAtomArtifact` and `TheoryRelationArtifact` envelopes consumed by `TheoreticalEnrichmentRunner`.
+- [x] `TheoreticalEnrichmentRunner` persists enriched relations via `upsert_theory_relations` without dropping D-QBAF edge properties.

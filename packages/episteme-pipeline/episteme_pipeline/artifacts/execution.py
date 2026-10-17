@@ -3,6 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from episteme_pipeline.artifacts.builders import parse_mention_id
+from episteme_pipeline.artifacts.codecs import (
+    ChunkCodec,
+    DocumentCodec,
+    GlobalRelationCodec,
+    LinkedEntityCodec,
+    LocalRelationCodec,
+    TheoryAtomCodec,
+    TheoryRelationCodec,
+)
 from episteme_pipeline.artifacts.models import (
     ArtifactEnvelope,
     ArtifactKind,
@@ -31,7 +40,50 @@ from episteme_pipeline.runs.models import RunManifest
 
 @dataclass(slots=True)
 class ArtifactCollection:
+    """Homogeneous or heterogeneous collection of artifact envelopes.
+
+    Parameters
+    ----------
+    artifacts : list[ArtifactEnvelope[ArtifactPayload]]
+        List of envelopes contained within this collection.
+    """
+
     artifacts: list[ArtifactEnvelope[ArtifactPayload]]
+
+    def __len__(self) -> int:
+        """Return the number of artifacts in the collection.
+
+        Returns
+        -------
+        int
+            Count of artifacts.
+        """
+        return len(self.artifacts)
+
+    def __iter__(self):
+        """Iterate over the artifact envelopes in the collection.
+
+        Returns
+        -------
+        Iterator[ArtifactEnvelope[ArtifactPayload]]
+            Iterator over envelopes.
+        """
+        return iter(self.artifacts)
+
+    def __getitem__(self, index: int) -> ArtifactEnvelope[ArtifactPayload]:
+        """Index into the artifact collection.
+
+        Parameters
+        ----------
+        index : int
+            Position index.
+
+        Returns
+        -------
+        ArtifactEnvelope[ArtifactPayload]
+            Artifact envelope at index.
+        """
+        return self.artifacts[index]
 
     def of_kind(self, *kinds: ArtifactKind) -> list[ArtifactEnvelope[ArtifactPayload]]:
         allowed = set(kinds)
@@ -54,31 +106,11 @@ class Phase1ArtifactsView:
             if artifact.kind == ArtifactKind.DOCUMENT and isinstance(
                 payload, DocumentArtifact
             ):
-                documents.append(
-                    L1Document(
-                        id=payload.document_id,
-                        title=payload.title,
-                        source_path=payload.source_path,
-                        ingested_at=payload.ingested_at,
-                        chapter_count=int(payload.metadata.get("chapter_count", "0")),
-                        chunk_count=int(payload.metadata.get("chunk_count", "0")),
-                        structural_anchor=payload.structural_anchor,
-                        metadata=payload.metadata,
-                    )
-                )
+                documents.append(DocumentCodec.to_domain(payload))
             elif artifact.kind == ArtifactKind.CHUNK and isinstance(
                 payload, ChunkArtifact
             ):
-                chunks.append(
-                    L1Chunk(
-                        id=payload.chunk_id,
-                        text=payload.text,
-                        source_doc_id=payload.document_id,
-                        chapter_id=payload.chapter_id,
-                        sequence_index=payload.sequence_index,
-                        token_count=payload.token_count,
-                    )
-                )
+                chunks.append(ChunkCodec.to_domain(payload))
         return cls(documents=documents, chunks=chunks)
 
 
@@ -116,37 +148,22 @@ class Phase2ArtifactsView:
             if artifact.kind == ArtifactKind.LINKED_ENTITY and isinstance(
                 payload, LinkedEntityArtifact
             ):
-                source_chunk_ids = mention_chunk_ids_by_entity.get(
-                    payload.entity_id, []
-                )
-                entities.append(
-                    L2Entity(
-                        id=payload.entity_id,
-                        label=payload.entity_type,
-                        name=payload.canonical_name,
-                        description=payload.description,
-                        textual_envelope=payload.textual_envelope,
-                        is_mature=payload.is_mature,
-                        confidence=payload.confidence,
-                        source_chunk_ids=source_chunk_ids,
+                entity = LinkedEntityCodec.to_domain(payload)
+                if not entity.source_chunk_ids:
+                    source_chunk_ids = mention_chunk_ids_by_entity.get(
+                        payload.entity_id, []
                     )
-                )
+                    entity = entity.model_copy(
+                        update={"source_chunk_ids": source_chunk_ids}
+                    )
+                entities.append(entity)
                 entity_count_by_type[payload.entity_type] = (
                     entity_count_by_type.get(payload.entity_type, 0) + 1
                 )
             elif artifact.kind == ArtifactKind.LOCAL_RELATION and isinstance(
                 payload, LocalRelationArtifact
             ):
-                triples.append(
-                    L2Triple(
-                        subject_id=payload.subject_entity_id,
-                        predicate=payload.predicate,
-                        object_id=payload.object_entity_id,
-                        confidence=payload.confidence,
-                        scope="local",
-                        source_chunk_id=payload.source_chunk_id,
-                    )
-                )
+                triples.append(LocalRelationCodec.to_domain(payload))
         return cls(
             entities=entities,
             local_triples=triples,
@@ -170,31 +187,11 @@ class Phase3ArtifactsView:
             if artifact.kind == ArtifactKind.CHUNK and isinstance(
                 payload, ChunkArtifact
             ):
-                chunks.append(
-                    L1Chunk(
-                        id=payload.chunk_id,
-                        text=payload.text,
-                        source_doc_id=payload.document_id,
-                        chapter_id=payload.chapter_id,
-                        sequence_index=payload.sequence_index,
-                        token_count=payload.token_count,
-                    )
-                )
+                chunks.append(ChunkCodec.to_domain(payload))
             elif artifact.kind == ArtifactKind.GLOBAL_RELATION and isinstance(
                 payload, GlobalRelationArtifact
             ):
-                triples.append(
-                    L2Triple(
-                        subject_id=payload.subject_entity_id,
-                        predicate=payload.predicate,
-                        object_id=payload.object_entity_id,
-                        confidence=payload.confidence,
-                        scope="global",
-                        source_chunk_id=payload.supporting_chunk_ids[0]
-                        if payload.supporting_chunk_ids
-                        else "",
-                    )
-                )
+                triples.append(GlobalRelationCodec.to_domain(payload))
                 distribution[payload.predicate] = (
                     distribution.get(payload.predicate, 0) + 1
                 )
@@ -219,39 +216,11 @@ class Phase4ArtifactsView:
             if artifact.kind == ArtifactKind.THEORY_ATOM and isinstance(
                 payload, TheoryAtomArtifact
             ):
-                components.append(
-                    TheoryAtom(
-                        id=payload.component_id,
-                        text=payload.text,
-                        component_type=payload.component_type,
-                        source_chunk_id=payload.chunk_id,
-                        plausibility=payload.plausibility,
-                        epistemic_status=payload.epistemic_status,
-                        scope_type=payload.scope_type,
-                    )
-                )
+                components.append(TheoryAtomCodec.to_domain(payload))
             elif artifact.kind == ArtifactKind.THEORY_RELATION and isinstance(
                 payload, TheoryRelationArtifact
             ):
-                relations.append(
-                    TheoryRelation(
-                        source_id=payload.source_component_id,
-                        target_id=payload.target_component_id,
-                        relation_type=payload.relation_type,
-                        confidence=payload.confidence,
-                        scope=payload.scope,
-                        weight=payload.weight,
-                        class_probability=payload.class_probability,
-                        empirical_accuracy=payload.empirical_accuracy,
-                        modal_strength=payload.modal_strength,
-                        effective_weight=payload.effective_weight,
-                        decision_engine_provider=payload.decision_engine_provider,
-                        tenability=payload.tenability,
-                        calibrated_confidence=payload.calibrated_confidence,
-                        weight_support=payload.weight_support,
-                        weight_attack=payload.weight_attack,
-                    )
-                )
+                relations.append(TheoryRelationCodec.to_domain(payload))
         return cls(theory_atoms=components, theory_relations=relations)
 
 

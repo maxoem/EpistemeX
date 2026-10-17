@@ -31,13 +31,7 @@ from episteme_pipeline.artifacts.execution import (
 )
 from episteme_pipeline.config import Phase4EntityMaturationConfig
 from episteme_pipeline.contracts.domain import L2Entity
-from episteme_pipeline.events.bus import EventEmitter
-from episteme_pipeline.events.models import (
-    EntityMaturationSynthesized,
-    ProgressAdvanced,
-    ProgressCompleted,
-    ProgressStarted,
-)
+from episteme_pipeline.events.models import EntityMaturationSynthesized
 from episteme_pipeline.llm import ensure_structured_llm
 from episteme_pipeline.protocols.extractors import EmbeddingModel, as_tensor
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
@@ -101,11 +95,6 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
             embedding_model or _default_embedding_model()
         )
 
-    @property
-    def event_emitter(self) -> EventEmitter:
-        from episteme_pipeline.events.context import get_event_emitter
-        return get_event_emitter()
-
     async def run(self, input: Phase3ArtifactsView, context: ArtifactExecutionContext) -> ArtifactCollection:
         # Note: In a production setting with extremely large inputs, this could be triggered
         # dynamically during Phase 2 when an entity reaches a threshold N of mentions.
@@ -124,54 +113,48 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
         from itertools import batched
         
         progress_task = f"Phase 4 Maturation: {len(immature_entities)} entities"
-        if immature_entities:
-            self.event_emitter.emit(
-                ProgressStarted(
-                    task_name=progress_task,
-                    total_items=len(immature_entities),
-                    description="Entity Maturation",
-                )
-            )
-
         batch_size = self.config.batch_size
         
-        # Process and checkpoint in batches to ensure crash resilience
-        for batch_idx, entity_batch in enumerate(batched(immature_entities, batch_size)):
-            logger.info(f"Maturing batch {batch_idx + 1}...")
-            
-            # Parallelize the LLM synthesis for this small batch
-            tasks = [self._process_entity(entity, context.run_id) for entity in entity_batch]
-            matured_results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            entities_to_upsert = []
-            for entity, matured_entity in zip(entity_batch, matured_results):
-                if isinstance(matured_entity, Exception):
-                    logger.error(f"Entity Maturation failed for {entity.name}: {matured_entity}")
-                    continue
-                if matured_entity:
-                    entities_to_upsert.append(matured_entity)
-                    matured_artifacts.append(
-                        build_linked_entity_artifact(
-                            matured_entity,
-                            [f"artifact::{cid}" for cid in matured_entity.source_chunk_ids],
-                            run_id=context.run_id,
-                            phase_name=self.name,
-                            method="Phase4EntityMaturationRunner",
+        with self.progress_scope(
+            progress_task,
+            total_items=len(immature_entities),
+            description="Entity Maturation",
+        ) as advance:
+            # Process and checkpoint in batches to ensure crash resilience
+            for batch_idx, entity_batch in enumerate(batched(immature_entities, batch_size)):
+                logger.info(f"Maturing batch {batch_idx + 1}...")
+                
+                # Parallelize the LLM synthesis for this small batch
+                tasks = [self._process_entity(entity, context.run_id) for entity in entity_batch]
+                matured_results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                entities_to_upsert = []
+                for entity, matured_entity in zip(entity_batch, matured_results):
+                    if isinstance(matured_entity, Exception):
+                        logger.error(f"Entity Maturation failed for {entity.name}: {matured_entity}")
+                        continue
+                    if matured_entity:
+                        entities_to_upsert.append(matured_entity)
+                        matured_artifacts.append(
+                            build_linked_entity_artifact(
+                                matured_entity,
+                                [
+                                    f"artifact::mention::{matured_entity.id}::{cid}"
+                                    for cid in matured_entity.source_chunk_ids
+                                ],
+                                run_id=context.run_id,
+                                phase_name=self.name,
+                                method="Phase4EntityMaturationRunner",
+                            )
                         )
-                    )
-                    
-            # Checkpoint graph for this batch
-            if entities_to_upsert:
-                # Upsert in sub-batches of 500 (though max is 100 here)
-                for sub_batch in batched(entities_to_upsert, 500):
-                    await self.graph_store.upsert_entities(list(sub_batch))
+                        
+                # Checkpoint graph for this batch
+                if entities_to_upsert:
+                    # Upsert in sub-batches of 500 (though max is 100 here)
+                    for sub_batch in batched(entities_to_upsert, 500):
+                        await self.graph_store.upsert_entities(list(sub_batch))
 
-            self.event_emitter.emit(
-                ProgressAdvanced(task_name=progress_task, advance=len(entity_batch))
-            )
-
-        if immature_entities:
-            self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
+                advance(len(entity_batch))
 
             
         if matured_artifacts:

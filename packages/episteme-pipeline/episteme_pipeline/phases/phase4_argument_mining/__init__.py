@@ -39,18 +39,14 @@ from episteme_pipeline.artifacts.execution import (
 )
 from episteme_pipeline.config import Phase4Config
 from episteme_pipeline.contracts.domain import (
+    L1Chunk,
     TheoryAtom,
     TheoryRelation,
 )
 from episteme_pipeline.decision.gleaning import GleaningStoppingOracle, JevGleaningGate
 from episteme_pipeline.decision.modal_resolver import HybridModalResolver
-from episteme_pipeline.events.bus import EventEmitter
-from episteme_pipeline.events.models import (
-    ProgressAdvanced,
-    ProgressCompleted,
-    ProgressStarted,
-)
 from episteme_pipeline.phases.chunk_selection import select_pending_chunks
+from episteme_pipeline.phases.phase2_entity_discovery import SystematicChunkFailure
 from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import (
     LLMACCClassifier,
 )
@@ -59,6 +55,12 @@ from episteme_pipeline.phases.phase4_argument_mining.adu_segmenter import (
 )
 from episteme_pipeline.phases.phase4_argument_mining.arc_classifier import (
     TAGARCClassifier,
+)
+from episteme_pipeline.phases.phase4_argument_mining.classifiers import (
+    CascadingACCClassifier,
+    CascadingARCClassifier,
+    JevACCClassifier,
+    JevARCClassifier,
 )
 from episteme_pipeline.protocols.argument_mining import (
     ACCClassifier,
@@ -117,7 +119,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         graph_store : ProcessingGraph
             Active graph store for reading and writing components and relations.
         adu_segmenter : ADUSegmenter or None, default None
-            Optional segmenter override. If omitted, constructed per chunk.
+            Optional segmenter override.
         acc_classifier : ACCClassifier or None, default None
             Optional component classifier override.
         arc_classifier : ARCClassifier or None, default None
@@ -138,8 +140,6 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         self.graph_store = graph_store
         self.global_extractor = global_extractor
         self.decision_engine = decision_engine
-        self._adu_segmenter_override = adu_segmenter
-        self._acc_classifier_override = acc_classifier
 
         self.modal_resolver = ensure_modal_strength_resolver(modal_resolver) or HybridModalResolver.create(
             config=config.modal_resolver,
@@ -151,7 +151,32 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             config=config.gleaning,
             prompts=config.acc_prompts,
         )
-        self.arc_classifier = arc_classifier or TAGARCClassifier(
+
+        self.adu_segmenter: ADUSegmenter = adu_segmenter or LLMADUSegmenter(
+            llm=self.llm,
+            prompts=self.config.adu_segmentation_prompts,
+        )
+
+        default_llm_acc = LLMACCClassifier(
+            llm=self.llm,
+            prompts=self.config.acc_prompts,
+            strategy=self.config.acc_decoding_strategy,
+        )
+        self.acc_classifier: ACCClassifier = acc_classifier or (
+            CascadingACCClassifier(
+                fast_classifier=JevACCClassifier(
+                    decision_engine=self.decision_engine,
+                    prompts=self.config.acc_prompts,
+                    modal_resolver=self.modal_resolver,
+                ),
+                llm_classifier=default_llm_acc,
+                config=self.config,
+            )
+            if self.decision_engine is not None
+            else default_llm_acc
+        )
+
+        default_tag_arc = TAGARCClassifier(
             llm=llm,
             embedding_model=embedding_model,
             prompts=config.arc_prompts,
@@ -161,15 +186,58 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             max_candidates_per_component=config.arc_max_candidates_per_component,
             use_priority_rank=config.arc_use_priority_rank,
         )
+        self.arc_classifier: ARCClassifier = arc_classifier or (
+            CascadingARCClassifier(
+                fast_classifier=JevARCClassifier(
+                    decision_engine=self.decision_engine,
+                    prompts=config.arc_prompts,
+                    embedding_model=embedding_model,
+                    confidence_threshold=config.arc_confidence_threshold,
+                    max_candidates_per_component=config.arc_max_candidates_per_component,
+                ),
+                llm_classifier=default_tag_arc,
+                config=self.config,
+            )
+            if self.decision_engine is not None
+            else default_tag_arc
+        )
 
     @property
     def gleaning_gate(self) -> GleaningStoppingOracle:
         return self.stopping_oracle
 
-    @property
-    def event_emitter(self) -> EventEmitter:
-        from episteme_pipeline.events.context import get_event_emitter
-        return get_event_emitter()
+    @staticmethod
+    def _guard_systematic_failure(
+        batch: list[L1Chunk], failures: list[Exception], succeeded: int
+    ) -> None:
+        """Abort the phase when a whole batch fails identically and nothing has worked yet.
+
+        Parameters
+        ----------
+        batch : list of L1Chunk
+            The chunk batch being evaluated.
+        failures : list of Exception
+            Exceptions raised by processing chunks in this batch.
+        succeeded : int
+            Total count of chunks successfully processed so far.
+
+        Raises
+        ------
+        SystematicChunkFailure
+            When all chunks in the first batch fail with the same exception type.
+        """
+        if succeeded or not failures or len(failures) != len(batch):
+            return
+        failure_types = {type(exc) for exc in failures}
+        if len(failure_types) != 1:
+            return
+        exc = failures[0]
+        raise SystematicChunkFailure(
+            f"All {len(batch)} chunks of the first batch failed with "
+            f"{type(exc).__name__}: {exc}. This is a configuration or interface "
+            f"error, not a per-chunk data error — aborting Phase 4 instead of "
+            f"completing with an empty graph."
+        ) from exc
 
     async def run(
         self, input: Phase3ArtifactsView, context: ArtifactExecutionContext
@@ -184,79 +252,74 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         import asyncio
         from itertools import batched
 
+        succeeded = 0
         progress_task = f"Phase 4: Chunk ADU Extraction ({len(chunks)} chunks)"
-        if chunks:
-            self.event_emitter.emit(
-                ProgressStarted(
-                    task_name=progress_task,
-                    total_items=len(chunks),
-                    description="Chunk ADU Extraction",
-                )
-            )
+        with self.progress_scope(
+            progress_task,
+            total_items=len(chunks),
+            description="Chunk ADU Extraction",
+        ) as advance:
+            batch_size = self.config.batch_size
 
-        batch_size = self.config.batch_size
+            for batch_idx, chunk_batch in enumerate(batched(chunks, batch_size)):
+                logger.info(f"Mining arguments for chunk batch {batch_idx + 1}...")
+                tasks = [self._process_chunk(chunk.id, chunk.text) for chunk in chunk_batch]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for batch_idx, chunk_batch in enumerate(batched(chunks, batch_size)):
-            logger.info(f"Mining arguments for chunk batch {batch_idx + 1}...")
-            tasks = [self._process_chunk(chunk.id, chunk.text) for chunk in chunk_batch]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-    
-            new_components = []
-            new_local_relations = []
-            processed_chunk_ids = []
-            relations_to_upsert = []
+                new_components = []
+                new_local_relations = []
+                processed_chunk_ids = []
+                relations_to_upsert = []
+                failures: list[Exception] = []
 
-    
-            for chunk, result in zip(chunk_batch, results):
-                if isinstance(result, Exception):
-                    logger.error(
-                        "Chunk %s argument mining failed (will retry): %s", chunk.id, result
-                    )
-                    continue
-                    
-                components, local_rels, c_id = result
-                    
-                new_components.extend(components)
-                new_local_relations.extend(local_rels)
-                processed_chunk_ids.append(c_id)
-    
-                for component in components:
-                    relations_to_upsert.append({
-                        "from_id": component.id,
-                        "relation_type": "EXTRACTED_FROM",
-                        "to_id": c_id,
-                        "properties": {"confidence": 1.0},
-                    })
-                    for entity_id in component.entity_ids:
+                for chunk, result in zip(chunk_batch, results):
+                    if isinstance(result, Exception):
+                        logger.error(
+                            "Chunk %s argument mining failed (will retry): %s", chunk.id, result
+                        )
+                        failures.append(result)
+                        continue
+
+                    components, local_rels, c_id = result
+
+                    new_components.extend(components)
+                    new_local_relations.extend(local_rels)
+                    processed_chunk_ids.append(c_id)
+
+                    for component in components:
                         relations_to_upsert.append({
                             "from_id": component.id,
-                            "relation_type": "MENTIONS",
-                            "to_id": entity_id,
+                            "relation_type": "EXTRACTED_FROM",
+                            "to_id": c_id,
                             "properties": {"confidence": 1.0},
                         })
-            all_components.extend(new_components)
-            all_local_relations.extend(new_local_relations)
-    
-            # Batch persist local findings for this checkpoint
-            for comp_batch in batched(new_components, 500):
-                await self.graph_store.upsert_argument_components(list(comp_batch))
+                        for entity_id in component.entity_ids:
+                            relations_to_upsert.append({
+                                "from_id": component.id,
+                                "relation_type": "MENTIONS",
+                                "to_id": entity_id,
+                                "properties": {"confidence": 1.0},
+                            })
+                succeeded += len(chunk_batch) - len(failures)
+                self._guard_systematic_failure(list(chunk_batch), failures, succeeded)
+                all_components.extend(new_components)
+                all_local_relations.extend(new_local_relations)
 
-            for rel_batch in batched(new_local_relations, 500):
-                await self.graph_store.upsert_theory_relations(list(rel_batch))
-            
-            for rel_batch in batched(relations_to_upsert, 500):
-                await self.graph_store.upsert_relations(list(rel_batch))
-                
-            if processed_chunk_ids:
-                for processed_batch in batched(processed_chunk_ids, 500):
-                    await self.graph_store.mark_chunks_processed(list(processed_batch), _PHASE_TAG)
+                # Batch persist local findings for this checkpoint
+                for comp_batch in batched(new_components, 500):
+                    await self.graph_store.upsert_argument_components(list(comp_batch))
 
-            self.event_emitter.emit(
-                ProgressAdvanced(task_name=progress_task, advance=len(chunk_batch))
-            )
+                for rel_batch in batched(new_local_relations, 500):
+                    await self.graph_store.upsert_theory_relations(list(rel_batch))
 
-        if chunks:
-            self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
+                for rel_batch in batched(relations_to_upsert, 500):
+                    await self.graph_store.upsert_relations(list(rel_batch))
+
+                if processed_chunk_ids:
+                    for processed_batch in batched(processed_chunk_ids, 500):
+                        await self.graph_store.mark_chunks_processed(list(processed_batch), _PHASE_TAG)
+
+                advance(len(chunk_batch))
 
         # Deduplicate all_components by id to avoid duplicating artifacts or ARC calls
 
@@ -272,14 +335,11 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         global_relations: list[TheoryRelation] = []
         if self.arc_classifier is not None:
             arc_task = "Phase 4: Global ARC Classification"
-            self.event_emitter.emit(
-                ProgressStarted(
-                    task_name=arc_task,
-                    total_items=1,
-                    description="Cross-Chunk Relation Classification (ARC)",
-                )
-            )
-            try:
+            with self.progress_scope(
+                arc_task,
+                total_items=1,
+                description="Cross-Chunk Relation Classification (ARC)",
+            ) as advance_arc:
                 global_relations = await self.arc_classifier.classify_global(
                     local_components=all_components,
                     local_relations=all_local_relations,
@@ -287,12 +347,8 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                     global_extractor=self.global_extractor,
                     schema=self.schema,
                 )
-                self.event_emitter.emit(
-                    ProgressAdvanced(task_name=arc_task, advance=1, current=1, total_items=1)
-                )
-            finally:
-                self.event_emitter.emit(ProgressCompleted(task_name=arc_task))
-            
+                advance_arc(1)
+
             # Commit global argument relations
             for rel_batch in batched(global_relations, 500):
                 await self.graph_store.upsert_theory_relations(list(rel_batch))
@@ -322,13 +378,9 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
 
     async def _process_chunk(
         self, chunk_id: str, chunk_text: str
-    ) -> tuple[list[TheoryAtom], list[TheoryRelation]]:
+    ) -> tuple[list[TheoryAtom], list[TheoryRelation], str]:
         # Step 1: ADU Segmentation
-        segmenter = self._adu_segmenter_override or LLMADUSegmenter(
-            llm=self.llm,
-            prompt_template=self.config.adu_segmentation_prompt_template,
-        )
-        tagged_text, adu_ids = await segmenter.segment(chunk_id, chunk_text)
+        tagged_text, adu_ids = await self.adu_segmenter.segment(chunk_id, chunk_text)
 
         if not adu_ids:
             # No argumentative content
@@ -336,13 +388,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
 
         # Step 2: ACC Classification
         chunk_entities = await self.graph_store.get_chunk_entities(chunk_id)
-
-        classifier = self._acc_classifier_override or LLMACCClassifier(
-            llm=self.llm,
-            prompts=self.config.acc_prompts,
-            strategy=self.config.acc_decoding_strategy,
-        )
-        components, local_relations = await classifier.classify(
+        components, local_relations = await self.acc_classifier.classify(
             chunk_id=chunk_id,
             tagged_text=tagged_text,
             adu_ids=adu_ids,
@@ -379,13 +425,13 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 f"Previously identified argument components:\n{prior_components_text}\n"
                 f"Please identify any additional missed Argumentative Discourse Units."
             )
-            refine_tagged_text, new_adu_ids = await segmenter.segment(
+            refine_tagged_text, new_adu_ids = await self.adu_segmenter.segment(
                 f"{chunk_id}_refine_{pass_count}", refinement_input
             )
             if not new_adu_ids:
                 break
 
-            new_components, new_rels = await classifier.classify(
+            new_components, new_rels = await self.acc_classifier.classify(
                 chunk_id=chunk_id,
                 tagged_text=refine_tagged_text,
                 adu_ids=new_adu_ids,

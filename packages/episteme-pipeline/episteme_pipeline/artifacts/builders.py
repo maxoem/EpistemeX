@@ -1,5 +1,14 @@
 from __future__ import annotations
 
+from episteme_pipeline.artifacts.codecs import (
+    ChunkCodec,
+    DocumentCodec,
+    GlobalRelationCodec,
+    LinkedEntityCodec,
+    LocalRelationCodec,
+    TheoryAtomCodec,
+    TheoryRelationCodec,
+)
 from episteme_pipeline.artifacts.models import (
     ArtifactEnvelope,
     ArtifactKind,
@@ -35,17 +44,7 @@ def build_document_artifact(document: L1Document, *, run_id: str, phase_name: st
         phase_name=phase_name,
         method=method,
         provenance=ArtifactProvenance(source_path=document.source_path, source_document_id=document.id),
-        payload=DocumentArtifact(
-            document_id=document.id,
-            title=document.title,
-            source_path=document.source_path,
-            structural_anchor=document.structural_anchor,
-            metadata={
-                "chapter_count": str(document.chapter_count),
-                "chunk_count": str(document.chunk_count),
-            },
-            ingested_at=document.ingested_at,
-        ),
+        payload=DocumentCodec.to_payload(document),
         dependency_fingerprint=stable_fingerprint({"document_id": document.id, "source_path": document.source_path}),
     )
 
@@ -59,14 +58,7 @@ def build_chunk_artifact(chunk: L1Chunk, *, run_id: str, phase_name: str, method
         phase_name=phase_name,
         method=method,
         provenance=ArtifactProvenance(source_document_id=chunk.source_doc_id, source_chunk_id=chunk.id),
-        payload=ChunkArtifact(
-            chunk_id=chunk.id,
-            document_id=chunk.source_doc_id,
-            text=chunk.text,
-            sequence_index=chunk.sequence_index,
-            chapter_id=chunk.chapter_id,
-            token_count=chunk.token_count,
-        ),
+        payload=ChunkCodec.to_payload(chunk),
         dependency_fingerprint=stable_fingerprint({"chunk_id": chunk.id, "document_id": chunk.source_doc_id, "text": chunk.text}),
     )
 
@@ -96,6 +88,8 @@ def parse_mention_id(mention_id: str) -> tuple[str, str]:
 
 
 def build_linked_entity_artifact(entity: L2Entity, mention_artifact_ids: list[str], *, run_id: str, phase_name: str, method: str) -> ArtifactEnvelope:
+    payload = LinkedEntityCodec.to_payload(entity)
+    payload.mention_ids = [artifact_id.removeprefix("artifact::") for artifact_id in mention_artifact_ids]
     return ArtifactEnvelope(
         artifact_id=f"artifact::{entity.id}",
         identity_key=f"linked_entity::{entity.id}",
@@ -104,16 +98,7 @@ def build_linked_entity_artifact(entity: L2Entity, mention_artifact_ids: list[st
         phase_name=phase_name,
         method=method,
         provenance=ArtifactProvenance(source_chunk_id=entity.source_chunk_ids[0] if entity.source_chunk_ids else None, upstream_artifact_ids=mention_artifact_ids),
-        payload=LinkedEntityArtifact(
-            entity_id=entity.id,
-            canonical_name=entity.name,
-            entity_type=entity.label,
-            mention_ids=[artifact_id.removeprefix("artifact::") for artifact_id in mention_artifact_ids],
-            description=entity.description,
-            textual_envelope=entity.textual_envelope,
-            is_mature=entity.is_mature,
-            confidence=entity.confidence,
-        ),
+        payload=payload,
         dependency_fingerprint=stable_fingerprint({"entity_id": entity.id, "canonical_name": entity.name, "entity_type": entity.label}),
     )
 
@@ -130,7 +115,7 @@ def build_local_relation_artifact(triple: L2Triple, *, run_id: str, phase_name: 
         phase_name=phase_name,
         method=method,
         provenance=ArtifactProvenance(source_chunk_id=triple.source_chunk_id, upstream_artifact_ids=[f"artifact::{triple.subject_id}", f"artifact::{triple.object_id}"]),
-        payload=LocalRelationArtifact(relation_id=relation_id, subject_entity_id=triple.subject_id, predicate=triple.predicate, object_entity_id=triple.object_id, source_chunk_id=triple.source_chunk_id, confidence=triple.confidence),
+        payload=LocalRelationArtifact(relation_id=relation_id, subject_entity_id=triple.subject_id, predicate=triple.predicate, object_entity_id=triple.object_id, source_chunk_id=triple.source_chunk_id or "", confidence=triple.confidence),
         dependency_fingerprint=stable_fingerprint({"relation_id": relation_id, "predicate": triple.predicate, "scope": triple.scope}),
     )
 
@@ -146,13 +131,13 @@ def build_global_relation_artifact(triple: L2Triple, relation_dist: dict[str, in
         phase_name=phase_name,
         method=method,
         provenance=ArtifactProvenance(source_chunk_id=triple.source_chunk_id, upstream_artifact_ids=[f"artifact::{triple.subject_id}", f"artifact::{triple.object_id}"]),
-        payload=GlobalRelationArtifact(relation_id=relation_id, subject_entity_id=triple.subject_id, predicate=triple.predicate, object_entity_id=triple.object_id, supporting_chunk_ids=[triple.source_chunk_id], confidence=triple.confidence, rerank_score=triple.rerank_score),
+        payload=GlobalRelationArtifact(relation_id=relation_id, subject_entity_id=triple.subject_id, predicate=triple.predicate, object_entity_id=triple.object_id, supporting_chunk_ids=[triple.source_chunk_id] if triple.source_chunk_id else [], confidence=triple.confidence, rerank_score=triple.rerank_score),
         dependency_fingerprint=stable_fingerprint({"relation_id": relation_id, "predicate": triple.predicate, "source_chunk_id": triple.source_chunk_id}),
         metadata={"relation_type_distribution": str(relation_dist.get(triple.predicate, 0))},
     )
 
 
-def build_argument_component_artifact(component: TheoryAtom, *, run_id: str, phase_name: str, method: str) -> ArtifactEnvelope:
+def build_theory_atom_artifact(component: TheoryAtom, *, run_id: str, phase_name: str, method: str) -> ArtifactEnvelope:
     return ArtifactEnvelope(
         artifact_id=f"artifact::{component.id}",
         identity_key=f"argument_component::{component.id}",
@@ -161,16 +146,7 @@ def build_argument_component_artifact(component: TheoryAtom, *, run_id: str, pha
         phase_name=phase_name,
         method=method,
         provenance=ArtifactProvenance(source_chunk_id=component.source_chunk_id, upstream_artifact_ids=[f"artifact::{component.source_chunk_id}"]),
-        payload=TheoryAtomArtifact(
-            component_id=component.id,
-            chunk_id=component.source_chunk_id,
-            text=component.text,
-            component_type=component.component_type,
-            confidence=component.confidence,
-            plausibility=component.plausibility,
-            epistemic_status=component.epistemic_status,
-            scope_type=component.scope_type,
-        ),
+        payload=TheoryAtomCodec.to_payload(component),
         dependency_fingerprint=stable_fingerprint({
             "component_id": component.id,
             "component_type": component.component_type,
@@ -181,7 +157,10 @@ def build_argument_component_artifact(component: TheoryAtom, *, run_id: str, pha
     )
 
 
-def build_argument_relation_artifact(relation: TheoryRelation, *, run_id: str, phase_name: str, method: str) -> ArtifactEnvelope:
+build_argument_component_artifact = build_theory_atom_artifact
+
+
+def build_theory_relation_artifact(relation: TheoryRelation, *, run_id: str, phase_name: str, method: str) -> ArtifactEnvelope:
     relation_id = f"argument-relation::{relation.source_id}::{relation.relation_type}::{relation.target_id}"
     return ArtifactEnvelope(
         artifact_id=f"artifact::{relation_id}",
@@ -191,26 +170,12 @@ def build_argument_relation_artifact(relation: TheoryRelation, *, run_id: str, p
         phase_name=phase_name,
         method=method,
         provenance=ArtifactProvenance(upstream_artifact_ids=[f"artifact::{relation.source_id}", f"artifact::{relation.target_id}"]),
-        payload=TheoryRelationArtifact(
-            relation_id=relation_id,
-            source_component_id=relation.source_id,
-            target_component_id=relation.target_id,
-            relation_type=relation.relation_type,
-            scope=relation.scope,
-            confidence=relation.confidence,
-            weight=relation.weight,
-            class_probability=relation.class_probability,
-            empirical_accuracy=relation.empirical_accuracy,
-            modal_strength=relation.modal_strength,
-            effective_weight=relation.effective_weight,
-            decision_engine_provider=relation.decision_engine_provider,
-            tenability=relation.tenability,
-            calibrated_confidence=relation.calibrated_confidence,
-            weight_support=relation.weight_support,
-            weight_attack=relation.weight_attack,
-        ),
+        payload=TheoryRelationCodec.to_payload(relation),
         dependency_fingerprint=stable_fingerprint({"relation_id": relation_id, "relation_type": relation.relation_type, "scope": relation.scope}),
     )
+
+
+build_argument_relation_artifact = build_theory_relation_artifact
 
 
 def build_canonicalization_artifact(original_id: str, canonical_id: str, *, run_id: str, phase_name: str, method: str) -> ArtifactEnvelope:
