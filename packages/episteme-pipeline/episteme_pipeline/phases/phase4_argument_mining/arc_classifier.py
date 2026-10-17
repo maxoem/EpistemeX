@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 
-from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom, TheoryRelation
+from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
 from episteme_pipeline.llm import ensure_structured_llm
 from episteme_pipeline.phases.phase4_argument_mining.models import ARCRelationOutput
 from episteme_pipeline.phases.phase4_argument_mining.pairing import (
@@ -35,31 +35,6 @@ from episteme_pipeline.utils import format_envelope
 from episteme_pipeline.utils.similarity import cosine_similarity_matrix
 
 logger = logging.getLogger(__name__)
-
-
-def _component_as_entity(component: TheoryAtom) -> L2Entity:
-    """
-    Convert a TheoryAtom into an L2Entity for structural retrieval.
-
-    This acts as a thin adapter so that `TheoryAtom` can be passed to
-    `get_structural_neighborhood`.
-
-    Parameters
-    ----------
-    component : TheoryAtom
-        The theory atom component to convert.
-
-    Returns
-    -------
-    L2Entity
-        The resulting L2 entity.
-    """
-    return L2Entity(
-        id=component.id,
-        label="TheoryAtom",
-        name=component.text[:80],
-        description=component.component_type,
-    )
 
 
 class TAGARCClassifier(ARCClassifier):
@@ -141,8 +116,8 @@ class TAGARCClassifier(ARCClassifier):
         local_components: list[TheoryAtom],
         local_relations: list[TheoryRelation],
         graph_store: GraphReader,
-        global_extractor: GlobalRelationExtractor,
-        schema: SchemaConfig,
+        global_extractor: GlobalRelationExtractor | None = None,
+        schema: SchemaConfig | None = None,
     ) -> list[TheoryRelation]:
         """
         Predict cross-chunk argument relations using the LLM.
@@ -155,17 +130,19 @@ class TAGARCClassifier(ARCClassifier):
             The relations already extracted locally.
         graph_store : GraphReader
             The graph database reader to fetch subgraph neighborhoods.
-        global_extractor : GlobalRelationExtractor
-            The extractor used to fetch the structural context.
-        schema : SchemaConfig
-            The pipeline schema definitions.
+        global_extractor : GlobalRelationExtractor | None, optional
+            Deprecated / optional global extractor. Subgraphs are fetched directly
+            from graph_store.
+        schema : SchemaConfig | None, optional
+            The pipeline schema definitions. If None, defaults to SchemaConfig().
 
         Returns
         -------
         list[TheoryRelation]
             A list of successfully predicted global relations.
         """
-        candidate_pairs = await self._cross_chunk_pairs(local_components, schema)
+        effective_schema = schema or SchemaConfig()
+        candidate_pairs = await self._cross_chunk_pairs(local_components, effective_schema)
         logger.info(
             "ARC: %d components → %d cross-chunk candidate pairs",
             len(local_components),
@@ -173,7 +150,7 @@ class TAGARCClassifier(ARCClassifier):
         )
 
         tasks = [
-            self._classify_pair(a, b, graph_store, global_extractor, schema)
+            self._classify_pair(a, b, graph_store, effective_schema, global_extractor=global_extractor)
             for a, b in candidate_pairs
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -320,26 +297,20 @@ class TAGARCClassifier(ARCClassifier):
             The second theory atom.
         graph_store : GraphReader
             The graph storage client.
-        global_extractor : GlobalRelationExtractor
-            The extractor to retrieve structural contexts.
         schema : SchemaConfig
             The schema to validate relation types against.
+        global_extractor : GlobalRelationExtractor | None, optional
+            Deprecated / optional global extractor. Subgraphs are fetched directly
+            from graph_store.
 
         Returns
         -------
         TheoryRelation | None
             The predicted relation, or None if no valid relation was found.
         """
-        entity_a = _component_as_entity(component_a)
-        entity_b = _component_as_entity(component_b)
-
         env_a, env_b = await asyncio.gather(
-            global_extractor.get_structural_neighborhood(
-                entity_a, graph_store, self.subgraph_depth
-            ),
-            global_extractor.get_structural_neighborhood(
-                entity_b, graph_store, self.subgraph_depth
-            ),
+            graph_store.get_neighborhood(component_a.id, depth=self.subgraph_depth),
+            graph_store.get_neighborhood(component_b.id, depth=self.subgraph_depth),
         )
 
         envelope_text = format_envelope(env_a, env_b, include_description=False)

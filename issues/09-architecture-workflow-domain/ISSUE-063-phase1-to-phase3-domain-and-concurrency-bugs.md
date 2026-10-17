@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Phase 1–3 Workflow Bugs, Concurrency Safety, Domain Correctness) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`phases/phase1_foundation/`, `phases/phase2_entity_discovery/`, `phases/phase3_global_relations/`) |
 | **Priority** | **Critical** |
-| **Status** | `Open` |
+| **Status** | `Resolved` |
 | **Evaluated Docs & ADRs** | [`docs/workflow/1_data_foundation/index.md`](../../docs/workflow/1_data_foundation/index.md), [`docs/workflow/2_entity_discovery/index.md`](../../docs/workflow/2_entity_discovery/index.md), [`docs/workflow/3_relation_extraction/index.md`](../../docs/workflow/3_relation_extraction/index.md), [`docs/architecture/design_patterns_and_standards.md §3.6`](../../docs/architecture/design_patterns_and_standards.md) |
 
 ---
@@ -120,8 +120,8 @@ else:
 
 ## 3. Acceptance Criteria
 
-- [ ] Ingesting a `.tex` document in Phase 1 produces a valid Markdown-parsed `GlobalStructuralAnchor` rather than `"(No LaTeX section commands detected)"`.
-- [ ] `L1Chunk.token_count` matches `chunker._count_tokens(chunk.text)` rather than `len(chunk.text.split())`.
-- [ ] `EpisodicWorkingMemoryManager` state transitions execute deterministically in `sequence_index` order without `asyncio.gather` data races, and `Phase2Runner` emits at most one `LinkedEntityArtifact` per unique `entity.id` with merged `source_chunk_ids`.
-- [ ] `DenseEntityLinker.link()` succeeds when `cross_encoder=None` by falling back to bi-encoder cosine scores, and offloads `cross_encoder.predict` via `asyncio.to_thread`.
-- [ ] `DenseRetrievalGlobalRelationExtractor._extract_pair()` enforces `self.config.global_relation_confidence_threshold` and guards against zero-norm embeddings.
+- [x] Ingesting a `.tex` document in Phase 1 produces a valid Markdown-parsed `GlobalStructuralAnchor` rather than `"(No LaTeX section commands detected)"`.
+- [x] `L1Chunk.token_count` matches `chunker._count_tokens(chunk.text)` rather than `len(chunk.text.split())`.
+- [x] `EpisodicWorkingMemoryManager` state transitions execute deterministically in `sequence_index` order without `asyncio.gather` data races, and `Phase2Runner` emits at most one `LinkedEntityArtifact` per unique `entity.id` with merged `source_chunk_ids`.
+- [x] `DenseEntityLinker.link()` succeeds when `cross_encoder=None` by falling back to bi-encoder cosine scores, and offloads `cross_encoder.predict` via `asyncio.to_thread`.
+- [x] `DenseRetrievalGlobalRelationExtractor._extract_pair()` enforces `self.config.global_relation_confidence_threshold` and guards against zero-norm embeddings.

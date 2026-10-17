@@ -252,16 +252,11 @@ class TenabilitySolver(Fingerprintable):
                 deltas.append(diff)
 
         if not shared_keys:
-            repression = source_params.get("RepressionMagnitude") or target_params.get("RepressionMagnitude")
-            amygdala = source_params.get("AmygdalaHyperactivity") or target_params.get("AmygdalaHyperactivity")
-            dopamine = source_params.get("DopamineDepletion") or target_params.get("DopamineDepletion")
-
-            if repression is not None and amygdala is not None:
-                diff = abs(float(repression) - float(amygdala))
-                deltas.append(diff)
-            elif repression is not None and dopamine is not None:
-                diff = abs(float(repression) - float(dopamine))
-                deltas.append(diff)
+            num_source = [float(v) for v in source_params.values() if isinstance(v, (int, float))]
+            num_target = [float(v) for v in target_params.values() if isinstance(v, (int, float))]
+            if num_source and num_target:
+                for s, t in zip(num_source, num_target):
+                    deltas.append(abs(s - t))
 
         delta_c = max(deltas) if deltas else 0.0
         ts_edge = max(0.0, min(1.0, 1.0 - delta_c))

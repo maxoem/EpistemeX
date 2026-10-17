@@ -172,6 +172,30 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             self.entity_linker = NameEntityLinker()
 
         self.working_memory_manager = working_memory_manager or EpisodicWorkingMemoryManager()
+        self._doc_memory_managers: dict[str, EpisodicWorkingMemoryManager] = {}
+
+    def _get_memory_manager(self, doc_id: str) -> EpisodicWorkingMemoryManager:
+        """Retrieve or create an episodic working memory manager scoped per document.
+
+        Parameters
+        ----------
+        doc_id : str
+            Source document identifier.
+
+        Returns
+        -------
+        EpisodicWorkingMemoryManager
+            Working memory manager instance scoped to the given document.
+        """
+        if doc_id not in self._doc_memory_managers:
+            if not self._doc_memory_managers:
+                self._doc_memory_managers[doc_id] = self.working_memory_manager
+            else:
+                self._doc_memory_managers[doc_id] = EpisodicWorkingMemoryManager(
+                    anchor=self.working_memory_manager.anchor,
+                    state_strategy=self.working_memory_manager.state_strategy,
+                )
+        return self._doc_memory_managers[doc_id]
 
     @property
     def event_emitter(self) -> EventEmitter:
@@ -202,6 +226,9 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         if not chunks:
             return ArtifactCollection([])
 
+        # Process chunks sequentially along document order
+        chunks = sorted(chunks, key=lambda c: (c.source_doc_id, c.sequence_index))
+
         all_entities: list[L2Entity] = []
         all_triples: list[L2Triple] = []
 
@@ -220,8 +247,28 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             
         self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
 
-        artifacts = []
+        # Deduplicate all_entities by entity.id, merging source_chunk_ids across all occurrences
+        merged_entities: dict[str, L2Entity] = {}
         for entity in all_entities:
+            if entity.id not in merged_entities:
+                merged_entities[entity.id] = entity.model_copy(
+                    update={"source_chunk_ids": list(dict.fromkeys(entity.source_chunk_ids))}
+                )
+            else:
+                existing = merged_entities[entity.id]
+                combined_chunks = list(dict.fromkeys(existing.source_chunk_ids + entity.source_chunk_ids))
+                conf_candidates = [c for c in [existing.confidence, entity.confidence] if c is not None]
+                merged_entities[entity.id] = existing.model_copy(
+                    update={
+                        "source_chunk_ids": combined_chunks,
+                        "description": existing.description or entity.description,
+                        "confidence": max(conf_candidates) if conf_candidates else None,
+                    }
+                )
+        deduped_entities = list(merged_entities.values())
+
+        artifacts = []
+        for entity in deduped_entities:
             mention_artifact_ids = []
             for chunk_id in entity.source_chunk_ids:
                 mention_id = f"mention::{entity.id}::{chunk_id}"
@@ -293,7 +340,15 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                 failures.append(result)
                 continue
                 
-            resolved_entities, triples, chunk_id = result
+            resolved_entities, triples, chunk_id, memory_update, boundary_detected, transitional_summary = result
+
+            memory_mgr = self._get_memory_manager(chunk.source_doc_id)
+            memory_mgr.process_step(
+                chunk=chunk,
+                state_delta=memory_update,
+                semantic_boundary_detected=boundary_detected,
+                transitional_summary=transitional_summary,
+            )
             
             for entity, env in resolved_entities:
                 entities_to_upsert.append(entity)
@@ -330,21 +385,15 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
 
     async def _process_chunk(
         self, chunk: L1Chunk, anchor: GlobalStructuralAnchor | None = None
-    ) -> tuple[list[tuple[L2Entity, str | None]], list[L2Triple], str]:
-        effective_anchor = anchor or self.working_memory_manager.get_effective_anchor(chunk)
+    ) -> tuple[list[tuple[L2Entity, str | None]], list[L2Triple], str, dict[str, Any] | None, bool, str | None]:
+        memory_mgr = self._get_memory_manager(chunk.source_doc_id)
+        effective_anchor = anchor or memory_mgr.get_effective_anchor(chunk)
         entities, triples, memory_update, boundary_detected, transitional_summary = await self.ner_extractor.extract(
             chunk_id=chunk.id,
             chunk_text=chunk.text,
             schema=self.schema,
-            memory=self.working_memory_manager.state,
+            memory=memory_mgr.state,
             anchor=effective_anchor,
-        )
-
-        self.working_memory_manager.process_step(
-            chunk=chunk,
-            state_delta=memory_update,
-            semantic_boundary_detected=boundary_detected,
-            transitional_summary=transitional_summary,
         )
 
         # Apply confidence threshold filtering if configured
@@ -372,7 +421,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             except Exception:
                 # Best-effort; lack of this flag must not block execution
                 pass
-            return [], [], chunk.id
+            return [], [], chunk.id, memory_update, boundary_detected, transitional_summary
 
         # Entity linking: redirect to existing canonical IDs where possible
         resolved_entities: list[tuple[L2Entity, str | None]] = []
@@ -417,4 +466,4 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                 )
             )
 
-        return resolved_entities, resolved_triples, chunk.id
+        return resolved_entities, resolved_triples, chunk.id, memory_update, boundary_detected, transitional_summary

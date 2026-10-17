@@ -212,16 +212,12 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             )
 
         # -------------------------------------------------------------
-        # Step 2: Domain-Specific Projections (Phi_spec)
-        # Step 3: Local Tenability Calculation (TS_local)
-        # Step 4: Global and Intertheoretical Consistency (GL)
         # -------------------------------------------------------------
-        enrichment_artifacts: list[ArtifactEnvelope[TheoreticalEnrichmentArtifact]] = []
+        # Step 2: Domain-Specific Projections (Phi_spec) & Local Tenability (TS_local)
+        # Pass 1: Project parameters and evaluate local tenability for all (cluster, theory) pairs
+        # -------------------------------------------------------------
         cluster_theory_params: dict[tuple[str, str], dict[str, Any]] = {}
-        atoms_to_update: list[TheoryAtom] = []
-        relations_to_update: list[dict[str, Any]] = []
-
-        {a.id: a for a in input.theory_atoms}
+        cluster_local_results: dict[tuple[str, str], tuple[float, float, list[str]]] = {}
 
         for cluster in clusters:
             for theory_id in cluster.claimant_theory_ids:
@@ -247,6 +243,11 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                 ts_local, delta_star, local_anomalies = self.solver.solve_local_tenability(
                     projected_params, theory
                 )
+                cluster_local_results[(cluster.cluster_id, theory_id)] = (
+                    ts_local,
+                    delta_star,
+                    local_anomalies,
+                )
 
                 for anom in local_anomalies:
                     self.event_emitter.emit(
@@ -260,6 +261,25 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                         )
                     )
 
+        # -------------------------------------------------------------
+        # Step 4: Edge Tenability & Aggregated Consistency (TS_edge, GL)
+        # Pass 2: Evaluate inter-cluster / intertheoretical edge tenability with complete parameter map
+        # -------------------------------------------------------------
+        enrichment_artifacts: list[ArtifactEnvelope[TheoreticalEnrichmentArtifact]] = []
+        atoms_to_update: list[TheoryAtom] = []
+        relations_to_update: list[dict[str, Any]] = []
+
+        for cluster in clusters:
+            for theory_id in cluster.claimant_theory_ids:
+                theory = self.registry.get(theory_id)
+                if not theory or (cluster.cluster_id, theory_id) not in cluster_theory_params:
+                    continue
+
+                projected_params = cluster_theory_params[(cluster.cluster_id, theory_id)]
+                ts_local, delta_star, local_anomalies = cluster_local_results[
+                    (cluster.cluster_id, theory_id)
+                ]
+
                 # Step 4: Edge Tenability Calculation (TS_edge) across cluster relations
                 edge_scores: dict[str, float] = {}
                 edge_anomalies: list[str] = []
@@ -267,7 +287,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                 for rel in cluster.relations:
                     rel_key = f"{rel.source_id}->{rel.relation_type}->{rel.target_id}"
 
-                    # Look up counterpart params (either target node's cluster or sibling theory)
+                    # Look up counterpart params across fully-populated cluster_theory_params
                     target_params = self._find_target_parameters(
                         rel.target_id, clusters, cluster_theory_params, theory_id
                     )
@@ -438,12 +458,30 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         cluster_theory_params: dict[tuple[str, str], dict[str, Any]],
         current_theory_id: str,
     ) -> dict[str, Any]:
-        """Find parameters postulated at a target node or its associated theories."""
-        # Find which cluster target_id belongs to
+        """Find parameters postulated at a target node or its associated theories.
+
+        Parameters
+        ----------
+        target_id : str
+            Identifier of target observation node.
+        clusters : list of EmpiricalCluster
+            All empirical clusters.
+        cluster_theory_params : dict
+            Projected parameters mapped by (cluster_id, theory_id).
+        current_theory_id : str
+            Identifier of the evaluating theory.
+
+        Returns
+        -------
+        dict[str, Any]
+            Parameters for the target node/cluster, or empty dict if unresolved.
+        """
         for cluster in clusters:
             for obs in cluster.observations:
                 if obs.id == target_id:
-                    # Check if current theory or an overlapping theory has projected parameters
+                    # Prefer matching current_theory_id first if present
+                    if (cluster.cluster_id, current_theory_id) in cluster_theory_params:
+                        return cluster_theory_params[(cluster.cluster_id, current_theory_id)]
                     for (c_id, t_id), params in cluster_theory_params.items():
                         if c_id == cluster.cluster_id:
                             return params

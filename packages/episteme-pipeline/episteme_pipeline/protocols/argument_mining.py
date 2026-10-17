@@ -82,6 +82,6 @@ class ARCClassifier(Fingerprintable, ABC):
         local_components: list[TheoryAtom],
         local_relations: list[TheoryRelation],
         graph_store: GraphReader,
-        global_extractor: GlobalRelationExtractor,
-        schema: SchemaConfig,
+        global_extractor: GlobalRelationExtractor | None = None,
+        schema: SchemaConfig | None = None,
     ) -> list[TheoryRelation]: ...

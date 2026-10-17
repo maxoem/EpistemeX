@@ -121,11 +121,14 @@ class RawChunk:
         Text content of the chunk.
     sequence_index : int
         Zero-based monotonic sequence index within the document.
+    token_count : int
+        Accurate BPE token count for the chunk text.
     """
 
     chapter_title: str
     text: str
     sequence_index: int
+    token_count: int = 0
 
 
 def parse_sections(markdown: str) -> list[RawSection]:
@@ -217,6 +220,7 @@ def chunk_section(
                     chapter_title=section.title,
                     text="\n\n".join(current_units),
                     sequence_index=seq,
+                    token_count=current_tokens,
                 )
             )
             seq += 1
@@ -243,6 +247,7 @@ def chunk_section(
                 chapter_title=section.title,
                 text="\n\n".join(current_units),
                 sequence_index=seq,
+                token_count=current_tokens,
             )
         )
 

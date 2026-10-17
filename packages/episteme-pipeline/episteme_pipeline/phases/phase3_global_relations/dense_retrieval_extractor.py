@@ -755,6 +755,26 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         if raw.relation is None:
             return None
 
+        if raw.confidence < self.config.global_relation_confidence_threshold:
+            logger.debug(
+                "Discarded (%s)-[%s]->(%s): confidence %.2f < threshold %.2f",
+                entity_a.name,
+                raw.relation,
+                entity_b.name,
+                raw.confidence,
+                self.config.global_relation_confidence_threshold,
+            )
+            self.event_emitter.emit(
+                CandidateRejectedByThreshold(
+                    candidate_pair=(entity_a.id, entity_b.id),
+                    stage="llm_relation_confidence",
+                    score=raw.confidence,
+                    threshold=self.config.global_relation_confidence_threshold,
+                    reason=f"LLM relation confidence {raw.confidence:.2f} < {self.config.global_relation_confidence_threshold:.2f}",
+                )
+            )
+            return None
+
         # Validate relation type against schema
         if raw.relation not in schema.relation_types:
             logger.debug(

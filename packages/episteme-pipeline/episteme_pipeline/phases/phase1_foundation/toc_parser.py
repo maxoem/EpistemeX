@@ -127,12 +127,17 @@ class LaTeXToCParser(ToCParserStrategy):
     """Parses LaTeX sectioning commands (\\part, \\chapter, \\section, etc.) into a GlobalStructuralAnchor."""
 
     def can_handle(self, path: Path | str | None, text: str) -> bool:
+        has_latex_cmd = r"\documentclass" in text or bool(_LATEX_SECTION_RE.search(text))
         if path:
             p = Path(path)
             if p.suffix.lower() in (".tex", ".latex", ".sty"):
+                # If text has already been converted to markdown (has markdown headers and no LaTeX commands),
+                # do not claim handling so MarkdownToCParser can process it.
+                if not has_latex_cmd and bool(_MD_HEADER_RE.search(text)):
+                    return False
                 return True
         # Text heuristic fallback: contains LaTeX documentclass or sectioning commands
-        return r"\documentclass" in text or bool(_LATEX_SECTION_RE.search(text))
+        return has_latex_cmd
 
     def parse(self, text: str, document_title: str) -> GlobalStructuralAnchor:
         lines: list[str] = []

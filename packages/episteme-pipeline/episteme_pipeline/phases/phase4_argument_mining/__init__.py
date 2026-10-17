@@ -151,19 +151,15 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             config=config.gleaning,
             prompts=config.acc_prompts,
         )
-        self.arc_classifier = arc_classifier or (
-            TAGARCClassifier(
-                llm=llm,
-                embedding_model=embedding_model,
-                prompts=config.arc_prompts,
-                strategy=config.arc_decoding_strategy,
-                confidence_threshold=config.arc_confidence_threshold,
-                subgraph_depth=config.arc_subgraph_depth,
-                max_candidates_per_component=config.arc_max_candidates_per_component,
-                use_priority_rank=config.arc_use_priority_rank,
-            )
-            if global_extractor is not None
-            else None
+        self.arc_classifier = arc_classifier or TAGARCClassifier(
+            llm=llm,
+            embedding_model=embedding_model,
+            prompts=config.arc_prompts,
+            strategy=config.arc_decoding_strategy,
+            confidence_threshold=config.arc_confidence_threshold,
+            subgraph_depth=config.arc_subgraph_depth,
+            max_candidates_per_component=config.arc_max_candidates_per_component,
+            use_priority_rank=config.arc_use_priority_rank,
         )
 
     @property
@@ -274,7 +270,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
 
         # Global argument relation classification (cross-chunk)
         global_relations: list[TheoryRelation] = []
-        if self.arc_classifier is not None and self.global_extractor is not None:
+        if self.arc_classifier is not None:
             arc_task = "Phase 4: Global ARC Classification"
             self.event_emitter.emit(
                 ProgressStarted(
@@ -300,10 +296,6 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             # Commit global argument relations
             for rel_batch in batched(global_relations, 500):
                 await self.graph_store.upsert_theory_relations(list(rel_batch))
-
-        if processed_chunk_ids:
-            for chunk_batch in batched(processed_chunk_ids, 500):
-                await self.graph_store.mark_chunks_processed(list(chunk_batch), _PHASE_TAG)
 
         all_relations = all_local_relations + global_relations
 

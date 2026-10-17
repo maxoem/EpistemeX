@@ -258,20 +258,24 @@ class DenseEntityLinker(EntityLinker):
         from episteme_pipeline.prompts.input_formatters import InputFormatStrategy
         from episteme_pipeline.utils import format_envelope
 
-        tasks = [graph_store.get_neighborhood(c.id, depth=1) for c in top_candidates]
-        subgraphs = await asyncio.gather(*tasks, return_exceptions=True)
+        if self.cross_encoder is not None:
+            tasks = [graph_store.get_neighborhood(c.id, depth=1) for c in top_candidates]
+            subgraphs = await asyncio.gather(*tasks, return_exceptions=True)
 
-        empty_subgraph = SubGraph(center_id="", nodes=[], triples=[], depth=0)
-        top_G_structs = []
-        for c, sg in zip(top_candidates, subgraphs):
-            if isinstance(sg, Exception):
-                logger.warning(f"Failed to fetch neighborhood for cross-encoder reranking of {c.name}: {sg}")
-                sg = SubGraph(center_id=c.id, nodes=[c], triples=[], depth=1)
-            top_G_structs.append(format_envelope(sg, empty_subgraph, strategy=InputFormatStrategy.TEXT))
+            empty_subgraph = SubGraph(center_id="", nodes=[], triples=[], depth=0)
+            top_G_structs = []
+            for c, sg in zip(top_candidates, subgraphs):
+                if isinstance(sg, Exception):
+                    logger.warning(f"Failed to fetch neighborhood for cross-encoder reranking of {c.name}: {sg}")
+                    sg = SubGraph(center_id=c.id, nodes=[c], triples=[], depth=1)
+                top_G_structs.append(format_envelope(sg, empty_subgraph, strategy=InputFormatStrategy.TEXT))
 
-        # [CLS] T_n [SEP] G_k_struct [SEP]
-        cross_inputs = [(T_n, G_k_struct) for G_k_struct in top_G_structs]
-        cross_scores = normalize_scores(self.cross_encoder.predict(cross_inputs))
+            # [CLS] T_n [SEP] G_k_struct [SEP]
+            cross_inputs = [(T_n, G_k_struct) for G_k_struct in top_G_structs]
+            raw_scores = await asyncio.to_thread(self.cross_encoder.predict, cross_inputs)
+            cross_scores = normalize_scores(raw_scores)
+        else:
+            cross_scores = [float(s) for s in top_scores]
 
         best_idx = argmax(cross_scores)
         best_score = cross_scores[best_idx]

@@ -97,7 +97,7 @@ async def test_phase2_runner_confidence_filtering():
     chunk = L1Chunk(id="c1", text="Sample text", source_doc_id="d1", sequence_index=0, token_count=10)
     
     # Run _process_chunk
-    res_entities, triples, _ = await runner._process_chunk(chunk)
+    res_entities, triples, *_ = await runner._process_chunk(chunk)
     entities = [e for e, _ in res_entities]
 
     # Low confidence entity (0.4) and low confidence triple (0.3) should be filtered out

@@ -487,8 +487,8 @@ class JevARCClassifier(ARCClassifier):
         local_components: list[TheoryAtom],
         local_relations: list[TheoryRelation],
         graph_store: GraphReader,
-        global_extractor: GlobalRelationExtractor,
-        schema: SchemaConfig,
+        global_extractor: GlobalRelationExtractor | None = None,
+        schema: SchemaConfig | None = None,
     ) -> list[TheoryRelation]:
         """Classify cross-chunk argument relations using the decision engine.
 
@@ -500,17 +500,18 @@ class JevARCClassifier(ARCClassifier):
             Intra-chunk relations previously extracted.
         graph_store : GraphReader
             Reader for graph context.
-        global_extractor : GlobalRelationExtractor
-            Extractor used for structural contexts.
-        schema : SchemaConfig
-            Schema taxonomy.
+        global_extractor : GlobalRelationExtractor | None, optional
+            Optional extractor for structural contexts.
+        schema : SchemaConfig | None, optional
+            Schema taxonomy. If None, defaults to SchemaConfig().
 
         Returns
         -------
         list of TheoryRelation
             Predicted global cross-chunk argument relations.
         """
-        pairs = self._get_cross_chunk_pairs(local_components, schema)
+        effective_schema = schema or SchemaConfig()
+        pairs = self._get_cross_chunk_pairs(local_components, effective_schema)
         if not pairs:
             return []
 
@@ -598,8 +599,8 @@ class CascadingARCClassifier(ARCClassifier):
         local_components: list[TheoryAtom],
         local_relations: list[TheoryRelation],
         graph_store: GraphReader,
-        global_extractor: GlobalRelationExtractor,
-        schema: SchemaConfig,
+        global_extractor: GlobalRelationExtractor | None = None,
+        schema: SchemaConfig | None = None,
     ) -> list[TheoryRelation]:
         """Classify cross-chunk argument relations using the cascade.
 
@@ -611,22 +612,23 @@ class CascadingARCClassifier(ARCClassifier):
             Intra-chunk relations previously extracted.
         graph_store : GraphReader
             Reader for graph context.
-        global_extractor : GlobalRelationExtractor
-            Extractor for structural neighborhoods.
-        schema : SchemaConfig
-            Schema taxonomy.
+        global_extractor : GlobalRelationExtractor | None, optional
+            Optional extractor for structural neighborhoods.
+        schema : SchemaConfig | None, optional
+            Schema taxonomy. If None, defaults to SchemaConfig().
 
         Returns
         -------
         list of TheoryRelation
             Extracted global argument relations.
         """
+        effective_schema = schema or SchemaConfig()
         fast_relations = await self.fast_classifier.classify_global(
             local_components=local_components,
             local_relations=local_relations,
             graph_store=graph_store,
             global_extractor=global_extractor,
-            schema=schema,
+            schema=effective_schema,
         )
 
         audit_rate = self.stochastic_audit_rate
@@ -640,5 +642,5 @@ class CascadingARCClassifier(ARCClassifier):
             local_relations=local_relations,
             graph_store=graph_store,
             global_extractor=global_extractor,
-            schema=schema,
+            schema=effective_schema,
         )

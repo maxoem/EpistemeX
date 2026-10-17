@@ -181,10 +181,10 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
             Constructed L1Document and list of extracted, embedded L1Chunks.
         """
         adapter = find_adapter(path, self.adapters)
-        markdown = adapter.convert(path, bib_paths=bib_paths or None)
+        markdown = await asyncio.to_thread(adapter.convert, path, bib_paths=bib_paths or None)
 
-        # Extract document structural anchor via ToC Parser
-        toc_anchor = self.toc_parser.parse(text=markdown, document_title=path.stem, path=path)
+        # Extract document structural anchor via ToC Parser on converted markdown
+        toc_anchor = self.toc_parser.parse(text=markdown, document_title=path.stem, path=None)
 
         raw_chunks = chunk_document(
             markdown,
@@ -252,12 +252,13 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
                 source_doc_id=d_id,
                 chapter_id=chap_id,
                 sequence_index=raw.sequence_index,
-                token_count=len(raw.text.split()),
+                token_count=raw.token_count,
                 embedding=embedding,
                 metadata={
+                    "section_path": raw.chapter_title,
                     **prov,
                     "_create_props": created,
-                }
+                },
             )
             chunks.append(chunk)
 

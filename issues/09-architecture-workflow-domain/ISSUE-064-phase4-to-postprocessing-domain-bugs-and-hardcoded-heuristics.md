@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Phase 4–6 & Post-Processing Bugs, LSP/OCP Violations, Domain Generality) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`phases/phase4_argument_mining/`, `phases/phase6_theorynet/`, `post_processing/theoretical_enrichment/`) |
 | **Priority** | **Critical** |
-| **Status** | `Open` |
+| **Status** | `Resolved` |
 | **Evaluated Docs & ADRs** | [`docs/workflow/4_argument_mining/index.md`](../../docs/workflow/4_argument_mining/index.md), [`docs/workflow/6_theorynet/index.md`](../../docs/workflow/6_theorynet/index.md), [`docs/workflow/post_processing/theoretical_enrichment.md`](../../docs/workflow/post_processing/theoretical_enrichment.md), [`docs/architecture/design_patterns_and_standards.md §3.6 & §4.2`](../../docs/architecture/design_patterns_and_standards.md) |
 
 ---
@@ -140,7 +140,7 @@ In [`post_processing/theoretical_enrichment/solvers.py#L238-L249`](../../package
 
 ## 3. Acceptance Criteria
 
-- [ ] Running `Phase4Runner.run()` when `chunks == []` completes cleanly without raising `UnboundLocalError`.
-- [ ] `TAGARCClassifier` queries `graph_store.get_neighborhood(component.id, depth=...)` directly without `_component_as_entity` or requiring `global_extractor`.
-- [ ] `TheoreticalEnrichmentRunner.run()` populates `cluster_theory_params` across all clusters in Pass 1 before evaluating outgoing edges in Pass 2, making edge tenability invariant to cluster ordering.
-- [ ] `TenabilitySolver.solve_edge_tenability()` contains zero hardcoded domain-specific parameter strings.
+- [x] Running `Phase4Runner.run()` when `chunks == []` completes cleanly without raising `UnboundLocalError`.
+- [x] `TAGARCClassifier` queries `graph_store.get_neighborhood(component.id, depth=...)` directly without `_component_as_entity` or requiring `global_extractor`.
+- [x] `TheoreticalEnrichmentRunner.run()` populates `cluster_theory_params` across all clusters in Pass 1 before evaluating outgoing edges in Pass 2, making edge tenability invariant to cluster ordering.
+- [x] `TenabilitySolver.solve_edge_tenability()` contains zero hardcoded domain-specific parameter strings.
