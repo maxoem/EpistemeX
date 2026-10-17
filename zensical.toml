@@ -170,7 +170,8 @@ nav = [
             { "Invalidation & Resume Graph" = "architecture/invalidation_and_resume.md" },
             { "Constrained Decoding Engine" = "architecture/constrained_decoding.md" },
             { "Runtime & Complexity Analysis" = "architecture/runtime_analysis.md" },
-            { "Cross-Cutting Concerns" = "architecture/cross_cutting_concerns.md" }
+            { "Cross-Cutting Concerns" = "architecture/cross_cutting_concerns.md" },
+            { "Design Patterns & Standards" = "architecture/design_patterns_and_standards.md"}
         ] },
         { "Architecture Decision Records (ADRs)" = [
             { "ADR Overview & Register" = "adr/index.md" },

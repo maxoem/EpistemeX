@@ -7,6 +7,41 @@ and epistemetrics) with a **production-grade software engine** (`episteme-pipeli
 
 ---
 
+## Delivered Capabilities & Completed Milestones
+
+**Production Engine | Implemented**
+
+Foundational architectural capabilities and inference systems that have transitioned from research and evaluation into production-grade, tested implementations within the core engine.
+
+| Target / Initiative                            | Component            | Status        | Key Deliverable & Implementation Artifacts                                                                                                                           |
+|:-----------------------------------------------|:---------------------|:--------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **TypeSafe / Jev Classification & Gating**     | `episteme-pipeline`  | `Implemented` | Sub-second typed classification, conformal prediction set gating, and AOP routing (`JevClassifier`, `JevEntityLinker`, `JevRelationReranker`, `JevGleaningGate`) |
+
+---
+
+### TypeSafe / Jev Typed Classification & Gating Engine (`JevClassifier`)
+
+| Status        | Target Component                                                                                                                                                                         | Focus Area                                 |
+|:--------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:-------------------------------------------|
+| `Implemented` | `episteme-pipeline` (`episteme_pipeline/decision/`, `pipeline/phases/phase2_entity_discovery/`, `pipeline/phases/phase3_global_relations/`, `pipeline/phases/phase4_argument_mining/`) | Ultra-Low Latency Inference & Flow Routing |
+
+Integrates TypeSafe's Jev as a non-generative, typed classification and decision-gating adapter across the pipeline. Fully implemented and integrated into production.
+
+Unlike generative LLMs, Jev directly emits typed values and calibrated confidence scores (empirically reflecting true
+classification accuracy / ground-truth fit frequencies rather than uncalibrated LLM probabilities) with sub-second
+response times (70–500ms) at 40–200× lower cost and latency.
+
+**Delivered Capabilities & Implementation Artifacts:**
+
+- **`JevEntityLinker` & `CascadingEntityLinker`**: Fast candidate triage and conformal prediction set gating ($C(X)$) in Phase 2 Entity Discovery ([`jev_entity_linker.py`](file:///Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/jev_entity_linker.py)).
+- **`JevGleaningGate`**: Non-generative critic oracle decoupling generative extraction from deterministic stopping criteria in Phase 2 and Phase 4 ([`gleaning.py`](file:///Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/decision/gleaning.py)).
+- **`JevRelationReranker` & Jev Pair Gating**: Drop-in calibrated reranking and binary `Noul` gating in Phase 3 Global Relations ([`rerankers.py`](file:///Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/phases/phase3_global_relations/rerankers.py)).
+- **`JevClusterVerification`**: Borderline candidate verification and canonical terminology election via Jev `Choice` in Phase 3b Consolidation ([`consolidation.py`](file:///Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/phases/phase3b_consolidation/consolidation.py)).
+- **`JevACCClassifier` & `JevARCClassifier`**: High-throughput argument component and defeasible stance classification in Phase 4 Argument Mining ([`classifiers.py`](file:///Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/classifiers.py)).
+- **Engine Clients & Test Harness**: Complete runtime provisioning via `AutoDecisionEngine`, `LayaDecisionEngine`, and deterministic `MockJevDecisionEngine` ([`decision/`](file:///Users/maxoehm/EpistemeX/packages/episteme-pipeline/episteme_pipeline/decision/)).
+
+---
+
 ## Horizon 1: Platform Stabilization & Core Engine
 
 **Current Focus | Active Development**
@@ -104,7 +139,7 @@ and deepening gradual argumentation semantics.
 | **Gradual Semantics Solvers (QBAF)**           | `epistemetrics` / `episteme-pipeline` | `Under Evaluation` | Iterative convergence algorithms for TheoryNet $(\text{TF} = (\text{At}, R))$ |
 | **Streaming Large Corpus Ingestion**           | `episteme-pipeline`                   | `Under Evaluation` | Memory-bounded chunking & windowed episodic memory eviction                   |
 | **Pluggable Vector Store Adapters**            | `episteme-pipeline`                   | `Under Evaluation` | Qdrant, Milvus, and pgvector reference implementations                        |
-| **TypeSafe / Jev Classification & Gating**     | `episteme-pipeline`                   | `Under Evaluation` | Sub-second typed classification & decision gating (`JevClassifier`)           |
+| **World Models & Empirical Simulation**        | `episteme-pipeline` / `epistemetrics` | `Under Evaluation` | Simulating world dynamics & environments to evaluate empirical node correctness |
 
 ---
 
@@ -204,29 +239,22 @@ Supports specialized vector backends alongside Neo4j.
 
 ---
 
-### TypeSafe / Jev Typed Classification & Gating Engine (`JevClassifier`)
+### World Models for Empirical Node Validation
 
-| Status             | Target Component                                                                                   | Focus Area                                 |
-|:-------------------|:---------------------------------------------------------------------------------------------------|:-------------------------------------------|
-| `Under Evaluation` | `episteme-pipeline` (`pipeline/protocols/extractors.py`, `pipeline/phases/phase4_argument_mining/`) | Ultra-Low Latency Inference & Flow Routing |
+| Status             | Target Component                                                                                         | Focus Area                                    |
+|:-------------------|:---------------------------------------------------------------------------------------------------------|:----------------------------------------------|
+| `Under Evaluation` | `episteme-pipeline` / `epistemetrics` (`pipeline/phases/phase6_theorynet/`, `epistemetrics/epistemic/`) | Environmental Simulation & Empirical Adequacy |
 
-Integrates TypeSafe's Jev as a non-generative, typed classification and decision-gating adapter across the pipeline.
+Explores generative and neuro-symbolic world models as simulation testbeds for evaluating the correctness, empirical adequacy, and real-world grounding of empirical nodes in theory graphs.
 
-Unlike generative LLMs, Jev directly emits typed values and calibrated confidence scores (empirically reflecting true
-classification accuracy / ground-truth fit frequencies rather than uncalibrated LLM probabilities) with sub-second
-response times (70–500ms) at 40–200× lower cost and latency.
+In formal structuralism (*Wissenschaftstheorie*) and Episteme's tri-layer architecture, intended applications ($I$) and empirical nodes assert concrete claims about domain phenomena. Traditional pipelines evaluate these nodes via static text matching or subjective LLM plausibility scores ($p(i, x)$). By integrating world models, Episteme simulates environment dynamics, state transitions, and counterfactual interventions directly, providing objective empirical feedback on whether extracted empirical assertions hold.
 
 **Key Capabilities & Milestones:**
 
-- **`JevACCClassifier`**: High-throughput argument component classification (`CLAIM`, `PREMISE`, `CONCLUSION`) in Phase
-  4.
-- **`JevARCClassifier`**: Defeasible relation stance classification (`SUPPORTS`, `ATTACKS`) bypassing heavy LLM prompt
-  envelopes.
-- **`JevRelationReranker`**: Drop-in replacement for CrossEncoder relation scoring in Phase 3 Global Relations.
-- **AOP Decision Points & Dynamic Gating**: Intercepts pipeline flow (e.g., via aspect-oriented decorators) at critical
-  junctures—deciding whether to continue iterative reasoning, trigger gleaning passes, or route to specialized
-  components—using calibrated confidence thresholds to maximize speed and minimize token burn.
-- Evaluates throughput speedups and cost reductions on book-length corpora against frontier generative LLM baselines.
+- **Domain Environment Simulation**: Constructs executable generative or symbolic simulation sandboxes modeling the physical, social, or historical conditions asserted by empirical claims.
+- **Empirical Node Correctness Evaluation**: Evaluates whether the factual claims, observational residuals ($d(i, x)$), and predictive implications of candidate empirical nodes hold under forward simulation rollouts.
+- **Counterfactual & Perturbation Stress-Testing**: Systematically perturbs simulation parameters to evaluate the boundary conditions, empirical vulnerability, and falsifiability of theoretical nodes.
+- **Closed-Loop Grounding**: Synthesizes empirical simulation rollouts with TheoryNet post-processing, computing grounded empirical adequacy and tenability scores for empirical subgraphs.
 
 ---
 
