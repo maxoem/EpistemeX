@@ -131,10 +131,6 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             weight_edge=self.config.weight_edge,
         )
 
-    @property
-    def event_emitter(self) -> EventEmitter:
-        """Centralized event emitter."""
-        return get_event_emitter()
 
     async def run(
         self, input: Phase4ArtifactsView, context: ArtifactExecutionContext
@@ -163,6 +159,33 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             logger.info("Theoretical Enrichment is disabled in config. Skipping.")
             return ArtifactCollection([])
 
+        total_items = len(input.theory_atoms) + len(input.theory_relations)
+        with self.progress_scope(
+            "Theoretical Enrichment",
+            total_items=total_items,
+            description="Theoretical Enrichment",
+        ) as advance:
+            artifacts, updated_count = await self._run_enrichment(input, context)
+            advance(updated_count)
+            return artifacts
+
+    async def _run_enrichment(
+        self, input: Phase4ArtifactsView, context: ArtifactExecutionContext
+    ) -> tuple[ArtifactCollection, int]:
+        """Execute core enrichment and tenability evaluation passes.
+
+        Parameters
+        ----------
+        input : Phase4ArtifactsView
+            Typed slice of upstream Phase 4/5 theory atoms and relations.
+        context : ArtifactExecutionContext
+            Execution run context.
+
+        Returns
+        -------
+        tuple of (ArtifactCollection, int)
+            Collection of generated artifacts and total update count.
+        """
         # -------------------------------------------------------------
         # Stage 0: Dynamic Theory-Element Induction (Macro Scope)
         # -------------------------------------------------------------
@@ -267,7 +290,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         # -------------------------------------------------------------
         enrichment_artifacts: list[ArtifactEnvelope[TheoreticalEnrichmentArtifact]] = []
         atoms_to_update: list[TheoryAtom] = []
-        relations_to_update: list[dict[str, Any]] = []
+        relations_to_update: list[TheoryRelation] = []
 
         for cluster in clusters:
             for theory_id in cluster.claimant_theory_ids:
@@ -315,19 +338,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                     # Stage relation for graph update
                     rel_copy = rel.model_copy()
                     rel_copy.tenability = ts_edge
-                    relations_to_update.append(
-                        {
-                            "from_id": rel.source_id,
-                            "relation_type": rel.relation_type,
-                            "to_id": rel.target_id,
-                            "properties": {
-                                "confidence": rel.confidence,
-                                "scope": rel.scope,
-                                "tenability": ts_edge,
-                                "weight": rel.weight,
-                            },
-                        }
-                    )
+                    relations_to_update.append(rel_copy)
 
                 tenability_res = self.solver.evaluate_theory_tenability(
                     local_score=ts_local,
@@ -397,7 +408,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
 
             if relations_to_update:
                 for batch in batched(relations_to_update, 500):
-                    await self.graph_store.upsert_relations(list(batch))
+                    await self.graph_store.upsert_theory_relations(list(batch))
 
             logger.info(
                 "Theoretical Enrichment: Projected %d enriched TheoryAtoms and %d relations to graph store",
@@ -405,7 +416,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                 len(relations_to_update),
             )
 
-        return ArtifactCollection(enrichment_artifacts)
+        return ArtifactCollection(enrichment_artifacts), len(atoms_to_update) + len(relations_to_update)
 
     def _identify_empirical_clusters(
         self, atoms: list[TheoryAtom], relations: list[TheoryRelation]

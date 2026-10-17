@@ -35,14 +35,7 @@ from episteme_pipeline.artifacts.execution import (
 from episteme_pipeline.config import Phase1Config
 from episteme_pipeline.contracts.domain import L1Chunk, L1Document
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
-from episteme_pipeline.events import (
-    ChunksGenerated,
-    EventEmitter,
-    ProgressAdvanced,
-    ProgressCompleted,
-    ProgressStarted,
-    get_event_emitter,
-)
+from episteme_pipeline.events import ChunksGenerated
 from episteme_pipeline.phases.phase1_foundation.adapters import (
     DEFAULT_ADAPTERS,
     find_adapter,
@@ -74,22 +67,17 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
         self,
         config: Phase1Config,
         *,
-        llm,
+        llm: Any = None,
         embedding_model: EmbeddingModel | None = None,
         graph_store: GraphWriter,
         adapters: list[DataSourceAdapter] | None = None,
         toc_parser: AutoToCParser | None = None,
     ) -> None:
         self.config = config
-        self.llm = llm
         self.embedding_model = embedding_model
         self.graph_store = graph_store
         self.adapters = adapters or DEFAULT_ADAPTERS
         self.toc_parser = toc_parser or AutoToCParser()
-
-    @property
-    def event_emitter(self) -> EventEmitter:
-        return get_event_emitter()
 
     async def run(
         self, input: PipelineInput, context: ArtifactExecutionContext
@@ -110,27 +98,29 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
             Generated DocumentArtifact and ChunkArtifact instances.
         """
         bib_paths = [Path(p) for p in input.bib_paths]
-        
+
         progress_task = f"Phase 1: {len(input.source_paths)} docs"
-        self.event_emitter.emit(ProgressStarted(task_name=progress_task, total_items=len(input.source_paths), description="Data Foundation"))
+        with self.progress_scope(
+            progress_task,
+            total_items=len(input.source_paths),
+            description="Data Foundation",
+        ) as advance:
+            async def _process_with_progress(path):
+                res = await self._process_document(
+                    Path(path),
+                    bib_paths=bib_paths,
+                    run_id=context.run_id,
+                )
+                advance(1)
+                return res
 
-        async def _process_with_progress(path):
-            res = await self._process_document(
-                Path(path),
-                bib_paths=bib_paths,
-                run_id=context.run_id,
+            results = await asyncio.gather(
+                *[
+                    _process_with_progress(source_path)
+                    for source_path in input.source_paths
+                ]
             )
-            self.event_emitter.emit(ProgressAdvanced(task_name=progress_task, advance=1))
-            return res
 
-        results = await asyncio.gather(
-            *[
-                _process_with_progress(source_path)
-                for source_path in input.source_paths
-            ]
-        )
-        
-        self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
         documents: list[L1Document] = []
         all_chunks: list[L1Chunk] = []
         for doc, chunks in results:

@@ -13,7 +13,12 @@ from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, Field, model_validator
 
-from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
+from episteme_pipeline.contracts.domain import (
+    GlobalStructuralAnchor,
+    Measurement,
+    TenabilityResult,
+    TextAnchor,
+)
 
 
 def utc_now() -> datetime:
@@ -65,6 +70,9 @@ class ChunkArtifact(BaseModel):
     sequence_index: int
     chapter_id: str | None = None
     token_count: int
+    embedding: list[float] | None = None
+    text_anchor: TextAnchor | None = None
+    chunk_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class EntityMentionArtifact(BaseModel):
@@ -82,10 +90,12 @@ class LinkedEntityArtifact(BaseModel):
     canonical_name: str
     entity_type: str
     mention_ids: list[str] = Field(default_factory=list)
+    source_chunk_ids: list[str] = Field(default_factory=list)
     description: str | None = None
     textual_envelope: str | None = None
     is_mature: bool = False
     confidence: float | None = None
+    text_anchor: TextAnchor | None = None
 
 
 class LocalRelationArtifact(BaseModel):
@@ -95,6 +105,7 @@ class LocalRelationArtifact(BaseModel):
     object_entity_id: str
     source_chunk_id: str
     confidence: float
+    rerank_score: float | None = None
     scope: Literal["local"] = "local"
 
 
@@ -107,6 +118,7 @@ class GlobalRelationArtifact(BaseModel):
     confidence: float
     rerank_score: float | None = None
     scope: Literal["global"] = "global"
+    source_chunk_id: str | None = None
 
 
 class FusionDecisionArtifact(BaseModel):
@@ -133,6 +145,13 @@ class TheoryAtomArtifact(BaseModel):
     plausibility: float | None = None
     epistemic_status: str | None = None
     scope_type: str | None = None
+    entity_ids: list[str] = Field(default_factory=list)
+    modal_strength: float = 0.6
+    base_score: float | None = None
+    text_anchor: TextAnchor | None = None
+    measurements: list[Measurement] = Field(default_factory=list)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    tenability: TenabilityResult | None = None
 
 
 class TheoryRelationArtifact(BaseModel):
@@ -185,7 +204,12 @@ class TheoryRelationArtifact(BaseModel):
     confidence: float
     weight: float | None = None
     class_probability: float | None = None
+    stance_probability: float | None = None
     empirical_accuracy: float | None = None
+    model_confidence: float | None = None
+    inferential_force: float = 0.75
+    is_admissible: bool = True
+    active_weight: float = 0.75
     modal_strength: float = 1.0
     effective_weight: float | None = None
     decision_engine_provider: str | None = None
@@ -237,7 +261,12 @@ class TheoryRelationArtifact(BaseModel):
             "confidence": self.confidence,
             "calibrated_confidence": cal_conf,
             "class_probability": self.class_probability,
+            "stance_probability": self.stance_probability,
             "empirical_accuracy": self.empirical_accuracy,
+            "model_confidence": self.model_confidence,
+            "inferential_force": self.inferential_force,
+            "is_admissible": self.is_admissible,
+            "active_weight": self.active_weight,
             "modal_strength": self.modal_strength,
             "effective_weight": eff_w,
             "weight": self.weight if self.weight is not None else eff_w,

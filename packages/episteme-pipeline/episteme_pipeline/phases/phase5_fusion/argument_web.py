@@ -5,8 +5,7 @@ from episteme_pipeline.artifacts.execution import (
     Phase4ArtifactsView,
 )
 from episteme_pipeline.config import Phase5Config
-from episteme_pipeline.events.bus import EventEmitter
-from episteme_pipeline.events.models import ProgressCompleted, ProgressStarted
+
 from episteme_pipeline.phases.phase5_fusion.argument_clustering import (
     EmbeddingArgumentClustering,
     InterDocumentClusterVerifier,
@@ -81,11 +80,6 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
             cluster_verifier=self.cluster_verifier,
         )
 
-    @property
-    def event_emitter(self) -> EventEmitter:
-        from episteme_pipeline.events.context import get_event_emitter
-        return get_event_emitter()
-
     async def run(self, input: Phase4ArtifactsView, context: ArtifactExecutionContext) -> ArtifactCollection:
         """Execute Phase 5 argument clustering and theory fusion passes.
 
@@ -101,24 +95,24 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
             Generated fusion cluster artifacts.
         """
         progress_task = "Phase 5: Argument Web & Theory Fusion"
-        self.event_emitter.emit(
-            ProgressStarted(task_name=progress_task, total_items=1, description="Theory Fusion")
-        )
-
         cluster_ids: list[list[str]] = []
-        if self.config.argument_clustering_enabled:
-            raw_cluster_ids = await self.argument_clustering.cluster(self.graph_store)
-            if self.cluster_verifier is not None:
-                cluster_ids = await self.cluster_verifier.filter_clusters(raw_cluster_ids, self.graph_store)
-            else:
-                cluster_ids = raw_cluster_ids
-
         theory_fusion_applied = False
-        if self.config.theory_fusion_enabled and self.theory_fusion is not None:
-            await self.theory_fusion.fuse(self.graph_store)
-            theory_fusion_applied = True
 
-        self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
+        with self.progress_scope(
+            progress_task, total_items=1, description="Theory Fusion"
+        ) as advance:
+            if self.config.argument_clustering_enabled:
+                raw_cluster_ids = await self.argument_clustering.cluster(self.graph_store)
+                if self.cluster_verifier is not None:
+                    cluster_ids = await self.cluster_verifier.filter_clusters(raw_cluster_ids, self.graph_store)
+                else:
+                    cluster_ids = raw_cluster_ids
+
+            if self.config.theory_fusion_enabled and self.theory_fusion is not None:
+                await self.theory_fusion.fuse(self.graph_store)
+                theory_fusion_applied = True
+
+            advance(1)
 
         artifacts = [
             build_fusion_cluster_artifact(

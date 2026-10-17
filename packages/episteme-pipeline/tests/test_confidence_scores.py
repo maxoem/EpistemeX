@@ -109,31 +109,32 @@ async def test_phase2_runner_confidence_filtering():
 
 @pytest.mark.asyncio
 async def test_phase4_runner_acc_confidence_filtering():
-    from unittest.mock import AsyncMock, MagicMock
+    from unittest.mock import AsyncMock
 
     from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
     graph_store = AsyncMock()
-    
+
     cfg = Phase4Config(acc_confidence_threshold=0.7)
-    runner = Phase4Runner(
-        config=cfg,
-        schema=DEFAULT_SCHEMA,
-        llm=MagicMock(),
-        embedding_model=MagicMock(),
-        graph_store=graph_store,
-    )
 
     c1 = TheoryAtom(id="ac1", text="Low confidence claim", component_type="ANTECEDENT", source_chunk_id="chk1", confidence=0.5)
     c2 = TheoryAtom(id="ac2", text="High confidence premise", component_type="EMPIRICAL_OBSERVATION", source_chunk_id="chk1", confidence=0.9)
-    
+
     mock_segmenter = AsyncMock()
     mock_segmenter.segment.return_value = ("<AC1>text</AC1>", ["ac1", "ac2"])
-    runner._adu_segmenter_override = mock_segmenter
 
     mock_classifier = AsyncMock()
     mock_classifier.classify.return_value = ([c1, c2], [])
-    runner._acc_classifier_override = mock_classifier
+
+    runner = Phase4Runner(
+        config=cfg,
+        schema=DEFAULT_SCHEMA,
+        llm=AsyncMock(),
+        embedding_model=AsyncMock(),
+        graph_store=graph_store,
+        adu_segmenter=mock_segmenter,
+        acc_classifier=mock_classifier,
+    )
 
     components, _, _ = await runner._process_chunk("chk1", "Sample text")
 

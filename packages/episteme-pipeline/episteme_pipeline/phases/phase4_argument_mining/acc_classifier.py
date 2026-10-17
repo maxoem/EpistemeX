@@ -66,19 +66,15 @@ class LLMACCClassifier(ACCClassifier):
         chunk_entities: list[L2Entity] | None = None,
     ) -> tuple[list[TheoryAtom], list[TheoryRelation]]:
         chunk_entities_str = "\n".join([f"- {e.id}: {e.name} ({e.label})" for e in chunk_entities]) if chunk_entities else "None"
-        try:
-            raw: ACCOutput = await self.llm.predict_structured(
-                ACCOutput,
-                self.prompts,
-                strategy=self.strategy,
-                component_types=", ".join(schema.component_types),
-                argument_relation_types=", ".join(schema.argument_relation_types),
-                tagged_text=tagged_text,
-                chunk_entities=chunk_entities_str,
-            )
-        except Exception as exc:
-            logger.warning("ACC classification failed for chunk %s: %s", chunk_id, exc)
-            return [], []
+        raw: ACCOutput = await self.llm.predict_structured(
+            ACCOutput,
+            self.prompts,
+            strategy=self.strategy,
+            component_types=", ".join(schema.component_types),
+            argument_relation_types=", ".join(schema.argument_relation_types),
+            tagged_text=tagged_text,
+            chunk_entities=chunk_entities_str,
+        )
 
         raw = raw.validate_references()
 

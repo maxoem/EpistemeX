@@ -55,10 +55,22 @@ class TAGRelationExtractor(GlobalRelationExtractor):
     The same instance is reused by Phase 4 ARC via get_structural_neighborhood().
     """
 
-    def __init__(self, llm, embedding_model, config: Phase3Config) -> None:
+    def __init__(
+        self, llm: Any, embedding_model: Any = None, config: Phase3Config | None = None
+    ) -> None:
+        """Initialize TAGRelationExtractor.
+
+        Parameters
+        ----------
+        llm : Any
+            Underlying language model facade or client.
+        embedding_model : Any, optional
+            Ignored; retained for call-site compatibility.
+        config : Phase3Config or None, optional
+            Configuration parameters for Phase 3.
+        """
         self.llm = ensure_structured_llm(llm)
-        self.embedding_model = embedding_model
-        self.config = config
+        self.config = config or Phase3Config()
 
     # ------------------------------------------------------------------
     # GlobalRelationExtractor interface

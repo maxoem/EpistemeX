@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Design Patterns, Template Method, Dependency Injection, Observability & Fingerprinting) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`protocols/phase_runner.py`, `phases/`, `post_processing/theoretical_enrichment/`, `runtime/runner.py`) |
 | **Priority** | **High** |
-| **Status** | `Open` |
+| **Status** | `Resolved` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/design_patterns_and_standards.md`](../../docs/architecture/design_patterns_and_standards.md), [`docs/architecture/cross_cutting_concerns.md`](../../docs/architecture/cross_cutting_concerns.md), [`ADR-0016`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), [`ADR-0017`](../../docs/adr/0017-artifact-native-execution-and-selective-invalidation.md) |
 
 ---
@@ -133,8 +133,8 @@ class PhaseRunner(ABC, Generic[InputT]):
 
 ## 4. Acceptance Criteria
 
-- [ ] `PhaseRunner` provides `event_emitter` and `progress_scope`, and all phase runners wrap progress reporting in `with self.progress_scope(...):`.
-- [ ] `LLMNERExtractor.extract`, `LLMADUSegmenter.segment`, and `LLMACCClassifier.classify` propagate runtime exceptions to the batch executor instead of returning `[]`, and `_guard_systematic_failure` halts Phase 2 and Phase 4 when Batch 0 fails 100%.
-- [ ] Legitimate 0-entity chunks in Phase 2 are marked `phase2_processed = True` when `extract()` succeeds without error.
-- [ ] `Phase4Runner` binds `self.adu_segmenter` and `self.acc_classifier` in `__init__` so `Phase4Runner.components()` includes them in `method_fingerprints`.
-- [ ] `Phase1Runner` no longer stores `self.llm`, and changing `ModelConfig.llm_model` does not invalidate Phase 1 in `ArtifactInvalidationPlanner`.
+- [x] `PhaseRunner` provides `event_emitter` and `progress_scope`, and all phase runners wrap progress reporting in `with self.progress_scope(...):`.
+- [x] `LLMNERExtractor.extract`, `LLMADUSegmenter.segment`, and `LLMACCClassifier.classify` propagate runtime exceptions to the batch executor instead of returning `[]`, and `_guard_systematic_failure` halts Phase 2 and Phase 4 when Batch 0 fails 100%.
+- [x] Legitimate 0-entity chunks in Phase 2 are marked `phase2_processed = True` when `extract()` succeeds without error.
+- [x] `Phase4Runner` binds `self.adu_segmenter` and `self.acc_classifier` in `__init__` so `Phase4Runner.components()` includes them in `method_fingerprints`.
+- [x] `Phase1Runner` no longer stores `self.llm`, and changing `ModelConfig.llm_model` does not invalidate Phase 1 in `ArtifactInvalidationPlanner`.

@@ -5,6 +5,14 @@ from __future__ import annotations
 import logging
 
 from episteme_pipeline.artifacts.builders import parse_mention_id
+from episteme_pipeline.artifacts.codecs import (
+    ChunkCodec,
+    GlobalRelationCodec,
+    LinkedEntityCodec,
+    LocalRelationCodec,
+    TheoryAtomCodec,
+    TheoryRelationCodec,
+)
 from episteme_pipeline.artifacts.models import (
     ArtifactEnvelope,
     CanonicalizationArtifact,
@@ -63,16 +71,7 @@ class ArtifactGraphProjector(GraphProjectionProtocol):
             return
 
         if isinstance(payload, ChunkArtifact):
-            await self.graph_store.upsert_chunk(
-                L1Chunk(
-                    id=payload.chunk_id,
-                    text=payload.text,
-                    source_doc_id=payload.document_id,
-                    chapter_id=payload.chapter_id,
-                    sequence_index=payload.sequence_index,
-                    token_count=payload.token_count,
-                )
-            )
+            await self.graph_store.upsert_chunk(ChunkCodec.to_domain(payload))
             return
 
         if isinstance(payload, EntityMentionArtifact):
@@ -89,81 +88,35 @@ class ArtifactGraphProjector(GraphProjectionProtocol):
             return
 
         if isinstance(payload, LinkedEntityArtifact):
-            # Reconstruct source_chunk_ids from mention ids ("mention::<entity_id>::<chunk_id>")
-            chunk_ids: list[str] = []
-            for mid in payload.mention_ids:
-                _, chunk_id = parse_mention_id(mid)
-                if chunk_id:
-                    chunk_ids.append(chunk_id)
-            # De-duplicate while preserving order
-            seen: set[str] = set()
-            uniq_chunk_ids = [c for c in chunk_ids if not (c in seen or seen.add(c))]
+            entity = LinkedEntityCodec.to_domain(payload)
+            if not entity.source_chunk_ids:
+                # Reconstruct source_chunk_ids from mention ids ("mention::<entity_id>::<chunk_id>")
+                chunk_ids: list[str] = []
+                for mid in payload.mention_ids:
+                    _, chunk_id = parse_mention_id(mid)
+                    if chunk_id:
+                        chunk_ids.append(chunk_id)
+                seen: set[str] = set()
+                uniq_chunk_ids = [c for c in chunk_ids if not (c in seen or seen.add(c))]
+                entity = entity.model_copy(update={"source_chunk_ids": uniq_chunk_ids})
 
-            await self.graph_store.upsert_entity(
-                L2Entity(
-                    id=payload.entity_id,
-                    label=payload.entity_type,
-                    name=payload.canonical_name,
-                    description=payload.description,
-                    textual_envelope=payload.textual_envelope,
-                    is_mature=payload.is_mature,
-                    confidence=payload.confidence,
-                    source_chunk_ids=uniq_chunk_ids,
-                )
-            )
+            await self.graph_store.upsert_entity(entity)
             return
 
         if isinstance(payload, LocalRelationArtifact):
-            await self.graph_store.upsert_triple(
-                L2Triple(
-                    subject_id=payload.subject_entity_id,
-                    predicate=payload.predicate,
-                    object_id=payload.object_entity_id,
-                    confidence=payload.confidence,
-                    scope="local",
-                    source_chunk_id=payload.source_chunk_id,
-                )
-            )
+            await self.graph_store.upsert_triple(LocalRelationCodec.to_domain(payload))
             return
 
         if isinstance(payload, GlobalRelationArtifact):
-            await self.graph_store.upsert_triple(
-                L2Triple(
-                    subject_id=payload.subject_entity_id,
-                    predicate=payload.predicate,
-                    object_id=payload.object_entity_id,
-                    confidence=payload.confidence,
-                    scope="global",
-                    source_chunk_id=payload.supporting_chunk_ids[0] if payload.supporting_chunk_ids else "",
-                )
-            )
+            await self.graph_store.upsert_triple(GlobalRelationCodec.to_domain(payload))
             return
 
         if isinstance(payload, TheoryAtomArtifact):
-            await self.graph_store.upsert_argument_component(
-                TheoryAtom(
-                    id=payload.component_id,
-                    text=payload.text,
-                    component_type=payload.component_type,
-                    source_chunk_id=payload.chunk_id,
-                    plausibility=payload.plausibility,
-                    epistemic_status=payload.epistemic_status,
-                    scope_type=payload.scope_type,
-                )
-            )
+            await self.graph_store.upsert_argument_component(TheoryAtomCodec.to_domain(payload))
             return
 
         if isinstance(payload, TheoryRelationArtifact):
-            polarity = self.schema.relation_polarities.get(payload.relation_type, 0)
-            if polarity == 0:
-                polarity = self.schema.relation_polarities.get(payload.relation_type.upper(), 0)
-            props = payload.to_graph_properties(polarity=polarity)
-            rel = TheoryRelation.from_graph_properties(
-                source_id=payload.source_component_id,
-                relation_type=payload.relation_type,
-                target_id=payload.target_component_id,
-                properties=props,
-            )
+            rel = TheoryRelationCodec.to_domain(payload)
             await self.graph_store.upsert_theory_relation(rel)
             return
 

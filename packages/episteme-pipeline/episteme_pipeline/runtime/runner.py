@@ -18,6 +18,7 @@ from llama_index.llms.litellm import LiteLLM
 
 from episteme_pipeline.config import (
     ExecutionConfig,
+    GleaningConfig,
     Phase2Config,
     Phase3bConfig,
     Phase3Config,
@@ -27,11 +28,7 @@ from episteme_pipeline.config import (
 from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.events.bus import EventEmitter
-from episteme_pipeline.graph import (
-    Neo4jGraphReader,
-    Neo4jGraphWriter,
-    Neo4jProcessingGraph,
-)
+from episteme_pipeline.graph import Neo4jProcessingGraph
 from episteme_pipeline.phases.phase3_global_relations.rerankers import (
     SentenceTransformerCrossEncoderReranker,
 )
@@ -109,14 +106,14 @@ async def run_pipeline(
     elif isinstance(config, dict):
         cfg = PipelineConfig(**config)
     else:
-        prompt_provider = LangfusePromptProvider()
-        cfg = PipelineConfig(
+        cfg = PipelineConfig.from_env(
             execution=ExecutionConfig(project_artifacts_to_graph=True),
-            phase2=Phase2Config(max_gleanings=2),
+            phase2=Phase2Config(gleaning=GleaningConfig(max_passes=2)),
             phase3=Phase3Config(dense_similarity_threshold=0.8),
             phase3b=Phase3bConfig(dense_similarity_threshold=0.8),
             phase5=Phase5Config(theory_fusion_enabled=True, cluster_layer="both"),
         )
+        prompt_provider = LangfusePromptProvider()
         try:
             cfg = prompt_provider.populate_config(cfg, label_or_version="production")
         except Exception as exc:
@@ -156,21 +153,18 @@ async def run_pipeline(
         model_kwargs={"torch_dtype": "auto"},
     )
 
-    # 5. Neo4j Graph Store Components
+    # 5. Neo4j Graph Store Components (single connection pool)
     url = neo4j_url or os.getenv("NEO4J_URL", "neo4j://127.0.0.1:7687")
     user = neo4j_user or os.getenv("NEO4J_USERNAME", "neo4j")
     password = neo4j_password or os.getenv("NEO4J_PASSWORD", "neo4jdbpass")
     database = neo4j_database or os.getenv("NEO4J_DATABASE", "neo4j")
 
-    graph_reader = Neo4jGraphReader(
+    neo4j_graph = Neo4jProcessingGraph(
         url=url, username=user, password=password, database=database
     )
-    projection_graph = Neo4jGraphWriter(
-        url=url, username=user, password=password, database=database
-    )
-    checkpoint_store = Neo4jProcessingGraph(
-        url=url, username=user, password=password, database=database
-    )
+    graph_reader = neo4j_graph
+    projection_graph = neo4j_graph
+    checkpoint_store = neo4j_graph
 
     # 6. Instantiate Pipeline via Pipeline.for_task()
     pipeline = Pipeline.for_task(

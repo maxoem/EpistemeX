@@ -1,9 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import ClassVar, TypeVar
+from contextlib import contextmanager
+from typing import Callable, ClassVar, Iterator, TypeVar
 
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
+)
+from episteme_pipeline.events.bus import EventEmitter
+from episteme_pipeline.events.context import get_event_emitter
+from episteme_pipeline.events.models import (
+    ProgressAdvanced,
+    ProgressCompleted,
+    ProgressStarted,
 )
 
 InputT = TypeVar("InputT")
@@ -46,6 +54,55 @@ class PhaseRunner[InputT](ABC):
 
     @abstractmethod
     async def run(self, input: InputT, context: ArtifactExecutionContext) -> ArtifactCollection: ...
+
+    @property
+    def event_emitter(self) -> EventEmitter:
+        """Return the active contextual event emitter.
+
+        Returns
+        -------
+        EventEmitter
+            The domain event emitter for the current execution context.
+        """
+        return get_event_emitter()
+
+    @contextmanager
+    def progress_scope(
+        self, task_name: str, total_items: int, description: str = ""
+    ) -> Iterator[Callable[[int], None]]:
+        """Emit ProgressStarted and guarantee ProgressCompleted in a finally block.
+
+        Parameters
+        ----------
+        task_name : str
+            Unique or readable name of the progress task.
+        total_items : int
+            Total number of units to be processed.
+        description : str, optional
+            Human-readable description of the task, defaults to runner name.
+
+        Yields
+        ------
+        Iterator of Callable[[int], None]
+            Advance callback taking an optional integer step (default 1).
+        """
+        self.event_emitter.emit(
+            ProgressStarted(
+                task_name=task_name,
+                total_items=total_items,
+                description=description or self.name,
+            )
+        )
+
+        def advance(step: int = 1) -> None:
+            self.event_emitter.emit(
+                ProgressAdvanced(task_name=task_name, advance=step)
+            )
+
+        try:
+            yield advance
+        finally:
+            self.event_emitter.emit(ProgressCompleted(task_name=task_name))
 
     @property
     def checkpoint_store(self) -> object | None:
