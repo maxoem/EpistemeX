@@ -1,5 +1,6 @@
 """Tests for JevEntityLinker and CascadingEntityLinker."""
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -18,6 +19,7 @@ from episteme_pipeline.phases.phase2_entity_discovery import (
     Phase2Runner,
 )
 from episteme_pipeline.protocols.extractors import EntityLinker
+from episteme_pipeline.protocols.graph_store import GraphReader
 
 
 class MockEmbeddingModel:
@@ -291,6 +293,39 @@ async def test_cascading_entity_linker_stochastic_audit():
     assert result.id == "e_audit"
     assert primary_mock.link.call_count == 0
     assert fallback_mock.link.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_cascading_entity_linker_polymorphic_non_jev_primary_novel_entity():
+    """Verify CascadingEntityLinker handles non-Jev primary linkers polymorphically without escalating novel entities."""
+    class CustomNonJevLinker(EntityLinker):
+        def fingerprint(self) -> dict[str, Any]:
+            return {"class": "CustomNonJevLinker"}
+
+        async def link(
+            self,
+            mention: L2Entity,
+            graph_store: GraphReader,
+            *,
+            top_k: int | None = None,
+            threshold: float | None = None,
+        ) -> L2Entity | None:
+            # Confidently declares novel entity (None)
+            return None
+
+    primary = CustomNonJevLinker()
+    fallback_mock = AsyncMock(spec=EntityLinker)
+    fallback_entity = L2Entity(id="e_fallback", name="Should Not Be Called", label="PERSON")
+    fallback_mock.link.return_value = fallback_entity
+
+    cascade = CascadingEntityLinker(primary=primary, fallback=fallback_mock, audit_rate=0.0)
+
+    mention = L2Entity(id="m_novel", name="NovelConcept", label="CONCEPT", textual_envelope="[ENT] NovelConcept [\\ENT]")
+    res = await cascade.link(mention, AsyncMock())
+
+    # Confident novel entity declaration is preserved, fallback is NOT called!
+    assert res is None
+    assert fallback_mock.link.call_count == 0
 
 
 def test_phase2_runner_explicit_entity_linker_injection():

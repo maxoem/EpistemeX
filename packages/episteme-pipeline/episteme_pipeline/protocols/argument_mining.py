@@ -85,3 +85,73 @@ class ARCClassifier(Fingerprintable, ABC):
         global_extractor: GlobalRelationExtractor | None = None,
         schema: SchemaConfig | None = None,
     ) -> list[TheoryRelation]: ...
+
+    async def classify_pairs(
+        self,
+        pairs: list[tuple[TheoryAtom, TheoryAtom]],
+        graph_store: GraphReader,
+        schema: SchemaConfig | None = None,
+        global_extractor: GlobalRelationExtractor | None = None,
+    ) -> list[TheoryRelation]:
+        """Classify cross-chunk argument relations for specific candidate pairs.
+
+        Parameters
+        ----------
+        pairs : list of tuple of (TheoryAtom, TheoryAtom)
+            Candidate argument component pairs to evaluate.
+        graph_store : GraphReader
+            Reader for graph context and subgraphs.
+        schema : SchemaConfig or None, default None
+            Schema taxonomy.
+        global_extractor : GlobalRelationExtractor or None, default None
+            Optional extractor for structural neighborhoods.
+
+        Returns
+        -------
+        list of TheoryRelation
+            Extracted argument relations for the specified pairs.
+        """
+        return []
+
+    async def classify_global_with_triage(
+        self,
+        local_components: list[TheoryAtom],
+        local_relations: list[TheoryRelation],
+        graph_store: GraphReader,
+        global_extractor: GlobalRelationExtractor | None = None,
+        schema: SchemaConfig | None = None,
+        audit_rate: float = 0.0,
+        run_seed: str = "phase4_arc",
+    ) -> tuple[list[TheoryRelation], list[tuple[TheoryAtom, TheoryAtom]]]:
+        """Classify cross-chunk relations and return triage escalation pairs.
+
+        Default implementation executes full global classification with no escalation.
+        Subclasses with conformal/calibrated fast triage override this method to partition
+        fast accepted vs. escalated candidate pairs.
+
+        Parameters
+        ----------
+        local_components : list of TheoryAtom
+            All argument components available.
+        local_relations : list of TheoryRelation
+            Intra-chunk relations previously extracted.
+        graph_store : GraphReader
+            Reader for graph context.
+        global_extractor : GlobalRelationExtractor or None, default None
+            Optional extractor for structural neighborhoods.
+        schema : SchemaConfig or None, default None
+            Schema taxonomy.
+        audit_rate : float, default 0.0
+            Deterministic stochastic audit rate.
+        run_seed : str, default "phase4_arc"
+            Deterministic seed for audit hashing.
+
+        Returns
+        -------
+        tuple of (list of TheoryRelation, list of tuple of (TheoryAtom, TheoryAtom))
+            Tuple of (confirmed_relations, escalated_candidate_pairs).
+        """
+        relations = await self.classify_global(
+            local_components, local_relations, graph_store, global_extractor, schema
+        )
+        return relations, []

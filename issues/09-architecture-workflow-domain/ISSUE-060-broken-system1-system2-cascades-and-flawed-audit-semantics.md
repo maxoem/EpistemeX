@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Design Patterns, Calibrated Cascade, System 1/2 Decision Engine, Conformal Prediction) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`phases/phase4_argument_mining/classifiers.py`, `phases/phase5_fusion/argument_clustering.py`, `phases/phase2_entity_discovery/jev_entity_linker.py`) |
 | **Priority** | **Critical** |
-| **Status** | `Open` |
+| **Status** | `Resolved` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/design_patterns_and_standards.md`](../../docs/architecture/design_patterns_and_standards.md), [`docs/workflow/4_argument_mining/index.md`](../../docs/workflow/4_argument_mining/index.md), [`docs/workflow/5_inter_document_argument_web/index.md`](../../docs/workflow/5_inter_document_argument_web/index.md), [`ADR-0018`](../../docs/adr/0018-system-1-calibrated-decision-engine.md) |
 
 ---
@@ -159,7 +159,7 @@ Add a default `link_with_decision` method on the `EntityLinker` base class (`pro
 
 ## 4. Acceptance Criteria
 
-- [ ] `CascadingACCClassifier` no longer falls back to `llm_classifier` on 100% of chunks due to `not relations`.
-- [ ] `CascadingARCClassifier` escalates only ambiguous ($|C(X)| \neq 1$) or deterministically audited candidate pairs to `llm_classifier`, never re-running the entire corpus on a single coin flip.
-- [ ] `InterDocumentClusterVerifier.should_fuse` never sets `is_confirmed = True` on rejected clusters during stochastic auditing.
-- [ ] `CascadingEntityLinker` operates polymorphically via the `EntityLinker` protocol with zero `isinstance` checks.
+- [x] `CascadingACCClassifier` no longer falls back to `llm_classifier` on 100% of chunks due to `not relations`.
+- [x] `CascadingARCClassifier` escalates only ambiguous ($|C(X)| \neq 1$) or deterministically audited candidate pairs to `llm_classifier`, never re-running the entire corpus on a single coin flip.
+- [x] `InterDocumentClusterVerifier.should_fuse` never sets `is_confirmed = True` on rejected clusters during stochastic auditing.
+- [x] `CascadingEntityLinker` operates polymorphically via the `EntityLinker` protocol with zero `isinstance` checks.

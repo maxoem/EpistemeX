@@ -50,6 +50,7 @@ from episteme_pipeline.contracts.domain import (
     PhaseItemRecord,
     SubGraph,
 )
+from episteme_pipeline.decision.cascade import TriageDecision
 from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.schema.default_schema import SchemaConfig
@@ -647,6 +648,45 @@ class EntityLinker(Fingerprintable, ABC):
         duplicated as signature defaults.
         """
         ...
+
+    async def link_with_decision(
+        self,
+        mention: L2Entity,
+        graph_store: GraphReader,
+        *,
+        top_k: int | None = None,
+        threshold: float | None = None,
+        alpha: float | None = None,
+    ) -> TriageDecision[L2Entity | None]:
+        """Link mention to canonical entity, returning triage decision envelope.
+
+        Default implementation calls ``link(mention, graph_store, top_k=top_k, threshold=threshold)``.
+        If the linker matches an entity, it is returned with ``is_ambiguous=False``.
+        If the linker returns None (e.g. out-of-ontology/novel entity), it is returned with
+        ``is_ambiguous=False``, preventing false escalation to fallback linkers.
+        Subclasses with calibrated conformal sets (e.g. Jev) override this method to flag
+        ambiguous sets (|C(X)| != 1) or low-confidence predictions.
+
+        Parameters
+        ----------
+        mention : L2Entity
+            The extracted entity mention to link.
+        graph_store : GraphReader
+            Active graph store.
+        top_k : int or None, default None
+            Optional candidate retrieval count override.
+        threshold : float or None, default None
+            Optional confidence threshold override.
+        alpha : float or None, default None
+            Optional conformal significance level.
+
+        Returns
+        -------
+        TriageDecision of L2Entity or None
+            Triage decision containing matched entity and ambiguity status.
+        """
+        matched = await self.link(mention, graph_store, top_k=top_k, threshold=threshold)
+        return TriageDecision(value=matched, is_ambiguous=False)
 
 
 def _static_conformance() -> None:

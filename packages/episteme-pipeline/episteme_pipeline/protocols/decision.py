@@ -13,6 +13,10 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
+from episteme_pipeline.decision.cascade import (
+    TriageDecision,
+    should_audit_deterministically,
+)
 from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 

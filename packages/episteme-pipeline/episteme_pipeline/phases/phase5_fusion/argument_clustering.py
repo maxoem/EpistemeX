@@ -29,6 +29,7 @@ from collections import defaultdict
 from typing import Any
 
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom
+from episteme_pipeline.decision.cascade import should_audit_deterministically
 from episteme_pipeline.decision.conformal import ConformalCalibrator
 from episteme_pipeline.events.context import get_event_emitter
 from episteme_pipeline.events.models import DecisionGatingTriggered
@@ -360,8 +361,8 @@ class InterDocumentClusterVerifier:
     ) -> bool:
         """Evaluate whether a candidate cluster should be merged or fused.
 
-        Applies conformal prediction verification, followed by stochastic audit
-        if the cluster was initially rejected.
+        Applies conformal prediction verification, and records deterministic stochastic
+        audit telemetry without overriding rejected merges.
 
         Parameters
         ----------
@@ -371,18 +372,25 @@ class InterDocumentClusterVerifier:
         Returns
         -------
         bool
-            True if verified or passed by stochastic audit; False otherwise.
+            True if verified by the decision model; False otherwise.
         """
-        import random
-
         if len(cluster_nodes) < 2:
             return True
 
         is_confirmed, emp_acc, pred_set = await self.verify(cluster_nodes)
-        if is_confirmed:
-            return True
 
-        if random.random() < self.audit_rate:
+        rep_id = cluster_nodes[0].id if cluster_nodes else "unknown"
+        is_audit = (
+            should_audit_deterministically(
+                rep_id,
+                "phase5_fusion",
+                f"{rep_id}:{len(cluster_nodes)}",
+                self.audit_rate,
+            )
+            if self.audit_rate > 0.0
+            else False
+        )
+        if is_audit:
             get_event_emitter().emit(
                 DecisionGatingTriggered(
                     gate_name="fusion_gate",
@@ -392,9 +400,8 @@ class InterDocumentClusterVerifier:
                     prediction_set_size=len(pred_set),
                 )
             )
-            return True
 
-        return False
+        return is_confirmed
 
     async def filter_clusters(
         self,

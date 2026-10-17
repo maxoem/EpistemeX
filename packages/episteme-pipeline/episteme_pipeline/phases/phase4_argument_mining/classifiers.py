@@ -10,12 +10,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-import random
 import re
 from collections import defaultdict
 
 from episteme_pipeline.config import Phase4Config
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom, TheoryRelation
+from episteme_pipeline.decision.cascade import should_audit_deterministically
 from episteme_pipeline.phases.phase4_argument_mining.pairing import stable_component_id
 from episteme_pipeline.prompts.default_prompts import (
     DECISION_ACC_CRITERIA,
@@ -242,15 +242,24 @@ class CascadingACCClassifier(ACCClassifier):
             chunk_id, tagged_text, adu_ids, schema, chunk_entities
         )
 
+        if not atoms:
+            return await self.llm_classifier.classify(
+                chunk_id, tagged_text, adu_ids, schema, chunk_entities
+            )
+
         threshold = self.triage_confidence_threshold
         audit_rate = self.stochastic_audit_rate
 
         is_uncertain = any(a.confidence is None or a.confidence < threshold for a in atoms)
-        is_audit = random.random() < audit_rate
+        is_audit = (
+            should_audit_deterministically(chunk_id, "phase4_acc", chunk_id, audit_rate)
+            if audit_rate > 0.0
+            else False
+        )
 
-        # When fast classifier produces uncertain results, or during stochastic audits,
-        # or when no intra-chunk relations were extracted, fall back to LLM
-        if is_uncertain or is_audit or not relations:
+        # When fast classifier produces uncertain results, or during deterministic audits,
+        # fall back to LLM
+        if is_uncertain or is_audit:
             return await self.llm_classifier.classify(
                 chunk_id, tagged_text, adu_ids, schema, chunk_entities
             )
@@ -394,13 +403,15 @@ class JevARCClassifier(ARCClassifier):
         options["NEUTRAL"] = self._resolve_neutral_criterion()
         return options
 
-    async def classify_pair(
+    async def classify_pair_with_triage(
         self,
         source_atom: TheoryAtom,
         target_atom: TheoryAtom,
         schema: SchemaConfig,
-    ) -> list[TheoryRelation]:
-        """Classify the dialectical stance between a candidate pair of atoms.
+        audit_rate: float = 0.0,
+        run_seed: str = "phase4_arc",
+    ) -> tuple[list[TheoryRelation], bool]:
+        """Classify dialectical stance for a pair, returning relations and escalation flag.
 
         Parameters
         ----------
@@ -410,16 +421,28 @@ class JevARCClassifier(ARCClassifier):
             The target argument component.
         schema : SchemaConfig
             Schema configuration defining allowable relation types.
+        audit_rate : float, default 0.0
+            Deterministic stochastic audit rate.
+        run_seed : str, default "phase4_arc"
+            Deterministic seed for audit hashing.
 
         Returns
         -------
-        list of TheoryRelation
-            Predicted relations between the atoms.
+        tuple of (list of TheoryRelation, bool)
+            Extracted relations and boolean flag indicating whether the pair was escalated
+            to System 2 (due to conformal ambiguity, low confidence, or deterministic audit).
         """
         state = f"Source: {source_atom.text}\nTarget: {target_atom.text}"
+        pair_key = f"{source_atom.id}:{target_atom.id}"
+        is_audit = (
+            should_audit_deterministically(run_seed, "phase4_arc", pair_key, audit_rate)
+            if audit_rate > 0.0
+            else False
+        )
 
         if self.arc_mode == "multiplex":
             rels: list[TheoryRelation] = []
+            should_escalate = is_audit
             for r_type in schema.argument_relation_types:
                 rel_def = schema.argument_relation_definitions.get(r_type, f"relation {r_type.lower()}")
                 if "{relation_type}" in self.decision_template:
@@ -431,7 +454,9 @@ class JevARCClassifier(ARCClassifier):
                     state=state,
                     question=question,
                 )
-                if decision.passed and decision.probability >= self.confidence_threshold:
+                if decision.probability < self.confidence_threshold and decision.probability > (1.0 - self.confidence_threshold):
+                    should_escalate = True
+                elif decision.passed and decision.probability >= self.confidence_threshold:
                     modal = self._resolve_modal_strength(source_atom, target_atom)
                     eff_w = float(modal * decision.probability)
                     rels.append(
@@ -449,7 +474,7 @@ class JevARCClassifier(ARCClassifier):
                             decision_engine_provider="jev",
                         )
                     )
-            return rels
+            return rels, should_escalate
 
         options = self._build_choice_options(schema)
         decision: DecisionScore = await self.decision_engine.evaluate_choice(
@@ -457,6 +482,17 @@ class JevARCClassifier(ARCClassifier):
             question=self.decision_template,
             options=options,
         )
+
+        pred_set = decision.prediction_set
+        is_ambiguous = (
+            len(pred_set) != 1
+            if pred_set is not None
+            else decision.class_probability < self.confidence_threshold
+        )
+        should_escalate = is_ambiguous or is_audit
+
+        if should_escalate:
+            return [], True
 
         selected = str(decision.selected_option) if decision.selected_option else "NEUTRAL"
         resolved_type = schema.resolve_relation_type(selected)
@@ -479,8 +515,97 @@ class JevARCClassifier(ARCClassifier):
                     decision_engine_provider="jev",
                     calibrated_confidence=decision.empirical_accuracy or decision.class_probability,
                 )
-            ]
-        return []
+            ], False
+
+        return [], False
+
+    async def classify_pair(
+        self,
+        source_atom: TheoryAtom,
+        target_atom: TheoryAtom,
+        schema: SchemaConfig,
+    ) -> list[TheoryRelation]:
+        """Classify the dialectical stance between a candidate pair of atoms.
+
+        Parameters
+        ----------
+        source_atom : TheoryAtom
+            The source argument component.
+        target_atom : TheoryAtom
+            The target argument component.
+        schema : SchemaConfig
+            Schema configuration defining allowable relation types.
+
+        Returns
+        -------
+        list of TheoryRelation
+            Predicted relations between the atoms.
+        """
+        rels, _ = await self.classify_pair_with_triage(source_atom, target_atom, schema)
+        return rels
+
+    async def classify_global_with_triage(
+        self,
+        local_components: list[TheoryAtom],
+        local_relations: list[TheoryRelation],
+        graph_store: GraphReader,
+        global_extractor: GlobalRelationExtractor | None = None,
+        schema: SchemaConfig | None = None,
+        audit_rate: float = 0.0,
+        run_seed: str = "phase4_arc",
+    ) -> tuple[list[TheoryRelation], list[tuple[TheoryAtom, TheoryAtom]]]:
+        """Classify cross-chunk pairs using System 1 triage, returning confirmed relations and escalated pairs.
+
+        Parameters
+        ----------
+        local_components : list of TheoryAtom
+            All argument components available.
+        local_relations : list of TheoryRelation
+            Intra-chunk relations previously extracted.
+        graph_store : GraphReader
+            Reader for graph context.
+        global_extractor : GlobalRelationExtractor or None, default None
+            Optional extractor for structural neighborhoods.
+        schema : SchemaConfig or None, default None
+            Schema taxonomy.
+        audit_rate : float, default 0.0
+            Deterministic stochastic audit rate.
+        run_seed : str, default "phase4_arc"
+            Deterministic seed for audit hashing.
+
+        Returns
+        -------
+        tuple of (list of TheoryRelation, list of tuple of (TheoryAtom, TheoryAtom))
+            (confirmed_relations, escalated_pairs).
+        """
+        effective_schema = schema or SchemaConfig()
+        pairs = self._get_cross_chunk_pairs(local_components, effective_schema)
+        if not pairs:
+            return [], []
+
+        tasks = [
+            self.classify_pair_with_triage(
+                a, b, effective_schema, audit_rate=audit_rate, run_seed=run_seed
+            )
+            for a, b in pairs
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        confirmed_relations: list[TheoryRelation] = []
+        escalated_pairs: list[tuple[TheoryAtom, TheoryAtom]] = []
+
+        for (a, b), res in zip(pairs, results):
+            if isinstance(res, Exception):
+                logger.warning("JevARC pair classification failed for (%s, %s): %s", a.id, b.id, res)
+                escalated_pairs.append((a, b))
+            elif isinstance(res, tuple):
+                rels, should_escalate = res
+                if should_escalate:
+                    escalated_pairs.append((a, b))
+                else:
+                    confirmed_relations.extend(rels)
+
+        return confirmed_relations, escalated_pairs
 
     async def classify_global(
         self,
@@ -510,22 +635,15 @@ class JevARCClassifier(ARCClassifier):
         list of TheoryRelation
             Predicted global cross-chunk argument relations.
         """
-        effective_schema = schema or SchemaConfig()
-        pairs = self._get_cross_chunk_pairs(local_components, effective_schema)
-        if not pairs:
-            return []
-
-        tasks = [self.classify_pair(a, b, schema) for a, b in pairs]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        relations: list[TheoryRelation] = []
-        for res in results:
-            if isinstance(res, list):
-                relations.extend(res)
-            elif isinstance(res, Exception):
-                logger.warning("JevARC pair classification failed: %s", res)
-
-        return relations
+        confirmed, _ = await self.classify_global_with_triage(
+            local_components=local_components,
+            local_relations=local_relations,
+            graph_store=graph_store,
+            global_extractor=global_extractor,
+            schema=schema,
+            audit_rate=0.0,
+        )
+        return confirmed
 
     def _get_cross_chunk_pairs(
         self, components: list[TheoryAtom], schema: SchemaConfig
@@ -623,24 +741,29 @@ class CascadingARCClassifier(ARCClassifier):
             Extracted global argument relations.
         """
         effective_schema = schema or SchemaConfig()
-        fast_relations = await self.fast_classifier.classify_global(
+        fast_relations, escalated_pairs = await self.fast_classifier.classify_global_with_triage(
             local_components=local_components,
             local_relations=local_relations,
             graph_store=graph_store,
             global_extractor=global_extractor,
             schema=effective_schema,
+            audit_rate=self.stochastic_audit_rate,
         )
 
-        audit_rate = self.stochastic_audit_rate
-        is_audit = random.random() < audit_rate
-
-        if fast_relations and not is_audit:
+        if not escalated_pairs:
             return fast_relations
 
-        return await self.llm_classifier.classify_global(
-            local_components=local_components,
-            local_relations=local_relations,
+        llm_relations = await self.llm_classifier.classify_pairs(
+            pairs=escalated_pairs,
             graph_store=graph_store,
-            global_extractor=global_extractor,
             schema=effective_schema,
+            global_extractor=global_extractor,
         )
+
+        merged: dict[tuple[str, str], TheoryRelation] = {
+            (r.source_id, r.target_id): r for r in fast_relations
+        }
+        for r in llm_relations:
+            merged[(r.source_id, r.target_id)] = r
+
+        return list(merged.values())

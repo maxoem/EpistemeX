@@ -149,14 +149,49 @@ class TAGARCClassifier(ARCClassifier):
             len(candidate_pairs),
         )
 
+        return await self.classify_pairs(
+            candidate_pairs,
+            graph_store,
+            schema=effective_schema,
+            global_extractor=global_extractor,
+        )
+
+    async def classify_pairs(
+        self,
+        pairs: list[tuple[TheoryAtom, TheoryAtom]],
+        graph_store: GraphReader,
+        schema: SchemaConfig | None = None,
+        global_extractor: GlobalRelationExtractor | None = None,
+    ) -> list[TheoryRelation]:
+        """Predict cross-chunk argument relations for specific candidate pairs using the LLM.
+
+        Parameters
+        ----------
+        pairs : list of tuple of (TheoryAtom, TheoryAtom)
+            Candidate argument component pairs to evaluate.
+        graph_store : GraphReader
+            The graph database reader to fetch subgraph neighborhoods.
+        schema : SchemaConfig or None, optional
+            The pipeline schema definitions. If None, defaults to SchemaConfig().
+        global_extractor : GlobalRelationExtractor or None, optional
+            Optional extractor for structural neighborhoods.
+
+        Returns
+        -------
+        list of TheoryRelation
+            A list of successfully predicted global relations for evaluated pairs.
+        """
+        if not pairs:
+            return []
+        effective_schema = schema or SchemaConfig()
         tasks = [
             self._classify_pair(a, b, graph_store, effective_schema, global_extractor=global_extractor)
-            for a, b in candidate_pairs
+            for a, b in pairs
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         global_relations: list[TheoryRelation] = []
-        for (a, b), result in zip(candidate_pairs, results):
+        for (a, b), result in zip(pairs, results):
             if isinstance(result, Exception):
                 logger.error("ARC pair (%s, %s) failed: %s", a.id, b.id, result)
                 continue
@@ -164,7 +199,9 @@ class TAGARCClassifier(ARCClassifier):
                 global_relations.append(result)
 
         logger.info(
-            "ARC: extracted %d global argument relations", len(global_relations)
+            "ARC: extracted %d global argument relations for %d evaluated pairs",
+            len(global_relations),
+            len(pairs),
         )
         return global_relations
 

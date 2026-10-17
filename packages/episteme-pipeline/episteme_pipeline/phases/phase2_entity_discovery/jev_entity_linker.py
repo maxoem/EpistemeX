@@ -8,12 +8,15 @@ protocol.
 from __future__ import annotations
 
 import logging
-import random
 from typing import Any
 
 import torch
 
 from episteme_pipeline.contracts.domain import L2Entity
+from episteme_pipeline.decision.cascade import (
+    TriageDecision,
+    should_audit_deterministically,
+)
 from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.events.context import get_event_emitter
 from episteme_pipeline.events.models import (
@@ -131,7 +134,7 @@ class JevEntityLinker(EntityLinker):
         top_k: int | None = None,
         threshold: float | None = None,
         alpha: float | None = None,
-    ) -> tuple[L2Entity | None, DecisionScore | None, bool]:
+    ) -> TriageDecision[L2Entity | None]:
         """Link a mention to a canonical entity and return detailed decision telemetry.
 
         Parameters
@@ -149,11 +152,9 @@ class JevEntityLinker(EntityLinker):
 
         Returns
         -------
-        tuple of (L2Entity or None, DecisionScore or None, bool)
-            - Matched canonical entity, or None if novel/ambiguous.
-            - Decision score telemetry from the DecisionEngine.
-            - ``is_ambiguous`` flag indicating whether decision escalated (e.g.
-              conformal set size > 1 or empty).
+        TriageDecision of L2Entity or None
+            Triage decision containing matched entity, decision score telemetry,
+            conformal prediction set, empirical accuracy, and ambiguity status.
         """
         if not mention.textual_envelope:
             logger.warning("Mention %s lacks textual envelope. Raising UnlinkableMentionError.", mention.name)
@@ -165,7 +166,7 @@ class JevEntityLinker(EntityLinker):
 
         candidates = await graph_store.get_entities()
         if not candidates:
-            return None, None, False
+            return TriageDecision(value=None, decision=None, is_ambiguous=False, empirical_accuracy=1.0)
 
         # 1. Bi-Encoder retrieval
         t_n = f"[{mention.label}] {mention.textual_envelope}"
@@ -227,7 +228,13 @@ class JevEntityLinker(EntityLinker):
                 conformal_set,
                 mention.name,
             )
-            return None, decision, True
+            return TriageDecision(
+                value=None,
+                decision=decision,
+                is_ambiguous=True,
+                empirical_accuracy=decision.empirical_accuracy,
+                prediction_set=conformal_set,
+            )
 
         selected = conformal_set[0]
 
@@ -245,7 +252,13 @@ class JevEntityLinker(EntityLinker):
                     threshold=effective_threshold,
                 )
             )
-            return None, decision, False
+            return TriageDecision(
+                value=None,
+                decision=decision,
+                is_ambiguous=False,
+                empirical_accuracy=decision.empirical_accuracy,
+                prediction_set=conformal_set,
+            )
 
         # Case: Confidently matched single canonical entity
         matched = key_to_candidate.get(selected)
@@ -267,9 +280,21 @@ class JevEntityLinker(EntityLinker):
                     threshold=effective_threshold,
                 )
             )
-            return matched, decision, False
+            return TriageDecision(
+                value=matched,
+                decision=decision,
+                is_ambiguous=False,
+                empirical_accuracy=decision.empirical_accuracy,
+                prediction_set=conformal_set,
+            )
 
-        return None, decision, True
+        return TriageDecision(
+            value=None,
+            decision=decision,
+            is_ambiguous=True,
+            empirical_accuracy=decision.empirical_accuracy,
+            prediction_set=conformal_set,
+        )
 
     async def link(
         self,
@@ -383,23 +408,25 @@ class CascadingEntityLinker(EntityLinker):
         L2Entity or None
             The matched canonical entity, or None to mint a novel entity.
         """
-        if self.audit_rate > 0.0 and random.random() < self.audit_rate:
-            logger.debug("CascadingEntityLinker: stochastic audit triggered for %s", mention.name)
+        is_audit = (
+            should_audit_deterministically(
+                mention.id, "phase2_entity_linking", mention.name, self.audit_rate
+            )
+            if self.audit_rate > 0.0
+            else False
+        )
+        if is_audit:
+            logger.debug("CascadingEntityLinker: deterministic audit triggered for %s", mention.name)
             return await self.fallback.link(mention, graph_store, top_k=top_k, threshold=threshold)
 
-        if isinstance(self.primary, JevEntityLinker):
-            matched, _decision, is_ambiguous = await self.primary.link_with_decision(
-                mention, graph_store, top_k=top_k, threshold=threshold
-            )
-            if not is_ambiguous:
-                return matched
-            logger.debug(
-                "CascadingEntityLinker: primary returned ambiguous decision for %s; escalating to fallback",
-                mention.name,
-            )
-        else:
-            matched = await self.primary.link(mention, graph_store, top_k=top_k, threshold=threshold)
-            if matched is not None:
-                return matched
+        triage = await self.primary.link_with_decision(
+            mention, graph_store, top_k=top_k, threshold=threshold
+        )
+        if not triage.is_ambiguous:
+            return triage.value
 
+        logger.debug(
+            "CascadingEntityLinker: primary returned ambiguous decision for %s; escalating to fallback",
+            mention.name,
+        )
         return await self.fallback.link(mention, graph_store, top_k=top_k, threshold=threshold)

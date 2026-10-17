@@ -9,6 +9,10 @@ including :class:`LayaDecisionEngine` for local Apple Silicon MLX inference,
 publishing.
 """
 
+from episteme_pipeline.decision.cascade import (
+    TriageDecision,
+    should_audit_deterministically,
+)
 from episteme_pipeline.decision.conformal import ConformalCalibrator
 from episteme_pipeline.decision.gleaning import JevGleaningGate
 from episteme_pipeline.decision.jev_client import (
@@ -56,10 +60,12 @@ __all__ = [
     "ScoreQuestionStrategy",
     "StructuralistModalResolver",
     "TransformersDecisionEngine",
+    "TriageDecision",
     "compute_conformal_prediction_set",
     "evaluate_questions_sequentially",
     "get_question_strategy",
     "register_question_strategy",
     "resolve_decision_engine",
+    "should_audit_deterministically",
 ]
 

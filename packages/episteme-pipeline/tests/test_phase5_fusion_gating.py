@@ -259,3 +259,47 @@ async def test_phase5_runner_gates_spurious_clusters():
     artifacts = await runner.run(Phase4ArtifactsView(theory_atoms=[], theory_relations=[]), context)
     # The cluster ["a1", "a2"] was rejected by the gate, so 0 fusion artifacts emitted!
     assert len(artifacts.artifacts) == 0
+
+
+@pytest.mark.asyncio
+async def test_inter_document_cluster_verifier_never_approves_rejected_cluster_on_audit():
+    """Verify stochastic audit emits telemetry but NEVER flips is_confirmed to True on rejected clusters."""
+    from episteme_pipeline.phases.phase5_fusion.argument_clustering import (
+        InterDocumentClusterVerifier,
+    )
+
+    engine = MockJevDecisionEngine()
+    # Reject cluster decisively
+    engine.register_choice_response(
+        question_pattern="semantically equivalent for knowledge graph fusion",
+        selected_option="COMPETING_THEORIES",
+        probabilities={"EQUIVALENT_FUSION": 0.05, "COMPETING_THEORIES": 0.95},
+        prediction_set=["COMPETING_THEORIES"],
+        empirical_accuracy=0.90,
+    )
+
+    emitter = SimpleEventEmitter()
+    collector = EventCollector()
+    emitter.register_observer(collector)
+    set_event_emitter(emitter)
+
+    verifier = InterDocumentClusterVerifier(
+        decision_engine=engine,
+        confidence_threshold=0.85,
+        audit_rate=1.0,  # 100% audit rate
+    )
+
+    a1 = TheoryAtom(id="a1", text="Theory X", component_type="CLAIM", source_chunk_id="c1")
+    a2 = TheoryAtom(id="a2", text="Theory Y", component_type="CLAIM", source_chunk_id="c2")
+
+    should_fuse = await verifier.should_fuse([a1, a2])
+
+    # MUST NOT approve rejected merge despite audit_rate = 1.0!
+    assert should_fuse is False
+
+    # But stochastic audit event should have been emitted
+    audit_events = [
+        e for e in collector.events
+        if isinstance(e, DecisionGatingTriggered) and e.action_taken == "stochastic_audit"
+    ]
+    assert len(audit_events) == 1

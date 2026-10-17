@@ -157,22 +157,97 @@ async def test_jev_arc_classifier_classify_global() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cascading_arc_classifier() -> None:
-    """Verify CascadingARCClassifier falls back to LLM when fast classifier predicts no relations."""
+async def test_jev_arc_classifier_escalates_ambiguous_conformal_set() -> None:
+    """Verify JevARCClassifier escalates pairs with ambiguous prediction sets to System 2."""
+    mock_engine = MagicMock()
+    mock_engine.evaluate_choice = AsyncMock(
+        return_value=DecisionScore(
+            selected_option="SUPPORTS_ARG",
+            class_probability=0.70,
+            empirical_accuracy=0.65,
+            prediction_set=["SUPPORTS_ARG", "ATTACKS_ARG"],
+        )
+    )
+
+    classifier = JevARCClassifier(mock_engine, confidence_threshold=0.60)
+    atom_a = TheoryAtom(id="ac_a", text="Premise A", component_type="PREMISE", source_chunk_id="c1")
+    atom_b = TheoryAtom(id="ac_b", text="Claim B", component_type="CLAIM", source_chunk_id="c2")
+
+    rels, escalated = await classifier.classify_global_with_triage(
+        local_components=[atom_a, atom_b],
+        local_relations=[],
+        graph_store=MagicMock(),
+        schema=DEFAULT_SCHEMA,
+    )
+
+    assert rels == []
+    assert len(escalated) == 1
+    assert escalated[0] == (atom_a, atom_b)
+
+
+@pytest.mark.asyncio
+async def test_cascading_acc_classifier_fast_exit() -> None:
+    """Verify CascadingACCClassifier accepts confident atoms without falling back to LLM."""
+    fast_acc = MagicMock(spec=ACCClassifier)
+    # Return confident atom with no relations (typical of single-unit extraction)
+    fast_acc.classify = AsyncMock(
+        return_value=(
+            [
+                TheoryAtom(
+                    id="ac_1",
+                    text="Confident claim",
+                    component_type="CLAIM",
+                    source_chunk_id="chunk_1",
+                    confidence=0.95,  # above 0.85 threshold
+                )
+            ],
+            [],
+        )
+    )
+
+    llm_acc = MagicMock(spec=ACCClassifier)
+    llm_acc.classify = AsyncMock()
+
+    config = Phase4Config(triage_confidence_threshold=0.85, stochastic_audit_rate=0.0)
+    cascade = CascadingACCClassifier(fast_acc, llm_acc, config)
+
+    atoms, rels = await cascade.classify(
+        chunk_id="chunk_1",
+        tagged_text="<AC1>Confident claim</AC1>",
+        adu_ids=["AC1"],
+        schema=DEFAULT_SCHEMA,
+    )
+
+    # Should NOT have escalated to LLM
+    assert not llm_acc.classify.called
+    assert atoms[0].component_type == "CLAIM"
+    assert atoms[0].confidence == 0.95
+    assert rels == []
+
+
+@pytest.mark.asyncio
+async def test_cascading_arc_classifier_escalates_only_triaged_pairs() -> None:
+    """Verify CascadingARCClassifier escalates only ambiguous or audited pairs to LLM."""
+    atom_a = TheoryAtom(id="ac_a", text="Premise A", component_type="PREMISE", source_chunk_id="c1")
+    atom_b = TheoryAtom(id="ac_b", text="Claim B", component_type="CLAIM", source_chunk_id="c2")
+
     fast_arc = MagicMock(spec=ARCClassifier)
-    fast_arc.classify_global = AsyncMock(return_value=[])
+    # fast_arc classifies and marks (atom_a, atom_b) as escalated
+    fast_arc.classify_global_with_triage = AsyncMock(
+        return_value=([], [(atom_a, atom_b)])
+    )
 
     llm_arc = MagicMock(spec=ARCClassifier)
     llm_rel = TheoryRelation(
         source_id="ac_a", target_id="ac_b", relation_type="ATTACKS", confidence=0.85, scope="global"
     )
-    llm_arc.classify_global = AsyncMock(return_value=[llm_rel])
+    llm_arc.classify_pairs = AsyncMock(return_value=[llm_rel])
 
     config = Phase4Config(stochastic_audit_rate=0.0)
     cascade = CascadingARCClassifier(fast_arc, llm_arc, config)
 
     result = await cascade.classify_global(
-        local_components=[],
+        local_components=[atom_a, atom_b],
         local_relations=[],
         graph_store=MagicMock(),
         global_extractor=MagicMock(),
@@ -181,7 +256,41 @@ async def test_cascading_arc_classifier() -> None:
 
     assert len(result) == 1
     assert result[0].relation_type == "ATTACKS"
-    assert llm_arc.classify_global.called
+    assert llm_arc.classify_pairs.called
+    assert llm_arc.classify_pairs.call_args[1]["pairs"] == [(atom_a, atom_b)]
+
+
+@pytest.mark.asyncio
+async def test_cascading_arc_classifier_fast_exit_without_llm() -> None:
+    """Verify CascadingARCClassifier accepts fast relations and skips LLM when no pairs escalate."""
+    atom_a = TheoryAtom(id="ac_a", text="Premise A", component_type="PREMISE", source_chunk_id="c1")
+    atom_b = TheoryAtom(id="ac_b", text="Claim B", component_type="CLAIM", source_chunk_id="c2")
+
+    fast_rel = TheoryRelation(
+        source_id="ac_a", target_id="ac_b", relation_type="SUPPORTS", confidence=0.92, scope="global"
+    )
+    fast_arc = MagicMock(spec=ARCClassifier)
+    fast_arc.classify_global_with_triage = AsyncMock(
+        return_value=([fast_rel], [])
+    )
+
+    llm_arc = MagicMock(spec=ARCClassifier)
+    llm_arc.classify_pairs = AsyncMock()
+
+    config = Phase4Config(stochastic_audit_rate=0.0)
+    cascade = CascadingARCClassifier(fast_arc, llm_arc, config)
+
+    result = await cascade.classify_global(
+        local_components=[atom_a, atom_b],
+        local_relations=[],
+        graph_store=MagicMock(),
+        global_extractor=MagicMock(),
+        schema=DEFAULT_SCHEMA,
+    )
+
+    assert len(result) == 1
+    assert result[0] is fast_rel
+    assert not llm_arc.classify_pairs.called
 
 
 
