@@ -19,15 +19,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from episteme_pipeline.artifacts.builders import parse_mention_id
-from episteme_pipeline.artifacts.codecs import (
-    ChunkCodec,
-    DocumentCodec,
-    GlobalRelationCodec,
-    LinkedEntityCodec,
-    LocalRelationCodec,
-    TheoryAtomCodec,
-    TheoryRelationCodec,
-)
 from episteme_pipeline.artifacts.models import (
     ArtifactEnvelope,
     ArtifactKind,
@@ -50,7 +41,6 @@ from episteme_pipeline.contracts.domain import (
     L1Document,
     L2Entity,
     L2Triple,
-    TenabilityResult,
     TheoryAtom,
     TheoryRelation,
 )
@@ -548,41 +538,9 @@ def _resolve_l3_atoms_and_relations(
     return canonical_atoms, list(deduped_relations.values())
 
 
+@dataclass(slots=True)
 class EpistemicStateView:
     """Base contract for cumulative inter-phase artifact views."""
-
-    documents: list[L1Document]
-    chunks: list[L1Chunk]
-    entities: list[L2Entity]
-    local_triples: list[L2Triple]
-    entity_count_by_type: dict[str, int]
-    global_triples: list[L2Triple]
-    relation_type_distribution: dict[str, int]
-    theory_atoms: list[TheoryAtom]
-    theory_relations: list[TheoryRelation]
-    fusion_decisions: list[FusionDecisionArtifact]
-    canonical_theory_atoms: list[TheoryAtom]
-    canonical_theory_relations: list[TheoryRelation]
-    entity_envelopes_by_id: dict[str, list[str]]
-    entity_mentions_by_id: dict[str, list[dict[str, str]]]
-    consumed_artifact_ids: list[str]
-
-    def to_graph_reader(self) -> ArtifactSubgraphReader:
-        """Build an in-memory :class:`ArtifactSubgraphReader` from this view.
-
-        Returns
-        -------
-        ArtifactSubgraphReader
-            Deterministic in-memory graph reader over this view's state.
-        """
-        return ArtifactSubgraphReader.from_view(self)
-
-
-@dataclass(slots=True)
-class Phase1ArtifactsView(EpistemicStateView):
-    """Cumulative view of Phase 1 foundation artifacts."""
-
-    _allowed_kinds = (ArtifactKind.DOCUMENT, ArtifactKind.CHUNK)
 
     documents: list[L1Document] = field(default_factory=list)
     chunks: list[L1Chunk] = field(default_factory=list)
@@ -601,6 +559,23 @@ class Phase1ArtifactsView(EpistemicStateView):
         default_factory=dict
     )
     consumed_artifact_ids: list[str] = field(default_factory=list)
+
+    def to_graph_reader(self) -> ArtifactSubgraphReader:
+        """Build an in-memory :class:`ArtifactSubgraphReader` from this view.
+
+        Returns
+        -------
+        ArtifactSubgraphReader
+            Deterministic in-memory graph reader over this view's state.
+        """
+        return ArtifactSubgraphReader.from_view(self)
+
+
+@dataclass(slots=True)
+class Phase1ArtifactsView(EpistemicStateView):
+    """Cumulative view of Phase 1 foundation artifacts."""
+
+    _allowed_kinds = (ArtifactKind.DOCUMENT, ArtifactKind.CHUNK)
 
     @classmethod
     def from_collection(cls, collection: ArtifactCollection) -> Phase1ArtifactsView:
@@ -625,24 +600,6 @@ class Phase2ArtifactsView(EpistemicStateView):
         ArtifactKind.LOCAL_RELATION,
         ArtifactKind.CANONICALIZATION,
     )
-
-    entities: list[L2Entity] = field(default_factory=list)
-    local_triples: list[L2Triple] = field(default_factory=list)
-    entity_count_by_type: dict[str, int] = field(default_factory=dict)
-    documents: list[L1Document] = field(default_factory=list)
-    chunks: list[L1Chunk] = field(default_factory=list)
-    global_triples: list[L2Triple] = field(default_factory=list)
-    relation_type_distribution: dict[str, int] = field(default_factory=dict)
-    theory_atoms: list[TheoryAtom] = field(default_factory=list)
-    theory_relations: list[TheoryRelation] = field(default_factory=list)
-    fusion_decisions: list[FusionDecisionArtifact] = field(default_factory=list)
-    canonical_theory_atoms: list[TheoryAtom] = field(default_factory=list)
-    canonical_theory_relations: list[TheoryRelation] = field(default_factory=list)
-    entity_envelopes_by_id: dict[str, list[str]] = field(default_factory=dict)
-    entity_mentions_by_id: dict[str, list[dict[str, str]]] = field(
-        default_factory=dict
-    )
-    consumed_artifact_ids: list[str] = field(default_factory=list)
 
     @classmethod
     def from_collection(cls, collection: ArtifactCollection) -> Phase2ArtifactsView:
@@ -672,24 +629,6 @@ class Phase2ArtifactsView(EpistemicStateView):
 @dataclass(slots=True)
 class Phase3ArtifactsView(EpistemicStateView):
     """Cumulative view of Phase 1 + Phase 2/3b/4-maturation + Phase 3 artifacts."""
-
-    global_triples: list[L2Triple] = field(default_factory=list)
-    relation_type_distribution: dict[str, int] = field(default_factory=dict)
-    chunks: list[L1Chunk] = field(default_factory=list)
-    documents: list[L1Document] = field(default_factory=list)
-    entities: list[L2Entity] = field(default_factory=list)
-    local_triples: list[L2Triple] = field(default_factory=list)
-    entity_count_by_type: dict[str, int] = field(default_factory=dict)
-    theory_atoms: list[TheoryAtom] = field(default_factory=list)
-    theory_relations: list[TheoryRelation] = field(default_factory=list)
-    fusion_decisions: list[FusionDecisionArtifact] = field(default_factory=list)
-    canonical_theory_atoms: list[TheoryAtom] = field(default_factory=list)
-    canonical_theory_relations: list[TheoryRelation] = field(default_factory=list)
-    entity_envelopes_by_id: dict[str, list[str]] = field(default_factory=dict)
-    entity_mentions_by_id: dict[str, list[dict[str, str]]] = field(
-        default_factory=dict
-    )
-    consumed_artifact_ids: list[str] = field(default_factory=list)
 
     @classmethod
     def from_collection(cls, collection: ArtifactCollection) -> Phase3ArtifactsView:
@@ -739,24 +678,6 @@ class Phase3ArtifactsView(EpistemicStateView):
 @dataclass(slots=True)
 class Phase4ArtifactsView(EpistemicStateView):
     """Cumulative view of Phase 1–5 artifacts including canonical L3 fusion."""
-
-    theory_atoms: list[TheoryAtom] = field(default_factory=list)
-    theory_relations: list[TheoryRelation] = field(default_factory=list)
-    fusion_decisions: list[FusionDecisionArtifact] = field(default_factory=list)
-    canonical_theory_atoms: list[TheoryAtom] = field(default_factory=list)
-    canonical_theory_relations: list[TheoryRelation] = field(default_factory=list)
-    documents: list[L1Document] = field(default_factory=list)
-    chunks: list[L1Chunk] = field(default_factory=list)
-    entities: list[L2Entity] = field(default_factory=list)
-    local_triples: list[L2Triple] = field(default_factory=list)
-    entity_count_by_type: dict[str, int] = field(default_factory=dict)
-    global_triples: list[L2Triple] = field(default_factory=list)
-    relation_type_distribution: dict[str, int] = field(default_factory=dict)
-    entity_envelopes_by_id: dict[str, list[str]] = field(default_factory=dict)
-    entity_mentions_by_id: dict[str, list[dict[str, str]]] = field(
-        default_factory=dict
-    )
-    consumed_artifact_ids: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.canonical_theory_atoms and self.theory_atoms:
