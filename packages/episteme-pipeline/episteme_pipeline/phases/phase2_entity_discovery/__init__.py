@@ -30,6 +30,8 @@ import asyncio
 import logging
 from collections import defaultdict
 
+from typing import Any
+
 from episteme_pipeline.artifacts.builders import (
     build_entity_mention_artifact,
     build_linked_entity_artifact,
@@ -40,6 +42,7 @@ from episteme_pipeline.artifacts.execution import (
     ArtifactExecutionContext,
     Phase1ArtifactsView,
 )
+from episteme_pipeline.artifacts.subgraph_reader import ArtifactSubgraphReader
 from episteme_pipeline.config import Phase2Config
 from episteme_pipeline.contracts.domain import (
     GlobalStructuralAnchor,
@@ -47,7 +50,6 @@ from episteme_pipeline.contracts.domain import (
     L2Entity,
     L2Triple,
 )
-
 from episteme_pipeline.phases.chunk_selection import select_pending_chunks
 from episteme_pipeline.phases.phase2_entity_discovery.entity_linker import (
     NameEntityLinker,
@@ -72,7 +74,12 @@ from episteme_pipeline.protocols.extractors import (
     EntityLinker,
     NERExtractor,
 )
-from episteme_pipeline.protocols.graph_store import ProcessingGraph
+from episteme_pipeline.protocols.graph_store import (
+    GraphReader,
+    GraphWriter,
+    PhaseCheckpointStore,
+    ProcessingGraph,
+)
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
@@ -106,9 +113,9 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         config: Phase2Config,
         schema: SchemaConfig,
         *,
-        llm,
+        llm: Any,
         embedding_model: EmbeddingModel | None = None,
-        graph_store: ProcessingGraph,
+        graph_store: ProcessingGraph | PhaseCheckpointStore | None = None,
         ner_extractor: NERExtractor | None = None,
         entity_linker: EntityLinker | None = None,
         working_memory_manager: EpisodicWorkingMemoryManager | None = None,
@@ -127,8 +134,8 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             LLM instance used for named entity recognition.
         embedding_model : EmbeddingModel or None, optional
             Embedding model for dense retrieval and entity linking.
-        graph_store : ProcessingGraph
-            Underlying graph database interface.
+        graph_store : ProcessingGraph | PhaseCheckpointStore | None, optional
+            Optional checkpoint or processing graph store.
         ner_extractor : NERExtractor or None, optional
             Custom NER extractor. Defaults to LLMNERExtractor if None.
         entity_linker : EntityLinker or None, optional
@@ -207,8 +214,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         return self._doc_memory_managers[doc_id]
 
     async def run(self, input: Phase1ArtifactsView, context: ArtifactExecutionContext) -> ArtifactCollection:
-        """
-        Execute Phase 2 entity extraction and local relation discovery.
+        """Execute Phase 2 entity extraction and local relation discovery.
 
         Parameters
         ----------
@@ -223,18 +229,32 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             Generated EntityMentionArtifact, LinkedEntityArtifact, and LocalRelationArtifact instances.
         """
         anchor = context.pipeline_input.structural_anchor if context and context.pipeline_input else None
+        effective_phase = (
+            f"{_PHASE_TAG}:{context.lineage_fingerprint}"
+            if context and context.lineage_fingerprint
+            else _PHASE_TAG
+        )
 
         chunks = await select_pending_chunks(
-            self.graph_store, _PHASE_TAG, input.chunks
+            self.graph_store, effective_phase, input.chunks
         )
         if not chunks:
             return ArtifactCollection([])
+
+        reader = input.to_graph_reader()
+        if (
+            isinstance(self.graph_store, GraphReader)
+            and not (context and context.lineage_fingerprint)
+        ):
+            for existing_entity in await self.graph_store.get_entities():
+                reader.register_entity(existing_entity)
 
         # Process chunks sequentially along document order
         chunks = sorted(chunks, key=lambda c: (c.source_doc_id, c.sequence_index))
 
         all_entities: list[L2Entity] = []
         all_triples: list[L2Triple] = []
+        mention_envelopes: dict[tuple[str, str], str] = {}
 
         succeeded = 0
         progress_task = f"Phase 2: {len(chunks)} chunks"
@@ -243,13 +263,19 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         ) as advance:
             for i in range(0, len(chunks), self.config.batch_size):
                 batch = chunks[i : i + self.config.batch_size]
-                batch_entities, batch_triples, failures = await self._process_batch(
-                    batch, anchor=anchor
+                batch_entities, batch_triples, batch_mentions, failures = (
+                    await self._process_batch(
+                        batch,
+                        anchor=anchor,
+                        reader=reader,
+                        phase_tag=effective_phase,
+                    )
                 )
                 succeeded += len(batch) - len(failures)
                 self._guard_systematic_failure(batch, failures, succeeded)
                 all_entities.extend(batch_entities)
                 all_triples.extend(batch_triples)
+                mention_envelopes.update(batch_mentions)
                 advance(len(batch))
 
         # Deduplicate all_entities by entity.id, merging source_chunk_ids across all occurrences
@@ -267,6 +293,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                     update={
                         "source_chunk_ids": combined_chunks,
                         "description": existing.description or entity.description,
+                        "textual_envelope": existing.textual_envelope or entity.textual_envelope,
                         "confidence": max(conf_candidates) if conf_candidates else None,
                     }
                 )
@@ -279,10 +306,41 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                 mention_id = f"mention::{entity.id}::{chunk_id}"
                 mention_artifact_id = f"artifact::{mention_id}"
                 mention_artifact_ids.append(mention_artifact_id)
-                artifacts.append(build_entity_mention_artifact(entity, chunk_id, run_id=context.run_id, phase_name=self.name, method="phase2.entity_discovery"))
-            artifacts.append(build_linked_entity_artifact(entity, mention_artifact_ids, run_id=context.run_id, phase_name=self.name, method="phase2.entity_discovery"))
+                env_text = mention_envelopes.get(
+                    (entity.id, chunk_id), entity.textual_envelope
+                )
+                mention_entity = (
+                    entity.model_copy(update={"textual_envelope": env_text})
+                    if env_text != entity.textual_envelope
+                    else entity
+                )
+                artifacts.append(
+                    build_entity_mention_artifact(
+                        mention_entity,
+                        chunk_id,
+                        run_id=context.run_id,
+                        phase_name=self.name,
+                        method="phase2.entity_discovery",
+                    )
+                )
+            artifacts.append(
+                build_linked_entity_artifact(
+                    entity,
+                    mention_artifact_ids,
+                    run_id=context.run_id,
+                    phase_name=self.name,
+                    method="phase2.entity_discovery",
+                )
+            )
         for triple in all_triples:
-            artifacts.append(build_local_relation_artifact(triple, run_id=context.run_id, phase_name=self.name, method="phase2.entity_discovery"))
+            artifacts.append(
+                build_local_relation_artifact(
+                    triple,
+                    run_id=context.run_id,
+                    phase_name=self.name,
+                    method="phase2.entity_discovery",
+                )
+            )
         return ArtifactCollection(artifacts)
 
     @staticmethod
@@ -307,10 +365,18 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         ) from exc
 
     async def _process_batch(
-        self, chunks: list[L1Chunk], anchor: GlobalStructuralAnchor | None = None
-    ) -> tuple[list[L2Entity], list[L2Triple], list[Exception]]:
-        """
-        Process a batch of L1Chunks concurrently through NER extraction and entity linking.
+        self,
+        chunks: list[L1Chunk],
+        anchor: GlobalStructuralAnchor | None = None,
+        reader: ArtifactSubgraphReader | None = None,
+        phase_tag: str = _PHASE_TAG,
+    ) -> tuple[
+        list[L2Entity],
+        list[L2Triple],
+        dict[tuple[str, str], str],
+        list[Exception],
+    ]:
+        """Process a batch of L1Chunks concurrently through NER extraction and entity linking.
 
         Parameters
         ----------
@@ -318,19 +384,31 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             List of L1Chunk instances to process.
         anchor : GlobalStructuralAnchor | None, optional
             Run-level structural coordinate anchor, by default None.
+        reader : ArtifactSubgraphReader | None, optional
+            In-memory run-scoped subgraph reader for entity linking.
+        phase_tag : str, optional
+            Effective checkpoint phase identifier.
 
         Returns
         -------
-        tuple[list[L2Entity], list[L2Triple], list[Exception]]
-            Discovered entities, local triples, and per-chunk exceptions encountered.
+        tuple
+            Discovered entities, local triples, per-mention textual envelopes,
+            and per-chunk exceptions encountered.
         """
-        tasks = [self._process_chunk(chunk, anchor=anchor) for chunk in chunks]
+        active_reader = reader or ArtifactSubgraphReader()
+        tasks = [
+            self._process_chunk(
+                chunk, anchor=anchor, reader=active_reader, phase_tag=phase_tag
+            )
+            for chunk in chunks
+        ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         batch_entities: list[L2Entity] = []
         batch_triples: list[L2Triple] = []
+        batch_mentions: dict[tuple[str, str], str] = {}
         failures: list[Exception] = []
-        
+
         entities_to_upsert = []
         relations_to_upsert = []
         triples_to_upsert = []
@@ -340,12 +418,20 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             if isinstance(result, Exception):
                 logger.error(
                     "Chunk %s processing failed (will retry on re-run): %s",
-                    chunk.id, result,
+                    chunk.id,
+                    result,
                 )
                 failures.append(result)
                 continue
-                
-            resolved_entities, triples, chunk_id, memory_update, boundary_detected, transitional_summary = result
+
+            (
+                resolved_entities,
+                triples,
+                chunk_id,
+                memory_update,
+                boundary_detected,
+                transitional_summary,
+            ) = result
 
             memory_mgr = self._get_memory_manager(chunk.source_doc_id)
             memory_mgr.process_step(
@@ -354,17 +440,22 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                 semantic_boundary_detected=boundary_detected,
                 transitional_summary=transitional_summary,
             )
-            
+
             for entity, env in resolved_entities:
                 entities_to_upsert.append(entity)
                 batch_entities.append(entity)
-                relations_to_upsert.append({
-                    "from_id": entity.id,
-                    "relation_type": "EXTRACTED_FROM",
-                    "to_id": chunk_id,
-                    "properties": {"confidence": 1.0, "textual_envelope": env}
-                })
-                
+                active_reader.register_entity(entity)
+                if env:
+                    batch_mentions[(entity.id, chunk_id)] = env
+                relations_to_upsert.append(
+                    {
+                        "from_id": entity.id,
+                        "relation_type": "EXTRACTED_FROM",
+                        "to_id": chunk_id,
+                        "properties": {"confidence": 1.0, "textual_envelope": env},
+                    }
+                )
+
             for triple in triples:
                 triples_to_upsert.append(triple)
                 batch_triples.append(triple)
@@ -372,27 +463,46 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             processed_chunks.append(chunk_id)
 
         from itertools import batched
-        if entities_to_upsert:
-            for e_batch in batched(entities_to_upsert, 500):
-                await self.graph_store.upsert_entities(list(e_batch))
-        if relations_to_upsert:
-            for r_batch in batched(relations_to_upsert, 500):
-                await self.graph_store.upsert_relations(list(r_batch))
-        if triples_to_upsert:
-            for t_batch in batched(triples_to_upsert, 500):
-                await self.graph_store.upsert_triples(list(t_batch))
-        if processed_chunks:
-            for c_batch in batched(processed_chunks, 500):
-                await self.graph_store.mark_chunks_processed(list(c_batch), _PHASE_TAG)
 
-        return batch_entities, batch_triples, failures
+        if isinstance(self.graph_store, GraphWriter):
+            if entities_to_upsert:
+                for e_batch in batched(entities_to_upsert, 500):
+                    await self.graph_store.upsert_entities(list(e_batch))
+            if relations_to_upsert:
+                for r_batch in batched(relations_to_upsert, 500):
+                    await self.graph_store.upsert_relations(list(r_batch))
+            if triples_to_upsert:
+                for t_batch in batched(triples_to_upsert, 500):
+                    await self.graph_store.upsert_triples(list(t_batch))
+        if self.graph_store is not None and processed_chunks:
+            for c_batch in batched(processed_chunks, 500):
+                await self.graph_store.mark_chunks_processed(list(c_batch), phase_tag)
+
+        return batch_entities, batch_triples, batch_mentions, failures
 
     async def _process_chunk(
-        self, chunk: L1Chunk, anchor: GlobalStructuralAnchor | None = None
-    ) -> tuple[list[tuple[L2Entity, str | None]], list[L2Triple], str, dict[str, Any] | None, bool, str | None]:
+        self,
+        chunk: L1Chunk,
+        anchor: GlobalStructuralAnchor | None = None,
+        reader: GraphReader | None = None,
+        phase_tag: str = _PHASE_TAG,
+    ) -> tuple[
+        list[tuple[L2Entity, str | None]],
+        list[L2Triple],
+        str,
+        dict[str, Any] | None,
+        bool,
+        str | None,
+    ]:
         memory_mgr = self._get_memory_manager(chunk.source_doc_id)
         effective_anchor = anchor or memory_mgr.get_effective_anchor(chunk)
-        entities, triples, memory_update, boundary_detected, transitional_summary = await self.ner_extractor.extract(
+        (
+            entities,
+            triples,
+            memory_update,
+            boundary_detected,
+            transitional_summary,
+        ) = await self.ner_extractor.extract(
             chunk_id=chunk.id,
             chunk_text=chunk.text,
             schema=self.schema,
@@ -403,33 +513,51 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         # Apply confidence threshold filtering if configured
         if self.config.ner_confidence_threshold > 0.0:
             entities = [
-                e for e in entities
-                if e.confidence is None or e.confidence >= self.config.ner_confidence_threshold
+                e
+                for e in entities
+                if e.confidence is None
+                or e.confidence >= self.config.ner_confidence_threshold
             ]
 
         if self.config.local_relation_confidence_threshold > 0.0:
             triples = [
-                t for t in triples
+                t
+                for t in triples
                 if t.confidence >= self.config.local_relation_confidence_threshold
             ]
 
         if not entities and not triples:
-            # Nothing extracted — leave chunk UNPROCESSED so it will be retried.
-            # Optionally annotate the chunk for easier diagnostics.
-            try:
-                await self.graph_store.upsert_node(
-                    label="Chunk",
-                    node_id=chunk.id,
-                    properties={f"{_PHASE_TAG}_skipped": True},
-                )
-            except Exception:
-                # Best-effort; lack of this flag must not block execution
-                pass
-            return [], [], chunk.id, memory_update, boundary_detected, transitional_summary
+            # Nothing extracted — optionally annotate the chunk for diagnostics
+            if isinstance(self.graph_store, GraphWriter):
+                try:
+                    await self.graph_store.upsert_node(
+                        label="Chunk",
+                        node_id=chunk.id,
+                        properties={f"{phase_tag}_skipped": True},
+                    )
+                except Exception:
+                    pass
+            return (
+                [],
+                [],
+                chunk.id,
+                memory_update,
+                boundary_detected,
+                transitional_summary,
+            )
 
         # Entity linking: redirect to existing canonical IDs where possible
         resolved_entities: list[tuple[L2Entity, str | None]] = []
         id_redirect: dict[str, str] = {}  # extracted_id -> canonical_id
+        link_store: GraphReader = (
+            reader
+            if reader is not None
+            else (
+                self.graph_store
+                if isinstance(self.graph_store, GraphReader)
+                else ArtifactSubgraphReader()
+            )
+        )
 
         from episteme_pipeline.events.models import UnlinkableMentionError
 
@@ -439,7 +567,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             try:
                 canonical = await self.entity_linker.link(
                     entity,
-                    self.graph_store,
+                    link_store,
                     top_k=self.config.top_k_linking_candidates,
                     threshold=self.config.linking_confidence_threshold,
                 )
@@ -447,7 +575,10 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                     id_redirect[entity.id] = canonical.id
                     # Append this chunk as a source of the canonical entity
                     canonical = canonical.model_copy(
-                        update={"source_chunk_ids": canonical.source_chunk_ids + [chunk.id]}
+                        update={
+                            "source_chunk_ids": canonical.source_chunk_ids
+                            + [chunk.id]
+                        }
                     )
                     resolved_entities.append((canonical, entity.textual_envelope))
                 else:
@@ -464,10 +595,21 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             resolved_triples.append(
                 triple.model_copy(
                     update={
-                        "subject_id": id_redirect.get(triple.subject_id, triple.subject_id),
-                        "object_id": id_redirect.get(triple.object_id, triple.object_id),
+                        "subject_id": id_redirect.get(
+                            triple.subject_id, triple.subject_id
+                        ),
+                        "object_id": id_redirect.get(
+                            triple.object_id, triple.object_id
+                        ),
                     }
                 )
             )
 
-        return resolved_entities, resolved_triples, chunk.id, memory_update, boundary_detected, transitional_summary
+        return (
+            resolved_entities,
+            resolved_triples,
+            chunk.id,
+            memory_update,
+            boundary_detected,
+            transitional_summary,
+        )

@@ -34,10 +34,15 @@ from episteme_pipeline.contracts.domain import L2Entity
 from episteme_pipeline.events.models import EntityMaturationSynthesized
 from episteme_pipeline.llm import ensure_structured_llm
 from episteme_pipeline.protocols.extractors import EmbeddingModel, as_tensor
-from episteme_pipeline.protocols.graph_store import ProcessingGraph
+from episteme_pipeline.protocols.graph_store import (
+    GraphReader,
+    GraphWriter,
+    ProcessingGraph,
+)
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 
 logger = logging.getLogger(__name__)
+
 
 class EntitySynthesisOutput(BaseModel):
     description: str
@@ -59,13 +64,13 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
 
     This phase addresses the 'epistemic drift' problem in knowledge graph construction.
     Instead of using a naive 'first-mention-wins' approach to name and describe entities,
-    this phase runs after Phase 3 to mature and stabilize entities before fusion:
-    1. Fetches all mention context envelopes (from `EXTRACTED_FROM` relations).
+    this phase runs after Phase 3b to mature and stabilize canonical entities:
+    1. Fetches all mention context envelopes from ``input.entity_envelopes_by_id`` (or ``GraphReader``).
     2. Encodes envelopes using the Phase 2 Bi-Encoder.
     3. Calculates the geometric centroid of the vectors to find the core meaning.
     4. Ranks envelopes and selects the top-K closest to the centroid.
     5. Calls the LLM to synthesize a canonical description from these top-K envelopes.
-    6. Persists the matured entity and marks it as mature (`is_mature = True`).
+    6. Emits matured ``LinkedEntityArtifact`` envelopes (`is_mature = True`).
 
     Parameters
     ----------
@@ -73,9 +78,10 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
         Configuration options for maturation (e.g. top-K envelopes to select).
     llm : LiteLLM
         LLM instance used for structured description synthesis.
-    graph_store : ProcessingGraph
-        The underlying Neo4j/graph database client.
+    graph_store : ProcessingGraph | GraphReader | None, optional
+        Optional graph database client fallback.
     """
+
     name = "Phase 4: Entity Maturation (Batch Epistemic Synthesis)"
     phase_key = "phase4_maturation"
     input_view = Phase3ArtifactsView
@@ -85,7 +91,7 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
         config: Phase4EntityMaturationConfig,
         *,
         llm: Any,
-        graph_store: ProcessingGraph,
+        graph_store: ProcessingGraph | GraphReader | None = None,
         embedding_model: EmbeddingModel | None = None,
     ) -> None:
         self.config = config
@@ -95,81 +101,107 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
             embedding_model or _default_embedding_model()
         )
 
-    async def run(self, input: Phase3ArtifactsView, context: ArtifactExecutionContext) -> ArtifactCollection:
-        # Note: In a production setting with extremely large inputs, this could be triggered
-        # dynamically during Phase 2 when an entity reaches a threshold N of mentions.
-        # For pipeline orchestration, it runs post Phase 3.
-        
+    async def run(
+        self, input: Phase3ArtifactsView, context: ArtifactExecutionContext
+    ) -> ArtifactCollection:
         logger.info("Starting Entity Maturation batch synthesis...")
         from episteme_pipeline.artifacts.builders import build_linked_entity_artifact
-        
-        all_entities = await self.graph_store.get_entities()
+
+        if input.entities:
+            all_entities = list(input.entities)
+        elif isinstance(self.graph_store, GraphReader):
+            all_entities = await self.graph_store.get_entities()
+        else:
+            all_entities = []
+
         immature_entities = [e for e in all_entities if not e.is_mature]
-        
-        logger.info(f"Found {len(immature_entities)} immature entities out of {len(all_entities)} total.")
-        
+
+        logger.info(
+            f"Found {len(immature_entities)} immature entities out of {len(all_entities)} total."
+        )
+
         matured_artifacts = []
         import asyncio
         from itertools import batched
-        
+
         progress_task = f"Phase 4 Maturation: {len(immature_entities)} entities"
         batch_size = self.config.batch_size
-        
+
         with self.progress_scope(
             progress_task,
             total_items=len(immature_entities),
             description="Entity Maturation",
         ) as advance:
-            # Process and checkpoint in batches to ensure crash resilience
-            for batch_idx, entity_batch in enumerate(batched(immature_entities, batch_size)):
+            for batch_idx, entity_batch in enumerate(
+                batched(immature_entities, batch_size)
+            ):
                 logger.info(f"Maturing batch {batch_idx + 1}...")
-                
-                # Parallelize the LLM synthesis for this small batch
-                tasks = [self._process_entity(entity, context.run_id) for entity in entity_batch]
+
+                tasks = [
+                    self._process_entity(
+                        entity,
+                        context.run_id,
+                        input_envelopes=input.entity_envelopes_by_id.get(entity.id),
+                    )
+                    for entity in entity_batch
+                ]
                 matured_results = await asyncio.gather(*tasks, return_exceptions=True)
-                
+
                 entities_to_upsert = []
                 for entity, matured_entity in zip(entity_batch, matured_results):
                     if isinstance(matured_entity, Exception):
-                        logger.error(f"Entity Maturation failed for {entity.name}: {matured_entity}")
+                        logger.error(
+                            f"Entity Maturation failed for {entity.name}: {matured_entity}"
+                        )
                         continue
                     if matured_entity:
                         entities_to_upsert.append(matured_entity)
+                        mention_ids = [
+                            f"artifact::mention::{matured_entity.id}::{cid}"
+                            for cid in matured_entity.source_chunk_ids
+                        ]
                         matured_artifacts.append(
                             build_linked_entity_artifact(
                                 matured_entity,
-                                [
-                                    f"artifact::mention::{matured_entity.id}::{cid}"
-                                    for cid in matured_entity.source_chunk_ids
-                                ],
+                                mention_ids,
                                 run_id=context.run_id,
                                 phase_name=self.name,
                                 method="Phase4EntityMaturationRunner",
+                                upstream_artifact_ids=[
+                                    f"artifact::{matured_entity.id}",
+                                    *mention_ids,
+                                ],
                             )
                         )
-                        
-                # Checkpoint graph for this batch
-                if entities_to_upsert:
-                    # Upsert in sub-batches of 500 (though max is 100 here)
+
+                if entities_to_upsert and isinstance(self.graph_store, GraphWriter):
                     for sub_batch in batched(entities_to_upsert, 500):
                         await self.graph_store.upsert_entities(list(sub_batch))
 
                 advance(len(entity_batch))
 
-            
         if matured_artifacts:
             return ArtifactCollection(matured_artifacts)
         return ArtifactCollection([])
 
-    async def _process_entity(self, entity: L2Entity, run_id: str) -> L2Entity | None:
-        # 1. Fetch all textual envelopes from EXTRACTED_FROM edges.
-        # No capability check: get_entity_envelopes is part of the GraphReader
-        # contract (F-11). It used to be duck-typed, which turned a missing
-        # backend method into "this entity has nothing to mature".
-        envelopes = await self.graph_store.get_entity_envelopes(entity.id)
+    async def _process_entity(
+        self,
+        entity: L2Entity,
+        run_id: str,
+        input_envelopes: list[str] | None = None,
+    ) -> L2Entity | None:
+        if input_envelopes:
+            envelopes = list(input_envelopes)
+        elif isinstance(self.graph_store, GraphReader):
+            envelopes = await self.graph_store.get_entity_envelopes(entity.id)
+        elif entity.textual_envelope:
+            envelopes = [entity.textual_envelope]
+        else:
+            envelopes = []
         if not envelopes:
-            logger.debug(f"Entity {entity.name} has no valid textual envelopes to synthesize.")
-            # Mark as mature anyway to avoid reprocessing empty entities
+            logger.debug(
+                f"Entity {entity.name} has no valid textual envelopes to synthesize."
+            )
             matured_entity = entity.model_copy(update={"is_mature": True})
             return matured_entity
 

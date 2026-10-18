@@ -271,6 +271,21 @@ class PhaseCheckpointStore(GraphHandle, ABC):
         """
         ...
 
+    async def get_committed_triples(self, phase: str) -> list[L2Triple]:
+        """Return triples committed across prior batches for ``phase``.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier (optionally scoped by lineage fingerprint).
+
+        Returns
+        -------
+        list of L2Triple
+            Committed triples for ``phase``.
+        """
+        return []
+
 
 class EntityGraph(GraphReader, GraphWriter, ABC):
     """Entity-focused read/write operations."""

@@ -43,6 +43,8 @@ from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
 from episteme_pipeline.protocols.graph_store import (
     EntityGraph,
+    GraphReader,
+    GraphWriter,
     PhaseCheckpointStore,
     ProcessingGraph,
 )
@@ -70,7 +72,7 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
         *,
         llm,
         embedding_model,
-        graph_store: ProcessingGraph | EntityGraph,
+        graph_store: ProcessingGraph | EntityGraph | PhaseCheckpointStore | None = None,
         global_extractor: GlobalRelationExtractor | None = None,
     ) -> None:
         self.config = config
@@ -95,7 +97,6 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
         if isinstance(self.graph_store, PhaseCheckpointStore):
             return self.graph_store
         return None
-
 
     @staticmethod
     def _guard_systematic_failure(
@@ -135,7 +136,7 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
         Parameters
         ----------
         input : Phase2ArtifactsView
-            View containing entity and chunk artifacts from Phase 2.
+            View containing entity and chunk artifacts from Phase 2 / 3b / 4-maturation.
         context : ArtifactExecutionContext
             Pipeline execution context.
 
@@ -144,11 +145,21 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
         ArtifactCollection
             Generated GlobalRelationArtifact instances.
         """
-        # Prefer graph-resident entities for crash-safe resume: a re-run will
-        # pick up any entities committed in a previous partial run.
-        entities = await self.graph_store.get_entities()
-        if not entities:
-            entities = input.entities
+        effective_phase = (
+            f"{_PHASE_TAG}:{context.lineage_fingerprint}"
+            if context and context.lineage_fingerprint
+            else _PHASE_TAG
+        )
+
+        if (
+            isinstance(self.graph_store, GraphReader)
+            and not (context and context.lineage_fingerprint)
+        ):
+            entities = await self.graph_store.get_entities()
+            if not entities:
+                entities = list(input.entities)
+        else:
+            entities = list(input.entities)
 
         if len(entities) < 2:
             logger.info("Phase 3: fewer than 2 entities — skipping global extraction.")
@@ -162,11 +173,25 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
             logger.info("Phase 3: 0 candidate pairs generated — skipping extraction.")
             return ArtifactCollection([])
 
+        reader: GraphReader = (
+            input.to_graph_reader()
+            if (
+                not isinstance(self.graph_store, GraphReader)
+                or (context and context.lineage_fingerprint)
+            )
+            else self.graph_store
+        )
+
         batch_size = self.config.batch_size
         progress_task = f"Phase 3: {len(candidates)} global candidate pairs"
-        all_triples: list[L2Triple] = []
-        succeeded_total = 0
         checkpoint_store = self.checkpoint_store
+        prior_triples: list[L2Triple] = (
+            list(await checkpoint_store.get_committed_triples(effective_phase))
+            if checkpoint_store is not None
+            else []
+        )
+        all_triples: list[L2Triple] = list(prior_triples)
+        succeeded_total = len(prior_triples)
 
         with self.progress_scope(
             progress_task,
@@ -178,38 +203,53 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
                 if checkpoint_store is not None:
                     batch_keys = [c.key for c in batch_list]
                     pending_keys = set(
-                        await checkpoint_store.filter_unprocessed_items(batch_keys, _PHASE_TAG)
+                        await checkpoint_store.filter_unprocessed_items(
+                            batch_keys, effective_phase
+                        )
                     )
                     pending_batch = [c for c in batch_list if c.key in pending_keys]
                 else:
                     pending_batch = batch_list
 
                 if pending_batch:
-                    batch_triples, batch_records = await self.global_extractor.extract_pairs(
-                        pending_batch, self.graph_store, self.schema
+                    batch_triples, batch_records = (
+                        await self.global_extractor.extract_pairs(
+                            pending_batch, reader, self.schema
+                        )
                     )
-                    self._guard_systematic_failure(pending_batch, batch_records, succeeded_total)
-                    succeeded_total += len([r for r in batch_records if r.status == "completed"])
+                    self._guard_systematic_failure(
+                        pending_batch, batch_records, succeeded_total
+                    )
+                    succeeded_total += len(
+                        [r for r in batch_records if r.status == "completed"]
+                    )
 
                     if checkpoint_store is not None:
                         await checkpoint_store.commit_phase_batch(
-                            _PHASE_TAG, batch_triples, batch_records
+                            effective_phase, batch_triples, batch_records
                         )
-                    else:
-                        if batch_triples:
-                            for triple_chunk in batched(batch_triples, 20):
-                                await self.graph_store.upsert_triples(list(triple_chunk))
+                    elif isinstance(self.graph_store, GraphWriter) and batch_triples:
+                        for triple_chunk in batched(batch_triples, 20):
+                            await self.graph_store.upsert_triples(list(triple_chunk))
 
                     all_triples.extend(batch_triples)
 
                 advance(len(batch_list))
 
-        relation_dist: dict[str, int] = defaultdict(int)
+        deduped_triples: list[L2Triple] = []
+        seen_triple_keys: set[tuple[str, str, str, str | None]] = set()
         for t in all_triples:
+            t_key = (t.subject_id, t.predicate, t.object_id, t.source_chunk_id)
+            if t_key not in seen_triple_keys:
+                seen_triple_keys.add(t_key)
+                deduped_triples.append(t)
+
+        relation_dist: dict[str, int] = defaultdict(int)
+        for t in deduped_triples:
             relation_dist[t.predicate] += 1
 
         artifacts = []
-        for triple in all_triples:
+        for triple in deduped_triples:
             artifacts.append(
                 build_global_relation_artifact(
                     triple,

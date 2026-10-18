@@ -211,8 +211,13 @@ class TheoryNetProjector:
             Materialized TheoryNet with equilibrium justification plausibilities.
         """
         # Retrieve and filter all theory relations with decoupled weights
+        source_relations = (
+            view.canonical_theory_relations
+            if view.canonical_theory_relations
+            else view.theory_relations
+        )
         relations: list[TheoryRelation] = []
-        for r in view.theory_relations:
+        for r in source_relations:
             rel = r.model_copy()
 
             # Apply upstream heuristic warrant mapping if not explicitly defined
@@ -280,8 +285,13 @@ class TheoryNetProjector:
             relations.append(rel)
 
         # Retrieve all theory atoms (empirical base and theoretical antecedents)
+        source_atoms = (
+            view.canonical_theory_atoms
+            if view.canonical_theory_atoms
+            else view.theory_atoms
+        )
         atoms: list[TheoryAtom] = []
-        for c in view.theory_atoms:
+        for c in source_atoms:
             atom = c.model_copy()
             if "modal_strength" not in atom.model_fields_set and "base_score" not in atom.model_fields_set:
                 atom.modal_strength = self.modal_resolver.resolve_modality_sync(atom)

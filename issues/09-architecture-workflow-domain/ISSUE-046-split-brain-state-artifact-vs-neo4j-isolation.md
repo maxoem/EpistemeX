@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Hexagonal Isolation, State Management, Reproducibility) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`pipeline.py`, `artifacts/`, `projection/`, `graph/`) |
 | **Priority** | **Critical** |
-| **Status** | `Open` |
+| **Status** | `Completed` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/artifact_run_model.md`](../../docs/architecture/artifact_run_model.md), [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0001`](../../docs/adr/0001-neo4j-async-graph-backend.md), [`ADR-0013`](../../docs/adr/0013-per-run-neo4j-credentials-and-graph-fallback.md), [`ADR-0016`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), [`ADR-0017`](../../docs/adr/0017-explicit-batch-contracts-and-bulk-io.md) |
 
 ---
@@ -96,10 +96,10 @@ flowchart TB
 
 ## 4. Acceptance Criteria
 
-- [ ] No `PhaseRunner` (`Phase1`–`Phase6`, `TheoreticalEnrichment`) performs direct writes to `projection_graph`; all target graph mutations flow exclusively through `ArtifactGraphProjector`.
-- [ ] `ArtifactSubgraphReader` implements `GraphReader` over `ArtifactCollection`, allowing `Phase3`, `Phase3b`, `Phase4`, and `Phase5` to execute 100% offline without an active Neo4j connection.
-- [ ] `ArtifactGraphProjector.project_collection()` batches projections by `ArtifactKind` using Cypher `UNWIND` in topological dependency order (nodes before edges).
-- [ ] Two concurrent or alternating runs with different LLM configurations can execute and resume without overwriting each other's checkpoints or entity states.
+- [x] No `PhaseRunner` (`Phase1`–`Phase6`, `TheoreticalEnrichment`) performs direct writes to `projection_graph`; all target graph mutations flow exclusively through `ArtifactGraphProjector`.
+- [x] `ArtifactSubgraphReader` implements `GraphReader` over `ArtifactCollection`, allowing `Phase3`, `Phase3b`, `Phase4`, and `Phase5` to execute 100% offline without an active Neo4j connection.
+- [x] `ArtifactGraphProjector.project_collection()` batches projections by `ArtifactKind` using Cypher `UNWIND` in topological dependency order (nodes before edges).
+- [x] Two concurrent or alternating runs with different LLM configurations can execute and resume without overwriting each other's checkpoints or entity states.
 
 ---
 

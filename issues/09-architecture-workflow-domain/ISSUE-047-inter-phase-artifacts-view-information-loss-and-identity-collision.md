@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Data Contracts, Inter-Phase Handoff, Epistemic Integrity) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`artifacts/execution.py`, `artifacts/models.py`, `pipeline.py`) |
 | **Priority** | **Critical** |
-| **Status** | `Open` |
+| **Status** | `Completed` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`docs/architecture/artifact_run_model.md`](../../docs/architecture/artifact_run_model.md), [`ADR-0003`](../../docs/adr/0003-coreference-absorbed-into-fusion.md), [`ADR-0005`](../../docs/adr/0005-two-pass-fusion-strategy.md), [`ADR-0015`](../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md) |
 
 ---
@@ -101,11 +101,11 @@ flowchart LR
 
 ## 4. Acceptance Criteria
 
-- [ ] `ArtifactCollection.of_kind()` deduplicates envelopes by `identity_key` (returning the latest version) while preserving full version history in `ArtifactStore`.
-- [ ] `Phase4EntityMaturationRunner` updates `LinkedEntityArtifact` without creating duplicate `L2Entity` instances in downstream views.
-- [ ] `CanonicalizationArtifact` merges from Phase 3b are reflected in the entity and triple views consumed by Phase 4 Argument Mining.
-- [ ] `FusionDecisionArtifact` equivalence merges from Phase 5 are reflected in Phase 6 `TheoryNet` materialization and QBAF gradual semantics calculations.
-- [ ] `RunPhaseRecord.input_artifact_ids` accurately records the exact artifact IDs consumed by each phase's `input_view`.
+- [x] `ArtifactCollection.of_kind()` deduplicates envelopes by `identity_key` (returning the latest version) while preserving full version history in `ArtifactStore`.
+- [x] `Phase4EntityMaturationRunner` updates `LinkedEntityArtifact` without creating duplicate `L2Entity` instances in downstream views.
+- [x] `CanonicalizationArtifact` merges from Phase 3b are reflected in the entity and triple views consumed by Phase 4 Argument Mining.
+- [x] `FusionDecisionArtifact` equivalence merges from Phase 5 are reflected in Phase 6 `TheoryNet` materialization and QBAF gradual semantics calculations.
+- [x] `RunPhaseRecord.input_artifact_ids` accurately records the exact artifact IDs consumed by each phase's `input_view`.
 
 ---
 

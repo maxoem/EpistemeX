@@ -69,7 +69,12 @@ from episteme_pipeline.protocols.argument_mining import (
 )
 from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
-from episteme_pipeline.protocols.graph_store import ProcessingGraph
+from episteme_pipeline.protocols.graph_store import (
+    GraphReader,
+    GraphWriter,
+    PhaseCheckpointStore,
+    ProcessingGraph,
+)
 from episteme_pipeline.protocols.modality import (
     ModalStrengthResolver,
     ensure_modal_strength_resolver,
@@ -95,7 +100,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         *,
         llm,
         embedding_model,
-        graph_store: ProcessingGraph,
+        graph_store: ProcessingGraph | PhaseCheckpointStore | None = None,
         adu_segmenter: ADUSegmenter | None = None,
         acc_classifier: ACCClassifier | None = None,
         arc_classifier: ARCClassifier | None = None,
@@ -116,8 +121,8 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             Language model instance.
         embedding_model : Any
             Embedding model for semantic similarity or candidate blocking.
-        graph_store : ProcessingGraph
-            Active graph store for reading and writing components and relations.
+        graph_store : ProcessingGraph | PhaseCheckpointStore | None, optional
+            Optional checkpoint or processing graph store.
         adu_segmenter : ADUSegmenter or None, default None
             Optional segmenter override.
         acc_classifier : ACCClassifier or None, default None
@@ -141,7 +146,9 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         self.global_extractor = global_extractor
         self.decision_engine = decision_engine
 
-        self.modal_resolver = ensure_modal_strength_resolver(modal_resolver) or HybridModalResolver.create(
+        self.modal_resolver = ensure_modal_strength_resolver(
+            modal_resolver
+        ) or HybridModalResolver.create(
             config=config.modal_resolver,
             decision_engine=self.decision_engine,
         )
@@ -242,11 +249,38 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
     async def run(
         self, input: Phase3ArtifactsView, context: ArtifactExecutionContext
     ) -> ArtifactCollection:
+        effective_phase = (
+            f"{_PHASE_TAG}:{context.lineage_fingerprint}"
+            if context and context.lineage_fingerprint
+            else _PHASE_TAG
+        )
         chunks = await select_pending_chunks(
-            self.graph_store, _PHASE_TAG, input.chunks
+            self.graph_store, effective_phase, input.chunks
         )
 
-        all_components: list[TheoryAtom] = await self.graph_store.get_theory_atoms()
+        reader = input.to_graph_reader()
+        use_artifact_reader = bool(
+            input.entities
+            or not isinstance(self.graph_store, GraphReader)
+            or (context and context.lineage_fingerprint)
+        )
+        active_reader: GraphReader = (
+            reader
+            if use_artifact_reader
+            else (
+                self.graph_store
+                if isinstance(self.graph_store, GraphReader)
+                else reader
+            )
+        )
+
+        if (
+            isinstance(self.graph_store, GraphReader)
+            and not (context and context.lineage_fingerprint)
+        ):
+            all_components: list[TheoryAtom] = await self.graph_store.get_theory_atoms()
+        else:
+            all_components = []
         all_local_relations: list[TheoryRelation] = []
 
         import asyncio
@@ -263,7 +297,12 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
 
             for batch_idx, chunk_batch in enumerate(batched(chunks, batch_size)):
                 logger.info(f"Mining arguments for chunk batch {batch_idx + 1}...")
-                tasks = [self._process_chunk(chunk.id, chunk.text) for chunk in chunk_batch]
+                tasks = [
+                    self._process_chunk(
+                        chunk.id, chunk.text, reader=active_reader
+                    )
+                    for chunk in chunk_batch
+                ]
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
                 new_components = []
@@ -275,7 +314,9 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 for chunk, result in zip(chunk_batch, results):
                     if isinstance(result, Exception):
                         logger.error(
-                            "Chunk %s argument mining failed (will retry): %s", chunk.id, result
+                            "Chunk %s argument mining failed (will retry): %s",
+                            chunk.id,
+                            result,
                         )
                         failures.append(result)
                         continue
@@ -287,42 +328,54 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                     processed_chunk_ids.append(c_id)
 
                     for component in components:
-                        relations_to_upsert.append({
-                            "from_id": component.id,
-                            "relation_type": "EXTRACTED_FROM",
-                            "to_id": c_id,
-                            "properties": {"confidence": 1.0},
-                        })
-                        for entity_id in component.entity_ids:
-                            relations_to_upsert.append({
+                        reader.register_theory_atom(component)
+                        relations_to_upsert.append(
+                            {
                                 "from_id": component.id,
-                                "relation_type": "MENTIONS",
-                                "to_id": entity_id,
+                                "relation_type": "EXTRACTED_FROM",
+                                "to_id": c_id,
                                 "properties": {"confidence": 1.0},
-                            })
+                            }
+                        )
+                        for entity_id in component.entity_ids:
+                            relations_to_upsert.append(
+                                {
+                                    "from_id": component.id,
+                                    "relation_type": "MENTIONS",
+                                    "to_id": entity_id,
+                                    "properties": {"confidence": 1.0},
+                                }
+                            )
+                    for local_rel in local_rels:
+                        reader.register_theory_relation(local_rel)
+
                 succeeded += len(chunk_batch) - len(failures)
                 self._guard_systematic_failure(list(chunk_batch), failures, succeeded)
                 all_components.extend(new_components)
                 all_local_relations.extend(new_local_relations)
 
-                # Batch persist local findings for this checkpoint
-                for comp_batch in batched(new_components, 500):
-                    await self.graph_store.upsert_argument_components(list(comp_batch))
+                # Batch persist local findings when a direct GraphWriter is configured
+                if isinstance(self.graph_store, GraphWriter):
+                    for comp_batch in batched(new_components, 500):
+                        await self.graph_store.upsert_argument_components(
+                            list(comp_batch)
+                        )
 
-                for rel_batch in batched(new_local_relations, 500):
-                    await self.graph_store.upsert_theory_relations(list(rel_batch))
+                    for rel_batch in batched(new_local_relations, 500):
+                        await self.graph_store.upsert_theory_relations(list(rel_batch))
 
-                for rel_batch in batched(relations_to_upsert, 500):
-                    await self.graph_store.upsert_relations(list(rel_batch))
+                    for rel_batch in batched(relations_to_upsert, 500):
+                        await self.graph_store.upsert_relations(list(rel_batch))
 
-                if processed_chunk_ids:
+                if self.graph_store is not None and processed_chunk_ids:
                     for processed_batch in batched(processed_chunk_ids, 500):
-                        await self.graph_store.mark_chunks_processed(list(processed_batch), _PHASE_TAG)
+                        await self.graph_store.mark_chunks_processed(
+                            list(processed_batch), effective_phase
+                        )
 
                 advance(len(chunk_batch))
 
         # Deduplicate all_components by id to avoid duplicating artifacts or ARC calls
-
         seen_ids = set()
         unique_components = []
         for c in all_components:
@@ -343,15 +396,16 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 global_relations = await self.arc_classifier.classify_global(
                     local_components=all_components,
                     local_relations=all_local_relations,
-                    graph_store=self.graph_store,
+                    graph_store=active_reader,
                     global_extractor=self.global_extractor,
                     schema=self.schema,
                 )
                 advance_arc(1)
 
-            # Commit global argument relations
-            for rel_batch in batched(global_relations, 500):
-                await self.graph_store.upsert_theory_relations(list(rel_batch))
+            # Commit global argument relations when a direct GraphWriter is configured
+            if isinstance(self.graph_store, GraphWriter):
+                for rel_batch in batched(global_relations, 500):
+                    await self.graph_store.upsert_theory_relations(list(rel_batch))
 
         all_relations = all_local_relations + global_relations
 
@@ -377,7 +431,10 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         return ArtifactCollection(artifacts)
 
     async def _process_chunk(
-        self, chunk_id: str, chunk_text: str
+        self,
+        chunk_id: str,
+        chunk_text: str,
+        reader: GraphReader | None = None,
     ) -> tuple[list[TheoryAtom], list[TheoryRelation], str]:
         # Step 1: ADU Segmentation
         tagged_text, adu_ids = await self.adu_segmenter.segment(chunk_id, chunk_text)
@@ -387,7 +444,14 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             return [], [], chunk_id
 
         # Step 2: ACC Classification
-        chunk_entities = await self.graph_store.get_chunk_entities(chunk_id)
+        active_reader = reader or (
+            self.graph_store if isinstance(self.graph_store, GraphReader) else None
+        )
+        chunk_entities = (
+            await active_reader.get_chunk_entities(chunk_id)
+            if active_reader is not None
+            else []
+        )
         components, local_relations = await self.acc_classifier.classify(
             chunk_id=chunk_id,
             tagged_text=tagged_text,

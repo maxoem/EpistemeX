@@ -94,30 +94,21 @@ class EmbeddingModel(ABC):
 
 This ensures that LLM/embedding batch sizes (tuned for token counts and GPU memory) remain decoupled from database write batch sizes (tuned for Cypher lock retention).
 
-### 5. Phase Refactoring: The `collect -> batched -> persist` Pattern
+### 5. Batched Topological Projection via `ArtifactGraphProjector.project_collection`
 
-Phases accumulating substantial entities, triples, or components use Python 3.12+'s standard `itertools.batched` to chunk in-memory collections into safe increments (default 500) before persisting:
-
-```python
-from itertools import batched
-
-class ExamplePhase(PhaseRunner):
-    async def run(self, input_data: PhaseInput, context: PipelineContext) -> PhaseOutput:
-        # 1. Process items and accumulate results in memory
-        extracted_entities = [await self._extract(item) for item in input_data.items]
-
-        # 2. Persist in bounded chunks to prevent transaction memory spikes
-        for entity_batch in batched(extracted_entities, 500):
-            await self.graph_store.upsert_entities(list(entity_batch))
-```
-
-This pattern is applied uniformly across:
-- **Phase 1 (Foundation):** Text chunks batched into Neo4j (`upsert_chunks`).
-- **Phase 2 (Entity Discovery):** Extracted entities, initial triples, and processed chunk IDs batched in 500-item chunks.
-- **Phase 3 (Global Relations):** Candidate batches and verified relation triples batched into single Cypher transactions.
-- **Phase 4 (Maturation & Argument Mining):** Synthesized entity envelopes, theory atoms, and dialectical relations batched.
-- **Phase 5 (Fusion):** Hierarchical community memberships batched (`upsert_communities`).
-- **Phase 6 (TheoryNet) & Post-Processing:** Projection atoms, relations, and theoretical parameter updates batched in 500-item chunks.
+Rather than phase runners mutating `projection_graph` directly or projecting artifacts one-by-one, phases emit immutable `ArtifactCollection`s and `ArtifactGraphProjector.project_collection(collection, batch_size=500)` groups artifacts by `ArtifactKind` in topological order (**Nodes before Edges**) and persists them in 500-item chunks using the plural `GraphWriter` bulk methods:
+- **Node Pass:**
+  - `DOCUMENT`: Document node + hierarchical chapter spine + `NEXT_CHUNK` chain.
+  - `CHUNK`: Text chunks batched via `upsert_chunks`.
+  - `LINKED_ENTITY`: Canonicalized and matured entities batched via `upsert_entities`.
+  - `THEORY_ATOM`: Argument components batched via `upsert_argument_components` plus `EXTRACTED_FROM` and `MENTIONS` edges via `upsert_relations`.
+- **Edge Pass:**
+  - `ENTITY_MENTION`: `EXTRACTED_FROM` mention edges batched via `upsert_relations`.
+  - `LOCAL_RELATION` & `GLOBAL_RELATION`: Semantic triples batched via `upsert_triples`.
+  - `CANONICALIZATION`: `SAME_AS` consolidation edges batched via `upsert_relations`.
+  - `THEORY_RELATION`: Dialectical support/attack edges batched via `upsert_theory_relations`.
+  - `FUSION_DECISION`: Community memberships (`upsert_communities`) and `EQUIVALENT_FUSION` edges (`upsert_relations`).
+  - `THEORETICAL_ENRICHMENT`: Postulated theoretical elements and law governance edges.
 
 ## Consequences
 

@@ -26,18 +26,25 @@ from episteme_pipeline.artifacts.models import (
     TheoryRelationArtifact,
 )
 
+from episteme_pipeline.artifacts.checkpoint_store import (
+    FileSystemCheckpointStore,
+)
+from episteme_pipeline.artifacts.subgraph_reader import ArtifactSubgraphReader
+
 __all__ = [
     "ArtifactCodec",
     "ArtifactEnvelope",
     "ArtifactKind",
     "ArtifactProvenance",
     "ArtifactRef",
+    "ArtifactSubgraphReader",
     "CanonicalizationArtifact",
     "ChunkArtifact",
     "ChunkCodec",
     "DocumentArtifact",
     "DocumentCodec",
     "EntityMentionArtifact",
+    "FileSystemCheckpointStore",
     "FusionDecisionArtifact",
     "GlobalRelationArtifact",
     "GlobalRelationCodec",

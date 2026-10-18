@@ -73,7 +73,17 @@ def build_entity_mention_artifact(entity: L2Entity, chunk_id: str, *, run_id: st
         phase_name=phase_name,
         method=method,
         provenance=ArtifactProvenance(source_chunk_id=chunk_id, upstream_artifact_ids=[f"artifact::{chunk_id}"]),
-        payload=EntityMentionArtifact(mention_id=mention_id, chunk_id=chunk_id, surface_form=entity.name, entity_type=entity.label),
+        payload=EntityMentionArtifact(
+            mention_id=mention_id,
+            chunk_id=chunk_id,
+            surface_form=entity.name,
+            entity_type=entity.label,
+            entity_id=entity.id,
+            textual_envelope=entity.textual_envelope,
+            start_char=entity.text_anchor.char_start if entity.text_anchor else None,
+            end_char=entity.text_anchor.char_end if entity.text_anchor else None,
+            confidence=entity.confidence,
+        ),
         dependency_fingerprint=stable_fingerprint({"mention_id": mention_id, "chunk_id": chunk_id}),
     )
 
@@ -87,9 +97,22 @@ def parse_mention_id(mention_id: str) -> tuple[str, str]:
     return mention_id, ""
 
 
-def build_linked_entity_artifact(entity: L2Entity, mention_artifact_ids: list[str], *, run_id: str, phase_name: str, method: str) -> ArtifactEnvelope:
+def build_linked_entity_artifact(
+    entity: L2Entity,
+    mention_artifact_ids: list[str],
+    *,
+    run_id: str,
+    phase_name: str,
+    method: str,
+    upstream_artifact_ids: list[str] | None = None,
+) -> ArtifactEnvelope:
     payload = LinkedEntityCodec.to_payload(entity)
     payload.mention_ids = [artifact_id.removeprefix("artifact::") for artifact_id in mention_artifact_ids]
+    resolved_upstream = (
+        list(dict.fromkeys(upstream_artifact_ids))
+        if upstream_artifact_ids is not None
+        else list(mention_artifact_ids)
+    )
     return ArtifactEnvelope(
         artifact_id=f"artifact::{entity.id}",
         identity_key=f"linked_entity::{entity.id}",
@@ -97,7 +120,10 @@ def build_linked_entity_artifact(entity: L2Entity, mention_artifact_ids: list[st
         run_id=run_id,
         phase_name=phase_name,
         method=method,
-        provenance=ArtifactProvenance(source_chunk_id=entity.source_chunk_ids[0] if entity.source_chunk_ids else None, upstream_artifact_ids=mention_artifact_ids),
+        provenance=ArtifactProvenance(
+            source_chunk_id=entity.source_chunk_ids[0] if entity.source_chunk_ids else None,
+            upstream_artifact_ids=resolved_upstream,
+        ),
         payload=payload,
         dependency_fingerprint=stable_fingerprint({"entity_id": entity.id, "canonical_name": entity.name, "entity_type": entity.label}),
     )
@@ -197,6 +223,7 @@ def build_fusion_cluster_artifact(cluster: list[str], theory_fusion_applied: boo
     # Identity is the membership set, order-independent. A positional index would
     # collide cluster #0 of one run with an unrelated cluster #0 of the next.
     decision_id = f"fusion-cluster::{stable_fingerprint(sorted(cluster))}"
+    canonical_id = cluster[0] if cluster else None
     return ArtifactEnvelope(
         artifact_id=f"artifact::{decision_id}",
         identity_key=f"fusion_decision::{decision_id}",
@@ -205,6 +232,13 @@ def build_fusion_cluster_artifact(cluster: list[str], theory_fusion_applied: boo
         phase_name=phase_name,
         method=method,
         provenance=ArtifactProvenance(upstream_artifact_ids=[f"artifact::{component_id}" for component_id in cluster]),
-        payload=FusionDecisionArtifact(decision_id=decision_id, artifact_ids=cluster, decision_type="cluster", rationale="semantic argument clustering", confidence=None),
+        payload=FusionDecisionArtifact(
+            decision_id=decision_id,
+            artifact_ids=cluster,
+            decision_type="cluster",
+            canonical_artifact_id=canonical_id,
+            rationale="semantic argument clustering",
+            confidence=None,
+        ),
         dependency_fingerprint=stable_fingerprint({"cluster": cluster, "theory_fusion_applied": theory_fusion_applied}),
     )

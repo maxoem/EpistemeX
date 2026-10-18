@@ -75,6 +75,8 @@ class ArtifactDependencyGraph:
                     # edge as "no dependency".
                     self._unresolved_upstream[key].add(up_id)
                     continue
+                if up_key == key:
+                    continue
                 self._downstream[up_key].add(key)
                 self._upstream[key].add(up_key)
         self._edges_resolved = True

@@ -23,6 +23,7 @@ import asyncio
 import logging
 from itertools import batched
 from pathlib import Path
+from typing import Any
 
 from episteme_pipeline.artifacts.builders import (
     build_chunk_artifact,
@@ -69,7 +70,7 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
         *,
         llm: Any = None,
         embedding_model: EmbeddingModel | None = None,
-        graph_store: GraphWriter,
+        graph_store: GraphWriter | None = None,
         adapters: list[DataSourceAdapter] | None = None,
         toc_parser: AutoToCParser | None = None,
     ) -> None:
@@ -187,49 +188,50 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
         # Written once, on node creation — see provenance.creation_provenance.
         created = creation_provenance()
 
-        # Upsert Document node with local ToC anchor metadata
-        await self.graph_store.upsert_node(
-            label="Document",
-            node_id=d_id,
-            properties={
-                "title": path.stem,
-                "toc_structure": (
-                    toc_anchor.toc_structure
-                    if isinstance(toc_anchor.toc_structure, str)
-                    else "\n".join(toc_anchor.toc_structure)
-                ),
-                "document_summary": toc_anchor.document_summary or "",
-                **prov,
-            },
-            create_only_properties=created,
-        )
-
+        # Upsert Document node with local ToC anchor metadata when a direct GraphWriter is attached
+        if self.graph_store is not None:
+            await self.graph_store.upsert_node(
+                label="Document",
+                node_id=d_id,
+                properties={
+                    "title": path.stem,
+                    "toc_structure": (
+                        toc_anchor.toc_structure
+                        if isinstance(toc_anchor.toc_structure, str)
+                        else "\n".join(toc_anchor.toc_structure)
+                    ),
+                    "document_summary": toc_anchor.document_summary or "",
+                    **prov,
+                },
+                create_only_properties=created,
+            )
 
         # Group raw_chunks by chapter → deduplicate chapter upserts
         seen_chapters: dict[str, str] = {}  # title -> chapter_id
         chunks: list[L1Chunk] = []
-        
+
         # 1. Collect and Batch Embed
         texts = [raw.text for raw in raw_chunks]
         embeddings = await self._embed_batch(texts) if texts else []
-        
+
         # 2. Build L1Chunk objects and relations
         for i, raw in enumerate(raw_chunks):
             # Chapter node (upserted once per title)
             if raw.chapter_title not in seen_chapters:
                 chap_id = chapter_id(d_id, raw.chapter_title)
                 seen_chapters[raw.chapter_title] = chap_id
-                await self.graph_store.upsert_node(
-                    label="Chapter",
-                    node_id=chap_id,
-                    properties={
-                        "title": raw.chapter_title,
-                        "source_doc_id": d_id,
-                        **prov,
-                    },
-                    create_only_properties=created,
-                )
-                await self.graph_store.upsert_relation(d_id, "CONTAINS", chap_id)
+                if self.graph_store is not None:
+                    await self.graph_store.upsert_node(
+                        label="Chapter",
+                        node_id=chap_id,
+                        properties={
+                            "title": raw.chapter_title,
+                            "source_doc_id": d_id,
+                            **prov,
+                        },
+                        create_only_properties=created,
+                    )
+                    await self.graph_store.upsert_relation(d_id, "CONTAINS", chap_id)
 
             chap_id = seen_chapters[raw.chapter_title]
             c_id = chunk_id(chap_id, raw.sequence_index, raw.text)
@@ -252,30 +254,31 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
             )
             chunks.append(chunk)
 
-        # 3. Batch upsert chunks
-        for chunk_batch in batched(chunks, 500):
-            await self.graph_store.upsert_chunks(list(chunk_batch))
-            
-        # 4. Upsert relations
-        prev_chunk_id: str | None = None
-        for chunk in chunks:
-            await self.graph_store.upsert_relation(chunk.chapter_id, "CONTAINS", chunk.id)
-            if prev_chunk_id is not None:
-                await self.graph_store.upsert_relation(
-                    prev_chunk_id, "NEXT", chunk.id, {"distance": 1}
-                )
-            prev_chunk_id = chunk.id
+        if self.graph_store is not None:
+            # 3. Batch upsert chunks
+            for chunk_batch in batched(chunks, 500):
+                await self.graph_store.upsert_chunks(list(chunk_batch))
 
-        # Chunk ids carry a fingerprint of their text, so re-ingesting an edited
-        # document writes new chunk nodes beside the previous ones. Without this
-        # sweep the graph accumulates dead chunks that get_chunks() still
-        # returns, and downstream phases keep mining text the source no longer
-        # contains.
-        await self.graph_store.prune_document_children(
-            d_id,
-            keep_chunk_ids=[c.id for c in chunks],
-            keep_chapter_ids=list(seen_chapters.values()),
-        )
+            # 4. Upsert relations
+            prev_chunk_id: str | None = None
+            for chunk in chunks:
+                await self.graph_store.upsert_relation(chunk.chapter_id, "CONTAINS", chunk.id)
+                if prev_chunk_id is not None:
+                    await self.graph_store.upsert_relation(
+                        prev_chunk_id, "NEXT", chunk.id, {"distance": 1}
+                    )
+                prev_chunk_id = chunk.id
+
+            # Chunk ids carry a fingerprint of their text, so re-ingesting an edited
+            # document writes new chunk nodes beside the previous ones. Without this
+            # sweep the graph accumulates dead chunks that get_chunks() still
+            # returns, and downstream phases keep mining text the source no longer
+            # contains.
+            await self.graph_store.prune_document_children(
+                d_id,
+                keep_chunk_ids=[c.id for c in chunks],
+                keep_chapter_ids=list(seen_chapters.values()),
+            )
 
         doc = L1Document(
             id=d_id,

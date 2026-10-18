@@ -135,10 +135,10 @@ The theory-graph construction process is organized into sequential phase runners
 
 ### Phase 3: Global Relation Discovery (`Phase3Runner`)
 
-- **Input View**: `Phase2ArtifactsView` (`entities`, `local_triples`, type distributions).
-- **Purpose**: Discover semantic relationships across distant sections/documents using dense graph retrieval.
+- **Input View**: `Phase2ArtifactsView` (`documents`, `chunks`, canonicalized `entities`, `local_triples`, `entity_envelopes_by_id`, type distributions).
+- **Purpose**: Discover semantic relationships across distant sections/documents using dense graph retrieval over `ArtifactSubgraphReader`.
 - **Key Operations**:
-  - **Text-Attributed Graph (TAG) Envelopes**: Constructs rich context envelopes around entity pairs via MIPS bi-encoder retrieval. Detailed in [Dense Alignment](../concepts/dense_alignment.md).
+  - **Text-Attributed Graph (TAG) Envelopes**: Constructs rich context envelopes around entity pairs via MIPS bi-encoder retrieval over `input.to_graph_reader()`. Detailed in [Dense Alignment](../concepts/dense_alignment.md).
   - **LLM Relational Reranking**: Evaluates context envelopes via Cross-Encoder joint attention to score cross-chunk triples.
   - **Structural Correspondence (ADR 0007)**: Scores edge admissibility $\kappa$-overlap.
 - **Emitted Artifacts**: [`GlobalRelationArtifact`](../reference/artifacts.md).
@@ -148,8 +148,8 @@ The theory-graph construction process is organized into sequential phase runners
 
 ### Phase 3b: Latent Graph Consolidation (`Phase3bLatentConsolidationRunner`)
 
-- **Input View**: `Phase3ArtifactsView` (`global_triples`, `chunks`, relation distributions).
-- **Purpose**: Consolidate duplicate Layer 2 entity nodes using latent topological invariance.
+- **Input View**: `Phase3ArtifactsView` (cumulative `documents`, `chunks`, `entities`, `local_triples`, `global_triples`, relation distributions).
+- **Purpose**: Consolidate duplicate Layer 2 entity nodes using latent topological invariance over `ArtifactSubgraphReader`.
 - **Key Operations**:
   - Dense vector similarity matrix over entity textual envelopes (`dense_similarity_threshold`).
   - Topological relation overlap via Jaccard similarity ($J(A, B)$) over 1-hop edge signatures (`IN:rel:id`, `OUT:rel:id`).
@@ -161,23 +161,23 @@ The theory-graph construction process is organized into sequential phase runners
 
 ### Phase 4: Entity Maturation (`Phase4EntityMaturationRunner`)
 
-- **Input View**: `Phase3ArtifactsView` (`global_triples`, `chunks`, relation distributions).
+- **Input View**: `Phase3ArtifactsView` (with Phase 3b `CanonicalizationArtifact` merges applied to `entities` and `entity_envelopes_by_id`).
 - **Purpose**: Resolve entity-level epistemic drift across continuous extraction.
 - **Key Operations**:
-  - **Epistemic Centroid Calculation**: Computes geometric centroid $C = \frac{1}{N} \sum E_{\text{ctx}}(T_i)$ of accumulated empirical envelopes.
+  - **Epistemic Centroid Calculation**: Computes geometric centroid $C = \frac{1}{N} \sum E_{\text{ctx}}(T_i)$ of accumulated empirical envelopes from `input.entity_envelopes_by_id`.
   - **Batch Epistemic Synthesis**: Synthesizes canonical descriptions to eliminate description mutation drift. Detailed in [Dense Alignment & Maturation](../concepts/dense_alignment.md#24-two-stage-entity-maturation-protocol).
-- **Emitted Artifacts**: Updated [`LinkedEntityArtifact`](../reference/artifacts.md) payloads with synthesized descriptions.
+- **Emitted Artifacts**: Updated [`LinkedEntityArtifact`](../reference/artifacts.md) payloads (`is_mature=True`) that supersede raw Phase 2 entities via `ArtifactCollection` identity-key resolution.
 - **See**: [Phase 4: Entity Maturation Workflow](../workflow/4_entity_maturation/index.md).
 
 ---
 
 ### Phase 4: Argument Mining (`Phase4Runner`)
 
-- **Input View**: `Phase3ArtifactsView` (`global_triples`, `chunks`, relation distributions).
+- **Input View**: `Phase3ArtifactsView` (containing consolidated and matured `entities`, `chunks`, `local_triples`, and `global_triples`).
 - **Purpose**: Extract Layer 3 bipolar argumentation structures from the corpus.
 - **Key Operations**:
   - **ADU Segmentation (`TAGADUSegmenter`)**: Identifies Argumentative Discourse Units and classifies text spans as claims, premises, or conclusions.
-  - **Component Classification (`TAGACCClassifier`)**: Assigns argumentative roles and epistemic statuses (`TheoryAtom`).
+  - **Component Classification (`TAGACCClassifier`)**: Assigns argumentative roles and epistemic statuses (`TheoryAtom`) grounded in matured canonical chunk entities via `ArtifactSubgraphReader`.
   - **Relation Classification (`TAGARCClassifier`)**: Classifies defeasible support and attack relations (`TheoryRelation`: `SUPPORTS`, `ATTACKS`).
 - **Emitted Artifacts**: [`TheoryAtomArtifact`](../reference/artifacts.md), [`TheoryRelationArtifact`](../reference/artifacts.md).
 - **See**: [Phase 4: Argument Mining Workflow](../workflow/4_argument_mining/index.md).
@@ -186,11 +186,11 @@ The theory-graph construction process is organized into sequential phase runners
 
 ### Phase 5: Alignment & Theory Web (`Phase5ArgumentWebRunner`)
 
-- **Input View**: `Phase4ArtifactsView` (`theory_atoms`, `theory_relations`).
+- **Input View**: `Phase4ArtifactsView` (cumulative L1/L2/L3 state: `theory_atoms`, `theory_relations`, `entities`, `chunks`, `local_triples`, `global_triples`).
 - **Purpose**: Cluster semantically equivalent argument components across documents and detect theory-level graph communities.
 - **Key Operations**:
   - **Argument Component Clustering (`EmbeddingArgumentClustering`)**: Computes dense vector embeddings of argument components and merges equivalent claims via Union-Find for Key Point Analysis.
-  - **Leiden Theory Clustering (`LeidenTheoryClustering`)**: Builds a global graph of entities and argument relations, applies modularity optimization via Hierarchical Leiden community detection, and assigns theoretical community affiliations.
+  - **Leiden Theory Clustering (`LeidenTheoryClustering`)**: Builds a global graph of entities and argument relations via `ArtifactSubgraphReader`, applies modularity optimization via Hierarchical Leiden community detection, and assigns theoretical community affiliations.
 - **Emitted Artifacts**: [`FusionDecisionArtifact`](../reference/artifacts.md).
 - **See**: [Phase 5 Workflow](../workflow/5_inter_document_argument_web/index.md).
 
@@ -198,13 +198,13 @@ The theory-graph construction process is organized into sequential phase runners
 
 ### Phase 6: TheoryNet Materialization (`Phase6Runner`)
 
-- **Input View**: `Phase4ArtifactsView` (`theory_atoms`, `theory_relations`).
-- **Purpose**: Formalize argument components and relations into the TheoryNet ($\text{TF} = (\text{At}, R)$) mathematical model, iterate QBAF gradual semantics, and calculate baseline empirical content.
+- **Input View**: `Phase5ArtifactsView` (`canonical_theory_atoms`, `canonical_theory_relations` with Phase 5 `FusionDecisionArtifact` cluster merges applied).
+- **Purpose**: Formalize canonical argument components and relations into the TheoryNet ($\text{TF} = (\text{At}, R)$) mathematical model, iterate QBAF gradual semantics, and calculate baseline empirical content.
 - **Key Operations**:
-  - Mathematical formalization of TheoryAtoms ($\text{At}$) and TheoryRelations ($R$).
-  - Evaluates gradual epistemic semantics (initial base score $\rho \to$ final degree of justification $\tau$).
+  - Mathematical formalization of canonical TheoryAtoms ($\text{At}$) and TheoryRelations ($R$).
+  - Evaluates gradual epistemic semantics (initial base score $\rho \to$ final degree of justification $\tau$) without duplicate-claim multi-counting.
   - Calculates empirical content ratio of theoretical antecedents to empirical observation base ($B \cap P$).
-- **Emitted Artifacts**: Formalized `TheoryNet` graph structures and projection records.
+- **Emitted Artifacts**: Updated [`TheoryAtomArtifact`](../reference/artifacts.md) and [`TheoryRelationArtifact`](../reference/artifacts.md) envelopes with converged tenability/plausibility scores.
 - **See**: [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md).
 
 ---
@@ -215,7 +215,7 @@ Beyond core graph construction (Phases 1–6), modular post-processors can be at
 
 ### Theoretical Enrichment & Tenability Evaluation (`TheoreticalEnrichmentRunner`)
 
-- **Input View**: `Phase4ArtifactsView`.
+- **Input View**: `Phase5ArtifactsView` (consuming `canonical_theory_atoms` and `canonical_theory_relations`).
 - **Purpose**: Execute the structuralist dual-enrichment architecture ($\Phi = \Phi_{\text{spec}} \circ \Phi_{\text{gen}}$).
 - **Key Operations**:
   - Maps empirical clusters to Intended Applications ($I \subseteq M_{pp}$).

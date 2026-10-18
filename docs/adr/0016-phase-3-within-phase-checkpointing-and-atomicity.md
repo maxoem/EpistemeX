@@ -28,9 +28,11 @@ Where $\mathcal{H}$ denotes a stable 16-character SHA-256 fingerprint of the ent
 * **Content Sensitivity:** If an entity's textual envelope changes across runs due to upstream re-extraction, the pair key changes, automatically invalidating stale evaluations without requiring manual cache busting.
 * **Run Independence:** The key deliberately excludes ephemeral `run_id` strings, enabling run $R_2$ to resume seamlessly from partial progress left by interrupted run $R_1$.
 
-### 2. Streaming $\mathcal{O}(1)$ Memory Candidate Delta Checking in Neo4j
+### 2. Lineage-Scoped Candidate Delta Checking & `FileSystemCheckpointStore`
 
-Rather than loading millions of processed pair keys into driver memory, candidate pairs are evaluated in configurable batches (`Phase3Config.batch_size`, default 50). Unprocessed items are filtered directly within the graph store via an indexed Cypher query:
+Rather than loading millions of processed pair keys into driver memory, candidate pairs are evaluated in configurable batches (`Phase3Config.batch_size`, default 50). Checkpoints are scoped by `(phase_key, lineage_fingerprint)` where `lineage_fingerprint` is the deterministic hash of upstream phase output fingerprints plus the current phase's config and method fingerprints.
+
+By default, `Pipeline.for_task()` wires `FileSystemCheckpointStore` (an append-only JSONL Write-Ahead Log under `<artifacts_dir>/_checkpoints/` implementing `PhaseCheckpointStore`, including `get_committed_triples(phase)` for crash-resume recovery) so the entire pipeline executes and recovers 100% offline without requiring Neo4j. When a Neo4j `PhaseCheckpointStore` is explicitly supplied, unprocessed items are filtered within the graph store via an indexed Cypher query:
 
 ```cypher
 UNWIND $items AS item

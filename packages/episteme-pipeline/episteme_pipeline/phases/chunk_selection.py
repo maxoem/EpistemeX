@@ -13,37 +13,55 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from episteme_pipeline.contracts.domain import L1Chunk
-from episteme_pipeline.protocols.graph_store import ProcessingGraph
+from episteme_pipeline.protocols.graph_store import (
+    GraphReader,
+    PhaseCheckpointStore,
+    ProcessingGraph,
+)
 
 
 async def select_pending_chunks(
-    graph_store: ProcessingGraph,
+    graph_store: ProcessingGraph | PhaseCheckpointStore | None,
     phase_tag: str,
     view_chunks: Sequence[L1Chunk],
 ) -> list[L1Chunk]:
     """Return the chunks ``phase_tag`` still has to process.
 
-    The graph is the authority: ``get_unprocessed_chunks`` returns chunks whose
-    ``{phase_tag}_processed`` flag is unset. When it comes back empty that is
-    ambiguous — either the phase is genuinely done, or the chunks live only in
-    the artifact stream because nothing projected them into the graph. So the
-    fallback subtracts the chunks the graph *does* record as processed from the
-    incoming artifact view; whatever remains is real, unprocessed work.
-
-    Subtracting all graph chunks instead of just the processed ones (Phase 4's
-    old behaviour) is the bug this helper exists to prevent: it makes the
-    fallback unconditionally empty.
+    When ``graph_store`` is ``None``, all ``view_chunks`` are returned. When
+    ``graph_store`` implements ``PhaseCheckpointStore`` only (such as
+    ``FileSystemCheckpointStore``), pending chunks are filtered directly via
+    ``filter_unprocessed_items``. When ``graph_store`` also implements
+    ``GraphReader`` (such as ``ProcessingGraph``), ``get_unprocessed_chunks``
+    and ``get_chunks(filters={f"{phase_tag}_processed": True})`` are consulted.
 
     Parameters
     ----------
-    graph_store
-        Read + checkpoint surface for the current run.
-    phase_tag
-        The phase's checkpoint tag, e.g. ``"phase2"``. The graph property is
-        ``{phase_tag}_processed``.
-    view_chunks
+    graph_store : ProcessingGraph | PhaseCheckpointStore | None
+        Checkpoint or processing graph store for the current run.
+    phase_tag : str
+        The phase's checkpoint tag, e.g. ``"phase2"`` or
+        ``"phase2:<lineage_fingerprint>"``.
+    view_chunks : Sequence[L1Chunk]
         Chunks carried by the incoming artifact view.
+
+    Returns
+    -------
+    list of L1Chunk
+        Chunks remaining to be processed in this phase.
     """
+    if graph_store is None:
+        return list(view_chunks)
+
+    if isinstance(graph_store, PhaseCheckpointStore) and not isinstance(
+        graph_store, GraphReader
+    ):
+        unprocessed_ids = set(
+            await graph_store.filter_unprocessed_items(
+                [chunk.id for chunk in view_chunks], phase_tag
+            )
+        )
+        return [chunk for chunk in view_chunks if chunk.id in unprocessed_ids]
+
     pending = await graph_store.get_unprocessed_chunks(phase_tag)
     if pending:
         return pending

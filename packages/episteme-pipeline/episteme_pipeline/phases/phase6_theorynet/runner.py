@@ -124,23 +124,29 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
         """
         logger.info("Phase 6: Projecting formal TheoryNet with calibrated weights")
 
-        total_items = len(input.theory_atoms) + len(input.theory_relations)
+        source_atoms = (
+            input.canonical_theory_atoms
+            if input.canonical_theory_atoms
+            else input.theory_atoms
+        )
+        source_relations = (
+            input.canonical_theory_relations
+            if input.canonical_theory_relations
+            else input.theory_relations
+        )
+        total_items = len(source_atoms) + len(source_relations)
         with self.progress_scope(
             "Phase 6: TheoryNet Projection",
             total_items=total_items,
             description="TheoryNet Projection",
         ) as advance:
             # Resolve propositional modal certainty for atoms missing explicit scores
-            for atom in input.theory_atoms:
+            for atom in source_atoms:
                 if "modal_strength" not in atom.model_fields_set and "base_score" not in atom.model_fields_set:
                     atom.modal_strength = await self.modal_resolver.resolve_modality(atom)
                     atom.base_score = atom.modal_strength
 
             theory_net: TheoryNet = self.projector.project(input)
-
-            if not self.graph_store:
-                logger.warning("Phase 6: No graph store configured; skipping Neo4j write.")
-                return ArtifactCollection([])
 
             atoms_updated = 0
             relations_updated = 0
@@ -152,15 +158,21 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
                 atoms_to_upsert.append(atom)
                 atoms_updated += 1
 
-            from itertools import batched
+            relations_updated = len(theory_net.relations)
 
-            for atom_batch in batched(atoms_to_upsert, 500):
-                await self.graph_store.upsert_argument_components(list(atom_batch))
+            if self.graph_store is not None:
+                from itertools import batched
 
-            for rel_batch in batched(theory_net.relations, 500):
-                batch_list = list(rel_batch)
-                await self.graph_store.upsert_theory_relations(batch_list)
-                relations_updated += len(batch_list)
+                for atom_batch in batched(atoms_to_upsert, 500):
+                    await self.graph_store.upsert_argument_components(list(atom_batch))
+
+                for rel_batch in batched(theory_net.relations, 500):
+                    batch_list = list(rel_batch)
+                    await self.graph_store.upsert_theory_relations(batch_list)
+            else:
+                logger.debug(
+                    "Phase 6: Running in artifact-native mode without direct graph_store write."
+                )
 
             advance(atoms_updated + relations_updated)
 

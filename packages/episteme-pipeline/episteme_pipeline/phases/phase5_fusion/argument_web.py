@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from episteme_pipeline.artifacts.builders import build_fusion_cluster_artifact
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
@@ -5,14 +7,13 @@ from episteme_pipeline.artifacts.execution import (
     Phase4ArtifactsView,
 )
 from episteme_pipeline.config import Phase5Config
-
 from episteme_pipeline.phases.phase5_fusion.argument_clustering import (
     EmbeddingArgumentClustering,
     InterDocumentClusterVerifier,
 )
 from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.fusion import ArgumentClustering, TheoryFusion
-from episteme_pipeline.protocols.graph_store import FusionGraph
+from episteme_pipeline.protocols.graph_store import FusionGraph, GraphReader
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 
 
@@ -23,6 +24,7 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
     theories, and verifies inter-document cluster equivalence using calibrated
     decision engine gating and conformal prediction sets.
     """
+
     name = "Phase 5: Inter-Document Argument Web"
     phase_key = "phase5"
     input_view = Phase4ArtifactsView
@@ -32,7 +34,7 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
         config: Phase5Config,
         *,
         embedding_model,
-        graph_store: FusionGraph,
+        graph_store: FusionGraph | GraphReader | None = None,
         argument_clustering: ArgumentClustering | None = None,
         theory_fusion: TheoryFusion | None = None,
         decision_engine: DecisionEngine | None = None,
@@ -46,8 +48,8 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
             Phase 5 configuration parameters.
         embedding_model : object
             Embedding model for projecting argument and entity texts.
-        graph_store : FusionGraph
-            Graph database store containing TheoryAtom and L2Entity nodes.
+        graph_store : FusionGraph | GraphReader | None, optional
+            Optional graph database store fallback.
         argument_clustering : ArgumentClustering, optional
             Clustering engine for grouping equivalent argument components.
         theory_fusion : TheoryFusion, optional
@@ -80,7 +82,9 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
             cluster_verifier=self.cluster_verifier,
         )
 
-    async def run(self, input: Phase4ArtifactsView, context: ArtifactExecutionContext) -> ArtifactCollection:
+    async def run(
+        self, input: Phase4ArtifactsView, context: ArtifactExecutionContext
+    ) -> ArtifactCollection:
         """Execute Phase 5 argument clustering and theory fusion passes.
 
         Parameters
@@ -89,6 +93,7 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
             Artifacts from Phase 4 argument mining.
         context : ArtifactExecutionContext
             Run context.
+
         Returns
         -------
         ArtifactCollection
@@ -97,19 +102,27 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
         progress_task = "Phase 5: Argument Web & Theory Fusion"
         cluster_ids: list[list[str]] = []
         theory_fusion_applied = False
+        active_store = (
+            input.to_graph_reader()
+            if (input.theory_atoms or self.graph_store is None)
+            else self.graph_store
+        )
 
         with self.progress_scope(
             progress_task, total_items=1, description="Theory Fusion"
         ) as advance:
             if self.config.argument_clustering_enabled:
-                raw_cluster_ids = await self.argument_clustering.cluster(self.graph_store)
+                raw_cluster_ids = await self.argument_clustering.cluster(active_store)
                 if self.cluster_verifier is not None:
-                    cluster_ids = await self.cluster_verifier.filter_clusters(raw_cluster_ids, self.graph_store)
+                    cluster_ids = await self.cluster_verifier.filter_clusters(
+                        raw_cluster_ids,
+                        active_store,  # type: ignore[arg-type]
+                    )
                 else:
                     cluster_ids = raw_cluster_ids
 
             if self.config.theory_fusion_enabled and self.theory_fusion is not None:
-                await self.theory_fusion.fuse(self.graph_store)
+                await self.theory_fusion.fuse(active_store)  # type: ignore[arg-type]
                 theory_fusion_applied = True
 
             advance(1)

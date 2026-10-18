@@ -139,6 +139,16 @@ class Pipeline:
         self.config = config
         self.graph_reader = graph_reader
         self.projection_graph = projection_graph
+        if checkpoint_store is None:
+            from pathlib import Path
+
+            from episteme_pipeline.artifacts.checkpoint_store import (
+                FileSystemCheckpointStore,
+            )
+
+            checkpoint_store = FileSystemCheckpointStore(
+                Path(self.config.execution.artifacts_dir) / "_checkpoints"
+            )
         self.checkpoint_store = checkpoint_store
         self.event_emitter = event_emitter or NoOpEventEmitter()
         self.decision_engine = decision_engine
@@ -149,6 +159,7 @@ class Pipeline:
         from episteme_pipeline.projection.artifact_projector import (
             ArtifactGraphProjector,
         )
+
         self._projector = ArtifactGraphProjector(projection_graph)
 
         # Build internal phase entries (1-based ordinals). Validate the dispatch
@@ -204,7 +215,6 @@ class Pipeline:
             )
         self._phase_entries = entries
 
-
     @classmethod
     def for_task(
         cls,
@@ -216,9 +226,9 @@ class Pipeline:
         entity_linker: Any | None = None,
         embedding_model: EmbeddingModel | Any = None,
         config: PipelineConfig,
-        graph_reader: Any,
-        projection_graph: Any,
-        checkpoint_store: Any,
+        graph_reader: Any = None,
+        projection_graph: Any = None,
+        checkpoint_store: Any = None,
         event_emitter: EventEmitter | None = None,
         extra_phases: list[PhaseRunner] | None = None,
         post_processors: list[PhaseRunner] | None = None,
@@ -277,6 +287,11 @@ class Pipeline:
                 f"Unknown task {task!r}. Supported: {sorted(_SUPPORTED_TASKS)}."
             )
 
+        from pathlib import Path
+
+        from episteme_pipeline.artifacts.checkpoint_store import (
+            FileSystemCheckpointStore,
+        )
         from episteme_pipeline.phases.phase1_foundation import Phase1Runner
         from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
         from episteme_pipeline.phases.phase3_global_relations import Phase3Runner
@@ -298,6 +313,17 @@ class Pipeline:
         emitter = event_emitter or NoOpEventEmitter()
         embedding_model = ensure_embedding_model(embedding_model)
 
+        resolved_checkpoint_store: PhaseCheckpointStore = (
+            checkpoint_store
+            if (
+                isinstance(checkpoint_store, PhaseCheckpointStore)
+                and checkpoint_store is not projection_graph
+            )
+            else FileSystemCheckpointStore(
+                Path(config.execution.artifacts_dir) / "_checkpoints"
+            )
+        )
+
         from episteme_pipeline.decision.observable import ObservableDecisionEngine
 
         if decision_engine is None and config.decision_engine is not None:
@@ -306,12 +332,27 @@ class Pipeline:
             decision_engine = resolve_decision_engine(config.decision_engine)
 
         decision_engine = ensure_decision_engine(decision_engine)
-        if decision_engine is not None and not isinstance(decision_engine, ObservableDecisionEngine):
-            stochastic_rate = config.decision_engine.stochastic_audit_rate if config.decision_engine else 0.0
+        if decision_engine is not None and not isinstance(
+            decision_engine, ObservableDecisionEngine
+        ):
+            stochastic_rate = (
+                config.decision_engine.stochastic_audit_rate
+                if config.decision_engine
+                else 0.0
+            )
             from episteme_pipeline.decision.conformal import ConformalCalibrator
-            conformal_alpha = config.decision_engine.conformal_alpha if config.decision_engine else 0.05
+
+            conformal_alpha = (
+                config.decision_engine.conformal_alpha
+                if config.decision_engine
+                else 0.05
+            )
             calibrator = ConformalCalibrator(alpha=conformal_alpha)
-            seed = config.models.seed if config.models and config.models.seed is not None else 42
+            seed = (
+                config.models.seed
+                if config.models and config.models.seed is not None
+                else 42
+            )
             decision_engine = ObservableDecisionEngine(
                 inner=decision_engine,
                 stochastic_audit_rate=stochastic_rate,
@@ -321,16 +362,13 @@ class Pipeline:
 
         from episteme_pipeline.decision.modal_resolver import HybridModalResolver
 
-        modal_resolver = ensure_modal_strength_resolver(modal_resolver) or HybridModalResolver.create(
+        modal_resolver = ensure_modal_strength_resolver(
+            modal_resolver
+        ) or HybridModalResolver.create(
             config=config.modal_resolver,
             decision_engine=decision_engine,
         )
 
-        # Wrap the LLM once, here, so the disk cache lands under the configured
-        # runs_dir instead of the hardcoded repo-root default (F-10). Every
-        # extractor calls ensure_structured_llm on whatever it is given, and
-        # that returns an already-wrapped DiskCachedStructuredLLM unchanged — so
-        # this is the single place the cache location is decided.
         from episteme_pipeline.llm.cache import (
             DiskCachedStructuredLLM,
             default_cache_dir,
@@ -339,9 +377,7 @@ class Pipeline:
 
         if not isinstance(llm, DiskCachedStructuredLLM):
             llm = DiskCachedStructuredLLM(
-                cast(Any, ensure_structured_llm(
-                    llm, use_cache=False
-                )),
+                cast(Any, ensure_structured_llm(llm, use_cache=False)),
                 cache_dir=default_cache_dir(config.execution.runs_dir),
             )
 
@@ -349,6 +385,7 @@ class Pipeline:
             from episteme_pipeline.phases.phase3_global_relations.rerankers import (
                 JevRelationReranker,
             )
+
             relation_reranker = JevRelationReranker(
                 decision_engine,
                 prompts=config.phase3.global_relation_prompts,
@@ -363,7 +400,11 @@ class Pipeline:
             )
 
         global_extractor = DenseRetrievalGlobalRelationExtractor(
-            llm, embedding_model, relation_reranker, config.phase3, decision_engine=decision_engine
+            llm,
+            embedding_model,
+            relation_reranker,
+            config.phase3,
+            decision_engine=decision_engine,
         )
 
         phases: list[Any] = [
@@ -371,14 +412,14 @@ class Pipeline:
                 config.phase1,
                 llm=llm,
                 embedding_model=embedding_model,
-                graph_store=projection_graph,
+                graph_store=None,
             ),
             Phase2Runner(
                 config.phase2,
                 config.graph_schema,
                 llm=llm,
                 embedding_model=embedding_model,
-                graph_store=checkpoint_store,
+                graph_store=resolved_checkpoint_store,
                 cross_encoder=cross_encoder,
                 working_memory_manager=working_memory_manager,
                 decision_engine=decision_engine,
@@ -390,19 +431,19 @@ class Pipeline:
                 config.graph_schema,
                 llm=llm,
                 embedding_model=embedding_model,
-                graph_store=checkpoint_store,
+                graph_store=resolved_checkpoint_store,
                 global_extractor=global_extractor,
             ),
             Phase3bLatentConsolidationRunner(
                 config.phase3b,
                 embedding_model=embedding_model,
-                graph_store=graph_reader,
+                graph_store=None,
                 decision_engine=decision_engine,
             ),
             Phase4EntityMaturationRunner(
                 config.phase4_maturation,
                 llm=llm,
-                graph_store=checkpoint_store,
+                graph_store=None,
                 embedding_model=embedding_model,
             ),
             Phase4Runner(
@@ -410,10 +451,7 @@ class Pipeline:
                 config.graph_schema,
                 llm=llm,
                 embedding_model=embedding_model,
-                graph_store=checkpoint_store,
-                # F-02: ARC (cross-chunk SUPPORTS/ATTACKS) is only constructed
-                # when the extractor is present. Phase 3 and Phase 4 share the
-                # same instance so retrieval caches and the reranker are reused.
+                graph_store=resolved_checkpoint_store,
                 global_extractor=global_extractor,
                 acc_classifier=acc_classifier,
                 arc_classifier=arc_classifier,
@@ -423,13 +461,13 @@ class Pipeline:
             Phase5ArgumentWebRunner(
                 config.phase5,
                 embedding_model=embedding_model,
-                graph_store=graph_reader,
+                graph_store=None,
                 decision_engine=decision_engine,
             ),
             Phase6Runner(
                 cast(Any, config.phase6),
                 config.graph_schema,
-                graph_store=projection_graph,
+                graph_store=None,
                 decision_engine=decision_engine,
                 modal_resolver=modal_resolver,
             ),
@@ -447,7 +485,7 @@ class Pipeline:
                 TheoreticalEnrichmentRunner(
                     config=config.theoretical_enrichment,
                     schema=config.graph_schema,
-                    graph_store=projection_graph,
+                    graph_store=None,
                     llm=llm,
                 )
             )
@@ -463,7 +501,7 @@ class Pipeline:
             config=config,
             graph_reader=graph_reader,
             projection_graph=projection_graph,
-            checkpoint_store=checkpoint_store,
+            checkpoint_store=resolved_checkpoint_store,
             event_emitter=emitter,
             decision_engine=decision_engine,
             modal_resolver=modal_resolver,
@@ -1028,14 +1066,24 @@ class Pipeline:
             self._increment_count(report.reused_artifact_counts_by_phase, entry.phase_name)
 
         previous = initial_previous_collection
+        if (
+            self.config.execution.project_artifacts_to_graph
+            and initial_previous_collection is not None
+            and initial_previous_collection.artifacts
+        ):
+            await self._projector.project_collection(
+                initial_previous_collection, batch_size=500
+            )
+
         # Ids produced by the phase that ran immediately before the current one,
-        # recorded as the current phase's input.
+        # used as fallback when a phase view does not track consumed_artifact_ids.
         upstream_artifact_ids: list[str] = (
             [a.artifact_id for a in initial_previous_collection.artifacts]
             if initial_previous_collection is not None
             else []
         )
         records_by_ordinal = {rec.phase_ordinal: rec for rec in manifest.phase_records}
+        from episteme_pipeline.artifacts.execution import EpistemicStateView
 
         # Execute phases starting from start_index (1-based). If start_index > len, nothing to run.
         for ordinal in range(start_index, len(self._phase_entries) + 1):
@@ -1047,13 +1095,44 @@ class Pipeline:
                 previous=previous,
             )
 
+            lineage_fp = stable_fingerprint(
+                {
+                    "phase_key": entry.phase_key,
+                    "input_fingerprint": manifest.input_fingerprint,
+                    "config_fingerprint": manifest.phase_config_fingerprints.get(
+                        f"phase_{ordinal}"
+                    ),
+                    "method_fingerprints": {
+                        k: v
+                        for k, v in sorted(manifest.method_fingerprints.items())
+                        if k.startswith(f"{entry.name}.")
+                        or k == "decision_engine"
+                        or k.startswith("decision_engine.")
+                    },
+                    "upstream_fingerprint": (
+                        self._fingerprint_collection(previous)
+                        if previous is not None
+                        else ""
+                    ),
+                }
+            )
+
             context = ArtifactExecutionContext(
-                run_id=run_id, manifest=manifest, pipeline_input=pipeline_input, previous=previous
+                run_id=run_id,
+                manifest=manifest,
+                pipeline_input=pipeline_input,
+                previous=previous,
+                lineage_fingerprint=lineage_fp,
             )
 
             if (
                 ordinal in invalidation_decision.invalidated_phase_ordinals
-                and not (invalidation_decision.reason and invalidation_decision.reason.startswith("prior-phase-incomplete"))
+                and not (
+                    invalidation_decision.reason
+                    and invalidation_decision.reason.startswith(
+                        "prior-phase-incomplete"
+                    )
+                )
             ):
                 chk_store = None
                 try:
@@ -1067,7 +1146,14 @@ class Pipeline:
             if record is not None:
                 record.status = RunStatus.RUNNING
                 record.started_at = datetime.now(UTC)
-                record.input_artifact_ids = list(upstream_artifact_ids)
+                if isinstance(phase_input, EpistemicStateView):
+                    record.input_artifact_ids = list(
+                        phase_input.consumed_artifact_ids or upstream_artifact_ids
+                    )
+                elif entry.input_view is None:
+                    record.input_artifact_ids = []
+                else:
+                    record.input_artifact_ids = list(upstream_artifact_ids)
 
             phase_emitter = ContextualEventEmitter(
                 self.event_emitter,
@@ -1088,7 +1174,9 @@ class Pipeline:
             # picked as the next run's reuse parent.
             try:
                 with use_event_emitter(phase_emitter):
-                    collection: ArtifactCollection = await entry.runner.run(phase_input, context)
+                    collection: ArtifactCollection = await entry.runner.run(
+                        phase_input, context
+                    )
             except Exception as exc:
                 logger.exception("Phase %s failed", phase_name)
                 fail_time = datetime.now(UTC)
@@ -1162,8 +1250,7 @@ class Pipeline:
                     await self._artifact_store.write_artifact(art)
 
             if self.config.execution.project_artifacts_to_graph:
-                for art in collection.artifacts:
-                    await self._projector.project(art)
+                await self._projector.project_collection(collection, batch_size=500)
 
             produced_ids = [a.artifact_id for a in collection.artifacts]
             if record is not None:

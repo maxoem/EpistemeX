@@ -149,17 +149,27 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         ArtifactCollection
             Collection of emitted TheoreticalEnrichmentArtifact envelopes.
         """
+        atoms = (
+            input.canonical_theory_atoms
+            if input.canonical_theory_atoms
+            else input.theory_atoms
+        )
+        relations = (
+            input.canonical_theory_relations
+            if input.canonical_theory_relations
+            else input.theory_relations
+        )
         logger.info(
             "Theoretical Enrichment: Beginning evaluation on %d atoms and %d relations",
-            len(input.theory_atoms),
-            len(input.theory_relations),
+            len(atoms),
+            len(relations),
         )
 
         if not self.config.enabled:
             logger.info("Theoretical Enrichment is disabled in config. Skipping.")
             return ArtifactCollection([])
 
-        total_items = len(input.theory_atoms) + len(input.theory_relations)
+        total_items = len(atoms) + len(relations)
         with self.progress_scope(
             "Theoretical Enrichment",
             total_items=total_items,
@@ -186,14 +196,24 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         tuple of (ArtifactCollection, int)
             Collection of generated artifacts and total update count.
         """
+        atoms = (
+            input.canonical_theory_atoms
+            if input.canonical_theory_atoms
+            else input.theory_atoms
+        )
+        relations = (
+            input.canonical_theory_relations
+            if input.canonical_theory_relations
+            else input.theory_relations
+        )
         # -------------------------------------------------------------
         # Stage 0: Dynamic Theory-Element Induction (Macro Scope)
         # -------------------------------------------------------------
         if not self.registry.all_theories() and self.config.induce_theories and self.inducer:
             logger.info("Theoretical Enrichment: Registry is unseeded. Running LLM Theory-Element induction...")
             induced = await self.inducer.induce_theories(
-                atoms=input.theory_atoms,
-                relations=input.theory_relations,
+                atoms=atoms,
+                relations=relations,
                 schema=self.schema,
                 max_theories=self.config.max_theories,
             )
@@ -208,9 +228,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         # -------------------------------------------------------------
         # Step 1: Cluster Mapping (Application Identification)
         # -------------------------------------------------------------
-        clusters = self._identify_empirical_clusters(
-            input.theory_atoms, input.theory_relations
-        )
+        clusters = self._identify_empirical_clusters(atoms, relations)
         logger.info(
             "Theoretical Enrichment: Identified %d empirical clusters (Intended Applications I)",
             len(clusters),
