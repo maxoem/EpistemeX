@@ -227,7 +227,7 @@ Beyond core graph construction (Phases 1–6), modular post-processors can be at
 
 ---
 
-##. Extensibility & Data Transformation Architecture
+## Extensibility & Data Transformation Architecture
 
 The pipeline distinguishes between three distinct architectural levels of extensibility:
 
@@ -275,7 +275,7 @@ flowchart TD
   - **Post-Processors** (e.g., `TheoreticalEnrichmentRunner`, standalone Epistemetrics evaluation) run *after* core construction. They inspect, enrich, or score the synthesized graph without altering foundational entity/relation boundaries.
   - **Ordering Rules**: In `Pipeline.for_task(...)`, `post_processors` and `extra_phases` are appended after Phase 6. When instantiating `Pipeline(phases=[...])` directly, runners can be arranged in any order, provided each runner's declared `input_view` is satisfied by the accumulated `ArtifactCollection`.
 
-###.2 Level 2: Component Subsystem Injection (Protocols)
+### Level 2: Component Subsystem Injection (Protocols)
 
 Rather than hardcoding algorithms into phase runners, subsystem behaviors are defined as abstract protocols in `pipeline/protocols/`:
 - **`GlobalRelationExtractor`**: Retrieval and candidate pair scoring (`DenseRetrievalGlobalRelationExtractor`, `TAGRelationExtractor`).
@@ -285,7 +285,7 @@ Rather than hardcoding algorithms into phase runners, subsystem behaviors are de
 
 These components are injected at composition time via `Pipeline.for_task(...)`, allowing alternative retrieval or reranking algorithms to be swapped without modifying phase runners.
 
-###.3 Level 3: Micro-Level Data Transformation & Strategy Pattern
+### Level 3: Micro-Level Data Transformation & Strategy Pattern
 
 When data within a phase needs to be transformed before consumption (for example, converting a `get_structural_neighborhood()` subgraph envelope into a specialized prompt representation), this is handled via the **Strategy Pattern** in `pipeline/prompts/input_formatters.py`:
 
@@ -305,16 +305,16 @@ When data within a phase needs to be transformed before consumption (for example
 
 ---
 
-##. Data Flow & Artifact Lifecycle
+## Data Flow & Artifact Lifecycle
 
-###.1 Artifact Management
+### Artifact Management
 
 All phase outputs are persisted as typed research artifacts:
 - **Storage**: [`JsonArtifactStore`](../reference/artifacts.md) writes envelopes under `.pipeline_artifacts/<run_id>/<kind>/<id>.json`.
 - **Versioning & Identity**: Dual-identifier system (`artifact_id` for instance lineage, `identity_key` for cross-run semantic matching).
 - **Lineage & Hydration**: When resuming or reusing phases, `_hydrate_previous_collection()` walks the parent run chain (`parent_run_id`), hydrating nearest-run artifacts so downstream phases receive a complete artifact collection without recomputation.
 
-###.2 Decoupled Graph Projection
+### Decoupled Graph Projection
 
 Phases have no direct write dependencies on the final projection graph:
 - **Artifact Projection**: When `config.execution.project_artifacts_to_graph` is enabled, [`ArtifactGraphProjector`](packages/episteme-pipeline/episteme_pipeline/projection/artifact_projector.py) maps emitted artifacts into Neo4j nodes and edges.
@@ -324,7 +324,7 @@ Phases have no direct write dependencies on the final projection graph:
 
 ---
 
-##. Performance & Asymptotic Complexity
+## Performance & Asymptotic Complexity
 
 For a rigorous asymptotic complexity analysis across all phases, candidate bounding constants $K$, and small-corpus overhead mitigations, see [Pipeline Runtime Analysis](runtime_analysis.md).
 

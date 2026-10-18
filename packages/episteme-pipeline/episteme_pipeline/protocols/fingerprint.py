@@ -61,14 +61,18 @@ def is_component(val: Any, attr_name: str | None = None) -> bool:
     if val is None or isinstance(val, _PRIMITIVE_TYPES):
         return False
 
-    # Pydantic models (configs, schemas, data contracts) are fingerprinted separately
-    if isinstance(val, BaseModel):
-        return False
+    if isinstance(val, NonCallableMock):
+        if attr_name in {"llm", "embedding_model", "cross_encoder"}:
+            return True
+        return "fingerprint" in vars(val) and callable(val.fingerprint)
 
     # Explicit protocol conformance (structural typing)
     if isinstance(val, Fingerprintable):
-        fp = val.fingerprint
-        return callable(fp)
+        return callable(val.fingerprint)
+
+    # Pydantic models (configs, schemas, data contracts) without explicit fingerprint are fingerprinted separately
+    if isinstance(val, BaseModel):
+        return False
 
     # External model bindings injected directly on runners
     return attr_name in {"llm", "embedding_model", "cross_encoder"}

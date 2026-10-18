@@ -50,6 +50,9 @@ def set_event_emitter(emitter: EventEmitter | None) -> Token:
 def use_event_emitter(emitter: EventEmitter | None) -> Generator[EventEmitter]:
     """Context manager to bind an `EventEmitter` for the duration of a code block.
 
+    Guarantees that `emitter.flush()` is invoked in a finally block upon exit,
+    ensuring that buffered spans and events are drained even if an exception occurs.
+
     Parameters
     ----------
     emitter : Optional[EventEmitter]
@@ -71,4 +74,9 @@ def use_event_emitter(emitter: EventEmitter | None) -> Generator[EventEmitter]:
     try:
         yield get_event_emitter()
     finally:
+        if isinstance(emitter, EventEmitter):
+            try:
+                emitter.flush()
+            except Exception:
+                pass
         _CURRENT_EVENT_EMITTER.reset(token)

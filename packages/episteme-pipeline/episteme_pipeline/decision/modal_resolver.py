@@ -242,9 +242,17 @@ class DecisionEngineModalResolver:
         question_template: str = "Assess the author's propositional certainty / modal qualification for this claim.",
         levels: list[float] | None = None,
     ) -> None:
+        from episteme_pipeline.prompts.models import StructuredPromptBundle
+
         self.decision_engine = decision_engine
         self.question_template = question_template
         self.levels = levels or [0.2, 0.4, 0.6, 0.8, 1.0]
+        self.prompt_bundle = StructuredPromptBundle(
+            direct_template=self.question_template,
+            decision_template=self.question_template,
+            decision_criteria={f"Level_{i}": f"Certainty {lvl:.2f}" for i, lvl in enumerate(self.levels)},
+            name="modal_strength_resolution",
+        )
         self._fallback_resolver = StructuralistModalResolver()
 
     def fingerprint(self) -> dict[str, Any]:
@@ -256,15 +264,18 @@ class DecisionEngineModalResolver:
             Dictionary containing class identifier, question template, levels,
             and underlying decision engine fingerprint.
         """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+
         eng_fp = (
             self.decision_engine.fingerprint()
-            if hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            if isinstance(self.decision_engine, Fingerprintable)
             else {"class": self.decision_engine.__class__.__name__}
         )
         return {
             "class": self.__class__.__name__,
             "question_template": self.question_template,
             "levels": list(self.levels),
+            "prompt_bundle": self.prompt_bundle.fingerprint(),
             "decision_engine": eng_fp,
         }
 
@@ -386,18 +397,20 @@ class HybridModalResolver:
         dict of str to Any
             Dictionary containing mode, fusion alpha, and component resolver fingerprints.
         """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+
         return {
             "class": self.__class__.__name__,
             "mode": self.mode,
             "fusion_alpha": self.fusion_alpha,
             "structural_resolver": (
                 self.structural_resolver.fingerprint()
-                if hasattr(self.structural_resolver, "fingerprint") and callable(self.structural_resolver.fingerprint)
+                if isinstance(self.structural_resolver, Fingerprintable)
                 else {"class": self.structural_resolver.__class__.__name__}
             ),
             "decision_resolver": (
                 self.decision_resolver.fingerprint()
-                if self.decision_resolver and hasattr(self.decision_resolver, "fingerprint") and callable(self.decision_resolver.fingerprint)
+                if isinstance(self.decision_resolver, Fingerprintable)
                 else None
             ),
         }

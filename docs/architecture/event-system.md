@@ -9,7 +9,7 @@ design rationale, context-based dispatch mechanisms, publisher-subscriber topolo
 
 ---
 
-#Overview & Architectural Role
+## Overview & Architectural Role
 
 The event system enforces a strict architectural boundary between **domain execution** and
 **observability/telemetry concerns**:
@@ -25,7 +25,7 @@ The event system enforces a strict architectural boundary between **domain execu
 
 ---
 
-#Core Architectural Patterns
+## Core Architectural Patterns
 
 ```mermaid
 flowchart TD
@@ -47,7 +47,7 @@ flowchart TD
     end
 ```
 
-##Context-Bound Dispatch (`contextvars`)
+### Context-Bound Dispatch (`contextvars`)
 
 A major design challenge in pipeline architectures is passing telemetry sinks through deeply nested component
 hierarchies. Episteme avoids constructor parameter drilling ("prop-drilling") and global singletons by using Python's
@@ -80,7 +80,7 @@ get_event_emitter().emit(
 )
 ```
 
-##Observer Pattern & Fan-Out
+### Observer Pattern & Fan-Out
 
 The system implements the standard Gang-of-Four **Observer Pattern**:
 
@@ -90,7 +90,7 @@ The system implements the standard Gang-of-Four **Observer Pattern**:
 - **`CompositeObserver`**: Fan-out wrapper that enables combining multiple distinct observers into a single logical
   subscription.
 
-##Zero-Cost Default & Test Isolation
+### Zero-Cost Default & Test Isolation
 
 When no emitter is bound in the active context, `get_event_emitter()` returns a singleton `NoOpEventEmitter`:
 
@@ -101,17 +101,27 @@ When no emitter is bound in the active context, `get_event_emitter()` returns a 
 
 ---
 
-#Operational Guarantees & Constraints
-
-##Failure Isolation
+### Failure Isolation & Observer Health Accounting
 
 Telemetry sinks must never compromise pipeline execution. Observers are treated as external side-effects:
 
-- An exception raised inside an observer's `on_event` handler must be caught, logged, and isolated.
-- A failure in one observer (e.g., a Langfuse network timeout or disk write error) must not prevent other observers
+- An exception raised inside an observer's `on_event` handler is caught, logged, and isolated.
+- A failure in one observer (e.g., a Langfuse network timeout or disk write error) does not prevent other observers
   from receiving the event, nor cause the pipeline phase to abort.
+- **Audit Completeness & Telemetry Accounting**: `SimpleEventEmitter` maintains delivery counters (`events_delivered: dict[str, int]`)
+  and isolates observer exceptions into `observer_errors: dict[str, list[str]]`. These metrics are captured in `RunReport.observer_telemetry`
+  so any audit loss or sink failure is explicitly surfaced in reports and execution results rather than being silently dropped.
 
-##Side-Effect Only & Non-Blocking
+### Guaranteed Lifecycle Brackets & Flush Barriers
+
+Pipeline execution is fully enclosed in symmetric start/end brackets with guaranteed `finally:` flushing:
+
+- **Run Lifecycle**: Runs emit `RunStarted` at invocation, `RunCompleted` upon successful execution, and `RunFailed` upon unhandled exceptions.
+- **Phase Lifecycle**: Every phase begins with `ComponentStarted`. Upon normal completion, `ComponentCompleted(success=True)` and `PhaseCompleted(success=True)` are emitted. Upon exception, `ComponentCompleted(success=False, error=...)`, `PhaseCompleted(success=False, error=...)`, and `PhaseFailed(...)` are guaranteed to fire before the exception propagates.
+- **Phase Reuse & Provenance**: Reused phases emit `PhaseReused(phase_name, source_run_id, artifact_count)` to establish end-to-end lineage across resumed runs.
+- **Flush Barrier**: Both `use_event_emitter` and `_run_observability_scope` invoke `emitter.flush()` inside guaranteed `finally:` blocks, ensuring that all buffered network spans (e.g., `LangfuseObserver`) and file buffers (e.g., `JsonlRunObserver`) are fully committed before process exit.
+
+### Side-Effect Only & Non-Blocking
 
 - **No Return Values**: `EventEmitter.emit()` returns `None`. Pipeline components never await or branch on the outcome
   of an event emission.
@@ -121,42 +131,48 @@ Telemetry sinks must never compromise pipeline execution. Observers are treated 
 
 ---
 
-#Event Lifecycle
+## Event Lifecycle
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Component as Pipeline Component
-    participant Context as contextvars
-    participant Bus as SimpleEventEmitter
-    participant Observers as CompositeObserver
-    participant Sinks as Sinks (JSONL, Langfuse, Log)
+    participant Orch as Pipeline._execute()
+    participant Bus as ContextualEventEmitter
+    participant Obs as CompositeObserver (JSONL / Langfuse)
 
-    Component->>Context: get_event_emitter()
-    Context-->>Component: Active EventEmitter
-    Component->>Bus: emit(event)
-    Bus->>Observers: on_event(event)
-    par Fan-Out
-        Observers->>Sinks: LoggingObserver.on_event()
-        Observers->>Sinks: JsonlRunObserver.on_event()
-        Observers->>Sinks: LangfuseObserver.on_event()
+    Orch->>Bus: emit(RunStarted)
+    loop For each Reused Phase
+        Orch->>Bus: emit(PhaseReused)
     end
+    loop For each Executed Phase
+        Orch->>Bus: emit(ComponentStarted)
+        alt Phase Succeeds
+            Orch->>Bus: emit(ComponentCompleted[success=True])
+            Orch->>Bus: emit(PhaseCompleted[success=True])
+        else Phase Raises Exception
+            Orch->>Bus: emit(ComponentCompleted[success=False])
+            Orch->>Bus: emit(PhaseFailed)
+        end
+    end
+    Orch->>Bus: emit(RunCompleted / RunFailed)
+    Note over Orch,Obs: Guaranteed in finally: block
+    Orch->>Bus: flush()
+    Bus->>Obs: flush() all buffered sinks
 ```
 
-1. **Trigger**: A domain component completes a scientifically relevant action (e.g., dense candidates retrieved,
-   triple committed, LLM relation decoded).
+1. **Trigger**: A domain component or pipeline orchestrator transitions through a lifecycle event.
 2. **Instantiation**: The component instantiates a Pydantic `BaseEvent` subclass, populating domain attributes.
 3. **Dispatch**: The component calls `get_event_emitter().emit(event)`.
-4. **Fan-Out**: `SimpleEventEmitter` iterates over registered observers and invokes `on_event(event)` on each.
+4. **Fan-Out**: `SimpleEventEmitter` iterates over registered observers and invokes `on_event(event)` on each, tracking deliveries and errors.
 5. **Consumption**:
    - `LoggingObserver` formats human-readable logs to stdout.
-   - `JsonlRunObserver` appends an immutable JSON line to the run's audit trail.
-   - `LangfuseObserver` creates or updates spans, generations, or scores.
+   - `JsonlRunObserver` appends an immutable JSON line to the run's audit trail and flushes to disk.
+   - `LangfuseObserver` creates, updates, and flushes spans, generations, or scores.
    - `RichProgressObserver` advances console progress bars.
 
 ---
 
-#Related Documentation
+## Related Documentation
 
 - [Event Reference and Observers](../observability/events.md) — Comprehensive catalog of all event types, payload schemas, and observer usage guides.
 - [Langfuse Integration](../observability/langfuse.md) — Configuration and span mapping for distributed LLM tracing.

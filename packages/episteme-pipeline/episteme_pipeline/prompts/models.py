@@ -82,3 +82,27 @@ class StructuredPromptBundle(BaseModel):
             format_kwargs=format_kwargs,
             alpha=alpha,
         )
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return a deterministic JSON-serializable representation of prompt bundle state.
+
+        Returns
+        -------
+        dict of str to Any
+            Deterministic dictionary containing prompt templates, rubrics,
+            and prompt management metadata.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "name": self.name,
+            "version": str(self.version) if self.version is not None else None,
+            "label": self.label,
+            "provider": self.provider,
+            "direct_template": self.direct_template,
+            "reasoning_template": self.reasoning_template,
+            "format_template": self.format_template,
+            "gleaning_template": self.gleaning_template,
+            "decision_template": self.decision_template,
+            "decision_criteria": self.decision_criteria,
+            "metadata": self.metadata,
+        }

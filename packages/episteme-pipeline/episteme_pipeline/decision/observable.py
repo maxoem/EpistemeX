@@ -10,7 +10,7 @@ to the active event emitter.
 from __future__ import annotations
 
 import hashlib
-import random
+import hmac
 import time
 from typing import Any
 
@@ -31,6 +31,7 @@ from episteme_pipeline.protocols.decision import (
     DecisionScore,
     ensure_decision_question,
 )
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 
 class ObservableDecisionEngine:
@@ -47,8 +48,14 @@ class ObservableDecisionEngine:
         Optional prompt bundle carrying prompt_name, prompt_version, and
         prompt_label for telemetry prompt binding.
     stochastic_audit_rate : float, default 0.0
-        Probability in [0, 1] of randomly marking a fast-exit evaluation for
+        Probability in [0, 1] of marking a fast-exit evaluation for
         stochastic auditing (System 2 validation).
+    seed : int or str or None, default None
+        Run seed for deterministic HMAC-SHA256 PRF stochastic auditing.
+    task_id : str or None, default None
+        Identifier for the decision task (e.g., 'p2_linking', 'p3_rerank').
+    calibrator : Any, default None
+        Optional conformal calibrator instance.
     """
 
     def __init__(
@@ -57,11 +64,17 @@ class ObservableDecisionEngine:
         engine_name: str | None = None,
         prompt_bundle: StructuredPromptBundle | None = None,
         stochastic_audit_rate: float = 0.0,
+        seed: int | str | None = None,
+        task_id: str | None = None,
+        calibrator: Any = None,
     ) -> None:
         self.inner = inner
         self.engine_name = engine_name or inner.name
         self.prompt_bundle = prompt_bundle
         self.stochastic_audit_rate = stochastic_audit_rate
+        self.seed = seed
+        self.task_id = task_id
+        self.calibrator = calibrator
 
     @property
     def name(self) -> str:
@@ -75,17 +88,31 @@ class ObservableDecisionEngine:
         -------
         dict of str to Any
             Deterministic dictionary containing wrapper metadata, audit rate,
-            and inner engine fingerprint.
+            seed, calibrator state, prompt bundle, and inner engine fingerprint.
         """
         inner_fp = (
             self.inner.fingerprint()
-            if hasattr(self.inner, "fingerprint") and callable(self.inner.fingerprint)
+            if isinstance(self.inner, Fingerprintable)
             else {"class": self.inner.__class__.__name__}
+        )
+        calibrator_fp = (
+            self.calibrator.fingerprint()
+            if isinstance(self.calibrator, Fingerprintable)
+            else None
+        )
+        prompt_fp = (
+            self.prompt_bundle.fingerprint()
+            if isinstance(self.prompt_bundle, Fingerprintable)
+            else None
         )
         return {
             "class": self.__class__.__name__,
             "engine_name": self.engine_name,
             "stochastic_audit_rate": self.stochastic_audit_rate,
+            "seed": str(self.seed) if self.seed is not None else None,
+            "task_id": self.task_id,
+            "calibrator": calibrator_fp,
+            "prompt_bundle": prompt_fp,
             "inner": inner_fp,
         }
 
@@ -107,17 +134,40 @@ class ObservableDecisionEngine:
         state_hash = hashlib.sha256(state_str.encode("utf-8")).hexdigest()
         return state_hash, len(state_str)
 
-    def _should_audit(self) -> bool:
+    def _should_audit(self, state_hash: str = "", task_id: str | None = None) -> bool:
         """Determine whether the current evaluation should be marked for stochastic audit.
+
+        Uses a deterministic HMAC-SHA256 PRF keyed by (seed, task_id, state_hash).
+        This guarantees invariant audit selection across arbitrary async execution
+        schedules while maintaining a uniform U(0, 1) marginal probability.
+
+        Parameters
+        ----------
+        state_hash : str, default ""
+            SHA-256 hash of the input state.
+        task_id : str or None, default None
+            Evaluation primitive or task identifier.
 
         Returns
         -------
         bool
-            True if random sample falls within stochastic_audit_rate.
+            True if deterministic PRF value falls within stochastic_audit_rate.
         """
         if self.stochastic_audit_rate <= 0.0:
             return False
-        return random.random() < self.stochastic_audit_rate
+        if self.stochastic_audit_rate >= 1.0:
+            return True
+
+        effective_seed = str(self.seed if self.seed is not None else 42)
+        if self.task_id and task_id and task_id != self.task_id:
+            effective_task = f"{self.task_id}:{task_id}"
+        else:
+            effective_task = str(task_id or self.task_id or self.engine_name or "decision")
+        effective_hash = state_hash or hashlib.sha256(b"").hexdigest()
+        msg = f"{effective_task}:{effective_hash}".encode()
+        digest = hmac.new(effective_seed.encode("utf-8"), msg, hashlib.sha256).digest()
+        uniform_val = int.from_bytes(digest[:8], "big") / float(1 << 64)
+        return uniform_val < self.stochastic_audit_rate
 
     async def evaluate_noul(
         self,
@@ -159,7 +209,7 @@ class ObservableDecisionEngine:
         result = await self.inner.evaluate_noul(state, question)
         duration = time.perf_counter() - t0
 
-        is_audit = self._should_audit()
+        is_audit = self._should_audit(state_hash, "noul")
         tokens_saved = result.tokens_saved_estimate if isinstance(result, DecisionScore) else 0
         if not tokens_saved:
             tokens_saved = (char_count // 4) + (len(question) // 4) + 30
@@ -237,7 +287,7 @@ class ObservableDecisionEngine:
         result = await self.inner.evaluate_choice(state, question, options, alpha=alpha)
         duration = time.perf_counter() - t0
 
-        is_audit = self._should_audit()
+        is_audit = self._should_audit(state_hash, "choice")
         tokens_saved = result.tokens_saved_estimate or (
             (char_count // 4) + (len(question) // 4) + (len(options) * 8) + 50
         )
@@ -308,7 +358,7 @@ class ObservableDecisionEngine:
         result = await self.inner.evaluate_score(state, question, levels)
         duration = time.perf_counter() - t0
 
-        is_audit = self._should_audit()
+        is_audit = self._should_audit(state_hash, "score")
         tokens_saved = result.tokens_saved_estimate or (
             (char_count // 4) + (len(question) // 4) + (len(levels) * 4) + 40
         )
@@ -386,3 +436,51 @@ class ObservableDecisionEngine:
     def __getattr__(self, name: str) -> Any:
         """Delegate unhandled attribute and method lookups to the inner engine."""
         return getattr(self.inner, name)
+
+
+def ensure_observable_decision_engine(
+    engine: Any | None,
+    engine_name: str | None = None,
+    prompt_bundle: StructuredPromptBundle | None = None,
+    stochastic_audit_rate: float = 0.0,
+    seed: int | str | None = None,
+    task_id: str | None = None,
+    calibrator: Any = None,
+) -> ObservableDecisionEngine | None:
+    """Ensure a DecisionEngine is decorated with ObservableDecisionEngine idempotently.
+
+    Parameters
+    ----------
+    engine : Any or None
+        Candidate decision engine.
+    engine_name : str or None, optional
+        Human-readable name of the decision engine.
+    prompt_bundle : StructuredPromptBundle or None, optional
+        Prompt bundle for telemetry.
+    stochastic_audit_rate : float, default 0.0
+        Audit rate in [0, 1].
+    seed : int or str or None, optional
+        Run seed for deterministic PRF auditing.
+    task_id : str or None, optional
+        Decision task identifier.
+    calibrator : Any or None, optional
+        Conformal calibrator instance.
+
+    Returns
+    -------
+    ObservableDecisionEngine or None
+        Decorated decision engine, or None if engine was None.
+    """
+    if engine is None:
+        return None
+    if isinstance(engine, ObservableDecisionEngine):
+        return engine
+    return ObservableDecisionEngine(
+        inner=engine,
+        engine_name=engine_name,
+        prompt_bundle=prompt_bundle,
+        stochastic_audit_rate=stochastic_audit_rate,
+        seed=seed,
+        task_id=task_id,
+        calibrator=calibrator,
+    )

@@ -8,7 +8,7 @@ It details all domain event schemas, available built-in observers, and patterns 
 
 ---
 
-#Base Event Schema
+## Base Event Schema
 
 All pipeline events are Pydantic v2 models defined in `pipeline/events/models.py` inheriting from `BaseEvent`:
 
@@ -20,9 +20,9 @@ All pipeline events are Pydantic v2 models defined in `pipeline/events/models.py
 
 ---
 
-#Event Reference Catalog
+## Event Reference Catalog
 
-##Entity & Maturation Events
+### Entity & Maturation Events
 
 Events related to entity processing, textual envelope injection, entity linking, and centroid description synthesis.
 
@@ -35,7 +35,7 @@ Events related to entity processing, textual envelope injection, entity linking,
 | `EntityLinkingReranked` | Entity Linking / Fusion | `mention_id: str`<br/>`candidate_id: str`<br/>`score: float`<br/>`accepted: bool`<br/>`threshold: float` | Cross-encoder scored an entity linking candidate against an acceptance threshold. |
 | `EntityMaturationSynthesized` | Maturation / Fusion | `entity_id: str`<br/>`entity_name: str`<br/>`envelope_count: int`<br/>`top_k_used: int`<br/>`synthesized_description: str` | LLM synthesized an aggregated entity description from top-K textual envelope centroids. |
 
-##Extraction & Relation Events
+### Extraction & Relation Events
 
 Events capturing candidate generation, cross-encoder reranking, and LLM relation decoding.
 
@@ -47,7 +47,7 @@ Events capturing candidate generation, cross-encoder reranking, and LLM relation
 | `LLMRelationDecoded` | Phase 2 (LLM Extractor) | `candidate_pair: tuple[str, str]`<br/>`relation: str \| None`<br/>`direction: str \| None`<br/>`confidence: float \| None` | LLM extracted or decoded a semantic relation between a candidate pair. |
 | `SchemaValidationRejectedRelation` | Phase 2 (Validation) | `candidate_pair: tuple[str, str]`<br/>`relation: str`<br/>`reason: str` | Extracted relation rejected because it does not conform to the active schema taxonomy. |
 
-##Graph & Fusion Events
+### Graph & Fusion Events
 
 Events recording persistence into Neo4j and entity fusion / resolution.
 
@@ -56,7 +56,7 @@ Events recording persistence into Neo4j and entity fusion / resolution.
 | `TripleCommitted` | Persistence / Phase 2 & 3 | `subject_id: str`<br/>`predicate: str`<br/>`object_id: str`<br/>`confidence: float`<br/>`scope: str`<br/>`source_chunk_id: str` | Validated triple written to the property graph store. |
 | `FusionDecisionMade` | Phase 3 (Fusion) | `entities_fused: list[str]`<br/>`fusion_type: str`<br/>`confidence: float`<br/>`reason: str \| None` | Entity resolution decision merged multiple entity nodes into a canonical node. |
 
-##Pipeline Lifecycle & Projection Events
+### Pipeline Lifecycle & Projection Events
 
 Events tracking phase execution, component start/stop boundaries, chunk generation, and projection.
 
@@ -68,7 +68,7 @@ Events tracking phase execution, component start/stop boundaries, chunk generati
 | `ChunksGenerated` | Phase 1 (Chunking) | `document_id: str`<br/>`document_title: str`<br/>`chunk_count: int`<br/>`token_count: int` | Text chunking completed for a source document. |
 | `ArtifactProjected` | Projection Layer | `artifact_type: str`<br/>`duration_seconds: float`<br/>`success: bool` | Intermediate artifact projected into the projection graph. |
 
-##LLM & Inference Telemetry Events
+### LLM & Inference Telemetry Events
 
 Events capturing detailed latency, prompt/completion tokens, and model parameters for cost and performance tracking.
 
@@ -78,7 +78,7 @@ Events capturing detailed latency, prompt/completion tokens, and model parameter
 | `LLMGenerationCompleted` | LLM Client Facades | `model_name: str`<br/>`prompt: Any`<br/>`output_text: str`<br/>`total_tokens: int`<br/>`duration_seconds: float`<br/>`cached: bool`<br/>`model_parameters: dict \| None` | Comprehensive generation record forwarded to observability backends (e.g., Langfuse). |
 | `EmbeddingGenerationCompleted` | Embedding Models | `model_name: str`<br/>`text_count: int`<br/>`total_characters: int`<br/>`total_tokens: int`<br/>`duration_seconds: float`<br/>`cached: bool` | Batch vector embedding generation completed. |
 
-##Decision Engine & System 1 Events
+### Decision Engine & System 1 Events
 
 Events emitted during non-generative, typed classification, sub-second routing, and dynamic flow gating (TypeSafe Jev / Laya).
 
@@ -88,7 +88,7 @@ Events emitted during non-generative, typed classification, sub-second routing, 
 | `DecisionEvaluationCompleted` | Decision Engine Subsystem | `engine_name: str`<br/>`primitive: str`<br/>`selected_value: Any`<br/>`class_probability: float`<br/>`empirical_accuracy: float`<br/>`prediction_set: list[str] \| None`<br/>`is_stochastic_audit: bool`<br/>`duration_seconds: float`<br/>`tokens_saved_estimate: int` | Emitted when a System 1 decision completes, capturing calibrated confidence, conformal prediction set, duration, and token savings. |
 | `DecisionGatingTriggered` | Phase Gate Adapters | `gate_name: str`<br/>`action_taken: str`<br/>`empirical_accuracy: float`<br/>`threshold: float`<br/>`prediction_set_size: int \| None` | Emitted when a dynamic gate triggers a routing decision (`fast_exit`, `escalated_to_llm`, `stochastic_audit`, `loop_terminated`). |
 
-##Progress, Evaluation & Validation Events
+### Progress, Evaluation & Validation Events
 
 Events tracking progress indicators, epistemic metrics, and schema violation warnings.
 
@@ -103,7 +103,7 @@ Events tracking progress indicators, epistemic metrics, and schema violation war
 
 ---
 
-#Built-in Observers
+## Built-in Observers
 
 The event system includes several built-in observers located in `pipeline/events/`:
 
@@ -118,9 +118,9 @@ The event system includes several built-in observers located in `pipeline/events
 
 ---
 
-#How-To Guides
+## How-To Guides
 
-##Emitting Events in Pipeline Components
+### Emitting Events in Pipeline Components
 
 Components retrieve the active emitter via `get_event_emitter()` from task-local context and emit typed event instances:
 
@@ -151,7 +151,7 @@ class DenseRetrievalService:
     Do not pass `event_emitter` through component constructors. `get_event_emitter()` uses Python's `contextvars` to
     automatically resolve the active emitter for the current asynchronous execution context.
 
-##Configuring Observers for a Pipeline Run
+### Configuring Observers for a Pipeline Run
 
 Use `CompositeObserver` to fan out events to multiple sinks, and bind the emitter using `use_event_emitter`:
 
@@ -185,7 +185,7 @@ with use_event_emitter(emitter):
     result = await pipeline.run(pipeline_input)
 ```
 
-##Implementing a Custom Observer
+### Implementing a Custom Observer
 
 To implement a new observer, subclass `EventObserver` and define the `on_event` handler:
 
@@ -211,7 +211,7 @@ class TripleCounterObserver(EventObserver):
             logger.warning(f"Error in TripleCounterObserver: {e}")
 ```
 
-##Decision Engine Observability & Langfuse Tracing
+### Decision Engine Observability & Langfuse Tracing
 
 System 1 decision evaluations (via TypeSafe Jev / Laya) are transparently instrumented through `ObservableDecisionEngine`:
 
@@ -229,7 +229,7 @@ System 1 decision evaluations (via TypeSafe Jev / Laya) are transparently instru
 
 ---
 
-#Best Practices
+## Best Practices
 
 1. **Keep Payloads Compact**:
    - Do not embed entire documents, giant prompt templates, or full graph states inside events.

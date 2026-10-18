@@ -234,7 +234,13 @@ class LLMTheoryProjector(TheoryProjector):
         strategy: Any = "direct_constrained",
     ) -> None:
         self.llm: StructuredLLM = ensure_structured_llm(llm)
-        self.prompts = prompts or CLUSTER_PROJECTION_DIRECT_PROMPT
+        if isinstance(prompts, StructuredPromptBundle):
+            self.prompts: StructuredPromptBundle = prompts
+        else:
+            self.prompts = StructuredPromptBundle(
+                direct_template=prompts or CLUSTER_PROJECTION_DIRECT_PROMPT,
+                name="cluster_projection",
+            )
         self.strategy = strategy
         self._fallback = GenericTheoryProjector()
 

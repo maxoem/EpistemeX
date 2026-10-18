@@ -30,6 +30,11 @@ from episteme_pipeline.events import (
     EventEmitter,
     NoOpEventEmitter,
     PhaseCompleted,
+    PhaseFailed,
+    PhaseReused,
+    RunCompleted,
+    RunFailed,
+    RunStarted,
     use_event_emitter,
 )
 from episteme_pipeline.observability.logging import run_folder_logger
@@ -114,6 +119,9 @@ class _PhaseEntry:
 
 class Pipeline:
     """Main pipeline orchestrator."""
+
+    decision_engine: DecisionEngine | None = None
+    modal_resolver: ModalStrengthResolver | None = None
 
     def __init__(
         self,
@@ -300,10 +308,16 @@ class Pipeline:
         decision_engine = ensure_decision_engine(decision_engine)
         if decision_engine is not None and not isinstance(decision_engine, ObservableDecisionEngine):
             stochastic_rate = config.decision_engine.stochastic_audit_rate if config.decision_engine else 0.0
+            from episteme_pipeline.decision.conformal import ConformalCalibrator
+            conformal_alpha = config.decision_engine.conformal_alpha if config.decision_engine else 0.05
+            calibrator = ConformalCalibrator(alpha=conformal_alpha)
+            seed = config.models.seed if config.models and config.models.seed is not None else 42
             decision_engine = ObservableDecisionEngine(
                 inner=decision_engine,
                 stochastic_audit_rate=stochastic_rate,
+                seed=seed,
             )
+            decision_engine.calibrator = calibrator
 
         from episteme_pipeline.decision.modal_resolver import HybridModalResolver
 
@@ -502,9 +516,11 @@ class Pipeline:
         contextual_emitter = ContextualEventEmitter(
             self.event_emitter, defaults={"run_id": run_id}
         )
-        with use_event_emitter(contextual_emitter):
-            with run_folder_logger(self.config.execution.runs_dir, run_id):
-                yield
+        with (
+            use_event_emitter(contextual_emitter),
+            run_folder_logger(self.config.execution.runs_dir, run_id),
+        ):
+            yield
 
     async def run(
         self,
@@ -656,43 +672,50 @@ class Pipeline:
     # -------------------- Helper methods --------------------
 
     def _prompt_fingerprints(self) -> dict[str, dict[str, str]]:
-        """``{phase_key: {prompt_name: fingerprint}}``.
+        """Discover and fingerprint prompt bundles across all pipeline phases.
 
-        Grouped by the phase that actually *uses* the prompt. Attaching
-        all prompts to every phase meant that editing, say, the ADU segmentation
-        prompt invalidated Phase 1 and forced a full re-ingest — including
-        re-embedding every chunk.
+        Inspects phase configs dynamically to discover all StructuredPromptBundle
+        instances without hardcoded phase dictionaries.
+
+        Returns
+        -------
+        dict of str to dict of str to str
+            Mapping from phase_key to prompt_name -> stable fingerprint.
         """
-        def _fp_item(item: Any) -> str:
-            if isinstance(item, BaseModel):
-                return stable_fingerprint(item.model_dump(mode="json"))
-            return stable_fingerprint(str(item))
+        from episteme_pipeline.prompts.models import StructuredPromptBundle
+        from episteme_pipeline.protocols.fingerprint import find_components
 
-        prompts_by_phase: dict[str, dict[str, Any]] = {
-            "phase2": {
-                "ner_extraction": self.config.phase2.ner_prompts,
-                "entity_linking": self.config.phase2.entity_linking_prompts,
-            },
-            "phase3": {
-                "global_relation": self.config.phase3.global_relation_prompts,
-            },
-            "phase4_maturation": {
-                "entity_synthesis": self.config.phase4_maturation.entity_synthesis_prompts,
-            },
-            "phase4": {
-                "adu_segmentation": self.config.phase4.adu_segmentation_prompts,
-                "acc_classification": self.config.phase4.acc_prompts,
-                "arc_classification": self.config.phase4.arc_prompts,
-            },
-        }
-        return {
-            phase_key: {name: _fp_item(bundle_or_text) for name, bundle_or_text in prompts.items()}
-            for phase_key, prompts in prompts_by_phase.items()
-        }
+        fps: dict[str, dict[str, str]] = {}
+        for phase_key, cfg in vars(self.config).items():
+            if not isinstance(cfg, BaseModel):
+                continue
+            prompts: dict[str, str] = {}
+            for comp_name, comp_obj in find_components(cfg).items():
+                if isinstance(comp_obj, StructuredPromptBundle):
+                    pname = comp_obj.name or comp_name.split(".")[-1].removesuffix("_prompts")
+                    prompts[pname] = stable_fingerprint(comp_obj.fingerprint())
+            if prompts:
+                fps[phase_key] = prompts
+
+        # Also inspect runner components
+        for entry in self._phase_entries:
+            runner = entry.runner
+            comps = runner.components() if isinstance(runner, PhaseRunner) else find_components(runner)
+            runner_prompts: dict[str, str] = {}
+            for comp_name, comp_obj in comps.items():
+                if isinstance(comp_obj, StructuredPromptBundle):
+                    pname = comp_obj.name or comp_name.split(".")[-1].removesuffix("_prompts")
+                    runner_prompts[pname] = stable_fingerprint(comp_obj.fingerprint())
+            if runner_prompts:
+                fps.setdefault(entry.phase_key, {}).update(runner_prompts)
+
+        return fps
 
     def _method_fingerprints(self) -> dict[str, str]:
         fps: dict[str, str] = {}
         prompt_fps = self._prompt_fingerprints()
+        from episteme_pipeline.protocols.fingerprint import find_components
+
         for entry in self._phase_entries:
             runner = entry.runner
             try:
@@ -703,8 +726,6 @@ class Pipeline:
                 prefix = f"phase{entry.index}"
 
             # Recursively discover and fingerprint all attached components
-            from episteme_pipeline.protocols.fingerprint import find_components
-
             if isinstance(runner, PhaseRunner):
                 comps = runner.components()
             else:
@@ -716,6 +737,17 @@ class Pipeline:
                     fps[f"{prefix}.{comp_name}"] = fp
             for pname, pfp in prompt_fps.get(entry.phase_key, {}).items():
                 fps[f"{prefix}.prompt.{pname}"] = pfp
+
+        if self.decision_engine is not None:
+            engine_comps = find_components(self.decision_engine)
+            for comp_name, comp_obj in engine_comps.items():
+                fp = fingerprint_method(comp_obj)
+                if fp:
+                    fps[f"decision_engine.{comp_name}"] = fp
+            engine_fp = fingerprint_method(self.decision_engine)
+            if engine_fp:
+                fps["decision_engine"] = engine_fp
+
         return fps
 
 
@@ -844,8 +876,23 @@ class Pipeline:
             earliest_invalid = 1
             reason = "source-changed"
 
+        # A changed pipeline-wide decision engine or calibrator invalidates from phase 1 on.
+        if earliest_invalid is None:
+            de_keys = {
+                k
+                for k in (set(current.method_fingerprints) | set(prior.method_fingerprints))
+                if k == "decision_engine" or k.startswith("decision_engine.")
+            }
+            if any(
+                prior.method_fingerprints.get(k) != current.method_fingerprints.get(k)
+                for k in de_keys
+            ):
+                earliest_invalid = 1
+                reason = "method-changed:decision_engine"
+
         # Otherwise find the first phase whose config, method or prompt moved.
         if earliest_invalid is None:
+            all_method_keys = set(current.method_fingerprints) | set(prior.method_fingerprints)
             for entry in self._phase_entries:
                 key = f"phase_{entry.index}"
                 if prior.phase_config_fingerprints.get(key) != current.phase_config_fingerprints.get(key):
@@ -853,7 +900,7 @@ class Pipeline:
                     reason = f"config-changed:{entry.name}"
                     break
                 method_keys = [
-                    k for k in current.method_fingerprints if k.startswith(f"{entry.name}.")
+                    k for k in all_method_keys if k.startswith(f"{entry.name}.")
                 ]
                 if any(
                     prior.method_fingerprints.get(k) != current.method_fingerprints.get(k)
@@ -937,6 +984,16 @@ class Pipeline:
             invalidation_reason=invalidation_decision.reason,
         )
 
+        self.event_emitter.emit(
+            RunStarted(
+                run_id=run_id,
+                parent_run_id=invalidation_decision.resume_point.run_id,
+                reused_phase_ordinals=list(invalidation_decision.reused_phase_ordinals),
+                invalidated_phase_ordinals=list(invalidation_decision.invalidated_phase_ordinals),
+                invalidation_reason=invalidation_decision.reason,
+            )
+        )
+
         # Mark reused phase records in manifest. Keyed by phase name, not by ordinal.
         reused_records = self._reused_phase_records(invalidation_decision)
         reused_by_name = {r.phase_name: r for r in reused_records}
@@ -951,6 +1008,15 @@ class Pipeline:
                 rec.input_artifact_ids = prior_rec.input_artifact_ids
                 rec.output_artifact_ids = prior_rec.output_artifact_ids
                 rec.output_fingerprint = prior_rec.output_fingerprint
+                self.event_emitter.emit(
+                    PhaseReused(
+                        phase_name=rec.phase_name,
+                        source_run_id=invalidation_decision.resume_point.run_id or "",
+                        artifact_count=len(prior_rec.artifact_ids or []),
+                        run_id=run_id,
+                        phase=rec.phase_name,
+                    )
+                )
 
         # Populate reused artifacts in report
         reused_entries = await self._reused_artifact_entries(invalidation_decision)
@@ -985,15 +1051,17 @@ class Pipeline:
                 run_id=run_id, manifest=manifest, pipeline_input=pipeline_input, previous=previous
             )
 
-            if ordinal in invalidation_decision.invalidated_phase_ordinals:
-                if not (invalidation_decision.reason and invalidation_decision.reason.startswith("prior-phase-incomplete")):
-                    chk_store = None
-                    try:
-                        chk_store = entry.runner.checkpoint_store
-                    except AttributeError:
-                        pass
-                    if isinstance(chk_store, PhaseCheckpointStore):
-                        await chk_store.clear_phase_checkpoints(entry.phase_key)
+            if (
+                ordinal in invalidation_decision.invalidated_phase_ordinals
+                and not (invalidation_decision.reason and invalidation_decision.reason.startswith("prior-phase-incomplete"))
+            ):
+                chk_store = None
+                try:
+                    chk_store = entry.runner.checkpoint_store
+                except AttributeError:
+                    pass
+                if isinstance(chk_store, PhaseCheckpointStore):
+                    await chk_store.clear_phase_checkpoints(entry.phase_key)
 
             record = records_by_ordinal.get(ordinal)
             if record is not None:
@@ -1022,15 +1090,69 @@ class Pipeline:
                 with use_event_emitter(phase_emitter):
                     collection: ArtifactCollection = await entry.runner.run(phase_input, context)
             except Exception as exc:
-                logger.exception("Phase %s failed: %s", phase_name, exc)
+                logger.exception("Phase %s failed", phase_name)
+                fail_time = datetime.now(UTC)
+                duration_sec = (
+                    (fail_time - record.started_at).total_seconds()
+                    if record and record.started_at
+                    else 0.0
+                )
                 if record is not None:
                     record.status = RunStatus.FAILED
-                    record.completed_at = datetime.now(UTC)
+                    record.completed_at = fail_time
                     record.notes["error"] = f"{type(exc).__name__}: {exc}"
                 manifest.status = RunStatus.FAILED
-                manifest.completed_at = datetime.now(UTC)
+                manifest.completed_at = fail_time
                 report.status = RunStatus.FAILED
                 report.completed_at = manifest.completed_at
+
+                total_run_duration = (
+                    (manifest.completed_at - report.started_at).total_seconds()
+                    if report.started_at and manifest.completed_at
+                    else duration_sec
+                )
+
+                phase_emitter.emit(
+                    ComponentCompleted(
+                        component_name=phase_name,
+                        duration_seconds=duration_sec,
+                        success=False,
+                        error_message=str(exc),
+                        phase=phase_name,
+                        run_id=run_id,
+                    )
+                )
+                phase_emitter.emit(
+                    PhaseCompleted(
+                        phase_name=phase_name,
+                        duration_seconds=duration_sec,
+                        artifact_count=0,
+                        success=False,
+                        error_message=str(exc),
+                        phase=phase_name,
+                        run_id=run_id,
+                    )
+                )
+                phase_emitter.emit(
+                    PhaseFailed(
+                        phase_name=phase_name,
+                        error_type=type(exc).__name__,
+                        error_message=str(exc),
+                        duration_seconds=duration_sec,
+                        phase=phase_name,
+                        run_id=run_id,
+                    )
+                )
+                self.event_emitter.emit(
+                    RunFailed(
+                        error_type=type(exc).__name__,
+                        error_message=str(exc),
+                        duration_seconds=total_run_duration,
+                        run_id=run_id,
+                    )
+                )
+                self.event_emitter.flush()
+                report.observer_telemetry = self.event_emitter.get_observer_telemetry()
                 if self.config.execution.persist_run_manifests:
                     self._manifest_store.write_manifest(manifest)
                 raise
@@ -1109,6 +1231,23 @@ class Pipeline:
         manifest.completed_at = datetime.now(UTC)
         report.status = RunStatus.COMPLETED
         report.completed_at = manifest.completed_at
+
+        total_run_duration = (
+            (manifest.completed_at - report.started_at).total_seconds()
+            if report.started_at and manifest.completed_at
+            else 0.0
+        )
+        total_artifacts = len(report.artifact_entries)
+
+        self.event_emitter.emit(
+            RunCompleted(
+                duration_seconds=total_run_duration,
+                total_artifacts=total_artifacts,
+                run_id=run_id,
+            )
+        )
+        self.event_emitter.flush()
+        report.observer_telemetry = self.event_emitter.get_observer_telemetry()
 
         if self.config.execution.persist_run_manifests:
             self._manifest_store.write_manifest(manifest)

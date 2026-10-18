@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Observability, Event Bus, Audit Trail, Langfuse Telemetry) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`events/`, `pipeline.py`, `runs/models.py`) |
 | **Priority** | **Medium** |
-| **Status** | `Open` |
+| **Status** | `Completed` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/event-system.md`](../../docs/architecture/event-system.md), [`docs/architecture/cross_cutting_concerns.md`](../../docs/architecture/cross_cutting_concerns.md), [`ADR-0012`](../../docs/adr/0012-phase-config-redesign-and-langfuse-integration.md), [`ADR-0019`](../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md) |
 
 ---
@@ -98,10 +98,10 @@ sequenceDiagram
 
 ## 4. Acceptance Criteria
 
-- [ ] When a phase raises an exception in `Pipeline._execute()`, `ComponentCompleted(success=False)` and `PhaseCompleted(success=False, error=...)` are emitted before the exception propagates.
-- [ ] Reused phases emit `PhaseReused` events carrying `source_run_id` and `artifact_count` to all registered observers.
-- [ ] `EventEmitter.flush()` is guaranteed to execute in a `finally` block at the end of every pipeline run (both completed and failed).
-- [ ] `SimpleEventEmitter` tracks observer exception counts and surfaces any dropped audit events in `RunReport`.
+- [x] When a phase raises an exception in `Pipeline._execute()`, `ComponentCompleted(success=False)` and `PhaseCompleted(success=False, error=...)` are emitted before the exception propagates.
+- [x] Reused phases emit `PhaseReused` events carrying `source_run_id` and `artifact_count` to all registered observers.
+- [x] `EventEmitter.flush()` is guaranteed to execute in a `finally` block at the end of every pipeline run (both completed and failed).
+- [x] `SimpleEventEmitter` tracks observer exception counts and surfaces any dropped audit events in `RunReport`.
 
 ---
 

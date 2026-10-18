@@ -26,10 +26,12 @@ except ImportError:
 
 from episteme_pipeline.events.bus import EventObserver
 from episteme_pipeline.events.models import (
+    PhaseFailed,
     PipelineEvent,
     ProgressAdvanced,
     ProgressCompleted,
     ProgressStarted,
+    RunFailed,
 )
 from episteme_pipeline.observability.logging import silence_noisy_loggers
 
@@ -225,14 +227,19 @@ class RichProgressObserver(EventObserver):
         elif isinstance(event, ProgressCompleted):
             task_id = self._tasks.get(event.task_name)
             if task_id is not None:
-                task = (
-                    self.progress._tasks.get(task_id)
-                    if hasattr(self.progress, "_tasks")
-                    else None
-                )
+                tasks_map = self.progress._tasks
+                task = tasks_map.get(task_id) if isinstance(tasks_map, dict) else None
                 if task is not None and task.total is not None:
                     self.progress.update(task_id, completed=task.total)
                 else:
                     self.progress.update(task_id, completed=None)
                 self.progress.refresh()
+
+        elif isinstance(event, (PhaseFailed, RunFailed)):
+            self.progress.refresh()
+
+    def flush(self) -> None:
+        """Refresh and flush the active Rich progress display."""
+        if self.progress is not None:
+            self.progress.refresh()
 

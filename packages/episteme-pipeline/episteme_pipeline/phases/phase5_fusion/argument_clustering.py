@@ -25,7 +25,6 @@ plugged in by subclassing ArgumentClustering and injecting the new implementatio
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
 from typing import Any
 
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom
@@ -212,13 +211,20 @@ class InterDocumentClusterVerifier:
         audit_rate: float = 0.02,
         prompt_bundle: StructuredPromptBundle | None = None,
         calibrator: ConformalCalibrator | None = None,
+        language: str | None = None,
     ) -> None:
         self.decision_engine = decision_engine
         self.confidence_threshold = confidence_threshold
         self.conformal_alpha = conformal_alpha
         self.audit_rate = audit_rate
-        self.prompt_bundle = prompt_bundle
+        self.prompt_bundle = prompt_bundle or StructuredPromptBundle(
+            direct_template=DECISION_THEORY_FUSION_QUESTION,
+            decision_template=DECISION_THEORY_FUSION_QUESTION,
+            decision_criteria=DECISION_THEORY_FUSION_CRITERIA,
+            name="theory_fusion",
+        )
         self.calibrator = calibrator
+        self.language = language
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic cluster verifier configuration.
@@ -236,6 +242,17 @@ class InterDocumentClusterVerifier:
             "confidence_threshold": self.confidence_threshold,
             "conformal_alpha": self.conformal_alpha,
             "audit_rate": self.audit_rate,
+            "language": self.language,
+            "prompt_bundle": (
+                self.prompt_bundle.fingerprint()
+                if isinstance(self.prompt_bundle, Fingerprintable)
+                else None
+            ),
+            "calibrator": (
+                self.calibrator.fingerprint()
+                if isinstance(self.calibrator, Fingerprintable)
+                else None
+            ),
             "decision_engine": (
                 self.decision_engine.fingerprint()
                 if isinstance(self.decision_engine, Fingerprintable)
@@ -250,6 +267,7 @@ class InterDocumentClusterVerifier:
         decision_engine: DecisionEngine,
         prompt_bundle: StructuredPromptBundle | None = None,
         calibrator: ConformalCalibrator | None = None,
+        language: str | None = None,
     ) -> InterDocumentClusterVerifier:
         """Construct InterDocumentClusterVerifier from configuration.
 
@@ -263,6 +281,8 @@ class InterDocumentClusterVerifier:
             Optional prompt bundle.
         calibrator : ConformalCalibrator or None, default None
             Optional pre-calibrated conformal prediction engine.
+        language : str or None, default None
+            Optional corpus language code ('de', 'en') for Mondrian calibration.
 
         Returns
         -------
@@ -274,13 +294,15 @@ class InterDocumentClusterVerifier:
             confidence_threshold=config.confidence_threshold,
             conformal_alpha=config.conformal_alpha,
             audit_rate=config.audit_rate,
-            prompt_bundle=prompt_bundle,
+            prompt_bundle=prompt_bundle or config.prompt_bundle,
             calibrator=calibrator,
+            language=language,
         )
 
     async def verify(
         self,
         cluster_nodes: list[TheoryAtom | L2Entity],
+        language: str | None = None,
     ) -> tuple[bool, float, list[str]]:
         """Verify semantic coherence and equivalence of an inter-document cluster.
 
@@ -288,6 +310,8 @@ class InterDocumentClusterVerifier:
         ----------
         cluster_nodes : list of (TheoryAtom or L2Entity)
             Candidate cluster nodes.
+        language : str or None, default None
+            Optional language code ('de', 'en') for Mondrian calibration.
 
         Returns
         -------
@@ -317,7 +341,12 @@ class InterDocumentClusterVerifier:
         )
 
         if self.calibrator is not None:
-            pred_set = self.calibrator.predict_set(score, alpha=self.conformal_alpha)
+            pred_set = self.calibrator.predict_set(
+                score,
+                alpha=self.conformal_alpha,
+                task_id="p5_fusion",
+                language=language or self.language,
+            )
         else:
             pred_set = score.prediction_set or ([str(score.selected_option)] if score.selected_option is not None else [])
 

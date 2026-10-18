@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Scientific Reproducibility, Conformal Prediction, Fingerprinting) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`decision/`, `runs/fingerprints.py`, `llm/cache.py`, `pipeline.py`) |
 | **Priority** | **High** |
-| **Status** | `Open` |
+| **Status** | `Completed` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/conformal_prediction.md`](../../docs/architecture/conformal_prediction.md), [`docs/architecture/constrained_decoding.md`](../../docs/architecture/constrained_decoding.md), [`docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md), [`ADR-0018`](../../docs/adr/0018-decision-engine-architecture-and-contracts.md), [`ADR-0019`](../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md), [`ADR-0020`](../../docs/adr/0020-propositional-modal-strength-resolver.md) |
 
 ---
@@ -86,10 +86,10 @@ $$\text{Audit}(X) = \mathbb{I}\big[u(X) < p_{\text{audit}}\big]$$
 
 ## 4. Acceptance Criteria
 
-- [ ] `ObservableDecisionEngine` uses a deterministic HMAC-SHA256 PRF keyed by `(seed, task_id, state_hash)` for `stochastic_audit`, producing identical audit selections under arbitrary async concurrency schedules.
-- [ ] `StructuredPromptBundle` implements `Fingerprintable` and is discovered automatically via `find_components(runner)`, removing the hardcoded 4-phase dictionary in `Pipeline._prompt_fingerprints()`.
-- [ ] `ConformalCalibrator` supports per-task and per-language (`de`/`en`) quantile lookup $\hat{q}_{t, \ell}$ and exposes its calibration state hash to `RunManifest.method_fingerprints`.
-- [ ] `DiskCachedStructuredLLM` includes `model_json_schema()` hash and decoding strategy (`direct_constrained` vs. `nl_to_format`) in its cache key.
+- [x] `ObservableDecisionEngine` uses a deterministic HMAC-SHA256 PRF keyed by `(seed, task_id, state_hash)` for `stochastic_audit`, producing identical audit selections under arbitrary async concurrency schedules.
+- [x] `StructuredPromptBundle` implements `Fingerprintable` and is discovered automatically via `find_components(runner)`, removing the hardcoded 4-phase dictionary in `Pipeline._prompt_fingerprints()`.
+- [x] `ConformalCalibrator` supports per-task and per-language (`de`/`en`) quantile lookup $\hat{q}_{t, \ell}$ and exposes its calibration state hash to `RunManifest.method_fingerprints`.
+- [x] `DiskCachedStructuredLLM` includes `model_json_schema()` hash and decoding strategy (`direct_constrained` vs. `nl_to_format`) in its cache key.
 
 ---
 

@@ -15,7 +15,6 @@ from episteme_pipeline.llm.structured import StructuredLLM, ensure_structured_ll
 from episteme_pipeline.post_processing.theoretical_enrichment.enrichment_models import (
     TheoryElementDefinition,
     TheoryInductionOutput,
-    TheoryLaw,
 )
 from episteme_pipeline.prompts.default_prompts import THEORY_INDUCTION_DIRECT_PROMPT
 from episteme_pipeline.prompts.models import StructuredPromptBundle
@@ -76,7 +75,13 @@ class LLMTheoryInducer:
         strategy: Any = "direct_constrained",
     ) -> None:
         self.llm: StructuredLLM = ensure_structured_llm(llm)
-        self.prompts = prompts or THEORY_INDUCTION_DIRECT_PROMPT
+        if isinstance(prompts, StructuredPromptBundle):
+            self.prompts: StructuredPromptBundle = prompts
+        else:
+            self.prompts = StructuredPromptBundle(
+                direct_template=prompts or THEORY_INDUCTION_DIRECT_PROMPT,
+                name="theory_induction",
+            )
         self.strategy = strategy
 
     def fingerprint(self) -> dict[str, Any]:

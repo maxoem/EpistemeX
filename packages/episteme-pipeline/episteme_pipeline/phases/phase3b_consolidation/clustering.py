@@ -93,11 +93,20 @@ class BorderlinePairVerifier:
         confidence_threshold: float = 0.80,
         conformal_alpha: float = 0.05,
         prompt_bundle: StructuredPromptBundle | None = None,
+        calibrator: Any = None,
+        language: str | None = None,
     ) -> None:
         self.decision_engine = decision_engine
         self.confidence_threshold = confidence_threshold
         self.conformal_alpha = conformal_alpha
-        self.prompt_bundle = prompt_bundle
+        self.prompt_bundle = prompt_bundle or StructuredPromptBundle(
+            direct_template="",
+            decision_template=DECISION_BORDERLINE_MERGE_QUESTION,
+            decision_criteria=DECISION_BORDERLINE_MERGE_CRITERIA,
+            name="borderline_merge",
+        )
+        self.calibrator = calibrator
+        self.language = language
 
     @classmethod
     def from_config(
@@ -105,6 +114,8 @@ class BorderlinePairVerifier:
         config: Any,
         decision_engine: DecisionEngine,
         prompt_bundle: StructuredPromptBundle | None = None,
+        calibrator: Any = None,
+        language: str | None = None,
     ) -> BorderlinePairVerifier:
         """Construct BorderlinePairVerifier from configuration.
 
@@ -116,6 +127,10 @@ class BorderlinePairVerifier:
             Calibrated decision engine.
         prompt_bundle : StructuredPromptBundle or None, default None
             Optional explicit prompt bundle override.
+        calibrator : ConformalCalibrator or None, default None
+            Optional conformal prediction calibrator.
+        language : str or None, default None
+            Optional corpus language code ('de', 'en') for Mondrian calibration.
 
         Returns
         -------
@@ -128,6 +143,8 @@ class BorderlinePairVerifier:
             confidence_threshold=config.confidence_threshold,
             conformal_alpha=config.conformal_alpha,
             prompt_bundle=bundle,
+            calibrator=calibrator,
+            language=language,
         )
 
     def fingerprint(self) -> dict[str, Any]:
@@ -145,6 +162,17 @@ class BorderlinePairVerifier:
             "class": self.__class__.__name__,
             "confidence_threshold": self.confidence_threshold,
             "conformal_alpha": self.conformal_alpha,
+            "language": self.language,
+            "prompt_bundle": (
+                self.prompt_bundle.fingerprint()
+                if isinstance(self.prompt_bundle, Fingerprintable)
+                else None
+            ),
+            "calibrator": (
+                self.calibrator.fingerprint()
+                if isinstance(self.calibrator, Fingerprintable)
+                else None
+            ),
             "decision_engine": (
                 self.decision_engine.fingerprint()
                 if isinstance(self.decision_engine, Fingerprintable)
@@ -158,6 +186,7 @@ class BorderlinePairVerifier:
         entity_b: L2Entity,
         relation_signatures_a: set[str] | None = None,
         relation_signatures_b: set[str] | None = None,
+        language: str | None = None,
     ) -> tuple[str, float, list[str]]:
         """Verify whether candidate pair (entity_a, entity_b) should be merged.
 
@@ -171,6 +200,8 @@ class BorderlinePairVerifier:
             1-hop relation signatures for entity A.
         relation_signatures_b : set of str or None, default None
             1-hop relation signatures for entity B.
+        language : str or None, default None
+            Optional language override ('de', 'en') for Mondrian calibration.
 
         Returns
         -------
@@ -205,7 +236,15 @@ class BorderlinePairVerifier:
         )
 
         selected = str(score.selected_option) if score.selected_option is not None else "DISTINCT_SEPARATE"
-        pred_set = score.prediction_set or [selected]
+        if self.calibrator is not None:
+            pred_set = self.calibrator.predict_set(
+                score,
+                alpha=self.conformal_alpha,
+                task_id="p3b_merge",
+                language=language or self.language,
+            )
+        else:
+            pred_set = score.prediction_set or [selected]
         emp_acc = score.empirical_accuracy
 
         is_singleton_identical = (pred_set == ["IDENTICAL_MERGE"])

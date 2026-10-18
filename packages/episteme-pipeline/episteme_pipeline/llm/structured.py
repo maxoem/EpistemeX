@@ -258,9 +258,16 @@ async def execute_nl_to_format[ModelT: BaseModel](
     Recursion is bounded: pass 2 always requests ``DIRECT``, which never routes
     back here.
     """
-    reasoning_prompt = getattr(prompt_bundle, "reasoning_template", None)
-    format_prompt = getattr(prompt_bundle, "format_template", None)
-    direct_prompt = getattr(prompt_bundle, "direct_template", prompt_bundle)
+    from episteme_pipeline.prompts.models import StructuredPromptBundle
+
+    if isinstance(prompt_bundle, StructuredPromptBundle):
+        reasoning_prompt = prompt_bundle.reasoning_template
+        format_prompt = prompt_bundle.format_template
+        direct_target: Any = prompt_bundle
+    else:
+        reasoning_prompt = getattr(prompt_bundle, "reasoning_template", None)
+        format_prompt = getattr(prompt_bundle, "format_template", None)
+        direct_target = getattr(prompt_bundle, "direct_template", prompt_bundle)
 
     async def _direct(target: Any) -> ModelT:
         return await llm.predict_structured(
@@ -277,7 +284,7 @@ async def execute_nl_to_format[ModelT: BaseModel](
             "Prompt bundle for %s carries no two-pass templates; decoding directly.",
             output_cls.__name__,
         )
-        return await _direct(direct_prompt)
+        return await _direct(direct_target)
 
     try:
         reasoning_text = await llm.predict_text(
@@ -290,10 +297,15 @@ async def execute_nl_to_format[ModelT: BaseModel](
             type(exc).__name__,
             exc,
         )
-        return await _direct(direct_prompt)
+        return await _direct(direct_target)
 
     prompt_args["reasoning_text"] = reasoning_text
-    return await _direct(format_prompt)
+    format_target = (
+        prompt_bundle.model_copy(update={"direct_template": format_prompt})
+        if isinstance(prompt_bundle, StructuredPromptBundle)
+        else format_prompt
+    )
+    return await _direct(format_target)
 
 
 @dataclass(frozen=True)

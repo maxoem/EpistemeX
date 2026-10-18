@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
+from enum import Enum
 from pathlib import Path
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
 from episteme_pipeline.llm.structured import StructuredLLM
+from episteme_pipeline.prompts.models import StructuredPromptBundle
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.runs.fingerprints import fingerprint_method, stable_fingerprint
 
 logger = logging.getLogger(__name__)
@@ -19,7 +22,7 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 #: Bumped whenever a change to this module makes previously written entries
 #: unsafe to reuse. It is part of the key, so a bump invalidates the whole cache
 #: without anyone having to remember to delete the directory.
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 
 #: Default cache location. The composition root passes
 #: a directory derived from ``ExecutionConfig.runs_dir`` — see
@@ -60,7 +63,7 @@ class DiskCachedStructuredLLM(StructuredLLM):
         """
         base_fp = (
             self.base_llm.fingerprint()
-            if hasattr(self.base_llm, "fingerprint") and callable(self.base_llm.fingerprint)
+            if isinstance(self.base_llm, Fingerprintable)
             else fingerprint_method(self._llm_method)
         )
         return {
@@ -78,21 +81,28 @@ class DiskCachedStructuredLLM(StructuredLLM):
         *,
         strategy: Any = None,
         llm_kwargs: dict[str, Any] | None = None,
+        schema_json_hash: str | None = None,
+        prompt_bundle_hash: str | None = None,
     ) -> Path:
         """Key on everything that can change the response.
 
-        ``strategy`` and ``llm_kwargs`` were previously absent from the key, so
-        a NL_TO_FORMAT call and a DIRECT call with the same prompt collided, and
-        re-running at a different temperature or token limit returned the
-        earlier run's answer (F-10).
+        Includes model method fingerprint, strategy, schema hash, prompt text,
+        bundle hash, inputs, and generation hyperparameters.
         """
+        strategy_str = strategy.value if isinstance(strategy, Enum) else str(strategy)
+        prompt_str = (
+            prompt.direct_template
+            if isinstance(prompt, StructuredPromptBundle)
+            else str(prompt)
+        )
         payload = {
             "cache_version": CACHE_VERSION,
             "method": self._method_fp,
-            "strategy": str(getattr(strategy, "value", strategy)),
+            "strategy": strategy_str,
             "output_schema": output_schema,
-            # If the prompt is a LlamaIndex PromptTemplate, get its string source
-            "prompt": getattr(prompt, "template", str(prompt)),
+            "schema_json_hash": schema_json_hash,
+            "prompt": prompt_str,
+            "prompt_bundle_hash": prompt_bundle_hash,
             "args": {k: str(v) for k, v in prompt_args.items()},
             "llm_kwargs": {k: str(v) for k, v in sorted((llm_kwargs or {}).items())},
         }
@@ -117,15 +127,11 @@ class DiskCachedStructuredLLM(StructuredLLM):
                 from episteme_pipeline.events.context import get_event_emitter
                 from episteme_pipeline.events.models import LLMGenerationCompleted
 
-                rendered_prompt = (
-                    prompt.format(llm=self.base_llm, **prompt_args)
-                    if hasattr(prompt, "format")
-                    else str(prompt).format(**prompt_args)
-                )
+                rendered_prompt = self._render_prompt_text(prompt, prompt_args)
                 get_event_emitter().emit(
                     LLMGenerationCompleted(
                         model_name=self._method_fp,
-                        prompt=str(rendered_prompt),
+                        prompt=rendered_prompt,
                         output_text=text_result,
                         output_json=None,
                         prompt_tokens=0,
@@ -152,6 +158,18 @@ class DiskCachedStructuredLLM(StructuredLLM):
 
         return result
 
+    def _render_prompt_text(self, prompt: Any, prompt_args: dict[str, Any]) -> str:
+        """Render prompt template with arguments for observability events."""
+        template_str = (
+            prompt.direct_template
+            if isinstance(prompt, StructuredPromptBundle)
+            else str(prompt)
+        )
+        try:
+            return template_str.format(llm=self.base_llm, **prompt_args)
+        except (KeyError, IndexError, ValueError, TypeError):
+            return template_str
+
     async def predict_structured(
         self,
         output_cls: type[ModelT],
@@ -172,7 +190,22 @@ class DiskCachedStructuredLLM(StructuredLLM):
                 self, output_cls, prompt_bundle, fallback_behavior, llm_kwargs, **prompt_args
             )
 
-        prompt = getattr(prompt_bundle, "direct_template", prompt_bundle)
+        prompt = (
+            prompt_bundle.direct_template
+            if isinstance(prompt_bundle, StructuredPromptBundle)
+            else prompt_bundle
+        )
+        schema_json_hash = (
+            stable_fingerprint(output_cls.model_json_schema())
+            if isinstance(output_cls, type) and issubclass(output_cls, BaseModel)
+            else None
+        )
+        prompt_bundle_hash = (
+            stable_fingerprint(prompt_bundle.fingerprint())
+            if isinstance(prompt_bundle, Fingerprintable)
+            else None
+        )
+
         cache_path = self._get_cache_path(
             "struct",
             output_cls.__name__,
@@ -180,6 +213,8 @@ class DiskCachedStructuredLLM(StructuredLLM):
             prompt_args,
             strategy=strategy,
             llm_kwargs=llm_kwargs,
+            schema_json_hash=schema_json_hash,
+            prompt_bundle_hash=prompt_bundle_hash,
         )
 
         if cache_path.exists():
@@ -190,15 +225,11 @@ class DiskCachedStructuredLLM(StructuredLLM):
                 from episteme_pipeline.events.context import get_event_emitter
                 from episteme_pipeline.events.models import LLMGenerationCompleted
 
-                rendered_prompt = (
-                    prompt.format(llm=self.base_llm, **prompt_args)
-                    if hasattr(prompt, "format")
-                    else str(prompt).format(**prompt_args)
-                )
+                rendered_prompt = self._render_prompt_text(prompt, prompt_args)
                 get_event_emitter().emit(
                     LLMGenerationCompleted(
                         model_name=self._method_fp,
-                        prompt=str(rendered_prompt),
+                        prompt=rendered_prompt,
                         output_text=json.dumps(data, ensure_ascii=False),
                         output_json=data,
                         prompt_tokens=0,

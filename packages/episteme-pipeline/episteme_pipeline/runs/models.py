@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -101,6 +102,7 @@ class RunReport(BaseModel):
     invalidated_phase_ordinals: list[int] = Field(default_factory=list)
     invalidation_reason: str | None = None
     artifact_entries: list[ArtifactReportEntry] = Field(default_factory=list)
+    observer_telemetry: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExecutionResult(BaseModel):

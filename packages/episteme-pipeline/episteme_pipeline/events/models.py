@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class UnlinkableMentionError(Exception):
@@ -340,6 +340,99 @@ class FusionDecisionMade(BaseEvent):
 
 
 # Performance and metrics events
+class PhaseReused(BaseEvent):
+    """A phase's artifacts were reused from a prior run.
+
+    Attributes
+    ----------
+    phase_name : str
+        Name of the reused phase.
+    source_run_id : str
+        ID of the prior run supplying the artifacts.
+    artifact_count : int
+        Number of artifacts hydrated / reused.
+    """
+
+    phase_name: str
+    source_run_id: str
+    artifact_count: int
+
+
+class PhaseFailed(BaseEvent):
+    """A pipeline phase failed with an exception.
+
+    Attributes
+    ----------
+    phase_name : str
+        Name of the failed phase.
+    error_type : str
+        Class name of the exception.
+    error_message : str
+        String representation of the exception.
+    duration_seconds : float, default 0.0
+        Duration of the phase until failure in seconds.
+    """
+
+    phase_name: str
+    error_type: str
+    error_message: str
+    duration_seconds: float = 0.0
+
+
+class RunStarted(BaseEvent):
+    """A pipeline run started execution.
+
+    Attributes
+    ----------
+    parent_run_id : str, optional
+        Parent run ID if resuming/forking.
+    reused_phase_ordinals : list of int
+        Ordinals of phases reused from prior runs.
+    invalidated_phase_ordinals : list of int
+        Ordinals of phases invalidated and scheduled to run.
+    invalidation_reason : str, optional
+        Reason for phase invalidation.
+    """
+
+    parent_run_id: str | None = None
+    reused_phase_ordinals: list[int] = Field(default_factory=list)
+    invalidated_phase_ordinals: list[int] = Field(default_factory=list)
+    invalidation_reason: str | None = None
+
+
+class RunCompleted(BaseEvent):
+    """A pipeline run completed successfully.
+
+    Attributes
+    ----------
+    duration_seconds : float, default 0.0
+        Total run duration in seconds.
+    total_artifacts : int, default 0
+        Total number of artifacts in the run.
+    """
+
+    duration_seconds: float = 0.0
+    total_artifacts: int = 0
+
+
+class RunFailed(BaseEvent):
+    """A pipeline run failed.
+
+    Attributes
+    ----------
+    error_type : str
+        Exception class name.
+    error_message : str
+        Exception message.
+    duration_seconds : float, default 0.0
+        Duration until failure in seconds.
+    """
+
+    error_type: str
+    error_message: str
+    duration_seconds: float = 0.0
+
+
 class PhaseCompleted(BaseEvent):
     """A pipeline phase completed.
     
@@ -358,11 +451,13 @@ class PhaseCompleted(BaseEvent):
     error_message : str, optional
         Error message if the phase failed.
     """
+    model_config = ConfigDict(populate_by_name=True)
+
     phase_name: str
     duration_seconds: float
     artifact_count: int
     success: bool
-    error_message: str | None = None
+    error_message: str | None = Field(default=None, alias="error")
 
 
 class ComponentStarted(BaseEvent):
@@ -399,11 +494,13 @@ class ComponentCompleted(BaseEvent):
     error_message : str, optional
         Error message if the component failed.
     """
+    model_config = ConfigDict(populate_by_name=True)
+
     component_name: str
     duration_seconds: float
     output_description: str | None = None
     success: bool
-    error_message: str | None = None
+    error_message: str | None = Field(default=None, alias="error")
 
 
 class LLMDurationMeasured(BaseEvent):
@@ -801,7 +898,8 @@ PipelineEvent = (
     EntityProcessed |
     DenseCandidatesGenerated | RerankerScoreAssigned |
     CandidateRejectedByThreshold | LLMRelationDecoded | SchemaValidationRejectedRelation |
-    TripleCommitted | FusionDecisionMade | PhaseCompleted | ComponentStarted |
+    TripleCommitted | FusionDecisionMade | PhaseCompleted | PhaseReused | PhaseFailed |
+    RunStarted | RunCompleted | RunFailed | ComponentStarted |
     ComponentCompleted | LLMDurationMeasured | LLMGenerationCompleted | EmbeddingGenerationCompleted | ArtifactProjected | ChunksGenerated |
     EntityLinkingCandidatesRetrieved | EntityLinkingReranked | EntityMaturationSynthesized |
     EnvelopeInjectionAttempted | EnvelopeInjectionFailed |
