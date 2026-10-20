@@ -29,10 +29,16 @@ from episteme_pipeline.phases.phase4_argument_mining.pairing import (
 )
 from episteme_pipeline.protocols.argument_mining import ARCClassifier
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
-from episteme_pipeline.protocols.graph_store import GraphReader
+from episteme_pipeline.protocols.graph_store import GraphReader, PhaseCheckpointStore
+from episteme_pipeline.runtime.batch_executor import CheckpointedBatchExecutor
 from episteme_pipeline.schema.default_schema import SchemaConfig
 from episteme_pipeline.utils import format_envelope
-from episteme_pipeline.utils.similarity import cosine_similarity_matrix
+from episteme_pipeline.utils.similarity import (
+    cosine_similarity_matrix,
+    csls_similarity_matrix,
+    dynamic_k_effective,
+    z_score_normalize,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +61,13 @@ class TAGARCClassifier(ARCClassifier):
         subgraph_depth: int = 2,
         max_candidates_per_component: int = 10,
         use_priority_rank: bool = False,
+        use_csls: bool = True,
+        csls_k_nearest: int = 10,
+        use_adaptive_k: bool = True,
+        adaptive_k_gamma: float = 2.0,
+        adaptive_k_min: int = 2,
+        z_score_threshold: float | None = None,
+        batch_size: int = 20,
     ) -> None:
         """
         Initialize the TAGARCClassifier.
@@ -77,6 +90,18 @@ class TAGARCClassifier(ARCClassifier):
             The max number of cross-chunk partners per component, by default 10.
         use_priority_rank : bool, optional
             If True, falls back to epistemic rank instead of embeddings, by default False.
+        use_csls : bool, default True
+            Whether to use Cross-Domain Similarity Local Scaling.
+        csls_k_nearest : int, default 10
+            Neighborhood size for CSLS local scaling.
+        use_adaptive_k : bool, default True
+            Whether to dynamically scale candidate degree K_eff with sqrt(N).
+        adaptive_k_gamma : float, default 2.0
+            Scaling multiplier for dynamic K_eff.
+        adaptive_k_min : int, default 2
+            Minimum candidate degree cap.
+        z_score_threshold : float | None, optional
+            Optional standardized z-score cutoff for candidate pairs.
         """
         self.llm = ensure_structured_llm(llm)
         self.embedding_model = embedding_model
@@ -86,6 +111,13 @@ class TAGARCClassifier(ARCClassifier):
         self.subgraph_depth = subgraph_depth
         self.max_candidates_per_component = max_candidates_per_component
         self.use_priority_rank = use_priority_rank
+        self.use_csls = use_csls
+        self.csls_k_nearest = csls_k_nearest
+        self.use_adaptive_k = use_adaptive_k
+        self.adaptive_k_gamma = adaptive_k_gamma
+        self.adaptive_k_min = adaptive_k_min
+        self.z_score_threshold = z_score_threshold
+        self.batch_size = max(1, batch_size)
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic TAG ARC classifier configuration.
@@ -107,6 +139,12 @@ class TAGARCClassifier(ARCClassifier):
             "subgraph_depth": self.subgraph_depth,
             "max_candidates_per_component": self.max_candidates_per_component,
             "use_priority_rank": self.use_priority_rank,
+            "use_csls": self.use_csls,
+            "csls_k_nearest": self.csls_k_nearest,
+            "use_adaptive_k": self.use_adaptive_k,
+            "adaptive_k_gamma": self.adaptive_k_gamma,
+            "adaptive_k_min": self.adaptive_k_min,
+            "z_score_threshold": self.z_score_threshold,
             "llm": fingerprint_method(self.llm),
             "embedding_model": fingerprint_method(self.embedding_model),
         }
@@ -184,19 +222,31 @@ class TAGARCClassifier(ARCClassifier):
         if not pairs:
             return []
         effective_schema = schema or SchemaConfig()
-        tasks = [
-            self._classify_pair(a, b, graph_store, effective_schema, global_extractor=global_extractor)
-            for a, b in pairs
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        checkpoint_store = (
+            graph_store if isinstance(graph_store, PhaseCheckpointStore) else None
+        )
 
-        global_relations: list[TheoryRelation] = []
-        for (a, b), result in zip(pairs, results):
-            if isinstance(result, Exception):
-                logger.error("ARC pair (%s, %s) failed: %s", a.id, b.id, result)
-                continue
-            if result is not None:
-                global_relations.append(result)
+        async def _eval_pair(pair: tuple[TheoryAtom, TheoryAtom]) -> TheoryRelation | None:
+            return await self._classify_pair(
+                pair[0],
+                pair[1],
+                graph_store,
+                effective_schema,
+                global_extractor=global_extractor,
+            )
+
+        executor = CheckpointedBatchExecutor[
+            tuple[TheoryAtom, TheoryAtom], TheoryRelation
+        ](
+            checkpoint_store=checkpoint_store,
+            phase_tag="phase4_arc",
+            batch_size=self.batch_size,
+            item_key_fn=lambda pair: f"arc::{min(pair[0].id, pair[1].id)}::{max(pair[0].id, pair[1].id)}",
+            process_item_fn=_eval_pair,
+            guard_systematic_failure=False,
+        )
+        res = await executor.execute(pairs)
+        global_relations = res.outputs
 
         logger.info(
             "ARC: extracted %d global argument relations for %d evaluated pairs",
@@ -278,9 +328,29 @@ class TAGARCClassifier(ARCClassifier):
         texts = [c.text for c in components]
         embeddings = await self.embedding_model.aget_text_embedding_batch(texts)
         
-        sim_matrix = cosine_similarity_matrix(np.array(embeddings))
+        vectors = np.array(embeddings)
+        if self.use_csls:
+            sim_matrix = csls_similarity_matrix(vectors, k_nearest=self.csls_k_nearest)
+        else:
+            sim_matrix = cosine_similarity_matrix(vectors)
         
         num_comp = len(components)
+        if self.use_adaptive_k:
+            k_eff = dynamic_k_effective(
+                n=num_comp,
+                k_min=self.adaptive_k_min,
+                k_max=self.max_candidates_per_component,
+                gamma=self.adaptive_k_gamma,
+            )
+        else:
+            k_eff = self.max_candidates_per_component
+
+        z_scores = (
+            z_score_normalize(sim_matrix, symmetric=True)
+            if self.z_score_threshold is not None
+            else None
+        )
+
         i_indices, j_indices = np.triu_indices(num_comp, k=1)
         similarities = sim_matrix[i_indices, j_indices]
         
@@ -295,13 +365,17 @@ class TAGARCClassifier(ARCClassifier):
             if a.source_chunk_id == b.source_chunk_id:
                 continue
                 
+            if self.z_score_threshold is not None and z_scores is not None:
+                if z_scores[i, j] < self.z_score_threshold:
+                    continue
+
             key = (min(a.id, b.id), max(a.id, b.id))
             if key in seen:
                 continue
                 
             if (
-                partner_count[a.id] >= self.max_candidates_per_component
-                or partner_count[b.id] >= self.max_candidates_per_component
+                partner_count[a.id] >= k_eff
+                or partner_count[b.id] >= k_eff
             ):
                 continue
                 

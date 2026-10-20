@@ -20,8 +20,14 @@ from episteme_pipeline.phases.phase3b_consolidation.clustering import (
 from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.fusion import InstanceFusion
 from episteme_pipeline.protocols.graph_store import FusionGraph
-from episteme_pipeline.utils.graph_algorithms import union_find_components
-from episteme_pipeline.utils.similarity import cosine_similarity_matrix
+from episteme_pipeline.utils.graph_algorithms import (
+    clique_constrained_components,
+    union_find_components,
+)
+from episteme_pipeline.utils.similarity import (
+    cosine_similarity_matrix,
+    csls_similarity_matrix,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,12 +71,20 @@ class LatentGraphConsolidation(InstanceFusion):
         enable_jev_cluster_verification: bool = False,
         merge_confidence_threshold: float = 0.80,
         conformal_merge_alpha: float = 0.05,
+        use_csls: bool = True,
+        csls_k_nearest: int = 10,
+        min_internal_similarity: float = 0.70,
+        max_diameter: float | None = None,
     ) -> None:
         self.embedding_model = embedding_model
         self.dense_similarity_threshold = dense_similarity_threshold
         self.relation_overlap_threshold = relation_overlap_threshold
         self.borderline_similarity_lower = borderline_similarity_lower
         self.borderline_similarity_upper = borderline_similarity_upper
+        self.use_csls = use_csls
+        self.csls_k_nearest = csls_k_nearest
+        self.min_internal_similarity = min_internal_similarity
+        self.max_diameter = max_diameter
 
         if verifier is not None:
             self.verifier = verifier
@@ -130,6 +144,10 @@ class LatentGraphConsolidation(InstanceFusion):
             borderline_similarity_upper=config.verification.similarity_upper,
             verifier=verifier,
             canonical_elector=canonical_elector,
+            use_csls=config.use_csls,
+            csls_k_nearest=config.csls_k_nearest,
+            min_internal_similarity=config.min_internal_similarity,
+            max_diameter=config.max_diameter,
         )
 
     async def _get_relations_for_entity(self, entity_id: str, graph_store: FusionGraph) -> set[str]:
@@ -213,7 +231,10 @@ class LatentGraphConsolidation(InstanceFusion):
         embeddings_list = await self.embedding_model.aget_text_embedding_batch(texts)
         embeddings = np.array(embeddings_list)
 
-        sim_matrix = cosine_similarity_matrix(embeddings)
+        if self.use_csls:
+            sim_matrix = csls_similarity_matrix(embeddings, k_nearest=self.csls_k_nearest)
+        else:
+            sim_matrix = cosine_similarity_matrix(embeddings)
 
         n = len(entities)
         edges = []
@@ -255,8 +276,14 @@ class LatentGraphConsolidation(InstanceFusion):
                     if is_singleton or is_high_conf:
                         edges.append((i, j))
 
-        # 4. Cluster connected components
-        clusters = union_find_components(n, edges)
+        # 4. Cluster connected components with clique constraints to prevent single-linkage chaining
+        clusters = clique_constrained_components(
+            n,
+            edges,
+            sim_matrix,
+            min_internal_similarity=self.min_internal_similarity,
+            max_diameter=self.max_diameter,
+        )
 
         # 5. Build fused map
         fused_map: dict[str, str] = {}

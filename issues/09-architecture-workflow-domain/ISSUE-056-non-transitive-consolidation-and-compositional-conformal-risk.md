@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Uncertainty Propagation, Clustering Topology, Statistical Guarantees) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`phases/phase3b_consolidation/`, `phases/phase5_fusion/`, `decision/conformal.py`) |
 | **Priority** | **Medium** |
-| **Status** | `Open` |
+| **Status** | `Resolved` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/conformal_prediction.md`](../../docs/architecture/conformal_prediction.md), [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0003`](../../docs/adr/0003-coreference-absorbed-into-fusion.md), [`ADR-0005`](../../docs/adr/0005-two-pass-fusion-strategy.md), [`ADR-0018`](../../docs/adr/0018-decision-engine-architecture-and-contracts.md) |
 
 ---
@@ -47,5 +47,5 @@
 
 ## 4. Acceptance Criteria
 
-- [ ] Phase 3b and Phase 5 enforce diameter / minimum-internal-similarity constraints during cluster formation instead of unconstrained transitive Union-Find.
-- [ ] `DecisionEngineConfig` supports per-phase / per-task $\alpha_m$ allocation derived from a global pipeline risk budget $\alpha_{\text{global}}$.
+- [x] Phase 3b and Phase 5 enforce diameter / minimum-internal-similarity constraints during cluster formation instead of unconstrained transitive Union-Find.
+- [x] `DecisionEngineConfig` supports per-phase / per-task $\alpha_m$ allocation derived from a global pipeline risk budget $\alpha_{\text{global}}$.

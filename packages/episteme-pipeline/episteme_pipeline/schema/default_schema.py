@@ -229,6 +229,23 @@ class SchemaConfig(BaseModel):
         """
         return self.relation_polarities.get(relation_type, self.relation_polarities.get(relation_type.upper(), 0)) < 0
 
+    def is_dialectical_relation(self, relation_type: str) -> bool:
+        """Check whether a relation type has non-zero dialectical polarity (+1 or -1).
+
+        Parameters
+        ----------
+        relation_type : str
+            Relation type to evaluate.
+
+        Returns
+        -------
+        bool
+            True if relation has non-zero polarity.
+        """
+        return self.relation_polarities.get(
+            relation_type, self.relation_polarities.get(relation_type.upper(), 0)
+        ) != 0
+
     def resolve_relation_type(self, candidate: str) -> str | None:
         """Resolve a candidate relation name or dialectical stance to a configured argument relation.
 

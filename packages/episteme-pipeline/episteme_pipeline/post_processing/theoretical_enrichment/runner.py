@@ -52,8 +52,9 @@ from episteme_pipeline.post_processing.theoretical_enrichment.projectors import 
 from episteme_pipeline.post_processing.theoretical_enrichment.solvers import (
     TenabilitySolver,
 )
-from episteme_pipeline.protocols.graph_store import ProjectionGraph
+from episteme_pipeline.protocols.graph_store import PhaseCheckpointStore, ProjectionGraph
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
+from episteme_pipeline.runtime.batch_executor import CheckpointedBatchExecutor
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
@@ -260,47 +261,85 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         cluster_theory_params: dict[tuple[str, str], dict[str, Any]] = {}
         cluster_local_results: dict[tuple[str, str], tuple[float, float, list[str]]] = {}
 
-        for cluster in clusters:
-            for theory_id in cluster.claimant_theory_ids:
-                theory = self.registry.get(theory_id)
-                if not theory:
-                    continue
+        checkpoint_store = (
+            self.graph_store
+            if isinstance(self.graph_store, PhaseCheckpointStore)
+            else None
+        )
+        effective_phase = (
+            f"{self.phase_key}:{context.lineage_fingerprint}"
+            if context and context.lineage_fingerprint
+            else self.phase_key
+        )
 
-                # Step 2: Project cluster through the theory-specific lens (Phi_spec)
-                projected_params = await self.projector.aproject(cluster, theory)
-                cluster_theory_params[(cluster.cluster_id, theory_id)] = projected_params
+        eval_items: list[tuple[EmpiricalCluster, str]] = [
+            (cluster, theory_id)
+            for cluster in clusters
+            for theory_id in cluster.claimant_theory_ids
+            if self.registry.get(theory_id) is not None
+        ]
 
+        async def _eval_cluster_theory(
+            item: tuple[EmpiricalCluster, str],
+        ) -> tuple[str, str, dict[str, Any], tuple[float, float, list[str]]]:
+            cluster, theory_id = item
+            theory = self.registry.get(theory_id)
+            assert theory is not None
+            projected_params = await self.projector.aproject(cluster, theory)
+            ts_local, delta_star, local_anomalies = self.solver.solve_local_tenability(
+                projected_params, theory
+            )
+            return (
+                cluster.cluster_id,
+                theory_id,
+                projected_params,
+                (ts_local, delta_star, local_anomalies),
+            )
+
+        async def _on_enrichment_batch(
+            batch_results: list[
+                tuple[str, str, dict[str, Any], tuple[float, float, list[str]]]
+            ],
+            records: list[PhaseItemRecord],
+        ) -> None:
+            for cluster_id, theory_id, params, local_res in batch_results:
+                cluster_theory_params[(cluster_id, theory_id)] = params
+                cluster_local_results[(cluster_id, theory_id)] = local_res
                 self.event_emitter.emit(
                     TheoreticalParametersProjected(
                         run_id=context.run_id,
                         phase=self.name,
-                        cluster_id=cluster.cluster_id,
+                        cluster_id=cluster_id,
                         theory_id=theory_id,
-                        parameters=projected_params,
+                        parameters=params,
                     )
                 )
-
-                # Step 3: Local Tenability Calculation (TS_local)
-                ts_local, delta_star, local_anomalies = self.solver.solve_local_tenability(
-                    projected_params, theory
-                )
-                cluster_local_results[(cluster.cluster_id, theory_id)] = (
-                    ts_local,
-                    delta_star,
-                    local_anomalies,
-                )
-
+                ts_local, delta_star, local_anomalies = local_res
                 for anom in local_anomalies:
                     self.event_emitter.emit(
                         TenabilityAnomalyDetected(
                             run_id=context.run_id,
                             phase=self.name,
-                            element_id=cluster.cluster_id,
+                            element_id=cluster_id,
                             theory_id=theory_id,
                             score=ts_local,
                             reason=anom,
                         )
                     )
+
+        executor = CheckpointedBatchExecutor[
+            tuple[EmpiricalCluster, str],
+            tuple[str, str, dict[str, Any], tuple[float, float, list[str]]],
+        ](
+            checkpoint_store=checkpoint_store,
+            phase_tag=effective_phase,
+            batch_size=10,
+            item_key_fn=lambda it: f"enrichment::{it[0].cluster_id}::{it[1]}",
+            process_item_fn=_eval_cluster_theory,
+            on_batch_complete=_on_enrichment_batch,
+            guard_systematic_failure=False,
+        )
+        await executor.execute(eval_items)
 
         # -------------------------------------------------------------
         # Step 4: Edge Tenability & Aggregated Consistency (TS_edge, GL)

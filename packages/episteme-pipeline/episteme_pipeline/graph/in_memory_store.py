@@ -76,6 +76,7 @@ class InMemoryGraphStore(ProcessingGraph):
         self._generic_relations: list[dict[str, Any]] = []
         self._processed_chunks: dict[str, set[str]] = {}  # chunk_id -> set of phase tags
         self._processed_items: dict[str, dict[str, PhaseItemRecord]] = {}
+        self._chunk_snapshots: dict[tuple[str, str], dict[str, Any]] = {}
         self._nodes: dict[str, dict[str, Any]] = {}
         self._embeddings: dict[str, list[float]] = {}
         self._node_run_ids: dict[str, str] = {}
@@ -652,8 +653,64 @@ class InMemoryGraphStore(ProcessingGraph):
         for record in items:
             phase_items[record.key] = record
 
+    async def commit_phase_items(
+        self, phase: str, items: list[PhaseItemRecord]
+    ) -> None:
+        """Persist phase item checkpoints without requiring triple upserts.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        items : list[PhaseItemRecord]
+            Phase item checkpoint records to persist.
+        """
+        phase_items = self._processed_items.setdefault(phase, {})
+        for record in items:
+            phase_items[record.key] = record
+
+    async def save_chunk_state_snapshot(
+        self, phase: str, chunk_id: str, snapshot: dict[str, Any]
+    ) -> None:
+        """Persist a serialized state machine snapshot associated with a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+        snapshot : dict[str, Any]
+            State dictionary snapshot.
+        """
+        self._chunk_snapshots[(phase, chunk_id)] = dict(snapshot)
+
+    async def get_chunk_state_snapshot(
+        self, phase: str, chunk_id: str
+    ) -> dict[str, Any] | None:
+        """Retrieve a prior serialized state machine snapshot for a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+
+        Returns
+        -------
+        dict[str, Any] or None
+            Restored state snapshot, or None if no prior snapshot was recorded.
+        """
+        snapshot = self._chunk_snapshots.get((phase, chunk_id))
+        return dict(snapshot) if snapshot is not None else None
+
     async def clear_phase_checkpoints(self, phase: str) -> None:
         if phase in self._processed_items:
             del self._processed_items[phase]
+        keys_to_del = [k for k in self._chunk_snapshots if k[0] == phase]
+        for k in keys_to_del:
+            del self._chunk_snapshots[k]
         for tags in self._processed_chunks.values():
             tags.discard(phase)
+

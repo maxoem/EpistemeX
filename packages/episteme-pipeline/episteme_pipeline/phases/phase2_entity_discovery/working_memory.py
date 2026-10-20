@@ -134,14 +134,35 @@ class JsonPatchWorkingMemoryState(WorkingMemoryState):
         """
         return dict(self._state)
 
+    def load_raw_state(self, state: dict[str, Any]) -> None:
+        """
+        Restore raw state variables from snapshot dictionary.
+
+        Parameters
+        ----------
+        state : dict[str, Any]
+            State dictionary to restore.
+        """
+        self._state = dict(state)
+
+
 
 class PydanticWorkingMemoryState(WorkingMemoryState):
     """
     Pydantic-backed state machine implementation of WorkingMemoryState.
     """
 
-    def __init__(self, initial_schema: WorkingMemorySchema | None = None) -> None:
-        self._schema = initial_schema or WorkingMemorySchema()
+    def __init__(
+        self,
+        initial_schema: WorkingMemorySchema | None = None,
+        initial_state: dict[str, Any] | None = None,
+    ) -> None:
+        if initial_schema is not None:
+            self._schema = initial_schema
+        elif initial_state is not None:
+            self._schema = WorkingMemorySchema(**initial_state)
+        else:
+            self._schema = WorkingMemorySchema()
 
     def update(self, state_delta: dict[str, Any]) -> None:
         """
@@ -208,6 +229,17 @@ class PydanticWorkingMemoryState(WorkingMemoryState):
         """
         return self._schema.model_dump()
 
+    def load_raw_state(self, state: dict[str, Any]) -> None:
+        """
+        Restore raw state variables from snapshot dictionary.
+
+        Parameters
+        ----------
+        state : dict[str, Any]
+            State dictionary to restore.
+        """
+        self._schema = WorkingMemorySchema(**state)
+
 
 class KeyValueWorkingMemoryState(WorkingMemoryState):
     """
@@ -266,6 +298,18 @@ class KeyValueWorkingMemoryState(WorkingMemoryState):
             State dictionary.
         """
         return dict(self._state)
+
+    def load_raw_state(self, state: dict[str, Any]) -> None:
+        """
+        Restore raw state variables from snapshot dictionary.
+
+        Parameters
+        ----------
+        state : dict[str, Any]
+            State dictionary to restore.
+        """
+        self._state = dict(state)
+
 
 
 class EpisodicEvictionHandler:
@@ -417,3 +461,48 @@ class EpisodicWorkingMemoryManager:
             self.state.reset(transitional_summary=signal.transitional_summary)
 
         return signal
+
+    def snapshot_state(self) -> dict[str, Any]:
+        """
+        Serialize current working memory state into a raw snapshot dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            Raw state snapshot dictionary.
+        """
+        return self.state.get_raw_state()
+
+    def restore_state(self, snapshot: dict[str, Any]) -> None:
+        """
+        Restore working memory state from a raw snapshot dictionary.
+
+        Parameters
+        ----------
+        snapshot : dict[str, Any]
+            Raw state snapshot dictionary.
+        """
+        self.state.load_raw_state(snapshot)
+
+    def fork(
+        self, anchor: GlobalStructuralAnchor | None = None
+    ) -> EpisodicWorkingMemoryManager:
+        """
+        Create an isolated working memory manager with fresh short-term state.
+
+        Parameters
+        ----------
+        anchor : GlobalStructuralAnchor | None, optional
+            Optional structural anchor override, by default None.
+
+        Returns
+        -------
+        EpisodicWorkingMemoryManager
+            Isolated working memory manager instance sharing the state strategy.
+        """
+        return EpisodicWorkingMemoryManager(
+            anchor=anchor if anchor is not None else self.anchor,
+            state_strategy=self.state_strategy,
+        )
+
+

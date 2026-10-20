@@ -80,6 +80,10 @@ from episteme_pipeline.protocols.modality import (
     ensure_modal_strength_resolver,
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
+from episteme_pipeline.runtime.batch_executor import (
+    CheckpointedBatchExecutor,
+    SystematicBatchFailureError,
+)
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
@@ -192,6 +196,12 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             subgraph_depth=config.arc_subgraph_depth,
             max_candidates_per_component=config.arc_max_candidates_per_component,
             use_priority_rank=config.arc_use_priority_rank,
+            use_csls=config.arc_use_csls,
+            csls_k_nearest=config.arc_csls_k_nearest,
+            use_adaptive_k=config.arc_use_adaptive_k,
+            adaptive_k_gamma=config.arc_adaptive_k_gamma,
+            adaptive_k_min=config.arc_adaptive_k_min,
+            z_score_threshold=config.arc_z_score_threshold,
         )
         self.arc_classifier: ARCClassifier = arc_classifier or (
             CascadingARCClassifier(
@@ -286,7 +296,77 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         import asyncio
         from itertools import batched
 
-        succeeded = 0
+        checkpoint_store = (
+            self.graph_store
+            if isinstance(self.graph_store, PhaseCheckpointStore)
+            else None
+        )
+
+        async def _process_chunk_item(
+            chunk: L1Chunk,
+        ) -> tuple[list[TheoryAtom], list[TheoryRelation], str]:
+            return await self._process_chunk(
+                chunk.id, chunk.text, reader=active_reader
+            )
+
+        async def _on_chunk_batch_complete(
+            batch_results: list[tuple[list[TheoryAtom], list[TheoryRelation], str]],
+            records: list[PhaseItemRecord],
+        ) -> None:
+            new_components = []
+            new_local_relations = []
+            processed_chunk_ids = []
+            relations_to_upsert = []
+
+            for components, local_rels, c_id in batch_results:
+                new_components.extend(components)
+                new_local_relations.extend(local_rels)
+                processed_chunk_ids.append(c_id)
+
+                for component in components:
+                    reader.register_theory_atom(component)
+                    relations_to_upsert.append(
+                        {
+                            "from_id": component.id,
+                            "relation_type": "EXTRACTED_FROM",
+                            "to_id": c_id,
+                            "properties": {"confidence": 1.0},
+                        }
+                    )
+                    for entity_id in component.entity_ids:
+                        relations_to_upsert.append(
+                            {
+                                "from_id": component.id,
+                                "relation_type": "MENTIONS",
+                                "to_id": entity_id,
+                                "properties": {"confidence": 1.0},
+                            }
+                        )
+                for local_rel in local_rels:
+                    reader.register_theory_relation(local_rel)
+
+            all_components.extend(new_components)
+            all_local_relations.extend(new_local_relations)
+
+            # Batch persist local findings when a direct GraphWriter is configured
+            if isinstance(self.graph_store, GraphWriter):
+                for comp_batch in batched(new_components, 500):
+                    await self.graph_store.upsert_argument_components(
+                        list(comp_batch)
+                    )
+
+                for rel_batch in batched(new_local_relations, 500):
+                    await self.graph_store.upsert_theory_relations(list(rel_batch))
+
+                for rel_batch in batched(relations_to_upsert, 500):
+                    await self.graph_store.upsert_relations(list(rel_batch))
+
+            if self.graph_store is not None and processed_chunk_ids:
+                for processed_batch in batched(processed_chunk_ids, 500):
+                    await self.graph_store.mark_chunks_processed(
+                        list(processed_batch), effective_phase
+                    )
+
         progress_task = f"Phase 4: Chunk ADU Extraction ({len(chunks)} chunks)"
         with self.progress_scope(
             progress_task,
@@ -294,86 +374,22 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             description="Chunk ADU Extraction",
         ) as advance:
             batch_size = self.config.batch_size
-
-            for batch_idx, chunk_batch in enumerate(batched(chunks, batch_size)):
-                logger.info(f"Mining arguments for chunk batch {batch_idx + 1}...")
-                tasks = [
-                    self._process_chunk(
-                        chunk.id, chunk.text, reader=active_reader
-                    )
-                    for chunk in chunk_batch
-                ]
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                new_components = []
-                new_local_relations = []
-                processed_chunk_ids = []
-                relations_to_upsert = []
-                failures: list[Exception] = []
-
-                for chunk, result in zip(chunk_batch, results):
-                    if isinstance(result, Exception):
-                        logger.error(
-                            "Chunk %s argument mining failed (will retry): %s",
-                            chunk.id,
-                            result,
-                        )
-                        failures.append(result)
-                        continue
-
-                    components, local_rels, c_id = result
-
-                    new_components.extend(components)
-                    new_local_relations.extend(local_rels)
-                    processed_chunk_ids.append(c_id)
-
-                    for component in components:
-                        reader.register_theory_atom(component)
-                        relations_to_upsert.append(
-                            {
-                                "from_id": component.id,
-                                "relation_type": "EXTRACTED_FROM",
-                                "to_id": c_id,
-                                "properties": {"confidence": 1.0},
-                            }
-                        )
-                        for entity_id in component.entity_ids:
-                            relations_to_upsert.append(
-                                {
-                                    "from_id": component.id,
-                                    "relation_type": "MENTIONS",
-                                    "to_id": entity_id,
-                                    "properties": {"confidence": 1.0},
-                                }
-                            )
-                    for local_rel in local_rels:
-                        reader.register_theory_relation(local_rel)
-
-                succeeded += len(chunk_batch) - len(failures)
-                self._guard_systematic_failure(list(chunk_batch), failures, succeeded)
-                all_components.extend(new_components)
-                all_local_relations.extend(new_local_relations)
-
-                # Batch persist local findings when a direct GraphWriter is configured
-                if isinstance(self.graph_store, GraphWriter):
-                    for comp_batch in batched(new_components, 500):
-                        await self.graph_store.upsert_argument_components(
-                            list(comp_batch)
-                        )
-
-                    for rel_batch in batched(new_local_relations, 500):
-                        await self.graph_store.upsert_theory_relations(list(rel_batch))
-
-                    for rel_batch in batched(relations_to_upsert, 500):
-                        await self.graph_store.upsert_relations(list(rel_batch))
-
-                if self.graph_store is not None and processed_chunk_ids:
-                    for processed_batch in batched(processed_chunk_ids, 500):
-                        await self.graph_store.mark_chunks_processed(
-                            list(processed_batch), effective_phase
-                        )
-
-                advance(len(chunk_batch))
+            executor = CheckpointedBatchExecutor[
+                L1Chunk, tuple[list[TheoryAtom], list[TheoryRelation], str]
+            ](
+                checkpoint_store=checkpoint_store,
+                phase_tag=effective_phase,
+                batch_size=batch_size,
+                item_key_fn=lambda ch: ch.id,
+                process_item_fn=_process_chunk_item,
+                on_batch_complete=_on_chunk_batch_complete,
+                guard_systematic_failure=True,
+            )
+            try:
+                await executor.execute(chunks, on_batch_advance=advance)
+            except SystematicBatchFailureError as exc:
+                msg = str(exc).replace("items", "chunks")
+                raise SystematicChunkFailure(msg) from exc
 
         # Deduplicate all_components by id to avoid duplicating artifacts or ARC calls
         seen_ids = set()

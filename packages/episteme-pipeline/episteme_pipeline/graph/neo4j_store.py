@@ -1155,11 +1155,83 @@ class _Neo4jCheckpointMixin:
                     await tx.run(checkpoint_query, phase=phase_safe, items=items_payload)
                 await tx.commit()
 
+    async def commit_phase_items(
+        self, phase: str, items: list[PhaseItemRecord]
+    ) -> None:
+        """Persist phase item checkpoints without requiring triple upserts.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        items : list[PhaseItemRecord]
+            Phase item checkpoint records to persist.
+        """
+        if not items:
+            return
+        await self.commit_phase_batch(phase, triples=[], items=items)
+
+    async def save_chunk_state_snapshot(
+        self, phase: str, chunk_id: str, snapshot: dict[str, Any]
+    ) -> None:
+        """Persist a serialized state machine snapshot associated with a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+        snapshot : dict[str, Any]
+            State dictionary snapshot.
+        """
+        import json
+
+        phase_safe = _cypher_identifier(phase, kind="phase identifier")
+        prop_key = f"{phase_safe}_state_snapshot"
+        snapshot_json = json.dumps(snapshot)
+        query = f"MATCH (c:Chunk {{id: $chunk_id}}) SET c.`{prop_key}` = $snapshot_json"
+        async with self._session() as session:
+            await session.run(query, chunk_id=chunk_id, snapshot_json=snapshot_json)
+
+    async def get_chunk_state_snapshot(
+        self, phase: str, chunk_id: str
+    ) -> dict[str, Any] | None:
+        """Retrieve a prior serialized state machine snapshot for a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+
+        Returns
+        -------
+        dict[str, Any] or None
+            Restored state snapshot, or None if no prior snapshot was recorded.
+        """
+        import json
+
+        phase_safe = _cypher_identifier(phase, kind="phase identifier")
+        prop_key = f"{phase_safe}_state_snapshot"
+        query = f"MATCH (c:Chunk {{id: $chunk_id}}) RETURN c.`{prop_key}` as snapshot"
+        async with self._session() as session:
+            result = await session.run(query, chunk_id=chunk_id)
+            row = await result.single()
+            if row and row["snapshot"]:
+                return json.loads(row["snapshot"])
+        return None
+
     async def clear_phase_checkpoints(self, phase: str) -> None:
         phase_safe = _cypher_identifier(phase, kind="phase identifier")
+        prop_key = f"{phase_safe}_state_snapshot"
         query = "MATCH (p:PhaseItem {phase: $phase}) DELETE p"
+        query_chunk = f"MATCH (c:Chunk) REMOVE c.`{prop_key}`"
         async with self._session() as session:
             await session.run(query, phase=phase_safe)
+            await session.run(query_chunk)
+
 
 
 class Neo4jGraphWriter(_Neo4jConnection, _Neo4jWriteMixin, ProjectionGraph):

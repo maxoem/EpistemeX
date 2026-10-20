@@ -74,7 +74,12 @@ from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.protocols.tracing import NoOpTraceSink, TraceSink
 from episteme_pipeline.schema.default_schema import SchemaConfig
 from episteme_pipeline.utils import format_envelope
-from episteme_pipeline.utils.similarity import cosine_similarity_matrix
+from episteme_pipeline.utils.similarity import (
+    cosine_similarity_matrix,
+    csls_similarity_matrix,
+    dynamic_k_effective,
+    z_score_normalize,
+)
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -412,14 +417,37 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         #
         # For scaling beyond 100-200 entities, we'd switch to FAISS/ANN search.
         entity_vectors = np.array(embeddings)
-        similarity_matrix = cosine_similarity_matrix(entity_vectors)
+        if self.config.use_csls:
+            similarity_matrix = csls_similarity_matrix(
+                entity_vectors, k_nearest=self.config.csls_k_nearest
+            )
+        else:
+            similarity_matrix = cosine_similarity_matrix(entity_vectors)
+
+        if self.config.use_adaptive_k:
+            k_eff = dynamic_k_effective(
+                n=len(entities),
+                k_min=self.config.adaptive_k_min,
+                k_max=self.config.max_candidates_per_entity_pair,
+                gamma=self.config.adaptive_k_gamma,
+            )
+        else:
+            k_eff = self.config.max_candidates_per_entity_pair
+
+        z_scores = (
+            z_score_normalize(similarity_matrix, symmetric=True)
+            if self.config.z_score_threshold is not None
+            else None
+        )
+
+        entity_idx = {ent.id: idx for idx, ent in enumerate(entities)}
 
         # Collect top-k pairs per entity, or globally if preferred
         candidates: list[_DenseCandidate] = []
         for i in range(len(entities)):
             row_scores = [(j, similarity_matrix[i, j]) for j in range(i + 1, len(entities))]
             row_scores.sort(key=lambda x: x[1], reverse=True)
-            for j, score in row_scores[:self.config.max_candidates_per_entity_pair]:
+            for j, score in row_scores[:k_eff]:
                 # Emit event for each candidate pair evaluation
                 candidates.append(_DenseCandidate(
                     score=float(score),
@@ -440,10 +468,17 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
             phase="phase3_dense"
         ))
         
-        # Filter candidates by dense similarity threshold
-        filtered_candidates = [
-            c for c in candidates if c.score >= self.config.dense_similarity_threshold
-        ]
+        # Filter candidates by z-score threshold or dense similarity threshold
+        if self.config.z_score_threshold is not None and z_scores is not None:
+            filtered_candidates = [
+                c for c in candidates
+                if z_scores[entity_idx[c.entity_a.id], entity_idx[c.entity_b.id]]
+                >= self.config.z_score_threshold
+            ]
+        else:
+            filtered_candidates = [
+                c for c in candidates if c.score >= self.config.dense_similarity_threshold
+            ]
         
         # Apply Jev pair gating if enabled
         return await self.filter_candidate_pairs(filtered_candidates)

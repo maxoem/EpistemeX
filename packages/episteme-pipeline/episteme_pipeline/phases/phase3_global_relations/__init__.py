@@ -53,10 +53,15 @@ from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
 
+from episteme_pipeline.runtime.batch_executor import (
+    CheckpointedBatchExecutor,
+    SystematicBatchFailureError,
+)
+
 _PHASE_TAG = "phase3"
 
 
-class SystematicPairFailure(RuntimeError):
+class SystematicPairFailure(SystematicBatchFailureError):
     """Raised when every candidate pair in the initial batch fails identically."""
 
 
@@ -198,43 +203,36 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
             total_items=len(candidates),
             description="Global Relations",
         ) as advance:
-            for batch in batched(candidates, batch_size):
-                batch_list = list(batch)
+            async def _custom_commit(
+                phase: str,
+                batch_triples: list[L2Triple],
+                batch_records: list[PhaseItemRecord],
+            ) -> None:
                 if checkpoint_store is not None:
-                    batch_keys = [c.key for c in batch_list]
-                    pending_keys = set(
-                        await checkpoint_store.filter_unprocessed_items(
-                            batch_keys, effective_phase
-                        )
+                    await checkpoint_store.commit_phase_batch(
+                        phase, batch_triples, batch_records
                     )
-                    pending_batch = [c for c in batch_list if c.key in pending_keys]
-                else:
-                    pending_batch = batch_list
+                elif isinstance(self.graph_store, GraphWriter) and batch_triples:
+                    for triple_chunk in batched(batch_triples, 20):
+                        await self.graph_store.upsert_triples(list(triple_chunk))
 
-                if pending_batch:
-                    batch_triples, batch_records = (
-                        await self.global_extractor.extract_pairs(
-                            pending_batch, reader, self.schema
-                        )
-                    )
-                    self._guard_systematic_failure(
-                        pending_batch, batch_records, succeeded_total
-                    )
-                    succeeded_total += len(
-                        [r for r in batch_records if r.status == "completed"]
-                    )
-
-                    if checkpoint_store is not None:
-                        await checkpoint_store.commit_phase_batch(
-                            effective_phase, batch_triples, batch_records
-                        )
-                    elif isinstance(self.graph_store, GraphWriter) and batch_triples:
-                        for triple_chunk in batched(batch_triples, 20):
-                            await self.graph_store.upsert_triples(list(triple_chunk))
-
-                    all_triples.extend(batch_triples)
-
-                advance(len(batch_list))
+            executor = CheckpointedBatchExecutor[CandidatePair, L2Triple](
+                checkpoint_store=checkpoint_store,
+                phase_tag=effective_phase,
+                batch_size=batch_size,
+                item_key_fn=lambda c: c.key,
+                process_batch_fn=lambda batch: self.global_extractor.extract_pairs(
+                    batch, reader, self.schema
+                ),
+                custom_commit_fn=_custom_commit,
+                guard_systematic_failure=True,
+            )
+            try:
+                result = await executor.execute(candidates, on_batch_advance=advance)
+                all_triples.extend(result.outputs)
+            except SystematicBatchFailureError as exc:
+                msg = str(exc).replace("items", "candidate pairs")
+                raise SystematicPairFailure(msg) from exc
 
         deduped_triples: list[L2Triple] = []
         seen_triple_keys: set[tuple[str, str, str, str | None]] = set()

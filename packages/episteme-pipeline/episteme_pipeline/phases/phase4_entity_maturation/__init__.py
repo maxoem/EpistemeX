@@ -37,9 +37,11 @@ from episteme_pipeline.protocols.extractors import EmbeddingModel, as_tensor
 from episteme_pipeline.protocols.graph_store import (
     GraphReader,
     GraphWriter,
+    PhaseCheckpointStore,
     ProcessingGraph,
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
+from episteme_pipeline.runtime.batch_executor import CheckpointedBatchExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -126,59 +128,66 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
 
         progress_task = f"Phase 4 Maturation: {len(immature_entities)} entities"
         batch_size = self.config.batch_size
+        checkpoint_store = (
+            self.graph_store
+            if isinstance(self.graph_store, PhaseCheckpointStore)
+            else None
+        )
+        effective_phase = (
+            f"{self.phase_key}:{context.lineage_fingerprint}"
+            if context and context.lineage_fingerprint
+            else self.phase_key
+        )
+
+        async def _maturation_item(entity: L2Entity) -> L2Entity | None:
+            return await self._process_entity(
+                entity,
+                context.run_id,
+                input_envelopes=input.entity_envelopes_by_id.get(entity.id),
+            )
+
+        async def _on_maturation_batch(
+            batch_entities: list[L2Entity],
+            records: list[PhaseItemRecord],
+        ) -> None:
+            for matured_entity in batch_entities:
+                mention_ids = [
+                    f"artifact::mention::{matured_entity.id}::{cid}"
+                    for cid in matured_entity.source_chunk_ids
+                ]
+                matured_artifacts.append(
+                    build_linked_entity_artifact(
+                        matured_entity,
+                        mention_ids,
+                        run_id=context.run_id,
+                        phase_name=self.name,
+                        method="Phase4EntityMaturationRunner",
+                        upstream_artifact_ids=[
+                            f"artifact::{matured_entity.id}",
+                            *mention_ids,
+                        ],
+                    )
+                )
+
+            if batch_entities and isinstance(self.graph_store, GraphWriter):
+                for sub_batch in batched(batch_entities, 500):
+                    await self.graph_store.upsert_entities(list(sub_batch))
 
         with self.progress_scope(
             progress_task,
             total_items=len(immature_entities),
             description="Entity Maturation",
         ) as advance:
-            for batch_idx, entity_batch in enumerate(
-                batched(immature_entities, batch_size)
-            ):
-                logger.info(f"Maturing batch {batch_idx + 1}...")
-
-                tasks = [
-                    self._process_entity(
-                        entity,
-                        context.run_id,
-                        input_envelopes=input.entity_envelopes_by_id.get(entity.id),
-                    )
-                    for entity in entity_batch
-                ]
-                matured_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                entities_to_upsert = []
-                for entity, matured_entity in zip(entity_batch, matured_results):
-                    if isinstance(matured_entity, Exception):
-                        logger.error(
-                            f"Entity Maturation failed for {entity.name}: {matured_entity}"
-                        )
-                        continue
-                    if matured_entity:
-                        entities_to_upsert.append(matured_entity)
-                        mention_ids = [
-                            f"artifact::mention::{matured_entity.id}::{cid}"
-                            for cid in matured_entity.source_chunk_ids
-                        ]
-                        matured_artifacts.append(
-                            build_linked_entity_artifact(
-                                matured_entity,
-                                mention_ids,
-                                run_id=context.run_id,
-                                phase_name=self.name,
-                                method="Phase4EntityMaturationRunner",
-                                upstream_artifact_ids=[
-                                    f"artifact::{matured_entity.id}",
-                                    *mention_ids,
-                                ],
-                            )
-                        )
-
-                if entities_to_upsert and isinstance(self.graph_store, GraphWriter):
-                    for sub_batch in batched(entities_to_upsert, 500):
-                        await self.graph_store.upsert_entities(list(sub_batch))
-
-                advance(len(entity_batch))
+            executor = CheckpointedBatchExecutor[L2Entity, L2Entity](
+                checkpoint_store=checkpoint_store,
+                phase_tag=effective_phase,
+                batch_size=batch_size,
+                item_key_fn=lambda e: f"maturation::{e.id}",
+                process_item_fn=_maturation_item,
+                on_batch_complete=_on_maturation_batch,
+                guard_systematic_failure=False,
+            )
+            await executor.execute(immature_entities, on_batch_advance=advance)
 
         if matured_artifacts:
             return ArtifactCollection(matured_artifacts)

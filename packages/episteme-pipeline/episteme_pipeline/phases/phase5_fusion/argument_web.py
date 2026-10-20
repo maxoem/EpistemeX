@@ -71,6 +71,8 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
         self.argument_clustering = argument_clustering or EmbeddingArgumentClustering(
             embedding_model=embedding_model,
             similarity_threshold=config.fusion_similarity_threshold,
+            min_internal_similarity=config.min_internal_similarity,
+            max_diameter=config.max_diameter,
         )
         from episteme_pipeline.phases.phase5_fusion.leiden_clustering import (
             LeidenTheoryClustering,

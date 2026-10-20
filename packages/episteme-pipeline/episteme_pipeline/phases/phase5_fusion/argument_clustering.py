@@ -40,7 +40,10 @@ from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.fusion import ArgumentClustering
 from episteme_pipeline.protocols.graph_store import GraphReader
-from episteme_pipeline.utils.graph_algorithms import union_find_components
+from episteme_pipeline.utils.graph_algorithms import (
+    clique_constrained_components,
+    union_find_components,
+)
 from episteme_pipeline.utils.similarity import cosine_similarity_matrix
 
 logger = logging.getLogger(__name__)
@@ -59,10 +62,14 @@ class EmbeddingArgumentClustering(ArgumentClustering):
         embedding_model=None,
         similarity_threshold: float = 0.85,
         max_components: int = 10000,
+        min_internal_similarity: float = 0.75,
+        max_diameter: float | None = None,
     ) -> None:
         self.embedding_model = embedding_model
         self.similarity_threshold = similarity_threshold
         self.max_components = max_components
+        self.min_internal_similarity = min_internal_similarity
+        self.max_diameter = max_diameter
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic argument clustering configuration.
@@ -80,6 +87,8 @@ class EmbeddingArgumentClustering(ArgumentClustering):
             "class": self.__class__.__name__,
             "similarity_threshold": self.similarity_threshold,
             "max_components": self.max_components,
+            "min_internal_similarity": self.min_internal_similarity,
+            "max_diameter": self.max_diameter,
             "embedding_model": (
                 self.embedding_model.fingerprint()
                 if isinstance(self.embedding_model, Fingerprintable)
@@ -132,7 +141,13 @@ class EmbeddingArgumentClustering(ArgumentClustering):
         if not edges:
             return []
 
-        groups = union_find_components(n, edges)
+        groups = clique_constrained_components(
+            n,
+            edges,
+            sim,
+            min_internal_similarity=self.min_internal_similarity,
+            max_diameter=self.max_diameter,
+        )
         ids = [c.id for c in components]
 
         clusters = [[ids[i] for i in group] for group in groups if len(group) > 1]

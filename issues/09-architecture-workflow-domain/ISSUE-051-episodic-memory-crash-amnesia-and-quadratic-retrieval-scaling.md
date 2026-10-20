@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Scalability, Fault Tolerance, Working Memory, Vector Retrieval) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`phases/phase2_entity_discovery/`, `phases/phase3_global_relations/`, `phases/phase3b_consolidation/`, `phases/phase4_argument_mining/`) |
 | **Priority** | **High** |
-| **Status** | `Open` |
+| **Status** | `Resolved` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/runtime_analysis.md`](../../docs/architecture/runtime_analysis.md), [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0001`](../../docs/adr/0001-neo4j-async-graph-backend.md), [`ADR-0009`](../../docs/adr/0009-sota-dual-memory-episodic-working-memory.md), [`ADR-0016`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md) |
 
 ---
@@ -103,10 +103,10 @@ Extract the atomic batch checkpointing, order-invariant content hashing, poison-
 
 ## 4. Acceptance Criteria
 
-- [ ] Phase 2 persists serialized `WorkingMemoryState` snapshots alongside chunk checkpoints and restores the exact prior chunk's STM state upon mid-chapter crash resumption.
-- [ ] Phase 2 supports concurrent execution across independent `(source_doc_id, chapter_id)` groups while maintaining sequential STM ordering within each chapter.
-- [ ] `CheckpointedBatchExecutor` provides `ADR-0016` atomic batch checkpointing and poison-pill quarantine to Phase 4 (ADU/ACC/ARC), Phase 4 Maturation, and Theoretical Enrichment.
-- [ ] Candidate pair generation in Phase 3, Phase 3b, and Phase 4 ARC supports CSLS / z-score normalized thresholding and dynamic $K_{\text{eff}}(E)$ scaling so 1-page documents do not trigger unpruned all-to-all LLM evaluations.
+- [x] Phase 2 persists serialized `WorkingMemoryState` snapshots alongside chunk checkpoints and restores the exact prior chunk's STM state upon mid-chapter crash resumption.
+- [x] Phase 2 supports concurrent execution across independent `(source_doc_id, chapter_id)` groups while maintaining sequential STM ordering within each chapter.
+- [x] `CheckpointedBatchExecutor` provides `ADR-0016` atomic batch checkpointing and poison-pill quarantine to Phase 4 (ADU/ACC/ARC), Phase 4 Maturation, and Theoretical Enrichment.
+- [x] Candidate pair generation in Phase 3, Phase 3b, and Phase 4 ARC supports CSLS / z-score normalized thresholding and dynamic $K_{\text{eff}}(E)$ scaling so 1-page documents do not trigger unpruned all-to-all LLM evaluations.
 
 ---
 

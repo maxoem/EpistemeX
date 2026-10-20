@@ -41,6 +41,7 @@ class InMemoryGraphStore(ProcessingGraph):
         self._relations: list[tuple[str, str, str, dict]] = []
         self._processed: dict[str, set[str]] = {}  # chunk_id -> set of phase tags
         self._processed_items: dict[str, dict[str, PhaseItemRecord]] = {}
+        self._chunk_snapshots: dict[tuple[str, str], dict[str, Any]] = {}
 
     async def get_chunks(self, filters=None, limit=None) -> list[L1Chunk]:
         chunks = list(self._chunks.values())
@@ -180,8 +181,30 @@ class InMemoryGraphStore(ProcessingGraph):
         for item in items:
             phase_items[item.key] = item
 
+    async def commit_phase_items(
+        self, phase: str, items: list[PhaseItemRecord]
+    ) -> None:
+        phase_items = self._processed_items.setdefault(phase, {})
+        for record in items:
+            phase_items[record.key] = record
+
+    async def save_chunk_state_snapshot(
+        self, phase: str, chunk_id: str, snapshot: dict
+    ) -> None:
+        self._chunk_snapshots[(phase, chunk_id)] = dict(snapshot)
+
+    async def get_chunk_state_snapshot(
+        self, phase: str, chunk_id: str
+    ) -> dict | None:
+        snapshot = self._chunk_snapshots.get((phase, chunk_id))
+        return dict(snapshot) if snapshot is not None else None
+
     async def clear_phase_checkpoints(self, phase: str) -> None:
         self._processed_items.pop(phase, None)
+        keys_to_del = [k for k in self._chunk_snapshots if k[0] == phase]
+        for k in keys_to_del:
+            del self._chunk_snapshots[k]
+
 
     async def find_entities_by_name(self, name: str, label=None) -> list[L2Entity]:
         name_lower = name.strip().lower()

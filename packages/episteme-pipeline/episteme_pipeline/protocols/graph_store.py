@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from typing import Any
+
 
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
@@ -261,6 +265,58 @@ class PhaseCheckpointStore(GraphHandle, ABC):
         ...
 
     @abstractmethod
+    async def commit_phase_items(
+        self, phase: str, items: list[PhaseItemRecord]
+    ) -> None:
+        """Persist phase item checkpoints without requiring triple upserts.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        items : list[PhaseItemRecord]
+            Phase item checkpoint records to persist.
+        """
+        ...
+
+    @abstractmethod
+    async def save_chunk_state_snapshot(
+        self, phase: str, chunk_id: str, snapshot: dict[str, Any]
+    ) -> None:
+        """Persist a serialized state machine snapshot associated with a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+        snapshot : dict[str, Any]
+            State dictionary snapshot.
+        """
+        ...
+
+    @abstractmethod
+    async def get_chunk_state_snapshot(
+        self, phase: str, chunk_id: str
+    ) -> dict[str, Any] | None:
+        """Retrieve a prior serialized state machine snapshot for a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+
+        Returns
+        -------
+        dict[str, Any] or None
+            Restored state snapshot, or None if no prior snapshot was recorded.
+        """
+        ...
+
+    @abstractmethod
     async def clear_phase_checkpoints(self, phase: str) -> None:
         """Clear all item checkpoints for the given phase upon invalidation.
 
@@ -270,6 +326,7 @@ class PhaseCheckpointStore(GraphHandle, ABC):
             Phase identifier tag.
         """
         ...
+
 
     async def get_committed_triples(self, phase: str) -> list[L2Triple]:
         """Return triples committed across prior batches for ``phase``.

@@ -69,6 +69,7 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
                     "processed_chunks": set(raw.get("processed_chunks", [])),
                     "processed_items": dict(raw.get("processed_items", {})),
                     "committed_triples": list(raw.get("committed_triples", [])),
+                    "chunk_snapshots": dict(raw.get("chunk_snapshots", {})),
                 }
                 self._cache[phase] = state
                 return state
@@ -79,6 +80,7 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
             "processed_chunks": set(),
             "processed_items": {},
             "committed_triples": [],
+            "chunk_snapshots": {},
         }
         self._cache[phase] = state
         return state
@@ -91,6 +93,7 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
             "processed_chunks": sorted(state["processed_chunks"]),
             "processed_items": state["processed_items"],
             "committed_triples": state["committed_triples"],
+            "chunk_snapshots": state.get("chunk_snapshots", {}),
         }
         tmp_path = path.with_suffix(".json.tmp")
         tmp_path.write_text(json.dumps(serializable, indent=2), encoding="utf-8")
@@ -204,6 +207,65 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
         for triple in triples:
             state["committed_triples"].append(triple.model_dump(mode="json"))
         self._save_phase_state(phase, state)
+
+    async def commit_phase_items(
+        self, phase: str, items: list[PhaseItemRecord]
+    ) -> None:
+        """Persist phase item checkpoints without requiring triple upserts.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        items : list[PhaseItemRecord]
+            Phase item checkpoint records to persist.
+        """
+        state = self._load_phase_state(phase)
+        for item in items:
+            state["processed_items"][item.key] = item.model_dump(mode="json")
+        self._save_phase_state(phase, state)
+
+    async def save_chunk_state_snapshot(
+        self, phase: str, chunk_id: str, snapshot: dict[str, Any]
+    ) -> None:
+        """Persist a serialized state machine snapshot associated with a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+        snapshot : dict[str, Any]
+            State dictionary snapshot.
+        """
+        state = self._load_phase_state(phase)
+        snapshots = state.setdefault("chunk_snapshots", {})
+        snapshots[chunk_id] = dict(snapshot)
+        self._save_phase_state(phase, state)
+
+    async def get_chunk_state_snapshot(
+        self, phase: str, chunk_id: str
+    ) -> dict[str, Any] | None:
+        """Retrieve a prior serialized state machine snapshot for a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+
+        Returns
+        -------
+        dict[str, Any] or None
+            Restored state snapshot, or None if no prior snapshot was recorded.
+        """
+        state = self._load_phase_state(phase)
+        snapshots = state.get("chunk_snapshots", {})
+        res = snapshots.get(chunk_id)
+        return dict(res) if res is not None else None
+
 
     async def get_committed_triples(self, phase: str) -> list[L2Triple]:
         """Return all :class:`L2Triple` instances committed for ``phase``.

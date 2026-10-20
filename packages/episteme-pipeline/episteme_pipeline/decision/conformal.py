@@ -41,9 +41,13 @@ class ConformalCalibrator(Fingerprintable):
         alpha: float = 0.05,
         q_hat: float | None = None,
         stratified_q_hat: dict[str, float] | dict[tuple[str, str], float] | None = None,
+        global_alpha: float | None = None,
+        risk_budget_weights: dict[str, float] | None = None,
     ) -> None:
         self.alpha = alpha
         self.q_hat = q_hat
+        self.global_alpha = global_alpha
+        self.risk_budget_weights = risk_budget_weights or {}
         self._stratified_q_hat: dict[tuple[str | None, str | None], float] = {}
         self._stratified_meta: dict[tuple[str | None, str | None], dict[str, Any]] = {}
         self._global_n_cal: int = 0
@@ -55,6 +59,66 @@ class ConformalCalibrator(Fingerprintable):
                     self._stratified_q_hat[(k[0], k[1])] = v
                 else:
                     self._stratified_q_hat[(str(k), None)] = v
+
+    @staticmethod
+    def allocate_risk_budget(
+        global_alpha: float,
+        weights: dict[str, float],
+    ) -> dict[str, float]:
+        """Allocate per-phase or per-task significance levels from a global risk budget.
+
+        Uses weighted union bound allocation:
+        :math:`\\alpha_m = \\alpha_{\\text{global}} \\cdot \\frac{w_m}{\\sum_k w_k}`
+        guaranteeing :math:`\\sum_{m=1}^M \\alpha_m \\le \\alpha_{\\text{global}}` and bounding
+        the family-wise error rate across sequential decision gates.
+
+        Parameters
+        ----------
+        global_alpha : float
+            Pipeline-level global significance risk budget.
+        weights : dict of str to float
+            Relative risk weights per phase or task.
+
+        Returns
+        -------
+        dict of str to float
+            Allocated significance level alpha_m per phase or task.
+
+        Raises
+        ------
+        ValueError
+            If total weight is non-positive.
+        """
+        if not weights:
+            return {}
+        total_weight = sum(weights.values())
+        if total_weight <= 0.0:
+            raise ValueError(
+                f"Total risk budget weight must be strictly positive, got {total_weight}"
+            )
+        return {
+            stage: (global_alpha * (weight / total_weight))
+            for stage, weight in weights.items()
+        }
+
+    def get_allocated_alpha(self, stage: str) -> float:
+        """Return the allocated significance level for a given pipeline stage or task.
+
+        Parameters
+        ----------
+        stage : str
+            Stage or task identifier.
+
+        Returns
+        -------
+        float
+            Allocated alpha if global budget is configured, otherwise instance alpha.
+        """
+        if self.global_alpha is not None and self.risk_budget_weights:
+            allocated = self.allocate_risk_budget(self.global_alpha, self.risk_budget_weights)
+            if stage in allocated:
+                return allocated[stage]
+        return self.alpha
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic JSON-serializable calibration state representation.
@@ -86,6 +150,7 @@ class ConformalCalibrator(Fingerprintable):
         return {
             "class": self.__class__.__name__,
             "alpha": self.alpha,
+            "global_alpha": self.global_alpha,
             "calibration_state": calibration_state,
         }
 
