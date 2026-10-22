@@ -347,7 +347,19 @@ class Pipeline:
                 if config.decision_engine
                 else 0.05
             )
-            calibrator = ConformalCalibrator(alpha=conformal_alpha)
+            calibrator = ConformalCalibrator(
+                alpha=conformal_alpha,
+                global_alpha=(
+                    config.decision_engine.global_alpha
+                    if config.decision_engine
+                    else None
+                ),
+                risk_budget_weights=(
+                    config.decision_engine.risk_budget_weights
+                    if config.decision_engine
+                    else None
+                ),
+            )
             seed = (
                 config.models.seed
                 if config.models and config.models.seed is not None
@@ -359,6 +371,9 @@ class Pipeline:
                 seed=seed,
             )
             decision_engine.calibrator = calibrator
+
+        if config.decision_engine is not None:
+            config.sync_allocated_risk_budgets()
 
         from episteme_pipeline.decision.modal_resolver import HybridModalResolver
 

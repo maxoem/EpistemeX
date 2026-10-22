@@ -88,6 +88,14 @@ class ConformalCalibrator(Fingerprintable):
         ------
         ValueError
             If total weight is non-positive.
+
+        References
+        ----------
+        .. [1] Angelopoulos, A. N., Bates, S., Candès, E. J., Jordan, M. I., &
+           Wainwright, M. J. (2022). Learn then test: Calibrating predictive
+           algorithms to achieve risk control.
+        .. [2] Vovk, V., Gammerman, A., & Shafer, G. (2005). Algorithmic Learning in a
+           Random World. Springer.
         """
         if not weights:
             return {}
@@ -115,9 +123,12 @@ class ConformalCalibrator(Fingerprintable):
             Allocated alpha if global budget is configured, otherwise instance alpha.
         """
         if self.global_alpha is not None and self.risk_budget_weights:
-            allocated = self.allocate_risk_budget(self.global_alpha, self.risk_budget_weights)
-            if stage in allocated:
-                return allocated[stage]
+            try:
+                allocated = self.allocate_risk_budget(self.global_alpha, self.risk_budget_weights)
+                if stage in allocated:
+                    return allocated[stage]
+            except ValueError:
+                return self.alpha
         return self.alpha
 
     def fingerprint(self) -> dict[str, Any]:
@@ -151,6 +162,7 @@ class ConformalCalibrator(Fingerprintable):
             "class": self.__class__.__name__,
             "alpha": self.alpha,
             "global_alpha": self.global_alpha,
+            "risk_budget_weights": dict(sorted(self.risk_budget_weights.items())),
             "calibration_state": calibration_state,
         }
 

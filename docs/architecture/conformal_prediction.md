@@ -213,11 +213,12 @@ entity pairs with cosine similarity in the borderline band $[0.75, 0.88)$ are pa
 - **Candidate Options**: `["IDENTICAL_MERGE", "HIERARCHICAL_SUBSUMPTION", "DISTINCT_SEPARATE"]`
 - **Mondrian Stratum**: `task_id="p3b_merge"`, `language=language or self.language`
 - **Decision Rule**:
-  A borderline pair is approved for Union-Find merging (`action_taken="merge_approved"`) if and only if:
+  A borderline pair is approved as a candidate merge edge for clique-constrained clustering (`action_taken="merge_approved"`) if and only if:
     1. The conformal prediction set is the unambiguous singleton $C (X) = \{\text{"IDENTICAL\_MERGE"}\}$, **or**
     2. The top-1 choice is `"IDENTICAL_MERGE"` and its calibrated empirical accuracy meets `confidence_threshold`
        (default $0.80$). Otherwise, the merge is aborted (`action_taken="merge_aborted"`) so hierarchical or distinct
        concepts are never conflated.
+  Subsequently, `clique_constrained_components` enforces minimum internal similarity and maximum diameter bounds, preventing transitive bridge chaining.
 
 ### Phase 5: Inter-Document Theory Cluster Verification
 
@@ -238,9 +239,37 @@ cross-document candidate clusters are verified by [
 
 ---
 
+## 6. Compositional Conformal Risk Control & Global Epistemic Risk Budget ($\alpha_{\text{global}}$)
+
+Split conformal prediction provides a $1 - \alpha$ coverage guarantee at a **single** isolated decision gate. However, scientific theory-graph construction is a multi-stage sequential pipeline spanning entity discovery (Phase 2), latent consolidation (Phase 3b), argument mining (Phase 4), and cross-document theory fusion (Phase 5).
+
+If each of $M$ sequential stages independently commits decisions at error rate $\alpha = 0.05$, the cumulative family-wise error rate across the pipeline degrades:
+
+$$P(\text{at least one failure}) \le 1 - (1 - \alpha)^M \approx 1 - 0.95^5 \approx 22.6\%$$
+
+To provide end-to-end statistical risk guarantees across the entire graph construction workflow, Episteme introduces a **Global Epistemic Risk Budget ($\alpha_{\text{global}}$)** managed by [`DecisionEngineConfig`](../../packages/episteme-pipeline/episteme_pipeline/config.py) and [`ConformalCalibrator.allocate_risk_budget()`](../../packages/episteme-pipeline/episteme_pipeline/decision/conformal.py):
+
+$$\alpha_m = \alpha_{\text{global}} \cdot \frac{w_m}{\sum_{k=1}^M w_k}, \qquad \sum_{m=1}^M \alpha_m \le \alpha_{\text{global}}$$
+
+By the union bound (Bonferroni inequality / Conformal Risk Control, Angelopoulos et al., 2022), the sequence-level probability that *any* decision gate commits an error is strictly bounded by $\alpha_{\text{global}}$:
+
+$$P\left(\bigcup_{m=1}^M \mathcal{E}_m\right) \le \sum_{m=1}^M P(\mathcal{E}_m) \le \sum_{m=1}^M \alpha_m \le \alpha_{\text{global}}$$
+
+### Asymmetric Epistemic Risk Allocation
+
+Pipeline gates have asymmetric consequences:
+1. **Irreversible Structural Gates (Phase 3b Latent Consolidation)**: Merging two distinct philosopher concepts or categories irreversibly corrupts the foundational graph topology. Phase 3b is allocated a tight risk budget ($w_{\text{p3b}} = 0.10 \implies \alpha_{\text{p3b}} = 0.005$).
+2. **Reversible Soft Gates (Phase 4 Argument Mining & Phase 5 Fusion)**: Soft-weighted edges and community discovery can tolerate more permissive exploration ($w_{\text{p4}} = 0.25 \implies \alpha_{\text{p4}} = 0.0125$).
+
+At pipeline initialization (`Pipeline.for_task()`), `PipelineConfig.sync_allocated_risk_budgets()` computes the per-phase $\alpha_m$ allocations and propagates them into each phase's configuration model.
+
+---
+
 ## References
 
 - Angelopoulos, A. N., & Bates, S. (2021). *A Gentle Introduction to Conformal Prediction and Distribution-Free
   Uncertainty Quantification*. arXiv:2107.07511.
+- Angelopoulos, A. N., Bates, S., Candès, E. J., Jordan, M. I., & Wainwright, M. J. (2022). *Learn then test: Calibrating predictive algorithms to achieve risk control*.
+- Bansal, N., Blum, A., & Chawla, S. (2004). *Correlation clustering*. Machine Learning, 56(1), 89-113.
 - Vovk, V., Gammerman, A., & Shafer, G. (2005). *Algorithmic Learning in a Random World*. Springer.
 - [ADR 0005: Two-Pass Fusion Strategy](../adr/0005-two-pass-fusion-strategy.md)

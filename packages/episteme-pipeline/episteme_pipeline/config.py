@@ -656,13 +656,15 @@ class DecisionEngineConfig(BaseModel):
         """
         if not self.risk_budget_weights:
             return {}
-        total = sum(self.risk_budget_weights.values())
-        if total <= 0.0:
+        from episteme_pipeline.decision.conformal import ConformalCalibrator
+
+        try:
+            return ConformalCalibrator.allocate_risk_budget(
+                global_alpha=self.global_alpha,
+                weights=self.risk_budget_weights,
+            )
+        except ValueError:
             return {k: self.conformal_alpha for k in self.risk_budget_weights}
-        return {
-            k: (self.global_alpha * (w / total))
-            for k, w in self.risk_budget_weights.items()
-        }
 
     def get_allocated_alpha(self, phase_or_task: str) -> float:
         """Return the allocated alpha for a given phase or task.
@@ -752,4 +754,31 @@ class PipelineConfig(BaseModel):
             "theoretical_enrichment": self.theoretical_enrichment,
         }
         return mapping.get(phase_key)
+
+    def sync_allocated_risk_budgets(self) -> None:
+        """Synchronize per-phase conformal significance levels from DecisionEngineConfig.
+
+        When a global risk budget is configured on ``decision_engine``, allocates
+        per-phase significance levels via weighted union bounds and assigns them
+        to the corresponding phase configurations:
+        - ``phase2.conformal_linking_alpha``
+        - ``phase3b.verification.conformal_alpha``
+        - ``phase4.conformal_alpha``
+        - ``phase5.gating.conformal_alpha``
+        """
+        if self.decision_engine is None:
+            return
+
+        self.phase2.conformal_linking_alpha = self.decision_engine.get_allocated_alpha(
+            "phase2_entity_discovery"
+        )
+        self.phase3b.verification.conformal_alpha = self.decision_engine.get_allocated_alpha(
+            "phase3b_consolidation"
+        )
+        self.phase4.conformal_alpha = self.decision_engine.get_allocated_alpha(
+            "phase4_argument_mining"
+        )
+        self.phase5.gating.conformal_alpha = self.decision_engine.get_allocated_alpha(
+            "phase5_fusion"
+        )
 

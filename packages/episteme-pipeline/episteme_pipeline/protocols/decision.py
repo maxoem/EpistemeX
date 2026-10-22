@@ -70,10 +70,10 @@ class DecisionQuestion:
         DecisionQuestion
             Instantiated typed decision question.
         """
-        text = getattr(bundle, "decision_template", None) or getattr(bundle, "direct_template", "")
+        text = bundle.decision_template or bundle.direct_template or ""
         if format_kwargs:
             text = text.format(**format_kwargs)
-        criteria = getattr(bundle, "decision_criteria", None)
+        criteria = bundle.decision_criteria
         return cls(
             question=text,
             type=type,

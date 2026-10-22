@@ -18,11 +18,12 @@ from episteme_pipeline.phases.phase3b_consolidation.clustering import (
     CanonicalRepresentativeElector,
 )
 from episteme_pipeline.protocols.decision import DecisionEngine
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.fusion import InstanceFusion
 from episteme_pipeline.protocols.graph_store import FusionGraph
+from episteme_pipeline.runs.fingerprints import fingerprint_method
 from episteme_pipeline.utils.graph_algorithms import (
     clique_constrained_components,
-    union_find_components,
 )
 from episteme_pipeline.utils.similarity import (
     cosine_similarity_matrix,
@@ -81,6 +82,8 @@ class LatentGraphConsolidation(InstanceFusion):
         self.relation_overlap_threshold = relation_overlap_threshold
         self.borderline_similarity_lower = borderline_similarity_lower
         self.borderline_similarity_upper = borderline_similarity_upper
+        self.merge_confidence_threshold = merge_confidence_threshold
+        self.conformal_merge_alpha = conformal_merge_alpha
         self.use_csls = use_csls
         self.csls_k_nearest = csls_k_nearest
         self.min_internal_similarity = min_internal_similarity
@@ -103,6 +106,48 @@ class LatentGraphConsolidation(InstanceFusion):
             self.canonical_elector = CanonicalRepresentativeElector(decision_engine=decision_engine)
         else:
             self.canonical_elector = CanonicalRepresentativeElector()
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic consolidation configuration and sub-component fingerprints.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, similarity thresholds, and fingerprints
+            for embedding_model, verifier, and canonical_elector.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "dense_similarity_threshold": self.dense_similarity_threshold,
+            "relation_overlap_threshold": self.relation_overlap_threshold,
+            "borderline_similarity_lower": self.borderline_similarity_lower,
+            "borderline_similarity_upper": self.borderline_similarity_upper,
+            "use_csls": self.use_csls,
+            "csls_k_nearest": self.csls_k_nearest,
+            "min_internal_similarity": self.min_internal_similarity,
+            "max_diameter": self.max_diameter,
+            "merge_confidence_threshold": self.merge_confidence_threshold,
+            "conformal_merge_alpha": self.conformal_merge_alpha,
+            "embedding_model": (
+                self.embedding_model.fingerprint()
+                if isinstance(self.embedding_model, Fingerprintable)
+                else (
+                    fingerprint_method(self.embedding_model)
+                    if self.embedding_model is not None
+                    else None
+                )
+            ),
+            "verifier": (
+                self.verifier.fingerprint()
+                if isinstance(self.verifier, Fingerprintable)
+                else None
+            ),
+            "canonical_elector": (
+                self.canonical_elector.fingerprint()
+                if isinstance(self.canonical_elector, Fingerprintable)
+                else None
+            ),
+        }
 
     @classmethod
     def from_config(
@@ -144,6 +189,8 @@ class LatentGraphConsolidation(InstanceFusion):
             borderline_similarity_upper=config.verification.similarity_upper,
             verifier=verifier,
             canonical_elector=canonical_elector,
+            merge_confidence_threshold=config.verification.confidence_threshold,
+            conformal_merge_alpha=config.verification.conformal_alpha,
             use_csls=config.use_csls,
             csls_k_nearest=config.csls_k_nearest,
             min_internal_similarity=config.min_internal_similarity,

@@ -153,7 +153,7 @@ The theory-graph construction process is organized into sequential phase runners
 - **Key Operations**:
   - Dense vector similarity matrix over entity textual envelopes (`dense_similarity_threshold`).
   - Topological relation overlap via Jaccard similarity ($J(A, B)$) over 1-hop edge signatures (`IN:rel:id`, `OUT:rel:id`).
-  - Union-Find clustering to merge duplicate entity pairs and elect canonical nodes with maximal source grounding.
+  - Clique-constrained complete-linkage clustering (with diameter and internal similarity floor bounds) to merge duplicate entity pairs and elect canonical nodes with maximal source grounding.
 - **Emitted Artifacts**: [`CanonicalizationArtifact`](../reference/artifacts.md).
 - **See**: [Phase 3b Consolidation Workflow](../workflow/3b_consolidation/index.md).
 
@@ -189,7 +189,7 @@ The theory-graph construction process is organized into sequential phase runners
 - **Input View**: `Phase4ArtifactsView` (cumulative L1/L2/L3 state: `theory_atoms`, `theory_relations`, `entities`, `chunks`, `local_triples`, `global_triples`).
 - **Purpose**: Cluster semantically equivalent argument components across documents and detect theory-level graph communities.
 - **Key Operations**:
-  - **Argument Component Clustering (`EmbeddingArgumentClustering`)**: Computes dense vector embeddings of argument components and merges equivalent claims via Union-Find for Key Point Analysis.
+  - **Argument Component Clustering (`EmbeddingArgumentClustering`)**: Computes dense vector embeddings of argument components and merges equivalent claims via clique-constrained complete-linkage clustering (preventing non-transitive single-linkage chaining) for Key Point Analysis.
   - **Leiden Theory Clustering (`LeidenTheoryClustering`)**: Builds a global graph of entities and argument relations via `ArtifactSubgraphReader`, applies modularity optimization via Hierarchical Leiden community detection, and assigns theoretical community affiliations.
 - **Emitted Artifacts**: [`FusionDecisionArtifact`](../reference/artifacts.md).
 - **See**: [Phase 5 Workflow](../workflow/5_inter_document_argument_web/index.md).

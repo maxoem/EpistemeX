@@ -205,6 +205,241 @@ def test_conformal_calibrator_instance_allocated_alpha_lookup():
     assert np.isclose(calibrator.get_allocated_alpha("phase4"), 0.03)
     assert np.isclose(calibrator.get_allocated_alpha("unlisted_phase"), 0.05)
 
-    # Fingerprint includes global_alpha
+    # Fingerprint includes global_alpha and risk_budget_weights
     fp = calibrator.fingerprint()
     assert fp["global_alpha"] == 0.04
+    assert fp["risk_budget_weights"] == {"phase3b": 0.25, "phase4": 0.75}
+
+
+def test_latent_graph_consolidation_fingerprint():
+    """Verify LatentGraphConsolidation implements Fingerprintable with deterministic metadata."""
+    consolidation = LatentGraphConsolidation(
+        embedding_model=None,
+        dense_similarity_threshold=0.88,
+        relation_overlap_threshold=0.75,
+        min_internal_similarity=0.72,
+        conformal_merge_alpha=0.02,
+        merge_confidence_threshold=0.85,
+    )
+
+    fp = consolidation.fingerprint()
+    assert fp["class"] == "LatentGraphConsolidation"
+    assert fp["dense_similarity_threshold"] == 0.88
+    assert fp["relation_overlap_threshold"] == 0.75
+    assert fp["min_internal_similarity"] == 0.72
+    assert fp["conformal_merge_alpha"] == 0.02
+    assert fp["merge_confidence_threshold"] == 0.85
+    assert fp["embedding_model"] is None
+
+
+def test_latent_graph_consolidation_from_config():
+    """Verify LatentGraphConsolidation.from_config correctly sets merge and conformal thresholds."""
+    from episteme_pipeline.config import ConsolidationVerificationConfig, Phase3bConfig
+
+    cfg = Phase3bConfig(
+        dense_similarity_threshold=0.89,
+        relation_overlap_threshold=0.82,
+        min_internal_similarity=0.73,
+        verification=ConsolidationVerificationConfig(
+            confidence_threshold=0.87,
+            conformal_alpha=0.03,
+        ),
+    )
+
+    consolidation = LatentGraphConsolidation.from_config(cfg)
+    assert consolidation.dense_similarity_threshold == 0.89
+    assert consolidation.relation_overlap_threshold == 0.82
+    assert consolidation.min_internal_similarity == 0.73
+    assert consolidation.merge_confidence_threshold == 0.87
+    assert consolidation.conformal_merge_alpha == 0.03
+
+
+def test_pipeline_config_sync_allocated_risk_budgets():
+    """Verify PipelineConfig.sync_allocated_risk_budgets propagates allocated alphas across phases."""
+    from episteme_pipeline.config import PipelineConfig
+
+    config = PipelineConfig(
+        decision_engine=DecisionEngineConfig(
+            global_alpha=0.08,
+            risk_budget_weights={
+                "phase2_entity_discovery": 0.25,
+                "phase3b_consolidation": 0.125,
+                "phase4_argument_mining": 0.375,
+                "phase5_fusion": 0.25,
+            },
+        )
+    )
+
+    config.sync_allocated_risk_budgets()
+
+    # Total weight = 1.0, global_alpha = 0.08
+    # phase2: 0.08 * 0.25 = 0.02
+    # phase3b: 0.08 * 0.125 = 0.01
+    # phase4: 0.08 * 0.375 = 0.03
+    # phase5: 0.08 * 0.25 = 0.02
+    assert np.isclose(config.phase2.conformal_linking_alpha, 0.02)
+    assert np.isclose(config.phase3b.verification.conformal_alpha, 0.01)
+    assert np.isclose(config.phase4.conformal_alpha, 0.03)
+    assert np.isclose(config.phase5.gating.conformal_alpha, 0.02)
+
+
+def test_decision_question_from_bundle_without_reflection():
+    """Verify DecisionQuestion.from_bundle maps typed fields without reflection hacks."""
+    from episteme_pipeline.prompts.models import StructuredPromptBundle
+    from episteme_pipeline.protocols.decision import DecisionQuestion
+
+    bundle = StructuredPromptBundle(
+        direct_template="Direct prompt for {topic}",
+        decision_template="Should we fuse concepts on {topic}?",
+        decision_criteria={"YES": "Fuse", "NO": "Keep separate"},
+    )
+
+    question = DecisionQuestion.from_bundle(
+        bundle=bundle,
+        type="choice",
+        format_kwargs={"topic": "epistemology"},
+        alpha=0.01,
+    )
+
+    assert question.question == "Should we fuse concepts on epistemology?"
+    assert question.type == "choice"
+    assert question.criteria == {"YES": "Fuse", "NO": "Keep separate"}
+    assert question.alpha == 0.01
+
+
+def test_pipeline_for_task_wires_calibrator_with_global_alpha_and_syncs():
+    """Verify Pipeline.for_task wires ConformalCalibrator with global_alpha and syncs phase alphas."""
+    from unittest.mock import MagicMock
+    from episteme_pipeline.config import PipelineConfig
+    from episteme_pipeline.pipeline import Pipeline
+    from episteme_pipeline.protocols.decision import DecisionEngine
+
+    config = PipelineConfig(
+        decision_engine=DecisionEngineConfig(
+            global_alpha=0.04,
+            risk_budget_weights={
+                "phase2_entity_discovery": 0.25,
+                "phase3b_consolidation": 0.25,
+                "phase4_argument_mining": 0.25,
+                "phase5_fusion": 0.25,
+            },
+        )
+    )
+
+    mock_llm = MagicMock()
+    mock_llm.model = "test-model"
+    mock_llm.temperature = 0.0
+
+    mock_embed = AsyncMock()
+    mock_embed.aget_text_embedding_batch = AsyncMock(return_value=[[0.1, 0.2]])
+
+    mock_cross = MagicMock()
+    mock_cross.predict = MagicMock(return_value=[0.9])
+
+    mock_engine = MagicMock(spec=DecisionEngine)
+    mock_engine.name = "mock_jev"
+    mock_engine.evaluate_choice = AsyncMock()
+
+    pipeline = Pipeline.for_task(
+        task="knowledge_graph",
+        config=config,
+        llm=mock_llm,
+        embedding_model=mock_embed,
+        cross_encoder=mock_cross,
+        decision_engine=mock_engine,
+    )
+
+    # Check that calibrator on observable decision engine received global_alpha
+    obs_engine = pipeline.decision_engine
+    assert obs_engine is not None
+    assert obs_engine.calibrator is not None
+    assert obs_engine.calibrator.global_alpha == 0.04
+    assert np.isclose(obs_engine.calibrator.get_allocated_alpha("phase3b_consolidation"), 0.01)
+
+    # Check that phase configs were synced
+    assert np.isclose(pipeline.config.phase2.conformal_linking_alpha, 0.01)
+    assert np.isclose(pipeline.config.phase3b.verification.conformal_alpha, 0.01)
+    assert np.isclose(pipeline.config.phase4.conformal_alpha, 0.01)
+    assert np.isclose(pipeline.config.phase5.gating.conformal_alpha, 0.01)
+
+
+def test_clique_constrained_components_max_diameter():
+    """Verify clique_constrained_components enforces max_diameter bounds."""
+    # 3 nodes: 0, 1, 2
+    # sim(0, 1) = 0.95, sim(1, 2) = 0.85, sim(0, 2) = 0.75
+    # Distances: d(0, 1) = 0.05, d(1, 2) = 0.15, d(0, 2) = 0.25
+    sim_matrix = np.array([
+        [1.00, 0.95, 0.75],
+        [0.95, 1.00, 0.85],
+        [0.75, 0.85, 1.00],
+    ])
+    edges = [(0, 1), (1, 2), (0, 2)]
+
+    # With max_diameter=0.20, merging {0, 1} and {2} is blocked because d(0, 2) = 0.25 > 0.20
+    # even though all similarities exceed min_internal_similarity=0.70!
+    clusters = clique_constrained_components(
+        3, edges, sim_matrix, min_internal_similarity=0.70, max_diameter=0.20
+    )
+    assert len(clusters) == 2
+    assert [0, 1] in clusters
+    assert [2] in clusters
+
+    # With max_diameter=0.30, merging is permitted
+    clusters_loose = clique_constrained_components(
+        3, edges, sim_matrix, min_internal_similarity=0.70, max_diameter=0.30
+    )
+    assert len(clusters_loose) == 1
+    assert clusters_loose[0] == [0, 1, 2]
+
+
+def test_clique_constrained_components_deterministic_ordering_and_edge_cases():
+    """Verify clique_constrained_components handles edge cases and returns deterministically sorted clusters."""
+    # Empty nodes
+    assert clique_constrained_components(0, [], np.zeros((0, 0))) == []
+
+    # Empty edges: singletons sorted
+    sim = np.eye(3)
+    singletons = clique_constrained_components(3, [], sim)
+    assert singletons == [[0], [1], [2]]
+
+    # Self-loops and out-of-bounds edges are safely ignored
+    dirty_edges = [(0, 0), (1, 1), (0, 1), (5, 9)]
+    sim_pair = np.array([
+        [1.0, 0.9, 0.1],
+        [0.9, 1.0, 0.1],
+        [0.1, 0.1, 1.0],
+    ])
+    comps = clique_constrained_components(3, dirty_edges, sim_pair, min_internal_similarity=0.8)
+    assert comps == [[0, 1], [2]]
+
+
+def test_embedding_argument_clustering_fingerprint():
+    """Verify EmbeddingArgumentClustering implements deterministic fingerprinting."""
+    clustering = EmbeddingArgumentClustering(
+        embedding_model=None,
+        similarity_threshold=0.88,
+        max_components=5000,
+        min_internal_similarity=0.78,
+        max_diameter=0.25,
+    )
+
+    fp = clustering.fingerprint()
+    assert fp["class"] == "EmbeddingArgumentClustering"
+    assert fp["similarity_threshold"] == 0.88
+    assert fp["max_components"] == 5000
+    assert fp["min_internal_similarity"] == 0.78
+    assert fp["max_diameter"] == 0.25
+    assert fp["embedding_model"] is None
+
+
+def test_decision_engine_config_fallback_on_invalid_weights():
+    """Verify DecisionEngineConfig gracefully falls back when total weight <= 0."""
+    config = DecisionEngineConfig(
+        conformal_alpha=0.05,
+        risk_budget_weights={"p1": 0.0, "p2": -1.0},
+    )
+    alphas = config.allocate_phase_alphas()
+    assert alphas["p1"] == 0.05
+    assert alphas["p2"] == 0.05
+
+

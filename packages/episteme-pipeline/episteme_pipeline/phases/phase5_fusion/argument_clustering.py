@@ -42,7 +42,6 @@ from episteme_pipeline.protocols.fusion import ArgumentClustering
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.utils.graph_algorithms import (
     clique_constrained_components,
-    union_find_components,
 )
 from episteme_pipeline.utils.similarity import cosine_similarity_matrix
 

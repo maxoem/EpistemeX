@@ -99,6 +99,11 @@ def clique_constrained_components(
     -----
     Corresponds to complete-linkage / correlation clustering (Bansal et al., 2004).
     Candidate edges are evaluated greedily in descending order of similarity.
+
+    References
+    ----------
+    .. [1] Bansal, N., Blum, A., & Chawla, S. (2004). Correlation clustering.
+       Machine Learning, 56(1), 89-113.
     """
 
     if n <= 0:
@@ -114,7 +119,7 @@ def clique_constrained_components(
     valid_edges = [(u, v) for u, v in edges if 0 <= u < n and 0 <= v < n and u != v]
     sorted_edges = sorted(
         valid_edges,
-        key=lambda e: float(sim[e[0], e[1]]),
+        key=lambda e: (float(sim[e[0], e[1]]), -min(e[0], e[1]), -max(e[0], e[1])),
         reverse=True,
     )
 
@@ -149,5 +154,5 @@ def clique_constrained_components(
                 node_to_cluster[m] = c_u
             del cluster_members[c_v]
 
-    return [sorted(members) for members in cluster_members.values()]
+    return sorted([sorted(members) for members in cluster_members.values()], key=lambda c: c[0])
 
