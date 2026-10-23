@@ -55,6 +55,8 @@ from episteme_pipeline.protocols.modality import (
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.fingerprints import (
+    compute_document_fingerprints,
+    fingerprint_curation_ledger,
     fingerprint_existing_sources,
     fingerprint_method,
     fingerprint_phase_config,
@@ -824,10 +826,18 @@ class Pipeline:
             [str(p) for p in pipeline_input.source_paths],
             [str(p) for p in pipeline_input.bib_paths]
         )
+        doc_fps = compute_document_fingerprints([str(p) for p in pipeline_input.source_paths])
         anchor_fp = fingerprint_structural_anchor(pipeline_input.structural_anchor)
+        ledger = pipeline_input.resolved_curation_ledger()
+        ledger_fp = fingerprint_curation_ledger(ledger)
+        fp_payload: dict[str, Any] = {"source": source_fp}
+        if anchor_fp is not None:
+            fp_payload["anchor"] = anchor_fp
+        if ledger_fp is not None:
+            fp_payload["ledger"] = ledger_fp
         input_fp = (
-            stable_fingerprint({"source": source_fp, "anchor": anchor_fp})
-            if anchor_fp is not None
+            stable_fingerprint(fp_payload)
+            if len(fp_payload) > 1
             else source_fp
         )
         cfg_snapshot = self.config.model_dump(mode="json")
@@ -841,6 +851,8 @@ class Pipeline:
             status=RunStatus.RUNNING,
             schema_version=self.config.graph_schema.version,
             source_fingerprint=source_fp,
+            document_fingerprints=doc_fps,
+            curation_ledger_fingerprint=ledger_fp,
             input_fingerprint=input_fp,
             input_fingerprint_inputs={
                 "source_paths": list(pipeline_input.source_paths),
@@ -849,6 +861,8 @@ class Pipeline:
                 "structural_anchor": anchor_dump,
                 "source_fingerprint": source_fp,
                 "structural_anchor_fingerprint": anchor_fp,
+                "document_fingerprints": doc_fps,
+                "curation_ledger_fingerprint": ledger_fp,
             },
             config_snapshot=cfg_snapshot,
             phase_config_fingerprints={f"phase_{i}": v for i, v in phase_cfg_fps.items()},
@@ -927,7 +941,16 @@ class Pipeline:
         # A changed input invalidates everything from phase 1 on.
         if prior.input_fingerprint != current.input_fingerprint:
             earliest_invalid = 1
-            reason = "source-changed"
+            if (
+                prior.document_fingerprints
+                and all(
+                    current.document_fingerprints.get(k) == v
+                    for k, v in prior.document_fingerprints.items()
+                )
+            ):
+                reason = "source-changed:incremental"
+            else:
+                reason = "source-changed"
 
         # A changed pipeline-wide decision engine or calibrator invalidates from phase 1 on.
         if earliest_invalid is None:
@@ -1100,6 +1123,15 @@ class Pipeline:
         records_by_ordinal = {rec.phase_ordinal: rec for rec in manifest.phase_records}
         from episteme_pipeline.artifacts.execution import EpistemicStateView
 
+        prior_run_id = invalidation_decision.resume_point.run_id or manifest.parent_run_id
+        prior_manifest: RunManifest | None = None
+        prior_artifacts: ArtifactCollection | None = None
+        if prior_run_id:
+            prior_manifest = self._manifest_store.read_manifest(prior_run_id)
+            raw_prior = await self._get_run_artifacts_raw(prior_run_id)
+            if raw_prior:
+                prior_artifacts = ArtifactCollection(raw_prior)
+
         # Execute phases starting from start_index (1-based). If start_index > len, nothing to run.
         for ordinal in range(start_index, len(self._phase_entries) + 1):
             entry = self._phase_entries[ordinal - 1]
@@ -1138,6 +1170,8 @@ class Pipeline:
                 pipeline_input=pipeline_input,
                 previous=previous,
                 lineage_fingerprint=lineage_fp,
+                prior_artifacts=prior_artifacts,
+                prior_manifest=prior_manifest,
             )
 
             if (

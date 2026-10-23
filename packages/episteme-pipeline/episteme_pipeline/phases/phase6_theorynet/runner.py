@@ -134,19 +134,69 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             if input.canonical_theory_relations
             else input.theory_relations
         )
+        curation_ledger = (
+            context.pipeline_input.resolved_curation_ledger()
+            if context and context.pipeline_input
+            else None
+        )
+
         total_items = len(source_atoms) + len(source_relations)
         with self.progress_scope(
             "Phase 6: TheoryNet Projection",
             total_items=total_items,
             description="TheoryNet Projection",
         ) as advance:
-            # Resolve propositional modal certainty for atoms missing explicit scores
+            # Resolve propositional modal certainty for atoms missing explicit scores or with ledger overrides
             for atom in source_atoms:
+                if curation_ledger is not None:
+                    override_val = curation_ledger.get_modality_override(atom.id)
+                    if override_val is not None:
+                        atom.modal_strength = override_val
+                        atom.base_score = override_val
+                        continue
                 if "modal_strength" not in atom.model_fields_set and "base_score" not in atom.model_fields_set:
                     atom.modal_strength = await self.modal_resolver.resolve_modality(atom)
                     atom.base_score = atom.modal_strength
 
+            if curation_ledger is not None and curation_ledger.relation_overrides:
+                curated_input_relations = []
+                for rel in source_relations:
+                    override = curation_ledger.get_relation_override(rel.from_id, rel.to_id)
+                    if override is not None:
+                        if override.relation_type == "REJECTED":
+                            continue
+                        rel = rel.model_copy(
+                            update={
+                                "relation_type": override.relation_type,
+                                "polarity": override.polarity or override.relation_type,
+                                "confidence": override.confidence,
+                                "weight": override.confidence,
+                            }
+                        )
+                    curated_input_relations.append(rel)
+                if input.canonical_theory_relations:
+                    input.canonical_theory_relations = curated_input_relations
+                else:
+                    input.theory_relations = curated_input_relations
+
             theory_net: TheoryNet = self.projector.project(input)
+
+            if curation_ledger is not None and curation_ledger.relation_overrides:
+                curated_relations = []
+                for rel in theory_net.relations:
+                    override = curation_ledger.get_relation_override(rel.from_id, rel.to_id)
+                    if override is not None:
+                        if override.relation_type == "REJECTED":
+                            continue
+                        rel = rel.model_copy(
+                            update={
+                                "relation_type": override.relation_type,
+                                "polarity": override.polarity or override.relation_type,
+                                "weight": override.confidence,
+                            }
+                        )
+                    curated_relations.append(rel)
+                theory_net = theory_net.model_copy(update={"relations": curated_relations})
 
             atoms_updated = 0
             relations_updated = 0

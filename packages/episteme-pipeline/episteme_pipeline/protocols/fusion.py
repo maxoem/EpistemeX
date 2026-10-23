@@ -1,7 +1,13 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.graph_store import FusionGraph
+
+if TYPE_CHECKING:
+    from episteme_pipeline.contracts.phase_contracts import EpistemicCurationLedger
 
 
 class InstanceFusion(Fingerprintable, ABC):
@@ -23,11 +29,24 @@ class InstanceFusion(Fingerprintable, ABC):
     async def fuse(
         self,
         graph_store: FusionGraph,
+        curation_ledger: EpistemicCurationLedger | None = None,
     ) -> dict[str, str]:
         """
         Returns a map of {original_entity_id -> canonical_entity_id} for all
         merged entities. Entities that are not merged map to themselves.
         Graph store is updated in place (MERGE semantics).
+
+        Parameters
+        ----------
+        graph_store : FusionGraph
+            The graph store containing entities and local relation edges.
+        curation_ledger : EpistemicCurationLedger | None, optional
+            Axiomatic human curation constraints (must-link / cannot-link), by default None.
+
+        Returns
+        -------
+        dict[str, str]
+            Map from original entity identifier to canonical entity identifier.
         """
         ...
 

@@ -34,9 +34,9 @@ flowchart TD
     D --> E[Retrieve 1-Hop Phase 3 Relations]
     E --> F[Calculate Jaccard Similarity of Relation Signatures]
     F --> G{Overlap >= relation_overlap_threshold<br>& same label?}
-    G -->|Yes| H[Add Edge to Union-Find Structure]
+    G -->|Yes| H[Add Candidate Merge Edge]
     G -->|No| I[Discard Candidate Pair]
-    H --> J[Compute Connected Components / Clusters]
+    H --> J[Compute Clique-Constrained Clusters<br>min_internal_similarity & max_diameter]
     J --> K[Elect Canonical Entity based on source_chunk_ids count]
     K --> L[Generate Canonicalization Artifacts]
 ```
@@ -64,11 +64,14 @@ If the Jaccard similarity is equal to or greater than `relation_overlap_threshol
 
 ### 3. Clustering and Canonicalization
 
-Using a **Union-Find** data structure, we find the connected components of matching entity pairs to form clusters of
-duplicates. For each cluster:
+Using **Clique-Constrained Complete-Linkage Clustering** ([`clique_constrained_components`](../../reference/graph-api.md)),
+we partition candidate pairs into clusters while strictly enforcing the pairwise internal similarity floor
+(`min_internal_similarity`) and maximum diameter bound (`max_diameter`). This mathematically prevents single-linkage bridge
+chaining ($A \sim B \sim C$ where $A \not\sim C$) from collapsing distinct philosophical concepts through polysemous bridges.
+For each cluster:
 
 - We elect a **canonical entity** based on grounding (the entity associated with the largest number of
-  `source_chunk_ids`).
+  `source_chunk_ids`) or via calibrated System 1 categorical election when `decision_engine` is available.
 - We generate a map from all other duplicate entity IDs in the cluster to the elected canonical entity ID.
 - We emit `Canonicalization` artifacts detailing the resolution mapping.
 
@@ -87,6 +90,10 @@ The following parameters are configured under `Phase3bConfig` in `pipeline/confi
 | `enabled`                         | `bool`                              | `True`    | Whether to execute the latent consolidation sweep.                 |
 | `dense_similarity_threshold`      | `float`                             | `0.85`    | Minimum cosine similarity between entity textual envelopes.        |
 | `relation_overlap_threshold`      | `float`                             | `0.8`     | Minimum Jaccard similarity of 1-hop relation signatures.           |
+| `use_csls`                        | `bool`                              | `True`    | Cross-Domain Similarity Local Scaling to correct hub anisotropy.   |
+| `csls_k_nearest`                  | `int`                               | `10`      | Neighborhood size for CSLS mean similarity calculation.            |
+| `min_internal_similarity`         | `float`                             | `0.70`    | Pairwise similarity floor preventing non-transitive bridge merges. |
+| `max_diameter`                    | `float \| None`                     | `None`    | Optional maximum cluster diameter constraint.                      |
 | `verification`                    | `ConsolidationVerificationConfig`   | `default` | Encapsulated verification sub-config for calibrated merge checks.  |
 | `verification.enabled`            | `bool`                              | `False`   | Enables System 1 Jev Choice verification for borderline pairs.     |
 | `verification.similarity_lower`   | `float`                             | `0.75`    | Lower cosine similarity bound for borderline verification band.    |

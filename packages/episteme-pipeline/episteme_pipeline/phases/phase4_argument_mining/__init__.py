@@ -295,6 +295,55 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
 
         import asyncio
         from itertools import batched
+        from episteme_pipeline.runs.fingerprints import is_phase_unchanged
+        from episteme_pipeline.artifacts.models import (
+            TheoryAtomArtifact,
+            TheoryRelationArtifact,
+        )
+
+        # Hydrate unchanged documents' chunks and local argument components
+        prior_artifacts = context.prior_artifacts
+        prior_manifest = context.prior_manifest
+        can_hydrate = (
+            prior_artifacts is not None
+            and prior_manifest is not None
+            and is_phase_unchanged(context.manifest, prior_manifest, 4, self.name)
+        )
+        if can_hydrate:
+            prior_fps = prior_manifest.document_fingerprints
+            curr_fps = context.manifest.document_fingerprints
+            unchanged_doc_ids = {
+                d_id
+                for d_id, fp in curr_fps.items()
+                if prior_fps.get(d_id) == fp
+            }
+            unchanged_chunk_ids = {
+                c.id
+                for c in input.chunks
+                if c.source_doc_id in unchanged_doc_ids
+            }
+            atom_chunk_map: dict[str, str] = {}
+            for art in prior_artifacts.artifacts:
+                if isinstance(art.payload, TheoryAtomArtifact):
+                    atom = art.payload.to_domain()
+                    atom_chunk_map[atom.id] = atom.source_chunk_id
+                    if atom.source_chunk_id in unchanged_chunk_ids:
+                        all_components.append(atom)
+                        reader.register_theory_atom(atom)
+
+            for art in prior_artifacts.artifacts:
+                if isinstance(art.payload, TheoryRelationArtifact):
+                    rel = art.payload.to_domain()
+                    source_chunk = atom_chunk_map.get(rel.source_id)
+                    target_chunk = atom_chunk_map.get(rel.target_id)
+                    if (
+                        source_chunk in unchanged_chunk_ids
+                        and target_chunk in unchanged_chunk_ids
+                    ):
+                        all_local_relations.append(rel)
+                        reader.register_theory_relation(rel)
+
+            chunks = [c for c in chunks if c.id not in unchanged_chunk_ids]
 
         checkpoint_store = (
             self.graph_store
@@ -367,29 +416,30 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                         list(processed_batch), effective_phase
                     )
 
-        progress_task = f"Phase 4: Chunk ADU Extraction ({len(chunks)} chunks)"
-        with self.progress_scope(
-            progress_task,
-            total_items=len(chunks),
-            description="Chunk ADU Extraction",
-        ) as advance:
-            batch_size = self.config.batch_size
-            executor = CheckpointedBatchExecutor[
-                L1Chunk, tuple[list[TheoryAtom], list[TheoryRelation], str]
-            ](
-                checkpoint_store=checkpoint_store,
-                phase_tag=effective_phase,
-                batch_size=batch_size,
-                item_key_fn=lambda ch: ch.id,
-                process_item_fn=_process_chunk_item,
-                on_batch_complete=_on_chunk_batch_complete,
-                guard_systematic_failure=True,
-            )
-            try:
-                await executor.execute(chunks, on_batch_advance=advance)
-            except SystematicBatchFailureError as exc:
-                msg = str(exc).replace("items", "chunks")
-                raise SystematicChunkFailure(msg) from exc
+        if chunks:
+            progress_task = f"Phase 4: Chunk ADU Extraction ({len(chunks)} chunks)"
+            with self.progress_scope(
+                progress_task,
+                total_items=len(chunks),
+                description="Chunk ADU Extraction",
+            ) as advance:
+                batch_size = self.config.batch_size
+                executor = CheckpointedBatchExecutor[
+                    L1Chunk, tuple[list[TheoryAtom], list[TheoryRelation], str]
+                ](
+                    checkpoint_store=checkpoint_store,
+                    phase_tag=effective_phase,
+                    batch_size=batch_size,
+                    item_key_fn=lambda ch: ch.id,
+                    process_item_fn=_process_chunk_item,
+                    on_batch_complete=_on_chunk_batch_complete,
+                    guard_systematic_failure=True,
+                )
+                try:
+                    await executor.execute(chunks, on_batch_advance=advance)
+                except SystematicBatchFailureError as exc:
+                    msg = str(exc).replace("items", "chunks")
+                    raise SystematicChunkFailure(msg) from exc
 
         # Deduplicate all_components by id to avoid duplicating artifacts or ARC calls
         seen_ids = set()
@@ -423,7 +473,59 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 for rel_batch in batched(global_relations, 500):
                     await self.graph_store.upsert_theory_relations(list(rel_batch))
 
-        all_relations = all_local_relations + global_relations
+        all_relations = []
+        seen_rel_keys: set[tuple[str, str, str]] = set()
+        for rel in all_local_relations + global_relations:
+            r_key = (rel.from_id, rel.relation_type, rel.to_id)
+            if r_key not in seen_rel_keys:
+                seen_rel_keys.add(r_key)
+                all_relations.append(rel)
+
+        curation_ledger = (
+            context.pipeline_input.resolved_curation_ledger()
+            if context and context.pipeline_input
+            else None
+        )
+        if curation_ledger is not None and curation_ledger.relation_overrides:
+            filtered_relations: list[TheoryRelation] = []
+            for rel in all_relations:
+                override = curation_ledger.get_relation_override(rel.from_id, rel.to_id)
+                if override is not None:
+                    if override.relation_type == "REJECTED":
+                        logger.info(
+                            "Curation ledger suppressed rejected argument relation %s -> %s",
+                            rel.from_id,
+                            rel.to_id,
+                        )
+                        continue
+                    rel = rel.model_copy(
+                        update={
+                            "relation_type": override.relation_type,
+                            "polarity": override.polarity or override.relation_type,
+                            "confidence": override.confidence,
+                        }
+                    )
+                filtered_relations.append(rel)
+            all_relations = filtered_relations
+
+            existing_pairs = {(r.from_id, r.to_id) for r in all_relations}
+            atom_ids = {a.id for a in all_components}
+            for override in curation_ledger.relation_overrides.values():
+                if (
+                    override.relation_type != "REJECTED"
+                    and (override.source_id, override.target_id) not in existing_pairs
+                    and override.source_id in atom_ids
+                    and override.target_id in atom_ids
+                ):
+                    injected_rel = TheoryRelation(
+                        from_id=override.source_id,
+                        to_id=override.target_id,
+                        relation_type=override.relation_type,
+                        polarity=override.polarity or override.relation_type,
+                        confidence=override.confidence,
+                    )
+                    all_relations.append(injected_rel)
+                    existing_pairs.add((override.source_id, override.target_id))
 
         artifacts = []
         for component in all_components:

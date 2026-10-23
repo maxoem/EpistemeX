@@ -101,11 +101,17 @@ class Phase3bLatentConsolidationRunner(PhaseRunner[Phase3ArtifactsView]):
             else self.graph_store
         )
 
+        ledger = (
+            context.pipeline_input.resolved_curation_ledger()
+            if context and context.pipeline_input
+            else None
+        )
+
         progress_task = "Phase 3b: Latent Consolidation"
         with self.progress_scope(
             progress_task, total_items=1, description="Latent Consolidation"
         ) as advance:
-            fused_map = await self.instance_fusion.fuse(reader)  # type: ignore[arg-type]
+            fused_map = await self.instance_fusion.fuse(reader, curation_ledger=ledger)  # type: ignore[arg-type]
             advance(1)
 
         artifacts = []

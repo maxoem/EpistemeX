@@ -25,6 +25,13 @@ from itertools import batched
 from pathlib import Path
 from typing import Any
 
+from episteme_pipeline.runs.fingerprints import is_phase_unchanged
+from episteme_pipeline.artifacts.models import (
+    ArtifactEnvelope,
+    ArtifactKind,
+    ChunkArtifact,
+    DocumentArtifact,
+)
 from episteme_pipeline.artifacts.builders import (
     build_chunk_artifact,
     build_document_artifact,
@@ -100,35 +107,97 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
         """
         bib_paths = [Path(p) for p in input.bib_paths]
 
-        progress_task = f"Phase 1: {len(input.source_paths)} docs"
-        with self.progress_scope(
-            progress_task,
-            total_items=len(input.source_paths),
-            description="Data Foundation",
-        ) as advance:
-            async def _process_with_progress(path):
-                res = await self._process_document(
-                    Path(path),
-                    bib_paths=bib_paths,
-                    run_id=context.run_id,
-                )
-                advance(1)
-                return res
+        hydrated_artifacts: list[ArtifactEnvelope] = []
+        delta_paths: list[str] = []
 
-            results = await asyncio.gather(
-                *[
-                    _process_with_progress(source_path)
-                    for source_path in input.source_paths
-                ]
-            )
+        prior_artifacts = context.prior_artifacts
+        prior_manifest = context.prior_manifest
+        can_hydrate = (
+            prior_artifacts is not None
+            and prior_manifest is not None
+            and is_phase_unchanged(context.manifest, prior_manifest, 1, self.name)
+        )
+        if can_hydrate:
+            prior_fps = prior_manifest.document_fingerprints
+            curr_fps = context.manifest.document_fingerprints
+            for source_path in input.source_paths:
+                p = Path(source_path)
+                d_id = doc_id(p)
+                p_str = str(source_path)
+                curr_fp = curr_fps.get(d_id) or curr_fps.get(p_str)
+                prior_fp = prior_fps.get(d_id) or prior_fps.get(p_str)
+
+                if curr_fp and prior_fp and curr_fp == prior_fp:
+                    doc_arts = [
+                        a
+                        for a in prior_artifacts.artifacts
+                        if a.kind == ArtifactKind.DOCUMENT
+                        and (
+                            (
+                                isinstance(a.payload, DocumentArtifact)
+                                and a.payload.document_id == d_id
+                            )
+                            or a.provenance.source_document_id == d_id
+                            or a.provenance.source_path == p_str
+                        )
+                    ]
+                    chunk_arts = [
+                        a
+                        for a in prior_artifacts.artifacts
+                        if a.kind == ArtifactKind.CHUNK
+                        and (
+                            (
+                                isinstance(a.payload, ChunkArtifact)
+                                and a.payload.document_id == d_id
+                            )
+                            or a.provenance.source_document_id == d_id
+                        )
+                    ]
+                    if doc_arts and chunk_arts:
+                        for da in doc_arts:
+                            hydrated_artifacts.append(
+                                da.model_copy(update={"run_id": context.run_id})
+                            )
+                        for ca in chunk_arts:
+                            hydrated_artifacts.append(
+                                ca.model_copy(update={"run_id": context.run_id})
+                            )
+                        continue
+                delta_paths.append(source_path)
+        else:
+            delta_paths = list(input.source_paths)
 
         documents: list[L1Document] = []
         all_chunks: list[L1Chunk] = []
-        for doc, chunks in results:
-            documents.append(doc)
-            all_chunks.extend(chunks)
 
-        artifacts = [
+        if delta_paths:
+            progress_task = f"Phase 1: {len(delta_paths)} docs"
+            with self.progress_scope(
+                progress_task,
+                total_items=len(delta_paths),
+                description="Data Foundation",
+            ) as advance:
+                async def _process_with_progress(path):
+                    res = await self._process_document(
+                        Path(path),
+                        bib_paths=bib_paths,
+                        run_id=context.run_id,
+                    )
+                    advance(1)
+                    return res
+
+                results = await asyncio.gather(
+                    *[
+                        _process_with_progress(source_path)
+                        for source_path in delta_paths
+                    ]
+                )
+
+            for doc, chunks in results:
+                documents.append(doc)
+                all_chunks.extend(chunks)
+
+        new_artifacts = [
             build_document_artifact(
                 document,
                 run_id=context.run_id,
@@ -137,7 +206,7 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
             )
             for document in documents
         ]
-        artifacts.extend(
+        new_artifacts.extend(
             build_chunk_artifact(
                 chunk,
                 run_id=context.run_id,
@@ -146,7 +215,7 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
             )
             for chunk in all_chunks
         )
-        return ArtifactCollection(artifacts)
+        return ArtifactCollection(hydrated_artifacts + new_artifacts)
 
     async def _process_document(
         self,

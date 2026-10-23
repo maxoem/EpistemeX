@@ -173,8 +173,59 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
         # Sort entities deterministically to guarantee order-invariant pairing across runs
         entities = sorted(entities, key=lambda e: e.id)
 
+        hydrated_prior_triples: list[L2Triple] = []
+        prior_artifacts = context.prior_artifacts if context else None
+        prior_manifest = context.prior_manifest if context else None
+        from episteme_pipeline.runs.fingerprints import is_phase_unchanged
+        from episteme_pipeline.artifacts.models import GlobalRelationArtifact
+
+        can_hydrate = (
+            prior_artifacts is not None
+            and prior_manifest is not None
+            and is_phase_unchanged(context.manifest, prior_manifest, 3, self.name)
+        )
+        delta_entity_ids: set[str] | None = None
+        if can_hydrate and prior_artifacts is not None and prior_manifest is not None:
+            prior_fps = prior_manifest.document_fingerprints
+            curr_fps = context.manifest.document_fingerprints
+            unchanged_doc_ids = {
+                d_id
+                for d_id, fp in curr_fps.items()
+                if prior_fps.get(d_id) == fp
+            }
+            unchanged_chunk_ids = {
+                c.id
+                for c in input.chunks
+                if c.source_doc_id in unchanged_doc_ids
+            }
+            if unchanged_chunk_ids:
+                prior_only_entity_ids = {
+                    e.id
+                    for e in entities
+                    if e.source_chunk_ids
+                    and all(cid in unchanged_chunk_ids for cid in e.source_chunk_ids)
+                }
+                delta_entity_ids = {
+                    e.id for e in entities if e.id not in prior_only_entity_ids
+                }
+                for art in prior_artifacts.artifacts:
+                    if isinstance(art.payload, GlobalRelationArtifact):
+                        triple = art.payload.to_domain()
+                        if (
+                            triple.subject_id in prior_only_entity_ids
+                            and triple.object_id in prior_only_entity_ids
+                        ):
+                            hydrated_prior_triples.append(triple)
+
         candidates = await self.global_extractor.candidate_pairs(entities)
-        if not candidates:
+        if delta_entity_ids is not None:
+            candidates = [
+                c
+                for c in candidates
+                if c.entity_a.id in delta_entity_ids or c.entity_b.id in delta_entity_ids
+            ]
+
+        if not candidates and not hydrated_prior_triples:
             logger.info("Phase 3: 0 candidate pairs generated — skipping extraction.")
             return ArtifactCollection([])
 
@@ -195,44 +246,45 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
             if checkpoint_store is not None
             else []
         )
-        all_triples: list[L2Triple] = list(prior_triples)
+        all_triples: list[L2Triple] = list(hydrated_prior_triples) + list(prior_triples)
         succeeded_total = len(prior_triples)
 
-        with self.progress_scope(
-            progress_task,
-            total_items=len(candidates),
-            description="Global Relations",
-        ) as advance:
-            async def _custom_commit(
-                phase: str,
-                batch_triples: list[L2Triple],
-                batch_records: list[PhaseItemRecord],
-            ) -> None:
-                if checkpoint_store is not None:
-                    await checkpoint_store.commit_phase_batch(
-                        phase, batch_triples, batch_records
-                    )
-                elif isinstance(self.graph_store, GraphWriter) and batch_triples:
-                    for triple_chunk in batched(batch_triples, 20):
-                        await self.graph_store.upsert_triples(list(triple_chunk))
+        if candidates:
+            with self.progress_scope(
+                progress_task,
+                total_items=len(candidates),
+                description="Global Relations",
+            ) as advance:
+                async def _custom_commit(
+                    phase: str,
+                    batch_triples: list[L2Triple],
+                    batch_records: list[PhaseItemRecord],
+                ) -> None:
+                    if checkpoint_store is not None:
+                        await checkpoint_store.commit_phase_batch(
+                            phase, batch_triples, batch_records
+                        )
+                    elif isinstance(self.graph_store, GraphWriter) and batch_triples:
+                        for triple_chunk in batched(batch_triples, 20):
+                            await self.graph_store.upsert_triples(list(triple_chunk))
 
-            executor = CheckpointedBatchExecutor[CandidatePair, L2Triple](
-                checkpoint_store=checkpoint_store,
-                phase_tag=effective_phase,
-                batch_size=batch_size,
-                item_key_fn=lambda c: c.key,
-                process_batch_fn=lambda batch: self.global_extractor.extract_pairs(
-                    batch, reader, self.schema
-                ),
-                custom_commit_fn=_custom_commit,
-                guard_systematic_failure=True,
-            )
-            try:
-                result = await executor.execute(candidates, on_batch_advance=advance)
-                all_triples.extend(result.outputs)
-            except SystematicBatchFailureError as exc:
-                msg = str(exc).replace("items", "candidate pairs")
-                raise SystematicPairFailure(msg) from exc
+                executor = CheckpointedBatchExecutor[CandidatePair, L2Triple](
+                    checkpoint_store=checkpoint_store,
+                    phase_tag=effective_phase,
+                    batch_size=batch_size,
+                    item_key_fn=lambda c: c.key,
+                    process_batch_fn=lambda batch: self.global_extractor.extract_pairs(
+                        batch, reader, self.schema
+                    ),
+                    custom_commit_fn=_custom_commit,
+                    guard_systematic_failure=True,
+                )
+                try:
+                    result = await executor.execute(candidates, on_batch_advance=advance)
+                    all_triples.extend(result.outputs)
+                except SystematicBatchFailureError as exc:
+                    msg = str(exc).replace("items", "candidate pairs")
+                    raise SystematicPairFailure(msg) from exc
 
         deduped_triples: list[L2Triple] = []
         seen_triple_keys: set[tuple[str, str, str, str | None]] = set()
@@ -241,6 +293,51 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
             if t_key not in seen_triple_keys:
                 seen_triple_keys.add(t_key)
                 deduped_triples.append(t)
+
+        curation_ledger = (
+            context.pipeline_input.resolved_curation_ledger()
+            if context and context.pipeline_input
+            else None
+        )
+        if curation_ledger is not None and curation_ledger.relation_overrides:
+            filtered_triples: list[L2Triple] = []
+            for t in deduped_triples:
+                override = curation_ledger.get_relation_override(t.subject_id, t.object_id)
+                if override is not None:
+                    if override.relation_type == "REJECTED":
+                        logger.info(
+                            "Curation ledger suppressed rejected relation %s -[%s]-> %s",
+                            t.subject_id,
+                            t.predicate,
+                            t.object_id,
+                        )
+                        continue
+                    t = t.model_copy(
+                        update={
+                            "predicate": override.relation_type,
+                            "confidence": override.confidence,
+                        }
+                    )
+                filtered_triples.append(t)
+            deduped_triples = filtered_triples
+
+            existing_pairs = {(t.subject_id, t.object_id) for t in deduped_triples}
+            entity_ids = {e.id for e in entities}
+            for override in curation_ledger.relation_overrides.values():
+                if (
+                    override.relation_type != "REJECTED"
+                    and (override.source_id, override.target_id) not in existing_pairs
+                    and override.source_id in entity_ids
+                    and override.target_id in entity_ids
+                ):
+                    injected_triple = L2Triple(
+                        subject_id=override.source_id,
+                        predicate=override.relation_type,
+                        object_id=override.target_id,
+                        confidence=override.confidence,
+                    )
+                    deduped_triples.append(injected_triple)
+                    existing_pairs.add((override.source_id, override.target_id))
 
         relation_dist: dict[str, int] = defaultdict(int)
         for t in deduped_triples:

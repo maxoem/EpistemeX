@@ -30,7 +30,7 @@ post-KG-build graph operation rather than a pre-NER text operation.
 - **Cross-chunk alias resolution** is handled by **Phase 3b Latent Graph Consolidation** (`LatentGraphConsolidation` /
   `Phase3bLatentConsolidationRunner`), which runs *after* Phase 3 global relation extraction and *before* Phase 4
   Argument Mining. It uses dense vector embedding similarity combined with Jaccard overlap of 1-hop relation edge
-  signatures to identify duplicate entity pairs, merges them using Union-Find clustering, and emits canonicalization
+  signatures to identify duplicate entity pairs, merges them using clique-constrained clustering, and emits canonicalization
   artifacts.
 
 ## Alternatives considered

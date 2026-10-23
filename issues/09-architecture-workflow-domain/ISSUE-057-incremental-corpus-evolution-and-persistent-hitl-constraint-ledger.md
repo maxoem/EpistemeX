@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Knowledge Base Evolution, Incremental Ingestion, HITL Curation) |
 | **Target Package(s)** | `packages/episteme-pipeline`, `packages/episteme-studio` (`runs/`, `artifacts/`, `pipeline.py`) |
 | **Priority** | **High** |
-| **Status** | `Open` |
+| **Status** | `Resolved` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/artifact_run_model.md`](../../docs/architecture/artifact_run_model.md), [`docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md), [`ADR-0010`](../../docs/adr/0010-graph-preview-driver-selection-neo4j.md), [`ADR-0014`](../../docs/adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [`ADR-0019`](../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md) |
 
 ---
@@ -70,5 +70,5 @@ flowchart LR
 
 ## 4. Acceptance Criteria
 
-- [ ] `RunManifest` tracks per-document SHA-256 fingerprints (`document_fingerprints`), allowing Phase 1, Phase 2, and local Phase 4 artifacts for unchanged documents to be hydrated when new documents ($\Delta D$) are added to `PipelineInput`.
-- [ ] `EpistemicCurationLedger` is defined as a first-class Pydantic contract and respected by Phase 2/3b (must-link / cannot-link constraints) and Phase 3/4/6 (relation & polarity overrides).
+- [x] `RunManifest` tracks per-document SHA-256 fingerprints (`document_fingerprints`), allowing Phase 1, Phase 2, and local Phase 4 artifacts for unchanged documents to be hydrated when new documents ($\Delta D$) are added to `PipelineInput`.
+- [x] `EpistemicCurationLedger` is defined as a first-class Pydantic contract and respected by Phase 2/3b (must-link / cannot-link constraints) and Phase 3/4/6 (relation & polarity overrides).

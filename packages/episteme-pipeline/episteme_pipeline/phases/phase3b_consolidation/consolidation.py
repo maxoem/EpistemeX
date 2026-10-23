@@ -10,6 +10,10 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from episteme_pipeline.contracts.phase_contracts import EpistemicCurationLedger
 
 import numpy as np
 
@@ -248,17 +252,24 @@ class LatentGraphConsolidation(InstanceFusion):
         union = len(set1.union(set2))
         return float(intersection) / union
 
-    async def fuse(self, graph_store: FusionGraph) -> dict[str, str]:
+    async def fuse(
+        self,
+        graph_store: FusionGraph,
+        curation_ledger: EpistemicCurationLedger | None = None,
+    ) -> dict[str, str]:
         """Find and merge duplicate Layer 2 nodes in the graph.
 
         Finds groups of entities with the same label that meet both the dense similarity
         threshold and structural relation overlap threshold, then maps duplicates to a
-        canonical entity.
+        canonical entity. Respects axiomatic must-link and cannot-link constraints from
+        an EpistemicCurationLedger.
 
         Parameters
         ----------
         graph_store : FusionGraph
             The graph store containing Layer 2 entities and relation edges.
+        curation_ledger : EpistemicCurationLedger | None, optional
+            Axiomatic human curation constraints (must-link / cannot-link), by default None.
 
         Returns
         -------
@@ -295,6 +306,23 @@ class LatentGraphConsolidation(InstanceFusion):
         # 2. Find candidates passing definite threshold or borderline verification
         for i in range(n):
             for j in range(i + 1, n):
+                # EpistemicCurationLedger: Hard cannot-link constraint
+                if curation_ledger is not None and curation_ledger.is_cannot_link(
+                    entities[i].id, entities[j].id, entities[i].name, entities[j].name
+                ):
+                    sim_matrix[i, j] = -1.0
+                    sim_matrix[j, i] = -1.0
+                    continue
+
+                # EpistemicCurationLedger: Hard must-link constraint
+                if curation_ledger is not None and curation_ledger.is_must_link(
+                    entities[i].id, entities[j].id, entities[i].name, entities[j].name
+                ):
+                    sim_matrix[i, j] = 1.0
+                    sim_matrix[j, i] = 1.0
+                    edges.append((i, j))
+                    continue
+
                 # Only compare entities of the same label
                 if entities[i].label != entities[j].label:
                     continue

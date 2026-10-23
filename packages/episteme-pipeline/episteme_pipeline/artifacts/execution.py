@@ -820,6 +820,10 @@ class ArtifactExecutionContext:
         Cumulative artifact collection from completed upstream phases.
     lineage_fingerprint : str or None, optional
         Deterministic lineage fingerprint for the currently executing phase.
+    prior_artifacts : ArtifactCollection or None, optional
+        Cumulative artifact collection hydrated from historical parent run lineage.
+    prior_manifest : RunManifest or None, optional
+        RunManifest of the immediate parent or resume run.
     """
 
     run_id: str
@@ -827,3 +831,5 @@ class ArtifactExecutionContext:
     pipeline_input: PipelineInput
     previous: ArtifactCollection | None = None
     lineage_fingerprint: str | None = None
+    prior_artifacts: ArtifactCollection | None = None
+    prior_manifest: RunManifest | None = None

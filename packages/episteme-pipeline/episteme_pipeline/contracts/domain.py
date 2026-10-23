@@ -551,6 +551,16 @@ class TheoryRelation(BaseModel):
         return props
 
     @property
+    def from_id(self) -> str:
+        """Alias for source_id."""
+        return self.source_id
+
+    @property
+    def to_id(self) -> str:
+        """Alias for target_id."""
+        return self.target_id
+
+    @property
     def polarity(self) -> int:
         """Epistemic polarity (+1 for support, -1 for attack, 0 for neutral).
 

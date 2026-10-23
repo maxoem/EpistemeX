@@ -48,6 +48,8 @@ class RunManifest(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     source_fingerprint: str | None = None
+    document_fingerprints: dict[str, str] = Field(default_factory=dict)
+    curation_ledger_fingerprint: str | None = None
     input_fingerprint: str | None = None
     input_fingerprint_inputs: dict[str, object] = Field(default_factory=dict)
     config_fingerprint: str | None = None

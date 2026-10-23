@@ -37,7 +37,7 @@ triple decoding, TAG subgraph envelopes.
 **Purpose**: Non-generative mathematical sweep over dense vectors and 1-hop relation signatures to resolve parallel
 entity duplicates.  
 **Theoretical Basis**: Latent topological invariance  
-**Key Concepts**: Pairwise cosine similarity matrix, Jaccard relation-overlap verification, Union-Find clustering,
+**Key Concepts**: Pairwise cosine similarity matrix, Jaccard relation-overlap verification, Clique-constrained clustering,
 canonical entity election.
 
 ### [Phase 4: Entity Maturation (Batch Synthesis)](4_entity_maturation/)
@@ -102,7 +102,7 @@ theory induction, anomaly detection.
 flowchart TD
     P1["Phase 1: Data Foundation<br>(Document/Chapter/Chunk)"] --> P2["Phase 2: Entity Discovery<br>(L2 Entities, Local Triples, Episodic RAM)"]
     P2 --> P3["Phase 3: Global Relations<br>(Dense Retrieval + Cross-Encoder)"]
-    P3 --> P3b["Phase 3b: Latent Consolidation<br>(Union-Find + Jaccard Sweep)"]
+    P3 --> P3b["Phase 3b: Latent Consolidation<br>(Clique-Constrained + Jaccard Sweep)"]
     P3b --> P4["Phase 4: Entity Maturation<br>(Centroid Synthesis & Stabilization)"]
     P4 --> P4b["Phase 4b: Argument Mining<br>(ADU, ACC+ARI, ARC, TF Mapping)"]
     P4b --> P5["Phase 5: Alignment & Theory Fusion<br>(Argument Clustering & Leiden Communities)"]

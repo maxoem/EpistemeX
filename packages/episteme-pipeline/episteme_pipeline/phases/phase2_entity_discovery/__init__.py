@@ -29,6 +29,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from episteme_pipeline.artifacts.models import (
+    EntityMentionArtifact,
+    LinkedEntityArtifact,
+    LocalRelationArtifact,
+)
 from episteme_pipeline.artifacts.builders import (
     build_entity_mention_artifact,
     build_linked_entity_artifact,
@@ -47,6 +52,8 @@ from episteme_pipeline.contracts.domain import (
     L2Entity,
     L2Triple,
 )
+from episteme_pipeline.runs.fingerprints import is_phase_unchanged
+from episteme_pipeline.contracts.phase_contracts import EpistemicCurationLedger
 from episteme_pipeline.events.models import UnlinkableMentionError
 from episteme_pipeline.phases.chunk_selection import select_pending_chunks
 from episteme_pipeline.phases.phase2_entity_discovery.entity_linker import (
@@ -254,6 +261,11 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             if context and context.pipeline_input
             else None
         )
+        curation_ledger = (
+            context.pipeline_input.resolved_curation_ledger()
+            if context and context.pipeline_input
+            else None
+        )
         effective_phase = (
             f"{_PHASE_TAG}:{context.lineage_fingerprint}"
             if context and context.lineage_fingerprint
@@ -263,8 +275,6 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         chunks = await select_pending_chunks(
             self.graph_store, effective_phase, input.chunks
         )
-        if not chunks:
-            return ArtifactCollection([])
 
         reader = input.to_graph_reader()
         if isinstance(self.graph_store, GraphReader) and not (
@@ -282,6 +292,59 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             else None
         )
 
+        # Hydrate unchanged documents' chunks and entities if prior run context is available
+        prior_artifacts = context.prior_artifacts
+        prior_manifest = context.prior_manifest
+        can_hydrate = (
+            prior_artifacts is not None
+            and prior_manifest is not None
+            and is_phase_unchanged(context.manifest, prior_manifest, 2, self.name)
+        )
+        if can_hydrate:
+            prior_fps = prior_manifest.document_fingerprints
+            curr_fps = context.manifest.document_fingerprints
+            unchanged_doc_ids = {
+                d_id
+                for d_id, fp in curr_fps.items()
+                if prior_fps.get(d_id) == fp
+            }
+            unchanged_chunk_ids = {
+                c.id
+                for c in input.chunks
+                if c.source_doc_id in unchanged_doc_ids
+            }
+            for art in prior_artifacts.artifacts:
+                if isinstance(art.payload, EntityMentionArtifact):
+                    if art.payload.chunk_id in unchanged_chunk_ids:
+                        eid = art.payload.entity_id or art.payload.mention_id
+                        mention_envelopes[(eid, art.payload.chunk_id)] = (
+                            art.payload.textual_envelope or ""
+                        )
+                elif isinstance(art.payload, LinkedEntityArtifact):
+                    ent = art.payload.to_domain()
+                    valid_chunks = [cid for cid in ent.source_chunk_ids if cid in unchanged_chunk_ids]
+                    if valid_chunks:
+                        hydrated_ent = ent.model_copy(update={"source_chunk_ids": valid_chunks})
+                        all_entities.append(hydrated_ent)
+                        reader.register_entity(hydrated_ent)
+                elif isinstance(art.payload, LocalRelationArtifact):
+                    triple = art.payload.to_domain()
+                    if triple.source_chunk_id in unchanged_chunk_ids:
+                        all_triples.append(triple)
+
+            chunks = [c for c in chunks if c.id not in unchanged_chunk_ids]
+
+        if not chunks and not all_entities and not all_triples:
+            return ArtifactCollection([])
+
+        if not chunks:
+            deduped_entities = self._deduplicate_entities(
+                all_entities, curation_ledger=curation_ledger
+            )
+            return self._build_artifacts(
+                deduped_entities, all_triples, mention_envelopes, context.run_id
+            )
+
         async def _process_chunk_step(
             chunk: L1Chunk, memory_mgr: EpisodicWorkingMemoryManager
         ) -> _ChunkDiscoveryStepOutput:
@@ -298,6 +361,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                 reader=reader,
                 phase_tag=effective_phase,
                 memory_mgr=memory_mgr,
+                curation_ledger=curation_ledger,
             )
             memory_mgr.process_step(
                 chunk=chunk,
@@ -381,26 +445,41 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                     str(exc).replace("items", "chunks")
                 ) from exc
 
-        deduped_entities = self._deduplicate_entities(all_entities)
+        deduped_entities = self._deduplicate_entities(
+            all_entities, curation_ledger=curation_ledger
+        )
         return self._build_artifacts(
             deduped_entities, all_triples, mention_envelopes, context.run_id
         )
 
     @staticmethod
-    def _deduplicate_entities(entities: list[L2Entity]) -> list[L2Entity]:
-        """Deduplicate discovered entities by ID, merging ``source_chunk_ids`` across streams."""
+    def _deduplicate_entities(
+        entities: list[L2Entity],
+        curation_ledger: EpistemicCurationLedger | None = None,
+    ) -> list[L2Entity]:
+        """Deduplicate discovered entities by ID and must-link constraints, merging source_chunk_ids."""
         merged: dict[str, L2Entity] = {}
         for entity in entities:
-            if entity.id not in merged:
-                merged[entity.id] = entity.model_copy(
+            target_id = entity.id
+            if curation_ledger is not None:
+                for existing_id, existing_ent in merged.items():
+                    if curation_ledger.is_must_link(
+                        entity.id, existing_id, entity.name, existing_ent.name
+                    ):
+                        target_id = existing_id
+                        break
+
+            if target_id not in merged:
+                merged[target_id] = entity.model_copy(
                     update={
+                        "id": target_id,
                         "source_chunk_ids": list(
                             dict.fromkeys(entity.source_chunk_ids)
-                        )
+                        ),
                     }
                 )
             else:
-                existing = merged[entity.id]
+                existing = merged[target_id]
                 combined_chunks = list(
                     dict.fromkeys(
                         existing.source_chunk_ids + entity.source_chunk_ids
@@ -411,7 +490,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                     for c in (existing.confidence, entity.confidence)
                     if c is not None
                 ]
-                merged[entity.id] = existing.model_copy(
+                merged[target_id] = existing.model_copy(
                     update={
                         "source_chunk_ids": combined_chunks,
                         "description": existing.description or entity.description,
@@ -482,6 +561,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         reader: GraphReader | None = None,
         phase_tag: str = _PHASE_TAG,
         memory_mgr: EpisodicWorkingMemoryManager | None = None,
+        curation_ledger: EpistemicCurationLedger | None = None,
     ) -> tuple[
         list[tuple[L2Entity, str | None]],
         list[L2Triple],
@@ -565,12 +645,41 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             # Passed explicitly so that an injected linker (which the runner did
             # not construct) still honours the configured values.
             try:
-                canonical = await self.entity_linker.link(
-                    entity,
-                    link_store,
-                    top_k=self.config.top_k_linking_candidates,
-                    threshold=self.config.linking_confidence_threshold,
-                )
+                canonical = None
+                if curation_ledger is not None:
+                    # Check must-link constraints against existing entities
+                    store_entities = (
+                        await link_store.get_entities()
+                        if isinstance(link_store, GraphReader)
+                        else []
+                    )
+                    for existing in store_entities:
+                        if curation_ledger.is_must_link(
+                            entity.id, existing.id, entity.name, existing.name
+                        ):
+                            canonical = existing
+                            break
+
+                if canonical is None:
+                    canonical = await self.entity_linker.link(
+                        entity,
+                        link_store,
+                        top_k=self.config.top_k_linking_candidates,
+                        threshold=self.config.linking_confidence_threshold,
+                    )
+
+                # Check cannot-link constraint
+                if canonical is not None and curation_ledger is not None:
+                    if curation_ledger.is_cannot_link(
+                        entity.id, canonical.id, entity.name, canonical.name
+                    ):
+                        logger.info(
+                            "Curation ledger cannot-link rejected link between %s and %s",
+                            entity.name,
+                            canonical.name,
+                        )
+                        canonical = None
+
                 if canonical is not None and canonical.id != entity.id:
                     id_redirect[entity.id] = canonical.id
                     # Append this chunk as a source of the canonical entity
