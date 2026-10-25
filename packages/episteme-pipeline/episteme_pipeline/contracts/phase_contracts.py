@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, Sequence
 
 from pydantic import BaseModel, Field
 
@@ -191,6 +191,169 @@ class EpistemicCurationLedger(BaseModel):
             Locked modal strength prior tau_0(a), or None if not overridden.
         """
         return self.modality_overrides.get(atom_id)
+
+    def apply_to_triples(
+        self,
+        triples: Sequence[L2Triple],
+        valid_entity_ids: set[str] | None = None,
+        scope: Literal["local", "global"] = "global",
+    ) -> list[L2Triple]:
+        """
+        Filter rejected triples, apply predicate/confidence overrides, and inject curated edges.
+
+        Parameters
+        ----------
+        triples : Sequence[L2Triple]
+            Input stream of triples.
+        valid_entity_ids : set[str] | None, optional
+            Set of valid entity identifiers for injected triples. If provided, injected triples
+            must connect nodes within this set, by default None.
+        scope : {"local", "global"}, default "global"
+            Scope assigned to newly injected triples, by default "global".
+
+        Returns
+        -------
+        list[L2Triple]
+            Filtered, overridden, and injected triples.
+        """
+        if not self.relation_overrides:
+            return list(triples)
+
+        filtered: list[L2Triple] = []
+        handled_pairs: set[tuple[str, str]] = set()
+
+        for t in triples:
+            pair = (t.subject_id, t.object_id)
+            override = self.get_relation_override(t.subject_id, t.object_id)
+            if override is not None:
+                if override.relation_type == "REJECTED" or pair in handled_pairs:
+                    continue
+                updated = t.model_copy(
+                    update={"predicate": override.relation_type, "confidence": override.confidence}
+                )
+                filtered.append(updated)
+                handled_pairs.add(pair)
+            else:
+                filtered.append(t)
+
+        existing_pairs = {(t.subject_id, t.object_id) for t in filtered}
+        for override in self.relation_overrides.values():
+            pair = (override.source_id, override.target_id)
+            if (
+                override.relation_type != "REJECTED"
+                and pair not in existing_pairs
+                and (
+                    valid_entity_ids is None
+                    or (override.source_id in valid_entity_ids and override.target_id in valid_entity_ids)
+                )
+            ):
+                filtered.append(
+                    L2Triple(
+                        subject_id=override.source_id,
+                        predicate=override.relation_type,
+                        object_id=override.target_id,
+                        confidence=override.confidence,
+                        scope=scope,
+                    )
+                )
+                existing_pairs.add(pair)
+
+        return filtered
+
+    def apply_to_theory_relations(
+        self,
+        relations: Sequence[TheoryRelation],
+        valid_atom_ids: set[str] | None = None,
+        scope: Literal["local", "global"] = "local",
+    ) -> list[TheoryRelation]:
+        """
+        Filter rejected relations, apply type and confidence overrides, and inject curated edges.
+
+        Parameters
+        ----------
+        relations : Sequence[TheoryRelation]
+            Input sequence of theory relations.
+        valid_atom_ids : set[str] | None, optional
+            Set of valid atom identifiers for injected relations. If provided, injected relations
+            must connect atoms within this set, by default None.
+        scope : {"local", "global"}, default "local"
+            Scope assigned to newly injected theory relations, by default "local".
+
+        Returns
+        -------
+        list[TheoryRelation]
+            Filtered, overridden, and injected theory relations.
+        """
+        if not self.relation_overrides:
+            return list(relations)
+
+        filtered: list[TheoryRelation] = []
+        handled_pairs: set[tuple[str, str]] = set()
+
+        for rel in relations:
+            pair = (rel.source_id, rel.target_id)
+            override = self.get_relation_override(rel.source_id, rel.target_id)
+            if override is not None:
+                if override.relation_type == "REJECTED" or pair in handled_pairs:
+                    continue
+                # Fresh initialization triggers @model_validator(mode="after")
+                # to recompute effective_weight, active_weight, and clear stale polarity caches.
+                # Only preserve inferential_force if explicitly set and relation_type did not change,
+                # so downstream TheoryNetProjector can derive the warrant for a changed relation_type.
+                extra_kwargs: dict[str, Any] = {}
+                if (
+                    "inferential_force" in rel.model_fields_set
+                    and override.relation_type == rel.relation_type
+                ):
+                    extra_kwargs["inferential_force"] = rel.inferential_force
+                updated = TheoryRelation(
+                    source_id=rel.source_id,
+                    target_id=rel.target_id,
+                    relation_type=override.relation_type,
+                    confidence=override.confidence,
+                    scope=rel.scope,
+                    weight=override.confidence,
+                    effective_weight=override.confidence,
+                    active_weight=abs(override.confidence),
+                    calibrated_confidence=override.confidence,
+                    model_confidence=override.confidence,
+                    tenability=rel.tenability,
+                    empirical_accuracy=rel.empirical_accuracy,
+                    decision_engine_provider=rel.decision_engine_provider,
+                    **extra_kwargs,
+                )
+                filtered.append(updated)
+                handled_pairs.add(pair)
+            else:
+                filtered.append(rel)
+
+        existing_pairs = {(r.source_id, r.target_id) for r in filtered}
+        for override in self.relation_overrides.values():
+            pair = (override.source_id, override.target_id)
+            if (
+                override.relation_type != "REJECTED"
+                and pair not in existing_pairs
+                and (
+                    valid_atom_ids is None
+                    or (override.source_id in valid_atom_ids and override.target_id in valid_atom_ids)
+                )
+            ):
+                injected = TheoryRelation(
+                    source_id=override.source_id,
+                    target_id=override.target_id,
+                    relation_type=override.relation_type,
+                    confidence=override.confidence,
+                    scope=scope,
+                    weight=override.confidence,
+                    effective_weight=override.confidence,
+                    active_weight=abs(override.confidence),
+                    calibrated_confidence=override.confidence,
+                    model_confidence=override.confidence,
+                )
+                filtered.append(injected)
+                existing_pairs.add(pair)
+
+        return filtered
 
     @classmethod
     def load_from_path(cls, path: str | Path) -> EpistemicCurationLedger:

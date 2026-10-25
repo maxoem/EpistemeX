@@ -21,13 +21,14 @@ import pytest
 from unittest.mock import AsyncMock
 
 from episteme_pipeline.artifacts.builders import (
+    build_argument_component_artifact,
+    build_argument_relation_artifact,
     build_chunk_artifact,
     build_document_artifact,
     build_entity_mention_artifact,
+    build_global_relation_artifact,
     build_linked_entity_artifact,
     build_local_relation_artifact,
-    build_argument_component_artifact,
-    build_argument_relation_artifact,
 )
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
@@ -792,4 +793,172 @@ async def test_phase3_and_phase4_incremental_delta_hydration() -> None:
     assert stub_segmenter.segmented_chunk_ids == ["c2"]
     atoms = [a.payload.to_domain() for a in p4_out.of_kind(ArtifactKind.THEORY_ATOM)]
     assert {a.id for a in atoms} == {"atom_c1", "atom_c2"}
+
+
+@pytest.mark.asyncio
+async def test_phase3_multi_chunk_lost_evidence_invalidation() -> None:
+    """Verify that an entity losing evidence from a modified chunk is not marked prior-only in Phase 3."""
+    chunk_a = L1Chunk(id="chunk_a", text="Doc A text", source_doc_id="doc_unchanged", sequence_index=0, token_count=3)
+    chunk_b_v2 = L1Chunk(id="chunk_b_v2", text="Doc B v2 text", source_doc_id="doc_modified", sequence_index=0, token_count=3)
+
+    # Prior entity e1 was supported by both chunk_a (unchanged) and chunk_b_v1 (modified)
+    prior_e1 = L2Entity(id="e1", label="Concept", name="E1", source_chunk_ids=["chunk_a", "chunk_b_v1"])
+    # Prior entity e2 was supported exclusively by chunk_a
+    prior_e2 = L2Entity(id="e2", label="Concept", name="E2", source_chunk_ids=["chunk_a"])
+
+    prior_triple = L2Triple(
+        subject_id="e1",
+        predicate="PRIOR_REL",
+        object_id="e2",
+        confidence=0.90,
+        scope="global",
+    )
+
+    prior_collection = ArtifactCollection([
+        build_linked_entity_artifact(prior_e1, [], run_id="run-prior", phase_name="P2", method="m"),
+        build_linked_entity_artifact(prior_e2, [], run_id="run-prior", phase_name="P2", method="m"),
+        build_global_relation_artifact(
+            prior_triple,
+            {"PRIOR_REL": 1},
+            run_id="run-prior",
+            phase_name="Phase 3: Global Relation Extraction",
+            method="m",
+        ),
+    ])
+
+    prior_manifest = RunManifest(
+        run_id="run-prior",
+        status=RunStatus.COMPLETED,
+        document_fingerprints={"doc_unchanged": "hash_same", "doc_modified": "hash_v1"},
+        phase_config_fingerprints={"phase_3": "same"},
+        method_fingerprints={},
+    )
+    current_manifest = RunManifest(
+        run_id="run-current",
+        document_fingerprints={"doc_unchanged": "hash_same", "doc_modified": "hash_v2"},
+        phase_config_fingerprints={"phase_3": "same"},
+        method_fingerprints={},
+    )
+    ctx = ArtifactExecutionContext(
+        run_id="run-current",
+        manifest=current_manifest,
+        pipeline_input=PipelineInput(source_paths=["a.md", "b.md"]),
+        prior_artifacts=prior_collection,
+        prior_manifest=prior_manifest,
+    )
+
+    # In current run, e1 lost mentions in modified Doc B, so it only has chunk_a
+    current_e1 = L2Entity(id="e1", label="Concept", name="E1", source_chunk_ids=["chunk_a"])
+    current_e2 = L2Entity(id="e2", label="Concept", name="E2", source_chunk_ids=["chunk_a"])
+
+    class RecordingGlobalExtractor(GlobalRelationExtractor):
+        def __init__(self) -> None:
+            self.extracted_pairs: list[tuple[str, str]] = []
+
+        async def candidate_pairs(self, entities: list[L2Entity]) -> list[CandidatePair]:
+            return [CandidatePair(entity_a=entities[0], entity_b=entities[1])]
+
+        async def extract_pairs(
+            self, candidate_pairs: list[CandidatePair], graph_store: Any, schema: SchemaConfig
+        ) -> tuple[list[L2Triple], list[PhaseItemRecord]]:
+            self.extracted_pairs.extend((c.entity_a.id, c.entity_b.id) for c in candidate_pairs)
+            triples = [
+                L2Triple(
+                    subject_id=c.entity_a.id,
+                    predicate="NEW_REL",
+                    object_id=c.entity_b.id,
+                    confidence=0.95,
+                    scope="global",
+                )
+                for c in candidate_pairs
+            ]
+            records = [PhaseItemRecord(key=c.key, status="completed") for c in candidate_pairs]
+            return triples, records
+
+        def fingerprint(self) -> dict[str, Any]:
+            return {"class": "RecordingGlobalExtractor"}
+
+    extractor = RecordingGlobalExtractor()
+    p3_runner = Phase3Runner(
+        config=Phase3Config(),
+        schema=DEFAULT_SCHEMA,
+        llm=None,
+        embedding_model=StubEmbeddingModel(),
+        global_extractor=extractor,
+    )
+    p2_view = Phase2ArtifactsView(chunks=[chunk_a, chunk_b_v2], entities=[current_e1, current_e2], local_triples=[])
+    await p3_runner.run(p2_view, ctx)
+
+    # Because e1 lost chunk_b_v1, e1 is NOT prior-only. (e1, e2) MUST be re-extracted!
+    assert ("e1", "e2") in extractor.extracted_pairs
+
+
+def test_curation_ledger_multi_predicate_override_collision() -> None:
+    """Verify that multiple predicate edges between the same pair collapse to a single overridden triple."""
+    t1 = L2Triple(subject_id="E1", predicate="RELATES_TO", object_id="E2", confidence=0.8, scope="global")
+    t2 = L2Triple(subject_id="E1", predicate="MENTIONS", object_id="E2", confidence=0.7, scope="global")
+    t3 = L2Triple(subject_id="E2", predicate="PART_OF", object_id="E3", confidence=0.9, scope="global")
+
+    ledger = EpistemicCurationLedger(
+        relation_overrides={
+            "E1::E2": RelationOverride(
+                source_id="E1",
+                target_id="E2",
+                relation_type="SUPPORTS",
+                confidence=0.99,
+            )
+        }
+    )
+
+    filtered = ledger.apply_to_triples([t1, t2, t3], valid_entity_ids={"E1", "E2", "E3"})
+
+    assert len(filtered) == 2
+    e1_e2_triples = [t for t in filtered if t.subject_id == "E1" and t.object_id == "E2"]
+    assert len(e1_e2_triples) == 1
+    assert e1_e2_triples[0].predicate == "SUPPORTS"
+    assert e1_e2_triples[0].confidence == 0.99
+
+    e2_e3_triples = [t for t in filtered if t.subject_id == "E2" and t.object_id == "E3"]
+    assert len(e2_e3_triples) == 1
+    assert e2_e3_triples[0].predicate == "PART_OF"
+    assert e2_e3_triples[0].confidence == 0.9
+
+
+def test_curation_ledger_theory_relation_revalidation() -> None:
+    """Verify that overriding TheoryRelation revalidates effective_weight and epistemic polarity."""
+    rel = TheoryRelation(
+        source_id="A1",
+        target_id="A2",
+        relation_type="SUPPORTS",
+        confidence=0.85,
+        scope="local",
+        weight=0.85,
+        weight_support=0.85,
+    )
+    assert rel.polarity == 1
+
+    ledger = EpistemicCurationLedger(
+        relation_overrides={
+            "A1::A2": RelationOverride(
+                source_id="A1",
+                target_id="A2",
+                relation_type="ATTACKS",
+                confidence=0.95,
+            )
+        }
+    )
+
+    updated_rels = ledger.apply_to_theory_relations([rel], valid_atom_ids={"A1", "A2"})
+    assert len(updated_rels) == 1
+    updated = updated_rels[0]
+
+    assert updated.relation_type == "ATTACKS"
+    assert updated.confidence == 0.95
+    assert updated.effective_weight == 0.95
+    assert updated.active_weight == 0.95
+    assert updated.polarity == -1
+    assert updated.weight_support is None
+    assert updated.weight_attack is None
+    assert "inferential_force" not in updated.model_fields_set
+
 

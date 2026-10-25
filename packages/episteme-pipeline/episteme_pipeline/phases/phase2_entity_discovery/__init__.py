@@ -52,7 +52,6 @@ from episteme_pipeline.contracts.domain import (
     L2Entity,
     L2Triple,
 )
-from episteme_pipeline.runs.fingerprints import is_phase_unchanged
 from episteme_pipeline.contracts.phase_contracts import EpistemicCurationLedger
 from episteme_pipeline.events.models import UnlinkableMentionError
 from episteme_pipeline.phases.chunk_selection import select_pending_chunks
@@ -292,47 +291,14 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             else None
         )
 
-        # Hydrate unchanged documents' chunks and entities if prior run context is available
-        prior_artifacts = context.prior_artifacts
-        prior_manifest = context.prior_manifest
-        can_hydrate = (
-            prior_artifacts is not None
-            and prior_manifest is not None
-            and is_phase_unchanged(context.manifest, prior_manifest, 2, self.name)
-        )
-        if can_hydrate:
-            prior_fps = prior_manifest.document_fingerprints
-            curr_fps = context.manifest.document_fingerprints
-            unchanged_doc_ids = {
-                d_id
-                for d_id, fp in curr_fps.items()
-                if prior_fps.get(d_id) == fp
-            }
-            unchanged_chunk_ids = {
-                c.id
-                for c in input.chunks
-                if c.source_doc_id in unchanged_doc_ids
-            }
-            for art in prior_artifacts.artifacts:
-                if isinstance(art.payload, EntityMentionArtifact):
-                    if art.payload.chunk_id in unchanged_chunk_ids:
-                        eid = art.payload.entity_id or art.payload.mention_id
-                        mention_envelopes[(eid, art.payload.chunk_id)] = (
-                            art.payload.textual_envelope or ""
-                        )
-                elif isinstance(art.payload, LinkedEntityArtifact):
-                    ent = art.payload.to_domain()
-                    valid_chunks = [cid for cid in ent.source_chunk_ids if cid in unchanged_chunk_ids]
-                    if valid_chunks:
-                        hydrated_ent = ent.model_copy(update={"source_chunk_ids": valid_chunks})
-                        all_entities.append(hydrated_ent)
-                        reader.register_entity(hydrated_ent)
-                elif isinstance(art.payload, LocalRelationArtifact):
-                    triple = art.payload.to_domain()
-                    if triple.source_chunk_id in unchanged_chunk_ids:
-                        all_triples.append(triple)
-
-            chunks = [c for c in chunks if c.id not in unchanged_chunk_ids]
+        if isinstance(context, ArtifactExecutionContext):
+            hydration = context.hydrator(2, self.name).hydrate_phase2(chunks)
+            chunks = hydration.delta_chunks
+            all_entities.extend(hydration.entities)
+            all_triples.extend(hydration.triples)
+            mention_envelopes.update(hydration.mention_envelopes)
+            for ent in hydration.entities:
+                reader.register_entity(ent)
 
         if not chunks and not all_entities and not all_triples:
             return ArtifactCollection([])

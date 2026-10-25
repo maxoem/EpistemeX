@@ -14,8 +14,9 @@ Implements:
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from episteme_pipeline.artifacts.builders import parse_mention_id
@@ -37,6 +38,7 @@ from episteme_pipeline.artifacts.models import (
 )
 from episteme_pipeline.artifacts.subgraph_reader import ArtifactSubgraphReader
 from episteme_pipeline.contracts.domain import (
+    CandidatePair,
     L1Chunk,
     L1Document,
     L2Entity,
@@ -45,6 +47,7 @@ from episteme_pipeline.contracts.domain import (
     TheoryRelation,
 )
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
+from episteme_pipeline.runs.fingerprints import is_phase_unchanged
 from episteme_pipeline.runs.models import RunManifest
 
 
@@ -833,3 +836,459 @@ class ArtifactExecutionContext:
     lineage_fingerprint: str | None = None
     prior_artifacts: ArtifactCollection | None = None
     prior_manifest: RunManifest | None = None
+
+    def hydrator(self, phase_ordinal: int, phase_name: str) -> ArtifactHydrator:
+        """Construct an ArtifactHydrator bound to this execution context.
+
+        Parameters
+        ----------
+        phase_ordinal : int
+            1-based phase ordinal index (e.g. 1 for Phase 1).
+        phase_name : str
+            Canonical phase name (e.g. 'Phase 1: Data Foundation').
+
+        Returns
+        -------
+        ArtifactHydrator
+            Bound hydrator instance.
+        """
+        return ArtifactHydrator(self, phase_ordinal, phase_name)
+
+
+@dataclass(frozen=True, slots=True)
+class IncrementalRetentionScope:
+    """Retention scope defining unchanged documents, chunks, and entities across runs.
+
+    Parameters
+    ----------
+    unchanged_doc_ids : frozenset of str
+        Identifiers of documents whose SHA-256 fingerprints did not change.
+    unchanged_chunk_ids : frozenset of str
+        Identifiers of chunks belonging to unchanged documents.
+    unmodified_prior_entity_chunks : dict of str to frozenset of str
+        Map of entity ID to its prior source chunk IDs, populated only for entities
+        whose entire evidence set fell strictly within unchanged chunks.
+    """
+
+    unchanged_doc_ids: frozenset[str]
+    unchanged_chunk_ids: frozenset[str]
+    unmodified_prior_entity_chunks: dict[str, frozenset[str]]
+
+    @classmethod
+    def from_context(
+        cls,
+        context: ArtifactExecutionContext,
+        chunks: Sequence[L1Chunk] | None = None,
+    ) -> IncrementalRetentionScope:
+        """Construct an IncrementalRetentionScope from execution context and optional chunks.
+
+        Parameters
+        ----------
+        context : ArtifactExecutionContext
+            Phase execution context containing current and prior manifests and artifacts.
+        chunks : Sequence of L1Chunk, optional
+            Input chunks from current run. If None, unchanged_chunk_ids remains empty.
+
+        Returns
+        -------
+        IncrementalRetentionScope
+            Calculated retention scope.
+        """
+        prior_manifest = context.prior_manifest
+        curr_manifest = context.manifest
+        prior_artifacts = context.prior_artifacts
+
+        if prior_manifest is None or curr_manifest is None:
+            return cls(frozenset(), frozenset(), {})
+
+        prior_fps = prior_manifest.document_fingerprints
+        curr_fps = curr_manifest.document_fingerprints
+        unchanged_doc_ids = frozenset(
+            d_id for d_id, fp in curr_fps.items() if prior_fps.get(d_id) == fp
+        )
+
+        unchanged_chunk_ids = (
+            frozenset(c.id for c in chunks if c.source_doc_id in unchanged_doc_ids)
+            if chunks is not None
+            else frozenset()
+        )
+
+        unmodified_prior_entity_chunks: dict[str, frozenset[str]] = {}
+        if prior_artifacts is not None and unchanged_chunk_ids:
+            for art in prior_artifacts.artifacts:
+                if isinstance(art.payload, LinkedEntityArtifact):
+                    cids = frozenset(art.payload.source_chunk_ids)
+                    if cids and cids.issubset(unchanged_chunk_ids):
+                        unmodified_prior_entity_chunks[art.payload.entity_id] = cids
+
+        return cls(unchanged_doc_ids, unchanged_chunk_ids, unmodified_prior_entity_chunks)
+
+
+@dataclass(frozen=True, slots=True)
+class Phase1HydrationResult:
+    """Result of Phase 1 artifact hydration.
+
+    Parameters
+    ----------
+    delta_source_paths : list of str
+        Source document paths requiring ingestion and chunking.
+    retained_artifacts : list of ArtifactEnvelope
+        Retained DocumentArtifact and ChunkArtifact envelopes from unchanged documents.
+    """
+
+    delta_source_paths: list[str]
+    retained_artifacts: list[ArtifactEnvelope]
+
+
+@dataclass(frozen=True, slots=True)
+class Phase2HydrationResult:
+    """Result of Phase 2 artifact hydration.
+
+    Parameters
+    ----------
+    delta_chunks : list of L1Chunk
+        Chunks requiring entity extraction and local relation discovery.
+    entities : list of L2Entity
+        Surviving hydrated entities with pruned source chunk IDs.
+    triples : list of L2Triple
+        Surviving hydrated local triples connecting surviving entities within unchanged chunks.
+    mention_envelopes : dict of tuple of (str, str) to str
+        Mapping from (entity_id, chunk_id) to mention textual envelope.
+    """
+
+    delta_chunks: list[L1Chunk]
+    entities: list[L2Entity]
+    triples: list[L2Triple]
+    mention_envelopes: dict[tuple[str, str], str]
+
+
+@dataclass(frozen=True, slots=True)
+class Phase3HydrationResult:
+    """Result of Phase 3 artifact hydration.
+
+    Parameters
+    ----------
+    delta_candidates : list of CandidatePair
+        Candidate entity pairs requiring global relation extraction.
+    hydrated_triples : list of L2Triple
+        Retained global relation triples between unchanged entities.
+    """
+
+    delta_candidates: list[CandidatePair]
+    hydrated_triples: list[L2Triple]
+
+
+@dataclass(frozen=True, slots=True)
+class Phase4HydrationResult:
+    """Result of Phase 4 artifact hydration.
+
+    Parameters
+    ----------
+    delta_chunks : list of L1Chunk
+        Chunks requiring argument component extraction.
+    components : list of TheoryAtom
+        Hydrated argument components from unchanged chunks.
+    local_relations : list of TheoryRelation
+        Hydrated local argument relations connecting surviving components.
+    """
+
+    delta_chunks: list[L1Chunk]
+    components: list[TheoryAtom]
+    local_relations: list[TheoryRelation]
+
+
+class ArtifactHydrator:
+    """Strategy engine orchestrating declarative artifact hydration across incremental runs.
+
+    Parameters
+    ----------
+    context : ArtifactExecutionContext
+        Phase execution context containing current and prior run manifests and artifacts.
+    phase_ordinal : int
+        1-based phase ordinal index (e.g., 1 for Phase 1).
+    phase_name : str
+        Canonical phase name (e.g., 'Phase 1: Data Foundation').
+    """
+
+    def __init__(
+        self,
+        context: ArtifactExecutionContext,
+        phase_ordinal: int,
+        phase_name: str,
+    ) -> None:
+        self.context = context
+        self.phase_ordinal = phase_ordinal
+        self.phase_name = phase_name
+
+    @property
+    def can_hydrate(self) -> bool:
+        """Check if prior artifacts and manifests exist and phase configuration is unchanged."""
+        return (
+            self.context.prior_artifacts is not None
+            and self.context.prior_manifest is not None
+            and is_phase_unchanged(
+                self.context.manifest,
+                self.context.prior_manifest,
+                self.phase_ordinal,
+                self.phase_name,
+            )
+        )
+
+    def hydrate_phase1(self, source_paths: Sequence[str]) -> Phase1HydrationResult:
+        """Hydrate Phase 1 document and chunk artifacts for unchanged source files.
+
+        Parameters
+        ----------
+        source_paths : Sequence of str
+            Input source document file paths.
+
+        Returns
+        -------
+        Phase1HydrationResult
+            Delta source paths to process and retained artifact envelopes.
+        """
+        if not self.can_hydrate or self.context.prior_artifacts is None or self.context.prior_manifest is None:
+            return Phase1HydrationResult(delta_source_paths=list(source_paths), retained_artifacts=[])
+
+        from episteme_pipeline.phases.phase1_foundation.provenance import doc_id
+
+        prior_artifacts = self.context.prior_artifacts
+
+        retained: list[ArtifactEnvelope] = []
+        delta_paths: list[str] = []
+
+        prior_fps = self.context.prior_manifest.document_fingerprints
+        curr_fps = self.context.manifest.document_fingerprints
+
+        for source_path in source_paths:
+            p = Path(source_path)
+            d_id = doc_id(p)
+            p_str = str(source_path)
+            curr_fp = curr_fps.get(d_id) or curr_fps.get(p_str)
+            prior_fp = prior_fps.get(d_id) or prior_fps.get(p_str)
+
+            if curr_fp and prior_fp and curr_fp == prior_fp:
+                doc_arts = [
+                    a
+                    for a in prior_artifacts.artifacts
+                    if a.kind == ArtifactKind.DOCUMENT
+                    and (
+                        (
+                            isinstance(a.payload, DocumentArtifact)
+                            and a.payload.document_id == d_id
+                        )
+                        or a.provenance.source_document_id == d_id
+                        or a.provenance.source_path == p_str
+                    )
+                ]
+                chunk_arts = [
+                    a
+                    for a in prior_artifacts.artifacts
+                    if a.kind == ArtifactKind.CHUNK
+                    and (
+                        (
+                            isinstance(a.payload, ChunkArtifact)
+                            and a.payload.document_id == d_id
+                        )
+                        or a.provenance.source_document_id == d_id
+                    )
+                ]
+                if doc_arts and chunk_arts:
+                    for da in doc_arts:
+                        retained.append(da.model_copy(update={"run_id": self.context.run_id}))
+                    for ca in chunk_arts:
+                        retained.append(ca.model_copy(update={"run_id": self.context.run_id}))
+                    continue
+            delta_paths.append(source_path)
+
+        return Phase1HydrationResult(delta_source_paths=delta_paths, retained_artifacts=retained)
+
+    def hydrate_phase2(self, chunks: Sequence[L1Chunk]) -> Phase2HydrationResult:
+        """Hydrate Phase 2 entities, mentions, and local triples for unchanged chunks.
+
+        Parameters
+        ----------
+        chunks : Sequence of L1Chunk
+            Input chunks from Phase 1.
+
+        Returns
+        -------
+        Phase2HydrationResult
+            Delta chunks to process, surviving entities, surviving local triples, and mention envelopes.
+        """
+        if not self.can_hydrate or self.context.prior_artifacts is None:
+            return Phase2HydrationResult(
+                delta_chunks=list(chunks),
+                entities=[],
+                triples=[],
+                mention_envelopes={},
+            )
+
+        scope = IncrementalRetentionScope.from_context(self.context, chunks=chunks)
+        prior_artifacts = self.context.prior_artifacts
+
+        surviving_entities: list[L2Entity] = []
+        for art in prior_artifacts.artifacts:
+            if isinstance(art.payload, LinkedEntityArtifact):
+                ent = art.payload.to_domain()
+                valid_chunks = [cid for cid in ent.source_chunk_ids if cid in scope.unchanged_chunk_ids]
+                if valid_chunks:
+                    hydrated_ent = ent.model_copy(update={"source_chunk_ids": valid_chunks})
+                    surviving_entities.append(hydrated_ent)
+
+        surviving_entity_ids = {e.id for e in surviving_entities}
+
+        mention_envelopes: dict[tuple[str, str], str] = {}
+        for art in prior_artifacts.artifacts:
+            if isinstance(art.payload, EntityMentionArtifact):
+                if art.payload.chunk_id in scope.unchanged_chunk_ids:
+                    eid = art.payload.entity_id or art.payload.mention_id
+                    if eid in surviving_entity_ids:
+                        mention_envelopes[(eid, art.payload.chunk_id)] = (
+                            art.payload.textual_envelope or ""
+                        )
+
+        surviving_triples: list[L2Triple] = []
+        for art in prior_artifacts.artifacts:
+            if isinstance(art.payload, LocalRelationArtifact):
+                triple = art.payload.to_domain()
+                if (
+                    triple.source_chunk_id in scope.unchanged_chunk_ids
+                    and triple.subject_id in surviving_entity_ids
+                    and triple.object_id in surviving_entity_ids
+                ):
+                    surviving_triples.append(triple)
+
+        delta_chunks = [c for c in chunks if c.id not in scope.unchanged_chunk_ids]
+
+        return Phase2HydrationResult(
+            delta_chunks=delta_chunks,
+            entities=surviving_entities,
+            triples=surviving_triples,
+            mention_envelopes=mention_envelopes,
+        )
+
+    def hydrate_phase3(
+        self,
+        candidates: Sequence[CandidatePair],
+        entities: Sequence[L2Entity],
+        chunks: Sequence[L1Chunk],
+    ) -> Phase3HydrationResult:
+        """Hydrate Phase 3 global relation triples and filter candidate pairs via bidirectional invariant.
+
+        Parameters
+        ----------
+        candidates : Sequence of CandidatePair
+            All candidate entity pairs generated for the current run.
+        entities : Sequence of L2Entity
+            All current entities.
+        chunks : Sequence of L1Chunk
+            Input chunks from Phase 1.
+
+        Returns
+        -------
+        Phase3HydrationResult
+            Filtered delta candidate pairs and hydrated global relation triples.
+        """
+        if not self.can_hydrate or self.context.prior_artifacts is None:
+            return Phase3HydrationResult(
+                delta_candidates=list(candidates),
+                hydrated_triples=[],
+            )
+
+        scope = IncrementalRetentionScope.from_context(self.context, chunks=chunks)
+        prior_artifacts = self.context.prior_artifacts
+
+        has_prior_entities = any(
+            isinstance(art.payload, LinkedEntityArtifact)
+            for art in prior_artifacts.artifacts
+        )
+
+        if has_prior_entities:
+            prior_only = {
+                e.id
+                for e in entities
+                if e.id in scope.unmodified_prior_entity_chunks
+                and frozenset(e.source_chunk_ids) == scope.unmodified_prior_entity_chunks[e.id]
+            }
+        else:
+            prior_only = {
+                e.id
+                for e in entities
+                if e.source_chunk_ids
+                and all(cid in scope.unchanged_chunk_ids for cid in e.source_chunk_ids)
+            }
+
+        delta_candidates = [
+            c
+            for c in candidates
+            if c.entity_a.id not in prior_only or c.entity_b.id not in prior_only
+        ]
+
+        hydrated_triples: list[L2Triple] = []
+        for art in prior_artifacts.artifacts:
+            if isinstance(art.payload, GlobalRelationArtifact):
+                if (
+                    art.payload.subject_entity_id in prior_only
+                    and art.payload.object_entity_id in prior_only
+                ):
+                    hydrated_triples.append(art.payload.to_domain())
+
+        return Phase3HydrationResult(
+            delta_candidates=delta_candidates,
+            hydrated_triples=hydrated_triples,
+        )
+
+    def hydrate_phase4(self, chunks: Sequence[L1Chunk]) -> Phase4HydrationResult:
+        """Hydrate Phase 4 argument components and local relations for unchanged chunks.
+
+        Parameters
+        ----------
+        chunks : Sequence of L1Chunk
+            Input chunks from Phase 1.
+
+        Returns
+        -------
+        Phase4HydrationResult
+            Delta chunks to process, hydrated argument components, and surviving local relations.
+        """
+        if not self.can_hydrate or self.context.prior_artifacts is None:
+            return Phase4HydrationResult(
+                delta_chunks=list(chunks),
+                components=[],
+                local_relations=[],
+            )
+
+        scope = IncrementalRetentionScope.from_context(self.context, chunks=chunks)
+        prior_artifacts = self.context.prior_artifacts
+
+        hydrated_components: list[TheoryAtom] = []
+        for art in prior_artifacts.artifacts:
+            if isinstance(art.payload, TheoryAtomArtifact):
+                atom = art.payload.to_domain()
+                if atom.source_chunk_id in scope.unchanged_chunk_ids:
+                    hydrated_components.append(atom)
+
+        surviving_atom_ids = {atom.id for atom in hydrated_components}
+
+        hydrated_local_relations: list[TheoryRelation] = []
+        for art in prior_artifacts.artifacts:
+            if isinstance(art.payload, TheoryRelationArtifact):
+                rel = art.payload.to_domain()
+                prov_chunk = art.provenance.source_chunk_id if art.provenance else None
+                chunk_ok = prov_chunk is None or prov_chunk in scope.unchanged_chunk_ids
+                if (
+                    rel.scope == "local"
+                    and chunk_ok
+                    and rel.source_id in surviving_atom_ids
+                    and rel.target_id in surviving_atom_ids
+                ):
+                    hydrated_local_relations.append(rel)
+
+        delta_chunks = [c for c in chunks if c.id not in scope.unchanged_chunk_ids]
+
+        return Phase4HydrationResult(
+            delta_chunks=delta_chunks,
+            components=hydrated_components,
+            local_relations=hydrated_local_relations,
+        )

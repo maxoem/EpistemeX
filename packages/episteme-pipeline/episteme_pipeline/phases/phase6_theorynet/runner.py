@@ -158,45 +158,16 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
                     atom.modal_strength = await self.modal_resolver.resolve_modality(atom)
                     atom.base_score = atom.modal_strength
 
-            if curation_ledger is not None and curation_ledger.relation_overrides:
-                curated_input_relations = []
-                for rel in source_relations:
-                    override = curation_ledger.get_relation_override(rel.from_id, rel.to_id)
-                    if override is not None:
-                        if override.relation_type == "REJECTED":
-                            continue
-                        rel = rel.model_copy(
-                            update={
-                                "relation_type": override.relation_type,
-                                "polarity": override.polarity or override.relation_type,
-                                "confidence": override.confidence,
-                                "weight": override.confidence,
-                            }
-                        )
-                    curated_input_relations.append(rel)
+            if curation_ledger is not None:
+                source_relations = curation_ledger.apply_to_theory_relations(
+                    source_relations, {a.id for a in source_atoms}
+                )
                 if input.canonical_theory_relations:
-                    input.canonical_theory_relations = curated_input_relations
+                    input.canonical_theory_relations = source_relations
                 else:
-                    input.theory_relations = curated_input_relations
+                    input.theory_relations = source_relations
 
             theory_net: TheoryNet = self.projector.project(input)
-
-            if curation_ledger is not None and curation_ledger.relation_overrides:
-                curated_relations = []
-                for rel in theory_net.relations:
-                    override = curation_ledger.get_relation_override(rel.from_id, rel.to_id)
-                    if override is not None:
-                        if override.relation_type == "REJECTED":
-                            continue
-                        rel = rel.model_copy(
-                            update={
-                                "relation_type": override.relation_type,
-                                "polarity": override.polarity or override.relation_type,
-                                "weight": override.confidence,
-                            }
-                        )
-                    curated_relations.append(rel)
-                theory_net = theory_net.model_copy(update={"relations": curated_relations})
 
             atoms_updated = 0
             relations_updated = 0

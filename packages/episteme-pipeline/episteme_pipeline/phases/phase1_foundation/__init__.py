@@ -25,7 +25,6 @@ from itertools import batched
 from pathlib import Path
 from typing import Any
 
-from episteme_pipeline.runs.fingerprints import is_phase_unchanged
 from episteme_pipeline.artifacts.models import (
     ArtifactEnvelope,
     ArtifactKind,
@@ -107,65 +106,13 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
         """
         bib_paths = [Path(p) for p in input.bib_paths]
 
-        hydrated_artifacts: list[ArtifactEnvelope] = []
-        delta_paths: list[str] = []
-
-        prior_artifacts = context.prior_artifacts
-        prior_manifest = context.prior_manifest
-        can_hydrate = (
-            prior_artifacts is not None
-            and prior_manifest is not None
-            and is_phase_unchanged(context.manifest, prior_manifest, 1, self.name)
-        )
-        if can_hydrate:
-            prior_fps = prior_manifest.document_fingerprints
-            curr_fps = context.manifest.document_fingerprints
-            for source_path in input.source_paths:
-                p = Path(source_path)
-                d_id = doc_id(p)
-                p_str = str(source_path)
-                curr_fp = curr_fps.get(d_id) or curr_fps.get(p_str)
-                prior_fp = prior_fps.get(d_id) or prior_fps.get(p_str)
-
-                if curr_fp and prior_fp and curr_fp == prior_fp:
-                    doc_arts = [
-                        a
-                        for a in prior_artifacts.artifacts
-                        if a.kind == ArtifactKind.DOCUMENT
-                        and (
-                            (
-                                isinstance(a.payload, DocumentArtifact)
-                                and a.payload.document_id == d_id
-                            )
-                            or a.provenance.source_document_id == d_id
-                            or a.provenance.source_path == p_str
-                        )
-                    ]
-                    chunk_arts = [
-                        a
-                        for a in prior_artifacts.artifacts
-                        if a.kind == ArtifactKind.CHUNK
-                        and (
-                            (
-                                isinstance(a.payload, ChunkArtifact)
-                                and a.payload.document_id == d_id
-                            )
-                            or a.provenance.source_document_id == d_id
-                        )
-                    ]
-                    if doc_arts and chunk_arts:
-                        for da in doc_arts:
-                            hydrated_artifacts.append(
-                                da.model_copy(update={"run_id": context.run_id})
-                            )
-                        for ca in chunk_arts:
-                            hydrated_artifacts.append(
-                                ca.model_copy(update={"run_id": context.run_id})
-                            )
-                        continue
-                delta_paths.append(source_path)
+        if isinstance(context, ArtifactExecutionContext):
+            hydration = context.hydrator(1, self.name).hydrate_phase1(input.source_paths)
+            delta_paths = hydration.delta_source_paths
+            retained_artifacts = list(hydration.retained_artifacts)
         else:
             delta_paths = list(input.source_paths)
+            retained_artifacts = []
 
         documents: list[L1Document] = []
         all_chunks: list[L1Chunk] = []
@@ -215,7 +162,7 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
             )
             for chunk in all_chunks
         )
-        return ArtifactCollection(hydrated_artifacts + new_artifacts)
+        return ArtifactCollection(retained_artifacts + new_artifacts)
 
     async def _process_document(
         self,
