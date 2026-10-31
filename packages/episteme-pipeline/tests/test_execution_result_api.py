@@ -21,6 +21,7 @@ from episteme_pipeline.runs.models import (
 
 class StubPhase1:
     name = "Phase 1: Data Foundation"
+    phase_key = "phase1"
 
     async def run(self, input: PipelineInput, context: ArtifactExecutionContext):
         artifacts = []
@@ -51,6 +52,7 @@ class StubPhase1:
 
 class StubPhase2:
     name = "Phase 2: Entity & Local Relation Discovery"
+    phase_key = "phase2"
 
     async def run(self, input: Phase1ArtifactsView, context: ArtifactExecutionContext):
         entity = L2Entity(id="entity-1", label="PERSON", name="Kant", source_chunk_ids=["chunk-1"])
@@ -68,6 +70,7 @@ class StubPhase2:
 
 class StubPhase3:
     name = "Phase 3: Global Relation Extraction"
+    phase_key = "phase3"
 
     async def run(self, input: Phase2ArtifactsView, context: ArtifactExecutionContext):
         return ArtifactCollection([])
@@ -116,7 +119,7 @@ async def test_resume_from_run_returns_execution_result(tmp_path: Path, graph_st
         run_id="run-old",
         status=RunStatus.COMPLETED,
         input_fingerprint="same-input",
-        phase_config_fingerprints={"phase_1": "same-phase", "phase_2": "same-phase", "phase_3": "same-phase"},
+        phase_config_fingerprints={"phase1": "same-phase", "phase2": "same-phase", "phase3": "same-phase"},
         phase_records=[RunPhaseRecord(phase_name="Phase 1: Data Foundation", ordinal=1, status=RunStatus.COMPLETED)],
     )
     pipeline._manifest_store.write_manifest(prior)

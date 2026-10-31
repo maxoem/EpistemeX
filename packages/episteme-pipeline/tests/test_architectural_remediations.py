@@ -102,16 +102,16 @@ def test_phase_config_fingerprints_mapping():
 
     cfg_fps = pipeline._phase_config_fingerprints()
     assert len(cfg_fps) == 9
-    # Modifying phase3b config should change fingerprint for phase index 4
-    cfg_fps_orig_4 = cfg_fps[4]
+    # Modifying phase3b config should change fingerprint for phase3b
+    cfg_fps_orig_3b = cfg_fps["phase3b"]
     pipeline.config.phase3b.dense_similarity_threshold = 0.99
     cfg_fps_new = pipeline._phase_config_fingerprints()
-    assert cfg_fps_new[4] != cfg_fps_orig_4
-    # Modifying phase4_maturation config should change fingerprint for phase index 5
-    cfg_fps_orig_5 = cfg_fps[5]
+    assert cfg_fps_new["phase3b"] != cfg_fps_orig_3b
+    # Modifying phase4_maturation config should change fingerprint for phase4_maturation
+    cfg_fps_orig_4m = cfg_fps["phase4_maturation"]
     pipeline.config.phase4_maturation.maturation_top_k = 99
-    cfg_fps_new_5 = pipeline._phase_config_fingerprints()
-    assert cfg_fps_new_5[5] != cfg_fps_orig_5
+    cfg_fps_new_4m = pipeline._phase_config_fingerprints()
+    assert cfg_fps_new_4m["phase4_maturation"] != cfg_fps_orig_4m
 
 
 def test_prompt_fingerprints_includes_entity_synthesis():

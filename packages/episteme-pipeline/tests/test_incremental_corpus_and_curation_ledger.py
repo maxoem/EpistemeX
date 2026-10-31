@@ -384,14 +384,14 @@ async def test_phase1_incremental_corpus_hydration(tmp_path: Path) -> None:
         run_id="run-prior",
         status=RunStatus.COMPLETED,
         document_fingerprints=doc_fps,
-        phase_config_fingerprints={"phase_1": "cfg_same"},
+        phase_config_fingerprints={"phase1": "cfg_same"},
         method_fingerprints={},
     )
 
     current_manifest = RunManifest(
         run_id="run-current",
         document_fingerprints=compute_document_fingerprints([str(doc1), str(doc2)]),
-        phase_config_fingerprints={"phase_1": "cfg_same"},
+        phase_config_fingerprints={"phase1": "cfg_same"},
         method_fingerprints={},
     )
 
@@ -448,13 +448,13 @@ async def test_phase2_incremental_hydration_and_curation_constraints() -> None:
         run_id="run-prior",
         status=RunStatus.COMPLETED,
         document_fingerprints={"doc_unchanged": "hash_same"},
-        phase_config_fingerprints={"phase_2": "same"},
+        phase_config_fingerprints={"phase2": "same"},
         method_fingerprints={},
     )
     current_manifest = RunManifest(
         run_id="run-current",
         document_fingerprints={"doc_unchanged": "hash_same", "doc_new": "hash_new"},
-        phase_config_fingerprints={"phase_2": "same"},
+        phase_config_fingerprints={"phase2": "same"},
         method_fingerprints={},
     )
 
@@ -712,13 +712,13 @@ async def test_phase3_and_phase4_incremental_delta_hydration() -> None:
         run_id="run-prior",
         status=RunStatus.COMPLETED,
         document_fingerprints={"doc_unchanged": "hash_same"},
-        phase_config_fingerprints={"phase_3": "same", "phase_4": "same"},
+        phase_config_fingerprints={"phase3": "same", "phase4": "same"},
         method_fingerprints={},
     )
     current_manifest = RunManifest(
         run_id="run-current",
         document_fingerprints={"doc_unchanged": "hash_same", "doc_new": "hash_new"},
-        phase_config_fingerprints={"phase_3": "same", "phase_4": "same"},
+        phase_config_fingerprints={"phase3": "same", "phase4": "same"},
         method_fingerprints={},
     )
     ctx = ArtifactExecutionContext(
@@ -830,13 +830,13 @@ async def test_phase3_multi_chunk_lost_evidence_invalidation() -> None:
         run_id="run-prior",
         status=RunStatus.COMPLETED,
         document_fingerprints={"doc_unchanged": "hash_same", "doc_modified": "hash_v1"},
-        phase_config_fingerprints={"phase_3": "same"},
+        phase_config_fingerprints={"phase3": "same"},
         method_fingerprints={},
     )
     current_manifest = RunManifest(
         run_id="run-current",
         document_fingerprints={"doc_unchanged": "hash_same", "doc_modified": "hash_v2"},
-        phase_config_fingerprints={"phase_3": "same"},
+        phase_config_fingerprints={"phase3": "same"},
         method_fingerprints={},
     )
     ctx = ArtifactExecutionContext(

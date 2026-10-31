@@ -106,18 +106,21 @@ _SUPPORTED_TASKS = frozenset({"knowledge_graph"})
 class _PhaseEntry:
     """A phase plus everything the orchestrator needs to dispatch on it.
 
-    ``phase_key`` and ``input_view`` are copied off the runner class at
-    construction time so no orchestrator code has to string-match ``name``.
+    ``phase_key``, ``reads_kinds``, and ``writes_kinds`` are resolved from the
+    runner class at composition time to prevent string matching on display names.
     """
 
     index: int
     runner: PhaseRunner
     phase_key: str
     input_view: type | None
+    reads_kinds: frozenset[ArtifactKind] = frozenset()
+    writes_kinds: frozenset[ArtifactKind] = frozenset()
 
     @property
     def name(self) -> str:
         return self.runner.name
+
 
 class Pipeline:
     """Main pipeline orchestrator."""
@@ -165,39 +168,45 @@ class Pipeline:
         self._projector = ArtifactGraphProjector(projection_graph)
 
         # Build internal phase entries (1-based ordinals). Validate the dispatch
-        # contract here so a runner with a missing or misspelled `phase_key`
-        # fails at composition time instead of quietly falling through to the
-        # wrong config block.
+        # contract here so a runner with a missing or invalid `phase_key`
+        # fails immediately at composition time rather than quietly falling back.
         entries: list[_PhaseEntry] = []
+        seen_phase_keys: set[str] = set()
         for i, runner in enumerate(self.phases, start=1):
             try:
                 phase_key = runner.phase_key
             except AttributeError:
                 try:
-                    name_str = str(runner.name)
+                    runner_name = runner.name
                 except AttributeError:
-                    name_str = str(runner)
+                    runner_name = str(runner)
+                raise TypeError(
+                    f"PhaseRunner '{runner_name}' at index {i} must define a non-empty 'phase_key' attribute."
+                )
 
-                if "Phase 1" in name_str:
-                    phase_key = "phase1"
-                elif "Phase 2" in name_str:
-                    phase_key = "phase2"
-                elif "Phase 3b" in name_str:
-                    phase_key = "phase3b"
-                elif "Phase 3" in name_str:
-                    phase_key = "phase3"
-                elif "Entity Maturation" in name_str:
-                    phase_key = "phase4_maturation"
-                elif "Phase 4" in name_str:
-                    phase_key = "phase4"
-                elif "Phase 5" in name_str:
-                    phase_key = "phase5"
-                elif "Phase 6" in name_str:
-                    phase_key = "phase6"
-                elif "Theoretical Enrichment" in name_str:
-                    phase_key = "theoretical_enrichment"
-                else:
-                    phase_key = f"phase{i}"
+            if not phase_key or not isinstance(phase_key, str) or not phase_key.strip():
+                try:
+                    runner_name = runner.name
+                except AttributeError:
+                    runner_name = str(runner)
+                raise TypeError(
+                    f"PhaseRunner '{runner_name}' at index {i} has invalid 'phase_key' of type {type(phase_key)}."
+                )
+
+            if phase_key in seen_phase_keys:
+                raise ValueError(
+                    f"Duplicate phase_key '{phase_key}' found in pipeline phases at index {i}."
+                )
+            seen_phase_keys.add(phase_key)
+
+            try:
+                name = runner.name
+                if not name:
+                    raise AttributeError
+            except AttributeError:
+                raise TypeError(
+                    f"PhaseRunner with phase_key '{phase_key}' at index {i} must define a non-empty 'name' attribute."
+                )
 
             try:
                 input_view = runner.input_view
@@ -207,12 +216,34 @@ class Pipeline:
                 except AttributeError:
                     input_view = None
 
+            try:
+                raw_reads = runner.reads_kinds
+            except AttributeError:
+                raw_reads = None
+
+            if not raw_reads:
+                try:
+                    allowed = input_view._allowed_kinds
+                    reads_kinds = frozenset(allowed)
+                except AttributeError:
+                    reads_kinds = frozenset()
+            else:
+                reads_kinds = frozenset(raw_reads)
+
+            try:
+                raw_writes = runner.writes_kinds
+                writes_kinds = frozenset(raw_writes) if raw_writes else frozenset()
+            except AttributeError:
+                writes_kinds = frozenset()
+
             entries.append(
                 _PhaseEntry(
                     index=i,
                     runner=runner,
                     phase_key=phase_key,
                     input_view=input_view,
+                    reads_kinds=reads_kinds,
+                    writes_kinds=writes_kinds,
                 )
             )
         self._phase_entries = entries
@@ -525,7 +556,10 @@ class Pipeline:
         )
 
     async def _hydrate_previous_collection(
-        self, phase_number: int, source_run_id: str | None = None
+        self,
+        phase_number: int = 1,
+        source_run_id: str | None = None,
+        wanted_phase_names: set[str] | None = None,
     ) -> ArtifactCollection | None:
         """Rebuild the artifact collection the phase at ``phase_number`` expects.
 
@@ -535,8 +569,23 @@ class Pipeline:
         the earliest phases — only its own parent does. ``_get_run_artifacts_raw``
         performs the same traversal for reporting; both now prefer the nearest
         run when the same artifact appears more than once in the chain.
+
+        Parameters
+        ----------
+        phase_number : int, optional
+            The 1-based index of the phase to hydrate up to (default 1).
+        source_run_id : str or None, optional
+            Specific run ID to hydrate artifacts from, defaults to latest run.
+        wanted_phase_names : set of str or None, optional
+            Explicit set of phase names to hydrate from historical runs. If None,
+            defaults to all phases strictly preceding phase_number.
+
+        Returns
+        -------
+        ArtifactCollection or None
+            The hydrated artifact collection, or None if no matching artifacts.
         """
-        if phase_number <= 1:
+        if phase_number <= 1 and wanted_phase_names is None:
             return None
         run_id = source_run_id
         if run_id is None:
@@ -545,11 +594,12 @@ class Pipeline:
                 return None
             run_id = latest.run_id
 
-        wanted_phases = {
-            self._phase_entries[idx - 1].name for idx in range(1, phase_number)
-        }
+        if wanted_phase_names is None:
+            wanted_phase_names = {
+                self._phase_entries[idx - 1].name for idx in range(1, phase_number)
+            }
         chain_artifacts = await self._get_run_artifacts_raw(run_id)
-        all_artifacts = [a for a in chain_artifacts if a.phase_name in wanted_phases]
+        all_artifacts = [a for a in chain_artifacts if a.phase_name in wanted_phase_names]
         if not all_artifacts:
             return None
         return ArtifactCollection(all_artifacts)
@@ -617,13 +667,16 @@ class Pipeline:
                 else len(self._phase_entries) + 1
             )
             allow_hydration = self.config.execution.allow_artifact_hydration
+            wanted_phases = self._reused_phase_names(decision)
             previous_collection = (
                 await self._hydrate_previous_collection(
-                    effective_start, source_run_id=decision.resume_point.run_id
+                    effective_start,
+                    source_run_id=decision.resume_point.run_id,
+                    wanted_phase_names=wanted_phases,
                 )
                 if allow_hydration
                 and decision.resume_point.run_id
-                and effective_start <= len(self._phase_entries)
+                and wanted_phases
                 else None
             )
             if decision.reused_phase_ordinals:
@@ -703,13 +756,35 @@ class Pipeline:
                 phase_number in decision.reused_phase_ordinals
                 and decision.invalidated_phase_ordinals
             ):
-                effective_start = decision.invalidated_phase_ordinals[0]
+                effective_start = min(phase_number, decision.invalidated_phase_ordinals[0])
+
+            # Invalidate all phases from phase_number onward
+            forced_reused = [ord for ord in decision.reused_phase_ordinals if ord < phase_number]
+            forced_invalidated = sorted(
+                list(
+                    set(decision.invalidated_phase_ordinals)
+                    | set(range(phase_number, len(self._phase_entries) + 1))
+                )
+            )
+            decision = InvalidationDecision(
+                resume_point=decision.resume_point,
+                reused_phase_ordinals=forced_reused,
+                invalidated_phase_ordinals=forced_invalidated,
+                reason=(
+                    decision.reason
+                    if forced_invalidated == decision.invalidated_phase_ordinals
+                    else f"run-from-phase:{phase_number}"
+                ),
+            )
             allow_hydration = self.config.execution.allow_artifact_hydration
+            wanted_phases = self._reused_phase_names(decision)
             previous_collection = (
                 await self._hydrate_previous_collection(
-                    effective_start, source_run_id=decision.resume_point.run_id
+                    effective_start,
+                    source_run_id=decision.resume_point.run_id,
+                    wanted_phase_names=wanted_phases,
                 )
-                if allow_hydration and decision.resume_point.run_id
+                if allow_hydration and decision.resume_point.run_id and wanted_phases
                 else None
             )
             if decision.reused_phase_ordinals:
@@ -810,13 +885,62 @@ class Pipeline:
         """The config block this phase runs on, resolved from ``phase_key``."""
         return self.config.get_phase_config(entry.phase_key)
 
-    def _phase_config_fingerprints(self) -> dict[int, str]:
-        fps: dict[int, str] = {}
+    def _phase_config_fingerprints(self) -> dict[str, str]:
+        """Compute configuration fingerprints keyed by semantic phase_key.
+
+        Returns
+        -------
+        dict[str, str]
+            Mapping from phase_key to its deterministic configuration fingerprint.
+        """
+        fps: dict[str, str] = {}
         for entry in self._phase_entries:
-            cfg = self._phase_config(entry)
-            if cfg is not None:
-                fps[entry.index] = fingerprint_phase_config(cfg)
+            runner_fp = (
+                entry.runner.config_fingerprint()
+                if isinstance(entry.runner, PhaseRunner)
+                else None
+            )
+            if runner_fp is None and not isinstance(entry.runner, PhaseRunner):
+                try:
+                    runner_fp = entry.runner.config_fingerprint()
+                except AttributeError:
+                    runner_fp = None
+            if runner_fp is not None:
+                fps[entry.phase_key] = runner_fp
+            else:
+                cfg = self._phase_config(entry)
+                if cfg is not None:
+                    fps[entry.phase_key] = fingerprint_phase_config(cfg)
         return fps
+
+    def _phase_dependencies(self) -> dict[str, set[str]]:
+        """Compute direct upstream phase dependencies for each phase in this pipeline.
+
+        Returns
+        -------
+        dict[str, set[str]]
+            Mapping of phase_key to set of upstream phase_keys it directly depends on.
+        """
+        deps: dict[str, set[str]] = {entry.phase_key: set() for entry in self._phase_entries}
+        for i, entry in enumerate(self._phase_entries):
+            if isinstance(entry.runner, PhaseRunner):
+                explicit_deps = entry.runner.dependencies
+            else:
+                try:
+                    explicit_deps = entry.runner.dependencies
+                except AttributeError:
+                    explicit_deps = None
+
+            if explicit_deps is not None:
+                deps[entry.phase_key].update(explicit_deps)
+            else:
+                if entry.reads_kinds:
+                    for prev in self._phase_entries[:i]:
+                        if entry.reads_kinds & prev.writes_kinds:
+                            deps[entry.phase_key].add(prev.phase_key)
+                elif not entry.writes_kinds and i > 0 and entry.input_view is None:
+                    deps[entry.phase_key].add(self._phase_entries[i - 1].phase_key)
+        return deps
 
     def _build_manifest(self, *, run_id: str, pipeline_input: PipelineInput) -> RunManifest:
         # Assemble manifest with fingerprints and config snapshot
@@ -846,6 +970,7 @@ class Pipeline:
             if pipeline_input.structural_anchor
             else None
         )
+
         return RunManifest(
             run_id=run_id,
             status=RunStatus.RUNNING,
@@ -865,41 +990,37 @@ class Pipeline:
                 "curation_ledger_fingerprint": ledger_fp,
             },
             config_snapshot=cfg_snapshot,
-            phase_config_fingerprints={f"phase_{i}": v for i, v in phase_cfg_fps.items()},
+            phase_config_fingerprints=dict(phase_cfg_fps),
             method_fingerprints=method_fps,
             input_sources=list(pipeline_input.source_paths),
             phase_records=[
-                RunPhaseRecord(phase_name=entry.runner.name, ordinal=entry.index)
+                RunPhaseRecord(
+                    phase_name=entry.runner.name,
+                    ordinal=entry.index,
+                    phase_key=entry.phase_key,
+                )
                 for entry in self._phase_entries
             ],
         )
 
 
 
-    def _phase_lists_match(self, prior: RunManifest) -> bool:
-        """True when the prior run ran exactly this phase list, in this order.
-
-        Reuse copies phase records and artifacts across run. Matching
-        them by ordinal alone is only safe if both runs had the same phases:
-        ``Pipeline.__init__`` accepts an arbitrary ``phases`` list, so dropping
-        one phase shifts every later ordinal.
-        """
-        prior_names = [rec.phase_name for rec in sorted(prior.phase_records, key=lambda r: r.phase_ordinal)]
-        current_names = [entry.name for entry in self._phase_entries]
-        return prior_names == current_names
-
     async def _choose_reuse_source(self, current: RunManifest) -> InvalidationDecision:
         """Decide which phases can be reused from the most recent completed run.
 
-        The decision is made purely by comparing *manifest* fingerprints —
-        source, per-phase config, and per-phase method/prompt — between the
-        prior run and this one.
+        Evaluates reuse along the phase dependency DAG: a phase can be reused if its
+        configuration, method fingerprints, and inputs did not change, and all its
+        upstream dependencies in the phase DAG were also successfully reused.
 
-        It deliberately does **not** consult the artifact dependency graph.
-        Staleness means "would re-running produce something different
-        from what is stored", and this run's artifacts do not exist yet at
-        decision time; The DAG is used for the question it can answer, in
-        :meth:`diff_artifacts`.
+        Parameters
+        ----------
+        current : RunManifest
+            Current run manifest containing fingerprints for this run.
+
+        Returns
+        -------
+        InvalidationDecision
+            The decision detailing reused and invalidated phase ordinals with reason.
         """
         # Prior is either the explicit parent_run_id or the latest completed manifest.
         prior: RunManifest | None = None
@@ -917,30 +1038,23 @@ class Pipeline:
                 reason="no-prior-or-reuse-disabled",
             )
 
-        if not self._phase_lists_match(prior):
-            return InvalidationDecision(
-                resume_point=ResumePoint(run_id=None),
-                reused_phase_ordinals=[],
-                invalidated_phase_ordinals=[e.index for e in self._phase_entries],
-                reason="phase-list-changed",
-            )
-
-        earliest_invalid: int | None = None
-        reason = "all-reused"
-
-        # If prior was partially executed, invalidation must start at the first incomplete phase
-        prior_completed_ordinals = {
-            rec.phase_ordinal for rec in prior.phase_records if rec.status == RunStatus.COMPLETED
+        # A changed pipeline-wide decision engine or calibrator invalidates everything
+        de_keys = {
+            k
+            for k in (set(current.method_fingerprints) | set(prior.method_fingerprints))
+            if k == "decision_engine" or k.startswith("decision_engine.")
         }
-        for entry in self._phase_entries:
-            if entry.index not in prior_completed_ordinals:
-                earliest_invalid = entry.index
-                reason = f"prior-phase-incomplete:{entry.name}"
-                break
+        pipeline_wide_invalidation: str | None = None
+        if any(
+            prior.method_fingerprints.get(k) != current.method_fingerprints.get(k)
+            for k in de_keys
+        ):
+            pipeline_wide_invalidation = "method-changed:decision_engine"
 
-        # A changed input invalidates everything from phase 1 on.
-        if prior.input_fingerprint != current.input_fingerprint:
-            earliest_invalid = 1
+        # Check root input changes
+        input_changed = (prior.input_fingerprint != current.input_fingerprint)
+        input_reason: str | None = None
+        if input_changed:
             if (
                 prior.document_fingerprints
                 and all(
@@ -948,50 +1062,89 @@ class Pipeline:
                     for k, v in prior.document_fingerprints.items()
                 )
             ):
-                reason = "source-changed:incremental"
+                input_reason = "source-changed:incremental"
             else:
-                reason = "source-changed"
+                input_reason = "source-changed"
 
-        # A changed pipeline-wide decision engine or calibrator invalidates from phase 1 on.
-        if earliest_invalid is None:
-            de_keys = {
+        # Index prior records by phase_key and phase_name
+        prior_by_key: dict[str, RunPhaseRecord] = {
+            rec.phase_key: rec for rec in prior.phase_records if rec.phase_key
+        }
+        prior_by_name: dict[str, RunPhaseRecord] = {
+            rec.phase_name: rec for rec in prior.phase_records
+        }
+
+        deps = self._phase_dependencies()
+        all_method_keys = set(current.method_fingerprints) | set(prior.method_fingerprints)
+
+        reused_keys: set[str] = set()
+        invalidated_keys: set[str] = set()
+        invalidation_reasons: dict[str, str] = {}
+
+        for entry in self._phase_entries:
+            key = entry.phase_key
+
+            if pipeline_wide_invalidation:
+                invalidated_keys.add(key)
+                invalidation_reasons[key] = pipeline_wide_invalidation
+                continue
+
+            # Root phase with changed input
+            if not deps[key] and input_changed:
+                invalidated_keys.add(key)
+                invalidation_reasons[key] = input_reason or "source-changed"
+                continue
+
+            # Check if any upstream dependency in the phase DAG was invalidated
+            upstream_invalid = [up for up in deps[key] if up in invalidated_keys]
+            if upstream_invalid:
+                invalidated_keys.add(key)
+                invalidation_reasons[key] = f"upstream-invalidated:{upstream_invalid[0]}"
+                continue
+
+            # Prior completion check
+            prior_rec = prior_by_key.get(key) or prior_by_name.get(entry.name)
+            if prior_rec is None:
+                invalidated_keys.add(key)
+                invalidation_reasons[key] = f"phase-not-in-prior:{entry.name}"
+                continue
+            if prior_rec.status != RunStatus.COMPLETED:
+                invalidated_keys.add(key)
+                invalidation_reasons[key] = f"prior-phase-incomplete:{entry.name}"
+                continue
+
+            # Config fingerprint check
+            if prior.phase_config_fingerprints.get(key) != current.phase_config_fingerprints.get(key):
+                invalidated_keys.add(key)
+                invalidation_reasons[key] = f"config-changed:{entry.name}"
+                continue
+
+            # Method / prompt fingerprints check
+            method_keys = [
                 k
-                for k in (set(current.method_fingerprints) | set(prior.method_fingerprints))
-                if k == "decision_engine" or k.startswith("decision_engine.")
-            }
+                for k in all_method_keys
+                if k.startswith(f"{entry.name}.") or k.startswith(f"{key}.")
+            ]
             if any(
                 prior.method_fingerprints.get(k) != current.method_fingerprints.get(k)
-                for k in de_keys
+                for k in method_keys
             ):
-                earliest_invalid = 1
-                reason = "method-changed:decision_engine"
+                invalidated_keys.add(key)
+                invalidation_reasons[key] = f"method-changed:{entry.name}"
+                continue
 
-        # Otherwise find the first phase whose config, method or prompt moved.
-        if earliest_invalid is None:
-            all_method_keys = set(current.method_fingerprints) | set(prior.method_fingerprints)
-            for entry in self._phase_entries:
-                key = f"phase_{entry.index}"
-                if prior.phase_config_fingerprints.get(key) != current.phase_config_fingerprints.get(key):
-                    earliest_invalid = entry.index
-                    reason = f"config-changed:{entry.name}"
-                    break
-                method_keys = [
-                    k for k in all_method_keys if k.startswith(f"{entry.name}.")
-                ]
-                if any(
-                    prior.method_fingerprints.get(k) != current.method_fingerprints.get(k)
-                    for k in method_keys
-                ):
-                    earliest_invalid = entry.index
-                    reason = f"method-changed:{entry.name}"
-                    break
+            reused_keys.add(key)
 
-        if earliest_invalid is None:
-            reused = [e.index for e in self._phase_entries]
-            invalidated = []
+        reused = [e.index for e in self._phase_entries if e.phase_key in reused_keys]
+        invalidated = [e.index for e in self._phase_entries if e.phase_key in invalidated_keys]
+
+        if not invalidated:
+            reason = "all-reused"
         else:
-            reused = [e.index for e in self._phase_entries if e.index < earliest_invalid]
-            invalidated = [e.index for e in self._phase_entries if e.index >= earliest_invalid]
+            first_invalid_key = next(
+                e.phase_key for e in self._phase_entries if e.phase_key in invalidated_keys
+            )
+            reason = invalidation_reasons.get(first_invalid_key, "invalidated")
 
         return InvalidationDecision(
             resume_point=resume_point,
@@ -1070,11 +1223,18 @@ class Pipeline:
             )
         )
 
-        # Mark reused phase records in manifest. Keyed by phase name, not by ordinal.
+        # Mark reused phase records in manifest. Keyed by phase_key or phase name.
         reused_records = self._reused_phase_records(invalidation_decision)
+        reused_by_key: dict[str, RunPhaseRecord] = {
+            r.phase_key: r for r in reused_records if r.phase_key
+        }
         reused_by_name = {r.phase_name: r for r in reused_records}
         for rec in manifest.phase_records:
-            prior_rec = reused_by_name.get(rec.phase_name)
+            prior_rec = (
+                reused_by_key.get(rec.phase_key)
+                if rec.phase_key
+                else None
+            ) or reused_by_name.get(rec.phase_name)
             if prior_rec is not None:
                 rec.reused = True
                 rec.status = prior_rec.status
@@ -1084,6 +1244,7 @@ class Pipeline:
                 rec.input_artifact_ids = prior_rec.input_artifact_ids
                 rec.output_artifact_ids = prior_rec.output_artifact_ids
                 rec.output_fingerprint = prior_rec.output_fingerprint
+                rec.config_fingerprint = prior_rec.config_fingerprint
                 self.event_emitter.emit(
                     PhaseReused(
                         phase_name=rec.phase_name,
@@ -1134,6 +1295,8 @@ class Pipeline:
 
         # Execute phases starting from start_index (1-based). If start_index > len, nothing to run.
         for ordinal in range(start_index, len(self._phase_entries) + 1):
+            if ordinal in invalidation_decision.reused_phase_ordinals:
+                continue
             entry = self._phase_entries[ordinal - 1]
             phase_name = entry.name
             phase_input = self._build_phase_input(
@@ -1147,12 +1310,13 @@ class Pipeline:
                     "phase_key": entry.phase_key,
                     "input_fingerprint": manifest.input_fingerprint,
                     "config_fingerprint": manifest.phase_config_fingerprints.get(
-                        f"phase_{ordinal}"
+                        entry.phase_key
                     ),
                     "method_fingerprints": {
                         k: v
                         for k, v in sorted(manifest.method_fingerprints.items())
                         if k.startswith(f"{entry.name}.")
+                        or k.startswith(f"{entry.phase_key}.")
                         or k == "decision_engine"
                         or k.startswith("decision_engine.")
                     },
@@ -1307,7 +1471,10 @@ class Pipeline:
                 record.completed_at = datetime.now(UTC)
                 record.artifact_ids = produced_ids
                 record.output_artifact_ids = produced_ids
-                record.config_fingerprint = cast(str, manifest.phase_config_fingerprints.get(f"phase_{ordinal}"))
+                record.config_fingerprint = cast(
+                    str,
+                    manifest.phase_config_fingerprints.get(entry.phase_key),
+                )
                 record.output_fingerprint = self._fingerprint_collection(collection)
 
             duration_sec = (

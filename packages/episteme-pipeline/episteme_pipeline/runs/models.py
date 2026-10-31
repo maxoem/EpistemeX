@@ -26,6 +26,7 @@ class RunPhaseRecord(BaseModel):
 
     phase_name: str
     phase_ordinal: int = Field(alias="ordinal")
+    phase_key: str | None = None
     status: RunStatus = RunStatus.PLANNED
     started_at: datetime | None = None
     completed_at: datetime | None = None

@@ -6,6 +6,7 @@ from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
 )
+from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.events.context import get_event_emitter
 from episteme_pipeline.events.models import (
@@ -51,6 +52,32 @@ class PhaseRunner[InputT](ABC):
     #: Artifact view class this phase consumes, e.g. ``Phase1ArtifactsView``.
     #: ``None`` means the phase is fed the raw ``PipelineInput`` — Phase 1 only.
     input_view: ClassVar[type | None] = None
+
+    #: The set of artifact kinds consumed by this phase. Derived from
+    #: ``input_view._allowed_kinds`` if empty, or declared explicitly.
+    reads_kinds: ClassVar[frozenset[ArtifactKind]] = frozenset()
+
+    #: The set of artifact kinds produced and written by this phase.
+    writes_kinds: ClassVar[frozenset[ArtifactKind]] = frozenset()
+
+    #: Explicit upstream ``phase_key`` dependencies when not derived solely
+    #: from ``reads_kinds`` / ``writes_kinds`` intersection.
+    dependencies: ClassVar[tuple[str, ...] | None] = None
+
+    def config_fingerprint(self) -> str | None:
+        """Return optional stable configuration fingerprint for custom runners.
+
+        Subclasses and custom post-processors may override this method to provide
+        a deterministic SHA-256 fingerprint of runner-specific configuration when
+        the runner does not correspond to a sub-config on ``PipelineConfig``.
+
+        Returns
+        -------
+        str or None
+            A deterministic fingerprint string, or None to defer to standard
+            ``PipelineConfig.get_phase_config()`` resolution.
+        """
+        return None
 
     @abstractmethod
     async def run(self, input: InputT, context: ArtifactExecutionContext) -> ArtifactCollection: ...

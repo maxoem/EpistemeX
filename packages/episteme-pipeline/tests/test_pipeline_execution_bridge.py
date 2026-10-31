@@ -23,6 +23,7 @@ from episteme_pipeline.runs.models import ExecutionResult, RunStatus
 
 class StubPhase1:
     name = "Phase 1: Data Foundation"
+    phase_key = "phase1"
 
     async def run(self, input: PipelineInput, context: ArtifactExecutionContext) -> ArtifactCollection:
         document = L1Document(
@@ -48,6 +49,7 @@ class StubPhase1:
 
 class StubPhase2:
     name = "Phase 2: Entity & Local Relation Discovery"
+    phase_key = "phase2"
 
     async def run(self, input: Phase1ArtifactsView, context: ArtifactExecutionContext) -> ArtifactCollection:
         entity = L2Entity(id="entity-1", label="PERSON", name="Kant", source_chunk_ids=["chunk-1"])
@@ -60,6 +62,7 @@ class StubPhase2:
 
 class StubPhase3:
     name = "Phase 3: Global Relation Extraction"
+    phase_key = "phase3"
 
     async def run(self, input, context: ArtifactExecutionContext) -> ArtifactCollection:
         return ArtifactCollection([])
@@ -67,6 +70,7 @@ class StubPhase3:
 
 class StubPhase3First:
     name = "Phase 3: Global Relation Extraction"
+    phase_key = "phase3"
     input_view = Phase2ArtifactsView
 
     def __init__(self) -> None:

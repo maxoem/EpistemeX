@@ -12,8 +12,9 @@ from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 
 
 class StubPhase:
-    def __init__(self, name: str, a: int = 1, b: str = "hello") -> None:
+    def __init__(self, name: str, a: int = 1, b: str = "hello", phase_key: str | None = None) -> None:
         self.name = name
+        self.phase_key = phase_key or name.lower().split(":")[0].replace(" ", "")
         self.a = a
         self.b = b
 
@@ -44,7 +45,7 @@ async def test_fine_grained_nested_config_detects_leaf_change(tmp_path, graph_st
         status=RunStatus.COMPLETED,
         input_fingerprint="same-input",
         # New nested format with per-leaf fingerprints
-        phase_config_fingerprints={"phase_1": {"a": "fp_for_10", "b": "fp_for_same"}},
+        phase_config_fingerprints={"phase1": {"a": "fp_for_10", "b": "fp_for_same"}},
         phase_records=[
             RunPhaseRecord(
                 phase_name="Phase 1: Data Foundation",
@@ -61,7 +62,7 @@ async def test_fine_grained_nested_config_detects_leaf_change(tmp_path, graph_st
 
     pipeline._compute_stale_phases = mock_compute_stale_phases
     pipeline._phase_config_fingerprints = lambda: {
-        1: {"a": "fp_for_20", "b": "fp_for_same"}
+        "phase1": {"a": "fp_for_20", "b": "fp_for_same"}
     }
     pipeline._method_fingerprints = dict
 
@@ -71,7 +72,7 @@ async def test_fine_grained_nested_config_detects_leaf_change(tmp_path, graph_st
             status=RunStatus.RUNNING,
             input_fingerprint="same-input",
             phase_config_fingerprints={
-                "phase_1": {"a": "fp_for_20", "b": "fp_for_same"},
+                "phase1": {"a": "fp_for_20", "b": "fp_for_same"},
             },
         )
     )
@@ -102,7 +103,7 @@ async def test_fine_grained_nested_config_all_leaves_match(tmp_path, graph_store
         run_id="run-old",
         status=RunStatus.COMPLETED,
         input_fingerprint="same-input",
-        phase_config_fingerprints={"phase_1": {"a": "fp_for_10", "b": "fp_for_same"}},
+        phase_config_fingerprints={"phase1": {"a": "fp_for_10", "b": "fp_for_same"}},
         phase_records=[
             RunPhaseRecord(
                 phase_name="Phase 1: Data Foundation",
@@ -119,7 +120,7 @@ async def test_fine_grained_nested_config_all_leaves_match(tmp_path, graph_store
 
     pipeline._compute_stale_phases = mock_compute_stale_phases
     pipeline._phase_config_fingerprints = lambda: {
-        1: {"a": "fp_for_10", "b": "fp_for_same"}
+        "phase1": {"a": "fp_for_10", "b": "fp_for_same"}
     }
     pipeline._method_fingerprints = dict
 
@@ -129,7 +130,7 @@ async def test_fine_grained_nested_config_all_leaves_match(tmp_path, graph_store
             status=RunStatus.RUNNING,
             input_fingerprint="same-input",
             phase_config_fingerprints={
-                "phase_1": {"a": "fp_for_10", "b": "fp_for_same"},
+                "phase1": {"a": "fp_for_10", "b": "fp_for_same"},
             },
         )
     )

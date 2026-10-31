@@ -19,6 +19,7 @@ from episteme_pipeline.artifacts.execution import (
     ArtifactExecutionContext,
     Phase4ArtifactsView,
 )
+from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.config import Phase6Config
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet
 from episteme_pipeline.decision.modal_resolver import HybridModalResolver
@@ -61,6 +62,14 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
     name = "Phase 6: TheoryNet Projection"
     phase_key = "phase6"
     input_view = Phase4ArtifactsView
+    reads_kinds = frozenset(
+        {
+            ArtifactKind.THEORY_ATOM,
+            ArtifactKind.THEORY_RELATION,
+            ArtifactKind.FUSION_DECISION,
+        }
+    )
+    writes_kinds = frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION})
 
     def __init__(
         self,

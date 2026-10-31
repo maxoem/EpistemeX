@@ -39,6 +39,7 @@ from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
 )
+from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.config import Phase1Config
 from episteme_pipeline.contracts.domain import L1Chunk, L1Document
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
@@ -69,6 +70,8 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
     name = "Phase 1: Data Foundation"
     phase_key = "phase1"
     input_view = None
+    reads_kinds = frozenset()
+    writes_kinds = frozenset({ArtifactKind.DOCUMENT, ArtifactKind.CHUNK})
 
     def __init__(
         self,
@@ -107,7 +110,7 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
         bib_paths = [Path(p) for p in input.bib_paths]
 
         if isinstance(context, ArtifactExecutionContext):
-            hydration = context.hydrator(1, self.name).hydrate_phase1(input.source_paths)
+            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase1(input.source_paths)
             delta_paths = hydration.delta_source_paths
             retained_artifacts = list(hydration.retained_artifacts)
         else:

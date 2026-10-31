@@ -29,11 +29,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from episteme_pipeline.artifacts.models import (
-    EntityMentionArtifact,
-    LinkedEntityArtifact,
-    LocalRelationArtifact,
-)
 from episteme_pipeline.artifacts.builders import (
     build_entity_mention_artifact,
     build_linked_entity_artifact,
@@ -43,6 +38,9 @@ from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
     Phase1ArtifactsView,
+)
+from episteme_pipeline.artifacts.models import (
+    ArtifactKind,
 )
 from episteme_pipeline.artifacts.subgraph_reader import ArtifactSubgraphReader
 from episteme_pipeline.config import Phase2Config
@@ -133,6 +131,14 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
     name = "Phase 2: Entity & Local Relation Discovery"
     phase_key = "phase2"
     input_view = Phase1ArtifactsView
+    reads_kinds = frozenset({ArtifactKind.DOCUMENT, ArtifactKind.CHUNK})
+    writes_kinds = frozenset(
+        {
+            ArtifactKind.ENTITY_MENTION,
+            ArtifactKind.LINKED_ENTITY,
+            ArtifactKind.LOCAL_RELATION,
+        }
+    )
 
     def __init__(
         self,
@@ -292,7 +298,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         )
 
         if isinstance(context, ArtifactExecutionContext):
-            hydration = context.hydrator(2, self.name).hydrate_phase2(chunks)
+            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase2(chunks)
             chunks = hydration.delta_chunks
             all_entities.extend(hydration.entities)
             all_triples.extend(hydration.triples)

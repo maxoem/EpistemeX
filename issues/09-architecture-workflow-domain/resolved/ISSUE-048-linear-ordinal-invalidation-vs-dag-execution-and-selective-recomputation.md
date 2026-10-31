@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Orchestration, DAG Scheduling, Invalidation & Caching) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`pipeline.py`, `artifacts/invalidate.py`, `protocols/phase_runner.py`) |
 | **Priority** | **High** |
-| **Status** | `Open` |
+| **Status** | `Resolved` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md), [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0012`](../../docs/adr/0012-phase-config-redesign-and-langfuse-integration.md), [`ADR-0014`](../../docs/adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [`ADR-0015`](../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md) |
 
 ---
@@ -100,28 +100,18 @@ flowchart TB
     4. $p$'s `phase_config_fingerprint` and `method_fingerprints` match `prior`.
 - **Immediate Benefit**: Appending `TheoreticalEnrichmentRunner` or custom `post_processors` to a completed 6-phase run automatically reuses Phases 1–6 (`🟢 Reused`) and executes **only** the newly attached post-processor!
 
-### Step 3: Bridge `ArtifactDependencyGraph` into Runtime Execution (`DeltaExecutionContext`)
-- When a phase $p$ is invalidated (e.g., because an upstream phase re-ran and modified 5% of artifacts, while $p$'s own config and method fingerprints are unchanged from `prior`), compute the stale `identity_key` set via `ArtifactDependencyGraph.find_stale_nodes()` before invoking `p.run()` and attach it to `ArtifactExecutionContext`:
-  ```python
-  @dataclass(slots=True)
-  class ArtifactExecutionContext:
-      run_id: str
-      manifest: RunManifest
-      pipeline_input: PipelineInput
-      previous: ArtifactCollection | None = None
-      prior_phase_artifacts: ArtifactCollection | None = None
-      stale_upstream_identities: frozenset[str] | None = None
-  ```
-- Phase runners can inspect `context.stale_upstream_identities`: if an upstream chunk or entity's `identity_key` is not in `stale_upstream_identities` and $p$'s own method/config fingerprint did not change, the runner can carry forward the corresponding output artifact from `context.prior_phase_artifacts` without re-invoking the LLM.
+### Step 3: Semantic `phase_key` Alignment with `ArtifactHydrator` (`IncrementalRetentionScope`)
+- Centralized intra-phase delta recomputation is handled by `ArtifactHydrator` and `IncrementalRetentionScope` (`artifacts/execution.py`), which filter unchanged documents, chunks, entities, and argument components across runs.
+- Bind `ArtifactExecutionContext.hydrator(phase_key, phase_name)` and `is_phase_unchanged(manifest, prior_manifest, phase_key, phase_name)` exclusively to semantic `phase_key` so that phases whose ordinal position differs from their phase number (e.g., `Phase4Runner` with `phase_key="phase4"` executing at ordinal 6 after `phase3b` and `phase4_maturation`) evaluate configuration stability against their own semantic `phase_key` rather than positional `phase_4`.
 
 ---
 
 ## 4. Acceptance Criteria
 
-- [ ] Appending or toggling `TheoreticalEnrichmentRunner`, `post_processors`, or `extra_phases` reuses all completed upstream phases (Phases 1–6) without triggering `"phase-list-changed"` full-pipeline invalidation.
-- [ ] `Pipeline.__init__` raises an explicit `ValueError` / `TypeError` on missing `phase_key` rather than silently defaulting to `"phase1"` or string-matching `runner.name`.
-- [ ] `RunManifest.phase_config_fingerprints` is keyed by semantic `phase_key` and supports custom `PhaseRunner` configurations outside `PipelineConfig`.
-- [ ] Independent post-processing branches in the phase DAG do not transitively invalidate each other when their respective configs change.
+- [x] Appending or toggling `TheoreticalEnrichmentRunner`, `post_processors`, or `extra_phases` reuses all completed upstream phases (Phases 1–6) without triggering `"phase-list-changed"` full-pipeline invalidation.
+- [x] `Pipeline.__init__` raises an explicit `ValueError` / `TypeError` on missing `phase_key` rather than silently defaulting to `"phase1"` or string-matching `runner.name`.
+- [x] `RunManifest.phase_config_fingerprints` is keyed by semantic `phase_key` and supports custom `PhaseRunner` configurations outside `PipelineConfig`.
+- [x] Independent post-processing branches in the phase DAG do not transitively invalidate each other when their respective configs change.
 
 ---
 

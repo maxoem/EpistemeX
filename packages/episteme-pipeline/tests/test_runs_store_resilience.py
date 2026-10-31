@@ -12,6 +12,7 @@ from episteme_pipeline.runs.persistence import JsonRunManifestStore
 
 class _Noop:
     name = "Phase X: Noop"
+    phase_key = "phase_noop"
     async def run(self, input, context):
         from episteme_pipeline.artifacts.execution import ArtifactCollection
         return ArtifactCollection([])

@@ -29,6 +29,7 @@ from collections import defaultdict
 from itertools import batched
 
 from episteme_pipeline.artifacts.builders import build_global_relation_artifact
+from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
@@ -69,6 +70,8 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
     name = "Phase 3: Global Relation Extraction"
     phase_key = "phase3"
     input_view = Phase2ArtifactsView
+    reads_kinds = frozenset({ArtifactKind.LINKED_ENTITY, ArtifactKind.LOCAL_RELATION})
+    writes_kinds = frozenset({ArtifactKind.GLOBAL_RELATION})
 
     def __init__(
         self,
@@ -175,7 +178,7 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
 
         candidates = await self.global_extractor.candidate_pairs(entities)
         if isinstance(context, ArtifactExecutionContext):
-            hydration = context.hydrator(3, self.name).hydrate_phase3(candidates, entities, input.chunks)
+            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase3(candidates, entities, input.chunks)
             candidates = hydration.delta_candidates
             hydrated_triples = list(hydration.hydrated_triples)
         else:

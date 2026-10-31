@@ -85,7 +85,10 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
 
     name = "Theoretical Enrichment & Tenability Evaluation"
     phase_key = "theoretical_enrichment"
+    dependencies = ("phase4",)
     input_view = Phase4ArtifactsView
+    reads_kinds = frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION})
+    writes_kinds = frozenset({ArtifactKind.THEORETICAL_ENRICHMENT})
 
     def __init__(
         self,

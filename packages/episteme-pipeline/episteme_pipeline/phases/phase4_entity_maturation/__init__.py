@@ -29,6 +29,7 @@ from episteme_pipeline.artifacts.execution import (
     ArtifactExecutionContext,
     Phase3ArtifactsView,
 )
+from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.config import Phase4EntityMaturationConfig
 from episteme_pipeline.contracts.domain import L2Entity
 from episteme_pipeline.events.models import EntityMaturationSynthesized
@@ -87,6 +88,14 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
     name = "Phase 4: Entity Maturation (Batch Epistemic Synthesis)"
     phase_key = "phase4_maturation"
     input_view = Phase3ArtifactsView
+    reads_kinds = frozenset(
+        {
+            ArtifactKind.LINKED_ENTITY,
+            ArtifactKind.CANONICALIZATION,
+            ArtifactKind.GLOBAL_RELATION,
+        }
+    )
+    writes_kinds = frozenset({ArtifactKind.LINKED_ENTITY})
 
     def __init__(
         self,

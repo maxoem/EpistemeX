@@ -21,7 +21,9 @@ from episteme_pipeline.runs.models import (
 
 
 class StubPhase:
-    name = "Phase 1: Data Foundation"
+    def __init__(self, name: str = "Phase 1: Data Foundation", phase_key: str = "phase1") -> None:
+        self.name = name
+        self.phase_key = phase_key
 
     async def run(self, input, context):
         from episteme_pipeline.artifacts.execution import ArtifactCollection
@@ -87,7 +89,7 @@ async def test_reused_run_copies_reused_artifact_entries_and_counts(tmp_path: Pa
         run_id="run-1",
         status=RunStatus.COMPLETED,
         input_fingerprint="same-input",
-        phase_config_fingerprints={"phase_1": "same-phase"},
+        phase_config_fingerprints={"phase1": "same-phase"},
         phase_records=[
             RunPhaseRecord(
                 phase_name="Phase 1: Data Foundation",
@@ -125,7 +127,7 @@ async def test_reused_run_copies_reused_artifact_entries_and_counts(tmp_path: Pa
         run_id=run_id,
         status=RunStatus.RUNNING,
         input_fingerprint="same-input",
-        phase_config_fingerprints={"phase_1": "same-phase"},
+        phase_config_fingerprints={"phase1": "same-phase"},
         input_fingerprint_inputs={"source_paths": list(pipeline_input.source_paths), "metadata": pipeline_input.metadata},
     )
 
@@ -191,7 +193,13 @@ async def test_get_run_report_reconstructs_new_vs_reused_breakdown_from_manifest
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
 
-    pipeline = Pipeline(phases=[StubPhase(), StubPhase()], config=config, graph_reader=graph_store, projection_graph=graph_store, checkpoint_store=graph_store)
+    pipeline = Pipeline(
+        phases=[StubPhase(phase_key="phase1"), StubPhase(phase_key="phase2")],
+        config=config,
+        graph_reader=graph_store,
+        projection_graph=graph_store,
+        checkpoint_store=graph_store,
+    )
 
     manifest = RunManifest(
         run_id="run-2",

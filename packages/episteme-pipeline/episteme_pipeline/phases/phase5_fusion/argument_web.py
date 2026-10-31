@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from episteme_pipeline.artifacts.builders import build_fusion_cluster_artifact
+from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
@@ -28,6 +29,8 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
     name = "Phase 5: Inter-Document Argument Web"
     phase_key = "phase5"
     input_view = Phase4ArtifactsView
+    reads_kinds = frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION})
+    writes_kinds = frozenset({ArtifactKind.FUSION_DECISION})
 
     def __init__(
         self,

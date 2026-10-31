@@ -173,7 +173,7 @@ async def test_method_fingerprint_invalidates_on_prompt_change(tmp_path, graph_s
             f"{StubPhase.name}.llm": "llm-fp",
             f"{StubPhase.name}.prompt.ner_extraction": default_fps["phase2"]["ner_extraction"],
         },
-        phase_config_fingerprints={"phase_1": default_fps},
+        phase_config_fingerprints={"phase2": default_fps},
         phase_records=[
             RunPhaseRecord(
                 phase_name=StubPhase.name,
@@ -189,7 +189,7 @@ async def test_method_fingerprint_invalidates_on_prompt_change(tmp_path, graph_s
         return {}
 
     pipeline._compute_stale_phases = mock_stale
-    pipeline._phase_config_fingerprints = lambda: {1: default_fps}
+    pipeline._phase_config_fingerprints = lambda: {"phase2": default_fps}
 
     # Now simulate changed prompt in current run
     changed_ner_fp = "changed_ner_extraction_fingerprint"
@@ -211,7 +211,7 @@ async def test_method_fingerprint_invalidates_on_prompt_change(tmp_path, graph_s
                 f"{StubPhase.name}.llm": "llm-fp",
                 f"{StubPhase.name}.prompt.ner_extraction": changed_ner_fp,
             },
-            phase_config_fingerprints={"phase_1": default_fps},
+            phase_config_fingerprints={"phase2": default_fps},
         )
     )
 

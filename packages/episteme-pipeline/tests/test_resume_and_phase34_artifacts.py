@@ -89,6 +89,7 @@ def test_phase4_mapper_emits_argument_artifacts() -> None:
 
 class StubPhase1:
     name = "Phase 1: Data Foundation"
+    phase_key = "phase1"
 
     async def run(self, input, context: ArtifactExecutionContext) -> ArtifactCollection:
         return ArtifactCollection([])
@@ -96,6 +97,7 @@ class StubPhase1:
 
 class StubPhase2:
     name = "Phase 2: Entity & Local Relation Discovery"
+    phase_key = "phase2"
 
     async def run(self, input, context: ArtifactExecutionContext) -> ArtifactCollection:
         return ArtifactCollection([])
@@ -103,6 +105,7 @@ class StubPhase2:
 
 class StubPhase3:
     name = "Phase 3: Global Relation Extraction"
+    phase_key = "phase3"
 
     async def run(self, input, context: ArtifactExecutionContext) -> ArtifactCollection:
         return ArtifactCollection([])

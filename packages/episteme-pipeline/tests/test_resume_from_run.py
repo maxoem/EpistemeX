@@ -12,8 +12,9 @@ from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 
 
 class StubPhase:
-    def __init__(self, name: str):
+    def __init__(self, name: str, phase_key: str | None = None):
         self.name = name
+        self.phase_key = phase_key or name.lower().split(":")[0].replace(" ", "")
 
     async def run(self, input, context: ArtifactExecutionContext):
         return ArtifactCollection([])
@@ -42,7 +43,7 @@ async def test_resume_from_run_persists_new_execution_result(tmp_path: Path, gra
         run_id="run-old",
         status=RunStatus.COMPLETED,
         input_fingerprint="same-input",
-        phase_config_fingerprints={"phase_1": "same-phase", "phase_2": "same-phase", "phase_3": "same-phase"},
+        phase_config_fingerprints={"phase1": "same-phase", "phase2": "same-phase", "phase3": "same-phase"},
         phase_records=[
             RunPhaseRecord(phase_name="Phase 1: Data Foundation", ordinal=1, status=RunStatus.COMPLETED),
             RunPhaseRecord(phase_name="Phase 2: Entity & Local Relation Discovery", ordinal=2, status=RunStatus.COMPLETED),

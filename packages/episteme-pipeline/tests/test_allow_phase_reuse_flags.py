@@ -11,8 +11,9 @@ from episteme_pipeline.pipeline import Pipeline
 
 
 class StubPhase:
-    def __init__(self, name: str):
+    def __init__(self, name: str, phase_key: str | None = None):
         self.name = name
+        self.phase_key = phase_key or name.lower().split(":")[0].replace(" ", "")
 
     async def run(self, input, context: ArtifactExecutionContext):
         return ArtifactCollection([])

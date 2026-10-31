@@ -633,6 +633,16 @@ class Phase2ArtifactsView(EpistemicStateView):
 class Phase3ArtifactsView(EpistemicStateView):
     """Cumulative view of Phase 1 + Phase 2/3b/4-maturation + Phase 3 artifacts."""
 
+    _allowed_kinds = (
+        ArtifactKind.DOCUMENT,
+        ArtifactKind.CHUNK,
+        ArtifactKind.ENTITY_MENTION,
+        ArtifactKind.LINKED_ENTITY,
+        ArtifactKind.LOCAL_RELATION,
+        ArtifactKind.CANONICALIZATION,
+        ArtifactKind.GLOBAL_RELATION,
+    )
+
     @classmethod
     def from_collection(cls, collection: ArtifactCollection) -> Phase3ArtifactsView:
         """Hydrate a cumulative :class:`Phase3ArtifactsView` from ``collection``."""
@@ -681,6 +691,20 @@ class Phase3ArtifactsView(EpistemicStateView):
 @dataclass(slots=True)
 class Phase4ArtifactsView(EpistemicStateView):
     """Cumulative view of Phase 1–5 artifacts including canonical L3 fusion."""
+
+    _allowed_kinds = (
+        ArtifactKind.DOCUMENT,
+        ArtifactKind.CHUNK,
+        ArtifactKind.ENTITY_MENTION,
+        ArtifactKind.LINKED_ENTITY,
+        ArtifactKind.LOCAL_RELATION,
+        ArtifactKind.CANONICALIZATION,
+        ArtifactKind.GLOBAL_RELATION,
+        ArtifactKind.THEORY_ATOM,
+        ArtifactKind.THEORY_RELATION,
+        ArtifactKind.FUSION_DECISION,
+        ArtifactKind.THEORETICAL_ENRICHMENT,
+    )
 
     def __post_init__(self) -> None:
         if not self.canonical_theory_atoms and self.theory_atoms:
@@ -837,13 +861,17 @@ class ArtifactExecutionContext:
     prior_artifacts: ArtifactCollection | None = None
     prior_manifest: RunManifest | None = None
 
-    def hydrator(self, phase_ordinal: int, phase_name: str) -> ArtifactHydrator:
+    def hydrator(
+        self,
+        phase_key: str,
+        phase_name: str,
+    ) -> ArtifactHydrator:
         """Construct an ArtifactHydrator bound to this execution context.
 
         Parameters
         ----------
-        phase_ordinal : int
-            1-based phase ordinal index (e.g. 1 for Phase 1).
+        phase_key : str
+            Unique machine phase key (e.g. 'phase1', 'phase4').
         phase_name : str
             Canonical phase name (e.g. 'Phase 1: Data Foundation').
 
@@ -852,7 +880,7 @@ class ArtifactExecutionContext:
         ArtifactHydrator
             Bound hydrator instance.
         """
-        return ArtifactHydrator(self, phase_ordinal, phase_name)
+        return ArtifactHydrator(self, phase_key, phase_name)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1004,8 +1032,8 @@ class ArtifactHydrator:
     ----------
     context : ArtifactExecutionContext
         Phase execution context containing current and prior run manifests and artifacts.
-    phase_ordinal : int
-        1-based phase ordinal index (e.g., 1 for Phase 1).
+    phase_key : str
+        Unique machine phase key (e.g., 'phase1', 'phase4').
     phase_name : str
         Canonical phase name (e.g., 'Phase 1: Data Foundation').
     """
@@ -1013,11 +1041,11 @@ class ArtifactHydrator:
     def __init__(
         self,
         context: ArtifactExecutionContext,
-        phase_ordinal: int,
+        phase_key: str,
         phase_name: str,
     ) -> None:
         self.context = context
-        self.phase_ordinal = phase_ordinal
+        self.phase_key = phase_key
         self.phase_name = phase_name
 
     @property
@@ -1029,7 +1057,7 @@ class ArtifactHydrator:
             and is_phase_unchanged(
                 self.context.manifest,
                 self.context.prior_manifest,
-                self.phase_ordinal,
+                self.phase_key,
                 self.phase_name,
             )
         )

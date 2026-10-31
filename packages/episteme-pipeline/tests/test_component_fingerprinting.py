@@ -327,7 +327,7 @@ async def test_pipeline_invalidates_when_decision_engine_changes(tmp_path, graph
         run_id="run-old",
         status=RunStatus.COMPLETED,
         input_fingerprint="same-input",
-        phase_config_fingerprints={"phase_1": "same"},
+        phase_config_fingerprints={"phase2": "same"},
         method_fingerprints=old_manifest_fps,
         phase_records=[
             RunPhaseRecord(
@@ -344,7 +344,7 @@ async def test_pipeline_invalidates_when_decision_engine_changes(tmp_path, graph
         pipeline_input=MagicMock(source_paths=[], bib_paths=[], metadata={}, structural_anchor=None),
     )
     current_manifest.input_fingerprint = "same-input"
-    current_manifest.phase_config_fingerprints = {"phase_1": "same"}
+    current_manifest.phase_config_fingerprints = {"phase2": "same"}
 
     decision = await pipeline._choose_reuse_source(current_manifest)
 

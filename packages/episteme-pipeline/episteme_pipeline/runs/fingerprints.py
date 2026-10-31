@@ -316,7 +316,7 @@ def fingerprint_curation_ledger(ledger: Any | None) -> str | None:
 def is_phase_unchanged(
     manifest: Any,
     prior_manifest: Any,
-    phase_ordinal: int,
+    phase_key: str,
     phase_name: str,
 ) -> bool:
     """
@@ -328,8 +328,8 @@ def is_phase_unchanged(
         Current run manifest containing phase config and method fingerprints.
     prior_manifest : RunManifest
         Prior run manifest to compare against.
-    phase_ordinal : int
-        1-based phase ordinal index (e.g. 1 for Phase 1).
+    phase_key : str
+        Unique phase machine key (e.g. 'phase1', 'phase4').
     phase_name : str
         Canonical phase name (e.g. 'Phase 1: Data Foundation').
 
@@ -338,14 +338,19 @@ def is_phase_unchanged(
     bool
         True if the phase's config and all associated method fingerprints are unchanged.
     """
-    key = f"phase_{phase_ordinal}"
-    if manifest.phase_config_fingerprints.get(key) != prior_manifest.phase_config_fingerprints.get(key):
+    if manifest.phase_config_fingerprints.get(phase_key) != prior_manifest.phase_config_fingerprints.get(phase_key):
         return False
     for k, v in manifest.method_fingerprints.items():
-        if k.startswith(f"{phase_name}.") and prior_manifest.method_fingerprints.get(k) != v:
+        if (
+            (k.startswith(f"{phase_name}.") or k.startswith(f"{phase_key}."))
+            and prior_manifest.method_fingerprints.get(k) != v
+        ):
             return False
     for k, v in prior_manifest.method_fingerprints.items():
-        if k.startswith(f"{phase_name}.") and manifest.method_fingerprints.get(k) != v:
+        if (
+            (k.startswith(f"{phase_name}.") or k.startswith(f"{phase_key}."))
+            and manifest.method_fingerprints.get(k) != v
+        ):
             return False
     return True
 

@@ -195,32 +195,42 @@ protocol and recursive discovery ([
 
 When `Pipeline.run()` is invoked with phase reuse enabled (`config.execution.allow_phase_reuse = True`):
 
-1. **Phase List Compatibility Check**:
-   `_phase_lists_match()` verifies that the prior run executed the identical sequence of phase runners. If the phase
-   list or order changed, all phases are invalidated.
+1. **Topological Phase DAG Dependency Evaluation**:
+   Phase reuse is evaluated along the declarative phase dependency DAG rather than as a rigid linear array.
+   Dependencies are resolved from declared artifact contracts (`reads_kinds` $\cap$ `writes_kinds`) and explicit
+   runner dependencies (`runner.dependencies`):
+   - Appending modular analytical passes (e.g. `TheoreticalEnrichmentRunner`, custom evaluators) automatically
+     reuses completed upstream phases (Phases 1–6) without triggering full-pipeline invalidation.
+   - Independent post-processing branches (e.g. Phase 5/6 TheoryNet vs. Theoretical Enrichment) do not transitively
+     invalidate each other when their respective configurations or hyperparameters change.
+
 2. **Prior Phase Completion Check**:
-   If the prior run terminated early or failed, invalidation starts at the first incomplete phase.
+   A phase is eligible for reuse from `prior` only if it completed with `RunStatus.COMPLETED` in the prior run manifest.
+   If a phase was not executed in the prior run, only that phase and its downstream dependents are scheduled for execution.
+
 3. **Input Change Check**:
-   If `prior.input_fingerprint != current.input_fingerprint`, invalidation begins at Phase 1. However, the orchestrator
-   distinguishes between two invalidation reasons:
+   If `prior.input_fingerprint != current.input_fingerprint`, root phases (those consuming raw `PipelineInput`)
+   cannot be reused as-is. However, the orchestrator distinguishes between two invalidation reasons:
    - `source-changed:incremental`: Every document fingerprint in `prior.document_fingerprints` exists and matches in
      `current.document_fingerprints` (pure corpus additions, $\mathcal{D}_{t+1} = \mathcal{D}_t \cup \Delta D$). Upstream
      phase runners execute in delta mode via `ArtifactHydrator`.
    - `source-changed`: Documents were modified, removed, or structural anchors changed.
-4. **Config, Method, and Prompt Check**:
-   Phases are checked in sequential ordinal order. The first phase exhibiting any difference in:
-    - `phase_config_fingerprints`
-    - `method_fingerprints` (LLM, embedder, extractors)
-    - Prompt fingerprints becomes the `earliest_invalid` phase.
-5. **Transitive Invalidation**:
-   All phases from `earliest_invalid` through the end of the pipeline are marked as invalidated
-   (`invalidated_phase_ordinals`). All phases strictly preceding `earliest_invalid` are marked as reused
-   (`reused_phase_ordinals`).
-6. **Artifact Hydration**:
+
+4. **Semantic Config, Method, and Prompt Check**:
+   Phase configurations are keyed semantically by machine identifier (`phase_key`) in `RunManifest.phase_config_fingerprints`.
+   Custom runners can supply self-contained configuration fingerprints via `runner.config_fingerprint()`.
+   A phase is marked invalidated if:
+   - Its `phase_config_fingerprints` changed relative to `prior`, or
+   - Its associated `method_fingerprints` (LLMs, embedders, classifiers, prompts) differed.
+
+5. **Topological Invalidation Propagation**:
+   If a phase $p$ is invalidated, all downstream phases in $\text{descendants}(p)$ are invalidated. Phases in disjoint
+   or upstream sub-DAGs remain marked as reused (`reused_phase_ordinals`).
+
+6. **Artifact Hydration & Delta-Aware Context**:
    If `config.execution.allow_artifact_hydration = True`:
-   - Reused upstream phases hydrate their artifacts from the parent run lineage via `_hydrate_previous_collection()`.
-   - Invalidated phases executing in incremental mode hydrate unchanged document and chunk outputs on a fine-grained
-     level via `ArtifactHydrator`.
+   - Reused upstream phases hydrate their artifacts from historical lineage via `_hydrate_previous_collection(wanted_phase_names=...)`.
+   - When an invalidated phase executes on incremental corpus changes, `ArtifactExecutionContext.hydrator(phase_key, phase_name)` verifies phase config and method stability by semantic `phase_key` (`is_phase_unchanged`) and selectively carries forward unmodified prior artifacts via `IncrementalRetentionScope` without redundant LLM recomputation.
 
 ---
 
@@ -229,7 +239,7 @@ When `Pipeline.run()` is invoked with phase reuse enabled (`config.execution.all
 Located in `pipeline/artifacts/execution.py`.
 
 When corpus documents evolve incrementally ($\mathcal{G}_t + \Delta D \to \mathcal{G}_{t+1}$), phase runners do not
-recompute artifacts for unchanged documents. Instead, `ArtifactExecutionContext.hydrator(phase_ordinal, phase_name)`
+recompute artifacts for unchanged documents. Instead, `ArtifactExecutionContext.hydrator(phase_key, phase_name)`
 provides declarative hydration routines that enforce strict retention invariants across runs:
 
 ```mermaid

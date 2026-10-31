@@ -37,6 +37,7 @@ from episteme_pipeline.artifacts.execution import (
     ArtifactExecutionContext,
     Phase3ArtifactsView,
 )
+from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.config import Phase4Config
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
@@ -96,6 +97,14 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
     name = "Phase 4: Argument Mining"
     phase_key = "phase4"
     input_view = Phase3ArtifactsView
+    reads_kinds = frozenset(
+        {
+            ArtifactKind.CHUNK,
+            ArtifactKind.LINKED_ENTITY,
+            ArtifactKind.GLOBAL_RELATION,
+        }
+    )
+    writes_kinds = frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION})
 
     def __init__(
         self,
@@ -296,7 +305,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         import asyncio
         from itertools import batched
         if isinstance(context, ArtifactExecutionContext):
-            hydration = context.hydrator(4, self.name).hydrate_phase4(chunks)
+            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase4(chunks)
             chunks = hydration.delta_chunks
             all_components.extend(hydration.components)
             all_local_relations.extend(hydration.local_relations)

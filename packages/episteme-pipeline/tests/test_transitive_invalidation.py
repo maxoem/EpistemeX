@@ -12,6 +12,7 @@ from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 
 class StubPhase1:
     name = "Phase 1: Data Foundation"
+    phase_key = "phase1"
 
     async def run(self, input, context: ArtifactExecutionContext):
         return ArtifactCollection([])
@@ -19,6 +20,7 @@ class StubPhase1:
 
 class StubPhase2:
     name = "Phase 2: Entity & Local Relation Discovery"
+    phase_key = "phase2"
 
     async def run(self, input, context: ArtifactExecutionContext):
         return ArtifactCollection([])
@@ -26,6 +28,7 @@ class StubPhase2:
 
 class StubPhase3:
     name = "Phase 3: Global Relation Extraction"
+    phase_key = "phase3"
 
     async def run(self, input, context: ArtifactExecutionContext):
         return ArtifactCollection([])
@@ -33,6 +36,7 @@ class StubPhase3:
 
 class StubPhase4:
     name = "Phase 4: Argument Mining"
+    phase_key = "phase4"
 
     async def run(self, input, context: ArtifactExecutionContext):
         return ArtifactCollection([])
@@ -40,6 +44,7 @@ class StubPhase4:
 
 class StubPhase5:
     name = "Phase 5b: Argument Clustering & Theory Fusion"
+    phase_key = "phase5"
 
     async def run(self, input, context: ArtifactExecutionContext):
         return ArtifactCollection([])
@@ -66,11 +71,11 @@ async def test_invalidation_propagates_after_first_invalid_phase(
         status=RunStatus.COMPLETED,
         input_fingerprint="same-input",
         phase_config_fingerprints={
-            "phase_1": {"config.a": "same"},
-            "phase_2": {"config.a": "old"},
-            "phase_3": {"config.a": "old"},
-            "phase_4": {"config.a": "old"},
-            "phase_5": {"config.a": "old"},
+            "phase1": {"config.a": "same"},
+            "phase2": {"config.a": "old"},
+            "phase3": {"config.a": "old"},
+            "phase4": {"config.a": "old"},
+            "phase5": {"config.a": "old"},
         },
         phase_records=[
             RunPhaseRecord(
@@ -102,11 +107,11 @@ async def test_invalidation_propagates_after_first_invalid_phase(
     )
     pipeline._manifest_store.write_manifest(prior)
     pipeline._phase_config_fingerprints = lambda: {
-        1: {"config.a": "same"},
-        2: {"config.a": "new"},
-        3: {"config.a": "new"},
-        4: {"config.a": "new"},
-        5: {"config.a": "new"},
+        "phase1": {"config.a": "same"},
+        "phase2": {"config.a": "new"},
+        "phase3": {"config.a": "new"},
+        "phase4": {"config.a": "new"},
+        "phase5": {"config.a": "new"},
     }
 
     decision = await pipeline._choose_reuse_source(
@@ -115,11 +120,11 @@ async def test_invalidation_propagates_after_first_invalid_phase(
             status=RunStatus.RUNNING,
             input_fingerprint="same-input",
             phase_config_fingerprints={
-                "phase_1": {"config.a": "same"},
-                "phase_2": {"config.a": "new"},
-                "phase_3": {"config.a": "new"},
-                "phase_4": {"config.a": "new"},
-                "phase_5": {"config.a": "new"},
+                "phase1": {"config.a": "same"},
+                "phase2": {"config.a": "new"},
+                "phase3": {"config.a": "new"},
+                "phase4": {"config.a": "new"},
+                "phase5": {"config.a": "new"},
             },
         )
     )

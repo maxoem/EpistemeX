@@ -23,6 +23,7 @@ class MockPhaseRunner:
     def __init__(self, phase_num: int, name: str):
         self.phase_num = phase_num
         self.name = name
+        self.phase_key = f"phase{phase_num}"
         self.config = MagicMock()
         
     async def validate(self, input: PipelineInput) -> tuple[bool, str]:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from episteme_pipeline.artifacts.builders import build_canonicalization_artifact
+from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
@@ -33,6 +34,8 @@ class Phase3bLatentConsolidationRunner(PhaseRunner[Phase3ArtifactsView]):
     name = "Phase 3b: Latent Graph Consolidation"
     phase_key = "phase3b"
     input_view = Phase3ArtifactsView
+    reads_kinds = frozenset({ArtifactKind.LINKED_ENTITY, ArtifactKind.GLOBAL_RELATION})
+    writes_kinds = frozenset({ArtifactKind.CANONICALIZATION})
 
     def __init__(
         self,
