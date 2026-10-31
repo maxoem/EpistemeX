@@ -7,16 +7,16 @@
 | **Target Package(s)** | `packages/episteme-pipeline` (`phases/phase3b_consolidation/`, `phases/phase5_fusion/`, `decision/conformal.py`) |
 | **Priority** | **Medium** |
 | **Status** | `Resolved` |
-| **Evaluated Docs & ADRs** | [`docs/architecture/conformal_prediction.md`](../../docs/architecture/conformal_prediction.md), [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0003`](../../docs/adr/0003-coreference-absorbed-into-fusion.md), [`ADR-0005`](../../docs/adr/0005-two-pass-fusion-strategy.md), [`ADR-0018`](../../docs/adr/0018-decision-engine-architecture-and-contracts.md) |
+| **Evaluated Docs & ADRs** | [`docs/architecture/conformal_prediction.md`](../../../docs/architecture/conformal_prediction.md), [`docs/architecture/pipeline_architecture.md`](../../../docs/architecture/pipeline_architecture.md), [`ADR-0003`](../../../docs/adr/0003-coreference-absorbed-into-fusion.md), [`ADR-0005`](../../../docs/adr/0005-two-pass-fusion-strategy.md), [`ADR-0018`](../../../docs/adr/0018-decision-engine-architecture-and-contracts.md) |
 
 ---
 
 ## 1. Current State
 
 1. **Transitive Union-Find Clustering in Phase 3b & Phase 5**:
-   - In [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md) (§Phase 3b and §Phase 5) and [`ADR-0005`](../../docs/adr/0005-two-pass-fusion-strategy.md), both entity consolidation (`Phase3bLatentConsolidationRunner`) and argument clustering (`EmbeddingArgumentClustering`) evaluate pairwise similarity/conformal gates and merge accepted pairs using **Union-Find (Disjoint-Set) connected components**, emitting hard `CanonicalizationArtifact`s (`confidence: 1.0`).
+   - In [`docs/architecture/pipeline_architecture.md`](../../../docs/architecture/pipeline_architecture.md) (§Phase 3b and §Phase 5) and [`ADR-0005`](../../../docs/adr/0005-two-pass-fusion-strategy.md), both entity consolidation (`Phase3bLatentConsolidationRunner`) and argument clustering (`EmbeddingArgumentClustering`) evaluate pairwise similarity/conformal gates and merge accepted pairs using **Union-Find (Disjoint-Set) connected components**, emitting hard `CanonicalizationArtifact`s (`confidence: 1.0`).
 2. **Isolated Per-Stage Conformal $\alpha$ Budgets**:
-   - [`docs/architecture/conformal_prediction.md`](../../docs/architecture/conformal_prediction.md) applies Split Conformal Prediction with a uniform significance level $\alpha$ (e.g., $\alpha = 0.05$) independently at each decision stage (Phase 2 linking, Phase 3 reranking, Phase 3b consolidation, Phase 4 ACC/ARC, Phase 5 fusion).
+   - [`docs/architecture/conformal_prediction.md`](../../../docs/architecture/conformal_prediction.md) applies Split Conformal Prediction with a uniform significance level $\alpha$ (e.g., $\alpha = 0.05$) independently at each decision stage (Phase 2 linking, Phase 3 reranking, Phase 3b consolidation, Phase 4 ACC/ARC, Phase 5 fusion).
 
 ---
 

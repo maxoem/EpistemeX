@@ -111,9 +111,11 @@ Fingerprints are deterministic SHA-256 hashes generated via `pipeline/runs/finge
 
 - **Corpus Files**: Computed by `fingerprint_existing_sources()`. Combines filesystem stat metadata (file size,
   modification time) with full SHA-256 content hashes of all corpus source and bibtex files.
+- **Per-Document Content Fingerprints (`document_fingerprints`)**: Computed by `compute_document_fingerprints()`.
+  Maps each individual document path to its independent SHA-256 content hash in `RunManifest.document_fingerprints`.
+  This allows fine-grained, document-level delta detection rather than forcing coarse re-processing of the entire corpus.
 - **Structural Anchors**: `fingerprint_structural_anchor()` hashes chapter/section structural metadata when provided.
-- **Input Fingerprint**: Combined hash `stable_fingerprint({"source": source_fp, "anchor": anchor_fp})`. Any change in
-  corpus content invalidates the entire pipeline from Phase 1 onward.
+- **Input Fingerprint**: Combined hash `stable_fingerprint({"source": source_fp, "anchor": anchor_fp})`.
 
 ### Phase-Config Fingerprints
 
@@ -199,7 +201,12 @@ When `Pipeline.run()` is invoked with phase reuse enabled (`config.execution.all
 2. **Prior Phase Completion Check**:
    If the prior run terminated early or failed, invalidation starts at the first incomplete phase.
 3. **Input Change Check**:
-   If `prior.input_fingerprint != current.input_fingerprint`, all phases are invalidated starting at Phase 1.
+   If `prior.input_fingerprint != current.input_fingerprint`, invalidation begins at Phase 1. However, the orchestrator
+   distinguishes between two invalidation reasons:
+   - `source-changed:incremental`: Every document fingerprint in `prior.document_fingerprints` exists and matches in
+     `current.document_fingerprints` (pure corpus additions, $\mathcal{D}_{t+1} = \mathcal{D}_t \cup \Delta D$). Upstream
+     phase runners execute in delta mode via `ArtifactHydrator`.
+   - `source-changed`: Documents were modified, removed, or structural anchors changed.
 4. **Config, Method, and Prompt Check**:
    Phases are checked in sequential ordinal order. The first phase exhibiting any difference in:
     - `phase_config_fingerprints`
@@ -210,8 +217,91 @@ When `Pipeline.run()` is invoked with phase reuse enabled (`config.execution.all
    (`invalidated_phase_ordinals`). All phases strictly preceding `earliest_invalid` are marked as reused
    (`reused_phase_ordinals`).
 6. **Artifact Hydration**:
-   If `config.execution.allow_artifact_hydration = True`, artifacts produced by reused phases are hydrated from the
-   parent run lineage via `_hydrate_previous_collection()`.
+   If `config.execution.allow_artifact_hydration = True`:
+   - Reused upstream phases hydrate their artifacts from the parent run lineage via `_hydrate_previous_collection()`.
+   - Invalidated phases executing in incremental mode hydrate unchanged document and chunk outputs on a fine-grained
+     level via `ArtifactHydrator`.
+
+---
+
+## Declarative Incremental Artifact Hydration (`ArtifactHydrator`)
+
+Located in `pipeline/artifacts/execution.py`.
+
+When corpus documents evolve incrementally ($\mathcal{G}_t + \Delta D \to \mathcal{G}_{t+1}$), phase runners do not
+recompute artifacts for unchanged documents. Instead, `ArtifactExecutionContext.hydrator(phase_ordinal, phase_name)`
+provides declarative hydration routines that enforce strict retention invariants across runs:
+
+```mermaid
+flowchart TD
+    subgraph Scope ["IncrementalRetentionScope.from_context()"]
+        DocFP["Compare document_fingerprints"] --> UnchangedDocs["unchanged_doc_ids"]
+        UnchangedDocs --> UnchangedChunks["unchanged_chunk_ids"]
+        UnchangedChunks --> EntityScope["unmodified_prior_entity_chunks<br/>(Entities whose source chunks all remain unchanged)"]
+    end
+
+    subgraph Hydrators ["ArtifactHydrator (Phases 1–4)"]
+        UnchangedDocs --> H1["hydrate_phase1()<br/>• Retain Doc & Chunk envelopes<br/>• Return delta_source_paths"]
+        UnchangedChunks --> H2["hydrate_phase2()<br/>• Prune zombie entities & dangling triples<br/>• Return surviving entities & delta_chunks"]
+        EntityScope --> H3["hydrate_phase3()<br/>• Enforce bidirectional chunk equality<br/>• Retain prior global triples<br/>• Return delta_candidates"]
+        UnchangedChunks --> H4["hydrate_phase4()<br/>• Retain unchanged TheoryAtoms & local relations<br/>• Return delta_chunks"]
+    end
+```
+
+### 1. `IncrementalRetentionScope`
+
+Derived deterministically by comparing `prior_manifest.document_fingerprints` with `current_manifest.document_fingerprints`:
+- `unchanged_doc_ids`: Set of document identifiers whose SHA-256 hashes are identical.
+- `unchanged_chunk_ids`: Set of chunk identifiers derived from unchanged documents.
+- `unmodified_prior_entity_chunks`: Mapping from entity ID to its prior chunk set, populated strictly for entities
+  whose entire evidence set fell within `unchanged_chunk_ids`.
+
+### 2. Phase-by-Phase Retention Invariants
+
+- **Phase 1 (`hydrate_phase1`)**: Returns `Phase1HydrationResult(delta_source_paths, retained_artifacts)`. Existing
+  `DocumentArtifact` and `ChunkArtifact` envelopes for unchanged documents are copied with updated `run_id`, skipping
+  redundant PDF/text parsing and chunking.
+- **Phase 2 (`hydrate_phase2`)**: Returns `Phase2HydrationResult(delta_chunks, entities, triples, mention_envelopes)`.
+  - **Zombie Entity Pruning**: Prior entities that lose all supporting chunk mentions in modified or deleted files are pruned.
+  - **Dangling Triple Pruning**: Local relation triples are only retained if both subject and object survive and their
+    `source_chunk_id` belongs to `unchanged_chunk_ids`.
+- **Phase 3 (`hydrate_phase3`)**: Returns `Phase3HydrationResult(delta_candidates, hydrated_triples)`.
+  - **Bidirectional Chunk-Set Invariant**: An entity is classified as `prior_only` if and only if
+    `frozenset(e.source_chunk_ids) == unmodified_prior_entity_chunks[e.id]`. If an entity loses mentions due to modified
+    chunks, it is ejected from `prior_only`, forcing re-extraction of its candidate pairs.
+  - **Candidate Delta Filtering**: Candidate pairs where both entities are `prior_only` are skipped; their prior
+    `GlobalRelationArtifact` triples are hydrated directly.
+- **Phase 4 (`hydrate_phase4`)**: Returns `Phase4HydrationResult(delta_chunks, components, local_relations)`.
+  Retains `TheoryAtom` components from unchanged chunks and surviving local argument relations.
+
+---
+
+## Persistent Epistemic Curation Ledger (`EpistemicCurationLedger`)
+
+Located in `pipeline/contracts/phase_contracts.py`.
+
+To ensure that human domain expert adjudications in Episteme Studio are preserved across incremental runs rather than
+being lost as throwaway post-processing edits, the pipeline accepts a persistent curation ledger via
+`PipelineInput.curation_ledger_path` (or `PipelineInput.curation_ledger`).
+
+`EpistemicCurationLedger` centralizes filtering, mutation, and edge injection across the pipeline:
+
+1. **Relation Overrides on Triples (`apply_to_triples`)**:
+   - Suppresses relations marked `relation_type == "REJECTED"`.
+   - Mutates predicate labels and confidence values for human-corrected entity pairs.
+   - Injects curated triples between valid entity nodes (scoped as `"local"` or `"global"`).
+   - Applied in **Phase 2** (local extraction) and **Phase 3** (global relations).
+2. **Relation Overrides on Theory Relations (`apply_to_theory_relations`)**:
+   - Reconstructs `TheoryRelation` instances upon override to trigger Pydantic `@model_validator` revalidation of
+     `effective_weight`, `active_weight`, and polarity caches.
+   - Preserves `inferential_force` only when `relation_type` was not modified, allowing downstream `TheoryNetProjector`
+     to re-derive warrants when a relation type changes (e.g., from `SUPPORTS` to `ATTACKS`).
+   - Deduplicates multi-predicate pair collisions.
+   - Injects curated argumentative edges between valid `TheoryAtom` components.
+   - Applied in **Phase 4** (argument relations) and **Phase 6** (TheoryNet input relations prior to projection).
+3. **Modal Strength Priors**:
+   - `modality_overrides: dict[str, float]` locks expert-curated base acceptability priors $\tau_0(a)$ during Phase 6
+     TheoryNet projection.
 
 ---
 
@@ -278,5 +368,4 @@ As tracked in the [Project & Research Roadmap](../roadmap.md):
 - **Runtime and Complexity**: [Pipeline Runtime Analysis](runtime_analysis.md)
 - **System Architecture Overview**: [System Architecture Overview](overview.md)
 - **Pipeline Architecture**: [Pipeline Architecture](pipeline_architecture.md)
--
-**ADRs**: [ADR 0014: Deterministic Identity Diffing](../adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [ADR 0016: Phase 3 Checkpointing & Atomicity](../adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md)
+- **ADRs**: [ADR 0014: Deterministic Identity Diffing](../adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [ADR 0016: Phase 3 Checkpointing & Atomicity](../adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), [ADR 0021: Incremental Corpus Evolution & HITL Constraint Ledger](../adr/0021-incremental-corpus-evolution-and-persistent-hitl-constraint-ledger.md)

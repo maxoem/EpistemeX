@@ -27,6 +27,46 @@ Context information for artifact processing.
       show_root_heading: false
       show_root_toc_entry: false
 
+## Incremental Hydration & Retention
+
+Declarative hydration and retention scope for incremental corpus evolution.
+
+### IncrementalRetentionScope
+
+::: episteme_pipeline.artifacts.execution.IncrementalRetentionScope
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+### ArtifactHydrator
+
+::: episteme_pipeline.artifacts.execution.ArtifactHydrator
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+### Hydration Results
+
+::: episteme_pipeline.artifacts.execution.Phase1HydrationResult
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+::: episteme_pipeline.artifacts.execution.Phase2HydrationResult
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+::: episteme_pipeline.artifacts.execution.Phase3HydrationResult
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+::: episteme_pipeline.artifacts.execution.Phase4HydrationResult
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
 ## Storage Implementation
 
 ### JsonArtifactStore

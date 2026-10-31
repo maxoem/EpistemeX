@@ -30,6 +30,7 @@ approach: [ADR 0008: Diátaxis Documentation Framework](0008-diataxis-documentat
 
 ### Recent Changes
 
+- **0021** - Incremental Corpus Evolution, Declarative Artifact Hydration, and Persistent HITL Constraint Ledgers (2026-10-25)
 - **0020** - Propositional Modal Strength Resolver, Structuralist Syntax Priors, and Neuro-Symbolic Hybrid Estimation (2026-10-07)
 - **0019** - TypeSafe Jev Client Implementation, System 1 Adapters, and Decision Observability (2026-10-01)
 - **0018** - Core Decision Engine Architecture, Contracts, and Composition Root (2026-10-01)

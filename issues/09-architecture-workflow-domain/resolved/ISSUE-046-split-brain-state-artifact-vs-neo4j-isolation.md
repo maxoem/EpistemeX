@@ -7,18 +7,18 @@
 | **Target Package(s)** | `packages/episteme-pipeline` (`pipeline.py`, `artifacts/`, `projection/`, `graph/`) |
 | **Priority** | **Critical** |
 | **Status** | `Completed` |
-| **Evaluated Docs & ADRs** | [`docs/architecture/artifact_run_model.md`](../../docs/architecture/artifact_run_model.md), [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0001`](../../docs/adr/0001-neo4j-async-graph-backend.md), [`ADR-0013`](../../docs/adr/0013-per-run-neo4j-credentials-and-graph-fallback.md), [`ADR-0016`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), [`ADR-0017`](../../docs/adr/0017-explicit-batch-contracts-and-bulk-io.md) |
+| **Evaluated Docs & ADRs** | [`docs/architecture/artifact_run_model.md`](../../../docs/architecture/artifact_run_model.md), [`docs/architecture/pipeline_architecture.md`](../../../docs/architecture/pipeline_architecture.md), [`ADR-0001`](../../../docs/adr/0001-neo4j-async-graph-backend.md), [`ADR-0013`](../../../docs/adr/0013-per-run-neo4j-credentials-and-graph-fallback.md), [`ADR-0016`](../../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), [`ADR-0017`](../../../docs/adr/0017-explicit-batch-contracts-and-bulk-io.md) |
 
 ---
 
 ## 1. Current State
 
-Across [`docs/architecture/artifact_run_model.md`](../../docs/architecture/artifact_run_model.md) and [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), the Episteme architecture is defined as **Artifact-Native and Graph-Independent**:
+Across [`docs/architecture/artifact_run_model.md`](../../../docs/architecture/artifact_run_model.md) and [`docs/architecture/pipeline_architecture.md`](../../../docs/architecture/pipeline_architecture.md), the Episteme architecture is defined as **Artifact-Native and Graph-Independent**:
 
 - *"The pipeline executes entirely on durable, run-scoped research artifacts and first-class run manifests, rather than ephemeral inter-phase execution values or graph-as-run-state."* (`artifact_run_model.md §Purpose & Motivation`)
 - *"Phases have no direct write dependencies on the final projection graph... Intermediate outputs are evaluated, replayed, and inspected without querying Neo4j. Graph persistence is isolated to an explicit projection step."* (`artifact_run_model.md §Graph Projection & Decoupling`)
 
-However, inspecting the actual architectural wiring across [`ADR-0001`](../../docs/adr/0001-neo4j-async-graph-backend.md), [`ADR-0016`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), [`ADR-0017`](../../docs/adr/0017-explicit-batch-contracts-and-bulk-io.md), and the composition root [`Pipeline.for_task()`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py#L322-L406) reveals a **Split-Brain State Architecture** where execution is simultaneously coupled to three overlapping Neo4j handles (`projection_graph`, `checkpoint_store`, `graph_reader`) and the JSON `ArtifactStore`:
+However, inspecting the actual architectural wiring across [`ADR-0001`](../../../docs/adr/0001-neo4j-async-graph-backend.md), [`ADR-0016`](../../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), [`ADR-0017`](../../../docs/adr/0017-explicit-batch-contracts-and-bulk-io.md), and the composition root [`Pipeline.for_task()`](../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py#L322-L406) reveals a **Split-Brain State Architecture** where execution is simultaneously coupled to three overlapping Neo4j handles (`projection_graph`, `checkpoint_store`, `graph_reader`) and the JSON `ArtifactStore`:
 
 1. **Direct Graph Mutations Inside Phase Runners**:
    - `Phase1Runner`, `Phase6Runner`, and `TheoreticalEnrichmentRunner` are constructed with `graph_store=projection_graph` and mutate the target graph directly during `.run()` (`pipeline.py#L323-L328`, `#L382-L406`, `ADR-0017 §5`).
@@ -27,7 +27,7 @@ However, inspecting the actual architectural wiring across [`ADR-0001`](../../do
 2. **Redundant Unbatched Post-Phase Projection**:
    - After `entry.runner.run()` completes—having already persisted batches into Neo4j via `ADR-0017` `UNWIND` calls—`Pipeline._execute()` (`pipeline.py#L985-L987`) loops over every emitted artifact *one by one* and calls `await self._projector.project(art)`, issuing $O(N)$ individual Cypher transactions against `projection_graph`.
 3. **Unscoped Global Graph Keys Across Runs**:
-   - In [`ADR-0001`](../../docs/adr/0001-neo4j-async-graph-backend.md) and [`ADR-0016`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), Neo4j nodes (`:Entity {id: ...}`, `:Chunk {id: ...}`, `:PhaseItem {phase: ..., key: ...}`) use global uniqueness constraints that **deliberately omit `run_id`** (`ADR-0016 §1`: *"The key deliberately excludes ephemeral `run_id` strings"*).
+   - In [`ADR-0001`](../../../docs/adr/0001-neo4j-async-graph-backend.md) and [`ADR-0016`](../../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), Neo4j nodes (`:Entity {id: ...}`, `:Chunk {id: ...}`, `:PhaseItem {phase: ..., key: ...}`) use global uniqueness constraints that **deliberately omit `run_id`** (`ADR-0016 §1`: *"The key deliberately excludes ephemeral `run_id` strings"*).
 
 ---
 
@@ -35,7 +35,7 @@ However, inspecting the actual architectural wiring across [`ADR-0001`](../../do
 
 ### A. Researcher & Scientific Reproducibility Perspective
 - **Cross-Run State Contamination in Ablation Studies**: Researchers routinely branch experiments from a shared baseline (e.g., comparing Run A with `Llama-3-8B` vs. Run B with `Claude-3.5-Sonnet`, or varying `Phase3Config` thresholds) while pointing at the same Neo4j instance. Because `:Entity {id}`, `:Chunk {id}`, and `:PhaseItem {phase, key}` are merged globally without `run_id` namespace isolation, Run B overwrites Run A's entity descriptions (`is_mature`, `textual_envelope`), chunk flags (`{phase}_processed = true`), and `:PhaseItem` records in-place.
-- **Broken Phase Reuse & Hydration When Neo4j State Diverges**: When `Pipeline.run()` reuses Phases 1–3 from `parent_run_id` via `_hydrate_previous_collection()` (`pipeline.py#L425-L454`), it only hydrates the in-memory `ArtifactCollection` from `.pipeline_artifacts/`. It does **not** verify or re-hydrate the Neo4j `checkpoint_store` or `graph_reader`. If the researcher switched Neo4j databases (per [`ADR-0013`](../../docs/adr/0013-per-run-neo4j-credentials-and-graph-fallback.md)), restarted a container, or ran an intervening experiment that mutated Neo4j, Phase 3b/4/5 will read empty or corrupted state from `graph_reader`/`checkpoint_store` while believing Phases 1–3 were safely reused!
+- **Broken Phase Reuse & Hydration When Neo4j State Diverges**: When `Pipeline.run()` reuses Phases 1–3 from `parent_run_id` via `_hydrate_previous_collection()` (`pipeline.py#L425-L454`), it only hydrates the in-memory `ArtifactCollection` from `.pipeline_artifacts/`. It does **not** verify or re-hydrate the Neo4j `checkpoint_store` or `graph_reader`. If the researcher switched Neo4j databases (per [`ADR-0013`](../../../docs/adr/0013-per-run-neo4j-credentials-and-graph-fallback.md)), restarted a container, or ran an intervening experiment that mutated Neo4j, Phase 3b/4/5 will read empty or corrupted state from `graph_reader`/`checkpoint_store` while believing Phases 1–3 were safely reused!
 
 ### B. Software Engineering & Hexagonal Architecture Perspective
 - **Violation of Single Source of Truth (SSOT)**: State is split between `.pipeline_artifacts/<run_id>/` (immutable JSON envelopes) and Neo4j (mutable global graph state). A phase runner reading from both `input: PhaseNArtifactsView` and `self.graph_store` has no guarantee that the two stores agree.
@@ -105,8 +105,8 @@ flowchart TB
 
 ## 5. Key Target Files
 
-- [`packages/episteme-pipeline/episteme_pipeline/pipeline.py`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py)
-- [`packages/episteme-pipeline/episteme_pipeline/projection/artifact_projector.py`](../../packages/episteme-pipeline/episteme_pipeline/projection/artifact_projector.py)
-- [`packages/episteme-pipeline/episteme_pipeline/protocols/graph_store.py`](../../packages/episteme-pipeline/episteme_pipeline/protocols/graph_store.py)
-- [`packages/episteme-pipeline/episteme_pipeline/graph/neo4j_store.py`](../../packages/episteme-pipeline/episteme_pipeline/graph/neo4j_store.py)
-- [`docs/architecture/artifact_run_model.md`](../../docs/architecture/artifact_run_model.md)
+- [`packages/episteme-pipeline/episteme_pipeline/pipeline.py`](../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py)
+- [`packages/episteme-pipeline/episteme_pipeline/projection/artifact_projector.py`](../../../packages/episteme-pipeline/episteme_pipeline/projection/artifact_projector.py)
+- [`packages/episteme-pipeline/episteme_pipeline/protocols/graph_store.py`](../../../packages/episteme-pipeline/episteme_pipeline/protocols/graph_store.py)
+- [`packages/episteme-pipeline/episteme_pipeline/graph/neo4j_store.py`](../../../packages/episteme-pipeline/episteme_pipeline/graph/neo4j_store.py)
+- [`docs/architecture/artifact_run_model.md`](../../../docs/architecture/artifact_run_model.md)

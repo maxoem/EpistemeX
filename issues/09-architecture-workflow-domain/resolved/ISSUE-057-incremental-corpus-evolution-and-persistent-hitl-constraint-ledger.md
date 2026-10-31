@@ -7,17 +7,17 @@
 | **Target Package(s)** | `packages/episteme-pipeline`, `packages/episteme-studio` (`runs/`, `artifacts/`, `pipeline.py`) |
 | **Priority** | **High** |
 | **Status** | `Resolved` |
-| **Evaluated Docs & ADRs** | [`docs/architecture/artifact_run_model.md`](../../docs/architecture/artifact_run_model.md), [`docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md), [`ADR-0010`](../../docs/adr/0010-graph-preview-driver-selection-neo4j.md), [`ADR-0014`](../../docs/adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [`ADR-0019`](../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md) |
+| **Evaluated Docs & ADRs** | [`docs/architecture/artifact_run_model.md`](../../../docs/architecture/artifact_run_model.md), [`docs/architecture/invalidation_and_resume.md`](../../../docs/architecture/invalidation_and_resume.md), [`ADR-0010`](../../../docs/adr/0010-graph-preview-driver-selection-neo4j.md), [`ADR-0014`](../../../docs/adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [`ADR-0019`](../../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md) |
 
 ---
 
 ## 1. Current State
 
-In [`docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md) (§Source and Input Fingerprints & §Phase Invalidation Logic):
+In [`docs/architecture/invalidation_and_resume.md`](../../../docs/architecture/invalidation_and_resume.md) (§Source and Input Fingerprints & §Phase Invalidation Logic):
 - `RunManifest.input_fingerprint` is computed as a single monolithic hash over all files in `PipelineInput.source_paths` and `bib_paths`.
-- Rule 3 of `_choose_reuse_source()` (`invalidation_and_resume.md#L202-L203` and [`pipeline.py#L788-L790`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py#L788-L790)) states:
+- Rule 3 of `_choose_reuse_source()` (`invalidation_and_resume.md#L202-L203` and [`pipeline.py#L788-L790`](../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py#L788-L790)) states:
   > *"If `prior.input_fingerprint != current.input_fingerprint`, all phases are invalidated starting at Phase 1."*
-- Furthermore, while [`ADR-0019`](../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md) and Studio issues (`ISSUE-012`, `ISSUE-027`) introduce Active Learning queues and Human-in-the-Loop (HITL) graph curation, the pipeline architecture has **no input contract for a persistent Curation / Constraint Ledger**.
+- Furthermore, while [`ADR-0019`](../../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md) and Studio issues (`ISSUE-012`, `ISSUE-027`) introduce Active Learning queues and Human-in-the-Loop (HITL) graph curation, the pipeline architecture has **no input contract for a persistent Curation / Constraint Ledger**.
 
 ---
 

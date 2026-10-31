@@ -7,22 +7,22 @@
 | **Target Package(s)** | `packages/episteme-pipeline` (`decision/`, `runs/fingerprints.py`, `llm/cache.py`, `pipeline.py`) |
 | **Priority** | **High** |
 | **Status** | `Completed` |
-| **Evaluated Docs & ADRs** | [`docs/architecture/conformal_prediction.md`](../../docs/architecture/conformal_prediction.md), [`docs/architecture/constrained_decoding.md`](../../docs/architecture/constrained_decoding.md), [`docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md), [`ADR-0018`](../../docs/adr/0018-decision-engine-architecture-and-contracts.md), [`ADR-0019`](../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md), [`ADR-0020`](../../docs/adr/0020-propositional-modal-strength-resolver.md) |
+| **Evaluated Docs & ADRs** | [`docs/architecture/conformal_prediction.md`](../../../docs/architecture/conformal_prediction.md), [`docs/architecture/constrained_decoding.md`](../../../docs/architecture/constrained_decoding.md), [`docs/architecture/invalidation_and_resume.md`](../../../docs/architecture/invalidation_and_resume.md), [`ADR-0018`](../../../docs/adr/0018-decision-engine-architecture-and-contracts.md), [`ADR-0019`](../../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md), [`ADR-0020`](../../../docs/adr/0020-propositional-modal-strength-resolver.md) |
 
 ---
 
 ## 1. Current State
 
-Episteme places a high premium on deterministic scientific reproducibility, relying on SHA-256 fingerprinting ([`docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md)), disk-cached structured LLM calls (`DiskCachedStructuredLLM` in [`docs/architecture/cross_cutting_concerns.md`](../../docs/architecture/cross_cutting_concerns.md)), and Split Conformal Prediction ([`docs/architecture/conformal_prediction.md`](../../docs/architecture/conformal_prediction.md)).
+Episteme places a high premium on deterministic scientific reproducibility, relying on SHA-256 fingerprinting ([`docs/architecture/invalidation_and_resume.md`](../../../docs/architecture/invalidation_and_resume.md)), disk-cached structured LLM calls (`DiskCachedStructuredLLM` in [`docs/architecture/cross_cutting_concerns.md`](../../../docs/architecture/cross_cutting_concerns.md)), and Split Conformal Prediction ([`docs/architecture/conformal_prediction.md`](../../../docs/architecture/conformal_prediction.md)).
 
 However, an audit of the interaction between these subsystems reveals **four critical reproducibility and statistical validity defects**:
 
 1. **Non-Deterministic Stochastic Auditing in `ObservableDecisionEngine`**:
-   - Per [`docs/architecture/conformal_prediction.md §3.1`](../../docs/architecture/conformal_prediction.md) and [`ADR-0019 §3`](../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md), `ObservableDecisionEngine` routes $p = 0.02$ ($2\%$) of System 1 fast-exit singletons to System 2 (generative LLM) via random sampling (`stochastic_audit_rate`).
+   - Per [`docs/architecture/conformal_prediction.md §3.1`](../../../docs/architecture/conformal_prediction.md) and [`ADR-0019 §3`](../../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md), `ObservableDecisionEngine` routes $p = 0.02$ ($2\%$) of System 1 fast-exit singletons to System 2 (generative LLM) via random sampling (`stochastic_audit_rate`).
    - Because decision evaluations occur concurrently across `asyncio.gather` / `Semaphore` worker tasks, drawing from a stateful or unseeded random number generator means task scheduling order determines *which* $2\%$ of candidate pairs or ADUs get escalated to System 2.
 2. **Hardcoded, Incomplete Prompt Fingerprinting in `Pipeline._prompt_fingerprints()`**:
-   - [`docs/architecture/invalidation_and_resume.md §Prompt Template Fingerprints`](../../docs/architecture/invalidation_and_resume.md) states that *"All 7 prompt task categories... are fingerprinted per run."*
-   - In [`pipeline.py#L619-L635`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py#L619-L635), `_prompt_fingerprints()` is a hardcoded dictionary covering only `phase2`, `phase3`, `phase4_maturation`, and `phase4`.
+   - [`docs/architecture/invalidation_and_resume.md §Prompt Template Fingerprints`](../../../docs/architecture/invalidation_and_resume.md) states that *"All 7 prompt task categories... are fingerprinted per run."*
+   - In [`pipeline.py#L619-L635`](../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py#L619-L635), `_prompt_fingerprints()` is a hardcoded dictionary covering only `phase2`, `phase3`, `phase4_maturation`, and `phase4`.
    - It completely omits prompts and decision rubrics introduced in later ADRs:
      - `Phase 1`: Epistemic relevance gating prompt (`DECISION_EPISTEMIC_RELEVANCE_QUESTION`, `ADR-0018`).
      - `Phase 2`: Episodic Working Memory boundary detection prompt (`DECISION_BOUNDARY_QUESTION`, `ADR-0009`, `ADR-0018`).
@@ -31,11 +31,11 @@ However, an audit of the interaction between these subsystems reveals **four cri
      - `Phase 6 / ModalResolver`: Modal certainty evaluation question and criteria (`DecisionEngineModalResolver`, `ADR-0020`).
      - `TheoreticalEnrichment`: Dynamic theory induction and lens projection prompts (`LLMTheoryInducer`, `ADR-0015`).
 3. **Unversioned & Unstratified Conformal Calibration ($\mathcal{D}_{\text{cal}}$ Exchangeability Violation)**:
-   - [`docs/architecture/conformal_prediction.md §2`](../../docs/architecture/conformal_prediction.md) relies on the finite-sample marginal coverage theorem $P(Y_{n+1} \in C(X_{n+1})) \ge 1 - \alpha$, which holds **if and only if** the test instance $X_{n+1}$ is exchangeable with the calibration set $\mathcal{D}_{\text{cal}} = \{(x_1, y_1), \dots, (x_n, y_n)\}$.
+   - [`docs/architecture/conformal_prediction.md §2`](../../../docs/architecture/conformal_prediction.md) relies on the finite-sample marginal coverage theorem $P(Y_{n+1} \in C(X_{n+1})) \ge 1 - \alpha$, which holds **if and only if** the test instance $X_{n+1}$ is exchangeable with the calibration set $\mathcal{D}_{\text{cal}} = \{(x_1, y_1), \dots, (x_n, y_n)\}$.
    - Currently, `DecisionEngineConfig` (`ADR-0018`) defines a single global `conformal_alpha: float = 0.05`, and `ConformalCalibrator` state is neither stratified by task/language (German historical prose vs. English analytic philosophy; binary gating vs. 3-way consolidation vs. modal scoring) nor recorded as a versioned calibration artifact in `RunManifest`.
-   - Furthermore, [`ADR-0019 §4`](../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md) introduces an Active Learning Queue (`decision_engine_active_learning`) specifically sampling high-entropy borderline cases ($|C(X)| > 1$) to recalibrate/fine-tune the engine.
+   - Furthermore, [`ADR-0019 §4`](../../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md) introduces an Active Learning Queue (`decision_engine_active_learning`) specifically sampling high-entropy borderline cases ($|C(X)| > 1$) to recalibrate/fine-tune the engine.
 4. **Constrained Decoding & Schema Evolution vs. `DiskCachedStructuredLLM`**:
-   - [`docs/architecture/constrained_decoding.md`](../../docs/architecture/constrained_decoding.md) introduces multiple decoding handlers (`direct_constrained`, `nl_to_format` two-pass Task Model $\to$ Schema Converter, and trigger-token `<schema_start>`). If `DiskCachedStructuredLLM` keys cache entries only on prompt text and model name without hashing the **target Pydantic JSON schema**, **decoding mode handler**, and **temperature/seed**, modifying a Pydantic contract field or switching from `direct_constrained` to `nl_to_format` returns stale or schema-incompatible cached payloads.
+   - [`docs/architecture/constrained_decoding.md`](../../../docs/architecture/constrained_decoding.md) introduces multiple decoding handlers (`direct_constrained`, `nl_to_format` two-pass Task Model $\to$ Schema Converter, and trigger-token `<schema_start>`). If `DiskCachedStructuredLLM` keys cache entries only on prompt text and model name without hashing the **target Pydantic JSON schema**, **decoding mode handler**, and **temperature/seed**, modifying a Pydantic contract field or switching from `direct_constrained` to `nl_to_format` returns stale or schema-incompatible cached payloads.
 
 ---
 
@@ -95,8 +95,8 @@ $$\text{Audit}(X) = \mathbb{I}\big[u(X) < p_{\text{audit}}\big]$$
 
 ## 5. Key Target Files
 
-- [`packages/episteme-pipeline/episteme_pipeline/decision/observable.py`](../../packages/episteme-pipeline/episteme_pipeline/decision/observable.py)
-- [`packages/episteme-pipeline/episteme_pipeline/decision/conformal.py`](../../packages/episteme-pipeline/episteme_pipeline/decision/conformal.py)
-- [`packages/episteme-pipeline/episteme_pipeline/pipeline.py`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py)
-- [`packages/episteme-pipeline/episteme_pipeline/llm/cache.py`](../../packages/episteme-pipeline/episteme_pipeline/llm/cache.py)
-- [`docs/architecture/conformal_prediction.md`](../../docs/architecture/conformal_prediction.md)
+- [`packages/episteme-pipeline/episteme_pipeline/decision/observable.py`](../../../packages/episteme-pipeline/episteme_pipeline/decision/observable.py)
+- [`packages/episteme-pipeline/episteme_pipeline/decision/conformal.py`](../../../packages/episteme-pipeline/episteme_pipeline/decision/conformal.py)
+- [`packages/episteme-pipeline/episteme_pipeline/pipeline.py`](../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py)
+- [`packages/episteme-pipeline/episteme_pipeline/llm/cache.py`](../../../packages/episteme-pipeline/episteme_pipeline/llm/cache.py)
+- [`docs/architecture/conformal_prediction.md`](../../../docs/architecture/conformal_prediction.md)

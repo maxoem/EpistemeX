@@ -7,7 +7,7 @@
 | **Target Package(s)** | `packages/episteme-pipeline` (`phases/phase4_argument_mining/`, `phases/phase6_theorynet/`, `post_processing/theoretical_enrichment/`) |
 | **Priority** | **Critical** |
 | **Status** | `Resolved` |
-| **Evaluated Docs & ADRs** | [`docs/workflow/4_argument_mining/index.md`](../../docs/workflow/4_argument_mining/index.md), [`docs/workflow/6_theorynet/index.md`](../../docs/workflow/6_theorynet/index.md), [`docs/workflow/post_processing/theoretical_enrichment.md`](../../docs/workflow/post_processing/theoretical_enrichment.md), [`docs/architecture/design_patterns_and_standards.md §3.6 & §4.2`](../../docs/architecture/design_patterns_and_standards.md) |
+| **Evaluated Docs & ADRs** | [`docs/workflow/4_argument_mining/index.md`](../../../docs/workflow/4_argument_mining/index.md), [`docs/workflow/6_theorynet/index.md`](../../../docs/workflow/6_theorynet/index.md), [`docs/workflow/post_processing/theoretical_enrichment.md`](../../../docs/workflow/post_processing/theoretical_enrichment.md), [`docs/architecture/design_patterns_and_standards.md §3.6 & §4.2`](../../../docs/architecture/design_patterns_and_standards.md) |
 
 ---
 
@@ -16,7 +16,7 @@
 Auditing Phases 4, 6, and Theoretical Enrichment (`post_processing/theoretical_enrichment/`) uncovered four concrete implementation and domain bugs:
 
 ### Defect 1 (Phase 4): `UnboundLocalError: processed_chunk_ids` When `chunks` Is Empty
-In [`Phase4Runner.run()` (`phases/phase4_argument_mining/__init__.py#L203-L306`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/__init__.py#L203-L306):
+In [`Phase4Runner.run()` (`phases/phase4_argument_mining/__init__.py#L203-L306`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/__init__.py#L203-L306):
 ```python
 203:         for batch_idx, chunk_batch in enumerate(batched(chunks, batch_size)):
 ...
@@ -34,7 +34,7 @@ In [`Phase4Runner.run()` (`phases/phase4_argument_mining/__init__.py#L203-L306`)
 2. When `chunks` is empty (e.g., all chunks were already processed in a prior run and Phase 4 is resuming at the global ARC step, or 0 chunks exist), the loop at line 203 does not execute, and line 304 crashes with **`UnboundLocalError: cannot access local variable 'processed_chunk_ids' where it is not associated with a value`**!
 
 ### Defect 2 (Phase 4): Fake `L2Entity` Adapter (`_component_as_entity`) & Silent Disabling of Global ARC
-In [`TAGARCClassifier` (`phases/phase4_argument_mining/arc_classifier.py#L36-L58,L359-L369`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/arc_classifier.py#L36-L58):
+In [`TAGARCClassifier` (`phases/phase4_argument_mining/arc_classifier.py#L36-L58,L359-L369`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/arc_classifier.py#L36-L58):
 ```python
 def _component_as_entity(component: TheoryAtom) -> L2Entity:
     return L2Entity(
@@ -51,7 +51,7 @@ env_a, env_b = await asyncio.gather(
     global_extractor.get_structural_neighborhood(entity_b, graph_store, self.subgraph_depth),
 )
 ```
-And in [`Phase4Runner.__init__()` (`phases/phase4_argument_mining/__init__.py#L154-L167`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/__init__.py#L154-L167):
+And in [`Phase4Runner.__init__()` (`phases/phase4_argument_mining/__init__.py#L154-L167`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/__init__.py#L154-L167):
 ```python
 self.arc_classifier = arc_classifier or (
     TAGARCClassifier(...)
@@ -60,10 +60,10 @@ self.arc_classifier = arc_classifier or (
 )
 ```
 1. Both `TAGRelationExtractor.get_structural_neighborhood()` and `DenseRetrievalGlobalRelationExtractor.get_structural_neighborhood()` are 1-line passthroughs to `await graph_store.get_neighborhood(entity.id, depth=depth)`!
-2. Coupling Phase 4 `TAGARCClassifier` to Phase 3's `GlobalRelationExtractor` via a fake `L2Entity` adapter violates Liskov Substitution and Hexagonal layer boundaries (see **[Design Patterns & Standards §4.2](../../docs/architecture/design_patterns_and_standards.md)**)—and worse, if `Phase4Runner` is instantiated without `global_extractor`, **global cross-chunk ARC is silently disabled (`self.arc_classifier = None`)** even though `graph_store.get_neighborhood()` is directly available on `GraphReader`!
+2. Coupling Phase 4 `TAGARCClassifier` to Phase 3's `GlobalRelationExtractor` via a fake `L2Entity` adapter violates Liskov Substitution and Hexagonal layer boundaries (see **[Design Patterns & Standards §4.2](../../../docs/architecture/design_patterns_and_standards.md)**)—and worse, if `Phase4Runner` is instantiated without `global_extractor`, **global cross-chunk ARC is silently disabled (`self.arc_classifier = None`)** even though `graph_store.get_neighborhood()` is directly available on `GraphReader`!
 
 ### Defect 3 (Post-Processing): Single-Pass Order-Dependent Bug in `TheoreticalEnrichmentRunner._find_target_parameters`
-In [`TheoreticalEnrichmentRunner.run()` (`post_processing/theoretical_enrichment/runner.py#L222-L289,L385-L391`)](../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py#L222-L289):
+In [`TheoreticalEnrichmentRunner.run()` (`post_processing/theoretical_enrichment/runner.py#L222-L289,L385-L391`)](../../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py#L222-L289):
 ```python
 cluster_theory_params: dict[tuple[str, str], dict[str, Any]] = {}
 {a.id: a for a in input.theory_atoms}  # Line 224: unassigned dead expression!
@@ -84,7 +84,7 @@ Look at what happens in this single-pass `for cluster in clusters:` loop:
 - Consequently, forward inter-cluster edges always receive `target_params = {}`, causing edge tenability evaluation (`solve_edge_tenability`) to depend entirely on the arbitrary iteration order of `clusters`!
 
 ### Defect 4 (Post-Processing): Hardcoded Psychology/Neuroscience Parameter Names in `TenabilitySolver.solve_edge_tenability`
-In [`TenabilitySolver.solve_edge_tenability()` (`post_processing/theoretical_enrichment/solvers.py#L238-L249`)](../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/solvers.py#L238-L249):
+In [`TenabilitySolver.solve_edge_tenability()` (`post_processing/theoretical_enrichment/solvers.py#L238-L249`)](../../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/solvers.py#L238-L249):
 ```python
 if not shared_keys:
     repression = source_params.get("RepressionMagnitude") or target_params.get("RepressionMagnitude")
@@ -134,7 +134,7 @@ for cluster in clusters:
 ```
 
 ### Fix 4: Replace Hardcoded Psychology Parameters in `TenabilitySolver.solve_edge_tenability` with Generic Normalized Parameter Distance
-In [`post_processing/theoretical_enrichment/solvers.py#L238-L249`](../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/solvers.py#L238-L249), replace the hardcoded `"RepressionMagnitude"` / `"AmygdalaHyperactivity"` / `"DopamineDepletion"` check with a domain-general comparison across all numeric values in `source_params.values()` and `target_params.values()` (or explicit `bridge_laws` declared on `TheoryElementDefinition`).
+In [`post_processing/theoretical_enrichment/solvers.py#L238-L249`](../../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/solvers.py#L238-L249), replace the hardcoded `"RepressionMagnitude"` / `"AmygdalaHyperactivity"` / `"DopamineDepletion"` check with a domain-general comparison across all numeric values in `source_params.values()` and `target_params.values()` (or explicit `bridge_laws` declared on `TheoryElementDefinition`).
 
 ---
 

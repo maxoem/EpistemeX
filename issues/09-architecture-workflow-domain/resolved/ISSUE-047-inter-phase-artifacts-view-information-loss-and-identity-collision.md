@@ -7,13 +7,13 @@
 | **Target Package(s)** | `packages/episteme-pipeline` (`artifacts/execution.py`, `artifacts/models.py`, `pipeline.py`) |
 | **Priority** | **Critical** |
 | **Status** | `Completed` |
-| **Evaluated Docs & ADRs** | [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`docs/architecture/artifact_run_model.md`](../../docs/architecture/artifact_run_model.md), [`ADR-0003`](../../docs/adr/0003-coreference-absorbed-into-fusion.md), [`ADR-0005`](../../docs/adr/0005-two-pass-fusion-strategy.md), [`ADR-0015`](../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md) |
+| **Evaluated Docs & ADRs** | [`docs/architecture/pipeline_architecture.md`](../../../docs/architecture/pipeline_architecture.md), [`docs/architecture/artifact_run_model.md`](../../../docs/architecture/artifact_run_model.md), [`ADR-0003`](../../../docs/adr/0003-coreference-absorbed-into-fusion.md), [`ADR-0005`](../../../docs/adr/0005-two-pass-fusion-strategy.md), [`ADR-0015`](../../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md) |
 
 ---
 
 ## 1. Current State
 
-In [`docs/architecture/artifact_run_model.md`](../../docs/architecture/artifact_run_model.md) (§Execution & Inter-Phase Handoff) and [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md) (§Phase-by-Phase Breakdown), inter-phase data flow is governed by accumulating `ArtifactEnvelope`s into a flat list (`previous = ArtifactCollection(previous.artifacts + collection.artifacts)` in [`pipeline.py#L1048`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py#L1048)) and projecting that collection into phase-specific `ArtifactsView` dataclasses defined in [`packages/episteme-pipeline/episteme_pipeline/artifacts/execution.py`](../../packages/episteme-pipeline/episteme_pipeline/artifacts/execution.py):
+In [`docs/architecture/artifact_run_model.md`](../../../docs/architecture/artifact_run_model.md) (§Execution & Inter-Phase Handoff) and [`docs/architecture/pipeline_architecture.md`](../../../docs/architecture/pipeline_architecture.md) (§Phase-by-Phase Breakdown), inter-phase data flow is governed by accumulating `ArtifactEnvelope`s into a flat list (`previous = ArtifactCollection(previous.artifacts + collection.artifacts)` in [`pipeline.py#L1048`](../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py#L1048)) and projecting that collection into phase-specific `ArtifactsView` dataclasses defined in [`packages/episteme-pipeline/episteme_pipeline/artifacts/execution.py`](../../../packages/episteme-pipeline/episteme_pipeline/artifacts/execution.py):
 
 - **`Phase1ArtifactsView`**: Exposes `documents: list[L1Document]` and `chunks: list[L1Chunk]`. Consumed by `Phase2Runner`.
 - **`Phase2ArtifactsView`**: Exposes `entities: list[L2Entity]` and `local_triples: list[L2Triple]`. Consumed by `Phase3Runner`.
@@ -34,7 +34,7 @@ upstream_artifact_ids = produced_ids
 
 ### A. Researcher & Epistemic Integrity Perspective
 1. **Severed Consolidation & Maturation Backbone (`ADR-0003` & `ADR-0005` Violation)**:
-   - [`ADR-0003`](../../docs/adr/0003-coreference-absorbed-into-fusion.md) and [`ADR-0005`](../../docs/adr/0005-two-pass-fusion-strategy.md) establish a core scientific invariant: *Phase 3b (Latent Graph Consolidation) and Phase 4 Entity Maturation MUST unify duplicate entity aliases and synthesize canonical entity descriptions before Phase 4 Argument Mining executes.*
+   - [`ADR-0003`](../../../docs/adr/0003-coreference-absorbed-into-fusion.md) and [`ADR-0005`](../../../docs/adr/0005-two-pass-fusion-strategy.md) establish a core scientific invariant: *Phase 3b (Latent Graph Consolidation) and Phase 4 Entity Maturation MUST unify duplicate entity aliases and synthesize canonical entity descriptions before Phase 4 Argument Mining executes.*
    - Yet in the artifact architecture, `Phase3b` emits `CanonicalizationArtifact` (`SAME_AS` mappings) and `Phase4EntityMaturationRunner` emits updated `LinkedEntityArtifact` envelopes, while `Phase4Runner` receives `Phase3ArtifactsView`—which contains **neither `entities`, nor `local_triples`, nor `CanonicalizationArtifact`s**!
    - Even if a view reads `LINKED_ENTITY` from `ArtifactCollection`, `Phase3b`'s `CanonicalizationArtifact`s are never applied to rewrite non-canonical entity IDs in `local_triples` or `global_triples`.
 2. **Duplicate Entity Collision (Append-Only `ArtifactCollection` Bug)**:
@@ -111,7 +111,7 @@ flowchart LR
 
 ## 5. Key Target Files
 
-- [`packages/episteme-pipeline/episteme_pipeline/artifacts/execution.py`](../../packages/episteme-pipeline/episteme_pipeline/artifacts/execution.py)
-- [`packages/episteme-pipeline/episteme_pipeline/artifacts/models.py`](../../packages/episteme-pipeline/episteme_pipeline/artifacts/models.py)
-- [`packages/episteme-pipeline/episteme_pipeline/pipeline.py`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py)
-- [`docs/architecture/artifact_run_model.md`](../../docs/architecture/artifact_run_model.md)
+- [`packages/episteme-pipeline/episteme_pipeline/artifacts/execution.py`](../../../packages/episteme-pipeline/episteme_pipeline/artifacts/execution.py)
+- [`packages/episteme-pipeline/episteme_pipeline/artifacts/models.py`](../../../packages/episteme-pipeline/episteme_pipeline/artifacts/models.py)
+- [`packages/episteme-pipeline/episteme_pipeline/pipeline.py`](../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py)
+- [`docs/architecture/artifact_run_model.md`](../../../docs/architecture/artifact_run_model.md)

@@ -195,7 +195,8 @@ nav = [
             { "ADR 0017: Explicit Batch Contracts & Bulk I/O" = "adr/0017-explicit-batch-contracts-and-bulk-io.md" },
             { "ADR 0018: Core Decision Engine Architecture" = "adr/0018-decision-engine-architecture-and-contracts.md" },
             { "ADR 0019: Decision Engine Client Implementation" = "adr/0019-typesafe-jev-client-and-decision-observability.md" },
-            { "ADR 0020: Propositional Modal Strength Resolver" = "adr/0020-propositional-modal-strength-resolver.md" }
+            { "ADR 0020: Propositional Modal Strength Resolver" = "adr/0020-propositional-modal-strength-resolver.md" },
+            { "ADR 0021: Incremental Corpus Evolution & HITL Constraint Ledger" = "adr/0021-incremental-corpus-evolution-and-persistent-hitl-constraint-ledger.md" }
         ] }
     ] },
 

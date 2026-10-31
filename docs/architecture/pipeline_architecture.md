@@ -313,6 +313,8 @@ All phase outputs are persisted as typed research artifacts:
 - **Storage**: [`JsonArtifactStore`](../reference/artifacts.md) writes envelopes under `.pipeline_artifacts/<run_id>/<kind>/<id>.json`.
 - **Versioning & Identity**: Dual-identifier system (`artifact_id` for instance lineage, `identity_key` for cross-run semantic matching).
 - **Lineage & Hydration**: When resuming or reusing phases, `_hydrate_previous_collection()` walks the parent run chain (`parent_run_id`), hydrating nearest-run artifacts so downstream phases receive a complete artifact collection without recomputation.
+- **Incremental Intra-Phase Delta Hydration**: When extending a corpus ($\mathcal{D}_{t+1} = \mathcal{D}_t \cup \Delta D$), [`ArtifactHydrator`](../reference/artifacts.md) and [`IncrementalRetentionScope`](../reference/artifacts.md) compare per-document fingerprints (`document_fingerprints`), hydrating unchanged document and chunk artifacts and evaluating only delta items across Phases 1–4.
+- **Persistent Epistemic Curation**: [`EpistemicCurationLedger`](../reference/phase_contracts.md) applies expert human constraints (relation overrides, rejections, polarity corrections, and edge injections) directly to triple streams and theory relations before projection.
 
 ### Decoupled Graph Projection
 

@@ -7,23 +7,23 @@
 | **Target Package(s)** | `packages/episteme-pipeline` (`phases/phase4_argument_mining/classifiers.py`, `phases/phase5_fusion/argument_clustering.py`, `phases/phase2_entity_discovery/jev_entity_linker.py`) |
 | **Priority** | **Critical** |
 | **Status** | `Resolved` |
-| **Evaluated Docs & ADRs** | [`docs/architecture/design_patterns_and_standards.md`](../../docs/architecture/design_patterns_and_standards.md), [`docs/workflow/4_argument_mining/index.md`](../../docs/workflow/4_argument_mining/index.md), [`docs/workflow/5_inter_document_argument_web/index.md`](../../docs/workflow/5_inter_document_argument_web/index.md), [`ADR-0018`](../../docs/adr/0018-system-1-calibrated-decision-engine.md) |
+| **Evaluated Docs & ADRs** | [`docs/architecture/design_patterns_and_standards.md`](../../../docs/architecture/design_patterns_and_standards.md), [`docs/workflow/4_argument_mining/index.md`](../../../docs/workflow/4_argument_mining/index.md), [`docs/workflow/5_inter_document_argument_web/index.md`](../../../docs/workflow/5_inter_document_argument_web/index.md), [`ADR-0018`](../../../docs/adr/0018-decision-engine-architecture-and-contracts.md) |
 
 ---
 
 ## 1. Current State
 
-[`ADR-0018`](../../docs/adr/0018-system-1-calibrated-decision-engine.md) introduces a dual-process neuro-symbolic cascade across the pipeline: a calibrated System 1 `DecisionEngine` (Jev) handles clear-cut classifications (`fast_exit` when $|C(X)| = 1$ and empirical accuracy $\ge \tau$), escalating only ambiguous cases ($|C(X)| \neq 1$) or a small stochastic audit sample (`audit_rate = 0.02`) to System 2 (`StructuredLLM` / `CrossEncoder`).
+[`ADR-0018`](../../../docs/adr/0018-decision-engine-architecture-and-contracts.md) introduces a dual-process neuro-symbolic cascade across the pipeline: a calibrated System 1 `DecisionEngine` (Jev) handles clear-cut classifications (`fast_exit` when $|C(X)| = 1$ and empirical accuracy $\ge \tau$), escalating only ambiguous cases ($|C(X)| \neq 1$) or a small stochastic audit sample (`audit_rate = 0.02`) to System 2 (`StructuredLLM` / `CrossEncoder`).
 
-Because each phase implemented its own cascading wrapper without a shared `CalibratedCascade` abstraction (see **[Design Patterns & Standards §3.4](../../docs/architecture/design_patterns_and_standards.md)**), four severe logic bugs currently break the System 1 $\to$ System 2 cascades:
+Because each phase implemented its own cascading wrapper without a shared `CalibratedCascade` abstraction (see **[Design Patterns & Standards §3.4](../../../docs/architecture/design_patterns_and_standards.md)**), four severe logic bugs currently break the System 1 $\to$ System 2 cascades:
 
 ### Bug 1: `CascadingACCClassifier` Falls Back to the LLM 100% of the Time (`not relations` Always `True`)
-In [`phases/phase4_argument_mining/classifiers.py#L185`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/classifiers.py#L185), `JevACCClassifier.classify()` classifies `TheoryAtom` component types using `DecisionEngine.evaluate_choice`, but does not extract intra-chunk relations and **unconditionally returns an empty relation list**:
+In [`phases/phase4_argument_mining/classifiers.py#L185`](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/classifiers.py#L185), `JevACCClassifier.classify()` classifies `TheoryAtom` component types using `DecisionEngine.evaluate_choice`, but does not extract intra-chunk relations and **unconditionally returns an empty relation list**:
 ```python
 # JevACCClassifier.classify (line 185):
 return atoms, []
 ```
-Then, in [`CascadingACCClassifier.classify()` (`classifiers.py#L244-L275`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/classifiers.py#L244-L275):
+Then, in [`CascadingACCClassifier.classify()` (`classifiers.py#L244-L275`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/classifiers.py#L244-L275):
 ```python
 atoms, relations = await self.fast_classifier.classify(
     chunk_id, tagged_text, adu_ids, schema, chunk_entities
@@ -37,7 +37,7 @@ if is_uncertain or is_audit or not relations:
 Because `relations` returned by `JevACCClassifier.classify()` is **always `[]`**, `not relations` evaluates to **`True` 100% of the time**! Consequently, `CascadingACCClassifier` runs `JevACCClassifier` on every chunk, **discards 100% of its classifications**, and calls `self.llm_classifier.classify()` on every single chunk!
 
 ### Bug 2: `CascadingARCClassifier.classify_global` Re-Runs the Entire Corpus on Audit or Empty Graph
-In [`CascadingARCClassifier.classify_global()` (`classifiers.py#L618-L650`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/classifiers.py#L618-L650):
+In [`CascadingARCClassifier.classify_global()` (`classifiers.py#L618-L650`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/classifiers.py#L618-L650):
 ```python
 fast_relations = await self.fast_classifier.classify_global(
     components, graph_store, schema, global_extractor
@@ -54,7 +54,7 @@ if is_audit or not fast_relations:
 Instead of evaluating conformal uncertainty and `audit_rate` **per candidate pair** and escalating only ambiguous/audited pairs to `self.llm_classifier`, `CascadingARCClassifier.classify_global` runs `JevARCClassifier` over all pairs and then flips a single coin (`random.random() < self.audit_rate`). When `is_audit` is `True` (or when a corpus legitimately has 0 cross-chunk relations so `not fast_relations` is `True`), it invokes `self.llm_classifier.classify_global` over **100% of the candidate pairs in the entire corpus**! Moreover, for pairs that `JevARCClassifier` rejected because $|C(X)| > 1$ (ambiguous) inside `JevARCClassifier._classify_pair` (`#L510-L512`), `JevARCClassifier` simply returns `None` (drops them) instead of escalating them to `llm_classifier`!
 
 ### Bug 3: `InterDocumentClusterVerifier.should_fuse` Approves Rejected Merges on Random Audit!
-In [`InterDocumentClusterVerifier.should_fuse()` (`phases/phase5_fusion/argument_clustering.py#L343-L370`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase5_fusion/argument_clustering.py#L343-L370):
+In [`InterDocumentClusterVerifier.should_fuse()` (`phases/phase5_fusion/argument_clustering.py#L343-L370`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase5_fusion/argument_clustering.py#L343-L370):
 ```python
 is_confirmed = bool(
     decision.selected_option == "EQUIVALENT_FUSION"
@@ -72,7 +72,7 @@ if not is_confirmed and self.audit_rate > 0.0:
 When Jev rejects a candidate cluster merge (`is_confirmed == False`, e.g., because the two arguments are `COMPETING_THEORIES` or `DISTINCT_APPLICATIONS`), a 2% coin flip (`random.random() < self.audit_rate`) **sets `is_confirmed = True` and returns `True` to `EmbeddingArgumentClustering.cluster()`** (`argument_clustering.py#L140`), which **immediately fuses the rejected cluster** without calling any System 2 verifier! It mistakes a stochastic false-negative audit for randomly overriding rejected merges into approved merges!
 
 ### Bug 4: `CascadingEntityLinker.link` Uses `isinstance` and Escalates Confident Novel Entities
-In [`CascadingEntityLinker.link()` (`phases/phase2_entity_discovery/jev_entity_linker.py#L411-L426`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/jev_entity_linker.py#L411-L426):
+In [`CascadingEntityLinker.link()` (`phases/phase2_entity_discovery/jev_entity_linker.py#L411-L426`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/jev_entity_linker.py#L411-L426):
 ```python
 if isinstance(self.primary, JevEntityLinker):
     matched, _decision, is_ambiguous = await self.primary.link_with_decision(
@@ -100,7 +100,7 @@ Checking `isinstance(self.primary, JevEntityLinker)` violates Open/Closed and Li
 
 ## 3. Proposed Solution & Direct Fixes
 
-Apply **Pattern 4 (`CalibratedCascade` & `TriageDecision[T]`)** from **[`docs/architecture/design_patterns_and_standards.md §3.4`](../../docs/architecture/design_patterns_and_standards.md)**:
+Apply **Pattern 4 (`CalibratedCascade` & `TriageDecision[T]`)** from **[`docs/architecture/design_patterns_and_standards.md §3.4`](../../../docs/architecture/design_patterns_and_standards.md)**:
 
 ### Fix 1: Repair `CascadingACCClassifier.classify` (`phases/phase4_argument_mining/classifiers.py#L244-L275`)
 Remove `or not relations` from the escalation condition when `len(adu_ids) <= 1` (since a single ADU cannot have intra-chunk relations), and when `len(adu_ids) > 1`, either classify intra-chunk ADU pairs via System 1 `JevARCClassifier` or preserve the confident `JevACCClassifier` atom types while delegating only relation extraction or uncertain atoms:

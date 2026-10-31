@@ -125,7 +125,7 @@ Define $\text{Tenability}_{\text{pred}}(y_b) = \max_{e=(y_a, y_b) \in E_{GC}} \b
 
 ### TN-05 · Chunk-Grouping Bug & Partition-`A` Target Inversion in `TheoreticalEnrichmentRunner` (`runner.py`) — **Major**
 
-**Where.** [`tenability.md#L37-L39`](../../../docs/concepts/theory/metrics/epistemic_coherence/tenability.md#L37-L39), [`#L92-L94`](../../../docs/concepts/theory/metrics/epistemic_coherence/tenability.md#L92-L94) vs. [`packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py#L420-L426`](../../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py#L420-L426), [`#L478-L520`](../../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py#L478-L520) (cf. [`ISSUE-064`](../../09-architecture-workflow-domain/ISSUE-064-phase4-to-postprocessing-domain-bugs-and-hardcoded-heuristics.md)).
+**Where.** [`tenability.md#L37-L39`](../../../docs/concepts/theory/metrics/epistemic_coherence/tenability.md#L37-L39), [`#L92-L94`](../../../docs/concepts/theory/metrics/epistemic_coherence/tenability.md#L92-L94) vs. [`packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py#L420-L426`](../../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py#L420-L426), [`#L478-L520`](../../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py#L478-L520) (cf. [`ISSUE-064`](../../09-architecture-workflow-domain/resolved/ISSUE-064-phase4-to-postprocessing-domain-bugs-and-hardcoded-heuristics.md)).
 
 **Finding.**
 1. **Intended Applications $I \subseteq M_{pp}$ Shifted to Raw Phase 1 Text Chunks (`source_chunk_id`):**

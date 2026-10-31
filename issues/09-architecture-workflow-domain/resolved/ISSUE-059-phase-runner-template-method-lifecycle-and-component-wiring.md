@@ -7,15 +7,15 @@
 | **Target Package(s)** | `packages/episteme-pipeline` (`protocols/phase_runner.py`, `phases/`, `post_processing/theoretical_enrichment/`, `runtime/runner.py`) |
 | **Priority** | **High** |
 | **Status** | `Resolved` |
-| **Evaluated Docs & ADRs** | [`docs/architecture/design_patterns_and_standards.md`](../../docs/architecture/design_patterns_and_standards.md), [`docs/architecture/cross_cutting_concerns.md`](../../docs/architecture/cross_cutting_concerns.md), [`ADR-0016`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), [`ADR-0017`](../../docs/adr/0017-artifact-native-execution-and-selective-invalidation.md) |
+| **Evaluated Docs & ADRs** | [`docs/architecture/design_patterns_and_standards.md`](../../../docs/architecture/design_patterns_and_standards.md), [`docs/architecture/cross_cutting_concerns.md`](../../../docs/architecture/cross_cutting_concerns.md), [`ADR-0016`](../../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), [`ADR-0017`](../../../docs/adr/0017-explicit-batch-contracts-and-bulk-io.md) |
 
 ---
 
 ## 1. Current State
 
-As documented in **[Design Patterns, Clean Code & Architectural Standards (`§3.1–§3.2`)](../../docs/architecture/design_patterns_and_standards.md)**, every pipeline phase shares a common execution lifecycle: emitting scoped progress events, slicing work items into batches, executing tasks concurrently with systematic failure circuit-breaking, committing batched graph checkpoints, and exposing its internal strategy components for deterministic run fingerprinting.
+As documented in **[Design Patterns, Clean Code & Architectural Standards (`§3.1–§3.2`)](../../../docs/architecture/design_patterns_and_standards.md)**, every pipeline phase shares a common execution lifecycle: emitting scoped progress events, slicing work items into batches, executing tasks concurrently with systematic failure circuit-breaking, committing batched graph checkpoints, and exposing its internal strategy components for deterministic run fingerprinting.
 
-Currently, `PhaseRunner` ([`protocols/phase_runner.py`](../../packages/episteme-pipeline/episteme_pipeline/protocols/phase_runner.py)) is a bare interface without a Template Method or shared execution helpers. Consequently, every concrete runner (`Phase1Runner` through `Phase6Runner` and `TheoreticalEnrichmentRunner`) re-implements this lifecycle ad-hoc with severe inconsistencies:
+Currently, `PhaseRunner` ([`protocols/phase_runner.py`](../../../packages/episteme-pipeline/episteme_pipeline/protocols/phase_runner.py)) is a bare interface without a Template Method or shared execution helpers. Consequently, every concrete runner (`Phase1Runner` through `Phase6Runner` and `TheoreticalEnrichmentRunner`) re-implements this lifecycle ad-hoc with severe inconsistencies:
 
 1. **Duplicated Lifecycle Boilerplate & Unguarded `ProgressStarted` Events**:
    - `@property def event_emitter(self) -> EventEmitter: return get_event_emitter()` is copy-pasted across 12 classes (`Phase1Runner`, `Phase2Runner`, `Phase3Runner`, `Phase3bLatentConsolidationRunner`, `Phase4EntityMaturationRunner`, `Phase4Runner`, `Phase5ArgumentWebRunner`, `Phase6Runner`, `TheoreticalEnrichmentRunner`, `DenseRetrievalGlobalRelationExtractor`, `JevEntityLinker`, `DenseEntityLinker`).
@@ -23,7 +23,7 @@ Currently, `PhaseRunner` ([`protocols/phase_runner.py`](../../packages/episteme-
    - `for batch in batched(..., 500): await self.graph_store.upsert_*(list(batch))` is manually repeated 15 times across runners instead of being encapsulated in `GraphWriter` / `BatchCheckpointExecutor`.
 
 2. **Silent Exception Swallowing in Extractors Defeating `_guard_systematic_failure` & Corrupting Checkpoints**:
-   - In [`LLMNERExtractor.extract()` (`phases/phase2_entity_discovery/ner_extractor.py#L227-L231`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/ner_extractor.py#L227-L231):
+   - In [`LLMNERExtractor.extract()` (`phases/phase2_entity_discovery/ner_extractor.py#L227-L231`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/ner_extractor.py#L227-L231):
      ```python
      except Exception as exc:
          logger.warning("NER extraction failed for chunk %s: %s", chunk_id, exc)
@@ -32,10 +32,10 @@ Currently, `PhaseRunner` ([`protocols/phase_runner.py`](../../packages/episteme-
      Because `LLMNERExtractor.extract` catches all exceptions and returns empty lists, `Phase2Runner._process_batch` (`phase2_entity_discovery/__init__.py#L280-L295`) **never sees an exception** in `asyncio.gather(..., return_exceptions=True)`! As a result:
      - `Phase2Runner._guard_systematic_failure` (`#L241-L259`) is **completely dead code** whenever the LLM endpoint is down, misconfigured, or rate-limited: `failures` is `0`, `succeeded` is `len(batch)`, and Phase 2 silently finishes with `COMPLETED` and 0 extracted entities!
      - Furthermore, in `Phase2Runner._process_chunk` (`#L367-L370`), because returning `[], []` is treated as "nothing extracted — leave chunk UNPROCESSED", any legitimate short paragraph (e.g., an acknowledgments or transition paragraph) that genuinely contains 0 entities is **never marked `phase2_processed = True`** and is re-sent to the LLM on every subsequent run forever!
-   - Conversely, in [`LLMADUSegmenter.segment()` (`phases/phase4_argument_mining/adu_segmenter.py#L47-L51`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/adu_segmenter.py#L47-L51) and [`LLMACCClassifier.classify()` (`phases/phase4_argument_mining/acc_classifier.py#L79-L81`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/acc_classifier.py#L79-L81), exceptions are caught and swallowed into `return []` / `return [], []`. Then `Phase4Runner.run()` (`phase4_argument_mining/__init__.py#L225,L254-L256`) appends `cid` to `processed_chunk_ids` for every non-exception result and marks the chunk `phase4_processed = True`—meaning **transient LLM failures in Phase 4 permanently mark the chunk as processed and never retry it**, directly contradicting the module docstring at line 19!
+   - Conversely, in [`LLMADUSegmenter.segment()` (`phases/phase4_argument_mining/adu_segmenter.py#L47-L51`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/adu_segmenter.py#L47-L51) and [`LLMACCClassifier.classify()` (`phases/phase4_argument_mining/acc_classifier.py#L79-L81`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/acc_classifier.py#L79-L81), exceptions are caught and swallowed into `return []` / `return [], []`. Then `Phase4Runner.run()` (`phase4_argument_mining/__init__.py#L225,L254-L256`) appends `cid` to `processed_chunk_ids` for every non-exception result and marks the chunk `phase4_processed = True`—meaning **transient LLM failures in Phase 4 permanently mark the chunk as processed and never retry it**, directly contradicting the module docstring at line 19!
 
 3. **Mid-Loop Component Instantiation & Unused Dependencies Corrupting `method_fingerprints`**:
-   - In [`Phase4Runner._process_chunk()` (`phases/phase4_argument_mining/__init__.py#L335-L352`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/__init__.py#L335-L352):
+   - In [`Phase4Runner._process_chunk()` (`phases/phase4_argument_mining/__init__.py#L335-L352`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/__init__.py#L335-L352):
      ```python
      segmenter = self._adu_segmenter_override or LLMADUSegmenter(
          llm=self.llm,
@@ -49,12 +49,12 @@ Currently, `PhaseRunner` ([`protocols/phase_runner.py`](../../packages/episteme-
      )
      ```
      `LLMADUSegmenter` and `LLMACCClassifier` are instantiated **inside `_process_chunk` on every chunk** rather than in `Phase4Runner.__init__`. Because `PhaseRunner.components()` (`protocols/phase_runner.py#L50-L64`) inspects `self` before `run()`, the default `ADUSegmenter` and `ACCClassifier` are **invisible to method fingerprinting**!
-   - Conversely, [`Phase1Runner.__init__` (`phases/phase1_foundation/__init__.py#L77,L84`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase1_foundation/__init__.py#L77-L84) requires `llm` and binds `self.llm = llm`, even though Phase 1 never uses an LLM. And [`TAGRelationExtractor.__init__` (`phases/phase3_global_relations/tag_extractor.py#L58-L60`)](../../packages/episteme-pipeline/episteme_pipeline/phases/phase3_global_relations/tag_extractor.py#L58-L60) binds `self.embedding_model = embedding_model`, even though TAG blocking never uses embeddings. Because `find_components()` discovers `self.llm` on `Phase1Runner` and `self.embedding_model` on `TAGRelationExtractor`, changing the LLM temperature or model **falsely invalidates Phase 1 (document chunking & embedding)**!
+   - Conversely, [`Phase1Runner.__init__` (`phases/phase1_foundation/__init__.py#L77,L84`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase1_foundation/__init__.py#L77-L84) requires `llm` and binds `self.llm = llm`, even though Phase 1 never uses an LLM. And [`TAGRelationExtractor.__init__` (`phases/phase3_global_relations/tag_extractor.py#L58-L60`)](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase3_global_relations/tag_extractor.py#L58-L60) binds `self.embedding_model = embedding_model`, even though TAG blocking never uses embeddings. Because `find_components()` discovers `self.llm` on `Phase1Runner` and `self.embedding_model` on `TAGRelationExtractor`, changing the LLM temperature or model **falsely invalidates Phase 1 (document chunking & embedding)**!
 
 4. **Unwired System 1 Strategies & Stale Runtime Config**:
    - `Phase2Runner.__init__` (`phase2_entity_discovery/__init__.py#L60-L63,L162-L172`) imports `JevEntityLinker` and `CascadingEntityLinker` but never instantiates them when `decision_engine` is provided.
    - `Phase4Runner.__init__` (`phase4_argument_mining/__init__.py#L141-L167`) accepts `decision_engine` for `HybridModalResolver` and `JevGleaningGate`, but never wires `JevACCClassifier`, `CascadingACCClassifier`, `JevARCClassifier`, or `CascadingARCClassifier`.
-   - [`runtime/runner.py` (`#L115,L126-L173`)](../../packages/episteme-pipeline/episteme_pipeline/runtime/runner.py#L115) passes the removed `max_gleanings=2` argument to `Phase2Config` (silently ignored by Pydantic), duplicates `ModelConfig.from_env()` with conflicting default model names, and creates three separate Neo4j driver connection pools (`Neo4jGraphReader`, `Neo4jGraphWriter`, `Neo4jProcessingGraph`) to the same database.
+   - [`runtime/runner.py` (`#L115,L126-L173`)](../../../packages/episteme-pipeline/episteme_pipeline/runtime/runner.py#L115) passes the removed `max_gleanings=2` argument to `Phase2Config` (silently ignored by Pydantic), duplicates `ModelConfig.from_env()` with conflicting default model names, and creates three separate Neo4j driver connection pools (`Neo4jGraphReader`, `Neo4jGraphWriter`, `Neo4jProcessingGraph`) to the same database.
 
 ---
 
@@ -68,10 +68,10 @@ Currently, `PhaseRunner` ([`protocols/phase_runner.py`](../../packages/episteme-
 
 ## 3. Proposed Solution & Direct Fixes
 
-Follow **[Design Patterns & Standards §3.1–§3.2](../../docs/architecture/design_patterns_and_standards.md)**:
+Follow **[Design Patterns & Standards §3.1–§3.2](../../../docs/architecture/design_patterns_and_standards.md)**:
 
 ### Fix 1: Provide `event_emitter`, `progress_scope`, and `BatchCheckpointExecutor` on `PhaseRunner`
-In [`packages/episteme-pipeline/episteme_pipeline/protocols/phase_runner.py`](../../packages/episteme-pipeline/episteme_pipeline/protocols/phase_runner.py):
+In [`packages/episteme-pipeline/episteme_pipeline/protocols/phase_runner.py`](../../../packages/episteme-pipeline/episteme_pipeline/protocols/phase_runner.py):
 ```python
 from contextlib import contextmanager
 from typing import Iterator

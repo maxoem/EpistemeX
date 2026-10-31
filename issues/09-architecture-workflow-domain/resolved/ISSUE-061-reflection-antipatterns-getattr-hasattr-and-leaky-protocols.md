@@ -7,16 +7,16 @@
 | **Target Package(s)** | `packages/episteme-pipeline` (`pipeline.py`, `runtime/runner.py`, `protocols/`, `phases/`, `post_processing/`) |
 | **Priority** | **High** |
 | **Status** | `Resolved` |
-| **Evaluated Docs & ADRs** | [`AGENTS.md §2`](../../AGENTS.md), [`docs/architecture/design_patterns_and_standards.md §4.1`](../../docs/architecture/design_patterns_and_standards.md) |
+| **Evaluated Docs & ADRs** | [`AGENTS.md §2`](../../../AGENTS.md), [`docs/architecture/design_patterns_and_standards.md §4.1`](../../../docs/architecture/design_patterns_and_standards.md) |
 
 ---
 
 ## 1. Current State
 
-[`AGENTS.md §2`](../../AGENTS.md) explicitly mandates:
+[`AGENTS.md §2`](../../../AGENTS.md) explicitly mandates:
 > *"Follow development best practices like SOLID, Hexagonal Architecture, ensure the use of dependency inversion and avoid `getattr`."*
 
-Despite this directive, a codebase-wide audit revealed **50+ occurrences of `getattr(...)` and `hasattr(...)`** across the orchestrator (`pipeline.py`, `runtime/runner.py`), protocols (`protocols/fingerprint.py`), and phase implementations (`phases/`, `post_processing/`). As categorized in **[Design Patterns, Clean Code & Architectural Standards §4.1](../../docs/architecture/design_patterns_and_standards.md)**, these reflection hacks mask four structural defects:
+Despite this directive, a codebase-wide audit revealed **50+ occurrences of `getattr(...)` and `hasattr(...)`** across the orchestrator (`pipeline.py`, `runtime/runner.py`), protocols (`protocols/fingerprint.py`), and phase implementations (`phases/`, `post_processing/`). As categorized in **[Design Patterns, Clean Code & Architectural Standards §4.1](../../../docs/architecture/design_patterns_and_standards.md)**, these reflection hacks mask four structural defects:
 
 ### Category A: Orchestrator Reflection & Silent Config Key Falsification (`pipeline.py`)
 1. **String-Matching Runner Names & Falsifying `phase_key = "phase1"` (`pipeline.py#L131-L162`)**:
@@ -78,7 +78,7 @@ Despite this directive, a codebase-wide audit revealed **50+ occurrences of `get
 
 ## 3. Proposed Solution & Direct Fixes
 
-Follow **[Design Patterns & Standards §3.1 & §4.1](../../docs/architecture/design_patterns_and_standards.md)**:
+Follow **[Design Patterns & Standards §3.1 & §4.1](../../../docs/architecture/design_patterns_and_standards.md)**:
 
 ### Step 1: Complete Port Protocols & ABC Contracts
 1. In `TheoryProjector` (`post_processing/theoretical_enrichment/projectors.py#L26-L47`), add:

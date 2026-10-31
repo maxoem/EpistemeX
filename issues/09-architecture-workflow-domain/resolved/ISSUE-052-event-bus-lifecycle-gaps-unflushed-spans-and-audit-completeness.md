@@ -7,15 +7,15 @@
 | **Target Package(s)** | `packages/episteme-pipeline` (`events/`, `pipeline.py`, `runs/models.py`) |
 | **Priority** | **Medium** |
 | **Status** | `Completed` |
-| **Evaluated Docs & ADRs** | [`docs/architecture/event-system.md`](../../docs/architecture/event-system.md), [`docs/architecture/cross_cutting_concerns.md`](../../docs/architecture/cross_cutting_concerns.md), [`ADR-0012`](../../docs/adr/0012-phase-config-redesign-and-langfuse-integration.md), [`ADR-0019`](../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md) |
+| **Evaluated Docs & ADRs** | [`docs/architecture/event-system.md`](../../../docs/architecture/event-system.md), [`docs/architecture/cross_cutting_concerns.md`](../../../docs/architecture/cross_cutting_concerns.md), [`ADR-0012`](../../../docs/adr/0012-phase-config-redesign-and-langfuse-integration.md), [`ADR-0019`](../../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md) |
 
 ---
 
 ## 1. Current State
 
-[`docs/architecture/event-system.md`](../../docs/architecture/event-system.md) and [`docs/architecture/cross_cutting_concerns.md`](../../docs/architecture/cross_cutting_concerns.md) define Episteme's observability architecture around task-local `contextvars` dispatch (`use_event_emitter`, `get_event_emitter`), `SimpleEventEmitter`, and pluggable `EventObserver` sinks (`LoggingObserver`, `JsonlRunObserver`, `MetricsObserver`, `LangfuseObserver`, `RichProgressObserver`).
+[`docs/architecture/event-system.md`](../../../docs/architecture/event-system.md) and [`docs/architecture/cross_cutting_concerns.md`](../../../docs/architecture/cross_cutting_concerns.md) define Episteme's observability architecture around task-local `contextvars` dispatch (`use_event_emitter`, `get_event_emitter`), `SimpleEventEmitter`, and pluggable `EventObserver` sinks (`LoggingObserver`, `JsonlRunObserver`, `MetricsObserver`, `LangfuseObserver`, `RichProgressObserver`).
 
-An audit of the event specification in [`docs/architecture/event-system.md`](../../docs/architecture/event-system.md) against the orchestrator lifecycle in [`packages/episteme-pipeline/episteme_pipeline/pipeline.py#L919-L1060`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py#L919-L1060) uncovers **four observability and audit-trail defects**:
+An audit of the event specification in [`docs/architecture/event-system.md`](../../../docs/architecture/event-system.md) against the orchestrator lifecycle in [`packages/episteme-pipeline/episteme_pipeline/pipeline.py#L919-L1060`](../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py#L919-L1060) uncovers **four observability and audit-trail defects**:
 
 1. **Unclosed Spans & Missing `PhaseFailed` / `ComponentCompleted(success=False)` Events on Phase Exception**:
    - In `Pipeline._execute()` (`pipeline.py#L949-L978`), the orchestrator emits `ComponentStarted(component_name=phase_name, ...)` before entering `try: with use_event_emitter(phase_emitter): collection = await entry.runner.run(...)`.
@@ -107,8 +107,8 @@ sequenceDiagram
 
 ## 5. Key Target Files
 
-- [`packages/episteme-pipeline/episteme_pipeline/pipeline.py`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py)
-- [`packages/episteme-pipeline/episteme_pipeline/events/models.py`](../../packages/episteme-pipeline/episteme_pipeline/events/models.py)
-- [`packages/episteme-pipeline/episteme_pipeline/events/bus.py`](../../packages/episteme-pipeline/episteme_pipeline/events/bus.py)
-- [`packages/episteme-pipeline/episteme_pipeline/events/langfuse_observer.py`](../../packages/episteme-pipeline/episteme_pipeline/events/langfuse_observer.py)
-- [`docs/architecture/event-system.md`](../../docs/architecture/event-system.md)
+- [`packages/episteme-pipeline/episteme_pipeline/pipeline.py`](../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py)
+- [`packages/episteme-pipeline/episteme_pipeline/events/models.py`](../../../packages/episteme-pipeline/episteme_pipeline/events/models.py)
+- [`packages/episteme-pipeline/episteme_pipeline/events/bus.py`](../../../packages/episteme-pipeline/episteme_pipeline/events/bus.py)
+- [`packages/episteme-pipeline/episteme_pipeline/events/langfuse_observer.py`](../../../packages/episteme-pipeline/episteme_pipeline/events/langfuse_observer.py)
+- [`docs/architecture/event-system.md`](../../../docs/architecture/event-system.md)

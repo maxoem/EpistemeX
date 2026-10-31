@@ -22,6 +22,20 @@ Standard input structure for pipeline execution.
       show_root_heading: false
       show_root_toc_entry: false
 
+### EpistemicCurationLedger
+
+Persistent Human-in-the-Loop (HITL) curation ledger for expert constraints and relation overrides.
+
+::: episteme_pipeline.contracts.phase_contracts.EpistemicCurationLedger
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+::: episteme_pipeline.contracts.phase_contracts.RelationOverride
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
 ## Phase 1: Data Foundation
 
 Handles document parsing and chunking operations.

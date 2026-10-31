@@ -69,6 +69,7 @@ The `RunManifest` is the central execution record for a pipeline run:
 - **`status`**: Current lifecycle status (`RunStatus.PLANNED`, `RUNNING`, `COMPLETED`, `FAILED`, `ABORTED`).
 - **`schema_version`**: Active `SchemaConfig.version` tracking ontology/taxonomy versions.
 - **`source_fingerprint` & `input_fingerprint`**: Deterministic hashes of source document paths, bibtex files, and structural anchors.
+- **`document_fingerprints`**: Map of `{document_id: sha256_hash}` tracking per-document content hashes for fine-grained delta extraction.
 - **`config_snapshot`**: Full JSON-serialized snapshot of `PipelineConfig`.
 - **`phase_config_fingerprints`**: Per-phase configuration hashes derived from serialized phase configs (including fine-grained nested leaf fingerprints).
 - **`method_fingerprints`**: Fine-grained fingerprints of models, extractors, and prompts used by each phase (e.g., LLM parameters, embedding model dimensions, and prompt bundles).
@@ -231,12 +232,29 @@ Execution is strictly decoupled from graph storage:
 
 ## Artifact Hydration & Parent-Run Lineage
 
+Artifact hydration operates at two complementary granularities:
+
+### 1. Whole-Phase Lineage Hydration (`_hydrate_previous_collection`)
+
 When a run is resumed via `resume_from_run()` or reuses phases via `_choose_reuse_source()`:
 
 1. The orchestrator identifies the source run (`parent_run_id`).
 2. `_hydrate_previous_collection(phase_number, source_run_id)` retrieves all artifacts produced prior to the resume boundary.
 3. If an artifact was inherited across multiple resume hops, the store traverses the parent-run chain (`run_id -> parent_run_id -> ...`), always selecting the nearest occurrence of each `identity_key`.
 4. Downstream phases execute seamlessly with a fully populated `ArtifactCollection` as if all upstream phases had executed in the current process.
+
+### 2. Fine-Grained Declarative Intra-Phase Hydration (`ArtifactHydrator`)
+
+When inputs evolve incrementally ($\mathcal{D}_{t+1} = \mathcal{D}_t \cup \Delta D$), phases from Phase 1 onward are marked for execution, but phase runners execute via `ArtifactExecutionContext.hydrator(ordinal, name)`:
+
+- **`IncrementalRetentionScope`**: Isolates unchanged document IDs, unchanged chunk IDs, and entities whose supporting evidence resides strictly within unchanged chunks (`unmodified_prior_entity_chunks`).
+- **Declarative Phase Hydration**:
+  - `hydrate_phase1()`: Copies prior `DocumentArtifact` and `ChunkArtifact` envelopes for unchanged documents, returning only delta source paths.
+  - `hydrate_phase2()`: Retains surviving entities, mention envelopes, and local relation triples while pruning zombie entities and dangling relations.
+  - `hydrate_phase3()`: Enforces bidirectional chunk-set equality to re-extract pairs for entities that lost mentions in modified chunks while retaining global relation triples for unmodified pairs.
+  - `hydrate_phase4()`: Retains `TheoryAtom` components and local relations from unchanged chunks.
+- **Persistent Constraint Ingestion (`EpistemicCurationLedger`)**:
+  Applies human domain curation rules (`apply_to_triples`, `apply_to_theory_relations`), suppressing `REJECTED` relations, updating confidence/predicates, and injecting curated triples/relations.
 
 ---
 
@@ -261,5 +279,5 @@ The artifact and run model is configured via `ExecutionConfig` in `pipeline/conf
 - **Runtime and Complexity**: [Pipeline Runtime Analysis](runtime_analysis.md)
 - **System Overview**: [System Architecture Overview](overview.md)
 - **Pipeline Architecture**: [Pipeline Architecture](pipeline_architecture.md)
-- **ADRs**: [ADR 0001: Neo4j Async Graph Backend](../adr/0001-neo4j-async-graph-backend.md), [ADR 0014: Deterministic Identity Diffing](../adr/0014-deterministic-identity-diffing-and-progression-workbench.md)
+- **ADRs**: [ADR 0001: Neo4j Async Graph Backend](../adr/0001-neo4j-async-graph-backend.md), [ADR 0014: Deterministic Identity Diffing](../adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [ADR 0021: Incremental Corpus Evolution & HITL Constraint Ledger](../adr/0021-incremental-corpus-evolution-and-persistent-hitl-constraint-ledger.md)
 

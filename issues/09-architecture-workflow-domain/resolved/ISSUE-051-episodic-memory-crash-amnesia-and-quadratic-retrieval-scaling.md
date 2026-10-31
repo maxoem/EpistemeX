@@ -7,24 +7,24 @@
 | **Target Package(s)** | `packages/episteme-pipeline` (`phases/phase2_entity_discovery/`, `phases/phase3_global_relations/`, `phases/phase3b_consolidation/`, `phases/phase4_argument_mining/`) |
 | **Priority** | **High** |
 | **Status** | `Resolved` |
-| **Evaluated Docs & ADRs** | [`docs/architecture/runtime_analysis.md`](../../docs/architecture/runtime_analysis.md), [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0001`](../../docs/adr/0001-neo4j-async-graph-backend.md), [`ADR-0009`](../../docs/adr/0009-sota-dual-memory-episodic-working-memory.md), [`ADR-0016`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md) |
+| **Evaluated Docs & ADRs** | [`docs/architecture/runtime_analysis.md`](../../../docs/architecture/runtime_analysis.md), [`docs/architecture/pipeline_architecture.md`](../../../docs/architecture/pipeline_architecture.md), [`ADR-0001`](../../../docs/adr/0001-neo4j-async-graph-backend.md), [`ADR-0009`](../../../docs/adr/0009-sota-dual-memory-episodic-working-memory.md), [`ADR-0016`](../../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md) |
 
 ---
 
 ## 1. Current State
 
-An examination of [`docs/architecture/runtime_analysis.md`](../../docs/architecture/runtime_analysis.md), [`ADR-0009` (SOTA Dual-Memory Architecture & Episodic Working Memory)](../../docs/adr/0009-sota-dual-memory-episodic-working-memory.md), and [`ADR-0016` (Phase 3 Within-Phase Checkpointing)](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md) highlights **four interconnected architectural vulnerabilities in intra-phase execution, crash recovery, and asymptotic scaling**:
+An examination of [`docs/architecture/runtime_analysis.md`](../../../docs/architecture/runtime_analysis.md), [`ADR-0009` (SOTA Dual-Memory Architecture & Episodic Working Memory)](../../../docs/adr/0009-sota-dual-memory-episodic-working-memory.md), and [`ADR-0016` (Phase 3 Within-Phase Checkpointing)](../../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md) highlights **four interconnected architectural vulnerabilities in intra-phase execution, crash recovery, and asymptotic scaling**:
 
 1. **Episodic Working Memory Crash Amnesia (`ADR-0001` vs. `ADR-0009`)**:
-   - [`ADR-0009 §Decision.1 & .3`](../../docs/adr/0009-sota-dual-memory-episodic-working-memory.md) specifies that Phase 2 maintains a stateful Short-Term Memory (STM) in RAM across sequential chunks ($C_{i-1} \to C_i$), tracking `active_entities`, `unresolved_references`, and `current_argument_branch`. Crucially, `ADR-0009` dictates: *"The STM state itself is **never committed to Neo4j**; its short-lived variables are purged from runtime memory (RAM)."*
-   - At the same time, [`ADR-0001 §Decision`](../../docs/adr/0001-neo4j-async-graph-backend.md) specifies that Phase 2 crash recovery works by setting `phase2_processed = true` on each committed `:Chunk` node, so *"re-running any phase picks up from the last committed chunk."*
+   - [`ADR-0009 §Decision.1 & .3`](../../../docs/adr/0009-sota-dual-memory-episodic-working-memory.md) specifies that Phase 2 maintains a stateful Short-Term Memory (STM) in RAM across sequential chunks ($C_{i-1} \to C_i$), tracking `active_entities`, `unresolved_references`, and `current_argument_branch`. Crucially, `ADR-0009` dictates: *"The STM state itself is **never committed to Neo4j**; its short-lived variables are purged from runtime memory (RAM)."*
+   - At the same time, [`ADR-0001 §Decision`](../../../docs/adr/0001-neo4j-async-graph-backend.md) specifies that Phase 2 crash recovery works by setting `phase2_processed = true` on each committed `:Chunk` node, so *"re-running any phase picks up from the last committed chunk."*
 2. **Global Sequential Bottleneck in Phase 2 (`ADR-0009 §Consequences`)**:
    - Because STM state flows sequentially from $C_{i-1} \to C_i$, Phase 2 processes chunks sequentially even across independent chapters or independent documents in a multi-document corpus, despite `ADR-0009` stating that STM is purged/evicted at chapter/semantic boundaries anyway.
 3. **Asymmetric Intra-Phase Checkpointing (`ADR-0016` Limited to Phase 3)**:
-   - [`ADR-0016`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md) introduced atomic batch checkpointing, `:PhaseItem` tracking, poison-pill quarantine, and systematic failure guards (`100%` first-batch failure abort)—but **only for Phase 3 (`Phase3Runner`)**.
+   - [`ADR-0016`](../../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md) introduced atomic batch checkpointing, `:PhaseItem` tracking, poison-pill quarantine, and systematic failure guards (`100%` first-batch failure abort)—but **only for Phase 3 (`Phase3Runner`)**.
    - `Phase4Runner` (which executes $O(C)$ local ADU/ACC LLM calls and $O(A \cdot K)$ global ARC LLM calls, per `runtime_analysis.md §Phase 4`), `Phase4EntityMaturationRunner` ($O(E)$ LLM calls), and `TheoreticalEnrichmentRunner` ($O(|\mathcal{C}| \cdot |\mathcal{T}|)$ LLM calls) lack `:PhaseItem` poison-pill quarantine and atomic batch recovery.
 4. **Anisotropic Cosine Similarity & Small-Corpus $O(N^2)$ Explosion (`runtime_analysis.md`)**:
-   - [`docs/architecture/runtime_analysis.md §The "Small Input" Overhead`](../../docs/architecture/runtime_analysis.md#L120-L139) documents two severe operational issues:
+   - [`docs/architecture/runtime_analysis.md §The "Small Input" Overhead`](../../../docs/architecture/runtime_analysis.md#L120-L139) documents two severe operational issues:
      - In Phase 3 and Phase 3b, a fixed scalar `dense_similarity_threshold` (e.g., $0.50$ or $0.85$) is used to filter raw cosine similarities. As `runtime_analysis.md#L134-L136` explicitly notes, for many embedding models (`all-MiniLM-L6-v2`, `bge-m3`, etc.), raw cosine similarities naturally cluster in a narrow anisotropic cone above $0.5$, allowing nearly 100% of all $O(E^2)$ pairs to bypass the filter!
      - In Phase 4 ARC (`runtime_analysis.md#L82,L131-L132`), candidate pairs ($O(A \cdot K)$) are sent directly to the generative LLM without a Cross-Encoder or System 1 Jev filter by default, causing a 1-page document with 15 theory atoms to trigger ~100 generative LLM calls.
 
@@ -112,8 +112,8 @@ Extract the atomic batch checkpointing, order-invariant content hashing, poison-
 
 ## 5. Key Target Files
 
-- [`packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/working_memory.py`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/working_memory.py)
-- [`packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/runner.py`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/runner.py)
-- [`packages/episteme-pipeline/episteme_pipeline/phases/phase3_global_relations/runner.py`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase3_global_relations/runner.py)
-- [`packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/runner.py`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/runner.py)
-- [`docs/architecture/runtime_analysis.md`](../../docs/architecture/runtime_analysis.md)
+- [`packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/working_memory.py`](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/working_memory.py)
+- [`packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/runner.py`](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/runner.py)
+- [`packages/episteme-pipeline/episteme_pipeline/phases/phase3_global_relations/runner.py`](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase3_global_relations/runner.py)
+- [`packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/runner.py`](../../../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/runner.py)
+- [`docs/architecture/runtime_analysis.md`](../../../docs/architecture/runtime_analysis.md)
