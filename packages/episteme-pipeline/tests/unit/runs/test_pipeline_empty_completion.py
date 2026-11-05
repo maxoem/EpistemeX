@@ -14,10 +14,11 @@ from episteme_pipeline.artifacts.execution import (
 )
 from episteme_pipeline.config import ExecutionConfig, PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import RunStatus
 
 
-class MockPhaseRunner:
+class MockPhaseRunner(PhaseRunner[PipelineInput]):
     """Mock phase runner that simulates processing with no results."""
     
     def __init__(self, phase_num: int, name: str):
@@ -92,7 +93,7 @@ async def test_pipeline_completes_with_no_entities() -> None:
         assert manifest_file.exists(), f"Manifest file should exist at {manifest_file}"
         
         # Verify we can read it back
-        read_manifest = pipeline._manifest_store.read_manifest(result.manifest.run_id)
+        read_manifest = pipeline.manifest_store.read_manifest(result.manifest.run_id)
         assert read_manifest is not None
         assert read_manifest.run_id == result.manifest.run_id
 

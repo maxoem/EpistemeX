@@ -7,10 +7,11 @@ from episteme_pipeline.artifacts.execution import (
 )
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 
 
-class StubPhase1:
+class StubPhase1(PhaseRunner[object]):
     name = "Phase 1: Data Foundation"
     phase_key = "phase1"
 
@@ -18,7 +19,7 @@ class StubPhase1:
         return ArtifactCollection([])
 
 
-class StubPhase2:
+class StubPhase2(PhaseRunner[object]):
     name = "Phase 2: Entity & Local Relation Discovery"
     phase_key = "phase2"
 
@@ -26,7 +27,7 @@ class StubPhase2:
         return ArtifactCollection([])
 
 
-class StubPhase3:
+class StubPhase3(PhaseRunner[object]):
     name = "Phase 3: Global Relation Extraction"
     phase_key = "phase3"
 
@@ -34,7 +35,7 @@ class StubPhase3:
         return ArtifactCollection([])
 
 
-class StubPhase4:
+class StubPhase4(PhaseRunner[object]):
     name = "Phase 4: Argument Mining"
     phase_key = "phase4"
 
@@ -42,7 +43,7 @@ class StubPhase4:
         return ArtifactCollection([])
 
 
-class StubPhase5:
+class StubPhase5(PhaseRunner[object]):
     name = "Phase 5b: Argument Clustering & Theory Fusion"
     phase_key = "phase5"
 
@@ -105,8 +106,8 @@ async def test_invalidation_propagates_after_first_invalid_phase(
             ),
         ],
     )
-    pipeline._manifest_store.write_manifest(prior)
-    pipeline._phase_config_fingerprints = lambda: {
+    pipeline.manifest_store.write_manifest(prior)
+    pipeline.engine.phase_config_fingerprints = lambda: {
         "phase1": {"config.a": "same"},
         "phase2": {"config.a": "new"},
         "phase3": {"config.a": "new"},
@@ -114,7 +115,7 @@ async def test_invalidation_propagates_after_first_invalid_phase(
         "phase5": {"config.a": "new"},
     }
 
-    decision = await pipeline._choose_reuse_source(
+    decision = await pipeline.engine.choose_reuse_source(
         RunManifest(
             run_id="run-new",
             status=RunStatus.RUNNING,

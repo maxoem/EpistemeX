@@ -550,6 +550,7 @@ class QualityGatesConfig(BaseModel):
     max_dominant_type_ratio: float = 0.90
     min_entities_for_entropy: int = 5
     min_entity_density: float = 0.0
+    require_nonzero_entity_density: bool = True
     max_percolation_fraction: float = 0.50
     min_population_for_percolation: int = 4
     max_conformal_empty_rate: float = 0.30

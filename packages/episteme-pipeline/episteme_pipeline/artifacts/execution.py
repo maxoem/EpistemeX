@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from episteme_pipeline.artifacts.builders import parse_mention_id
 from episteme_pipeline.artifacts.models import (
@@ -545,6 +545,9 @@ def _resolve_l3_atoms_and_relations(
 class EpistemicStateView:
     """Base contract for cumulative inter-phase artifact views."""
 
+    _allowed_kinds: ClassVar[tuple[ArtifactKind, ...]] = ()
+    allowed_kinds: ClassVar[tuple[ArtifactKind, ...]] = ()
+
     documents: list[L1Document] = field(default_factory=list)
     chunks: list[L1Chunk] = field(default_factory=list)
     entities: list[L2Entity] = field(default_factory=list)
@@ -579,6 +582,7 @@ class Phase1ArtifactsView(EpistemicStateView):
     """Cumulative view of Phase 1 foundation artifacts."""
 
     _allowed_kinds = (ArtifactKind.DOCUMENT, ArtifactKind.CHUNK)
+    allowed_kinds = _allowed_kinds
 
     @classmethod
     def from_collection(cls, collection: ArtifactCollection) -> Phase1ArtifactsView:
@@ -603,6 +607,7 @@ class Phase2ArtifactsView(EpistemicStateView):
         ArtifactKind.LOCAL_RELATION,
         ArtifactKind.CANONICALIZATION,
     )
+    allowed_kinds = _allowed_kinds
 
     @classmethod
     def from_collection(cls, collection: ArtifactCollection) -> Phase2ArtifactsView:
@@ -642,6 +647,7 @@ class Phase3ArtifactsView(EpistemicStateView):
         ArtifactKind.CANONICALIZATION,
         ArtifactKind.GLOBAL_RELATION,
     )
+    allowed_kinds = _allowed_kinds
 
     @classmethod
     def from_collection(cls, collection: ArtifactCollection) -> Phase3ArtifactsView:
@@ -705,6 +711,7 @@ class Phase4ArtifactsView(EpistemicStateView):
         ArtifactKind.FUSION_DECISION,
         ArtifactKind.THEORETICAL_ENRICHMENT,
     )
+    allowed_kinds = _allowed_kinds
 
     def __post_init__(self) -> None:
         if not self.canonical_theory_atoms and self.theory_atoms:

@@ -10,16 +10,11 @@ execution, caching, hydration, and observability to
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
-
-from pydantic import BaseModel
 
 from episteme_pipeline.artifacts.checkpoint_store import FileSystemCheckpointStore
-from episteme_pipeline.artifacts.execution import ArtifactCollection
 from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
@@ -37,10 +32,6 @@ from episteme_pipeline.protocols.quality_gate import EpistemicQualityGate
 from episteme_pipeline.runs.models import (
     ArtifactReportEntry,
     ExecutionResult,
-    InvalidationDecision,
-    ResumePoint,
-    RunManifest,
-    RunPhaseRecord,
     RunReport,
 )
 from episteme_pipeline.runs.persistence import JsonRunManifestStore
@@ -95,17 +86,10 @@ class Pipeline:
         Pre-constructed artifact execution engine.
     """
 
-    workflow: WorkflowDAG | None = None
-    engine: ArtifactExecutionEngine | None = None
-    event_emitter: EventEmitter | None = None
-    decision_engine: DecisionEngine | None = None
-    modal_resolver: ModalStrengthResolver | None = None
-    _custom_phase_entries: list[WorkflowNode] | None = None
-
     def __init__(
         self,
         *,
-        phases: list[PhaseRunner] | None = None,
+        phases: list[PhaseRunner[Any]] | None = None,
         config: PipelineConfig,
         graph_reader: Any = None,
         projection_graph: Any = None,
@@ -128,15 +112,14 @@ class Pipeline:
         self.event_emitter: EventEmitter = event_emitter or NoOpEventEmitter()
         self.decision_engine = decision_engine
         self.modal_resolver = modal_resolver
-        self._custom_phase_entries = None
 
-        resolved_gates: Sequence[EpistemicQualityGate]
-        if quality_gates is not None:
-            resolved_gates = quality_gates
-        else:
-            resolved_gates = build_default_quality_gates(
+        resolved_gates: Sequence[EpistemicQualityGate] = (
+            quality_gates
+            if quality_gates is not None
+            else build_default_quality_gates(
                 config, decision_engine=decision_engine
             )
+        )
 
         if workflow is not None:
             self.workflow = workflow
@@ -149,36 +132,14 @@ class Pipeline:
                 quality_gates=resolved_gates,
             )
 
-        if engine is not None:
-            self.engine = engine
-        else:
-            self.engine = ArtifactExecutionEngine(
-                workflow=self.workflow,
-                config=self.config,
-                projection_graph=self.projection_graph,
-                checkpoint_store=self.checkpoint_store,
-                event_emitter=self.event_emitter,
-                decision_engine=self.decision_engine,
-            )
-
-    def _ensure_engine(self) -> ArtifactExecutionEngine:
-        """Return the active execution engine, initializing a fallback if needed."""
-        if self.engine is None:
-            fallback_workflow = (
-                self.workflow
-                if self.workflow is not None
-                else WorkflowDAG(phases=[])
-            )
-            self.engine = ArtifactExecutionEngine(
-                workflow=fallback_workflow,
-                config=self.config,
-                decision_engine=self.decision_engine,
-            )
-        else:
-            self.engine.config = self.config
-            self.engine.event_emitter = self.event_emitter or NoOpEventEmitter()
-            self.engine.decision_engine = self.decision_engine
-        return self.engine
+        self.engine = engine or ArtifactExecutionEngine(
+            workflow=self.workflow,
+            config=self.config,
+            projection_graph=self.projection_graph,
+            checkpoint_store=self.checkpoint_store,
+            event_emitter=self.event_emitter,
+            decision_engine=self.decision_engine,
+        )
 
     def fingerprint(self) -> dict[str, Any]:
         """Return a deterministic fingerprint dictionary for the pipeline.
@@ -190,58 +151,41 @@ class Pipeline:
         """
         return {
             "class": self.__class__.__name__,
-            "workflow": self.workflow.fingerprint() if self.workflow else {},
-            "engine": self._ensure_engine().fingerprint(),
+            "workflow": self.workflow.fingerprint(),
+            "engine": self.engine.fingerprint(),
         }
 
     @property
     def quality_gates(self) -> tuple[EpistemicQualityGate, ...]:
         """Return the epistemic quality gates attached to the workflow DAG."""
-        if self.workflow is None:
-            return ()
         return self.workflow.quality_gates
 
     @property
-    def _phase_entries(self) -> list[WorkflowNode]:
-        """Return the ordered workflow nodes for this pipeline."""
-        if self._custom_phase_entries is not None:
-            return self._custom_phase_entries
-        if self.workflow is not None:
-            return list(self.workflow.nodes)
-        return []
-
-    @_phase_entries.setter
-    def _phase_entries(self, value: list[WorkflowNode]) -> None:
-        self._custom_phase_entries = list(value)
-        if self.workflow is not None:
-            self.workflow._nodes = tuple(value)
-
-    @property
-    def _manifest_store(self) -> JsonRunManifestStore:
+    def manifest_store(self) -> JsonRunManifestStore:
         """Return the underlying run manifest store."""
-        return self._ensure_engine().manifest_store
+        return self.engine.manifest_store
 
-    @_manifest_store.setter
-    def _manifest_store(self, value: JsonRunManifestStore) -> None:
-        self._ensure_engine().manifest_store = value
+    @manifest_store.setter
+    def manifest_store(self, value: JsonRunManifestStore) -> None:
+        self.engine.manifest_store = value
 
     @property
-    def _artifact_store(self) -> JsonArtifactStore:
+    def artifact_store(self) -> JsonArtifactStore:
         """Return the underlying artifact store."""
-        return self._ensure_engine().artifact_store
+        return self.engine.artifact_store
 
-    @_artifact_store.setter
-    def _artifact_store(self, value: JsonArtifactStore) -> None:
-        self._ensure_engine().artifact_store = value
+    @artifact_store.setter
+    def artifact_store(self, value: JsonArtifactStore) -> None:
+        self.engine.artifact_store = value
 
     @property
-    def _projector(self) -> ArtifactGraphProjector:
+    def projector(self) -> ArtifactGraphProjector:
         """Return the underlying artifact graph projector."""
-        return self._ensure_engine().projector
+        return self.engine.projector
 
-    @_projector.setter
-    def _projector(self, value: ArtifactGraphProjector) -> None:
-        self._ensure_engine().projector = value
+    @projector.setter
+    def projector(self, value: ArtifactGraphProjector) -> None:
+        self.engine.projector = value
 
     @classmethod
     def for_task(
@@ -258,8 +202,8 @@ class Pipeline:
         projection_graph: Any = None,
         checkpoint_store: Any = None,
         event_emitter: EventEmitter | None = None,
-        extra_phases: list[PhaseRunner] | None = None,
-        post_processors: list[PhaseRunner] | None = None,
+        extra_phases: list[PhaseRunner[Any]] | None = None,
+        post_processors: list[PhaseRunner[Any]] | None = None,
         working_memory_manager: Any | None = None,
         decision_engine: DecisionEngine | None = None,
         acc_classifier: Any | None = None,
@@ -351,26 +295,7 @@ class Pipeline:
         list of tuple of (int, str)
             Ordered list of ``(ordinal, phase_name)`` pairs.
         """
-        return [(entry.index, entry.runner.name) for entry in self._phase_entries]
-
-    @contextmanager
-    def _run_observability_scope(self, run_id: str) -> Iterator[None]:
-        """Establish contextual event emission and run-scoped folder logging."""
-        with self._ensure_engine().run_observability_scope(run_id):
-            yield
-
-    async def _hydrate_previous_collection(
-        self,
-        phase_number: int = 1,
-        source_run_id: str | None = None,
-        wanted_phase_names: set[str] | None = None,
-    ) -> ArtifactCollection | None:
-        """Delegate artifact collection hydration to :class:`ArtifactExecutionEngine`."""
-        return await self._ensure_engine().hydrate_previous_collection(
-            phase_number=phase_number,
-            source_run_id=source_run_id,
-            wanted_phase_names=wanted_phase_names,
-        )
+        return self.workflow.phase_boundaries()
 
     async def run(
         self,
@@ -394,42 +319,9 @@ class Pipeline:
         ExecutionResult
             Execution result containing the run manifest and report.
         """
-        resolved_run_id = run_id or f"run-{uuid4()}"
-        with self._run_observability_scope(resolved_run_id):
-            manifest = self._build_manifest(
-                run_id=resolved_run_id, pipeline_input=input
-            )
-            if parent_run_id:
-                manifest.parent_run_id = parent_run_id
-            decision = await self._choose_reuse_source(manifest)
-            effective_start = (
-                decision.invalidated_phase_ordinals[0]
-                if decision.invalidated_phase_ordinals
-                else len(self._phase_entries) + 1
-            )
-            allow_hydration = self.config.execution.allow_artifact_hydration
-            wanted_phases = self._reused_phase_names(decision)
-            previous_collection = (
-                await self._hydrate_previous_collection(
-                    effective_start,
-                    source_run_id=decision.resume_point.run_id,
-                    wanted_phase_names=wanted_phases,
-                )
-                if allow_hydration
-                and decision.resume_point.run_id
-                and wanted_phases
-                else None
-            )
-            if decision.reused_phase_ordinals:
-                manifest.parent_run_id = decision.resume_point.run_id
-            return await self._execute(
-                run_id=resolved_run_id,
-                manifest=manifest,
-                start_index=effective_start,
-                pipeline_input=input,
-                initial_previous_collection=previous_collection,
-                invalidation_decision=decision,
-            )
+        return await self.engine.run(
+            input=input, run_id=run_id, parent_run_id=parent_run_id
+        )
 
     async def run_from_phase(
         self,
@@ -457,237 +349,11 @@ class Pipeline:
         ExecutionResult
             Execution result containing the run manifest and report.
         """
-        valid_ordinals = {entry.index for entry in self._phase_entries}
-        if phase_number not in valid_ordinals:
-            raise ValueError(
-                f"Invalid phase boundary {phase_number}. Valid boundaries: {self.phase_boundaries()}"
-            )
-        latest = (
-            (
-                self._manifest_store.read_manifest(parent_run_id)
-                if parent_run_id
-                else None
-            )
-            or self._manifest_store.latest_manifest()
-            or self._manifest_store.latest_manifest(only_completed=False)
-        )
-        if input is None:
-            if latest is None:
-                raise ValueError(
-                    "No previous run manifest found and no PipelineInput provided."
-                )
-            input = PipelineInput(
-                source_paths=list(
-                    latest.input_fingerprint_inputs.get("source_paths", [])
-                ),
-                bib_paths=list(
-                    latest.input_fingerprint_inputs.get("bib_paths", [])
-                ),
-            )
-        resolved_run_id = run_id or f"run-{uuid4()}"
-
-        with self._run_observability_scope(resolved_run_id):
-            manifest = self._build_manifest(
-                run_id=resolved_run_id, pipeline_input=input
-            )
-            if parent_run_id:
-                manifest.parent_run_id = parent_run_id
-            decision = await self._choose_reuse_source(manifest)
-            effective_start = phase_number
-            if (
-                phase_number in decision.reused_phase_ordinals
-                and decision.invalidated_phase_ordinals
-            ):
-                effective_start = min(
-                    phase_number, decision.invalidated_phase_ordinals[0]
-                )
-
-            forced_reused = [
-                ord for ord in decision.reused_phase_ordinals if ord < phase_number
-            ]
-            forced_invalidated = sorted(
-                set(decision.invalidated_phase_ordinals)
-                | set(range(phase_number, len(self._phase_entries) + 1))
-            )
-            decision = InvalidationDecision(
-                resume_point=decision.resume_point,
-                reused_phase_ordinals=forced_reused,
-                invalidated_phase_ordinals=forced_invalidated,
-                reason=(
-                    decision.reason
-                    if forced_invalidated == decision.invalidated_phase_ordinals
-                    else f"run-from-phase:{phase_number}"
-                ),
-            )
-            allow_hydration = self.config.execution.allow_artifact_hydration
-            wanted_phases = self._reused_phase_names(decision)
-            previous_collection = (
-                await self._hydrate_previous_collection(
-                    effective_start,
-                    source_run_id=decision.resume_point.run_id,
-                    wanted_phase_names=wanted_phases,
-                )
-                if allow_hydration
-                and decision.resume_point.run_id
-                and wanted_phases
-                else None
-            )
-            if decision.reused_phase_ordinals:
-                manifest.parent_run_id = decision.resume_point.run_id
-            return await self._execute(
-                run_id=resolved_run_id,
-                manifest=manifest,
-                start_index=effective_start,
-                pipeline_input=input,
-                initial_previous_collection=previous_collection,
-                invalidation_decision=decision,
-            )
-
-    def _prompt_fingerprints(self) -> dict[str, dict[str, str]]:
-        """Discover and fingerprint prompt bundles across all pipeline phases."""
-        return self._ensure_engine().prompt_fingerprints(self._phase_entries)
-
-    def _method_fingerprints(self) -> dict[str, str]:
-        """Compute method and component fingerprints across all pipeline phases."""
-        return self._ensure_engine().method_fingerprints(
-            self._phase_entries, prompt_fps=self._prompt_fingerprints()
-        )
-
-    def _phase_config(self, entry: _PhaseEntry) -> BaseModel | None:
-        """Resolve the configuration block for ``entry``."""
-        return self._ensure_engine().phase_config(entry)
-
-    def _phase_config_fingerprints(self) -> dict[str, str]:
-        """Compute configuration fingerprints keyed by semantic ``phase_key``."""
-        return self._ensure_engine().phase_config_fingerprints(self._phase_entries)
-
-    def _phase_dependencies(self) -> dict[str, set[str]]:
-        """Compute direct upstream phase dependencies from the workflow DAG."""
-        return self._ensure_engine().phase_dependencies()
-
-    def _build_manifest(
-        self, *, run_id: str, pipeline_input: PipelineInput
-    ) -> RunManifest:
-        """Assemble a :class:`RunManifest` using the execution engine."""
-        return self._ensure_engine().build_manifest(
+        return await self.engine.run_from_phase(
+            phase_number=phase_number,
+            input=input,
             run_id=run_id,
-            pipeline_input=pipeline_input,
-            method_fps=self._method_fingerprints(),
-            phase_cfg_fps=self._phase_config_fingerprints(),
-        )
-
-    async def _choose_reuse_source(
-        self, current: RunManifest
-    ) -> InvalidationDecision:
-        """Delegate DAG-based cache reuse resolution to :class:`ArtifactExecutionEngine`."""
-        return await self._ensure_engine().choose_reuse_source(current)
-
-    async def diff_artifacts(
-        self, run_id: str, baseline_run_id: str
-    ) -> dict[str, list[str]]:
-        """Compare artifacts of ``run_id`` against ``baseline_run_id``."""
-        return await self._ensure_engine().diff_artifacts(
-            run_id, baseline_run_id
-        )
-
-    async def _execute(
-        self,
-        *,
-        run_id: str,
-        manifest: RunManifest,
-        start_index: int,
-        pipeline_input: PipelineInput,
-        initial_previous_collection: ArtifactCollection | None,
-        invalidation_decision: InvalidationDecision,
-    ) -> ExecutionResult:
-        """Delegate phase execution and quality gate evaluation to :class:`ArtifactExecutionEngine`."""
-        return await self._ensure_engine().execute(
-            run_id=run_id,
-            manifest=manifest,
-            start_index=start_index,
-            pipeline_input=pipeline_input,
-            initial_previous_collection=initial_previous_collection,
-            invalidation_decision=invalidation_decision,
-        )
-
-    @staticmethod
-    def _fingerprint_collection(collection: ArtifactCollection) -> str:
-        """Fingerprint a phase's output collection deterministically."""
-        return ArtifactExecutionEngine.fingerprint_collection(collection)
-
-    def _build_phase_input(
-        self,
-        *,
-        entry: _PhaseEntry,
-        pipeline_input: PipelineInput,
-        previous: ArtifactCollection | None,
-    ) -> Any:
-        """Return the phase-specific input expected by a runner."""
-        return ArtifactExecutionEngine.build_phase_input(
-            entry=entry,
-            pipeline_input=pipeline_input,
-            previous=previous,
-        )
-
-    def _reused_phase_names(self, decision: InvalidationDecision) -> set[str]:
-        """Names of the phases this run reuses."""
-        return self._ensure_engine().reused_phase_names(decision)
-
-    def _reused_phase_records(
-        self, decision: InvalidationDecision
-    ) -> list[RunPhaseRecord]:
-        """Phase records copied from the reuse source manifest."""
-        return self._ensure_engine().reused_phase_records(decision)
-
-    @staticmethod
-    def _increment_count(
-        bucket: dict[str, int], key: str, amount: int = 1
-    ) -> None:
-        """Increment a count in ``bucket`` by ``amount``."""
-        ArtifactExecutionEngine._increment_count(bucket, key, amount)
-
-    async def _reused_artifact_entries(
-        self, decision: InvalidationDecision
-    ) -> list[ArtifactReportEntry]:
-        """Artifact report entries for reused phases."""
-        return await self._ensure_engine().reused_artifact_entries(decision)
-
-    async def _get_run_artifacts_raw(self, run_id: str) -> list[Any]:
-        """All artifacts visible from ``run_id``, walking the parent-run chain."""
-        return await self._ensure_engine().get_run_artifacts_raw(run_id)
-
-    async def get_run_report(self, run_id: str) -> RunReport:
-        """Assemble a :class:`RunReport` for ``run_id``."""
-        return await self._ensure_engine().get_run_report(run_id)
-
-    def _collect_run_artifact_entries(
-        self,
-        artifacts: list[Any],
-        manifest: RunManifest | None,
-        run_id: str,
-        *,
-        phase_name: str | None = None,
-        kind: str | None = None,
-    ) -> list[ArtifactReportEntry]:
-        """Collect and tag :class:`ArtifactReportEntry` items indicating reuse status."""
-        return ArtifactExecutionEngine.collect_run_artifact_entries(
-            artifacts,
-            manifest,
-            run_id,
-            phase_name=phase_name,
-            kind=kind,
-        )
-
-    async def get_run_artifacts(
-        self,
-        run_id: str,
-        *,
-        phase_name: str | None = None,
-        kind: str | None = None,
-    ) -> list[ArtifactReportEntry]:
-        """Retrieve all report-level artifact entries associated with a run."""
-        return await self._ensure_engine().get_run_artifacts(
-            run_id, phase_name=phase_name, kind=kind
+            parent_run_id=parent_run_id,
         )
 
     async def resume_from_run(
@@ -697,34 +363,31 @@ class Pipeline:
         from_phase: int | None = None,
     ) -> ExecutionResult:
         """Resume pipeline execution from a prior run within observability context."""
-        target_run_id = f"run-resume-{run_id}"
-        with self._run_observability_scope(target_run_id):
-            manifest = self._build_manifest(
-                run_id=target_run_id, pipeline_input=input
-            )
-            if from_phase is None:
-                from_phase = 1
-            decision = InvalidationDecision(
-                resume_point=ResumePoint(run_id=run_id),
-                reused_phase_ordinals=[i for i in range(1, from_phase)],
-                invalidated_phase_ordinals=[
-                    i for i in range(from_phase, len(self._phase_entries) + 1)
-                ],
-                reason="explicit-resume-boundary",
-            )
-            if decision.reused_phase_ordinals:
-                manifest.parent_run_id = run_id
-            previous_collection = await self._hydrate_previous_collection(
-                from_phase, source_run_id=run_id
-            )
-            return await self._execute(
-                run_id=target_run_id,
-                manifest=manifest,
-                start_index=from_phase,
-                pipeline_input=input,
-                initial_previous_collection=previous_collection,
-                invalidation_decision=decision,
-            )
+        return await self.engine.resume_from_run(
+            run_id=run_id, input=input, from_phase=from_phase
+        )
+
+    async def diff_artifacts(
+        self, run_id: str, baseline_run_id: str
+    ) -> dict[str, list[str]]:
+        """Compare artifacts of ``run_id`` against ``baseline_run_id``."""
+        return await self.engine.diff_artifacts(run_id, baseline_run_id)
+
+    async def get_run_report(self, run_id: str) -> RunReport:
+        """Assemble a :class:`RunReport` for ``run_id``."""
+        return await self.engine.get_run_report(run_id)
+
+    async def get_run_artifacts(
+        self,
+        run_id: str,
+        *,
+        phase_name: str | None = None,
+        kind: str | None = None,
+    ) -> list[ArtifactReportEntry]:
+        """Retrieve all report-level artifact entries associated with a run."""
+        return await self.engine.get_run_artifacts(
+            run_id, phase_name=phase_name, kind=kind
+        )
 
 
 __all__ = [

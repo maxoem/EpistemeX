@@ -12,6 +12,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from episteme_pipeline.artifacts.execution import EpistemicStateView
 from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
@@ -109,24 +110,15 @@ class WorkflowDAG(Fingerprintable):
         seen_phase_keys: set[str] = set()
 
         for i, runner in enumerate(phases, start=1):
-            try:
-                phase_key = runner.phase_key
-            except AttributeError:
-                try:
-                    runner_name = runner.name
-                except AttributeError:
-                    runner_name = str(runner)
+            if not isinstance(runner, PhaseRunner):
                 raise TypeError(
-                    f"PhaseRunner '{runner_name}' at index {i} must define a non-empty 'phase_key' attribute."
-                ) from None
+                    f"Phase at index {i} must inherit from PhaseRunner, got {type(runner).__name__}."
+                )
 
+            phase_key = runner.phase_key
             if not phase_key or not isinstance(phase_key, str) or not phase_key.strip():
-                try:
-                    runner_name = runner.name
-                except AttributeError:
-                    runner_name = str(runner)
                 raise TypeError(
-                    f"PhaseRunner '{runner_name}' at index {i} has invalid 'phase_key' of type {type(phase_key)}."
+                    f"PhaseRunner at index {i} must define a non-empty string 'phase_key'."
                 )
 
             if phase_key in seen_phase_keys:
@@ -135,50 +127,30 @@ class WorkflowDAG(Fingerprintable):
                 )
             seen_phase_keys.add(phase_key)
 
-            try:
-                name = runner.name
-                if not name:
-                    raise AttributeError
-            except AttributeError:
+            name = runner.name
+            if not name or not isinstance(name, str) or not name.strip():
                 raise TypeError(
                     f"PhaseRunner with phase_key '{phase_key}' at index {i} must define a non-empty 'name' attribute."
-                ) from None
-
-            try:
-                input_view = runner.input_view
-            except AttributeError:
-                try:
-                    input_view = runner.input_view_type  # type: ignore[attr-defined]
-                except AttributeError:
-                    input_view = None
-
-            try:
-                raw_reads = runner.reads_kinds
-            except AttributeError:
-                raw_reads = frozenset()
-
-            if not raw_reads:
-                try:
-                    allowed = input_view._allowed_kinds  # type: ignore[union-attr]
-                    reads_kinds: frozenset[ArtifactKind] = frozenset(allowed)
-                except AttributeError:
-                    reads_kinds = frozenset()
-            else:
-                reads_kinds = frozenset(raw_reads)
-
-            try:
-                raw_writes = runner.writes_kinds
-                writes_kinds: frozenset[ArtifactKind] = (
-                    frozenset(raw_writes) if raw_writes else frozenset()
                 )
-            except AttributeError:
-                writes_kinds = frozenset()
 
-            try:
-                raw_deps = runner.dependencies
-                explicit_deps = tuple(raw_deps) if raw_deps is not None else None
-            except AttributeError:
-                explicit_deps = None
+            input_view = runner.input_view
+            raw_reads = runner.reads_kinds
+            if not raw_reads and isinstance(input_view, type) and issubclass(
+                input_view, EpistemicStateView
+            ):
+                reads_kinds: frozenset[ArtifactKind] = frozenset(
+                    input_view.allowed_kinds
+                )
+            else:
+                reads_kinds = frozenset(raw_reads) if raw_reads else frozenset()
+
+            raw_writes = runner.writes_kinds
+            writes_kinds: frozenset[ArtifactKind] = (
+                frozenset(raw_writes) if raw_writes else frozenset()
+            )
+
+            raw_deps = runner.dependencies
+            explicit_deps = tuple(raw_deps) if raw_deps is not None else None
 
             attached_gates = tuple(
                 gate
@@ -199,80 +171,6 @@ class WorkflowDAG(Fingerprintable):
                 )
             )
         return tuple(entries)
-
-    @classmethod
-    def from_entries(
-        cls,
-        entries: Iterable[Any],
-        *,
-        quality_gates: Iterable[EpistemicQualityGate] | None = None,
-        task: str = "knowledge_graph",
-    ) -> WorkflowDAG:
-        """Build a :class:`WorkflowDAG` from pre-existing node or entry objects.
-
-        Parameters
-        ----------
-        entries : Iterable of Any
-            Sequence of :class:`WorkflowNode` or mocked phase entry objects.
-        quality_gates : Iterable of EpistemicQualityGate or None, optional
-            Quality gates to attach.
-        task : str, default "knowledge_graph"
-            Logical task name.
-
-        Returns
-        -------
-        WorkflowDAG
-            Constructed workflow DAG.
-        """
-        gates = ensure_quality_gates(quality_gates)
-        normalized_nodes: list[WorkflowNode] = []
-        for idx, item in enumerate(entries, start=1):
-            if isinstance(item, WorkflowNode):
-                normalized_nodes.append(item)
-                continue
-            try:
-                node_index = int(item.index)
-            except AttributeError:
-                node_index = idx
-            runner = item.runner
-            try:
-                phase_key = str(item.phase_key)
-            except AttributeError:
-                try:
-                    phase_key = str(runner.phase_key)
-                except AttributeError:
-                    phase_key = f"phase{node_index}"
-            try:
-                input_view = item.input_view
-            except AttributeError:
-                try:
-                    input_view = item.input_view_type
-                except AttributeError:
-                    input_view = None
-            try:
-                reads_kinds = frozenset(item.reads_kinds)
-            except (AttributeError, TypeError):
-                reads_kinds = frozenset()
-            try:
-                writes_kinds = frozenset(item.writes_kinds)
-            except (AttributeError, TypeError):
-                writes_kinds = frozenset()
-
-            attached = tuple(
-                g for g in gates if phase_key in g.target_phases or "*" in g.target_phases
-            )
-            normalized_nodes.append(
-                WorkflowNode(
-                    index=node_index,
-                    runner=runner,
-                    phase_key=phase_key,
-                    input_view=input_view,
-                    reads_kinds=reads_kinds,
-                    writes_kinds=writes_kinds,
-                    quality_gates=attached,
-                )
-            )
-        return cls(quality_gates=gates, task=task, nodes=normalized_nodes)
 
     @property
     def nodes(self) -> tuple[WorkflowNode, ...]:
@@ -402,12 +300,9 @@ class WorkflowDAG(Fingerprintable):
         deps: dict[str, set[str]] = {node.phase_key: set() for node in self._nodes}
         for i, node in enumerate(self._nodes):
             explicit_deps = node.explicit_dependencies
-            if explicit_deps is None:
-                try:
-                    raw_deps = node.runner.dependencies
-                    explicit_deps = tuple(raw_deps) if raw_deps is not None else None
-                except AttributeError:
-                    explicit_deps = None
+            if explicit_deps is None and isinstance(node.runner, PhaseRunner):
+                raw_deps = node.runner.dependencies
+                explicit_deps = tuple(raw_deps) if raw_deps is not None else None
 
             if explicit_deps is not None:
                 deps[node.phase_key].update(explicit_deps)
@@ -418,6 +313,34 @@ class WorkflowDAG(Fingerprintable):
             elif not node.writes_kinds and i > 0 and node.input_view is None:
                 deps[node.phase_key].add(self._nodes[i - 1].phase_key)
         return deps
+
+    def transitive_dependencies(self) -> dict[str, set[str]]:
+        """Compute the transitive closure of upstream ``phase_key`` dependencies per node.
+
+        Returns
+        -------
+        dict of str to set of str
+            Mapping from ``phase_key`` to all direct and transitive upstream
+            ``phase_key``s in the DAG.
+        """
+        direct = self.dependencies()
+        known_keys = set(direct)
+        transitive: dict[str, set[str]] = {}
+
+        for key in known_keys:
+            visited: set[str] = set()
+            stack = [u for u in direct[key] if u in known_keys]
+            while stack:
+                curr = stack.pop()
+                if curr in visited or curr == key:
+                    continue
+                visited.add(curr)
+                for parent in direct.get(curr, ()):
+                    if parent in known_keys and parent not in visited:
+                        stack.append(parent)
+            transitive[key] = visited
+
+        return transitive
 
     def topological_order(self) -> list[WorkflowNode]:
         """Return workflow nodes in a valid topological execution order.

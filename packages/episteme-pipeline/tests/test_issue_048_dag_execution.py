@@ -32,14 +32,14 @@ from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 
 
-class StubMissingPhaseKey:
+class StubMissingPhaseKey(PhaseRunner[object]):
     name = "Phase Missing Key"
 
     async def run(self, input, context: ArtifactExecutionContext) -> ArtifactCollection:
         return ArtifactCollection([])
 
 
-class StubEmptyPhaseKey:
+class StubEmptyPhaseKey(PhaseRunner[object]):
     name = "Phase Empty Key"
     phase_key = "   "
 
@@ -78,9 +78,9 @@ def test_pipeline_init_validates_phase_key_presence(tmp_path: Path, graph_store)
     cfg.execution.artifacts_dir = str(tmp_path / "artifacts")
 
     # Missing phase_key attribute
-    with pytest.raises(TypeError, match="must define a non-empty 'phase_key' attribute"):
+    with pytest.raises(TypeError, match="must define a non-empty string 'phase_key'"):
         Pipeline(
-            phases=[StubMissingPhaseKey()],  # type: ignore[list-item]
+            phases=[StubMissingPhaseKey()],
             config=cfg,
             graph_reader=graph_store,
             projection_graph=graph_store,
@@ -88,9 +88,9 @@ def test_pipeline_init_validates_phase_key_presence(tmp_path: Path, graph_store)
         )
 
     # Empty phase_key
-    with pytest.raises(TypeError, match="has invalid 'phase_key'"):
+    with pytest.raises(TypeError, match="must define a non-empty string 'phase_key'"):
         Pipeline(
-            phases=[StubEmptyPhaseKey()],  # type: ignore[list-item]
+            phases=[StubEmptyPhaseKey()],
             config=cfg,
             graph_reader=graph_store,
             projection_graph=graph_store,
@@ -132,11 +132,11 @@ def test_manifest_phase_config_fingerprints_semantic_keying(tmp_path: Path, grap
         checkpoint_store=graph_store,
     )
 
-    fps = pipeline._phase_config_fingerprints()
+    fps = pipeline.engine.phase_config_fingerprints()
     assert fps["custom_eval"] == "sha256-custom-config-v1"
     assert "phase1" in fps
 
-    manifest = pipeline._build_manifest(
+    manifest = pipeline.engine.build_manifest(
         run_id="run-test",
         pipeline_input=pytest.importorskip("episteme_pipeline.contracts.phase_contracts").PipelineInput(
             source_paths=[], bib_paths=[]
@@ -204,7 +204,7 @@ async def test_appending_post_processor_reuses_all_upstream_phases(
             RunPhaseRecord(phase_name="Phase 4", ordinal=4, phase_key="phase4", status=RunStatus.COMPLETED),
         ],
     )
-    pipeline_initial._manifest_store.write_manifest(prior)
+    pipeline_initial.manifest_store.write_manifest(prior)
 
     # New pipeline with Phases 1-4 + Theoretical Enrichment appended (5 phases)
     pipeline_with_enrichment = Pipeline(
@@ -214,7 +214,7 @@ async def test_appending_post_processor_reuses_all_upstream_phases(
         projection_graph=graph_store,
         checkpoint_store=graph_store,
     )
-    pipeline_with_enrichment._phase_config_fingerprints = lambda: {
+    pipeline_with_enrichment.engine.phase_config_fingerprints = lambda: {
         "phase1": "fp_p1",
         "phase2": "fp_p2",
         "phase3": "fp_p3",
@@ -235,7 +235,7 @@ async def test_appending_post_processor_reuses_all_upstream_phases(
         },
     )
 
-    decision = await pipeline_with_enrichment._choose_reuse_source(current_manifest)
+    decision = await pipeline_with_enrichment.engine.choose_reuse_source(current_manifest)
 
     # Phases 1-4 MUST be reused; only Theoretical Enrichment (ordinal 5) executes!
     assert decision.reused_phase_ordinals == [1, 2, 3, 4]
@@ -304,7 +304,7 @@ async def test_independent_dag_branches_do_not_transitively_invalidate(
             RunPhaseRecord(phase_name="Theoretical Enrichment", ordinal=4, phase_key="theoretical_enrichment", status=RunStatus.COMPLETED),
         ],
     )
-    pipeline._manifest_store.write_manifest(prior)
+    pipeline.manifest_store.write_manifest(prior)
 
     # Current run: only Phase 5 config changed!
     current = RunManifest(
@@ -319,7 +319,7 @@ async def test_independent_dag_branches_do_not_transitively_invalidate(
         },
     )
 
-    decision = await pipeline._choose_reuse_source(current)
+    decision = await pipeline.engine.choose_reuse_source(current)
 
     # Phase 4 is reused (trunk)
     # Phase 5 is invalidated (config changed)
@@ -370,7 +370,7 @@ async def test_modifying_branch_b_does_not_invalidate_branch_a(
             RunPhaseRecord(phase_name="Theoretical Enrichment", ordinal=4, phase_key="theoretical_enrichment", status=RunStatus.COMPLETED),
         ],
     )
-    pipeline._manifest_store.write_manifest(prior)
+    pipeline.manifest_store.write_manifest(prior)
 
     current = RunManifest(
         run_id="run-te-changed",
@@ -379,7 +379,7 @@ async def test_modifying_branch_b_does_not_invalidate_branch_a(
         phase_config_fingerprints={"phase4": "same", "phase5": "same", "phase6": "same", "theoretical_enrichment": "new-te-config"},
     )
 
-    decision = await pipeline._choose_reuse_source(current)
+    decision = await pipeline.engine.choose_reuse_source(current)
 
     # Phase 4, Phase 5, and Phase 6 are ALL reused!
     # ONLY Theoretical Enrichment (ordinal 4) is invalidated!

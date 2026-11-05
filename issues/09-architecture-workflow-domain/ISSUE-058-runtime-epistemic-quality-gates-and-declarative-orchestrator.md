@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Orchestrator Architecture, Runtime Quality Gates, Workflow Composition) |
 | **Target Package(s)** | `packages/episteme-pipeline`, `packages/epistemetrics` (`pipeline.py`, `runtime/`, `protocols/`) |
 | **Priority** | **Medium** |
-| **Status** | `Completed` |
+| **Status** | `In Progress (Post-Audit Architectural Remediation)` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/overview.md`](../../docs/architecture/overview.md), [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0007`](../../docs/adr/0007-tf-structural-correspondence.md), [`ADR-0011`](../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), [`ADR-0016`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md) |
 
 ---
@@ -52,7 +52,32 @@ Refactor [`pipeline.py`](../../packages/episteme-pipeline/episteme_pipeline/pipe
 
 ---
 
-## 4. Acceptance Criteria
+## 4. Post-Implementation Architectural Audit & Zero-Legacy Remediation Scope
 
-- [x] `EpistemicQualityGate` protocol is evaluated after each phase in the execution engine, with built-in checks for entity type collapse, cluster percolation, and conformal OOD spikes.
-- [x] `Pipeline` delegates DI construction to `PipelineFactory`, topology resolution to `WorkflowDAG`, and run execution/caching to `ArtifactExecutionEngine`.
+Following review of commit `2982acd`, the macro-level separation into `PipelineFactory`, `WorkflowDAG`, `ArtifactExecutionEngine`, and `EpistemicQualityGate` is sound, but six architectural and domain defects must be remediated under our zero-legacy standard:
+
+1. **True Topological DAG Execution & Branch-Scoped Dataflow (`WorkflowDAG` + `ArtifactExecutionEngine`)**:
+   - `WorkflowDAG` must validate acyclicity eagerly on construction, resolve dependencies across all nodes (not only backward slice `[:i]`), and `ArtifactExecutionEngine.execute()` must iterate in `workflow.topological_order()`.
+   - Each node's input `ArtifactCollection` and `lineage_fingerprint` must be scoped to its transitive upstream DAG dependencies (`transitive_dependencies(phase_key)`) rather than a single global flat `previous` collection, isolating parallel multi-branch workflows (e.g., Comparative Theory Alignment).
+   - Quality gate fingerprints must be included in `phase_config_fingerprints` / invalidation checks so modifying a gate's thresholds invalidates and re-evaluates the gated phase.
+2. **Centralized Quality Gate Event & Violation Lifecycle (OCP/DIP)**:
+   - Quality gates must be pure domain evaluators returning `QualityGateResult` without side-effecting on the event bus or raising exceptions directly. `ArtifactExecutionEngine.evaluate_phase_quality_gates()` must uniformly emit `QualityGateEvaluated`, record manifest notes, emit `QualityGateWarning`, or raise `QualityGateViolationError` for both built-in and custom gates.
+3. **Phase-Scoped Conformal Prediction Tracking & Active Calibrator Wiring (`ObservableDecisionEngine` + `ConformalCalibrationGate`)**:
+   - `ObservableDecisionEngine` must apply `self.calibrator.predict_set(result)` when `self.calibrator` is configured and `result.prediction_set is None`, instrument `evaluate_batch()` via `evaluate_questions_sequentially` (or record per-item sets/events), and scope recorded prediction sets by active phase (`clear_prediction_sets()` at phase start or phase-keyed buffer) so Phase 2/3b sets never contaminate Phase 3/4 gates.
+   - `ConformalCalibrationGate` must also support Phase 2 / 3b / 5 conformal evaluations and inspect typed `DecisionEvaluationCompleted` / phase-scoped sets cleanly.
+4. **Domain Fixes in `OntologyEntropyGate` and `PercolationQualityGate`**:
+   - `OntologyEntropyGate`: `require_nonzero_density` must default to `True` in `build_default_quality_gates()` (catching 0-entity extraction on non-empty chunks by default) and account for schema entity-type cardinality ($|T| \le 1 \implies H_{\min} = 0$).
+   - `PercolationQualityGate`: Separate L2 (`LinkedEntityArtifact` + `CanonicalizationArtifact` / L2 `FusionDecisionArtifact`) and L3 (`TheoryAtomArtifact` + L3 `FusionDecisionArtifact`) populations so `cluster_layer="both"` in Phase 5 does not conflate L2 and L3 denominators.
+5. **Eliminate Disguised `getattr` (`try/except AttributeError`) & Enforce Strict `PhaseRunner` Protocol**:
+   - Remove the 14 `try ... except AttributeError` blocks in `WorkflowDAG` and `ArtifactExecutionEngine` in favor of strict `PhaseRunner` attributes (`phase_key`, `name`, `input_view`, `reads_kinds`, `writes_kinds`, `dependencies`, `checkpoint_store`) and public `EpistemicStateView.allowed_kinds`.
+6. **Zero-Legacy `Pipeline` Facade & Unified Engine Entrypoints**:
+   - Move `run_from_phase()` and `resume_from_run()` into `ArtifactExecutionEngine`, eliminate duplicated `run()` logic, and shrink `Pipeline` to a thin facade without private `_phase_entries` / `_custom_phase_entries` mutation shims.
+
+---
+
+## 5. Acceptance Criteria
+
+- [ ] `EpistemicQualityGate` protocol is evaluated purely after each phase in `ArtifactExecutionEngine`, with centralized `QualityGateEvaluated` emission, warning/halt policy enforcement, and gate fingerprint invalidation.
+- [ ] `OntologyEntropyGate`, `PercolationQualityGate`, and `ConformalCalibrationGate` accurately evaluate phase-scoped artifacts and calibrated `ObservableDecisionEngine` prediction sets without cross-phase buffer contamination or L2/L3 denominator mixing.
+- [ ] `WorkflowDAG` validates acyclicity eagerly and `ArtifactExecutionEngine` executes in topological order with branch-isolated upstream `ArtifactCollection` and `lineage_fingerprint` scoping.
+- [ ] `Pipeline` is a thin, zero-legacy facade delegating `run`, `run_from_phase`, `resume_from_run`, `get_run_report`, `get_run_artifacts`, and `diff_artifacts` to `ArtifactExecutionEngine`, with zero `try/except AttributeError` duck-typing in `WorkflowDAG`.
