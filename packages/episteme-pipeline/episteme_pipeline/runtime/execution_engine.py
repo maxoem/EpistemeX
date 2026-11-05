@@ -760,6 +760,24 @@ class ArtifactExecutionEngine:
         if not gates:
             return []
 
+        class _GateEventSpy(EventEmitter):
+            """Contextual spy tracking whether a gate emitted QualityGateEvaluated."""
+
+            def __init__(self, inner: EventEmitter | None) -> None:
+                self._inner = inner or NoOpEventEmitter()
+                self.emitted_gate_event = False
+
+            def emit(self, event: Any) -> None:
+                if isinstance(event, QualityGateEvaluated):
+                    self.emitted_gate_event = True
+                self._inner.emit(event)
+
+            def flush(self) -> None:
+                self._inner.flush()
+
+            def get_observer_telemetry(self) -> dict[str, Any]:
+                return self._inner.get_observer_telemetry()
+
         results: list[QualityGateResult] = []
         for gate in gates:
             spy = _GateEventSpy(phase_emitter)
