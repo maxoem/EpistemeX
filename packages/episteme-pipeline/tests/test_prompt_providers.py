@@ -148,7 +148,7 @@ async def test_prompt_version_changes_fingerprint(tmp_path, graph_store):
         projection_graph=graph_store,
         checkpoint_store=graph_store,
     )
-    fps1 = pipeline1._prompt_fingerprints()
+    fps1 = pipeline1.engine.prompt_fingerprints()
 
     config2 = PipelineConfig()
     config2.phase2.ner_prompts.version = 2
@@ -159,7 +159,7 @@ async def test_prompt_version_changes_fingerprint(tmp_path, graph_store):
         projection_graph=graph_store,
         checkpoint_store=graph_store,
     )
-    fps2 = pipeline2._prompt_fingerprints()
+    fps2 = pipeline2.engine.prompt_fingerprints()
 
     assert fps1["phase2"]["ner_extraction"] != fps2["phase2"]["ner_extraction"]
     assert fps1["phase3"]["global_relation"] == fps2["phase3"]["global_relation"]

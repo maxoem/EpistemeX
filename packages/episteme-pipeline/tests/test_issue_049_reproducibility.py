@@ -243,7 +243,7 @@ def test_find_components_and_prompt_fingerprints_discover_bundles():
         checkpoint_store=MagicMock(),
     )
 
-    fps = pipeline._prompt_fingerprints()
+    fps = pipeline.engine.prompt_fingerprints()
     assert "phase3b" in fps
     assert "borderline_merge_prompt" in fps["phase3b"]
 
@@ -311,7 +311,7 @@ def test_calibrator_discovered_in_pipeline_method_fingerprints():
         decision_engine=engine,
     )
 
-    method_fps = pipeline._method_fingerprints()
+    method_fps = pipeline.engine.method_fingerprints()
     assert any("decision_engine" in k for k in method_fps)
     assert any("calibrator" in k for k in method_fps)
 
@@ -437,12 +437,12 @@ async def test_calibrator_drift_invalidates_phase_reuse(tmp_path):
         decision_engine=engine1,
     )
     pipe_input = PipelineInput(source_paths=[])
-    manifest1 = p1._build_manifest(run_id="run-1", pipeline_input=pipe_input)
+    manifest1 = p1.engine.build_manifest(run_id="run-1", pipeline_input=pipe_input)
     manifest1.status = RunStatus.COMPLETED
     manifest1.phase_records = [
         RunPhaseRecord(phase_name="Phase 1", ordinal=1, status=RunStatus.COMPLETED)
     ]
-    p1._manifest_store.write_manifest(manifest1)
+    p1.manifest_store.write_manifest(manifest1)
 
     # Recalibrate with shifted scores
     cal2 = ConformalCalibrator(alpha=0.1)
@@ -457,8 +457,8 @@ async def test_calibrator_drift_invalidates_phase_reuse(tmp_path):
         checkpoint_store=MagicMock(),
         decision_engine=engine2,
     )
-    manifest2 = p2._build_manifest(run_id="run-2", pipeline_input=pipe_input)
-    decision = await p2._choose_reuse_source(manifest2)
+    manifest2 = p2.engine.build_manifest(run_id="run-2", pipeline_input=pipe_input)
+    decision = await p2.engine.choose_reuse_source(manifest2)
 
     assert decision.reused_phase_ordinals == []
     assert decision.invalidated_phase_ordinals == [1]

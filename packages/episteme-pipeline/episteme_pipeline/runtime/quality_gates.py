@@ -163,6 +163,7 @@ class OntologyEntropyGate:
         min_entities: int = 5,
         min_entity_density: float = 0.0,
         require_nonzero_density: bool = True,
+        schema_entity_type_count: int | None = None,
         on_violation: Literal["warn", "raise"] = "warn",
         target_phases: frozenset[str] = frozenset({"phase2"}),
     ) -> None:
@@ -171,6 +172,7 @@ class OntologyEntropyGate:
         self.min_entities = min_entities
         self.min_entity_density = min_entity_density
         self.require_nonzero_density = require_nonzero_density
+        self.schema_entity_type_count = schema_entity_type_count
         self.on_violation: Literal["warn", "raise"] = on_violation
         self._target_phases = frozenset(target_phases)
 
@@ -200,6 +202,7 @@ class OntologyEntropyGate:
             "min_entities": self.min_entities,
             "min_entity_density": self.min_entity_density,
             "require_nonzero_density": self.require_nonzero_density,
+            "schema_entity_type_count": self.schema_entity_type_count,
             "on_violation": self.on_violation,
             "target_phases": sorted(self._target_phases),
         }
@@ -318,7 +321,11 @@ class OntologyEntropyGate:
                     f"entity density {entity_density:.3f} < min_entity_density {self.min_entity_density:.3f}"
                 )
 
-        if entity_count >= self.min_entities:
+        multi_type_schema = (
+            self.schema_entity_type_count is None
+            or self.schema_entity_type_count > 1
+        )
+        if entity_count >= self.min_entities and multi_type_schema:
             if entropy < self.min_entropy:
                 reasons.append(
                     f"ontological Shannon entropy H={entropy:.3f} < H_min={self.min_entropy:.3f}"
@@ -461,7 +468,12 @@ class PercolationQualityGate:
         phase_collection: ArtifactCollection,
         cumulative_collection: ArtifactCollection,
     ) -> tuple[int, int, int]:
-        """Compute population size, largest cluster size, and merge count for Phase 5."""
+        """Compute population size, largest cluster size, and merge count for Phase 5.
+
+        Separates L3 ``TheoryAtom`` clusters from L2 ``LinkedEntity`` clusters when
+        ``cluster_layer='both'`` so L2 entity IDs never inflate the L3 population
+        denominator (or vice versa), returning the worst-case layer percolation.
+        """
         fusion_envelopes = phase_collection.of_kind(
             ArtifactKind.FUSION_DECISION, latest_only=True
         )
@@ -470,16 +482,26 @@ class PercolationQualityGate:
                 ArtifactKind.FUSION_DECISION, latest_only=True
             )
 
-        alias_map: dict[str, str] = {}
-        population_ids: set[str] = set()
-
+        l3_population: set[str] = set()
         for env in cumulative_collection.of_kind(
             ArtifactKind.THEORY_ATOM, latest_only=True
         ):
             if isinstance(env.payload, TheoryAtomArtifact):
                 clean_id = _strip_artifact_prefix(env.payload.component_id)
                 if clean_id:
-                    population_ids.add(clean_id)
+                    l3_population.add(clean_id)
+
+        l2_population: set[str] = set()
+        for env in cumulative_collection.of_kind(
+            ArtifactKind.LINKED_ENTITY, latest_only=True
+        ):
+            if isinstance(env.payload, LinkedEntityArtifact):
+                clean_id = _strip_artifact_prefix(env.payload.entity_id)
+                if clean_id:
+                    l2_population.add(clean_id)
+
+        l3_alias: dict[str, str] = {}
+        l2_alias: dict[str, str] = {}
 
         for env in fusion_envelopes:
             if isinstance(env.payload, FusionDecisionArtifact):
@@ -490,8 +512,6 @@ class PercolationQualityGate:
                     for aid in env.payload.artifact_ids
                     if _strip_artifact_prefix(aid)
                 ]
-                for cid in clean_ids:
-                    population_ids.add(cid)
                 if len(clean_ids) < 2:
                     continue
                 canon_id = (
@@ -499,22 +519,42 @@ class PercolationQualityGate:
                     if env.payload.canonical_artifact_id
                     else clean_ids[0]
                 )
+                is_l2 = bool(
+                    l2_population
+                    and all(cid in l2_population for cid in clean_ids)
+                    and not any(cid in l3_population for cid in clean_ids)
+                )
+                target_pop = l2_population if is_l2 else l3_population
+                target_alias = l2_alias if is_l2 else l3_alias
+                for cid in clean_ids:
+                    target_pop.add(cid)
                 if canon_id:
-                    population_ids.add(canon_id)
+                    target_pop.add(canon_id)
                     for member_id in clean_ids:
                         if member_id != canon_id:
-                            alias_map[member_id] = canon_id
+                            target_alias[member_id] = canon_id
 
-        if not population_ids:
-            return 0, 0, 0
+        def _eval_layer(
+            pop: set[str], alias: dict[str, str]
+        ) -> tuple[int, int, int, float]:
+            if not pop:
+                return 0, 0, 0, 0.0
+            clusters: dict[str, set[str]] = {}
+            for node_id in pop:
+                rep = _resolve_alias_chain(node_id, alias)
+                clusters.setdefault(rep, set()).add(node_id)
+            max_sz = max((len(m) for m in clusters.values()), default=0)
+            return len(pop), max_sz, len(alias), float(max_sz) / float(len(pop))
 
-        clusters: dict[str, set[str]] = {}
-        for node_id in population_ids:
-            rep = _resolve_alias_chain(node_id, alias_map)
-            clusters.setdefault(rep, set()).add(node_id)
-
-        max_cluster_size = max((len(members) for members in clusters.values()), default=0)
-        return len(population_ids), max_cluster_size, len(alias_map)
+        l3_pop_sz, l3_max_sz, l3_merges, l3_ratio = _eval_layer(
+            l3_population, l3_alias
+        )
+        l2_pop_sz, l2_max_sz, l2_merges, l2_ratio = _eval_layer(
+            l2_population, l2_alias
+        )
+        if l2_merges > 0 and l2_ratio > l3_ratio:
+            return l2_pop_sz, l2_max_sz, l2_merges
+        return l3_pop_sz, l3_max_sz, l3_merges
 
     def evaluate(
         self,
@@ -672,6 +712,7 @@ class ConformalCalibrationGate:
     def _collect_prediction_set_sizes(
         self,
         phase_collection: ArtifactCollection,
+        phase_key: str | None = None,
     ) -> list[int]:
         """Extract conformal prediction set cardinalities from phase artifacts and engine."""
         sizes: list[int] = []
@@ -709,7 +750,7 @@ class ConformalCalibrationGate:
                         sizes.append(int(ps_param_size))
 
         if isinstance(self.decision_engine, ObservableDecisionEngine):
-            recorded = self.decision_engine.consume_prediction_sets()
+            recorded = self.decision_engine.consume_prediction_sets(phase_key)
             if not sizes and recorded:
                 sizes.extend(len(ps) for ps in recorded)
 
@@ -740,7 +781,9 @@ class ConformalCalibrationGate:
         QualityGateResult
             Evaluation result.
         """
-        sizes = self._collect_prediction_set_sizes(phase_collection)
+        sizes = self._collect_prediction_set_sizes(
+            phase_collection, phase_key=phase_key
+        )
         sample_count = len(sizes)
         if sample_count == 0 or sample_count < self.min_samples:
             metrics = {
@@ -833,8 +876,10 @@ def build_default_quality_gates(
         Configured ``(OntologyEntropyGate, PercolationQualityGate, ConformalCalibrationGate)``
         or empty tuple if quality gates are disabled in configuration.
     """
+    schema_type_count: int | None = None
     if isinstance(config, PipelineConfig):
         gate_cfg = config.quality_gates
+        schema_type_count = len(config.graph_schema.node_types)
     elif isinstance(config, QualityGatesConfig):
         gate_cfg = config
     else:
@@ -849,7 +894,11 @@ def build_default_quality_gates(
             max_dominant_type_ratio=gate_cfg.max_dominant_type_ratio,
             min_entities=gate_cfg.min_entities_for_entropy,
             min_entity_density=gate_cfg.min_entity_density,
-            require_nonzero_density=gate_cfg.min_entity_density > 0.0,
+            require_nonzero_density=(
+                gate_cfg.require_nonzero_entity_density
+                or gate_cfg.min_entity_density > 0.0
+            ),
+            schema_entity_type_count=schema_type_count,
             on_violation=gate_cfg.on_violation,
         ),
         PercolationQualityGate(

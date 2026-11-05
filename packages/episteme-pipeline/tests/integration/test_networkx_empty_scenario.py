@@ -65,19 +65,19 @@ def test_persistence_with_empty_networkx_graph():
             # Verify success
             assert path.exists(), "Manifest should be written successfully"
             assert "empty-networkx-graph-run.json" in str(path)
-            print(f"✅ SUCCESS: Manifest written despite empty NetworkX graph at {path}")
+            print(f"☼ SUCCESS: Manifest written despite empty NetworkX graph at {path}")
             
             # Verify content
             content = path.read_text()
             assert "empty-networkx-graph-run" in content
             assert "completed" in content.lower()
-            print("✅ SUCCESS: Content verification passed")
+            print("☼ SUCCESS: Content verification passed")
             
             # Test reading back
             read_manifest = store.read_manifest("empty-networkx-graph-run")
             assert read_manifest is not None
             assert read_manifest.run_id == "empty-networkx-graph-run"
-            print("✅ SUCCESS: Round-trip reading works")
+            print("☼ SUCCESS: Round-trip reading works")
             
         finally:
             os.chdir(original_cwd)
@@ -119,12 +119,12 @@ def test_persistence_with_nodes_but_no_edges():
             # Verify
             assert path.exists(), "Manifest should be written successfully"
             assert "nodes-no-edges-run.json" in str(path)
-            print(f"✅ SUCCESS: Manifest written for partial results at {path}")
+            print(f"☼ SUCCESS: Manifest written for partial results at {path}")
             
             # Content verification
             content = path.read_text()
             assert "nodes-no-edges-run" in content
-            print("✅ SUCCESS: Content verification passed")
+            print("☼ SUCCESS: Content verification passed")
             
         finally:
             os.chdir(original_cwd)
@@ -164,12 +164,12 @@ def test_multiple_empty_scenarios():
                     path = store.write_manifest(manifest)
                     assert path.exists(), f"Manifest {run_id} should exist"
                     success_count += 1
-                    print(f"  ✅ {description}: SUCCESS")
+                    print(f"  ☼ {description}: SUCCESS")
                 except Exception as e:
                     print(f"  ❌ {description}: FAILED - {e}")
                     
             assert success_count == len(test_cases), f"All {len(test_cases)} writes should succeed"
-            print(f"✅ SUCCESS: All {success_count} rapid writes completed successfully")
+            print(f"☼ SUCCESS: All {success_count} rapid writes completed successfully")
             
         finally:
             os.chdir(original_cwd)
@@ -184,9 +184,9 @@ if __name__ == "__main__":
         test_persistence_with_nodes_but_no_edges() 
         test_multiple_empty_scenarios()
         print("\n🎉 ALL NETWORKX INTEGRATION TESTS PASSED!")
-        print("✅ Empty NetworkX graphs no longer cause FileNotFoundError!")
-        print("✅ Partial results (nodes-only) work correctly!") 
-        print("✅ Rapid multiple writes are reliable!")
+        print("☼ Empty NetworkX graphs no longer cause FileNotFoundError!")
+        print("☼ Partial results (nodes-only) work correctly!") 
+        print("☼ Rapid multiple writes are reliable!")
     except Exception as e:
         print(f"\n💥 TEST FAILED: {e}")
         raise

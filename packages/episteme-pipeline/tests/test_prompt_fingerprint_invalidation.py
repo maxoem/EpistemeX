@@ -8,12 +8,13 @@ from episteme_pipeline.artifacts.execution import (
 from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 
 
 @pytest.mark.asyncio
 async def test_prompt_fingerprints_includes_all_prompts(tmp_path, graph_store):
-    """_prompt_fingerprints returns prompts grouped by phase."""
+    """prompt_fingerprints returns prompts grouped by phase."""
     config = PipelineConfig()
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
@@ -26,7 +27,7 @@ async def test_prompt_fingerprints_includes_all_prompts(tmp_path, graph_store):
         checkpoint_store=graph_store,
     )
 
-    fps = pipeline._prompt_fingerprints()
+    fps = pipeline.engine.prompt_fingerprints()
 
     # Should have entries for all active phase keys
     assert "phase2" in fps
@@ -45,7 +46,7 @@ async def test_prompt_fingerprints_includes_all_prompts(tmp_path, graph_store):
 
 @pytest.mark.asyncio
 async def test_prompt_fingerprints_are_deterministic(tmp_path, graph_store):
-    """Re-running _prompt_fingerprints returns identical values."""
+    """Re-running prompt_fingerprints returns identical values."""
     config = PipelineConfig()
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
@@ -58,10 +59,10 @@ async def test_prompt_fingerprints_are_deterministic(tmp_path, graph_store):
         checkpoint_store=graph_store,
     )
 
-    fps1 = pipeline._prompt_fingerprints()
+    fps1 = pipeline.engine.prompt_fingerprints()
     assert len(fps1) == 4
 
-    fps2 = pipeline._prompt_fingerprints()
+    fps2 = pipeline.engine.prompt_fingerprints()
     assert fps1 == fps2
 
 
@@ -79,7 +80,7 @@ async def test_prompt_fingerprints_differ_when_template_changes(tmp_path, graph_
         projection_graph=graph_store,
         checkpoint_store=graph_store,
     )
-    fps1 = pipeline1._prompt_fingerprints()
+    fps1 = pipeline1.engine.prompt_fingerprints()
 
     # Create a config with a modified prompt
     config2 = PipelineConfig()
@@ -94,7 +95,7 @@ async def test_prompt_fingerprints_differ_when_template_changes(tmp_path, graph_
         projection_graph=graph_store,
         checkpoint_store=graph_store,
     )
-    fps2 = pipeline2._prompt_fingerprints()
+    fps2 = pipeline2.engine.prompt_fingerprints()
 
     # ner_extraction should differ
     assert fps1["phase2"]["ner_extraction"] != fps2["phase2"]["ner_extraction"]
@@ -110,7 +111,7 @@ async def test_prompt_in_method_fingerprints(tmp_path, graph_store):
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
 
-    class StubPhase:
+    class StubPhase(PhaseRunner[object]):
         name = "Phase 2: Entity & Local Relation Discovery"
         phase_key = "phase2"
 
@@ -125,8 +126,8 @@ async def test_prompt_in_method_fingerprints(tmp_path, graph_store):
         checkpoint_store=graph_store,
     )
 
-    method_fps = pipeline._method_fingerprints()
-    prompt_fps = pipeline._prompt_fingerprints()
+    method_fps = pipeline.engine.method_fingerprints()
+    prompt_fps = pipeline.engine.prompt_fingerprints()
 
     # Should have prompt fingerprints under the phase key
     phase_prefix = f"{StubPhase.name}.prompt."
@@ -147,7 +148,7 @@ async def test_method_fingerprint_invalidates_on_prompt_change(tmp_path, graph_s
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
 
-    class StubPhase:
+    class StubPhase(PhaseRunner[object]):
         name = "Phase 2: Entity & Local Relation Discovery"
         phase_key = "phase2"
 
@@ -163,7 +164,7 @@ async def test_method_fingerprint_invalidates_on_prompt_change(tmp_path, graph_s
         checkpoint_store=graph_store,
     )
 
-    default_fps = pipeline._prompt_fingerprints()
+    default_fps = pipeline.engine.prompt_fingerprints()
 
     prior = RunManifest(
         run_id="run-old",
@@ -182,14 +183,10 @@ async def test_method_fingerprint_invalidates_on_prompt_change(tmp_path, graph_s
             ),
         ],
     )
-    pipeline._manifest_store.write_manifest(prior)
-    pipeline._artifact_store = JsonArtifactStore(tmp_path / "artifacts")
+    pipeline.manifest_store.write_manifest(prior)
+    pipeline.artifact_store = JsonArtifactStore(tmp_path / "artifacts")
 
-    async def mock_stale(_prior_run_id: str):
-        return {}
-
-    pipeline._compute_stale_phases = mock_stale
-    pipeline._phase_config_fingerprints = lambda: {"phase2": default_fps}
+    pipeline.engine.phase_config_fingerprints = lambda: {"phase2": default_fps}
 
     # Now simulate changed prompt in current run
     changed_ner_fp = "changed_ner_extraction_fingerprint"
@@ -200,9 +197,9 @@ async def test_method_fingerprint_invalidates_on_prompt_change(tmp_path, graph_s
             f"{StubPhase.name}.prompt.ner_extraction": changed_ner_fp,
         }
 
-    pipeline._method_fingerprints = changed_method_fps
+    pipeline.engine.method_fingerprints = changed_method_fps
 
-    decision = await pipeline._choose_reuse_source(
+    decision = await pipeline.engine.choose_reuse_source(
         RunManifest(
             run_id="run-new",
             status=RunStatus.RUNNING,

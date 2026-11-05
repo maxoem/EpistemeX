@@ -39,15 +39,12 @@ class PhaseRunner[InputT](ABC):
 
     #: Human-readable phase name. **Display only** — appears in manifests,
     #: reports and logs. Never dispatch on it.
-    name: ClassVar[str]
+    name: ClassVar[str] = ""
 
     #: Stable machine key for this phase. Part of the orchestrator contract:
-    #: the phase's config block is ``getattr(PipelineConfig, phase_key)`` and
-    #: its persistence toggle is
-    #: ``getattr(ExecutionConfig, f"persist_{phase_key}_artifacts")``.
-    #: ``Pipeline.__init__`` validates both, so a typo fails at composition
-    #: time rather than silently selecting the wrong config.
-    phase_key: ClassVar[str]
+    #: the phase's config block is ``PipelineConfig.get_phase_config(phase_key)`` and
+    #: its persistence toggle is ``ExecutionConfig.should_persist_artifacts(phase_key)``.
+    phase_key: ClassVar[str] = ""
 
     #: Artifact view class this phase consumes, e.g. ``Phase1ArtifactsView``.
     #: ``None`` means the phase is fed the raw ``PipelineInput`` — Phase 1 only.

@@ -18,10 +18,11 @@ from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.domain import L1Chunk, L1Document, L2Entity, L2Triple
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import ExecutionResult, RunStatus
 
 
-class StubPhase1:
+class StubPhase1(PhaseRunner[PipelineInput]):
     name = "Phase 1: Data Foundation"
     phase_key = "phase1"
 
@@ -47,9 +48,10 @@ class StubPhase1:
         ])
 
 
-class StubPhase2:
+class StubPhase2(PhaseRunner[Phase1ArtifactsView]):
     name = "Phase 2: Entity & Local Relation Discovery"
     phase_key = "phase2"
+    input_view = Phase1ArtifactsView
 
     async def run(self, input: Phase1ArtifactsView, context: ArtifactExecutionContext) -> ArtifactCollection:
         entity = L2Entity(id="entity-1", label="PERSON", name="Kant", source_chunk_ids=["chunk-1"])
@@ -60,7 +62,7 @@ class StubPhase2:
         return ArtifactCollection([mention, linked, relation])
 
 
-class StubPhase3:
+class StubPhase3(PhaseRunner[object]):
     name = "Phase 3: Global Relation Extraction"
     phase_key = "phase3"
 
@@ -68,7 +70,7 @@ class StubPhase3:
         return ArtifactCollection([])
 
 
-class StubPhase3First:
+class StubPhase3First(PhaseRunner[Phase2ArtifactsView]):
     name = "Phase 3: Global Relation Extraction"
     phase_key = "phase3"
     input_view = Phase2ArtifactsView

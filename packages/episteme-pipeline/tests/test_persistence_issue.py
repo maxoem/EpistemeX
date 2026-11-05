@@ -56,13 +56,10 @@ def test_file_creation_scenario():
                 parsed = json.loads(content)
                 assert parsed["run_id"] == run_id, "Run ID should match"
                 print("SUCCESS: Manifest file is readable and correct")
-                
-                return True
-                
             except Exception as e:
                 print(f"ERROR: Failed to write manifest: {e}")
                 print(f"Error type: {type(e).__name__}")
-                return False
+                raise
     finally:
         os.chdir(original_cwd)
 
@@ -97,7 +94,7 @@ def test_multiple_writes():
                     print(f"  Write {i+1}: FAILED - {e}")
                     
             print(f"Successfully wrote {success_count}/5 manifests")
-            return success_count == 5
+            assert success_count == 5
     finally:
         os.chdir(original_cwd)
 
@@ -108,7 +105,7 @@ if __name__ == "__main__":
     success2 = test_multiple_writes()
     
     if success1 and success2:
-        print("\n✅ ALL TESTS PASSED - The FileNotFoundError issue appears to be resolved!")
+        print("\n☼ ALL TESTS PASSED - The FileNotFoundError issue appears to be resolved!")
     else:
         print("\n❌ SOME TESTS FAILED - The issue may still exist")
         

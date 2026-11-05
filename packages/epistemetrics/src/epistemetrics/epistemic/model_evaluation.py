@@ -130,7 +130,7 @@ class ModelComponentEvaluationResult(BaseModel):
         str
             GitHub-flavored Markdown report.
         """
-        status_badge = "✅ PASSED (Subsumes Capabilities)" if self.is_subsumed else "❌ FAILED (Capability Deficit)"
+        status_badge = "☼ PASSED (Subsumes Capabilities)" if self.is_subsumed else "❌ FAILED (Capability Deficit)"
         lines = [
             "# Formal Structuralist Model Evaluation Report",
             "",
@@ -138,7 +138,7 @@ class ModelComponentEvaluationResult(BaseModel):
             "",
             "## Quantitative Benchmark Metrics",
             f"- **Model Component Completeness (MCC):** {self.mcc:.4f}",
-            f"- **Axiomatic Omission Rate (AOR):** {self.aor:.4f} {'(Zero Omission ✅)' if self.aor == 0.0 else '(Laws Omitted ❌)'}",
+            f"- **Axiomatic Omission Rate (AOR):** {self.aor:.4f} {'(Zero Omission ☼)' if self.aor == 0.0 else '(Laws Omitted ❌)'}",
             f"- **Property Fidelity Score (PFS):** {self.pfs:.4f}",
             f"- **Text Anchor Grounding IoU ($AG_{{IoU}}$):** {self.ag_iou:.4f}",
             f"- **Relational Edge Fidelity:** {self.edge_fidelity:.4f}",

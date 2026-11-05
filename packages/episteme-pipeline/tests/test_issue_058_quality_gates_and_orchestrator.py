@@ -703,7 +703,7 @@ async def test_execution_engine_halts_on_quality_gate_violation_before_downstrea
     assert p3.run_count == 0
 
     # Manifest must be persisted as FAILED with quality gate diagnostic note
-    manifest = pipeline._manifest_store.read_manifest("run-halt-test")
+    manifest = pipeline.manifest_store.read_manifest("run-halt-test")
     assert manifest is not None
     assert manifest.status == RunStatus.FAILED
     p2_rec = next(r for r in manifest.phase_records if r.phase_key == "phase2")
@@ -711,7 +711,7 @@ async def test_execution_engine_halts_on_quality_gate_violation_before_downstrea
     assert "quality_gate.ontology_entropy_gate" in p2_rec.notes
 
     # Corrupted Phase 2 artifacts must NOT have been persisted to the artifact store
-    persisted = await pipeline._artifact_store.list_run_artifacts("run-halt-test")
+    persisted = await pipeline.artifact_store.list_run_artifacts("run-halt-test")
     persisted_phases = {a.phase_name for a in persisted}
     assert "Phase 2: Entity & Local Relation Discovery" not in persisted_phases
 
@@ -799,4 +799,118 @@ async def test_multi_branch_workflow_dag_execution_and_selective_reuse(
     assert res2.report.reused_phase_ordinals == [1, 2]
     assert res2.report.invalidated_phase_ordinals == [3, 4]
     assert (p1.run_count, p2a.run_count, p2b.run_count, p_join.run_count) == (1, 1, 2, 2)
+
+
+@pytest.mark.asyncio
+async def test_branch_isolation_and_gate_fingerprint_invalidation(
+    tmp_path: Path,
+) -> None:
+    """Verify parallel DAG branches only receive their transitive upstream artifacts and gate threshold changes invalidate gated phases."""
+    config = PipelineConfig(quality_gates=QualityGatesConfig(enabled=False))
+    config.execution.runs_dir = str(tmp_path / "runs")
+    config.execution.artifacts_dir = str(tmp_path / "artifacts")
+
+    doc_path = tmp_path / "corpus.md"
+    doc_path.write_text("# Corpus\nParagraph.", encoding="utf-8")
+    p_input = PipelineInput(source_paths=[str(doc_path)])
+
+    class _ContextInspectingRunner(_StubPhaseRunner):
+        def __init__(self, **kwargs: Any) -> None:
+            super().__init__(**kwargs)
+            self.seen_previous_ids: list[str] = []
+            self.seen_lineage_fp: str = ""
+
+        async def run(
+            self, input: Any, context: ArtifactExecutionContext
+        ) -> ArtifactCollection:
+            self.run_count += 1
+            self.seen_previous_ids = (
+                [a.artifact_id for a in context.previous.artifacts]
+                if context.previous is not None
+                else []
+            )
+            self.seen_lineage_fp = context.lineage_fingerprint
+            return ArtifactCollection(list(self.artifacts_to_emit))
+
+    c1_env = _make_chunk_env("c1")
+    e_branch_a = _make_linked_entity_env("e_a", "Concept")
+    e_branch_a.phase_name = "Phase 2A"
+
+    p1 = _ContextInspectingRunner(
+        name="Phase 1: Document Ingestion & Foundation",
+        phase_key="phase1",
+        writes_kinds=frozenset({ArtifactKind.CHUNK}),
+        artifacts_to_emit=[c1_env],
+    )
+    p2a = _ContextInspectingRunner(
+        name="Phase 2A",
+        phase_key="phase2a",
+        reads_kinds=frozenset({ArtifactKind.CHUNK}),
+        writes_kinds=frozenset({ArtifactKind.LINKED_ENTITY}),
+        artifacts_to_emit=[e_branch_a],
+    )
+    p2b = _ContextInspectingRunner(
+        name="Phase 2B",
+        phase_key="phase2b",
+        reads_kinds=frozenset({ArtifactKind.CHUNK}),
+        writes_kinds=frozenset({ArtifactKind.THEORY_ATOM}),
+        artifacts_to_emit=[],
+    )
+
+    gate_v1 = OntologyEntropyGate(
+        min_entropy=0.0,
+        require_nonzero_density=False,
+        target_phases=frozenset({"phase2b"}),
+    )
+    workflow_v1 = WorkflowDAG(
+        phases=[p1, p2a, p2b],
+        quality_gates=[gate_v1],
+    )
+    engine_v1 = ArtifactExecutionEngine(workflow=workflow_v1, config=config)
+    await engine_v1.run(p_input, run_id="run-branch-1")
+
+    # Branch 2B only depends on Phase 1 (CHUNK), NOT Phase 2A (LINKED_ENTITY)
+    assert p2b.seen_previous_ids == [c1_env.artifact_id]
+    assert e_branch_a.artifact_id not in p2b.seen_previous_ids
+
+    # Modifying quality gate threshold on phase2b must invalidate phase2b while reusing phase1 and phase2a
+    gate_v2 = OntologyEntropyGate(
+        min_entropy=0.95,
+        require_nonzero_density=False,
+        target_phases=frozenset({"phase2b"}),
+    )
+    workflow_v2 = WorkflowDAG(
+        phases=[p1, p2a, p2b],
+        quality_gates=[gate_v2],
+    )
+    engine_v2 = ArtifactExecutionEngine(workflow=workflow_v2, config=config)
+    res2 = await engine_v2.run(p_input, run_id="run-branch-2")
+    assert res2.report.reused_phase_ordinals == [1, 2]
+    assert res2.report.invalidated_phase_ordinals == [3]
+
+
+@pytest.mark.asyncio
+async def test_phase_scoped_prediction_sets_do_not_bleed_across_phases() -> None:
+    """Verify ObservableDecisionEngine.start_phase isolates prediction sets per phase."""
+    inner = MockJevDecisionEngine(default_confidence_threshold=0.85)
+    inner.register_choice_response("entity link?", prediction_set=[])
+    obs_engine = ObservableDecisionEngine(inner=inner, stochastic_audit_rate=0.0)
+
+    obs_engine.start_phase("phase2")
+    await obs_engine.evaluate_choice(
+        state="ctx", question="Entity link?", options=["e1", "e2"]
+    )
+    assert len(obs_engine.recorded_prediction_sets) == 1
+
+    # Starting phase3 clears the active phase buffer so phase2's empty set cannot bleed into phase3
+    obs_engine.start_phase("phase3")
+    gate = ConformalCalibrationGate(
+        max_empty_rate=0.10,
+        decision_engine=obs_engine,
+        on_violation="raise",
+    )
+    res = gate.evaluate("phase3", ArtifactCollection([]), ArtifactCollection([]))
+    assert res.passed is True
+    assert res.metrics["sample_count"] == 0.0
+
 

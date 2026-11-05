@@ -236,8 +236,8 @@ async def test_pipeline_resume_from_run_observability_context() -> None:
         projection_graph=MagicMock(),
         checkpoint_store=MagicMock(),
     )
-    pipeline._execute = fake_execute  # type: ignore[assignment]
-    pipeline._hydrate_previous_collection = AsyncMock(return_value=None)  # type: ignore[assignment]
+    pipeline.engine.execute = fake_execute  # type: ignore[assignment]
+    pipeline.engine.hydrate_previous_collection = AsyncMock(return_value=None)  # type: ignore[assignment]
 
     p_input = PipelineInput(source_paths=[], documents=[])
     await pipeline.resume_from_run(run_id="run-original-123", input=p_input, from_phase=2)

@@ -8,12 +8,14 @@ from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.phases.phase1_foundation import Phase1Runner
 from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import RunStatus
 from episteme_pipeline.runs.persistence import JsonRunManifestStore
 
 
-class _NoopPhase:
+class _NoopPhase(PhaseRunner[object]):
     name = "Phase X: Noop"
+    phase_key = "phase_noop"
 
     async def run(self, input, context):
         # Pass artifacts-through without writes

@@ -7,10 +7,11 @@ import pytest
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.persistence import JsonRunManifestStore
 
 
-class _Noop:
+class _Noop(PhaseRunner[object]):
     name = "Phase X: Noop"
     phase_key = "phase_noop"
     async def run(self, input, context):

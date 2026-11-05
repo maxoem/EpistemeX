@@ -1,10 +1,10 @@
 # Formal Structuralist Model Evaluation Report
 
-**Capability Subsumption ($G_{pred} \succeq_{cap} G_{ref}$):** ✅ PASSED (Subsumes Capabilities)
+**Capability Subsumption ($G_{pred} \succeq_{cap} G_{ref}$):** ☼ PASSED (Subsumes Capabilities)
 
 ## Quantitative Benchmark Metrics
 - **Model Component Completeness (MCC):** 1.0000
-- **Axiomatic Omission Rate (AOR):** 0.0000 (Zero Omission ✅)
+- **Axiomatic Omission Rate (AOR):** 0.0000 (Zero Omission ☼)
 - **Property Fidelity Score (PFS):** 0.9583
 - **Text Anchor Grounding IoU ($AG_{IoU}$):** 1.0000
 - **Relational Edge Fidelity:** 1.0000
@@ -21,9 +21,9 @@
 
 # Specialization Poset Hierarchy Evaluation Report
 
-- **DAG Property & Strict Partial Order:** ✅ PASSED (Acyclic DAG)
-- **Root Element Conformity ($B(TN) = \{T_0\}$):** ✅ PASSED (Root: `str:TE_DissF`)
-- **Hierarchical Model Inheritance Subsumption:** ✅ PASSED (100.00%)
+- **DAG Property & Strict Partial Order:** ☼ PASSED (Acyclic DAG)
+- **Root Element Conformity ($B(TN) = \{T_0\}$):** ☼ PASSED (Root: `str:TE_DissF`)
+- **Hierarchical Model Inheritance Subsumption:** ☼ PASSED (100.00%)
 
 ## Quantitative Benchmark Metrics
 - **Poset Transitive Reduction F1:** 1.0000 (Precision: 1.0000, Recall: 1.0000)

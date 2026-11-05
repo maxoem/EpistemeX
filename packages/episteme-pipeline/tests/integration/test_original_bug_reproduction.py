@@ -37,7 +37,7 @@ def test_original_bug_is_fixed():
             
             # Step 3: Verify the directory was created 
             assert runs_dir.exists(), "Directory should be created automatically"
-            print("✅ Directory creation works correctly")
+            print("☼ Directory creation works correctly")
             
             # Step 4: Create a manifest (representing an empty run)
             manifest = RunManifest(
@@ -55,12 +55,12 @@ def test_original_bug_is_fixed():
             # Step 6: Verify success
             assert path.exists(), "Manifest file should exist"
             assert "run-f12281a0-1267-43fd-8dfa-4c23d9e35789.json" in str(path)
-            print(f"✅ SUCCESS: No FileNotFoundError! Manifest written to {path}")
+            print(f"☼ SUCCESS: No FileNotFoundError! Manifest written to {path}")
             
             # Step 7: Verify content
             content = path.read_text()
             assert "f12281a0-1267-43fd-8dfa-4c23d9e35789" in content
-            print("✅ SUCCESS: Manifest content is correct")
+            print("☼ SUCCESS: Manifest content is correct")
             
         finally:
             os.chdir(original_cwd)
@@ -115,7 +115,7 @@ def test_what_would_happen_without_proper_directory_handling():
                         fake_path = runs_dir / "test-manifest.json" 
                         fake_path.write_text("{}")  # This should fail
                         
-                    print("✅ Demonstrated that raw file operations fail without directories")
+                    print("☼ Demonstrated that raw file operations fail without directories")
                         
                 except Exception as e:
                     if "No such file or directory" in str(e):
@@ -135,9 +135,9 @@ if __name__ == "__main__":
         test_original_bug_is_fixed()
         test_what_would_happen_without_proper_directory_handling()
         print("\n🎯 CONCLUSION:")
-        print("✅ The original FileNotFoundError bug has been fixed!")
-        print("✅ Directory creation now works reliably!")
-        print("✅ Empty results no longer cause persistence failures!")
+        print("☼ The original FileNotFoundError bug has been fixed!")
+        print("☼ Directory creation now works reliably!")
+        print("☼ Empty results no longer cause persistence failures!")
     except Exception as e:
         print(f"\n💥 UNEXPECTED FAILURE: {e}")
         raise

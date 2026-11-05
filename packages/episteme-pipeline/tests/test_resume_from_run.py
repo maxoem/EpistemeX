@@ -8,10 +8,11 @@ from episteme_pipeline.artifacts.execution import (
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 
 
-class StubPhase:
+class StubPhase(PhaseRunner[object]):
     def __init__(self, name: str, phase_key: str | None = None):
         self.name = name
         self.phase_key = phase_key or name.lower().split(":")[0].replace(" ", "")
@@ -49,7 +50,7 @@ async def test_resume_from_run_persists_new_execution_result(tmp_path: Path, gra
             RunPhaseRecord(phase_name="Phase 2: Entity & Local Relation Discovery", ordinal=2, status=RunStatus.COMPLETED),
         ],
     )
-    pipeline._manifest_store.write_manifest(prior)
+    pipeline.manifest_store.write_manifest(prior)
 
     execution = await pipeline.resume_from_run("run-old", PipelineInput(source_paths=["docs/example.md"]))
 

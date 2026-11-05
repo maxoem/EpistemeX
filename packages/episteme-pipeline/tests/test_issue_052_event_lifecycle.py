@@ -222,7 +222,7 @@ async def test_reused_phases_emit_phase_reused_events(tmp_path):
             )
         ],
     )
-    pipeline._manifest_store.write_manifest(prior_manifest)
+    pipeline.manifest_store.write_manifest(prior_manifest)
 
     invalidation_decision = InvalidationDecision(
         resume_point=ResumePoint(run_id="run-prior", phase_ordinal=1, phase_name=runner1.name),
@@ -231,8 +231,8 @@ async def test_reused_phases_emit_phase_reused_events(tmp_path):
         reason="clean-cache-hit",
     )
 
-    # Calling _execute directly with reused phases (start_index = 2, beyond 1)
-    result = await pipeline._execute(
+    # Calling execute directly with reused phases (start_index = 2, beyond 1)
+    result = await pipeline.engine.execute(
         run_id="run-new",
         manifest=manifest,
         start_index=2,

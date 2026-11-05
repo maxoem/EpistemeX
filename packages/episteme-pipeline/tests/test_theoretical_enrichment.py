@@ -523,7 +523,7 @@ def test_dynamic_pipeline_runner_injection():
         event_emitter=NoOpEventEmitter(),
     )
 
-    entries = pipe._phase_entries
+    entries = pipe.workflow.nodes
     assert len(entries) == 1
     assert entries[0].phase_key == "theoretical_enrichment"
     assert entries[0].name == "Theoretical Enrichment & Tenability Evaluation"
@@ -532,8 +532,10 @@ def test_dynamic_pipeline_runner_injection():
 
 def test_pipeline_for_task_with_post_processors():
     """Verify that Pipeline.for_task accepts and appends post_processors cleanly."""
+    from typing import Any
     from unittest.mock import MagicMock
 
+    from episteme_pipeline.artifacts.execution import ArtifactCollection
     from episteme_pipeline.pipeline import Pipeline
     from episteme_pipeline.protocols.phase_runner import PhaseRunner
 
@@ -541,10 +543,15 @@ def test_pipeline_for_task_with_post_processors():
         theoretical_enrichment=TheoreticalEnrichmentConfig(enabled=False)
     )
 
-    mock_post_proc = MagicMock(spec=PhaseRunner)
-    mock_post_proc.name = "Custom Evaluation Post-Processor"
-    mock_post_proc.phase_key = "custom_post_processor"
-    mock_post_proc.input_view = Phase4ArtifactsView
+    class CustomPostProcessor(PhaseRunner[Phase4ArtifactsView]):
+        name = "Custom Evaluation Post-Processor"
+        phase_key = "custom_post_processor"
+        input_view = Phase4ArtifactsView
+
+        async def run(self, input: Phase4ArtifactsView, context: Any) -> ArtifactCollection:
+            return ArtifactCollection([])
+
+    mock_post_proc = CustomPostProcessor()
 
     pipe = Pipeline.for_task(
         task="knowledge_graph",

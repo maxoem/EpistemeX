@@ -337,16 +337,16 @@ async def test_pipeline_invalidates_when_decision_engine_changes(tmp_path, graph
             ),
         ],
     )
-    pipeline._manifest_store.write_manifest(prior)
+    pipeline.manifest_store.write_manifest(prior)
 
-    current_manifest = pipeline._build_manifest(
+    current_manifest = pipeline.engine.build_manifest(
         run_id="run-new",
         pipeline_input=MagicMock(source_paths=[], bib_paths=[], metadata={}, structural_anchor=None),
     )
     current_manifest.input_fingerprint = "same-input"
     current_manifest.phase_config_fingerprints = {"phase2": "same"}
 
-    decision = await pipeline._choose_reuse_source(current_manifest)
+    decision = await pipeline.engine.choose_reuse_source(current_manifest)
 
     assert 1 in decision.invalidated_phase_ordinals, "Phase 2 must be invalidated due to decision engine change"
     assert "method-changed" in decision.reason
@@ -370,7 +370,7 @@ def test_pipeline_manifest_captures_nested_component_hierarchy(tmp_path, graph_s
         checkpoint_store=graph_store,
     )
 
-    manifest = pipeline._build_manifest(
+    manifest = pipeline.engine.build_manifest(
         run_id="run-hierarchy",
         pipeline_input=MagicMock(source_paths=[], bib_paths=[], metadata={}, structural_anchor=None),
     )

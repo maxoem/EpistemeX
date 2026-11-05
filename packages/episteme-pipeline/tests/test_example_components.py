@@ -49,23 +49,22 @@ def test_reporting_utilities():
     assert "completed" in text_output
     assert "entities: 0" in text_output
     assert "relations: 0" in text_output
-    print("✅ Text formatting works")
+    print("☼ Text formatting works")
     
     # Test markdown formatting
     md_output = format_markdown(report, manifest)
     assert "`test-run-12345`" in md_output
     assert "`completed`" in md_output
     assert "`entities`" in md_output
-    print("✅ Markdown formatting works")
+    print("☼ Markdown formatting works")
     
     # Test JSON formatting
     json_dict = format_json(report, manifest)
     assert json_dict["run_id"] == "test-run-12345"
     assert json_dict["status"] == "completed"
     assert json_dict["artifacts_by_kind"]["entities"] == 0
-    print("✅ JSON formatting works")
-    
-    return True
+    print("☼ JSON formatting works")
+
 
 def test_cli_parsing_simulation():
     """Simulate CLI argument parsing to verify our additions work."""
@@ -79,9 +78,8 @@ def test_cli_parsing_simulation():
     
     # Since we can't easily test argparse without importing the full script,
     # let's verify that the code at least compiles with these arguments
-    print("✅ CLI argument definitions are present in source")
-    
-    return True
+    print("☼ CLI argument definitions are present in source")
+
 
 def test_persistence_with_empty_results():
     """Test that persistence works with the kinds of empty results that caused issues."""
@@ -122,11 +120,9 @@ def test_persistence_with_empty_results():
             assert "f12281a0-1267-43fd-8dfa-4c23d9e35789" in content
             assert "completed" in content.lower()
             
-            print("✅ Persistence with empty results works (original FileNotFoundError fixed)")
+            print("☼ Persistence with empty results works (original FileNotFoundError fixed)")
     finally:
         os.chdir(original_cwd)
-    
-    return True
 
 if __name__ == "__main__":
     print("🧪 Testing Example Script Components...")
@@ -138,9 +134,9 @@ if __name__ == "__main__":
         
         if success1 and success2 and success3:
             print("\n🎉 ALL COMPONENT TESTS PASSED!")
-            print("✅ Reporting utilities work correctly")
-            print("✅ CLI arguments are defined") 
-            print("✅ Persistence handles empty results (FileNotFoundError fixed)")
+            print("☼ Reporting utilities work correctly")
+            print("☼ CLI arguments are defined") 
+            print("☼ Persistence handles empty results (FileNotFoundError fixed)")
             print("\nThe example script modifications are working correctly.")
         else:
             print("\n❌ Some component tests failed")

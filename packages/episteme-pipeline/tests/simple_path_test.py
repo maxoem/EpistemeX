@@ -33,16 +33,15 @@ def test_path_creation():
                 run_file.write_text('{"test": "data"}')
                 print(f"File created successfully: {run_file.exists()}")
                 print("SUCCESS: No FileNotFoundError!")
-                return True
             except Exception as e:
                 print(f"ERROR: {e}")
-                return False
+                raise
     finally:
         os.chdir(original_cwd)
 
 if __name__ == "__main__":
     success = test_path_creation()
     if success:
-        print("\n✅ Path creation works fine - the issue might be elsewhere")
+        print("\n☼ Path creation works fine - the issue might be elsewhere")
     else:
         print("\n❌ Path creation failed")

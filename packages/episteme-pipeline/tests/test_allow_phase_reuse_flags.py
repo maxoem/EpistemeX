@@ -8,9 +8,10 @@ from episteme_pipeline.artifacts.execution import (
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 
 
-class StubPhase:
+class StubPhase(PhaseRunner[object]):
     def __init__(self, name: str, phase_key: str | None = None):
         self.name = name
         self.phase_key = phase_key or name.lower().split(":")[0].replace(" ", "")

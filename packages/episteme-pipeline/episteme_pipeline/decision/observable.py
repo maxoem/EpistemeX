@@ -75,16 +75,53 @@ class ObservableDecisionEngine:
         self.seed = seed
         self.task_id = task_id
         self.calibrator = calibrator
+        self.active_phase_key: str | None = None
         self.recorded_prediction_sets: list[list[str]] = []
+        self.prediction_sets_by_phase: dict[str, list[list[str]]] = {}
 
-    def consume_prediction_sets(self) -> list[list[str]]:
-        """Return and clear conformal prediction sets recorded since the last check.
+    def start_phase(self, phase_key: str) -> None:
+        """Scope conformal prediction set recording to ``phase_key`` and reset its buffer.
+
+        Parameters
+        ----------
+        phase_key : str
+            Machine identifier of the starting pipeline phase.
+        """
+        self.active_phase_key = phase_key
+        self.recorded_prediction_sets.clear()
+        self.prediction_sets_by_phase[phase_key] = []
+
+    def _record_prediction_set(self, prediction_set: list[str]) -> None:
+        """Append an observed conformal prediction set to active buffers."""
+        copied = list(prediction_set)
+        self.recorded_prediction_sets.append(copied)
+        if self.active_phase_key is not None:
+            self.prediction_sets_by_phase.setdefault(
+                self.active_phase_key, []
+            ).append(copied)
+
+    def consume_prediction_sets(
+        self, phase_key: str | None = None
+    ) -> list[list[str]]:
+        """Return and clear conformal prediction sets recorded for ``phase_key``.
+
+        Parameters
+        ----------
+        phase_key : str or None, optional
+            Specific phase key to consume prediction sets for. When ``None`` or
+            when no phase-scoped sets were recorded under ``phase_key`` (e.g.
+            standalone unit tests), consumes ``recorded_prediction_sets``.
 
         Returns
         -------
         list of list of str
             Observed conformal prediction sets in evaluation order.
         """
+        if phase_key is not None and phase_key in self.prediction_sets_by_phase:
+            recorded = list(self.prediction_sets_by_phase.pop(phase_key, []))
+            if self.active_phase_key == phase_key:
+                self.recorded_prediction_sets.clear()
+            return recorded
         recorded = list(self.recorded_prediction_sets)
         self.recorded_prediction_sets.clear()
         return recorded
@@ -299,8 +336,13 @@ class ObservableDecisionEngine:
         t0 = time.perf_counter()
         result = await self.inner.evaluate_choice(state, question, options, alpha=alpha)
         duration = time.perf_counter() - t0
+        if result.prediction_set is None and self.calibrator is not None:
+            computed_set = self.calibrator.predict_set(
+                result, alpha=alpha, task_id=self.task_id
+            )
+            result = result.model_copy(update={"prediction_set": computed_set})
         if result.prediction_set is not None:
-            self.recorded_prediction_sets.append(list(result.prediction_set))
+            self._record_prediction_set(result.prediction_set)
 
         is_audit = self._should_audit(state_hash, "choice")
         tokens_saved = result.tokens_saved_estimate or (
@@ -372,8 +414,13 @@ class ObservableDecisionEngine:
         t0 = time.perf_counter()
         result = await self.inner.evaluate_score(state, question, levels)
         duration = time.perf_counter() - t0
+        if result.prediction_set is None and self.calibrator is not None:
+            computed_set = self.calibrator.predict_set(
+                result, task_id=self.task_id
+            )
+            result = result.model_copy(update={"prediction_set": computed_set})
         if result.prediction_set is not None:
-            self.recorded_prediction_sets.append(list(result.prediction_set))
+            self._record_prediction_set(result.prediction_set)
 
         is_audit = self._should_audit(state_hash, "score")
         tokens_saved = result.tokens_saved_estimate or (
@@ -446,13 +493,7 @@ class ObservableDecisionEngine:
         dict of str to (DecisionScore or DecisionNoulResult)
             Batch evaluation results.
         """
-        if hasattr(self.inner, "evaluate_batch"):
-            return await self.inner.evaluate_batch(state, questions)
         return await evaluate_questions_sequentially(self, state, questions)
-
-    def __getattr__(self, name: str) -> Any:
-        """Delegate unhandled attribute and method lookups to the inner engine."""
-        return getattr(self.inner, name)
 
 
 def ensure_observable_decision_engine(

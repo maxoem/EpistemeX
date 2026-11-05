@@ -948,7 +948,7 @@ class NoiseRobustnessStrategy:
         markdown_report = (
             "## Noise & Perturbation Robustness Benchmarking Report\n\n"
             f"- **Robustness Degradation Factor (RDF):** {rdf:.4f} "
-            f"({'Robust ✅' if passes_threshold else 'Degraded ❌'})\n"
+            f"({'Robust ☼' if passes_threshold else 'Degraded ❌'})\n"
             f"- **Clean Score ($F_1$ / $MCC$):** {f1_clean:.4f}\n"
             f"- **Perturbed Score:** {f1_pert:.4f}\n"
             f"- **Perturbation Config:** typo_rate={self.typo_rate}, drop_rate={self.drop_rate}\n"

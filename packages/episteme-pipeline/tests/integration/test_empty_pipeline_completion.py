@@ -102,14 +102,14 @@ def test_verify_file_not_found_error_scenario():
             # Verify success
             assert path.exists(), f"Manifest file should exist at {path}"
             assert path.name == "run-f12281a0-1267-43fd-8dfa-4c23d9e35789.json"
-            print(f"✅ SUCCESS: No FileNotFoundError! Manifest written to {path}")
+            print(f"☼ SUCCESS: No FileNotFoundError! Manifest written to {path}")
             
             # Verify it can be read back
             read_manifest = store.read_manifest("run-f12281a0-1267-43fd-8dfa-4c23d9e35789")
             assert read_manifest is not None
             assert read_manifest.run_id == "run-f12281a0-1267-43fd-8dfa-4c23d9e35789"
             assert read_manifest.status == RunStatus.COMPLETED
-            print("✅ SUCCESS: Manifest can be read back correctly!")
+            print("☼ SUCCESS: Manifest can be read back correctly!")
             
         finally:
             os.chdir(original_cwd)
@@ -145,7 +145,7 @@ def test_manifest_written_with_empty_results():
             
             # Verify directory was created
             assert runs_dir_path.exists(), "Directory should be created automatically"
-            print("✅ Runs directory created automatically")
+            print("☼ Runs directory created automatically")
             
             # Create a manifest representing a "successful but empty" run
             manifest = RunManifest(
@@ -166,14 +166,14 @@ def test_manifest_written_with_empty_results():
                 assert path.exists(), "Manifest file should exist"
                 assert str(path).endswith("empty-results-test-run.json"), "Filename should match"
                 
-                print(f"✅ SUCCESS: Manifest written to {path}")
+                print(f"☼ SUCCESS: Manifest written to {path}")
                 
                 # VERIFY FILE CONTENTS
                 content = path.read_text()
                 assert "empty-results-test-run" in content, "Run ID should be in content"
                 assert "completed" in content.lower(), "Status should be recorded"
                 
-                print("✅ SUCCESS: Manifest content is correct")
+                print("☼ SUCCESS: Manifest content is correct")
                 
                 # VERIFY READABILITY 
                 read_back = store.read_manifest("empty-results-test-run")
@@ -182,8 +182,7 @@ def test_manifest_written_with_empty_results():
                 assert read_back.status == RunStatus.COMPLETED, "Status should be preserved"
                 assert read_back.tags == ["empty-results", "integration-test"], "Empty dicts should be preserved"
                 
-                print("✅ SUCCESS: Manifest round-trip successful")
-                return True
+                print("☼ SUCCESS: Manifest round-trip successful")
                 
             except FileNotFoundError as e:
                 # This is the EXACT error we were trying to solve
@@ -204,8 +203,8 @@ if __name__ == "__main__":
         test_verify_file_not_found_error_scenario()
         test_manifest_written_with_empty_results()
         print("\n🎉 ALL INTEGRATION TESTS PASSED!")
-        print("✅ The FileNotFoundError issue has been resolved!")
-        print("✅ Empty results no longer cause manifest writing failures!")
+        print("☼ The FileNotFoundError issue has been resolved!")
+        print("☼ Empty results no longer cause manifest writing failures!")
     except Exception as e:
         print(f"\n💥 TEST FAILED: {e}")
         raise

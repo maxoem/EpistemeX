@@ -33,13 +33,14 @@ from episteme_pipeline.contracts.phase_contracts import (
     PipelineInput,
 )
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import (
     ExecutionResult,
     RunStatus,
 )
 
 
-class FullStubPhase1:
+class FullStubPhase1(PhaseRunner[PipelineInput]):
     """Stub Phase 1: produces DOCUMENT + CHUNK artifacts."""
 
     name = "Phase 1: Data Foundation"
@@ -76,11 +77,12 @@ class FullStubPhase1:
         return ArtifactCollection(artifacts)
 
 
-class FullStubPhase2:
+class FullStubPhase2(PhaseRunner[Phase1ArtifactsView]):
     """Stub Phase 2: produces ENTITY_MENTION + LINKED_ENTITY + LOCAL_RELATION."""
 
     name = "Phase 2: Entity & Local Relation Discovery"
     phase_key = "phase2"
+    input_view = Phase1ArtifactsView
 
     async def run(
         self,
@@ -119,11 +121,12 @@ class FullStubPhase2:
         )
 
 
-class FullStubPhase3:
+class FullStubPhase3(PhaseRunner[Phase2ArtifactsView]):
     """Stub Phase 3: produces GLOBAL_RELATION artifacts."""
 
     name = "Phase 3: Global Relation Extraction"
     phase_key = "phase3"
+    input_view = Phase2ArtifactsView
 
     async def run(
         self,
@@ -147,11 +150,12 @@ class FullStubPhase3:
         )
 
 
-class FullStubPhase4:
+class FullStubPhase4(PhaseRunner[Phase3ArtifactsView]):
     """Stub Phase 4: produces ARGUMENT_COMPONENT + ARGUMENT_RELATION."""
 
     name = "Phase 4: Argument Mining"
     phase_key = "phase4"
+    input_view = Phase3ArtifactsView
 
     async def run(
         self,
@@ -208,11 +212,12 @@ class FullStubPhase4:
         return ArtifactCollection(artifacts)
 
 
-class FullStubPhase5a:
+class FullStubPhase5a(PhaseRunner[Phase2ArtifactsView]):
     """Stub Phase 5a: returns empty collection (instance fusion)."""
 
     name = "Phase 5a: Instance Fusion"
     phase_key = "phase3b"
+    input_view = Phase2ArtifactsView
 
     async def run(
         self,
@@ -222,7 +227,7 @@ class FullStubPhase5a:
         return ArtifactCollection([])
 
 
-class FullStubPhase5b:
+class FullStubPhase5b(PhaseRunner[PipelineInput]):
     """Stub Phase 5b: returns empty collection (theory fusion)."""
 
     name = "Phase 5b: Theory Fusion"
@@ -317,7 +322,7 @@ async def test_full_run_artifact_persistence(tmp_path: Path, graph_store):
     assert len(artifacts) > 0
 
     # Verify manifest exists
-    manifest = pipeline._manifest_store.read_manifest(result.manifest.run_id)
+    manifest = pipeline.manifest_store.read_manifest(result.manifest.run_id)
     assert manifest is not None
     assert manifest.status == RunStatus.COMPLETED
 
@@ -405,6 +410,6 @@ async def test_full_run_schema_version_persisted(tmp_path: Path, graph_store):
     assert result.manifest.schema_version == "v2-integration"
 
     # Verify persisted manifest has the schema version
-    persisted = pipeline._manifest_store.read_manifest(result.manifest.run_id)
+    persisted = pipeline.manifest_store.read_manifest(result.manifest.run_id)
     assert persisted is not None
     assert persisted.schema_version == "v2-integration"

@@ -142,13 +142,13 @@ def test_manifest_invalidated_when_structural_anchor_changes(tmp_path: Path) -> 
     )
 
     input_no_anchor = PipelineInput(source_paths=[str(sample_doc)])
-    manifest1 = pipeline._build_manifest(run_id="run-1", pipeline_input=input_no_anchor)
+    manifest1 = pipeline.engine.build_manifest(run_id="run-1", pipeline_input=input_no_anchor)
 
     input_with_anchor = PipelineInput(
         source_paths=[str(sample_doc)],
         structural_anchor=GlobalStructuralAnchor(global_thesis="New Thesis"),
     )
-    manifest2 = pipeline._build_manifest(run_id="run-2", pipeline_input=input_with_anchor)
+    manifest2 = pipeline.engine.build_manifest(run_id="run-2", pipeline_input=input_with_anchor)
 
     assert manifest1.input_fingerprint != manifest2.input_fingerprint
     assert manifest2.input_fingerprint_inputs["structural_anchor_fingerprint"] is not None

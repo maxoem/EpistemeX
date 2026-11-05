@@ -25,7 +25,7 @@ def test_imports():
     assert callable(format_json)
     assert callable(LangfusePublisher)
     
-    print("✅ All imports successful")
+    print("☼ All imports successful")
     
     # Test basic functionality 
     manifest = RunManifest(run_id="smoke-test", status=RunStatus.COMPLETED)
@@ -39,7 +39,7 @@ def test_imports():
     assert "smoke-test" in text_result
     assert "completed" in text_result
     
-    print("✅ Basic functionality works")
+    print("☼ Basic functionality works")
     
     return True
 
@@ -48,7 +48,7 @@ if __name__ == "__main__":
         success = test_imports()
         if success:
             print("\n🎉 Smoke test PASSED!")
-            print("✅ Example script components are working correctly")
+            print("☼ Example script components are working correctly")
         else:
             print("\n❌ Smoke test FAILED")
             sys.exit(1)

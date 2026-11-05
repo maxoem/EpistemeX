@@ -28,9 +28,10 @@ from episteme_pipeline.contracts.phase_contracts import (
     Phase4Output,
 )
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 
 
-class StubPhase:
+class StubPhase(PhaseRunner[object]):
     def __init__(self, name: str, phase_key: str | None = None) -> None:
         self.name = name
         self.phase_key = phase_key or name.lower().split(":")[0].replace(" ", "")
@@ -83,8 +84,8 @@ async def test_hydrate_previous_collection_builds_phase1_view(tmp_path: Path, gr
     ):
         await artifact_store.write_artifact(artifact)
 
-    pipeline._artifact_store = artifact_store
-    collection = await pipeline._hydrate_previous_collection(2, source_run_id="run-old")
+    pipeline.artifact_store = artifact_store
+    collection = await pipeline.engine.hydrate_previous_collection(2, source_run_id="run-old")
 
     assert collection is not None
     view = Phase1ArtifactsView.from_collection(collection)
@@ -120,8 +121,8 @@ async def test_hydrate_previous_collection_builds_phase2_view(tmp_path: Path, gr
     ):
         await artifact_store.write_artifact(artifact)
 
-    pipeline._artifact_store = artifact_store
-    collection = await pipeline._hydrate_previous_collection(3, source_run_id="run-old")
+    pipeline.artifact_store = artifact_store
+    collection = await pipeline.engine.hydrate_previous_collection(3, source_run_id="run-old")
 
     assert collection is not None
     view = Phase2ArtifactsView.from_collection(collection)
@@ -165,8 +166,8 @@ async def test_hydrate_previous_collection_builds_phase3_view(tmp_path: Path, gr
     ):
         await artifact_store.write_artifact(artifact)
 
-    pipeline._artifact_store = artifact_store
-    collection = await pipeline._hydrate_previous_collection(4, source_run_id="run-old")
+    pipeline.artifact_store = artifact_store
+    collection = await pipeline.engine.hydrate_previous_collection(4, source_run_id="run-old")
 
     assert collection is not None
     view = Phase3ArtifactsView.from_collection(collection)
@@ -211,8 +212,8 @@ async def test_hydrate_previous_collection_builds_phase4_view(tmp_path: Path, gr
     ):
         await artifact_store.write_artifact(artifact)
 
-    pipeline._artifact_store = artifact_store
-    collection = await pipeline._hydrate_previous_collection(5, source_run_id="run-old")
+    pipeline.artifact_store = artifact_store
+    collection = await pipeline.engine.hydrate_previous_collection(5, source_run_id="run-old")
 
     assert collection is not None
     view = Phase4ArtifactsView.from_collection(collection)

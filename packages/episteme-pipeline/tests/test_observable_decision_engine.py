@@ -185,13 +185,13 @@ async def test_observable_stochastic_auditing() -> None:
 
 
 @pytest.mark.asyncio
-async def test_observable_getattr_delegation() -> None:
-    """Verify ObservableDecisionEngine delegates custom methods/attributes to inner engine."""
+async def test_observable_explicit_inner_access() -> None:
+    """Verify ObservableDecisionEngine decorates inner engine while preserving explicit inner access."""
     mock_inner = MockJevDecisionEngine()
     observable = ObservableDecisionEngine(inner=mock_inner)
 
-    # Underlying methods available via passthrough
-    observable.register_choice_response(
+    # Underlying methods available explicitly via inner engine without reflection
+    observable.inner.register_choice_response(
         question_pattern="test_pattern",
         selected_option="CUSTOM_OPTION",
     )
@@ -200,9 +200,9 @@ async def test_observable_getattr_delegation() -> None:
     res = await observable.evaluate_choice("state", "test_pattern", ["CUSTOM_OPTION", "OTHER"])
     assert res.selected_option == "CUSTOM_OPTION"
 
-    assert len(observable.calls) == 1
-    observable.reset()
-    assert len(observable.calls) == 0
+    assert len(mock_inner.calls) == 1
+    mock_inner.reset()
+    assert len(mock_inner.calls) == 0
 
 
 @pytest.mark.asyncio

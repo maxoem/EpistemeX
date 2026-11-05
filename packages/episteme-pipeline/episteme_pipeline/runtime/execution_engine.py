@@ -32,11 +32,13 @@ from episteme_pipeline.artifacts.invalidate import (
 from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
+from episteme_pipeline.decision.observable import ObservableDecisionEngine
 from episteme_pipeline.events import (
     ComponentCompleted,
     ComponentStarted,
     ContextualEventEmitter,
     EventEmitter,
+    EventObserver,
     NoOpEventEmitter,
     PhaseCompleted,
     PhaseFailed,
@@ -78,11 +80,6 @@ from episteme_pipeline.runs.models import (
     RunStatus,
 )
 from episteme_pipeline.runs.persistence import JsonRunManifestStore
-from episteme_pipeline.runtime.quality_gates import (
-    ConformalCalibrationGate,
-    OntologyEntropyGate,
-    PercolationQualityGate,
-)
 from episteme_pipeline.runtime.workflow_dag import WorkflowDAG, WorkflowNode
 
 logger = logging.getLogger(__name__)
@@ -104,6 +101,70 @@ def _artifact_kind_str(kind: Any) -> str:
     if isinstance(kind, Enum):
         return str(kind.value)
     return str(kind)
+
+
+class _GateEventSpy(EventEmitter):
+    """Contextual event emitter spy tracking QualityGateEvaluated emissions.
+
+    Wraps an underlying :class:`~episteme_pipeline.events.EventEmitter` to detect
+    whether a quality gate published a :class:`~episteme_pipeline.events.QualityGateEvaluated`
+    event during evaluation, enabling symmetric lifecycle emission without duplication.
+
+    Parameters
+    ----------
+    inner : EventEmitter or None
+        Underlying event emitter to delegate event dispatch and observer management to.
+    """
+
+    def __init__(self, inner: EventEmitter | None) -> None:
+        self._inner = inner or NoOpEventEmitter()
+        self.emitted_gate_event = False
+
+    def emit(self, event: Any) -> None:
+        """Emit an event to the inner emitter, flagging QualityGateEvaluated occurrences.
+
+        Parameters
+        ----------
+        event : Any
+            Pipeline event to emit.
+        """
+        if isinstance(event, QualityGateEvaluated):
+            self.emitted_gate_event = True
+        self._inner.emit(event)
+
+    def register_observer(self, observer: EventObserver) -> None:
+        """Register an observer with the inner event emitter.
+
+        Parameters
+        ----------
+        observer : EventObserver
+            The observer to register.
+        """
+        self._inner.register_observer(observer)
+
+    def unregister_observer(self, observer: EventObserver) -> None:
+        """Unregister an observer from the inner event emitter.
+
+        Parameters
+        ----------
+        observer : EventObserver
+            The observer to unregister.
+        """
+        self._inner.unregister_observer(observer)
+
+    def flush(self) -> None:
+        """Flush pending events or spans across all registered observers."""
+        self._inner.flush()
+
+    def get_observer_telemetry(self) -> dict[str, Any]:
+        """Collect telemetry metadata across all registered observers.
+
+        Returns
+        -------
+        dict of str to Any
+            Observer telemetry metrics.
+        """
+        return self._inner.get_observer_telemetry()
 
 
 class ArtifactExecutionEngine:
@@ -279,17 +340,13 @@ class ArtifactExecutionEngine:
 
         for entry in active_nodes:
             runner = entry.runner
-            try:
-                prefix = str(runner.name)
-            except AttributeError:
-                prefix = f"phase{entry.index}"
-            if not prefix:
-                prefix = f"phase{entry.index}"
+            prefix = str(runner.name) if isinstance(runner, PhaseRunner) and runner.name else f"phase{entry.index}"
 
-            if isinstance(runner, PhaseRunner):
-                comps = runner.components()
-            else:
-                comps = find_components(runner)
+            comps = (
+                runner.components()
+                if isinstance(runner, PhaseRunner)
+                else find_components(runner)
+            )
 
             for comp_name, comp_obj in comps.items():
                 fp = fingerprint_method(comp_obj)
@@ -297,6 +354,10 @@ class ArtifactExecutionEngine:
                     fps[f"{prefix}.{comp_name}"] = fp
             for pname, pfp in resolved_prompt_fps.get(entry.phase_key, {}).items():
                 fps[f"{prefix}.prompt.{pname}"] = pfp
+            for gate in entry.quality_gates:
+                gate_fp = fingerprint_method(gate)
+                if gate_fp:
+                    fps[f"{entry.phase_key}.quality_gate.{gate.name}"] = gate_fp
 
         if self.decision_engine is not None:
             engine_comps = find_components(self.decision_engine)
@@ -348,11 +409,6 @@ class ArtifactExecutionEngine:
                 if isinstance(entry.runner, PhaseRunner)
                 else None
             )
-            if runner_fp is None and not isinstance(entry.runner, PhaseRunner):
-                try:
-                    runner_fp = entry.runner.config_fingerprint()
-                except AttributeError:
-                    runner_fp = None
             if runner_fp is not None:
                 fps[entry.phase_key] = runner_fp
             else:
@@ -537,7 +593,7 @@ class ArtifactExecutionEngine:
         invalidated_keys: set[str] = set()
         invalidation_reasons: dict[str, str] = {}
 
-        for entry in self.workflow.nodes:
+        for entry in self.workflow.topological_order():
             key = entry.phase_key
 
             if pipeline_wide_invalidation:
@@ -705,25 +761,22 @@ class ArtifactExecutionEngine:
             return []
 
         results: list[QualityGateResult] = []
-        builtin_types = (
-            OntologyEntropyGate,
-            PercolationQualityGate,
-            ConformalCalibrationGate,
-        )
         for gate in gates:
+            spy = _GateEventSpy(phase_emitter)
             try:
-                gate_result = gate.evaluate(
-                    entry.phase_key,
-                    phase_collection,
-                    cumulative_collection,
-                    context,
-                )
+                with use_event_emitter(spy):
+                    gate_result = gate.evaluate(
+                        entry.phase_key,
+                        phase_collection,
+                        cumulative_collection,
+                        context,
+                    )
             except QualityGateViolationError as qg_exc:
                 if record is not None:
                     record.notes[f"quality_gate.{qg_exc.result.gate_name}"] = (
                         qg_exc.result.message
                     )
-                if not isinstance(gate, builtin_types) and phase_emitter is not None:
+                if not spy.emitted_gate_event and phase_emitter is not None:
                     phase_emitter.emit(
                         QualityGateEvaluated(
                             gate_name=qg_exc.result.gate_name,
@@ -742,7 +795,7 @@ class ArtifactExecutionEngine:
                 record.notes[f"quality_gate.{gate_result.gate_name}"] = (
                     gate_result.message
                 )
-            if not isinstance(gate, builtin_types) and phase_emitter is not None:
+            if not spy.emitted_gate_event and phase_emitter is not None:
                 phase_emitter.emit(
                     QualityGateEvaluated(
                         gate_name=gate_result.gate_name,
@@ -875,11 +928,6 @@ class ArtifactExecutionEngine:
                 initial_previous_collection, batch_size=500
             )
 
-        upstream_artifact_ids: list[str] = (
-            [a.artifact_id for a in initial_previous_collection.artifacts]
-            if initial_previous_collection is not None
-            else []
-        )
         records_by_ordinal = {
             rec.phase_ordinal: rec for rec in manifest.phase_records
         }
@@ -895,15 +943,63 @@ class ArtifactExecutionEngine:
             if raw_prior:
                 prior_artifacts = ArtifactCollection(raw_prior)
 
-        for ordinal in range(start_index, len(self.workflow.nodes) + 1):
+        ordered_nodes = self.workflow.topological_order()
+        transitive_deps = self.workflow.transitive_dependencies()
+        key_by_name = {node.name: node.phase_key for node in ordered_nodes}
+        artifacts_by_key: dict[str, list[Any]] = {}
+        untagged_initial_artifacts: list[Any] = []
+        if initial_previous_collection is not None:
+            for art in initial_previous_collection.artifacts:
+                mapped_key = key_by_name.get(art.phase_name)
+                if mapped_key is not None:
+                    artifacts_by_key.setdefault(mapped_key, []).append(art)
+                else:
+                    untagged_initial_artifacts.append(art)
+
+        for entry in ordered_nodes:
+            ordinal = entry.index
+            if ordinal < start_index:
+                continue
             if ordinal in invalidation_decision.reused_phase_ordinals:
                 continue
-            entry = self.workflow.nodes[ordinal - 1]
             phase_name = entry.name
+
+            upstream_keys = transitive_deps.get(entry.phase_key, set())
+            if upstream_keys:
+                scoped_artifacts: list[Any] = list(untagged_initial_artifacts)
+                for topo_node in ordered_nodes:
+                    if (
+                        topo_node.phase_key in upstream_keys
+                        and topo_node.phase_key in artifacts_by_key
+                    ):
+                        scoped_artifacts.extend(
+                            artifacts_by_key[topo_node.phase_key]
+                        )
+                branch_previous: ArtifactCollection | None = (
+                    ArtifactCollection(scoped_artifacts)
+                    if scoped_artifacts
+                    else (
+                        initial_previous_collection
+                        if not artifacts_by_key
+                        else None
+                    )
+                )
+            else:
+                branch_previous = (
+                    initial_previous_collection
+                    if ordinal > 1 and not artifacts_by_key
+                    else None
+                )
+
+            upstream_artifact_ids = (
+                [a.artifact_id for a in branch_previous.artifacts]
+                if branch_previous is not None
+                else []
+            )
             phase_input = self.build_phase_input(
                 entry=entry,
                 pipeline_input=pipeline_input,
-                previous=previous,
+                previous=branch_previous,
             )
 
             lineage_fp = stable_fingerprint(
@@ -926,8 +1022,8 @@ class ArtifactExecutionEngine:
                         or k == "decision_engine"
                     },
                     "upstream_fingerprint": (
-                        self.fingerprint_collection(previous)
-                        if previous is not None
+                        self.fingerprint_collection(branch_previous)
+                        if branch_previous is not None
                         else ""
                     ),
                 }
@@ -937,7 +1033,7 @@ class ArtifactExecutionEngine:
                 run_id=run_id,
                 manifest=manifest,
                 pipeline_input=pipeline_input,
-                previous=previous,
+                previous=branch_previous,
                 lineage_fingerprint=lineage_fp,
                 prior_artifacts=prior_artifacts,
                 prior_manifest=prior_manifest,
@@ -952,11 +1048,11 @@ class ArtifactExecutionEngine:
                     )
                 )
             ):
-                chk_store = None
-                try:
-                    chk_store = entry.runner.checkpoint_store
-                except AttributeError:
-                    pass
+                chk_store = (
+                    entry.runner.checkpoint_store
+                    if isinstance(entry.runner, PhaseRunner)
+                    else None
+                )
                 if isinstance(chk_store, PhaseCheckpointStore):
                     await chk_store.clear_phase_checkpoints(entry.phase_key)
 
@@ -987,6 +1083,9 @@ class ArtifactExecutionEngine:
             if self.config.execution.persist_run_manifests:
                 self.manifest_store.write_manifest(manifest)
 
+            if isinstance(self.decision_engine, ObservableDecisionEngine):
+                self.decision_engine.start_phase(entry.phase_key)
+
             try:
                 with use_event_emitter(phase_emitter):
                     collection: ArtifactCollection = await entry.runner.run(
@@ -994,9 +1093,9 @@ class ArtifactExecutionEngine:
                     )
                     cumulative_collection = (
                         collection
-                        if previous is None
+                        if branch_previous is None
                         else ArtifactCollection(
-                            previous.artifacts + collection.artifacts
+                            branch_previous.artifacts + collection.artifacts
                         )
                     )
                     self.evaluate_phase_quality_gates(
@@ -1147,7 +1246,7 @@ class ArtifactExecutionEngine:
                     )
                 )
 
-            upstream_artifact_ids = produced_ids
+            artifacts_by_key[entry.phase_key] = list(collection.artifacts)
             previous = cumulative_collection
 
         manifest.status = RunStatus.COMPLETED
@@ -1231,6 +1330,168 @@ class ArtifactExecutionEngine:
                 run_id=resolved_run_id,
                 manifest=manifest,
                 start_index=effective_start,
+                pipeline_input=input,
+                initial_previous_collection=previous_collection,
+                invalidation_decision=decision,
+            )
+
+    async def run_from_phase(
+        self,
+        phase_number: int,
+        input: PipelineInput | None = None,
+        run_id: str | None = None,
+        parent_run_id: str | None = None,
+    ) -> ExecutionResult:
+        """Execute or resume the workflow starting from a specific phase boundary.
+
+        Parameters
+        ----------
+        phase_number : int
+            The 1-based ordinal of the phase runner to start or resume from.
+        input : PipelineInput or None, optional
+            Pipeline input; recovered from latest manifest when None.
+        run_id : str or None, optional
+            Explicit identifier for this execution run.
+        parent_run_id : str or None, optional
+            Optional identifier of parent run to fork or resume from.
+
+        Returns
+        -------
+        ExecutionResult
+            Execution result containing the run manifest and report.
+        """
+        valid_ordinals = {entry.index for entry in self.workflow.nodes}
+        if phase_number not in valid_ordinals:
+            raise ValueError(
+                f"Invalid phase boundary {phase_number}. Valid boundaries: {self.workflow.phase_boundaries()}"
+            )
+        latest = (
+            (
+                self.manifest_store.read_manifest(parent_run_id)
+                if parent_run_id
+                else None
+            )
+            or self.manifest_store.latest_manifest()
+            or self.manifest_store.latest_manifest(only_completed=False)
+        )
+        if input is None:
+            if latest is None:
+                raise ValueError(
+                    "No previous run manifest found and no PipelineInput provided."
+                )
+            input = PipelineInput(
+                source_paths=list(
+                    latest.input_fingerprint_inputs.get("source_paths", [])
+                ),
+                bib_paths=list(
+                    latest.input_fingerprint_inputs.get("bib_paths", [])
+                ),
+            )
+        resolved_run_id = run_id or f"run-{uuid4()}"
+
+        with self.run_observability_scope(resolved_run_id):
+            manifest = self.build_manifest(
+                run_id=resolved_run_id, pipeline_input=input
+            )
+            if parent_run_id:
+                manifest.parent_run_id = parent_run_id
+            decision = await self.choose_reuse_source(manifest)
+            effective_start = phase_number
+            if (
+                phase_number in decision.reused_phase_ordinals
+                and decision.invalidated_phase_ordinals
+            ):
+                effective_start = min(
+                    phase_number, decision.invalidated_phase_ordinals[0]
+                )
+
+            forced_reused = [
+                ord for ord in decision.reused_phase_ordinals if ord < phase_number
+            ]
+            forced_invalidated = sorted(
+                set(decision.invalidated_phase_ordinals)
+                | set(range(phase_number, len(self.workflow.nodes) + 1))
+            )
+            decision = InvalidationDecision(
+                resume_point=decision.resume_point,
+                reused_phase_ordinals=forced_reused,
+                invalidated_phase_ordinals=forced_invalidated,
+                reason=(
+                    decision.reason
+                    if forced_invalidated == decision.invalidated_phase_ordinals
+                    else f"run-from-phase:{phase_number}"
+                ),
+            )
+            allow_hydration = self.config.execution.allow_artifact_hydration
+            wanted_phases = self.reused_phase_names(decision)
+            previous_collection = (
+                await self.hydrate_previous_collection(
+                    effective_start,
+                    source_run_id=decision.resume_point.run_id,
+                    wanted_phase_names=wanted_phases,
+                )
+                if allow_hydration
+                and decision.resume_point.run_id
+                and wanted_phases
+                else None
+            )
+            if decision.reused_phase_ordinals:
+                manifest.parent_run_id = decision.resume_point.run_id
+            return await self.execute(
+                run_id=resolved_run_id,
+                manifest=manifest,
+                start_index=effective_start,
+                pipeline_input=input,
+                initial_previous_collection=previous_collection,
+                invalidation_decision=decision,
+            )
+
+    async def resume_from_run(
+        self,
+        run_id: str,
+        input: PipelineInput,
+        from_phase: int | None = None,
+    ) -> ExecutionResult:
+        """Resume workflow execution from a prior run within observability context.
+
+        Parameters
+        ----------
+        run_id : str
+            Source run identifier to resume from.
+        input : PipelineInput
+            Pipeline input for the resumed execution.
+        from_phase : int or None, optional
+            1-based phase ordinal to resume from (defaults to 1).
+
+        Returns
+        -------
+        ExecutionResult
+            Execution result containing the run manifest and report.
+        """
+        target_run_id = f"run-resume-{run_id}"
+        with self.run_observability_scope(target_run_id):
+            manifest = self.build_manifest(
+                run_id=target_run_id, pipeline_input=input
+            )
+            if from_phase is None:
+                from_phase = 1
+            decision = InvalidationDecision(
+                resume_point=ResumePoint(run_id=run_id),
+                reused_phase_ordinals=[i for i in range(1, from_phase)],
+                invalidated_phase_ordinals=[
+                    i for i in range(from_phase, len(self.workflow.nodes) + 1)
+                ],
+                reason="explicit-resume-boundary",
+            )
+            if decision.reused_phase_ordinals:
+                manifest.parent_run_id = run_id
+            previous_collection = await self.hydrate_previous_collection(
+                from_phase, source_run_id=run_id
+            )
+            return await self.execute(
+                run_id=target_run_id,
+                manifest=manifest,
+                start_index=from_phase,
                 pipeline_input=input,
                 initial_previous_collection=previous_collection,
                 invalidation_decision=decision,

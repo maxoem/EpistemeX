@@ -132,9 +132,9 @@ class PosetEvaluationResult(BaseModel):
         str
             GitHub-flavored Markdown report.
         """
-        status_dag = "✅ PASSED (Acyclic DAG)" if self.is_dag else "❌ FAILED (Cycles Detected)"
-        status_root = "✅ PASSED" if self.root_conformity else "❌ FAILED"
-        status_subsume = "✅ PASSED" if self.hierarchical_subsumption_valid else "❌ FAILED"
+        status_dag = "☼ PASSED (Acyclic DAG)" if self.is_dag else "❌ FAILED (Cycles Detected)"
+        status_root = "☼ PASSED" if self.root_conformity else "❌ FAILED"
+        status_subsume = "☼ PASSED" if self.hierarchical_subsumption_valid else "❌ FAILED"
 
         lines = [
             "# Specialization Poset Hierarchy Evaluation Report",

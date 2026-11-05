@@ -100,8 +100,8 @@ class DynamicsEvaluationResult(BaseModel):
         str
             GitHub-flavored Markdown report.
         """
-        status_prog = "✅ PROGRESSIVE" if self.is_progressive else "❌ DEGENERATING"
-        status_core = "✅ INVARIANT" if self.core_invariant else "❌ CORE MUTATED"
+        status_prog = "☼ PROGRESSIVE" if self.is_progressive else "❌ DEGENERATING"
+        status_core = "☼ INVARIANT" if self.core_invariant else "❌ CORE MUTATED"
 
         lines = [
             "# Diachronic Dynamics & Lakatosian Degeneration Report",
@@ -122,7 +122,7 @@ class DynamicsEvaluationResult(BaseModel):
             lines.append("| Auxiliary Node ID | Immunization Index ($II$) | Stance |")
             lines.append("| :--- | :---: | :--- |")
             for nid, score in self.node_immunization_scores.items():
-                stance = "Ad-Hoc Immunization ❌" if score >= 0.8 else "Progressive Expansion ✅"
+                stance = "Ad-Hoc Immunization ❌" if score >= 0.8 else "Progressive Expansion ☼"
                 lines.append(f"| `{nid}` | {score:.4f} | {stance} |")
 
         if self.violated_invariance:

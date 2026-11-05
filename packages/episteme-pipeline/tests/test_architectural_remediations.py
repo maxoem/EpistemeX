@@ -100,22 +100,22 @@ def test_phase_config_fingerprints_mapping():
         checkpoint_store=mock_ckpt,
     )
 
-    cfg_fps = pipeline._phase_config_fingerprints()
+    cfg_fps = pipeline.engine.phase_config_fingerprints()
     assert len(cfg_fps) == 9
     # Modifying phase3b config should change fingerprint for phase3b
     cfg_fps_orig_3b = cfg_fps["phase3b"]
     pipeline.config.phase3b.dense_similarity_threshold = 0.99
-    cfg_fps_new = pipeline._phase_config_fingerprints()
+    cfg_fps_new = pipeline.engine.phase_config_fingerprints()
     assert cfg_fps_new["phase3b"] != cfg_fps_orig_3b
     # Modifying phase4_maturation config should change fingerprint for phase4_maturation
     cfg_fps_orig_4m = cfg_fps["phase4_maturation"]
     pipeline.config.phase4_maturation.maturation_top_k = 99
-    cfg_fps_new_4m = pipeline._phase_config_fingerprints()
+    cfg_fps_new_4m = pipeline.engine.phase_config_fingerprints()
     assert cfg_fps_new_4m["phase4_maturation"] != cfg_fps_orig_4m
 
 
 def test_prompt_fingerprints_includes_entity_synthesis():
-    """Verify _prompt_fingerprints includes entity_synthesis template."""
+    """Verify prompt_fingerprints includes entity_synthesis template."""
     from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
     mock_llm = MagicMock(spec=DiskCachedStructuredLLM)
     mock_reranker = MagicMock()
@@ -135,12 +135,12 @@ def test_prompt_fingerprints_includes_entity_synthesis():
         checkpoint_store=mock_ckpt,
     )
 
-    prompts = pipeline._prompt_fingerprints()
+    prompts = pipeline.engine.prompt_fingerprints()
     assert "entity_synthesis" in prompts.get("phase4_maturation", {})
 
 
 def test_build_phase_input_routing():
-    """Verify _build_phase_input routes inputs accurately to phase views."""
+    """Verify build_phase_input routes inputs accurately to phase views."""
     from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
     mock_llm = MagicMock(spec=DiskCachedStructuredLLM)
     mock_reranker = MagicMock()
@@ -167,24 +167,24 @@ def test_build_phase_input_routing():
     chunk_art = build_chunk_artifact(chunk, run_id="r1", phase_name="P1", method="m")
     col1 = ArtifactCollection([doc_art, chunk_art])
 
-    p1_in = pipeline._build_phase_input(entry=pipeline._phase_entries[0], pipeline_input=inp, previous=None)
+    p1_in = pipeline.engine.build_phase_input(entry=pipeline.workflow.nodes[0], pipeline_input=inp, previous=None)
     assert isinstance(p1_in, PipelineInput)
 
-    p2_in = pipeline._build_phase_input(entry=pipeline._phase_entries[1], pipeline_input=inp, previous=col1)
+    p2_in = pipeline.engine.build_phase_input(entry=pipeline.workflow.nodes[1], pipeline_input=inp, previous=col1)
     assert isinstance(p2_in, Phase1ArtifactsView)
     assert len(p2_in.chunks) == 1
 
-    p3b_in = pipeline._build_phase_input(entry=pipeline._phase_entries[3], pipeline_input=inp, previous=col1)
+    p3b_in = pipeline.engine.build_phase_input(entry=pipeline.workflow.nodes[3], pipeline_input=inp, previous=col1)
     assert isinstance(p3b_in, Phase3ArtifactsView)
 
-    p4m_in = pipeline._build_phase_input(entry=pipeline._phase_entries[4], pipeline_input=inp, previous=col1)
+    p4m_in = pipeline.engine.build_phase_input(entry=pipeline.workflow.nodes[4], pipeline_input=inp, previous=col1)
     assert isinstance(p4m_in, Phase3ArtifactsView)
 
-    p4a_in = pipeline._build_phase_input(entry=pipeline._phase_entries[5], pipeline_input=inp, previous=col1)
+    p4a_in = pipeline.engine.build_phase_input(entry=pipeline.workflow.nodes[5], pipeline_input=inp, previous=col1)
     assert isinstance(p4a_in, Phase3ArtifactsView)
     assert len(p4a_in.chunks) == 1
 
-    p5_in = pipeline._build_phase_input(entry=pipeline._phase_entries[6], pipeline_input=inp, previous=col1)
+    p5_in = pipeline.engine.build_phase_input(entry=pipeline.workflow.nodes[6], pipeline_input=inp, previous=col1)
     assert isinstance(p5_in, Phase4ArtifactsView)
 
 

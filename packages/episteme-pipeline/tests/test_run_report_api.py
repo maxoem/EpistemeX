@@ -11,6 +11,7 @@ from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import (
     ArtifactReportEntry,
     RunManifest,
@@ -20,7 +21,7 @@ from episteme_pipeline.runs.models import (
 )
 
 
-class StubPhase:
+class StubPhase(PhaseRunner[object]):
     def __init__(self, name: str = "Phase 1: Data Foundation", phase_key: str = "phase1") -> None:
         self.name = name
         self.phase_key = phase_key
@@ -43,7 +44,7 @@ async def test_get_run_report_returns_manifest_and_artifact_summary(tmp_path: Pa
         status=RunStatus.COMPLETED,
         phase_records=[RunPhaseRecord(phase_name="Phase 1: Data Foundation", ordinal=1, status=RunStatus.COMPLETED)],
     )
-    pipeline._manifest_store.write_manifest(manifest)
+    pipeline.manifest_store.write_manifest(manifest)
 
     artifact_store = JsonArtifactStore(tmp_path / "artifacts")
     await artifact_store.write_artifact(
@@ -65,7 +66,7 @@ async def test_get_run_report_returns_manifest_and_artifact_summary(tmp_path: Pa
             ),
         )
     )
-    pipeline._artifact_store = artifact_store
+    pipeline.artifact_store = artifact_store
 
     report = await pipeline.get_run_report("run-1")
 
@@ -99,7 +100,7 @@ async def test_reused_run_copies_reused_artifact_entries_and_counts(tmp_path: Pa
             )
         ],
     )
-    pipeline._manifest_store.write_manifest(manifest)
+    pipeline.manifest_store.write_manifest(manifest)
 
     artifact_store = JsonArtifactStore(tmp_path / "artifacts")
     await artifact_store.write_artifact(
@@ -121,9 +122,9 @@ async def test_reused_run_copies_reused_artifact_entries_and_counts(tmp_path: Pa
             ),
         )
     )
-    pipeline._artifact_store = artifact_store
+    pipeline.artifact_store = artifact_store
 
-    pipeline._build_manifest = lambda *, run_id, pipeline_input: RunManifest(
+    pipeline.engine.build_manifest = lambda *, run_id, pipeline_input: RunManifest(
         run_id=run_id,
         status=RunStatus.RUNNING,
         input_fingerprint="same-input",
@@ -157,7 +158,7 @@ async def test_get_run_artifacts_supports_filters(tmp_path: Path, graph_store):
         status=RunStatus.COMPLETED,
         phase_records=[RunPhaseRecord(phase_name="Phase 1: Data Foundation", ordinal=1, status=RunStatus.COMPLETED)],
     )
-    pipeline._manifest_store.write_manifest(manifest)
+    pipeline.manifest_store.write_manifest(manifest)
 
     artifact_store = JsonArtifactStore(tmp_path / "artifacts")
     await artifact_store.write_artifact(
@@ -179,7 +180,7 @@ async def test_get_run_artifacts_supports_filters(tmp_path: Path, graph_store):
             ),
         )
     )
-    pipeline._artifact_store = artifact_store
+    pipeline.artifact_store = artifact_store
 
     artifacts = await pipeline.get_run_artifacts("run-1", phase_name="Phase 1: Data Foundation", kind="chunk")
 
@@ -209,7 +210,7 @@ async def test_get_run_report_reconstructs_new_vs_reused_breakdown_from_manifest
             RunPhaseRecord(phase_name="Phase 1: Data Foundation", ordinal=2, status=RunStatus.COMPLETED, reused=False),
         ],
     )
-    pipeline._manifest_store.write_manifest(manifest)
+    pipeline.manifest_store.write_manifest(manifest)
 
     artifact_store = JsonArtifactStore(tmp_path / "artifacts")
     await artifact_store.write_artifact(
@@ -231,7 +232,7 @@ async def test_get_run_report_reconstructs_new_vs_reused_breakdown_from_manifest
             ),
         )
     )
-    pipeline._artifact_store = artifact_store
+    pipeline.artifact_store = artifact_store
 
     report = await pipeline.get_run_report("run-2")
 
