@@ -75,6 +75,19 @@ class ObservableDecisionEngine:
         self.seed = seed
         self.task_id = task_id
         self.calibrator = calibrator
+        self.recorded_prediction_sets: list[list[str]] = []
+
+    def consume_prediction_sets(self) -> list[list[str]]:
+        """Return and clear conformal prediction sets recorded since the last check.
+
+        Returns
+        -------
+        list of list of str
+            Observed conformal prediction sets in evaluation order.
+        """
+        recorded = list(self.recorded_prediction_sets)
+        self.recorded_prediction_sets.clear()
+        return recorded
 
     @property
     def name(self) -> str:
@@ -286,6 +299,8 @@ class ObservableDecisionEngine:
         t0 = time.perf_counter()
         result = await self.inner.evaluate_choice(state, question, options, alpha=alpha)
         duration = time.perf_counter() - t0
+        if result.prediction_set is not None:
+            self.recorded_prediction_sets.append(list(result.prediction_set))
 
         is_audit = self._should_audit(state_hash, "choice")
         tokens_saved = result.tokens_saved_estimate or (
@@ -357,6 +372,8 @@ class ObservableDecisionEngine:
         t0 = time.perf_counter()
         result = await self.inner.evaluate_score(state, question, levels)
         duration = time.perf_counter() - t0
+        if result.prediction_set is not None:
+            self.recorded_prediction_sets.append(list(result.prediction_set))
 
         is_audit = self._should_audit(state_hash, "score")
         tokens_saved = result.tokens_saved_estimate or (

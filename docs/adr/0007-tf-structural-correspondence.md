@@ -102,12 +102,14 @@ SC may optionally be re-run after Phase 4 to score L3 edges (SUPPORTS/ATTACKS be
 ArgumentComponent as an atom of type `CLAIM`, `MAJOR_CLAIM`, or `PREMISE`. This is enabled by including L3 atom-type
 pairs in `StructuralCorrespondenceConfig.pairs`.
 
-### 4. Evaluation remains post-construct
+### 4. Evaluation remains post-construct (complemented by inter-phase quality gates)
 
-The three evaluation dimensions — empirical content, internal coherence, external compatibility — are **not part of
-pipeline construction**. They are offline analyses run against the completed property graph. `structural_correspondence`
-scores stored on edges provide input data for coherence and compatibility evaluation, but the evaluation logic itself is
-outside the pipeline.
+The three full theory evaluation dimensions — empirical content, internal coherence, external compatibility — are
+offline analyses run against the completed property graph via `epistemetrics`. `structural_correspondence`
+scores stored on edges provide input data for coherence and compatibility evaluation, while during construction the
+`ArtifactExecutionEngine` evaluates lightweight inter-phase `EpistemicQualityGate` circuit breakers (`OntologyEntropyGate`,
+`PercolationQualityGate`, and `ConformalCalibrationGate`, see `ISSUE-058`) to detect ontological collapse, giant-component
+percolation, or conformal OOD spikes before downstream LLM compute is expended.
 
 ---
 

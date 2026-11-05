@@ -51,6 +51,14 @@ from episteme_pipeline.protocols.modality import (
     ensure_modal_strength_resolver,
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
+from episteme_pipeline.protocols.quality_gate import (
+    EpistemicQualityGate,
+    QualityGateResult,
+    QualityGateViolationError,
+    QualityGateWarning,
+    ensure_quality_gate,
+    ensure_quality_gates,
+)
 
 __all__ = [
     "ACCClassifier",
@@ -67,6 +75,7 @@ __all__ = [
     "EmbeddingModel",
     "EntityGraph",
     "EntityLinker",
+    "EpistemicQualityGate",
     "EvictionSignal",
     "Fingerprintable",
     "FusionGraph",
@@ -85,6 +94,9 @@ __all__ = [
     "PhaseRunner",
     "ProcessingGraph",
     "ProjectionGraph",
+    "QualityGateResult",
+    "QualityGateViolationError",
+    "QualityGateWarning",
     "RelationReranker",
     "SyncEncoderEmbeddingModel",
     "TheoryFusion",
@@ -94,5 +106,7 @@ __all__ = [
     "ensure_decision_question",
     "ensure_embedding_model",
     "ensure_modal_strength_resolver",
+    "ensure_quality_gate",
+    "ensure_quality_gates",
     "find_components",
 ]

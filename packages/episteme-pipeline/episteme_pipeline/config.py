@@ -510,6 +510,54 @@ class TheoreticalEnrichmentConfig(BaseModel):
     projection_prompts: StructuredPromptBundle | None = None
 
 
+class QualityGatesConfig(BaseModel):
+    """Configuration for inter-phase epistemic quality gates (ISSUE-058).
+
+    Attributes
+    ----------
+    enabled : bool, default True
+        Whether default inter-phase quality gates are attached at pipeline composition.
+    on_violation : Literal["warn", "raise"], default "warn"
+        Default policy when a quality gate threshold is violated ('warn' emits
+        a ``QualityGateWarning`` and domain event; 'raise' halts the run with
+        ``QualityGateViolationError``).
+    min_entity_type_entropy : float, default 0.30
+        Minimum Shannon entropy H(entity_types) in bits required post-Phase 2.
+    max_dominant_type_ratio : float, default 0.90
+        Maximum fraction of extracted entities assignable to a single ontological type.
+    min_entities_for_entropy : int, default 5
+        Minimum number of extracted entities before ontological entropy bounds are enforced.
+    min_entity_density : float, default 0.0
+        Minimum entity density per non-empty chunk required post-Phase 2.
+    max_percolation_fraction : float, default 0.50
+        Maximum fraction rho_max of total nodes allowed in a single merged equivalence
+        class post-Phase 3b and Phase 5.
+    min_population_for_percolation : int, default 4
+        Minimum entity/atom count required before percolation fraction bounds are enforced.
+    max_conformal_empty_rate : float, default 0.30
+        Maximum allowed fraction of empty conformal prediction sets (|C(X)| == 0).
+    max_conformal_ambiguous_rate : float, default 0.70
+        Maximum allowed fraction of ambiguous multi-label prediction sets (|C(X)| > 1).
+    max_conformal_ood_rate : float, default 0.70
+        Maximum allowed combined conformal OOD rate (|C(X)| != 1).
+    min_conformal_samples : int, default 1
+        Minimum number of conformal evaluations required before OOD bounds are checked.
+    """
+
+    enabled: bool = True
+    on_violation: Literal["warn", "raise"] = "warn"
+    min_entity_type_entropy: float = 0.30
+    max_dominant_type_ratio: float = 0.90
+    min_entities_for_entropy: int = 5
+    min_entity_density: float = 0.0
+    max_percolation_fraction: float = 0.50
+    min_population_for_percolation: int = 4
+    max_conformal_empty_rate: float = 0.30
+    max_conformal_ambiguous_rate: float = 0.70
+    max_conformal_ood_rate: float = 0.70
+    min_conformal_samples: int = 1
+
+
 class ExecutionConfig(BaseModel):
     persist_run_manifests: bool = True
     persist_phase1_artifacts: bool = True
@@ -706,6 +754,7 @@ class PipelineConfig(BaseModel):
     phase6: Phase6Config = Field(default_factory=Phase6Config)
     theoretical_enrichment: TheoreticalEnrichmentConfig = Field(default_factory=TheoreticalEnrichmentConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
+    quality_gates: QualityGatesConfig = Field(default_factory=QualityGatesConfig)
     decision_engine: DecisionEngineConfig | None = Field(default=None)
     modal_resolver: ModalResolverConfig = Field(default_factory=ModalResolverConfig)
 

@@ -893,6 +893,33 @@ class ModalStrengthResolved(BaseEvent):
     clamped: bool = False
 
 
+class QualityGateEvaluated(BaseEvent):
+    """An inter-phase epistemic quality gate was evaluated on phase artifacts.
+
+    Attributes
+    ----------
+    gate_name : str
+        Unique identifier of the quality gate.
+    phase_key : str
+        Machine key of the evaluated pipeline phase.
+    passed : bool
+        Whether the quality gate check passed.
+    severity : str
+        Evaluation outcome severity ('pass', 'warn', 'halt').
+    metrics : dict of str to float
+        Quantitative telemetry metrics computed by the gate.
+    message : str, default ""
+        Human-readable diagnostic summary.
+    """
+
+    gate_name: str
+    phase_key: str
+    passed: bool
+    severity: str = "pass"
+    metrics: dict[str, float] = Field(default_factory=dict)
+    message: str = ""
+
+
 # Type union for event handling
 PipelineEvent = (
     EntityProcessed |
@@ -906,7 +933,7 @@ PipelineEvent = (
     ProgressStarted | ProgressAdvanced | ProgressCompleted |
     EvaluationCompleted | EvaluationScoreLogged | ValidationViolationDetected |
     DecisionEvaluationStarted | DecisionEvaluationCompleted | DecisionGatingTriggered |
-    ModalStrengthResolved
+    ModalStrengthResolved | QualityGateEvaluated
 )
 
 

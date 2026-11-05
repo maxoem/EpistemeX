@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Orchestrator Architecture, Runtime Quality Gates, Workflow Composition) |
 | **Target Package(s)** | `packages/episteme-pipeline`, `packages/epistemetrics` (`pipeline.py`, `runtime/`, `protocols/`) |
 | **Priority** | **Medium** |
-| **Status** | `Open` |
+| **Status** | `Completed` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/overview.md`](../../docs/architecture/overview.md), [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0007`](../../docs/adr/0007-tf-structural-correspondence.md), [`ADR-0011`](../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), [`ADR-0016`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md) |
 
 ---
@@ -54,5 +54,5 @@ Refactor [`pipeline.py`](../../packages/episteme-pipeline/episteme_pipeline/pipe
 
 ## 4. Acceptance Criteria
 
-- [ ] `EpistemicQualityGate` protocol is evaluated after each phase in the execution engine, with built-in checks for entity type collapse, cluster percolation, and conformal OOD spikes.
-- [ ] `Pipeline` delegates DI construction to `PipelineFactory`, topology resolution to `WorkflowDAG`, and run execution/caching to `ArtifactExecutionEngine`.
+- [x] `EpistemicQualityGate` protocol is evaluated after each phase in the execution engine, with built-in checks for entity type collapse, cluster percolation, and conformal OOD spikes.
+- [x] `Pipeline` delegates DI construction to `PipelineFactory`, topology resolution to `WorkflowDAG`, and run execution/caching to `ArtifactExecutionEngine`.

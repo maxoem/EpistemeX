@@ -141,3 +141,16 @@ Following rigorous theoretical and numerical evaluation of ticket ISSUE-041 and 
 - Eliminates double-penalization of tentative premises while maintaining rigorous Toulmin warrant accounting.
 - Guarantees $O(|V| + |E|)$ execution for acyclic theory graphs while ensuring numerically stable, early-halting ODE relaxation for cyclic structures.
 - Provides complete mathematical harmony between database projections, runtime solvers, and visualization telemetry.
+
+---
+
+## Addendum 3 (2026-10-31): Active Inter-Phase Epistemic Quality Gates (`ISSUE-058`)
+
+### Context
+While `epistemetrics` provides rich post-construction theory-graph evaluation, structural or calibration pathologies arising mid-run (such as Phase 2 ontological collapse, Phase 3b/5 giant-component percolation, or Phase 3/4 conformal OOD spikes) previously went undetected until after all downstream LLM phases completed.
+
+### Decision Amendment
+We complement passive post-construction analytics with active inter-phase `EpistemicQualityGate` circuit breakers evaluated by `ArtifactExecutionEngine` on the `ArtifactCollection` emitted by each phase in `WorkflowDAG`:
+- **`OntologyEntropyGate` (Post-Phase 2)**: Enforces Shannon entropy $H(\text{entity\_types}) \ge H_{\min}$, bounds single-type dominance ratio, and verifies non-zero entity density on non-empty chunks.
+- **`PercolationQualityGate` (Post-Phase 3b & Phase 5)**: Verifies that the largest merged equivalence class does not exceed $\rho_{\max} \cdot |E|$, preventing giant-component collapse prior to QBAF / TheoryNet synthesis.
+- **`ConformalCalibrationGate` (Post-Phase 3 & Phase 4)**: Monitors empirical rates of empty ($|C(X)| = 0$) and ambiguous ($|C(X)| > 1$) conformal prediction sets, emitting `QualityGateWarning` or raising `QualityGateViolationError` before corrupted artifacts are persisted or projected.

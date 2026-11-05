@@ -35,6 +35,7 @@ Every external capability is decoupled from business logic via abstract protocol
 | **Embedding Model** | `EmbeddingModel` | `LiteLLMEmbedding` / LlamaIndex | Normalized async text and batch vector embeddings |
 | **Reranking & Scoring** | `CrossEncoder` / `RelationReranker` | `SentenceTransformerCrossEncoderReranker` | PyTorch / HuggingFace joint-attention candidate relation scoring |
 | **Decision Engine** | `DecisionEngine` | `LayaDecisionEngine` / `MockJevDecisionEngine` | Sub-second System 1 classification, calibrated confidence scoring, conformal prediction sets, and categorical decision gating |
+| **Epistemic Quality Gates** | `EpistemicQualityGate` | `OntologyEntropyGate`, `PercolationQualityGate`, `ConformalCalibrationGate` | Inter-phase homeostatic circuit breakers checking entity type entropy, cluster percolation, and conformal OOD rates |
 | **Prompt Management** | `PromptProvider` | `LangfusePromptProvider` | Remote prompt versioning, label resolution (`production`), auto-sync (with `DefaultPromptProvider` fallback) |
 | **Observability & Tracing** | `EventEmitter` / `Observer` | `LangfuseObserver` | Distributed LLM call tracing, token/cost analysis, latency tracking |
 
@@ -74,12 +75,13 @@ flowchart TD
     Events --> Observers
 ```
 
-### Orchestration Layer (`pipeline/pipeline.py`, `pipeline/runner.py`)
+### Orchestration Layer (`pipeline.py`, `runtime/`)
 
-- **`Pipeline`**: Central executor managing phase lifecycle, YAML configuration loading, state transitions, and
-  resumption flags.
-- **`PhaseRunner`**: Abstract base class enforcing a uniform async contract `run(input: PipelineInput) -> PhaseResult`
-  across all pipeline phases.
+- **`Pipeline`**: High-level facade coordinating composition, declarative topology, and runtime execution.
+- **`PipelineFactory` (`runtime/pipeline_factory.py`)**: Composition root wiring LLMs, embedders, rerankers, `DecisionEngine`, `ModalStrengthResolver`, and `EpistemicQualityGate` instances from `PipelineConfig`.
+- **`WorkflowDAG` (`runtime/workflow_dag.py`)**: Declarative dataflow topology defining `WorkflowNode`s, data dependencies (`reads_kinds`/`writes_kinds`), topological ordering, and bound `EpistemicQualityGate`s.
+- **`ArtifactExecutionEngine` (`runtime/execution_engine.py`)**: Executes any `WorkflowDAG` with manifest fingerprinting, DAG-based cache hydration, inter-phase epistemic quality gate evaluation (`OntologyEntropyGate`, `PercolationQualityGate`, `ConformalCalibrationGate`), batched graph projection, and symmetric lifecycle event emission.
+- **`PhaseRunner`**: Abstract base class enforcing a uniform async contract `run(input, context) -> ArtifactCollection` across all pipeline phases.
 
 ### Domain Contracts & Data Layer (`pipeline/contracts/`)
 

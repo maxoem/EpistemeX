@@ -75,6 +75,7 @@ The extractor interface (`GlobalRelationExtractor.extract_pairs`) wraps individu
 * **Systematic Failure Guard:** To prevent silently burning API budget or continuing execution when a global failure occurs (e.g., invalid LLM API key, revoked credentials, or network partition), `Phase3Runner` validates the first processed batch:
 $$\text{if } B_0 \neq \emptyset \land \frac{|\{item \in B_0 \mid item.status = \text{"failed"}\}|}{|B_0|} = 1.0 \implies \text{Abort}$$
   If 100% of pairs in the initial batch fail, execution immediately terminates with a descriptive `RuntimeError`.
+* **Inter-Phase Epistemic Quality Gates (`ISSUE-058`):** In addition to the intra-phase Batch 0 exception guard, `ArtifactExecutionEngine` evaluates semantic `EpistemicQualityGate` circuit breakers (`OntologyEntropyGate`, `PercolationQualityGate`, and `ConformalCalibrationGate`) between phases on the emitted `ArtifactCollection`, halting or warning when ontological collapse, giant-component percolation, or conformal OOD spikes occur.
 
 ### 5. Automated Checkpoint Invalidation Hook
 

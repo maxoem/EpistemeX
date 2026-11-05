@@ -262,8 +262,16 @@ flowchart TD
     end
 ```
 
-### Level 1: Macro Extensibility (`PhaseRunner`)
+### Level 1: Macro Extensibility (`PhaseRunner`, `WorkflowDAG`, & `EpistemicQualityGate`)
 
+- **Declarative Orchestration Trio (`runtime/`)**:
+  - **`PipelineFactory`**: Composition root that normalizes LLMs, embedders, rerankers, `DecisionEngine`, `ModalStrengthResolver`, and `EpistemicQualityGate`s from `PipelineConfig`.
+  - **`WorkflowDAG`**: Declarative topology graph resolving `WorkflowNode` dataflow dependencies (`reads_kinds` / `writes_kinds`), topological ordering, and per-phase quality gate bindings. Supports both linear pipelines and multi-branch research workflows.
+  - **`ArtifactExecutionEngine`**: Executes any `WorkflowDAG` with manifest fingerprinting, DAG-based cache reuse, inter-phase quality gate evaluation, batched graph projection, and symmetric lifecycle event emission.
+- **Inter-Phase Epistemic Quality Gates (`protocols/quality_gate.py`, `runtime/quality_gates.py`)**:
+  - **`OntologyEntropyGate` (Post-Phase 2)**: Verifies Shannon entropy $H(\text{entity\_types}) \ge H_{\min}$, bounds single-type dominance ratio, and checks non-empty chunk entity density.
+  - **`PercolationQualityGate` (Post-Phase 3b & Phase 5)**: Verifies that the largest merged equivalence class does not exceed $\rho_{\max} \cdot |E|$, preventing giant-component percolation collapse.
+  - **`ConformalCalibrationGate` (Post-Phase 3 & Phase 4)**: Monitors empirical rates of empty ($|C(X)| = 0$) and ambiguous ($|C(X)| > 1$) conformal prediction sets, emitting a `QualityGateWarning` or halting with `QualityGateViolationError` before corrupted artifacts are persisted or projected.
 - **Interface**: All phases and post-processors implement the uniform async [`PhaseRunner`](../reference/pipeline.md) protocol:
   ```python
   async def run(
