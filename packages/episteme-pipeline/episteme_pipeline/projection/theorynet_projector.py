@@ -221,28 +221,41 @@ class TheoryNetProjector:
             rel = r.model_copy()
 
             # Apply upstream heuristic warrant mapping if not explicitly defined
-            if "inferential_force" not in rel.model_fields_set and "modal_strength" not in rel.model_fields_set:
-                rel.inferential_force = derive_relation_warrant(rel)
+            if (
+                "inferential_force" not in rel.model_fields_set
+                and "inferential_warrant" not in rel.model_fields_set
+            ):
+                warrant = derive_relation_warrant(rel)
+                rel.inferential_force = warrant
+                rel.inferential_warrant = warrant
 
             p_val = (
-                rel.stance_probability
-                if rel.stance_probability is not None
+                rel.perception_stance_prob
+                if rel.perception_stance_prob is not None
                 else (
-                    rel.class_probability
-                    if rel.class_probability is not None
-                    else (rel.confidence if rel.confidence is not None else 1.0)
+                    rel.stance_probability
+                    if rel.stance_probability is not None
+                    else (
+                        rel.class_probability
+                        if rel.class_probability is not None
+                        else (rel.confidence if rel.confidence is not None else 1.0)
+                    )
                 )
             )
             c_val = (
-                rel.model_confidence
-                if rel.model_confidence is not None
+                rel.perception_empirical_acc
+                if rel.perception_empirical_acc is not None
                 else (
-                    rel.calibrated_confidence
-                    if rel.calibrated_confidence is not None
+                    rel.model_confidence
+                    if rel.model_confidence is not None
                     else (
-                        rel.empirical_accuracy
-                        if rel.empirical_accuracy is not None
-                        else (rel.confidence if rel.confidence is not None else 1.0)
+                        rel.calibrated_confidence
+                        if rel.calibrated_confidence is not None
+                        else (
+                            rel.empirical_accuracy
+                            if rel.empirical_accuracy is not None
+                            else (rel.confidence if rel.confidence is not None else 1.0)
+                        )
                     )
                 )
             )
@@ -268,6 +281,7 @@ class TheoryNetProjector:
                     else:
                         rel.active_weight = 0.0
                         rel.tenability = 0.0
+                        rel.edge_tenability = 0.0
                 else:
                     rel.active_weight = rel.inferential_force
             else:
@@ -293,10 +307,17 @@ class TheoryNetProjector:
         atoms: list[TheoryAtom] = []
         for c in source_atoms:
             atom = c.model_copy()
-            if "modal_strength" not in atom.model_fields_set and "base_score" not in atom.model_fields_set:
-                atom.modal_strength = self.modal_resolver.resolve_modality_sync(atom)
-                atom.base_score = atom.modal_strength
+            if (
+                "modal_prior" not in atom.model_fields_set
+                and "modal_strength" not in atom.model_fields_set
+                and "base_score" not in atom.model_fields_set
+            ):
+                resolved_mod = self.modal_resolver.resolve_modality_sync(atom)
+                atom.modal_prior = resolved_mod
+                atom.modal_strength = resolved_mod
+                atom.base_score = resolved_mod
             atom.plausibility = self.compute_weight(atom)
+            atom.equilibrium_strength = atom.plausibility
             atoms.append(atom)
 
         # Execute Gradual Semantics Convergence via sovereign epistemetrics solver
@@ -311,6 +332,9 @@ class TheoryNetProjector:
             for atom in atoms:
                 if atom.id in solver_res.degrees:
                     atom.plausibility = solver_res.degrees[atom.id]
+                    atom.equilibrium_strength = solver_res.degrees[atom.id]
+                if solver_res.volatility_index and atom.id in solver_res.volatility_index:
+                    atom.controversy_volatility = solver_res.volatility_index[atom.id]
 
         return TheoryNet(
             atoms=atoms,
@@ -342,6 +366,17 @@ class TheoryNetProjector:
                     )
                     else 1
                 )
+            ts_edge = (
+                float(rel.edge_tenability)
+                if rel.edge_tenability is not None
+                else (float(rel.tenability) if rel.tenability is not None else 1.0)
+            )
+            base_eff = (
+                rel.active_weight
+                if (rel.edge_tenability is not None or rel.tenability is not None or not rel.is_admissible)
+                else (rel.effective_weight if rel.effective_weight is not None else rel.active_weight)
+            )
+            solver_eff_weight = float(base_eff * ts_edge) if rel.is_admissible else 0.0
             theory_edges.append(
                 TheoryEdge(
                     source=rel.source_id,
@@ -354,32 +389,35 @@ class TheoryNetProjector:
                     stance_probability=rel.stance_probability,
                     model_confidence=rel.model_confidence,
                     empirical_accuracy=rel.empirical_accuracy,
-                    active_weight=rel.active_weight,
-                    effective_weight=rel.effective_weight,
+                    active_weight=solver_eff_weight,
+                    effective_weight=solver_eff_weight,
                 )
             )
         return theory_edges
 
     def _to_node_priors(self, atoms: list[TheoryAtom]) -> dict[str, float]:
-        """Extract node prior plausibility mappings from theoretical atoms.
+        """Extract tenability-modulated node prior plausibility mappings from theoretical atoms.
 
         Parameters
         ----------
         atoms : list of TheoryAtom
-            Theoretical atoms with base scores or computed plausibility.
+            Theoretical atoms with base scores and optional local tenability.
 
         Returns
         -------
         dict of str to float
-            Mapping from atom identifier to prior plausibility score.
+            Mapping from atom identifier to tenability-modulated prior :math:`\\tilde{\\tau}_0(a)`.
         """
         return {
-            atom.id: atom.plausibility if atom.plausibility is not None else atom.base_score
+            atom.id: self.compute_weight(atom)
             for atom in atoms
         }
 
     def compute_weight(self, atom: TheoryAtom) -> float:
-        """Derive prior plausibility weight for a theoretical atom.
+        """Derive tenability-modulated prior plausibility weight :math:`\\tilde{\\tau}_0(a)` for a theoretical atom.
+
+        .. math::
+            \\tilde{\\tau}_0(a) = \\tau_0(a) \\cdot TS_{\\text{local}}(a)
 
         Parameters
         ----------
@@ -389,15 +427,9 @@ class TheoryNetProjector:
         Returns
         -------
         float
-            Assigned prior plausibility.
+            Assigned prior plausibility in ``[0.0, 1.0]``.
         """
-        if atom.base_score is not None:
-            return atom.base_score
-        if atom.modal_strength is not None:
-            return atom.modal_strength
-        if atom.plausibility is not None:
-            return atom.plausibility
-        return atom.confidence if atom.confidence is not None else 0.60
+        return atom.effective_base_prior()
 
     def compute_relation_weight(self, rel: TheoryRelation) -> float:
         """Compute signed directional relation weight.
@@ -420,7 +452,7 @@ class TheoryNetProjector:
         elif rel.effective_weight is not None:
             base = rel.effective_weight
         elif rel.class_probability is not None:
-            base = rel.modal_strength * rel.class_probability
+            base = rel.inferential_warrant * rel.class_probability
         elif rel.weight is not None:
             base = abs(rel.weight)
         else:

@@ -16,7 +16,7 @@ of each phase with respect to the size of the input document corpus and analyzes
 * **$|\mathcal{T}|$**: Total number of registered theory elements ($M_p, M_{pp}$).
 * **$K$**: A constant bounding parameter (e.g., `max_candidates_per_entity_pair`, `arc_max_candidates_per_component`, `top_k_linking_candidates`).
 * **$\boldsymbol{\mu}_e$**: Geometric centroid embedding of entity $e$ across its textual mention envelopes.
-* **$I$**: Fixed number of iterations in QBAF iterative gradual semantics convergence ($I=5$).
+* **$T_{\text{ODE}}$**: Adaptive integration step count (`RK45`/`Radau`) for cyclic strongly connected components (SCCs) in continuous D-QBAF gradual semantics (whereas acyclic DAG components execute in a single closed-form topological pass).
 
 ---
 
@@ -33,8 +33,8 @@ of each phase with respect to the size of the input document corpus and analyzes
 | **Phase 4: Argument Mining** | ADU / ACC (Local) + ARC (Global) | $O(C) + O(A \cdot K)$ | LLM Structured Output | `arc_max_candidates_per_component` ($K=10$) |
 | **Phase 4: Maturation** | Centroid Text Synthesis | $O(E)$ | LLM Structured Output | `maturation_top_k` ($5$) |
 | **Phase 5: Fusion** | Community Leiden Detection | $O(V \log V)$ | Neo4j GDS / In-Memory Graph | Resolution parameters |
-| **Phase 6: TheoryNet** | QBAF Gradual Semantics Iteration | $O(I \cdot (\vert A\vert + \vert R\vert))$ | In-Memory Convergence Loop | Iterations $I=5$ |
-| **Post-Processing** | Theoretical Enrichment | $O(\vert\mathcal{C}\vert \cdot \vert\mathcal{T}\vert)$ | LLM Structured Output | Number of Theories $\mathcal{T}$ |
+| **Phase 6: TheoryNet** | Continuous D-QBAF Equilibrium | $O(\vert A\vert + \vert R\vert)$ (DAG) / $O(T_{\text{ODE}} \cdot (\vert A_{\text{cyc}}\vert + \vert R_{\text{cyc}}\vert))$ (Cyclic) | Closed-Form DAG / Adaptive ODE Solver | `rtol`, `atol`, `max_time` |
+| **Post-Processing** | Theoretical Enrichment & Coupled Re-Convergence | $O(\vert\mathcal{C}\vert \cdot \vert\mathcal{T}\vert) + O(\vert A\vert + \vert R\vert)$ | LLM Structured Output + D-QBAF Re-Convergence | Number of Theories $\mathcal{T}$ |
 
 ---
 
@@ -93,17 +93,19 @@ cross-encoder reranking, and LLM decoding.
   roughly $O(V \log V)$ or $O(V + \mathcal{E})$ where $V$ is nodes and $\mathcal{E}$ is edges.
 * **Overall Complexity**: **$O(E \log E)$** or near-linear in graph size.
 
-#### Phase 6: TheoryNet Construction & Gradual Semantics
+#### Phase 6: TheoryNet Construction & Continuous D-QBAF Gradual Semantics
 
-* Maps Phase 4 theory atoms and relations into the formal $\mathcal{G}_{\text{TheoryNet}}$ model.
-* Runs iterative QBAF gradual semantics convergence over incoming relation weights: $O(I \cdot (|A| + |R|))$, where $I=5$ is the fixed iteration count.
-* **Overall Complexity**: **$O(|A| + |R|)$** linear in theory graph components.
+* Maps Phase 4/5 canonical theory atoms and relations into the formal $\mathcal{G}_{\text{TheoryNet}}$ model ([ADR-0011 Addendum 2](../adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), [ADR-0022](../adr/0022-unified-stratified-epistemic-metamodel.md)).
+* **Acyclic Graphs (DAGs)**: Solves equilibrium justification degrees $\tau^*(a)$ in a single exact closed-form topological pass via Kahn's algorithm in **$O(|A| + |R|)$** time with zero iteration overhead.
+* **Cyclic Graphs**: Integrates the continuous dynamical system $\frac{ds_i(t)}{dt} = -s_i(t) + \sigma(\text{logit}(\tilde{\tau}_0(a_i)) + E_i(s(t)))$ over cyclic subgraphs using adaptive Runge-Kutta (`RK45`) or implicit `Radau` ODE integration with terminal root-finding (`||ds/dt||_\infty < 10^{-5}`), scaling as **$O(T_{\text{ODE}} \cdot (|A_{\text{cyc}}| + |R_{\text{cyc}}|))$**.
+* **Overall Complexity**: **$O(|A| + |R|)$** for DAGs; **$O(T_{\text{ODE}} \cdot (|A_{\text{cyc}}| + |R_{\text{cyc}}|))$** for cyclic components.
 
-#### Post-Processing: Theoretical Enrichment & Tenability Evaluation
+#### Post-Processing: Theoretical Enrichment & Coupled D-QBAF Re-Convergence
 
 * Projects empirical clusters $\mathcal{C}$ into theoretical parametric spaces ($M_p$) across registered theory elements $\mathcal{T}$.
-* Evaluates local and aggregated tenability via bounded blur constraints: $O(|\mathcal{C}| \cdot |\mathcal{T}|)$ structured LLM/optimization calls.
-* **Overall Complexity**: **$O(|\mathcal{C}| \cdot |\mathcal{T}|)$**.
+* Evaluates local tenability ($TS_{\text{local}}$) and intertheoretical edge tenability ($TS_{\text{edge}}$) via bounded blur constraints: $O(|\mathcal{C}| \cdot |\mathcal{T}|)$ structured LLM/optimization calls.
+* Executes an incremental D-QBAF re-convergence pass over tenability-modulated node priors $\tilde{\tau}_0(a) = \tau_0(a) \cdot TS_{\text{local}}(a)$ and edge weights $W_{ji} \cdot TS_{\text{edge}}(e)$ in $O(|A| + |R|)$ time.
+* **Overall Complexity**: **$O(|\mathcal{C}| \cdot |\mathcal{T}|) + O(|A| + |R|)$**.
 
 ---
 

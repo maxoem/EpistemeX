@@ -996,10 +996,9 @@ class ArtifactReader:
                             empirical_accuracy=payload.get("empirical_accuracy"),
                             model_confidence=payload.get("model_confidence", payload.get("calibrated_confidence")),
                             stance_probability=payload.get("stance_probability", payload.get("class_probability")),
-                            inferential_force=payload.get("inferential_force"),
+                            inferential_force=payload.get("inferential_warrant", payload.get("inferential_force")),
                             active_weight=payload.get("active_weight"),
                             is_admissible=bool(payload.get("is_admissible", True)),
-                            modal_strength=payload.get("modal_strength"),
                             decision_tier=tier,
                             conformal_set_size=payload.get("conformal_set_size"),
                             decision_id=payload.get("decision_id"),
@@ -1014,7 +1013,8 @@ class ArtifactReader:
                 text = payload.get("text", "")
                 label = (text[:60] + "...") if len(text) > 60 else (text or comp_id)
                 base_sc = payload.get("base_score", payload.get("plausibility"))
-                mod_str = payload.get("modal_strength", base_sc)
+                mod_str = payload.get("modal_prior", payload.get("modal_strength", base_sc))
+                eq_str = payload.get("equilibrium_strength", payload.get("plausibility", base_sc))
                 tier = "system_1" if payload.get("decision_tier") == "system_1" or payload.get("is_fast_exit") else ("system_2" if payload.get("decision_tier") == "system_2" else "legacy")
                 scope_t = payload.get("scope_type")
                 epist_s = payload.get("epistemic_status")
@@ -1027,7 +1027,7 @@ class ArtifactReader:
                     type=comp_type,
                     label=label,
                     partition=mapper.resolve_partition(comp_type),
-                    plausibility=base_sc,
+                    plausibility=eq_str,
                     confidence=payload.get("confidence"),
                     empirical_accuracy=payload.get("empirical_accuracy"),
                     modal_strength=mod_str,
@@ -1037,9 +1037,9 @@ class ArtifactReader:
                     modal_resolver=res_type,
                     raw_modal_score=raw_m,
                     is_modal_clamped=clamped_m,
-                    qbaf_tau=payload.get("qbaf_tau"),
+                    qbaf_tau=payload.get("qbaf_tau", eq_str),
                     total_weight_of_evidence=payload.get("total_weight_of_evidence"),
-                    volatility_index=payload.get("volatility_index"),
+                    volatility_index=payload.get("volatility_index", payload.get("controversy_volatility")),
                     decision_tier=tier,
                     conformal_set_size=payload.get("conformal_set_size"),
                     decision_id=payload.get("decision_id"),
@@ -1065,7 +1065,7 @@ class ArtifactReader:
                     if polarity is None:
                         unmapped_predicates[rel_type] = unmapped_predicates.get(rel_type, 0) + 1
                     tier = "system_1" if payload.get("decision_tier") == "system_1" or payload.get("is_fast_exit") else ("system_2" if payload.get("decision_tier") == "system_2" else "legacy")
-                    inf_force = payload.get("inferential_force", payload.get("modal_strength", 0.75))
+                    inf_force = payload.get("inferential_warrant", payload.get("inferential_force", 0.75))
                     act_weight = payload.get("active_weight", payload.get("weight", inf_force))
                     edges.append(
                         StudioEdge(
@@ -1077,14 +1077,13 @@ class ArtifactReader:
                             polarity=polarity,
                             weight=payload.get("weight", act_weight),
                             confidence=payload.get("confidence"),
-                            tenability=payload.get("tenability"),
-                            empirical_accuracy=payload.get("empirical_accuracy"),
+                            tenability=payload.get("edge_tenability", payload.get("tenability")),
+                            empirical_accuracy=payload.get("perception_empirical_acc", payload.get("empirical_accuracy")),
                             model_confidence=payload.get("model_confidence", payload.get("calibrated_confidence")),
-                            stance_probability=payload.get("stance_probability", payload.get("class_probability")),
+                            stance_probability=payload.get("perception_stance_prob", payload.get("stance_probability", payload.get("class_probability"))),
                             inferential_force=inf_force,
                             active_weight=act_weight,
                             is_admissible=bool(payload.get("is_admissible", True)),
-                            modal_strength=payload.get("modal_strength"),
                             qbaf_tau=payload.get("qbaf_tau"),
                             decision_tier=tier,
                             conformal_set_size=payload.get("conformal_set_size"),

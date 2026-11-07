@@ -160,12 +160,20 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
                 if curation_ledger is not None:
                     override_val = curation_ledger.get_modality_override(atom.id)
                     if override_val is not None:
+                        atom.modal_prior = override_val
                         atom.modal_strength = override_val
                         atom.base_score = override_val
+                        atom.resolver_type = "curation_ledger_override"
                         continue
-                if "modal_strength" not in atom.model_fields_set and "base_score" not in atom.model_fields_set:
-                    atom.modal_strength = await self.modal_resolver.resolve_modality(atom)
-                    atom.base_score = atom.modal_strength
+                if (
+                    "modal_prior" not in atom.model_fields_set
+                    and "modal_strength" not in atom.model_fields_set
+                    and "base_score" not in atom.model_fields_set
+                ):
+                    resolved_mod = await self.modal_resolver.resolve_modality(atom)
+                    atom.modal_prior = resolved_mod
+                    atom.modal_strength = resolved_mod
+                    atom.base_score = resolved_mod
 
             if curation_ledger is not None:
                 source_relations = curation_ledger.apply_to_theory_relations(

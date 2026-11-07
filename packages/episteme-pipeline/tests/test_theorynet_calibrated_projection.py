@@ -36,7 +36,7 @@ class TestTheoryRelationContracts:
     """Test suite for TheoryRelation calibrated attributes and weight decoupling."""
 
     def test_theory_relation_calibrated_fields_defaults(self) -> None:
-        """Verify default effective weight is derived as M * P."""
+        """Verify default effective weight and warrant defaults without edge modal_strength."""
         rel = TheoryRelation(
             source_id="c1",
             target_id="c2",
@@ -44,16 +44,17 @@ class TestTheoryRelationContracts:
             confidence=0.8,
             scope="global",
         )
-        assert rel.modal_strength == 1.0
+        assert not hasattr(rel, "modal_strength")
+        assert rel.inferential_warrant == 0.75
+        assert rel.inferential_force == 0.75
         assert rel.class_probability is None
         assert rel.empirical_accuracy is None
-        # Default effective_weight = modal_strength (1.0) * confidence (0.8)
+        # Default effective_weight when warrant is not explicitly set uses confidence (0.8)
         assert pytest.approx(rel.effective_weight) == 0.8
         assert pytest.approx(rel.weight) == 0.8
 
-    def test_decoupling_epistemic_confidence_from_modal_strength(self) -> None:
-        """Verify high extraction confidence does not inflate tentative epistemic modality."""
-        # Author: 'It is conceivable that space is an illusion' (Extraction P=0.99, but Modality M=0.30)
+    def test_decoupling_epistemic_confidence_from_inferential_warrant(self) -> None:
+        """Verify high extraction confidence does not inflate weak inferential warrant."""
         rel = TheoryRelation(
             source_id="speculative_hypothesis",
             target_id="space_concept",
@@ -61,15 +62,16 @@ class TestTheoryRelationContracts:
             confidence=0.99,
             class_probability=0.99,
             empirical_accuracy=0.96,
-            modal_strength=0.30,
+            inferential_warrant=0.30,
             scope="global",
             decision_engine_provider="typesafe_jev",
         )
 
         assert rel.class_probability == 0.99
         assert rel.empirical_accuracy == 0.96
-        assert rel.modal_strength == 0.30
-        # Crucial check: effective weight is M * P = 0.30 * 0.99 = 0.297, NOT 0.99!
+        assert rel.inferential_warrant == 0.30
+        assert rel.inferential_force == 0.30
+        # Crucial check: effective weight is I * P = 0.30 * 0.99 = 0.297, NOT 0.99!
         assert pytest.approx(rel.effective_weight, rel=1e-3) == 0.297
         assert pytest.approx(rel.weight, rel=1e-3) == 0.297
         assert rel.decision_engine_provider == "typesafe_jev"
@@ -83,7 +85,7 @@ class TestTheoryRelationContracts:
             confidence=0.88,
             class_probability=0.88,
             empirical_accuracy=0.92,
-            modal_strength=0.75,
+            inferential_warrant=0.75,
             scope="global",
             decision_engine_provider="mock_jev",
         )
@@ -101,7 +103,7 @@ class TestTheoryRelationContracts:
         assert restored.relation_type == "ATTACKS"
         assert restored.class_probability == 0.88
         assert restored.empirical_accuracy == 0.92
-        assert restored.modal_strength == 0.75
+        assert restored.inferential_warrant == 0.75
         assert pytest.approx(restored.effective_weight, rel=1e-3) == 0.75 * 0.88
         assert restored.decision_engine_provider == "mock_jev"
 
@@ -118,7 +120,7 @@ class TestTheoryNetProjectorCalibrated:
             relation_type="SUPPORTS",
             confidence=0.9,
             class_probability=0.9,
-            modal_strength=0.5,
+            inferential_warrant=0.5,
             scope="global",
         )
         rel_att = TheoryRelation(
@@ -127,7 +129,7 @@ class TestTheoryNetProjectorCalibrated:
             relation_type="ATTACKS",
             confidence=0.8,
             class_probability=0.8,
-            modal_strength=0.5,
+            inferential_warrant=0.5,
             scope="global",
         )
 
@@ -313,7 +315,7 @@ class TestPhase6RunnerProjection:
             confidence=0.95,
             class_probability=0.95,
             empirical_accuracy=0.92,
-            modal_strength=0.80,
+            inferential_warrant=0.80,
             scope="global",
             decision_engine_provider="typesafe_jev",
         )
@@ -351,7 +353,8 @@ class TestPhase6RunnerProjection:
 
         assert stored_rel.class_probability == 0.95
         assert stored_rel.empirical_accuracy == 0.92
-        assert stored_rel.modal_strength == 0.80
+        assert stored_rel.inferential_warrant == 0.80
+        assert stored_rel.inferential_force == 0.80
         assert pytest.approx(stored_rel.effective_weight, rel=1e-3) == 0.76
         assert stored_rel.decision_engine_provider == "typesafe_jev"
 
@@ -363,12 +366,13 @@ class TestPhase6RunnerProjection:
         assert props["calibrated_confidence"] == 0.92
         assert props["class_probability"] == 0.95
         assert props["empirical_accuracy"] == 0.92
-        assert props["modal_strength"] == 0.80
+        assert props["inferential_warrant"] == 0.80
+        assert props["inferential_force"] == 0.80
+        assert "modal_strength" not in props
         # effective_weight = 0.80 * 0.95 = 0.76
         assert pytest.approx(props["effective_weight"], rel=1e-3) == 0.76
         assert pytest.approx(props["weight_support"], rel=1e-3) == 0.76
         assert props["weight_attack"] == 0.0
-        assert props["decision_engine_provider"] == "typesafe_jev"
         assert props["decision_engine_provider"] == "typesafe_jev"
 
 

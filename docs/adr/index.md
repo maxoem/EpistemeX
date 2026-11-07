@@ -30,6 +30,7 @@ approach: [ADR 0008: Diátaxis Documentation Framework](0008-diataxis-documentat
 
 ### Recent Changes
 
+- **0022** - Unified Stratified Epistemic Metamodel: Reconciling TF, D-QBAF, and Structuralist Tenability Feedback (2026-11-07)
 - **0021** - Incremental Corpus Evolution, Declarative Artifact Hydration, and Persistent HITL Constraint Ledgers (2026-10-25)
 - **0020** - Propositional Modal Strength Resolver, Structuralist Syntax Priors, and Neuro-Symbolic Hybrid Estimation (2026-10-07)
 - **0019** - TypeSafe Jev Client Implementation, System 1 Adapters, and Decision Observability (2026-10-01)
@@ -44,7 +45,7 @@ approach: [ADR 0008: Diátaxis Documentation Framework](0008-diataxis-documentat
 - **0010** - Dual-Driver Graph Preview (Artifact Store vs. Live Neo4j) and Calculation Overlays (2026-09-07)
 - **0009** - SOTA Dual-Memory Architecture & Episodic Working Memory (2026-08-05)
 - **0008** - Diátaxis Documentation Framework (2026-06-23)
-- **0007** - TF Structural Correspondence
+- **0007** - TF Structural Correspondence (*Partially Superseded by ADR-0011 Addendum 2, ADR-0020, and ADR-0022; $\kappa$-correspondence and structuralist poset retained*)
 - **0006** - QBAF Mapping Deferred
 - **0005** - Two-Pass Fusion Strategy
 - **0004** - ACC Outputs Triples Single Pass

@@ -196,7 +196,13 @@ class StructuralistModalResolver:
         float
             Propositional modal strength M(phi) in [0.0, 1.0].
         """
-        return self.evaluate_syntax_profile(atom).score
+        profile = self.evaluate_syntax_profile(atom)
+        atom.modal_prior = profile.score
+        atom.modal_strength = profile.score
+        atom.base_score = profile.score
+        atom.resolver_type = "structural"
+        atom.syntax_bounds = profile.bounds
+        return profile.score
 
     async def resolve_modality(
         self,
@@ -512,6 +518,9 @@ class HybridModalResolver:
             resolver_type = "hybrid_guardrail"
 
         final_score = float(max(0.0, min(1.0, final_score)))
+        atom.resolver_type = resolver_type
+        atom.syntax_bounds = syntax_profile.bounds
+        atom.modal_prior = final_score
 
         # Emit observability domain event
         try:

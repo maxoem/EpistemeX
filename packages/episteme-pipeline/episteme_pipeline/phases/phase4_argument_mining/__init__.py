@@ -576,8 +576,14 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         # Resolve authorial propositional modal strength on newly mined components
         if self.modal_resolver:
             for c in components:
-                if "modal_strength" not in c.model_fields_set and "base_score" not in c.model_fields_set:
-                    c.modal_strength = await self.modal_resolver.resolve_modality(c, context=chunk_text)
-                    c.base_score = c.modal_strength
+                if (
+                    "modal_prior" not in c.model_fields_set
+                    and "modal_strength" not in c.model_fields_set
+                    and "base_score" not in c.model_fields_set
+                ):
+                    resolved_mod = await self.modal_resolver.resolve_modality(c, context=chunk_text)
+                    c.modal_prior = resolved_mod
+                    c.modal_strength = resolved_mod
+                    c.base_score = resolved_mod
 
         return components, local_relations, chunk_id

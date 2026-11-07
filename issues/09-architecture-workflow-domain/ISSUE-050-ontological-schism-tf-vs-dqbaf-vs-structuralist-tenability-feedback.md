@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Epistemic Metamodel, Formal Semantics, ADR Governance) |
 | **Target Package(s)** | `packages/episteme-pipeline`, `packages/epistemetrics` (`contracts/domain.py`, `artifacts/models.py`, `phases/phase6_theorynet/`, `post_processing/theoretical_enrichment/`) |
 | **Priority** | **High** |
-| **Status** | `Open` |
+| **Status** | `Completed` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`docs/architecture/runtime_analysis.md`](../../docs/architecture/runtime_analysis.md), [`ADR-0006`](../../docs/adr/0006-qbaf-mapping-deferred.md), [`ADR-0007`](../../docs/adr/0007-tf-structural-correspondence.md), [`ADR-0011`](../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), [`ADR-0015`](../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md), [`ADR-0020`](../../docs/adr/0020-propositional-modal-strength-resolver.md) |
 
 ---
@@ -119,10 +119,10 @@ Eliminate the 11-field flat float soup on `TheoryRelation` (`contracts/domain.py
 
 ## 4. Acceptance Criteria
 
-- [ ] `ADR-0007` header and `docs/adr/index.md` are updated to clarify which sections are superseded by `ADR-0011 Addendum 2` and `ADR-0020`, eliminating contradiction between `TF` and `D-QBAF`.
-- [ ] `modal_strength` is removed from `TheoryRelation` / `TheoryRelationArtifact` and consolidated on `TheoryAtom` / `TheoryAtomArtifact` to prevent $M^2$ double-penalization.
-- [ ] Empirical tenability ($TS_{\text{local}}, TS_{\text{edge}}$) from `TheoreticalEnrichmentRunner` feeds into D-QBAF equilibrium justification $\tau^*$, ensuring empirically falsified hypotheses ($TS < 0.5$) reflect degraded justification.
-- [ ] `docs/architecture/runtime_analysis.md` accurately documents the closed-form DAG and adaptive ODE cyclic complexity of Phase 6.
+- [x] `ADR-0007` header and `docs/adr/index.md` are updated to clarify which sections are superseded by `ADR-0011 Addendum 2` and `ADR-0020`, eliminating contradiction between `TF` and `D-QBAF`.
+- [x] `modal_strength` is removed from `TheoryRelation` / `TheoryRelationArtifact` and consolidated on `TheoryAtom` / `TheoryAtomArtifact` to prevent $M^2$ double-penalization.
+- [x] Empirical tenability ($TS_{\text{local}}, TS_{\text{edge}}$) from `TheoreticalEnrichmentRunner` feeds into D-QBAF equilibrium justification $\tau^*$, ensuring empirically falsified hypotheses ($TS < 0.5$) reflect degraded justification.
+- [x] `docs/architecture/runtime_analysis.md` accurately documents the closed-form DAG and adaptive ODE cyclic complexity of Phase 6.
 
 ---
 

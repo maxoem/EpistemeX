@@ -772,6 +772,12 @@ class ArtifactExecutionEngine:
                     self.emitted_gate_event = True
                 self._inner.emit(event)
 
+            def register_observer(self, observer: Any) -> None:
+                self._inner.register_observer(observer)
+
+            def unregister_observer(self, observer: Any) -> None:
+                self._inner.unregister_observer(observer)
+
             def flush(self) -> None:
                 self._inner.flush()
 

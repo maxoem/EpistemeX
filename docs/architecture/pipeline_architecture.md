@@ -199,13 +199,13 @@ The theory-graph construction process is organized into sequential phase runners
 ### Phase 6: TheoryNet Materialization (`Phase6Runner`)
 
 - **Input View**: `Phase5ArtifactsView` (`canonical_theory_atoms`, `canonical_theory_relations` with Phase 5 `FusionDecisionArtifact` cluster merges applied).
-- **Purpose**: Formalize canonical argument components and relations into the TheoryNet ($\text{TF} = (\text{At}, R)$) mathematical model, iterate QBAF gradual semantics, and calculate baseline empirical content.
+- **Purpose**: Formalize canonical argument components and relations into the Stratified Epistemic State Tuple ([ADR-0022](../adr/0022-unified-stratified-epistemic-metamodel.md)), solve continuous D-QBAF gradual semantics ([ADR-0011 Addendum 2](../adr/0011-declarative-graph-metrics-and-qbaf-semantics.md)), and calculate baseline empirical content.
 - **Key Operations**:
-  - Mathematical formalization of canonical TheoryAtoms ($\text{At}$) and TheoryRelations ($R$).
-  - Evaluates gradual epistemic semantics (initial base score $\rho \to$ final degree of justification $\tau$) without duplicate-claim multi-counting.
+  - Resolves node-intrinsic propositional modal priors $\tau_0(a) \equiv M(\phi_a) \in [0, 1]$ (`modal_prior` / `modal_strength`) via `HybridModalResolver` ([ADR-0020](../adr/0020-propositional-modal-strength-resolver.md)), strictly decoupled from edge-intrinsic Toulminian inferential warrants $I_{j \to i} \in [0, 1]$ (`inferential_warrant` / `inferential_force`).
+  - Evaluates continuous D-QBAF gradual epistemic semantics (closed-form topological pass on DAGs; adaptive `RK45`/`Radau` ODE integration on cyclic graphs) from tenability-modulated prior $\tilde{\tau}_0(a) = \tau_0(a) \cdot TS_{\text{local}}(a)$ to equilibrium justification degree $\tau^*(a)$ (`equilibrium_strength` / `plausibility`) and controversy volatility $\mathcal{V}(a)$.
   - Calculates empirical content ratio of theoretical antecedents to empirical observation base ($B \cap P$).
-- **Emitted Artifacts**: Updated [`TheoryAtomArtifact`](../reference/artifacts.md) and [`TheoryRelationArtifact`](../reference/artifacts.md) envelopes with converged tenability/plausibility scores.
-- **See**: [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md).
+- **Emitted Artifacts**: Updated [`TheoryAtomArtifact`](../reference/artifacts.md) and [`TheoryRelationArtifact`](../reference/artifacts.md) envelopes with converged equilibrium justification scores.
+- **See**: [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md), [ADR-0022: Unified Stratified Epistemic Metamodel](../adr/0022-unified-stratified-epistemic-metamodel.md).
 
 ---
 
@@ -216,13 +216,14 @@ Beyond core graph construction (Phases 1–6), modular post-processors can be at
 ### Theoretical Enrichment & Tenability Evaluation (`TheoreticalEnrichmentRunner`)
 
 - **Input View**: `Phase5ArtifactsView` (consuming `canonical_theory_atoms` and `canonical_theory_relations`).
-- **Purpose**: Execute the structuralist dual-enrichment architecture ($\Phi = \Phi_{\text{spec}} \circ \Phi_{\text{gen}}$).
+- **Purpose**: Execute the structuralist dual-enrichment architecture ($\Phi = \Phi_{\text{spec}} \circ \Phi_{\text{gen}}$) and close the empirical tenability feedback loop into D-QBAF equilibrium justification $\tau^*$.
 - **Key Operations**:
   - Maps empirical clusters to Intended Applications ($I \subseteq M_{pp}$).
   - Applies domain-specific lenses ($\Phi_{\text{spec}}$).
   - Calculates local tenability ($TS_{\text{local}} = \sup \{ 1 - \delta \}$).
   - Evaluates cross-theory constraint edges ($TS_{\text{edge}}$), flagging untenable anomalies ($TS < 0.5$).
-- **Emitted Artifacts**: [`TheoreticalEnrichmentArtifact`](../reference/artifacts.md) (postulated theoretical parameters, $TS_{\text{local}}$, $TS_{\text{edge}}$, admissible blurs $\delta^*$).
+  - Executes a coupled D-QBAF re-convergence pass over tenability-modulated priors $\tilde{\tau}_0(a) = \tau_0(a) \cdot TS_{\text{local}}(a)$ and edge weights $W_{ji} \cdot TS_{\text{edge}}(e)$ so empirically falsified hypotheses ($TS_{\text{local}} < 0.5$) reflect degraded equilibrium justification $\tau^*(a)$.
+- **Emitted Artifacts**: [`TheoreticalEnrichmentArtifact`](../reference/artifacts.md) (postulated theoretical parameters, $TS_{\text{local}}$, $TS_{\text{edge}}$, equilibrium strengths $\tau^*$, admissible blurs $\delta^*$) and re-converged [`TheoryAtomArtifact`](../reference/artifacts.md) / [`TheoryRelationArtifact`](../reference/artifacts.md) envelopes.
 - **Governed by**: [ADR 0015](../adr/0015-theoretical-enrichment-and-tenability-evaluation.md) and documented in [Theoretical Enrichment Workflow](../workflow/post_processing/theoretical_enrichment.md).
 
 ---

@@ -394,6 +394,8 @@ class CanonicalizationArtifact(BaseArtifactPayload):
 
 
 class TheoryAtomArtifact(DomainObjectPayload[TheoryAtom]):
+    """Artifact payload capturing a Layer 3 TheoryAtom with Stratified Epistemic State Tuple."""
+
     component_id: str
     chunk_id: str
     text: str
@@ -403,8 +405,14 @@ class TheoryAtomArtifact(DomainObjectPayload[TheoryAtom]):
     epistemic_status: str | None = None
     scope_type: str | None = None
     entity_ids: list[str] = Field(default_factory=list)
+    modal_prior: float = 0.6
     modal_strength: float = 0.6
     base_score: float | None = None
+    local_tenability: float | None = None
+    equilibrium_strength: float | None = None
+    controversy_volatility: float | None = None
+    resolver_type: str | None = None
+    syntax_bounds: tuple[float, float] | None = None
     text_anchor: TextAnchor | None = None
     measurements: list[Measurement] = Field(default_factory=list)
     parameters: dict[str, Any] = Field(default_factory=dict)
@@ -428,8 +436,9 @@ class TheoryAtomArtifact(DomainObjectPayload[TheoryAtom]):
 class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
     """Artifact payload capturing a dialectical TheoryRelation.
 
-    Preserves decoupled calibration metrics, modal strengths, and mathematical
-    weights across pipeline phase boundaries.
+    Preserves decoupled calibration metrics, Toulmin inferential warrants,
+    structural correspondence, and tenability weights across pipeline phase
+    boundaries (strictly free of node-level modal strength).
 
     Parameters
     ----------
@@ -449,10 +458,24 @@ class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
         Relational edge weight.
     class_probability : float | None, optional
         Softmax stance probability.
+    stance_probability : float | None, optional
+        Canonical perception stance probability.
+    perception_stance_prob : float | None, optional
+        System 1 perception stance probability :math:`P(\\text{stance})`.
     empirical_accuracy : float | None, optional
         Calibrated empirical accuracy frequency from decision engine.
-    modal_strength : float, default 1.0
-        Propositional modal strength in [0.0, 1.0].
+    perception_empirical_acc : float | None, optional
+        System 1 calibrated empirical accuracy :math:`C`.
+    model_confidence : float | None, optional
+        Canonical calibrated confidence score.
+    inferential_force : float, default 0.75
+        Toulminian inferential warrant validity :math:`I_{j \\to i} \\in [0, 1]`.
+    inferential_warrant : float, default 0.75
+        Toulminian inferential warrant validity :math:`I_{j \\to i} \\in [0, 1]`.
+    structural_correspondence : float | None, optional
+        :math:`\\kappa`-structural correspondence score from ADR-0007.
+    edge_tenability : float | None, optional
+        Intertheoretical edge tenability :math:`TS_{\\text{edge}}` from ADR-0015.
     effective_weight : float | None, optional
         Decoupled mathematical edge weight.
     decision_engine_provider : str | None, optional
@@ -476,15 +499,19 @@ class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
     weight: float | None = None
     class_probability: float | None = None
     stance_probability: float | None = None
+    perception_stance_prob: float | None = None
     empirical_accuracy: float | None = None
+    perception_empirical_acc: float | None = None
     model_confidence: float | None = None
     inferential_force: float = 0.75
+    inferential_warrant: float = 0.75
+    structural_correspondence: float | None = None
     is_admissible: bool = True
     active_weight: float = 0.75
-    modal_strength: float = 1.0
     effective_weight: float | None = None
     decision_engine_provider: str | None = None
     tenability: float | None = None
+    edge_tenability: float | None = None
     calibrated_confidence: float | None = None
     weight_support: float | None = None
     weight_attack: float | None = None
@@ -547,20 +574,30 @@ class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
             "calibrated_confidence": cal_conf,
             "class_probability": self.class_probability,
             "stance_probability": self.stance_probability,
+            "perception_stance_prob": self.perception_stance_prob,
             "empirical_accuracy": self.empirical_accuracy,
+            "perception_empirical_acc": self.perception_empirical_acc,
             "model_confidence": self.model_confidence,
             "inferential_force": self.inferential_force,
+            "inferential_warrant": self.inferential_warrant,
             "is_admissible": self.is_admissible,
             "active_weight": self.active_weight,
-            "modal_strength": self.modal_strength,
             "effective_weight": eff_w,
             "weight": self.weight if self.weight is not None else eff_w,
             "decision_engine_provider": self.decision_engine_provider,
             "weight_support": w_supp,
             "weight_attack": w_att,
         }
-        if self.tenability is not None:
-            props["tenability"] = self.tenability
+        if self.structural_correspondence is not None:
+            props["structural_correspondence"] = self.structural_correspondence
+        ts_val = (
+            self.edge_tenability
+            if self.edge_tenability is not None
+            else self.tenability
+        )
+        if ts_val is not None:
+            props["tenability"] = ts_val
+            props["edge_tenability"] = ts_val
         return props
 
 
@@ -568,9 +605,11 @@ class TheoreticalEnrichmentArtifact(BaseArtifactPayload):
     enrichment_id: str
     cluster_id: str
     theory_id: str
+    claimant_atom_ids: list[str] = Field(default_factory=list)
     projected_parameters: dict[str, Any] = Field(default_factory=dict)
     local_tenability: float
     edge_tenabilities: dict[str, float] = Field(default_factory=dict)
+    equilibrium_strengths: dict[str, float] = Field(default_factory=dict)
     aggregated_tenability: float
     admissible_blur_delta: float
     is_tenable: bool

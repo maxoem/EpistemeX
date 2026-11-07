@@ -314,14 +314,74 @@ class EpistemicStatus(str, Enum):
 
 
 class TheoryAtom(BaseModel):
+    """Propositional claim, hypothesis, axiom, or observation unit (Layer 3).
+
+    Implements the node-level attributes of the Stratified Epistemic State Tuple:
+    - Layer 1 (Propositional Prior): ``modal_prior`` / ``modal_strength`` / ``base_score`` (:math:`\\tau_0(a) \\equiv M(\\phi_a)`).
+    - Layer 3 (Empirical Tenability): ``local_tenability`` (:math:`TS_{\\text{local}}(a)`) and ``tenability``.
+    - Layer 4 (Dialectical Equilibrium): ``equilibrium_strength`` / ``plausibility`` (:math:`\\tau^*(a)`)
+      and ``controversy_volatility`` (:math:`\\mathcal{V}(a)`).
+
+    Parameters
+    ----------
+    id : str
+        Unique component identifier.
+    text : str
+        Raw span text of the argument component.
+    component_type : str
+        Ontological component type (e.g. ``ObservationUnit``, ``TheoreticalHypothesis``).
+    source_chunk_id : str
+        Source chunk identifier where this component was extracted.
+    confidence : float or None, optional
+        Raw extractor confidence.
+    plausibility : float or None, optional
+        D-QBAF equilibrium justification degree :math:`\\tau^*(a)` (synchronized with ``equilibrium_strength``).
+    modal_prior : float, default 0.6
+        Node-intrinsic propositional modal prior :math:`\\tau_0(a) = M(\\phi_a) \\in [0, 1]`.
+    modal_strength : float, default 0.6
+        Author propositional modal certainty :math:`M(\\phi_a) \\in [0, 1]` (synchronized with ``modal_prior``).
+    base_score : float, default 0.6
+        Prior plausibility :math:`\\tau_0(a)` for QBAF (synchronized with ``modal_prior``).
+    local_tenability : float or None, optional
+        Empirical local tenability score :math:`TS_{\\text{local}}(a) \\in [0, 1]` from ADR-0015.
+    equilibrium_strength : float or None, optional
+        Dialectical equilibrium justification degree :math:`\\tau^*(a) \\in [0, 1]` from D-QBAF.
+    controversy_volatility : float or None, optional
+        Keynes-Gärdenfors epistemic weight volatility :math:`\\mathcal{V}(a) \\ge 0`.
+    resolver_type : str or None, optional
+        Modality resolver identifier (e.g. ``'structuralist_syntax'``, ``'decision_engine_llm'``, ``'hybrid'``).
+    syntax_bounds : tuple of (float, float) or None, optional
+        Deterministic syntax interval :math:`[L_{\\text{syn}}, U_{\\text{syn}}]` from ``StructuralistModalResolver``.
+    entity_ids : list of str, optional
+        Identifiers of L2Entities mentioned in this span.
+    epistemic_status : str or None, optional
+        Rhetorical/dialectical epistemic status.
+    scope_type : str or None, optional
+        Structuralist scope type.
+    text_anchor : TextAnchor or None, optional
+        Character offset grounding in the source chunk.
+    measurements : list of Measurement, optional
+        Quantitative empirical measurements extracted from the span.
+    parameters : dict of str to Any, optional
+        Projected theoretical parameters.
+    tenability : TenabilityResult or None, optional
+        Full empirical tenability evaluation result from Theoretical Enrichment.
+    """
+
     id: str
     text: str
     component_type: str
     source_chunk_id: str
     confidence: float | None = None
     plausibility: float | None = None
+    modal_prior: float = Field(default=0.6, ge=0.0, le=1.0, description="Node-intrinsic propositional modal prior tau_0(a) = M(phi_a)")
     modal_strength: float = Field(default=0.6, ge=0.0, le=1.0, description="Author propositional modal certainty M(phi)")
     base_score: float = Field(default=0.6, ge=0.0, le=1.0, description="Prior plausibility tau_0 for QBAF")
+    local_tenability: float | None = Field(default=None, ge=0.0, le=1.0, description="Empirical local tenability TS_local(a) in [0, 1]")
+    equilibrium_strength: float | None = Field(default=None, ge=0.0, le=1.0, description="Dialectical equilibrium justification degree tau*(a) in [0, 1]")
+    controversy_volatility: float | None = Field(default=None, ge=0.0, description="Keynes-Gardenfors epistemic weight volatility V(a)")
+    resolver_type: str | None = None
+    syntax_bounds: tuple[float, float] | None = None
     entity_ids: list[str] = Field(default_factory=list)
     epistemic_status: str | None = None
     scope_type: str | None = None
@@ -333,26 +393,98 @@ class TheoryAtom(BaseModel):
     @field_validator("scope_type", mode="before")
     @classmethod
     def normalize_scope_type(cls, v: Any) -> str | None:
+        """Normalize scope_type via ScopeType enum."""
         st = ScopeType.from_str(v)
         return st.value if st is not None else (str(v).strip() if v else None)
 
     @field_validator("epistemic_status", mode="before")
     @classmethod
     def normalize_epistemic_status(cls, v: Any) -> str | None:
+        """Normalize epistemic_status via EpistemicStatus enum."""
         es = EpistemicStatus.from_str(v)
         return es.value if es is not None else (str(v).strip() if v else None)
 
     @model_validator(mode="after")
     def sync_modal_and_base_scores(self) -> TheoryAtom:
-        """Synchronize modal_strength and base_score priors."""
-        if "base_score" in self.model_fields_set and "modal_strength" not in self.model_fields_set:
-            self.modal_strength = self.base_score
-        elif "modal_strength" in self.model_fields_set and "base_score" not in self.model_fields_set:
-            self.base_score = self.modal_strength
-        elif self.plausibility is not None and "base_score" not in self.model_fields_set and "modal_strength" not in self.model_fields_set:
-            self.base_score = float(self.plausibility)
-            self.modal_strength = float(self.plausibility)
+        """Synchronize modal_prior, modal_strength, base_score, local_tenability, and equilibrium_strength."""
+        prior_val: float | None = None
+        if "modal_prior" in self.model_fields_set:
+            prior_val = float(self.modal_prior)
+        elif "modal_strength" in self.model_fields_set:
+            prior_val = float(self.modal_strength)
+        elif "base_score" in self.model_fields_set:
+            prior_val = float(self.base_score)
+        elif (
+            self.plausibility is not None
+            and "equilibrium_strength" not in self.model_fields_set
+        ):
+            prior_val = float(self.plausibility)
+
+        if prior_val is not None:
+            if "modal_prior" not in self.model_fields_set:
+                self.modal_prior = prior_val
+            if "modal_strength" not in self.model_fields_set:
+                self.modal_strength = prior_val
+            if "base_score" not in self.model_fields_set:
+                self.base_score = prior_val
+
+        # Synchronize local_tenability and tenability.local_score
+        if self.tenability is not None and self.local_tenability is None:
+            self.local_tenability = float(self.tenability.local_score)
+        elif (
+            self.local_tenability is not None
+            and self.tenability is not None
+            and "local_tenability" in self.model_fields_set
+            and "tenability" not in self.model_fields_set
+        ):
+            self.tenability.local_score = float(self.local_tenability)
+
+        # Synchronize equilibrium_strength and plausibility
+        if (
+            "equilibrium_strength" in self.model_fields_set
+            and self.equilibrium_strength is not None
+            and "plausibility" not in self.model_fields_set
+        ):
+            self.plausibility = float(self.equilibrium_strength)
+        elif (
+            "plausibility" in self.model_fields_set
+            and self.plausibility is not None
+            and "equilibrium_strength" not in self.model_fields_set
+        ):
+            self.equilibrium_strength = float(self.plausibility)
+
         return self
+
+    def effective_base_prior(self) -> float:
+        """Compute tenability-modulated prior :math:`\\tilde{\\tau}_0(a) = \\tau_0(a) \\cdot TS_{\\text{local}}(a)`.
+
+        Returns
+        -------
+        float
+            Effective D-QBAF prior in ``[0.0, 1.0]``.
+        """
+        if self.modal_prior != self.modal_strength:
+            if (
+                "modal_prior" in self.model_fields_set
+                and "modal_strength" not in self.model_fields_set
+            ):
+                prior = self.modal_prior
+            else:
+                prior = self.modal_strength
+        elif self.base_score != self.modal_strength and "base_score" in self.model_fields_set:
+            prior = self.base_score
+        else:
+            prior = (
+                self.modal_strength
+                if self.modal_strength is not None
+                else (self.base_score if self.base_score is not None else 0.6)
+            )
+        ts_local = (
+            self.local_tenability
+            if self.local_tenability is not None
+            else (self.tenability.local_score if self.tenability is not None else 1.0)
+        )
+        return max(0.0, min(1.0, float(prior) * float(ts_local)))
 
 
 class TheoryRelation(BaseModel):
@@ -360,11 +492,12 @@ class TheoryRelation(BaseModel):
 
     Models argumentative interactions (supports, attacks, undercuts, reductions)
     within a Quantitative Bipolar Argumentation Framework (QBAF). Explicitly decouples
-    the author's propositional modality (on nodes) from inferential warrant force (on edges)
-    and perception extraction probability:
+    the author's propositional modality (exclusively on :class:`TheoryAtom` nodes) from
+    inferential warrant force (on edges), perception extraction probability, and
+    intertheoretical edge tenability:
 
     .. math::
-        W_{ji} = \\mathcal{I}(a_j \\to a_i) \\cdot \\mathcal{F}(r)
+        W_{ji} = I_{j \\to i} \\cdot \\mathcal{F}_{\\text{gate}}(P_{ji}, C_{ji}) \\cdot TS_{\\text{edge}}(e_{ji})
 
     Parameters
     ----------
@@ -380,29 +513,38 @@ class TheoryRelation(BaseModel):
         Structural visibility scope ('local' intra-chunk vs 'global' cross-chunk).
     weight : float | None, optional
         Directed relational weight for QBAF semantics. If None, derived from
-        active_weight.
+        effective_weight.
     tenability : float | None, optional
-        Epistemic tenability score in [0.0, 1.0].
+        Epistemic edge tenability score in [0.0, 1.0] (synchronized with ``edge_tenability``).
+    edge_tenability : float | None, optional
+        Intertheoretical edge tenability :math:`TS_{\\text{edge}} \\in [0, 1]` from ADR-0015.
+    structural_correspondence : float | None, optional
+        :math:`\\kappa`-structural correspondence overlap score in [0.0, 1.0] from ADR-0007.
     class_probability : float | None, optional
         Softmax probability P(stance) of the predicted relation type.
     stance_probability : float | None, optional
         Canonical perception class probability P(stance).
+    perception_stance_prob : float | None, optional
+        System 1 perception stance probability :math:`P(\\text{stance}) \\in [0, 1]`.
     empirical_accuracy : float | None, optional
         Calibrated empirical accuracy frequency from System 1 decision engine
         (e.g. Laya action.act_probability) used for admissibility gating.
+    perception_empirical_acc : float | None, optional
+        System 1 calibrated empirical accuracy :math:`C \\in [0, 1]`.
     model_confidence : float | None, optional
         Canonical calibrated confidence score C for perception gating.
     inferential_force : float, default 0.75
-        Toulminian inferential warrant validity I_(j->i) in [0.0, 1.0].
+        Toulminian inferential warrant validity :math:`I_{j \\to i} \\in [0, 1]`
+        (synchronized with ``inferential_warrant``).
+    inferential_warrant : float, default 0.75
+        Toulminian inferential warrant validity :math:`I_{j \\to i} \\in [0, 1]`.
     is_admissible : bool, default True
         Admissibility status under active bivariate thresholds.
     active_weight : float, default 0.75
-        Net weight W_ji ingested by gradual semantics solvers.
-    modal_strength : float, default 1.0
-        Legacy propositional modality score on edges (deprecated in favor of
-        TheoryAtom.modal_strength and TheoryRelation.inferential_force).
+        Net weight :math:`W_{ji}` ingested by gradual semantics solvers.
     effective_weight : float | None, optional
-        Legacy decoupled edge weight.
+        Decoupled edge weight derived strictly from relational warrant, perception
+        confidence, and edge tenability (free of node modality).
     decision_engine_provider : str | None, optional
         System 1 engine provider identifier (e.g. 'mock_jev', 'typesafe_jev').
     calibrated_confidence : float | None, optional
@@ -420,14 +562,18 @@ class TheoryRelation(BaseModel):
     scope: Literal["local", "global"]
     weight: float | None = None
     tenability: float | None = None
+    edge_tenability: float | None = Field(default=None, ge=0.0, le=1.0)
+    structural_correspondence: float | None = Field(default=None, ge=0.0, le=1.0)
     class_probability: float | None = None
     stance_probability: float | None = None
+    perception_stance_prob: float | None = Field(default=None, ge=0.0, le=1.0)
     empirical_accuracy: float | None = None
+    perception_empirical_acc: float | None = Field(default=None, ge=0.0, le=1.0)
     model_confidence: float | None = None
     inferential_force: float = Field(default=0.75, ge=0.0, le=1.0)
+    inferential_warrant: float = Field(default=0.75, ge=0.0, le=1.0)
     is_admissible: bool = True
     active_weight: float = Field(default=0.75, ge=0.0, le=1.0)
-    modal_strength: float = 1.0
     effective_weight: float | None = None
     decision_engine_provider: str | None = None
     calibrated_confidence: float | None = None
@@ -436,39 +582,89 @@ class TheoryRelation(BaseModel):
 
     @model_validator(mode="after")
     def compute_default_weights(self) -> TheoryRelation:
-        """Compute decoupled effective weight, calibrated confidence, and align relation weight."""
-        # Align stance_probability and class_probability
-        if self.stance_probability is not None and self.class_probability is None:
-            self.class_probability = self.stance_probability
-        elif self.class_probability is not None and self.stance_probability is None:
-            self.stance_probability = self.class_probability
+        """Compute decoupled effective weight, calibrated confidence, and align relation fields."""
+        warrant_explicit = (
+            "inferential_warrant" in self.model_fields_set
+            or "inferential_force" in self.model_fields_set
+        )
+        # 1. Align inferential_warrant and inferential_force
+        if (
+            "inferential_warrant" in self.model_fields_set
+            and "inferential_force" not in self.model_fields_set
+        ):
+            self.inferential_force = self.inferential_warrant
+        elif (
+            "inferential_force" in self.model_fields_set
+            and "inferential_warrant" not in self.model_fields_set
+        ):
+            self.inferential_warrant = self.inferential_force
+        else:
+            self.inferential_warrant = self.inferential_force
 
-        # Align model_confidence and calibrated_confidence
+        # 2. Align perception_stance_prob, stance_probability, and class_probability
+        resolved_stance = (
+            self.perception_stance_prob
+            if self.perception_stance_prob is not None
+            else (
+                self.stance_probability
+                if self.stance_probability is not None
+                else self.class_probability
+            )
+        )
+        if resolved_stance is not None:
+            if self.perception_stance_prob is None:
+                self.perception_stance_prob = resolved_stance
+            if self.stance_probability is None:
+                self.stance_probability = resolved_stance
+            if self.class_probability is None:
+                self.class_probability = resolved_stance
+
+        # 3. Align perception_empirical_acc and empirical_accuracy
+        resolved_acc = (
+            self.perception_empirical_acc
+            if self.perception_empirical_acc is not None
+            else self.empirical_accuracy
+        )
+        if resolved_acc is not None:
+            if self.perception_empirical_acc is None:
+                self.perception_empirical_acc = resolved_acc
+            if self.empirical_accuracy is None:
+                self.empirical_accuracy = resolved_acc
+
+        # 4. Align model_confidence and calibrated_confidence
         if self.model_confidence is not None and self.calibrated_confidence is None:
             self.calibrated_confidence = self.model_confidence
         elif self.calibrated_confidence is not None and self.model_confidence is None:
             self.model_confidence = self.calibrated_confidence
 
-        # Backward compatibility: if modal_strength was set on TheoryRelation but inferential_force was not
-        if "modal_strength" in self.model_fields_set and "inferential_force" not in self.model_fields_set:
-            self.inferential_force = self.modal_strength
+        # 5. Align edge_tenability and tenability
+        if self.edge_tenability is not None and self.tenability is None:
+            self.tenability = self.edge_tenability
+        elif self.tenability is not None and self.edge_tenability is None:
+            self.edge_tenability = self.tenability
 
+        ts_edge = (
+            float(self.edge_tenability)
+            if self.edge_tenability is not None
+            else (float(self.tenability) if self.tenability is not None else 1.0)
+        )
+
+        # 6. Compute effective_weight strictly without node modality M(phi)
         if self.effective_weight is None:
             if self.weight is not None:
-                self.effective_weight = self.weight
+                self.effective_weight = float(self.weight)
             else:
-                p_stance = (
-                    self.stance_probability
-                    if self.stance_probability is not None
-                    else (
-                        self.class_probability
-                        if self.class_probability is not None
-                        else self.confidence
+                if warrant_explicit:
+                    p_factor = float(resolved_stance) if resolved_stance is not None else 1.0
+                    self.effective_weight = float(
+                        self.inferential_warrant * p_factor * ts_edge
                     )
-                )
-                self.effective_weight = float(
-                    self.modal_strength * (p_stance if p_stance is not None else 1.0)
-                )
+                elif resolved_stance is not None:
+                    self.effective_weight = float(
+                        self.inferential_warrant * float(resolved_stance) * ts_edge
+                    )
+                else:
+                    self.effective_weight = float(self.confidence * ts_edge)
         if self.weight is None:
             self.weight = self.effective_weight
 
@@ -481,18 +677,85 @@ class TheoryRelation(BaseModel):
                 self.empirical_accuracy
                 if self.empirical_accuracy is not None
                 else (
-                    self.stance_probability
-                    if self.stance_probability is not None
-                    else (
-                        self.class_probability
-                        if self.class_probability is not None
-                        else self.confidence
-                    )
+                    resolved_stance
+                    if resolved_stance is not None
+                    else self.confidence
                 )
             )
         if self.model_confidence is None:
             self.model_confidence = self.calibrated_confidence
         return self
+
+    def compute_effective_weight(
+        self,
+        gating_mode: Literal["hard", "soft"] = "hard",
+        tau_p: float = 0.0,
+        tau_c: float = 0.0,
+    ) -> float:
+        """Compute deterministic edge weight :math:`W_{ji}` free of node modality :math:`M(\\phi)`.
+
+        .. math::
+            W_{ji} = I_{j \\to i} \\cdot \\mathcal{F}_{\\text{gate}}(P_{ji}, C_{ji}) \\cdot TS_{\\text{edge}}(e_{ji})
+
+        Parameters
+        ----------
+        gating_mode : Literal["hard", "soft"], default "hard"
+            Admissibility gating mode (``"hard"`` indicator step vs ``"soft"`` product).
+        tau_p : float, default 0.0
+            Minimum stance probability threshold :math:`\\tau_p`.
+        tau_c : float, default 0.0
+            Minimum empirical accuracy / calibration threshold :math:`\\tau_c`.
+
+        Returns
+        -------
+        float
+            Effective non-negative edge weight :math:`W_{ji} \\in [0, 1]`.
+        """
+        warrant = (
+            self.inferential_warrant
+            if "inferential_warrant" in self.model_fields_set
+            and "inferential_force" not in self.model_fields_set
+            else self.inferential_force
+        )
+        p_val = float(
+            self.perception_stance_prob
+            if self.perception_stance_prob is not None
+            else (
+                self.stance_probability
+                if self.stance_probability is not None
+                else (
+                    self.class_probability
+                    if self.class_probability is not None
+                    else (self.confidence if self.confidence is not None else 1.0)
+                )
+            )
+        )
+        c_val = float(
+            self.perception_empirical_acc
+            if self.perception_empirical_acc is not None
+            else (
+                self.model_confidence
+                if self.model_confidence is not None
+                else (
+                    self.calibrated_confidence
+                    if self.calibrated_confidence is not None
+                    else (
+                        self.empirical_accuracy
+                        if self.empirical_accuracy is not None
+                        else p_val
+                    )
+                )
+            )
+        )
+        if not self.is_admissible or p_val < tau_p or c_val < tau_c:
+            return 0.0
+        gate = 1.0 if gating_mode == "hard" else (p_val * c_val)
+        ts_edge = (
+            float(self.edge_tenability)
+            if self.edge_tenability is not None
+            else (float(self.tenability) if self.tenability is not None else 1.0)
+        )
+        return max(0.0, min(1.0, float(warrant) * gate * ts_edge))
 
     def to_graph_properties(self, polarity: int | None = None) -> dict[str, Any]:
         """Convert TheoryRelation into a serialized projection property dictionary.
@@ -534,20 +797,30 @@ class TheoryRelation(BaseModel):
             "calibrated_confidence": self.calibrated_confidence,
             "class_probability": self.class_probability,
             "stance_probability": self.stance_probability,
+            "perception_stance_prob": self.perception_stance_prob,
             "empirical_accuracy": self.empirical_accuracy,
+            "perception_empirical_acc": self.perception_empirical_acc,
             "model_confidence": self.model_confidence,
             "inferential_force": self.inferential_force,
+            "inferential_warrant": self.inferential_warrant,
             "is_admissible": self.is_admissible,
             "active_weight": self.active_weight,
-            "modal_strength": self.modal_strength,
             "effective_weight": eff_w,
             "weight": self.weight if self.weight is not None else eff_w,
             "decision_engine_provider": self.decision_engine_provider,
             "weight_support": w_supp,
             "weight_attack": w_att,
         }
-        if self.tenability is not None:
-            props["tenability"] = self.tenability
+        if self.structural_correspondence is not None:
+            props["structural_correspondence"] = self.structural_correspondence
+        ts_val = (
+            self.edge_tenability
+            if self.edge_tenability is not None
+            else self.tenability
+        )
+        if ts_val is not None:
+            props["tenability"] = ts_val
+            props["edge_tenability"] = ts_val
         return props
 
     @property
@@ -619,13 +892,25 @@ class TheoryRelation(BaseModel):
             if "effective_weight" in props and props["effective_weight"] is not None
             else None
         )
-        modal_val = float(props.get("modal_strength", 1.0) or 1.0)
         confidence_val = float(props.get("confidence", 1.0) or 1.0)
-        inferential_val = float(props.get("inferential_force", modal_val) or 0.75)
-        stance_prob_val = props.get("stance_probability", props.get("class_probability"))
-        model_conf_val = props.get("model_confidence", props.get("calibrated_confidence", props.get("empirical_accuracy")))
+        raw_warrant = props.get("inferential_warrant", props.get("inferential_force"))
+        inferential_val = float(raw_warrant if raw_warrant is not None else 0.75)
+        stance_prob_val = props.get(
+            "perception_stance_prob",
+            props.get("stance_probability", props.get("class_probability")),
+        )
+        emp_acc_val = props.get(
+            "perception_empirical_acc", props.get("empirical_accuracy")
+        )
+        model_conf_val = props.get(
+            "model_confidence",
+            props.get("calibrated_confidence", emp_acc_val),
+        )
         is_admissible_val = bool(props.get("is_admissible", True))
-        active_weight_val = float(props.get("active_weight", eff_weight_val or inferential_val) or inferential_val)
+        active_weight_val = float(
+            props.get("active_weight", eff_weight_val or inferential_val) or inferential_val
+        )
+        ts_val = props.get("edge_tenability", props.get("tenability"))
 
         return cls(
             source_id=source_id,
@@ -634,17 +919,21 @@ class TheoryRelation(BaseModel):
             confidence=confidence_val,
             scope=scope_val,
             weight=weight_val,
-            class_probability=props.get("class_probability"),
+            class_probability=props.get("class_probability", stance_prob_val),
             stance_probability=stance_prob_val,
-            empirical_accuracy=props.get("empirical_accuracy"),
+            perception_stance_prob=stance_prob_val,
+            empirical_accuracy=emp_acc_val,
+            perception_empirical_acc=emp_acc_val,
             model_confidence=model_conf_val,
             inferential_force=inferential_val,
+            inferential_warrant=inferential_val,
             is_admissible=is_admissible_val,
             active_weight=active_weight_val,
-            modal_strength=modal_val,
             effective_weight=eff_weight_val,
             decision_engine_provider=props.get("decision_engine_provider"),
-            tenability=props.get("tenability"),
+            tenability=ts_val,
+            edge_tenability=ts_val,
+            structural_correspondence=props.get("structural_correspondence"),
             calibrated_confidence=props.get("calibrated_confidence"),
             weight_support=props.get("weight_support"),
             weight_attack=props.get("weight_attack"),
@@ -698,7 +987,8 @@ class TheoryRelation(BaseModel):
         theory_markers = {
             "calibrated_confidence",
             "effective_weight",
-            "modal_strength",
+            "inferential_warrant",
+            "inferential_force",
             "weight_support",
             "weight_attack",
         }

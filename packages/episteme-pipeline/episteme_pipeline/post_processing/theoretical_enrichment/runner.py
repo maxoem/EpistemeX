@@ -348,9 +348,17 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         # Step 4: Edge Tenability & Aggregated Consistency (TS_edge, GL)
         # Pass 2: Evaluate inter-cluster / intertheoretical edge tenability with complete parameter map
         # -------------------------------------------------------------
-        enrichment_artifacts: list[ArtifactEnvelope[TheoreticalEnrichmentArtifact]] = []
-        atoms_to_update: list[TheoryAtom] = []
-        relations_to_update: list[TheoryRelation] = []
+        from episteme_pipeline.artifacts.builders import (
+            build_argument_relation_artifact,
+            build_theory_atom_artifact,
+        )
+        from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
+
+        enrichment_artifacts: list[ArtifactEnvelope[Any]] = []
+        enrichment_payloads: list[tuple[TheoreticalEnrichmentArtifact, EmpiricalCluster]] = []
+        updated_atoms_by_id: dict[str, TheoryAtom] = {}
+        updated_rels_by_key: dict[str, TheoryRelation] = {}
+        atoms_by_id: dict[str, TheoryAtom] = {a.id: a for a in atoms}
 
         for cluster in clusters:
             for theory_id in cluster.claimant_theory_ids:
@@ -395,10 +403,12 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                             )
                         )
 
-                    # Stage relation for graph update
-                    rel_copy = rel.model_copy()
+                    # Stage relation for graph and D-QBAF update
+                    base_rel = updated_rels_by_key.get(rel_key, rel)
+                    rel_copy = base_rel.model_copy()
                     rel_copy.tenability = ts_edge
-                    relations_to_update.append(rel_copy)
+                    rel_copy.edge_tenability = ts_edge
+                    updated_rels_by_key[rel_key] = rel_copy
 
                 tenability_res = self.solver.evaluate_theory_tenability(
                     local_score=ts_local,
@@ -420,18 +430,53 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                     )
                 )
 
-                # Attach parameters and scores to TheoreticalHypothesis nodes in the cluster
-                for obs in cluster.observations:
-                    if self.schema.component_partitions.get(obs.component_type) == "A":
-                        obs_updated = obs.model_copy()
-                        obs_updated.parameters.update(projected_params)
+                # Attach parameters and local tenability scores to claimant hypothesis nodes
+                claimant_ids = set(theory.claimant_hypothesis_ids or [])
+                matched_atom_ids: list[str] = []
+                candidate_atoms: list[TheoryAtom] = []
+                cluster_has_measurements = any(
+                    bool(obs.measurements) for obs in cluster.observations
+                )
+                if claimant_ids:
+                    candidate_atoms = [
+                        obs for obs in cluster.observations if obs.id in claimant_ids
+                    ]
+                    if not candidate_atoms and (
+                        cluster_has_measurements or len(clusters) == 1
+                    ):
+                        candidate_atoms = [
+                            atoms_by_id[cid]
+                            for cid in claimant_ids
+                            if cid in atoms_by_id
+                        ]
+                if not candidate_atoms:
+                    candidate_atoms = [
+                        obs
+                        for obs in cluster.observations
+                        if self.schema.component_partitions.get(obs.component_type) == "A"
+                        or obs.component_type != "ObservationUnit"
+                    ]
+                if not candidate_atoms:
+                    candidate_atoms = list(cluster.observations)
+
+                for obs in candidate_atoms:
+                    base_atom = updated_atoms_by_id.get(obs.id, obs)
+                    obs_updated = base_atom.model_copy()
+                    obs_updated.parameters.update(projected_params)
+                    if (
+                        obs_updated.local_tenability is None
+                        or ts_local <= obs_updated.local_tenability
+                    ):
                         obs_updated.tenability = tenability_res
-                        atoms_to_update.append(obs_updated)
+                        obs_updated.local_tenability = ts_local
+                    updated_atoms_by_id[obs_updated.id] = obs_updated
+                    matched_atom_ids.append(obs_updated.id)
 
                 enrichment_payload = TheoreticalEnrichmentArtifact(
                     enrichment_id=f"enrichment-{uuid4()}",
                     cluster_id=cluster.cluster_id,
                     theory_id=theory_id,
+                    claimant_atom_ids=matched_atom_ids,
                     projected_parameters=projected_params,
                     local_tenability=ts_local,
                     edge_tenabilities=edge_scores,
@@ -440,21 +485,95 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                     is_tenable=tenability_res.is_tenable,
                     anomalies=tenability_res.anomalies,
                 )
+                enrichment_payloads.append((enrichment_payload, cluster))
 
-                envelope = ArtifactEnvelope[TheoreticalEnrichmentArtifact](
-                    artifact_id=enrichment_payload.enrichment_id,
-                    kind=ArtifactKind.THEORETICAL_ENRICHMENT,
+        # -------------------------------------------------------------
+        # Step 4.5: Coupled D-QBAF Equilibrium Re-Convergence
+        # Propagate empirical tenability (TS_local, TS_edge) into D-QBAF tau*(a)
+        # -------------------------------------------------------------
+        merged_atoms = [updated_atoms_by_id.get(a.id, a) for a in atoms]
+        merged_relations = [
+            updated_rels_by_key.get(
+                f"{r.source_id}->{r.relation_type}->{r.target_id}", r
+            )
+            for r in relations
+        ]
+        reconverged_net = TheoryNetProjector(schema=self.schema).project(
+            Phase4ArtifactsView(
+                theory_atoms=merged_atoms,
+                theory_relations=merged_relations,
+            )
+        )
+        reconverged_atoms_by_id = {a.id: a for a in reconverged_net.atoms}
+        reconverged_rels_by_key = {
+            f"{r.source_id}->{r.relation_type}->{r.target_id}": r
+            for r in reconverged_net.relations
+        }
+        equilibrium_map = {
+            a.id: float(a.equilibrium_strength)
+            for a in reconverged_net.atoms
+            if a.equilibrium_strength is not None
+        }
+
+        atoms_to_update: list[TheoryAtom] = []
+        for aid, orig_updated in updated_atoms_by_id.items():
+            reconv = reconverged_atoms_by_id.get(aid)
+            if reconv is not None:
+                orig_updated.equilibrium_strength = reconv.equilibrium_strength
+                orig_updated.plausibility = reconv.plausibility
+                orig_updated.controversy_volatility = reconv.controversy_volatility
+            atoms_to_update.append(orig_updated)
+
+        # Also include downstream atoms whose D-QBAF equilibrium shifted due to tenability feedback
+        for reconv in reconverged_net.atoms:
+            if reconv.id not in updated_atoms_by_id:
+                orig_atom = atoms_by_id.get(reconv.id)
+                if orig_atom is not None and (
+                    orig_atom.plausibility != reconv.plausibility
+                    or orig_atom.equilibrium_strength != reconv.equilibrium_strength
+                ):
+                    atoms_to_update.append(reconv)
+
+        relations_to_update: list[TheoryRelation] = [
+            reconverged_rels_by_key.get(rkey, rel_obj)
+            for rkey, rel_obj in updated_rels_by_key.items()
+        ]
+
+        for enrichment_payload, cluster in enrichment_payloads:
+            enrichment_payload.equilibrium_strengths = dict(equilibrium_map)
+            envelope = ArtifactEnvelope[TheoreticalEnrichmentArtifact](
+                artifact_id=enrichment_payload.enrichment_id,
+                kind=ArtifactKind.THEORETICAL_ENRICHMENT,
+                run_id=context.run_id,
+                phase_name=self.name,
+                method="theoretical_enrichment",
+                payload=enrichment_payload,
+                provenance=ArtifactProvenance(
+                    source_chunk_id=cluster.observations[0].source_chunk_id
+                    if cluster.observations
+                    else None
+                ),
+            )
+            enrichment_artifacts.append(envelope)
+
+        for atom_upd in atoms_to_update:
+            enrichment_artifacts.append(
+                build_theory_atom_artifact(
+                    atom_upd,
                     run_id=context.run_id,
                     phase_name=self.name,
-                    method="theoretical_enrichment",
-                    payload=enrichment_payload,
-                    provenance=ArtifactProvenance(
-                        source_chunk_id=cluster.observations[0].source_chunk_id
-                        if cluster.observations
-                        else None
-                    ),
+                    method="theoretical_enrichment.dqbaf_reconvergence",
                 )
-                enrichment_artifacts.append(envelope)
+            )
+        for rel_upd in relations_to_update:
+            enrichment_artifacts.append(
+                build_argument_relation_artifact(
+                    rel_upd,
+                    run_id=context.run_id,
+                    phase_name=self.name,
+                    method="theoretical_enrichment.dqbaf_reconvergence",
+                )
+            )
 
         # -------------------------------------------------------------
         # Step 5: Graph Persistence

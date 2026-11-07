@@ -512,7 +512,7 @@ class Neo4jReader:
                     edge_tenability = None
 
             tier_edge = props.get("decision_tier", "system_1" if props.get("is_fast_exit") else "legacy")
-            inf_force = props.get("inferential_force", props.get("modal_strength"))
+            inf_force = props.get("inferential_warrant", props.get("inferential_force"))
             edges.append(
                 StudioEdge(
                     id=rel_id,
@@ -524,13 +524,12 @@ class Neo4jReader:
                     weight=props.get("weight"),
                     confidence=props.get("confidence"),
                     tenability=edge_tenability,
-                    empirical_accuracy=props.get("empirical_accuracy"),
+                    empirical_accuracy=props.get("perception_empirical_acc", props.get("empirical_accuracy")),
                     model_confidence=props.get("model_confidence", props.get("calibrated_confidence")),
-                    stance_probability=props.get("stance_probability", props.get("class_probability")),
+                    stance_probability=props.get("perception_stance_prob", props.get("stance_probability", props.get("class_probability"))),
                     inferential_force=inf_force,
                     active_weight=props.get("active_weight", props.get("weight")),
                     is_admissible=bool(props.get("is_admissible", True)),
-                    modal_strength=props.get("modal_strength"),
                     qbaf_tau=props.get("qbaf_tau"),
                     decision_tier=tier_edge,
                     conformal_set_size=props.get("conformal_set_size"),
@@ -768,7 +767,7 @@ class Neo4jReader:
                     edge_tenability = None
 
             tier_edge = props.get("decision_tier", "system_1" if props.get("is_fast_exit") else "legacy")
-            inf_force = props.get("inferential_force", props.get("modal_strength"))
+            inf_force = props.get("inferential_warrant", props.get("inferential_force"))
             edges.append(
                 StudioEdge(
                     id=rel_id,
@@ -780,13 +779,12 @@ class Neo4jReader:
                     weight=props.get("weight"),
                     confidence=props.get("confidence"),
                     tenability=edge_tenability,
-                    empirical_accuracy=props.get("empirical_accuracy"),
+                    empirical_accuracy=props.get("perception_empirical_acc", props.get("empirical_accuracy")),
                     model_confidence=props.get("model_confidence", props.get("calibrated_confidence")),
-                    stance_probability=props.get("stance_probability", props.get("class_probability")),
+                    stance_probability=props.get("perception_stance_prob", props.get("stance_probability", props.get("class_probability"))),
                     inferential_force=inf_force,
                     active_weight=props.get("active_weight", props.get("weight")),
                     is_admissible=bool(props.get("is_admissible", True)),
-                    modal_strength=props.get("modal_strength"),
                     qbaf_tau=props.get("qbaf_tau"),
                     decision_tier=tier_edge,
                     conformal_set_size=props.get("conformal_set_size"),

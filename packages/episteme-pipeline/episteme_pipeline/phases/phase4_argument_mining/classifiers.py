@@ -160,8 +160,10 @@ class JevACCClassifier(ACCClassifier):
                 plausibility=empirical_accuracy,
             )
             if self.modal_resolver:
-                atom.modal_strength = await self.modal_resolver.resolve_modality(atom, context=state)
-                atom.base_score = atom.modal_strength
+                resolved_mod = await self.modal_resolver.resolve_modality(atom, context=state)
+                atom.modal_prior = resolved_mod
+                atom.modal_strength = resolved_mod
+                atom.base_score = resolved_mod
             atoms.append(atom)
 
         return atoms, []
@@ -296,7 +298,7 @@ class JevARCClassifier(ARCClassifier):
         embedding_model: EmbeddingModel | None = None,
         confidence_threshold: float = 0.65,
         max_candidates_per_component: int = 10,
-        default_modal_strength: float = 1.0,
+        default_inferential_warrant: float = 1.0,
     ) -> None:
         self.decision_engine = decision_engine
         self.prompts = prompts
@@ -304,7 +306,7 @@ class JevARCClassifier(ARCClassifier):
         self.embedding_model = embedding_model
         self.confidence_threshold = confidence_threshold
         self.max_candidates_per_component = max_candidates_per_component
-        self.default_modal_strength = default_modal_strength
+        self.default_inferential_warrant = default_inferential_warrant
 
         if prompts is not None:
             question = prompts.decision_template
@@ -318,16 +320,17 @@ class JevARCClassifier(ARCClassifier):
         self.decision_template = question.strip()
         self.criteria = criteria or DECISION_ARC_CRITERIA
 
-    def _resolve_modal_strength(
+    def _resolve_inferential_warrant(
         self,
         source_atom: TheoryAtom,
         target_atom: TheoryAtom,
     ) -> float:
-        """Resolve propositional modal strength for a candidate relation edge.
+        """Resolve Toulminian inferential warrant strength for a candidate relation edge.
 
-        In Quantitative Bipolar Argumentation Frameworks (QBAF), mathematical edge
-        weights decouple epistemic extraction certainty from propositional modal necessity:
-        w = M(modal_strength) * P(stance).
+        In Quantitative Bipolar Argumentation Frameworks (D-QBAF), mathematical edge
+        weights decouple perception extraction certainty from relational warrant validity
+        without conflating node-level modal strength:
+        W = I(inferential_warrant) * P(stance).
 
         Parameters
         ----------
@@ -339,10 +342,9 @@ class JevARCClassifier(ARCClassifier):
         Returns
         -------
         float
-            Modal strength multiplier in [0.0, 1.0]. Defaults to `default_modal_strength` (1.0)
-            unless modulated by atom epistemic status or modality.
+            Inferential warrant multiplier in [0.0, 1.0].
         """
-        return self.default_modal_strength
+        return self.default_inferential_warrant
 
     def _resolve_relation_criterion(self, r_type: str, schema: SchemaConfig) -> str:
         """Resolve prompt criterion text for a relation type using schema and polarity alignment.
@@ -457,8 +459,8 @@ class JevARCClassifier(ARCClassifier):
                 if decision.probability < self.confidence_threshold and decision.probability > (1.0 - self.confidence_threshold):
                     should_escalate = True
                 elif decision.passed and decision.probability >= self.confidence_threshold:
-                    modal = self._resolve_modal_strength(source_atom, target_atom)
-                    eff_w = float(modal * decision.probability)
+                    warrant = self._resolve_inferential_warrant(source_atom, target_atom)
+                    eff_w = float(warrant * decision.probability)
                     rels.append(
                         TheoryRelation(
                             source_id=source_atom.id,
@@ -468,8 +470,11 @@ class JevARCClassifier(ARCClassifier):
                             scope="global",
                             weight=eff_w,
                             class_probability=decision.probability,
+                            perception_stance_prob=decision.probability,
                             empirical_accuracy=decision.empirical_accuracy,
-                            modal_strength=modal,
+                            perception_empirical_acc=decision.empirical_accuracy,
+                            inferential_force=warrant,
+                            inferential_warrant=warrant,
                             effective_weight=eff_w,
                             decision_engine_provider="jev",
                         )
@@ -498,8 +503,8 @@ class JevARCClassifier(ARCClassifier):
         resolved_type = schema.resolve_relation_type(selected)
 
         if resolved_type and decision.class_probability >= self.confidence_threshold:
-            modal = self._resolve_modal_strength(source_atom, target_atom)
-            eff_w = float(modal * decision.class_probability)
+            warrant = self._resolve_inferential_warrant(source_atom, target_atom)
+            eff_w = float(warrant * decision.class_probability)
             return [
                 TheoryRelation(
                     source_id=source_atom.id,
@@ -509,8 +514,11 @@ class JevARCClassifier(ARCClassifier):
                     scope="global",
                     weight=eff_w,
                     class_probability=decision.class_probability,
+                    perception_stance_prob=decision.class_probability,
                     empirical_accuracy=decision.empirical_accuracy,
-                    modal_strength=modal,
+                    perception_empirical_acc=decision.empirical_accuracy,
+                    inferential_force=warrant,
+                    inferential_warrant=warrant,
                     effective_weight=eff_w,
                     decision_engine_provider="jev",
                     calibrated_confidence=decision.empirical_accuracy or decision.class_probability,
