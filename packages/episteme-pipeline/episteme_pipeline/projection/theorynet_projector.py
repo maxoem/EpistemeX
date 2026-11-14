@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Literal
+from typing import Any, Literal
 
 from epistemetrics.core.models import RelationType, TheoryEdge
 from epistemetrics.epistemic.qbaf import (
@@ -156,6 +156,9 @@ class TheoryNetProjector:
         Gradual semantics formulation ('quadratic', 'euler', 'categorizer', or 'linear').
     modal_resolver : ModalStrengthResolver | None, optional
         Injected authorial modal strength resolver. If None, defaults to StructuralistModalResolver.
+    use_continuous : bool, default True
+        Whether to use the continuous WeightedQuadraticEnergySolver (closed-form DAG
+        and adaptive RK45/Radau ODE integration) when semantics_model is 'quadratic'.
     """
 
     def __init__(
@@ -171,6 +174,7 @@ class TheoryNetProjector:
         tolerance: float = 1e-4,
         semantics_model: GradualSemanticsModel | str = GradualSemanticsModel.QUADRATIC,
         modal_resolver: ModalStrengthResolver | None = None,
+        use_continuous: bool = True,
     ) -> None:
         self.schema = schema or SchemaConfig()
         self.modal_resolver = modal_resolver or StructuralistModalResolver()
@@ -186,13 +190,46 @@ class TheoryNetProjector:
             if isinstance(semantics_model, GradualSemanticsModel)
             else str(semantics_model)
         )
+        self.use_continuous = bool(
+            use_continuous
+            and self.semantics_model == GradualSemanticsModel.QUADRATIC.value
+        )
         self.solver = solver or QBAFGradualSemanticsSolver(
             semantics_model=self.semantics_model,
             max_iterations=iterations,
             tolerance=tolerance,
             admissibility_threshold=admissibility_threshold,
             prune_inadmissible=prune_inadmissible,
+            use_continuous=self.use_continuous,
         )
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic configuration fingerprint for run cache invalidation.
+
+        Returns
+        -------
+        dict of str to Any
+            Projector configuration and dependency fingerprints.
+        """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+
+        return {
+            "class": self.__class__.__name__,
+            "admissibility_threshold": self.admissibility_threshold,
+            "admissibility_mode": self.admissibility_mode,
+            "tau_p": self.tau_p,
+            "tau_c": self.tau_c,
+            "prune_inadmissible": self.prune_inadmissible,
+            "iterations": self.iterations,
+            "tolerance": self.tolerance,
+            "semantics_model": self.semantics_model,
+            "use_continuous": self.use_continuous,
+            "modal_resolver": (
+                self.modal_resolver.fingerprint()
+                if isinstance(self.modal_resolver, Fingerprintable)
+                else {"class": self.modal_resolver.__class__.__name__}
+            ),
+        }
 
     def project(
         self,
@@ -369,14 +406,20 @@ class TheoryNetProjector:
             ts_edge = (
                 float(rel.edge_tenability)
                 if rel.edge_tenability is not None
-                else (float(rel.tenability) if rel.tenability is not None else 1.0)
+                else 1.0
             )
-            base_eff = (
-                rel.active_weight
-                if (rel.edge_tenability is not None or rel.tenability is not None or not rel.is_admissible)
-                else (rel.effective_weight if rel.effective_weight is not None else rel.active_weight)
-            )
-            solver_eff_weight = float(base_eff * ts_edge) if rel.is_admissible else 0.0
+            if not rel.is_admissible:
+                solver_eff_weight = 0.0
+            elif self.admissibility_mode == "soft":
+                solver_eff_weight = float(rel.active_weight * ts_edge)
+            else:
+                p_factor = (
+                    float(rel.perception_stance_prob)
+                    if rel.perception_stance_prob is not None
+                    else 1.0
+                )
+                unscaled_base = float(rel.inferential_warrant * p_factor)
+                solver_eff_weight = float(unscaled_base * ts_edge)
             theory_edges.append(
                 TheoryEdge(
                     source=rel.source_id,

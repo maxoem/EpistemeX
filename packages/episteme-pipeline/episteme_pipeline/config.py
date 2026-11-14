@@ -467,6 +467,7 @@ class Phase6Config(BaseModel):
     iterations: int = 20
     tolerance: float = 1e-4
     semantics_model: str = "quadratic"
+    use_continuous: bool = True
     admissibility_mode: Literal["hard", "soft"] = "hard"
     tau_p: float = 0.0
     tau_c: float = 0.0

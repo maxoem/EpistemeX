@@ -8,9 +8,10 @@ described in `docs/architecture/artifact_run_model.md` and `docs/architecture/ov
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -401,13 +402,10 @@ class TheoryAtomArtifact(DomainObjectPayload[TheoryAtom]):
     text: str
     component_type: str
     confidence: float | None = None
-    plausibility: float | None = None
     epistemic_status: str | None = None
     scope_type: str | None = None
     entity_ids: list[str] = Field(default_factory=list)
     modal_prior: float = 0.6
-    modal_strength: float = 0.6
-    base_score: float | None = None
     local_tenability: float | None = None
     equilibrium_strength: float | None = None
     controversy_volatility: float | None = None
@@ -417,6 +415,75 @@ class TheoryAtomArtifact(DomainObjectPayload[TheoryAtom]):
     measurements: list[Measurement] = Field(default_factory=list)
     parameters: dict[str, Any] = Field(default_factory=dict)
     tenability: TenabilityResult | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_atom_artifact_fields(cls, data: Any) -> Any:
+        """Normalize legacy alias keys into canonical TheoryAtomArtifact fields."""
+        if not isinstance(data, Mapping):
+            return data
+        normalized = dict(data)
+        if "modal_prior" not in normalized or normalized["modal_prior"] is None:
+            if "modal_strength" in normalized and normalized["modal_strength"] is not None:
+                normalized["modal_prior"] = normalized["modal_strength"]
+            elif "base_score" in normalized and normalized["base_score"] is not None:
+                normalized["modal_prior"] = normalized["base_score"]
+        normalized.pop("modal_strength", None)
+        normalized.pop("base_score", None)
+        if "equilibrium_strength" not in normalized or normalized["equilibrium_strength"] is None:
+            if "plausibility" in normalized and normalized["plausibility"] is not None:
+                normalized["equilibrium_strength"] = normalized["plausibility"]
+        normalized.pop("plausibility", None)
+        return normalized
+
+    @property
+    def modal_strength(self) -> float:
+        """Author propositional modal certainty :math:`M(\\phi_a)` (alias for ``modal_prior``)."""
+        return self.modal_prior
+
+    @modal_strength.setter
+    def modal_strength(self, value: float) -> None:
+        self.modal_prior = float(value)
+
+    @property
+    def base_score(self) -> float:
+        """Prior plausibility :math:`\\tau_0(a)` for D-QBAF (alias for ``modal_prior``)."""
+        return self.modal_prior
+
+    @base_score.setter
+    def base_score(self, value: float) -> None:
+        self.modal_prior = float(value)
+
+    @property
+    def plausibility(self) -> float | None:
+        """Dialectical equilibrium justification degree :math:`\\tau^*(a)` (alias for ``equilibrium_strength``)."""
+        return self.equilibrium_strength
+
+    @plausibility.setter
+    def plausibility(self, value: float | None) -> None:
+        self.equilibrium_strength = float(value) if value is not None else None
+
+    def model_copy(
+        self,
+        *,
+        update: Mapping[str, Any] | None = None,
+        deep: bool = False,
+    ) -> Self:
+        """Create a copy of the artifact payload, normalizing legacy alias keys in ``update``."""
+        if update:
+            norm = dict(update)
+            if "modal_prior" not in norm:
+                if "modal_strength" in norm and norm["modal_strength"] is not None:
+                    norm["modal_prior"] = norm["modal_strength"]
+                elif "base_score" in norm and norm["base_score"] is not None:
+                    norm["modal_prior"] = norm["base_score"]
+            norm.pop("modal_strength", None)
+            norm.pop("base_score", None)
+            if "equilibrium_strength" not in norm and "plausibility" in norm:
+                norm["equilibrium_strength"] = norm["plausibility"]
+            norm.pop("plausibility", None)
+            update = norm
+        return super().model_copy(update=update, deep=deep)
 
     def to_domain(self) -> TheoryAtom:
         """Hydrate into a :class:`TheoryAtom` via :class:`TheoryAtomCodec`."""
@@ -456,20 +523,10 @@ class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
         Extraction confidence score.
     weight : float | None, optional
         Relational edge weight.
-    class_probability : float | None, optional
-        Softmax stance probability.
-    stance_probability : float | None, optional
-        Canonical perception stance probability.
     perception_stance_prob : float | None, optional
         System 1 perception stance probability :math:`P(\\text{stance})`.
-    empirical_accuracy : float | None, optional
-        Calibrated empirical accuracy frequency from decision engine.
     perception_empirical_acc : float | None, optional
         System 1 calibrated empirical accuracy :math:`C`.
-    model_confidence : float | None, optional
-        Canonical calibrated confidence score.
-    inferential_force : float, default 0.75
-        Toulminian inferential warrant validity :math:`I_{j \\to i} \\in [0, 1]`.
     inferential_warrant : float, default 0.75
         Toulminian inferential warrant validity :math:`I_{j \\to i} \\in [0, 1]`.
     structural_correspondence : float | None, optional
@@ -480,8 +537,6 @@ class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
         Decoupled mathematical edge weight.
     decision_engine_provider : str | None, optional
         Provenance identifier of decision provider.
-    tenability : float | None, optional
-        Epistemic tenability score.
     calibrated_confidence : float | None, optional
         Empirically calibrated confidence score.
     weight_support : float | None, optional
@@ -497,24 +552,139 @@ class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
     scope: str
     confidence: float
     weight: float | None = None
-    class_probability: float | None = None
-    stance_probability: float | None = None
     perception_stance_prob: float | None = None
-    empirical_accuracy: float | None = None
     perception_empirical_acc: float | None = None
-    model_confidence: float | None = None
-    inferential_force: float = 0.75
     inferential_warrant: float = 0.75
     structural_correspondence: float | None = None
     is_admissible: bool = True
     active_weight: float = 0.75
     effective_weight: float | None = None
     decision_engine_provider: str | None = None
-    tenability: float | None = None
     edge_tenability: float | None = None
     calibrated_confidence: float | None = None
     weight_support: float | None = None
     weight_attack: float | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_relation_artifact_fields(cls, data: Any) -> Any:
+        """Normalize legacy alias keys into canonical TheoryRelationArtifact fields."""
+        if not isinstance(data, Mapping):
+            return data
+        normalized = dict(data)
+        if "inferential_warrant" not in normalized or normalized["inferential_warrant"] is None:
+            if "inferential_force" in normalized and normalized["inferential_force"] is not None:
+                normalized["inferential_warrant"] = normalized["inferential_force"]
+        normalized.pop("inferential_force", None)
+
+        if "perception_stance_prob" not in normalized or normalized["perception_stance_prob"] is None:
+            if "stance_probability" in normalized and normalized["stance_probability"] is not None:
+                normalized["perception_stance_prob"] = normalized["stance_probability"]
+            elif "class_probability" in normalized and normalized["class_probability"] is not None:
+                normalized["perception_stance_prob"] = normalized["class_probability"]
+        normalized.pop("stance_probability", None)
+        normalized.pop("class_probability", None)
+
+        if "perception_empirical_acc" not in normalized or normalized["perception_empirical_acc"] is None:
+            if "empirical_accuracy" in normalized and normalized["empirical_accuracy"] is not None:
+                normalized["perception_empirical_acc"] = normalized["empirical_accuracy"]
+        normalized.pop("empirical_accuracy", None)
+
+        if "calibrated_confidence" not in normalized or normalized["calibrated_confidence"] is None:
+            if "model_confidence" in normalized and normalized["model_confidence"] is not None:
+                normalized["calibrated_confidence"] = normalized["model_confidence"]
+        normalized.pop("model_confidence", None)
+
+        if "edge_tenability" not in normalized or normalized["edge_tenability"] is None:
+            if "tenability" in normalized and normalized["tenability"] is not None:
+                normalized["edge_tenability"] = normalized["tenability"]
+        normalized.pop("tenability", None)
+        return normalized
+
+    @property
+    def inferential_force(self) -> float:
+        """Toulminian inferential warrant validity :math:`I_{j \\to i}` (alias for ``inferential_warrant``)."""
+        return self.inferential_warrant
+
+    @inferential_force.setter
+    def inferential_force(self, value: float) -> None:
+        self.inferential_warrant = float(value)
+
+    @property
+    def stance_probability(self) -> float | None:
+        """Perception stance probability :math:`P(\\text{stance})` (alias for ``perception_stance_prob``)."""
+        return self.perception_stance_prob
+
+    @stance_probability.setter
+    def stance_probability(self, value: float | None) -> None:
+        self.perception_stance_prob = float(value) if value is not None else None
+
+    @property
+    def class_probability(self) -> float | None:
+        """Softmax class probability :math:`P(\\text{stance})` (alias for ``perception_stance_prob``)."""
+        return self.perception_stance_prob
+
+    @class_probability.setter
+    def class_probability(self, value: float | None) -> None:
+        self.perception_stance_prob = float(value) if value is not None else None
+
+    @property
+    def empirical_accuracy(self) -> float | None:
+        """Calibrated empirical accuracy :math:`C` (alias for ``perception_empirical_acc``)."""
+        return self.perception_empirical_acc
+
+    @empirical_accuracy.setter
+    def empirical_accuracy(self, value: float | None) -> None:
+        self.perception_empirical_acc = float(value) if value is not None else None
+
+    @property
+    def model_confidence(self) -> float | None:
+        """Calibrated model confidence (alias for ``calibrated_confidence``)."""
+        return self.calibrated_confidence
+
+    @model_confidence.setter
+    def model_confidence(self, value: float | None) -> None:
+        self.calibrated_confidence = float(value) if value is not None else None
+
+    @property
+    def tenability(self) -> float | None:
+        """Intertheoretical edge tenability :math:`TS_{\\text{edge}}` (alias for ``edge_tenability``)."""
+        return self.edge_tenability
+
+    @tenability.setter
+    def tenability(self, value: float | None) -> None:
+        self.edge_tenability = float(value) if value is not None else None
+
+    def model_copy(
+        self,
+        *,
+        update: Mapping[str, Any] | None = None,
+        deep: bool = False,
+    ) -> Self:
+        """Create a copy of the artifact payload, normalizing legacy alias keys in ``update``."""
+        if update:
+            norm = dict(update)
+            if "inferential_warrant" not in norm and "inferential_force" in norm:
+                norm["inferential_warrant"] = norm["inferential_force"]
+            norm.pop("inferential_force", None)
+            if "perception_stance_prob" not in norm:
+                if "stance_probability" in norm:
+                    norm["perception_stance_prob"] = norm["stance_probability"]
+                elif "class_probability" in norm:
+                    norm["perception_stance_prob"] = norm["class_probability"]
+            norm.pop("stance_probability", None)
+            norm.pop("class_probability", None)
+            if "perception_empirical_acc" not in norm and "empirical_accuracy" in norm:
+                norm["perception_empirical_acc"] = norm["empirical_accuracy"]
+            norm.pop("empirical_accuracy", None)
+            if "calibrated_confidence" not in norm and "model_confidence" in norm:
+                norm["calibrated_confidence"] = norm["model_confidence"]
+            norm.pop("model_confidence", None)
+            if "edge_tenability" not in norm and "tenability" in norm:
+                norm["edge_tenability"] = norm["tenability"]
+            norm.pop("tenability", None)
+            update = norm
+        return super().model_copy(update=update, deep=deep)
 
     def to_domain(self) -> TheoryRelation:
         """Hydrate into a :class:`TheoryRelation` via :class:`TheoryRelationCodec`."""
@@ -543,62 +713,7 @@ class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
         dict of str to Any
             Graph edge properties conforming to the projection schema.
         """
-        eff_w = (
-            self.effective_weight
-            if self.effective_weight is not None
-            else (self.weight if self.weight is not None else 1.0)
-        )
-        cal_conf = (
-            self.calibrated_confidence
-            if self.calibrated_confidence is not None
-            else (
-                self.empirical_accuracy
-                if self.empirical_accuracy is not None
-                else self.confidence
-            )
-        )
-        w_supp = (
-            self.weight_support
-            if self.weight_support is not None
-            else (eff_w if polarity > 0 else 0.0)
-        )
-        w_att = (
-            self.weight_attack
-            if self.weight_attack is not None
-            else (eff_w if polarity < 0 else 0.0)
-        )
-
-        props: dict[str, Any] = {
-            "scope": self.scope,
-            "confidence": self.confidence,
-            "calibrated_confidence": cal_conf,
-            "class_probability": self.class_probability,
-            "stance_probability": self.stance_probability,
-            "perception_stance_prob": self.perception_stance_prob,
-            "empirical_accuracy": self.empirical_accuracy,
-            "perception_empirical_acc": self.perception_empirical_acc,
-            "model_confidence": self.model_confidence,
-            "inferential_force": self.inferential_force,
-            "inferential_warrant": self.inferential_warrant,
-            "is_admissible": self.is_admissible,
-            "active_weight": self.active_weight,
-            "effective_weight": eff_w,
-            "weight": self.weight if self.weight is not None else eff_w,
-            "decision_engine_provider": self.decision_engine_provider,
-            "weight_support": w_supp,
-            "weight_attack": w_att,
-        }
-        if self.structural_correspondence is not None:
-            props["structural_correspondence"] = self.structural_correspondence
-        ts_val = (
-            self.edge_tenability
-            if self.edge_tenability is not None
-            else self.tenability
-        )
-        if ts_val is not None:
-            props["tenability"] = ts_val
-            props["edge_tenability"] = ts_val
-        return props
+        return self.to_domain().to_graph_properties(polarity=polarity)
 
 
 class TheoreticalEnrichmentArtifact(BaseArtifactPayload):

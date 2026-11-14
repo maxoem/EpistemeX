@@ -38,10 +38,10 @@ Every `TheoryAtom` $a \in \mathcal{A}$ and `TheoryRelation` $e \in \mathcal{R}$ 
    Represents empirical model-theoretic satisfaction ($M_p \cap I$ under blur $\delta^*$) and intertheoretical constraint satisfaction ($C, \rho$), stored as `local_tenability` on `TheoryAtom` and `edge_tenability` on `TheoryRelation`.
 
 4. **Layer 4 — Dialectical Equilibrium (Global Fixed-Point, Phase 6 & Theoretical Enrichment / [ADR-0011 Addendum 2](0011-declarative-graph-metrics-and-qbaf-semantics.md))**:
-   $$\tau^*(a) = \sigma\!\left(\sigma^{-1}\!\left(\tilde{\tau}_0(a)\right) + \sum_{b \in \text{Supp}(a)} W_{ba}\,\tau^*(b) - \sum_{c \in \text{Att}(a)} W_{ca}\,\tau^*(c)\right)$$
+   $$\tau^*(a) = \tilde{\tau}_0(a) + \bigl(1 - \tilde{\tau}_0(a)\bigr)\,h(E_a) - \tilde{\tau}_0(a)\,h(-E_a), \qquad E_a = \sum_{b \in \text{Supp}(a)} W_{ba}\,\tau^*(b) - \sum_{c \in \text{Att}(a)} W_{ca}\,\tau^*(c), \qquad h(x) = \frac{\max(x, 0)^2}{1 + \max(x, 0)^2}$$
    Where empirical tenability modulates the effective base prior:
    $$\tilde{\tau}_0(a) = \tau_0(a) \cdot TS_{\text{local}}(a)$$
-   Stored on `TheoryAtom` as `equilibrium_strength` (synchronized with `plausibility`), accompanied by Keynes-Gärdenfors controversy volatility $\mathcal{V}(a)$ (`controversy_volatility`).
+   Solved via closed-form $O(|V| + |E|)$ topological evaluation on DAGs and adaptive ODE integration (`RK45`/`Radau`) on cyclic graphs via `WeightedQuadraticEnergySolver`. Stored on `TheoryAtom` as `equilibrium_strength` (aliased as `plausibility`), accompanied by Keynes-Gärdenfors controversy volatility $\mathcal{V}(a)$ (`controversy_volatility`).
 
 ### 2. Closed-Loop Coupling Between `TheoreticalEnrichmentRunner` and D-QBAF
 

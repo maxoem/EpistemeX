@@ -493,29 +493,30 @@ def _resolve_l3_atoms_and_relations(
 
         conf_vals = [m.confidence for m in group if m.confidence is not None]
         max_conf = max(conf_vals) if conf_vals else rep.confidence
-        plaus_vals = [m.plausibility for m in group if m.plausibility is not None]
-        max_plaus = max(plaus_vals) if plaus_vals else rep.plausibility
-        eq_vals = [m.equilibrium_strength for m in group if m.equilibrium_strength is not None]
-        max_eq = max(eq_vals) if eq_vals else (rep.equilibrium_strength if rep.equilibrium_strength is not None else max_plaus)
-        modal_vals = [m.modal_strength for m in group if m.modal_strength is not None]
-        max_modal = max(modal_vals) if modal_vals else rep.modal_strength
-        base_scores = [m.base_score for m in group if m.base_score is not None]
-        best_base = max(base_scores) if base_scores else rep.base_score
-        tenability = rep.tenability or next(
-            (m.tenability for m in group if m.tenability is not None), None
+        modal_vals = [m.modal_prior for m in group if m.modal_prior is not None]
+        max_modal = max(modal_vals) if modal_vals else rep.modal_prior
+        tenabilities = [m.tenability for m in group if m.tenability is not None]
+        tenability = (
+            min(tenabilities, key=lambda t: t.local_score)
+            if tenabilities
+            else rep.tenability
         )
-        local_ts = (
-            rep.local_tenability
-            if rep.local_tenability is not None
-            else (
-                tenability.local_score
-                if tenability is not None
-                else next(
-                    (m.local_tenability for m in group if m.local_tenability is not None),
-                    None,
-                )
-            )
-        )
+        local_ts_vals = [
+            m.local_tenability for m in group if m.local_tenability is not None
+        ]
+        if tenabilities:
+            local_ts_vals.extend(t.local_score for t in tenabilities)
+        local_ts = min(local_ts_vals) if local_ts_vals else rep.local_tenability
+
+        eq_vals = [
+            m.equilibrium_strength
+            for m in group
+            if m.equilibrium_strength is not None
+        ]
+        if eq_vals:
+            best_eq = min(eq_vals) if (local_ts is not None and local_ts < 1.0) else max(eq_vals)
+        else:
+            best_eq = rep.equilibrium_strength
 
         canonical_atoms.append(
             rep.model_copy(
@@ -525,11 +526,8 @@ def _resolve_l3_atoms_and_relations(
                     "measurements": merged_measurements,
                     "parameters": merged_parameters,
                     "confidence": max_conf,
-                    "plausibility": max_plaus,
-                    "equilibrium_strength": max_eq,
+                    "equilibrium_strength": best_eq,
                     "modal_prior": max_modal,
-                    "modal_strength": max_modal,
-                    "base_score": best_base,
                     "local_tenability": local_ts,
                     "tenability": tenability,
                 }

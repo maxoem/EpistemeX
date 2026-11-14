@@ -429,13 +429,31 @@ class PipelineFactory(Fingerprintable):
             from episteme_pipeline.post_processing.theoretical_enrichment import (
                 TheoreticalEnrichmentRunner,
             )
+            from episteme_pipeline.projection.theorynet_projector import (
+                TheoryNetProjector,
+            )
 
+            p6_cfg = config.phase6
+            enrichment_projector = TheoryNetProjector(
+                schema=config.graph_schema,
+                admissibility_threshold=p6_cfg.admissibility_threshold,
+                admissibility_mode=p6_cfg.admissibility_mode,
+                tau_p=p6_cfg.tau_p,
+                tau_c=p6_cfg.tau_c,
+                prune_inadmissible=p6_cfg.prune_inadmissible,
+                iterations=p6_cfg.iterations,
+                tolerance=p6_cfg.tolerance,
+                semantics_model=p6_cfg.semantics_model,
+                modal_resolver=components.modal_resolver,
+                use_continuous=p6_cfg.use_continuous,
+            )
             phases.append(
                 TheoreticalEnrichmentRunner(
                     config=config.theoretical_enrichment,
                     schema=config.graph_schema,
                     graph_store=None,
                     llm=components.llm,
+                    theorynet_projector=enrichment_projector,
                 )
             )
 

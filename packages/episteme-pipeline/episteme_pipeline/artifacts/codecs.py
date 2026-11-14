@@ -427,19 +427,18 @@ class TheoryAtomCodec:
         TheoryAtomArtifact
             Lossless theory atom artifact payload.
         """
+        extra: dict[str, float] = {}
+        if "modal_prior" in domain_obj.model_fields_set or domain_obj.modal_prior != 0.6:
+            extra["modal_prior"] = domain_obj.modal_prior
         return TheoryAtomArtifact(
             component_id=domain_obj.id,
             chunk_id=domain_obj.source_chunk_id,
             text=domain_obj.text,
             component_type=domain_obj.component_type,
             confidence=domain_obj.confidence,
-            plausibility=domain_obj.plausibility,
             epistemic_status=domain_obj.epistemic_status,
             scope_type=domain_obj.scope_type,
             entity_ids=list(domain_obj.entity_ids),
-            modal_prior=domain_obj.modal_prior,
-            modal_strength=domain_obj.modal_strength,
-            base_score=domain_obj.base_score,
             local_tenability=domain_obj.local_tenability,
             equilibrium_strength=domain_obj.equilibrium_strength,
             controversy_volatility=domain_obj.controversy_volatility,
@@ -449,6 +448,7 @@ class TheoryAtomCodec:
             measurements=list(domain_obj.measurements),
             parameters=dict(domain_obj.parameters),
             tenability=domain_obj.tenability,
+            **extra,
         )
 
     @classmethod
@@ -465,27 +465,15 @@ class TheoryAtomCodec:
         TheoryAtom
             Reconstructed theory atom contract.
         """
-        modal_val = (
-            payload.modal_prior
-            if "modal_prior" in payload.model_fields_set
-            and "modal_strength" not in payload.model_fields_set
-            else payload.modal_strength
-        )
-        base_score = (
-            payload.base_score
-            if payload.base_score is not None
-            else modal_val
-        )
+        extra: dict[str, float] = {}
+        if "modal_prior" in payload.model_fields_set or payload.modal_prior != 0.6:
+            extra["modal_prior"] = payload.modal_prior
         return TheoryAtom(
             id=payload.component_id,
             text=payload.text,
             component_type=payload.component_type,
             source_chunk_id=payload.chunk_id,
             confidence=payload.confidence,
-            plausibility=payload.plausibility,
-            modal_prior=modal_val,
-            modal_strength=modal_val,
-            base_score=base_score,
             local_tenability=payload.local_tenability,
             equilibrium_strength=payload.equilibrium_strength,
             controversy_volatility=payload.controversy_volatility,
@@ -498,6 +486,7 @@ class TheoryAtomCodec:
             measurements=list(payload.measurements),
             parameters=dict(payload.parameters),
             tenability=payload.tenability,
+            **extra,
         )
 
 
@@ -519,6 +508,9 @@ class TheoryRelationCodec:
             Lossless theory relation artifact payload.
         """
         relation_id = f"argument-relation::{domain_obj.source_id}::{domain_obj.relation_type}::{domain_obj.target_id}"
+        extra: dict[str, float] = {}
+        if "inferential_warrant" in domain_obj.model_fields_set or domain_obj.inferential_warrant != 0.75:
+            extra["inferential_warrant"] = domain_obj.inferential_warrant
         return TheoryRelationArtifact(
             relation_id=relation_id,
             source_component_id=domain_obj.source_id,
@@ -527,24 +519,18 @@ class TheoryRelationCodec:
             scope=domain_obj.scope,
             confidence=domain_obj.confidence,
             weight=domain_obj.weight,
-            class_probability=domain_obj.class_probability,
-            stance_probability=domain_obj.stance_probability,
             perception_stance_prob=domain_obj.perception_stance_prob,
-            empirical_accuracy=domain_obj.empirical_accuracy,
             perception_empirical_acc=domain_obj.perception_empirical_acc,
-            model_confidence=domain_obj.model_confidence,
-            inferential_force=domain_obj.inferential_force,
-            inferential_warrant=domain_obj.inferential_warrant,
             structural_correspondence=domain_obj.structural_correspondence,
             is_admissible=domain_obj.is_admissible,
             active_weight=domain_obj.active_weight,
             effective_weight=domain_obj.effective_weight,
             decision_engine_provider=domain_obj.decision_engine_provider,
-            tenability=domain_obj.tenability,
             edge_tenability=domain_obj.edge_tenability,
             calibrated_confidence=domain_obj.calibrated_confidence,
             weight_support=domain_obj.weight_support,
             weight_attack=domain_obj.weight_attack,
+            **extra,
         )
 
     @classmethod
@@ -562,12 +548,9 @@ class TheoryRelationCodec:
             Reconstructed theory relation contract.
         """
         scope_lit = "local" if payload.scope == "local" else "global"
-        warrant_val = (
-            payload.inferential_warrant
-            if "inferential_warrant" in payload.model_fields_set
-            and "inferential_force" not in payload.model_fields_set
-            else payload.inferential_force
-        )
+        extra: dict[str, float] = {}
+        if "inferential_warrant" in payload.model_fields_set or payload.inferential_warrant != 0.75:
+            extra["inferential_warrant"] = payload.inferential_warrant
         return TheoryRelation(
             source_id=payload.source_component_id,
             target_id=payload.target_component_id,
@@ -575,17 +558,10 @@ class TheoryRelationCodec:
             confidence=payload.confidence,
             scope=scope_lit,
             weight=payload.weight,
-            tenability=payload.tenability,
             edge_tenability=payload.edge_tenability,
             structural_correspondence=payload.structural_correspondence,
-            class_probability=payload.class_probability,
-            stance_probability=payload.stance_probability,
             perception_stance_prob=payload.perception_stance_prob,
-            empirical_accuracy=payload.empirical_accuracy,
             perception_empirical_acc=payload.perception_empirical_acc,
-            model_confidence=payload.model_confidence,
-            inferential_force=warrant_val,
-            inferential_warrant=warrant_val,
             is_admissible=payload.is_admissible,
             active_weight=payload.active_weight,
             effective_weight=payload.effective_weight,
@@ -593,4 +569,5 @@ class TheoryRelationCodec:
             calibrated_confidence=payload.calibrated_confidence,
             weight_support=payload.weight_support,
             weight_attack=payload.weight_attack,
+            **extra,
         )

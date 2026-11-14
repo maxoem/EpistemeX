@@ -112,6 +112,7 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             tolerance=config.tolerance,
             semantics_model=config.semantics_model,
             modal_resolver=self.modal_resolver,
+            use_continuous=config.use_continuous,
         )
 
     async def run(

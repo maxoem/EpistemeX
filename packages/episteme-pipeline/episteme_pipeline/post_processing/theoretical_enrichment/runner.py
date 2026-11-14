@@ -88,7 +88,13 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
     dependencies = ("phase4",)
     input_view = Phase4ArtifactsView
     reads_kinds = frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION})
-    writes_kinds = frozenset({ArtifactKind.THEORETICAL_ENRICHMENT})
+    writes_kinds = frozenset(
+        {
+            ArtifactKind.THEORETICAL_ENRICHMENT,
+            ArtifactKind.THEORY_ATOM,
+            ArtifactKind.THEORY_RELATION,
+        }
+    )
 
     def __init__(
         self,
@@ -100,12 +106,18 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         solver: TenabilitySolver | None = None,
         inducer: TheoryInducer | None = None,
         llm: Any | None = None,
+        theorynet_projector: Any | None = None,
     ) -> None:
+        from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
+
         self.config = config or TheoreticalEnrichmentConfig()
         self.schema = schema or SchemaConfig()
         self.graph_store = graph_store
         self.registry = registry or TheoryRegistry()
         self.llm: StructuredLLM | None = ensure_structured_llm(llm) if llm is not None else None
+        self.theorynet_projector: TheoryNetProjector = (
+            theorynet_projector or TheoryNetProjector(schema=self.schema)
+        )
 
         if inducer is not None:
             self.inducer: TheoryInducer | None = inducer
@@ -498,7 +510,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             )
             for r in relations
         ]
-        reconverged_net = TheoryNetProjector(schema=self.schema).project(
+        reconverged_net = self.theorynet_projector.project(
             Phase4ArtifactsView(
                 theory_atoms=merged_atoms,
                 theory_relations=merged_relations,

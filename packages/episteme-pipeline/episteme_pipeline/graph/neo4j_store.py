@@ -505,7 +505,7 @@ class _Neo4jWriteMixin:
         """
         batch_data = []
         for c in components:
-            props = c.model_dump(exclude={"id"})
+            props = c.to_graph_properties()
             # Drop empty defaults so they neither cause Cypher Map{} errors
             # nor wipe existing enriched properties on re-runs (F-06).
             if not c.parameters:

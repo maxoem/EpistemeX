@@ -203,10 +203,55 @@ async def test_hybrid_modal_resolver_populates_resolver_type_and_syntax_bounds()
     score = await resolver.resolve_modality(atom)
     assert score > 0.85
     assert atom.modal_prior == pytest.approx(score)
+    # Post-init mutation of modal_prior MUST immediately reflect on modal_strength and base_score properties
+    assert atom.modal_strength == pytest.approx(score)
+    assert atom.base_score == pytest.approx(score)
     assert atom.resolver_type == "structural"
     assert atom.syntax_bounds is not None
     assert len(atom.syntax_bounds) == 2
     assert atom.syntax_bounds[0] <= score <= atom.syntax_bounds[1]
+
+
+def test_projector_idempotency_and_stance_prob_preservation_under_edge_tenability() -> None:
+    """Verify TheoryNetProjector does not double-penalize TS_edge^2 or drop perception_stance_prob."""
+    projector = TheoryNetProjector(schema=DEFAULT_SCHEMA)
+    assert projector.use_continuous is True
+    assert projector.solver.use_continuous is True
+    assert projector.fingerprint()["use_continuous"] is True
+
+    a1 = TheoryAtom(
+        id="a1",
+        text="Premise",
+        component_type="ObservationUnit",
+        source_chunk_id="c1",
+        modal_prior=0.80,
+    )
+    a2 = TheoryAtom(
+        id="a2",
+        text="Conclusion",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="c1",
+        modal_prior=0.50,
+    )
+    rel = TheoryRelation(
+        source_id="a1",
+        target_id="a2",
+        relation_type="SUPPORTS",
+        confidence=0.90,
+        inferential_warrant=0.80,
+        perception_stance_prob=0.50,
+        edge_tenability=0.50,
+        scope="local",
+    )
+    # Effective weight = I * P * TS_edge = 0.80 * 0.50 * 0.50 = 0.20 (NOT 0.10 and NOT 0.40)
+    assert rel.effective_weight == pytest.approx(0.20)
+    edges = projector._to_theory_edges([rel])
+    assert edges[0].effective_weight == pytest.approx(0.20)
+
+    # Projecting repeatedly must be strictly idempotent
+    net1 = projector.project(Phase4ArtifactsView(theory_atoms=[a1, a2], theory_relations=[rel]))
+    net2 = projector.project(Phase4ArtifactsView(theory_atoms=net1.atoms, theory_relations=net1.relations))
+    assert net1.atoms[1].equilibrium_strength == pytest.approx(net2.atoms[1].equilibrium_strength)
 
 
 # ---------------------------------------------------------------------------

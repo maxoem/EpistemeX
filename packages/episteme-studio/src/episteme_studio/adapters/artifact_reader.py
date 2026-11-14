@@ -1012,7 +1012,10 @@ class ArtifactReader:
                 comp_type = payload.get("component_type") or "TheoryAtom"
                 text = payload.get("text", "")
                 label = (text[:60] + "...") if len(text) > 60 else (text or comp_id)
-                base_sc = payload.get("base_score", payload.get("plausibility"))
+                base_sc = payload.get(
+                    "modal_prior",
+                    payload.get("base_score", payload.get("plausibility")),
+                )
                 mod_str = payload.get("modal_prior", payload.get("modal_strength", base_sc))
                 eq_str = payload.get("equilibrium_strength", payload.get("plausibility", base_sc))
                 tier = "system_1" if payload.get("decision_tier") == "system_1" or payload.get("is_fast_exit") else ("system_2" if payload.get("decision_tier") == "system_2" else "legacy")
