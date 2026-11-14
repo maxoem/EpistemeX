@@ -157,13 +157,15 @@ class JevACCClassifier(ACCClassifier):
                 component_type=selected_type,
                 source_chunk_id=chunk_id,
                 confidence=confidence,
-                plausibility=empirical_accuracy,
+                **(
+                    {"modal_prior": empirical_accuracy}
+                    if empirical_accuracy is not None
+                    else {}
+                ),
             )
             if self.modal_resolver:
                 resolved_mod = await self.modal_resolver.resolve_modality(atom, context=state)
                 atom.modal_prior = resolved_mod
-                atom.modal_strength = resolved_mod
-                atom.base_score = resolved_mod
             atoms.append(atom)
 
         return atoms, []
@@ -469,11 +471,8 @@ class JevARCClassifier(ARCClassifier):
                             confidence=decision.probability,
                             scope="global",
                             weight=eff_w,
-                            class_probability=decision.probability,
                             perception_stance_prob=decision.probability,
-                            empirical_accuracy=decision.empirical_accuracy,
                             perception_empirical_acc=decision.empirical_accuracy,
-                            inferential_force=warrant,
                             inferential_warrant=warrant,
                             effective_weight=eff_w,
                             decision_engine_provider="jev",
@@ -513,11 +512,8 @@ class JevARCClassifier(ARCClassifier):
                     confidence=decision.class_probability,
                     scope="global",
                     weight=eff_w,
-                    class_probability=decision.class_probability,
                     perception_stance_prob=decision.class_probability,
-                    empirical_accuracy=decision.empirical_accuracy,
                     perception_empirical_acc=decision.empirical_accuracy,
-                    inferential_force=warrant,
                     inferential_warrant=warrant,
                     effective_weight=eff_w,
                     decision_engine_provider="jev",

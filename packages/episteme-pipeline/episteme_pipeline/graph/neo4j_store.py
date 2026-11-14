@@ -38,6 +38,11 @@ from episteme_pipeline.contracts.domain import (
     TheoryAtom,
     TheoryRelation,
 )
+from episteme_pipeline.graph.theory_graph_mapper import (
+    theory_atom_to_graph_properties,
+    theory_relation_from_graph_properties,
+    theory_relation_to_graph_properties,
+)
 from episteme_pipeline.protocols.graph_store import (
     EntityGraph,
     FusionGraph,
@@ -505,7 +510,7 @@ class _Neo4jWriteMixin:
         """
         batch_data = []
         for c in components:
-            props = c.to_graph_properties()
+            props = theory_atom_to_graph_properties(c)
             # Drop empty defaults so they neither cause Cypher Map{} errors
             # nor wipe existing enriched properties on re-runs (F-06).
             if not c.parameters:
@@ -546,7 +551,7 @@ class _Neo4jWriteMixin:
         rels_by_type: dict[str, list[dict]] = {}
         for rel in relations:
             rel_safe = _cypher_identifier(rel.relation_type, kind="relationship type")
-            props = rel.to_graph_properties()
+            props = theory_relation_to_graph_properties(rel)
             rels_by_type.setdefault(rel_safe, []).append({
                 "from_id": rel.source_id,
                 "to_id": rel.target_id,
@@ -715,7 +720,11 @@ class _Neo4jReadMixin:
         query = (
             "MATCH (n:TheoryAtom) "
             "RETURN n.id as id, n.text as text, n.component_type as component_type, "
-            "n.source_chunk_id as source_chunk_id, n.confidence as confidence, n.plausibility as plausibility, "
+            "n.source_chunk_id as source_chunk_id, n.confidence as confidence, "
+            "n.modal_prior as modal_prior, n.local_tenability as local_tenability, "
+            "n.equilibrium_strength as equilibrium_strength, "
+            "n.controversy_volatility as controversy_volatility, "
+            "n.resolver_type as resolver_type, n.syntax_bounds as syntax_bounds, "
             "n.epistemic_status as epistemic_status, n.scope_type as scope_type, "
             "n.entity_ids as entity_ids, n.parameters as parameters, "
             "n.measurements as measurements, n.tenability as tenability"
@@ -800,22 +809,33 @@ class _Neo4jReadMixin:
             elif isinstance(raw_tenab, TenabilityResult):
                 tenability_res = raw_tenab
 
-            atoms.append(
-                TheoryAtom(
-                    id=row["id"],
-                    text=row["text"],
-                    component_type=row["component_type"],
-                    source_chunk_id=row["source_chunk_id"],
-                    confidence=row.get("confidence"),
-                    plausibility=row.get("plausibility"),
-                    epistemic_status=row.get("epistemic_status"),
-                    scope_type=row.get("scope_type"),
-                    entity_ids=row.get("entity_ids") or [],
-                    parameters=params,
-                    measurements=meas_list,
-                    tenability=tenability_res,
-                )
+            raw_bounds = row.get("syntax_bounds")
+            syntax_bounds: tuple[float, float] | None = (
+                (float(raw_bounds[0]), float(raw_bounds[1]))
+                if isinstance(raw_bounds, (list, tuple)) and len(raw_bounds) == 2
+                else None
             )
+            atom_kwargs: dict[str, Any] = {
+                "id": row["id"],
+                "text": row["text"],
+                "component_type": row["component_type"],
+                "source_chunk_id": row["source_chunk_id"],
+                "confidence": row.get("confidence"),
+                "local_tenability": row.get("local_tenability"),
+                "equilibrium_strength": row.get("equilibrium_strength"),
+                "controversy_volatility": row.get("controversy_volatility"),
+                "resolver_type": row.get("resolver_type"),
+                "syntax_bounds": syntax_bounds,
+                "epistemic_status": row.get("epistemic_status"),
+                "scope_type": row.get("scope_type"),
+                "entity_ids": row.get("entity_ids") or [],
+                "parameters": params,
+                "measurements": meas_list,
+                "tenability": tenability_res,
+            }
+            if row.get("modal_prior") is not None:
+                atom_kwargs["modal_prior"] = float(row["modal_prior"])
+            atoms.append(TheoryAtom(**atom_kwargs))
         return atoms
 
     async def get_all_theory_relations(self) -> list[TheoryRelation]:
@@ -823,13 +843,13 @@ class _Neo4jReadMixin:
             "MATCH (a:TheoryAtom)-[r]->(b:TheoryAtom) "
             "RETURN a.id as source_id, type(r) as relation_type, b.id as target_id, "
             "coalesce(r.confidence, 1.0) as confidence, coalesce(r.scope, 'global') as scope, "
-            "r.weight as weight, r.tenability as tenability, properties(r) as props"
+            "r.weight as weight, r.edge_tenability as edge_tenability, properties(r) as props"
         )
         async with self._session() as session:
             result = await session.run(query)
             rows = await result.data()
         return [
-            TheoryRelation.from_graph_properties(
+            theory_relation_from_graph_properties(
                 source_id=row["source_id"],
                 relation_type=row["relation_type"],
                 target_id=row["target_id"],

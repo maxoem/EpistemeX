@@ -14,6 +14,7 @@ os.environ.setdefault("TIKTOKEN_OFFLINE", "1")
 import pytest
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
+from episteme_pipeline.graph.theory_graph_mapper import theory_relation_to_graph_properties
 from episteme_pipeline.contracts.phase_contracts import (
     L1Chunk,
     L2Entity,
@@ -129,7 +130,14 @@ class InMemoryGraphStore(ProcessingGraph):
             await self.upsert_argument_component(c)
 
     async def upsert_theory_relation(self, relation: TheoryRelation) -> None:
-        self._relations.append((relation.source_id, relation.relation_type, relation.target_id, relation.to_graph_properties()))
+        self._relations.append(
+            (
+                relation.source_id,
+                relation.relation_type,
+                relation.target_id,
+                theory_relation_to_graph_properties(relation),
+            )
+        )
 
     async def upsert_theory_relations(self, relations: list[TheoryRelation]) -> None:
         for r in relations:

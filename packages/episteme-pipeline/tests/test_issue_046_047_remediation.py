@@ -352,8 +352,7 @@ class OfflineACCClassifier(ACCClassifier):
                 source_chunk_id=chunk_id,
                 entity_ids=[e.id for e in (chunk_entities or [])],
                 confidence=0.92,
-                modal_strength=0.85,
-                base_score=0.85,
+                modal_prior=0.85,
             )
             a2 = TheoryAtom(
                 id="atom_obs_1",
@@ -362,8 +361,7 @@ class OfflineACCClassifier(ACCClassifier):
                 source_chunk_id=chunk_id,
                 entity_ids=[e.id for e in (chunk_entities or [])],
                 confidence=0.90,
-                modal_strength=0.80,
-                base_score=0.80,
+                modal_prior=0.80,
             )
             rel = TheoryRelation(
                 source_id="atom_obs_1",
@@ -382,8 +380,7 @@ class OfflineACCClassifier(ACCClassifier):
                 source_chunk_id=chunk_id,
                 entity_ids=[e.id for e in (chunk_entities or [])],
                 confidence=0.89,
-                modal_strength=0.82,
-                base_score=0.82,
+                modal_prior=0.82,
             )
             a_obs_2 = TheoryAtom(
                 id="atom_obs_2",
@@ -392,8 +389,7 @@ class OfflineACCClassifier(ACCClassifier):
                 source_chunk_id=chunk_id,
                 entity_ids=[e.id for e in (chunk_entities or [])],
                 confidence=0.91,
-                modal_strength=0.84,
-                base_score=0.84,
+                modal_prior=0.84,
             )
             rel_dup = TheoryRelation(
                 source_id="atom_obs_2",
@@ -762,8 +758,7 @@ async def test_phase5_cluster_merges_propagate_to_phase6_and_theoretical_enrichm
         component_type="TheoreticalHypothesis",
         source_chunk_id="c1",
         confidence=0.90,
-        modal_strength=0.85,
-        base_score=0.85,
+        modal_prior=0.85,
     )
     a2 = TheoryAtom(
         id="atom_merged",
@@ -771,8 +766,7 @@ async def test_phase5_cluster_merges_propagate_to_phase6_and_theoretical_enrichm
         component_type="TheoreticalHypothesis",
         source_chunk_id="c2",
         confidence=0.88,
-        modal_strength=0.80,
-        base_score=0.80,
+        modal_prior=0.80,
     )
     obs = TheoryAtom(
         id="atom_obs",
@@ -780,8 +774,7 @@ async def test_phase5_cluster_merges_propagate_to_phase6_and_theoretical_enrichm
         component_type="ObservationUnit",
         source_chunk_id="c2",
         confidence=0.95,
-        modal_strength=0.90,
-        base_score=0.90,
+        modal_prior=0.90,
     )
     # Relation originally targets the duplicate atom_merged
     rel = TheoryRelation(

@@ -442,10 +442,10 @@ class PercolationQualityGate:
 
         for env in canon_envelopes:
             if isinstance(env.payload, CanonicalizationArtifact):
-                canon_id = _strip_artifact_prefix(env.payload.canonical_entity_id)
+                canon_id = _strip_artifact_prefix(env.payload.canonical_id)
                 if canon_id:
                     population_ids.add(canon_id)
-                for orig_id in env.payload.merged_entity_ids:
+                for orig_id in env.payload.original_artifact_ids:
                     clean_orig = _strip_artifact_prefix(orig_id)
                     if clean_orig:
                         population_ids.add(clean_orig)

@@ -94,7 +94,14 @@ async def export_neo4j_to_theory_graph(
                     confidence=atom.confidence or 1.0,
                     description=atom.text,
                     provenance=[atom.source_chunk_id] if atom.source_chunk_id else [],
-                    attributes={"plausibility": atom.plausibility, "layer": "L3"},
+                    attributes={
+                        "plausibility": (
+                            atom.equilibrium_strength
+                            if atom.equilibrium_strength is not None
+                            else atom.modal_prior
+                        ),
+                        "layer": "L3",
+                    },
                 )
 
             relations = await reader.get_all_theory_relations()

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Literal, Self
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -318,9 +317,9 @@ class TheoryAtom(BaseModel):
     """Propositional claim, hypothesis, axiom, or observation unit (Layer 3).
 
     Implements the node-level attributes of the Stratified Epistemic State Tuple:
-    - Layer 1 (Propositional Prior): ``modal_prior`` / ``modal_strength`` / ``base_score`` (:math:`\\tau_0(a) \\equiv M(\\phi_a)`).
+    - Layer 1 (Propositional Prior): ``modal_prior`` (:math:`\\tau_0(a) \\equiv M(\\phi_a)`).
     - Layer 3 (Empirical Tenability): ``local_tenability`` (:math:`TS_{\\text{local}}(a)`) and ``tenability``.
-    - Layer 4 (Dialectical Equilibrium): ``equilibrium_strength`` / ``plausibility`` (:math:`\\tau^*(a)`)
+    - Layer 4 (Dialectical Equilibrium): ``equilibrium_strength`` (:math:`\\tau^*(a)`)
       and ``controversy_volatility`` (:math:`\\mathcal{V}(a)`).
 
     Parameters
@@ -335,14 +334,8 @@ class TheoryAtom(BaseModel):
         Source chunk identifier where this component was extracted.
     confidence : float or None, optional
         Raw extractor confidence.
-    plausibility : float or None, optional
-        D-QBAF equilibrium justification degree :math:`\\tau^*(a)` (synchronized with ``equilibrium_strength``).
     modal_prior : float, default 0.6
         Node-intrinsic propositional modal prior :math:`\\tau_0(a) = M(\\phi_a) \\in [0, 1]`.
-    modal_strength : float, default 0.6
-        Author propositional modal certainty :math:`M(\\phi_a) \\in [0, 1]` (synchronized with ``modal_prior``).
-    base_score : float, default 0.6
-        Prior plausibility :math:`\\tau_0(a)` for QBAF (synchronized with ``modal_prior``).
     local_tenability : float or None, optional
         Empirical local tenability score :math:`TS_{\\text{local}}(a) \\in [0, 1]` from ADR-0015.
     equilibrium_strength : float or None, optional
@@ -388,39 +381,6 @@ class TheoryAtom(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
     tenability: TenabilityResult | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_atom_epistemic_fields(cls, data: Any) -> Any:
-        """Normalize legacy alias keywords into canonical Stratified Epistemic State Tuple fields."""
-        if not isinstance(data, Mapping):
-            return data
-        normalized = dict(data)
-        has_explicit_prior = (
-            ("modal_prior" in normalized and normalized["modal_prior"] is not None)
-            or ("modal_strength" in normalized and normalized["modal_strength"] is not None)
-            or ("base_score" in normalized and normalized["base_score"] is not None)
-        )
-        if "modal_prior" not in normalized or normalized["modal_prior"] is None:
-            if "modal_strength" in normalized and normalized["modal_strength"] is not None:
-                normalized["modal_prior"] = normalized["modal_strength"]
-            elif "base_score" in normalized and normalized["base_score"] is not None:
-                normalized["modal_prior"] = normalized["base_score"]
-            elif (
-                "plausibility" in normalized
-                and normalized["plausibility"] is not None
-                and "equilibrium_strength" not in normalized
-                and not has_explicit_prior
-            ):
-                normalized["modal_prior"] = normalized["plausibility"]
-        normalized.pop("modal_strength", None)
-        normalized.pop("base_score", None)
-
-        if "equilibrium_strength" not in normalized or normalized["equilibrium_strength"] is None:
-            if "plausibility" in normalized and normalized["plausibility"] is not None:
-                normalized["equilibrium_strength"] = normalized["plausibility"]
-        normalized.pop("plausibility", None)
-        return normalized
-
     @field_validator("scope_type", mode="before")
     @classmethod
     def normalize_scope_type(cls, v: Any) -> str | None:
@@ -437,7 +397,13 @@ class TheoryAtom(BaseModel):
 
     @model_validator(mode="after")
     def sync_modal_and_base_scores(self) -> TheoryAtom:
-        """Synchronize local_tenability and tenability.local_score."""
+        """Synchronize ``local_tenability`` and ``tenability.local_score``.
+
+        Returns
+        -------
+        TheoryAtom
+            Validated atom with synchronized local tenability metadata.
+        """
         if self.tenability is not None and self.local_tenability is None:
             self.local_tenability = float(self.tenability.local_score)
         elif (
@@ -448,55 +414,6 @@ class TheoryAtom(BaseModel):
         ):
             self.tenability.local_score = float(self.local_tenability)
         return self
-
-    @property
-    def modal_strength(self) -> float:
-        """Author propositional modal certainty :math:`M(\\phi_a)` (alias for ``modal_prior``)."""
-        return self.modal_prior
-
-    @modal_strength.setter
-    def modal_strength(self, value: float) -> None:
-        self.modal_prior = float(value)
-
-    @property
-    def base_score(self) -> float:
-        """Prior plausibility :math:`\\tau_0(a)` for D-QBAF (alias for ``modal_prior``)."""
-        return self.modal_prior
-
-    @base_score.setter
-    def base_score(self, value: float) -> None:
-        self.modal_prior = float(value)
-
-    @property
-    def plausibility(self) -> float | None:
-        """Dialectical equilibrium justification degree :math:`\\tau^*(a)` (alias for ``equilibrium_strength``)."""
-        return self.equilibrium_strength
-
-    @plausibility.setter
-    def plausibility(self, value: float | None) -> None:
-        self.equilibrium_strength = float(value) if value is not None else None
-
-    def model_copy(
-        self,
-        *,
-        update: Mapping[str, Any] | None = None,
-        deep: bool = False,
-    ) -> Self:
-        """Create a copy of the atom, normalizing legacy alias keys in ``update``."""
-        if update:
-            norm = dict(update)
-            if "modal_prior" not in norm:
-                if "modal_strength" in norm and norm["modal_strength"] is not None:
-                    norm["modal_prior"] = norm["modal_strength"]
-                elif "base_score" in norm and norm["base_score"] is not None:
-                    norm["modal_prior"] = norm["base_score"]
-            norm.pop("modal_strength", None)
-            norm.pop("base_score", None)
-            if "equilibrium_strength" not in norm and "plausibility" in norm:
-                norm["equilibrium_strength"] = norm["plausibility"]
-            norm.pop("plausibility", None)
-            update = norm
-        return super().model_copy(update=update, deep=deep)
 
     def effective_base_prior(self) -> float:
         """Compute tenability-modulated prior :math:`\\tilde{\\tau}_0(a) = \\tau_0(a) \\cdot TS_{\\text{local}}(a)`.
@@ -513,20 +430,6 @@ class TheoryAtom(BaseModel):
             else (self.tenability.local_score if self.tenability is not None else 1.0)
         )
         return max(0.0, min(1.0, float(prior) * float(ts_local)))
-
-    def to_graph_properties(self) -> dict[str, Any]:
-        """Convert TheoryAtom into a serialized projection property dictionary.
-
-        Returns
-        -------
-        dict of str to Any
-            Graph node properties including canonical and compatibility keys.
-        """
-        props = self.model_dump(exclude={"id"})
-        props["modal_strength"] = self.modal_prior
-        props["base_score"] = self.modal_prior
-        props["plausibility"] = self.equilibrium_strength
-        return props
 
 
 class TheoryRelation(BaseModel):
@@ -553,47 +456,33 @@ class TheoryRelation(BaseModel):
         Extraction confidence score in [0.0, 1.0].
     scope : Literal["local", "global"]
         Structural visibility scope ('local' intra-chunk vs 'global' cross-chunk).
-    weight : float | None, optional
+    weight : float or None, optional
         Directed relational weight for QBAF semantics. If None, derived from
-        effective_weight.
-    tenability : float | None, optional
-        Epistemic edge tenability score in [0.0, 1.0] (synchronized with ``edge_tenability``).
-    edge_tenability : float | None, optional
+        ``effective_weight``.
+    edge_tenability : float or None, optional
         Intertheoretical edge tenability :math:`TS_{\\text{edge}} \\in [0, 1]` from ADR-0015.
-    structural_correspondence : float | None, optional
+    structural_correspondence : float or None, optional
         :math:`\\kappa`-structural correspondence overlap score in [0.0, 1.0] from ADR-0007.
-    class_probability : float | None, optional
-        Softmax probability P(stance) of the predicted relation type.
-    stance_probability : float | None, optional
-        Canonical perception class probability P(stance).
-    perception_stance_prob : float | None, optional
+    perception_stance_prob : float or None, optional
         System 1 perception stance probability :math:`P(\\text{stance}) \\in [0, 1]`.
-    empirical_accuracy : float | None, optional
-        Calibrated empirical accuracy frequency from System 1 decision engine
-        (e.g. Laya action.act_probability) used for admissibility gating.
-    perception_empirical_acc : float | None, optional
+    perception_empirical_acc : float or None, optional
         System 1 calibrated empirical accuracy :math:`C \\in [0, 1]`.
-    model_confidence : float | None, optional
-        Canonical calibrated confidence score C for perception gating.
-    inferential_force : float, default 0.75
-        Toulminian inferential warrant validity :math:`I_{j \\to i} \\in [0, 1]`
-        (synchronized with ``inferential_warrant``).
     inferential_warrant : float, default 0.75
         Toulminian inferential warrant validity :math:`I_{j \\to i} \\in [0, 1]`.
     is_admissible : bool, default True
         Admissibility status under active bivariate thresholds.
     active_weight : float, default 0.75
         Net weight :math:`W_{ji}` ingested by gradual semantics solvers.
-    effective_weight : float | None, optional
+    effective_weight : float or None, optional
         Decoupled edge weight derived strictly from relational warrant, perception
         confidence, and edge tenability (free of node modality).
-    decision_engine_provider : str | None, optional
+    decision_engine_provider : str or None, optional
         System 1 engine provider identifier (e.g. 'mock_jev', 'typesafe_jev').
-    calibrated_confidence : float | None, optional
+    calibrated_confidence : float or None, optional
         Empirically calibrated confidence score for calibration evaluation and admissibility.
-    weight_support : float | None, optional
+    weight_support : float or None, optional
         Directed support weight contribution in [0.0, 1.0].
-    weight_attack : float | None, optional
+    weight_attack : float or None, optional
         Directed attack weight contribution in [0.0, 1.0].
     """
 
@@ -616,45 +505,16 @@ class TheoryRelation(BaseModel):
     weight_support: float | None = None
     weight_attack: float | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_relation_epistemic_fields(cls, data: Any) -> Any:
-        """Normalize legacy alias keywords into canonical TheoryRelation fields."""
-        if not isinstance(data, Mapping):
-            return data
-        normalized = dict(data)
-        if "inferential_warrant" not in normalized or normalized["inferential_warrant"] is None:
-            if "inferential_force" in normalized and normalized["inferential_force"] is not None:
-                normalized["inferential_warrant"] = normalized["inferential_force"]
-        normalized.pop("inferential_force", None)
-
-        if "perception_stance_prob" not in normalized or normalized["perception_stance_prob"] is None:
-            if "stance_probability" in normalized and normalized["stance_probability"] is not None:
-                normalized["perception_stance_prob"] = normalized["stance_probability"]
-            elif "class_probability" in normalized and normalized["class_probability"] is not None:
-                normalized["perception_stance_prob"] = normalized["class_probability"]
-        normalized.pop("stance_probability", None)
-        normalized.pop("class_probability", None)
-
-        if "perception_empirical_acc" not in normalized or normalized["perception_empirical_acc"] is None:
-            if "empirical_accuracy" in normalized and normalized["empirical_accuracy"] is not None:
-                normalized["perception_empirical_acc"] = normalized["empirical_accuracy"]
-        normalized.pop("empirical_accuracy", None)
-
-        if "calibrated_confidence" not in normalized or normalized["calibrated_confidence"] is None:
-            if "model_confidence" in normalized and normalized["model_confidence"] is not None:
-                normalized["calibrated_confidence"] = normalized["model_confidence"]
-        normalized.pop("model_confidence", None)
-
-        if "edge_tenability" not in normalized or normalized["edge_tenability"] is None:
-            if "tenability" in normalized and normalized["tenability"] is not None:
-                normalized["edge_tenability"] = normalized["tenability"]
-        normalized.pop("tenability", None)
-        return normalized
-
     @model_validator(mode="after")
     def compute_default_weights(self) -> TheoryRelation:
-        """Compute decoupled effective weight, calibrated confidence, and active weight."""
+        """Compute decoupled effective weight, calibrated confidence, and active weight.
+
+        Returns
+        -------
+        TheoryRelation
+            Validated relation with populated default weights and calibrated
+            confidence.
+        """
         warrant_explicit = "inferential_warrant" in self.model_fields_set
         ts_edge = float(self.edge_tenability) if self.edge_tenability is not None else 1.0
 
@@ -691,91 +551,6 @@ class TheoryRelation(BaseModel):
                 )
             )
         return self
-
-    @property
-    def inferential_force(self) -> float:
-        """Toulminian inferential warrant validity :math:`I_{j \\to i}` (alias for ``inferential_warrant``)."""
-        return self.inferential_warrant
-
-    @inferential_force.setter
-    def inferential_force(self, value: float) -> None:
-        self.inferential_warrant = float(value)
-
-    @property
-    def stance_probability(self) -> float | None:
-        """Perception stance probability :math:`P(\\text{stance})` (alias for ``perception_stance_prob``)."""
-        return self.perception_stance_prob
-
-    @stance_probability.setter
-    def stance_probability(self, value: float | None) -> None:
-        self.perception_stance_prob = float(value) if value is not None else None
-
-    @property
-    def class_probability(self) -> float | None:
-        """Softmax class probability :math:`P(\\text{stance})` (alias for ``perception_stance_prob``)."""
-        return self.perception_stance_prob
-
-    @class_probability.setter
-    def class_probability(self, value: float | None) -> None:
-        self.perception_stance_prob = float(value) if value is not None else None
-
-    @property
-    def empirical_accuracy(self) -> float | None:
-        """Calibrated empirical accuracy :math:`C` (alias for ``perception_empirical_acc``)."""
-        return self.perception_empirical_acc
-
-    @empirical_accuracy.setter
-    def empirical_accuracy(self, value: float | None) -> None:
-        self.perception_empirical_acc = float(value) if value is not None else None
-
-    @property
-    def model_confidence(self) -> float | None:
-        """Calibrated model confidence (alias for ``calibrated_confidence``)."""
-        return self.calibrated_confidence
-
-    @model_confidence.setter
-    def model_confidence(self, value: float | None) -> None:
-        self.calibrated_confidence = float(value) if value is not None else None
-
-    @property
-    def tenability(self) -> float | None:
-        """Intertheoretical edge tenability :math:`TS_{\\text{edge}}` (alias for ``edge_tenability``)."""
-        return self.edge_tenability
-
-    @tenability.setter
-    def tenability(self, value: float | None) -> None:
-        self.edge_tenability = float(value) if value is not None else None
-
-    def model_copy(
-        self,
-        *,
-        update: Mapping[str, Any] | None = None,
-        deep: bool = False,
-    ) -> Self:
-        """Create a copy of the relation, normalizing legacy alias keys in ``update``."""
-        if update:
-            norm = dict(update)
-            if "inferential_warrant" not in norm and "inferential_force" in norm:
-                norm["inferential_warrant"] = norm["inferential_force"]
-            norm.pop("inferential_force", None)
-            if "perception_stance_prob" not in norm:
-                if "stance_probability" in norm:
-                    norm["perception_stance_prob"] = norm["stance_probability"]
-                elif "class_probability" in norm:
-                    norm["perception_stance_prob"] = norm["class_probability"]
-            norm.pop("stance_probability", None)
-            norm.pop("class_probability", None)
-            if "perception_empirical_acc" not in norm and "empirical_accuracy" in norm:
-                norm["perception_empirical_acc"] = norm["empirical_accuracy"]
-            norm.pop("empirical_accuracy", None)
-            if "calibrated_confidence" not in norm and "model_confidence" in norm:
-                norm["calibrated_confidence"] = norm["model_confidence"]
-            norm.pop("model_confidence", None)
-            if "edge_tenability" not in norm and "tenability" in norm:
-                norm["edge_tenability"] = norm["tenability"]
-            norm.pop("tenability", None)
-            update = norm
-        return super().model_copy(update=update, deep=deep)
 
     def compute_effective_weight(
         self,
@@ -823,84 +598,14 @@ class TheoryRelation(BaseModel):
         ts_edge = float(self.edge_tenability) if self.edge_tenability is not None else 1.0
         return max(0.0, min(1.0, float(warrant) * gate * ts_edge))
 
-    def to_graph_properties(self, polarity: int | None = None) -> dict[str, Any]:
-        """Convert TheoryRelation into a serialized projection property dictionary.
-
-        Parameters
-        ----------
-        polarity : int | None, optional
-            Epistemic polarity (+1, -1, 0). If omitted, inferred from relation weight.
-
-        Returns
-        -------
-        dict of str to Any
-            Graph edge properties conforming to the projection schema.
-        """
-        eff_w = (
-            self.effective_weight
-            if self.effective_weight is not None
-            else (self.weight if self.weight is not None else 1.0)
-        )
-        pol = (
-            polarity
-            if polarity is not None
-            else (1 if (self.weight or 0) > 0 else (-1 if (self.weight or 0) < 0 else 0))
-        )
-        w_supp = (
-            self.weight_support
-            if self.weight_support is not None
-            else (eff_w if pol > 0 else 0.0)
-        )
-        w_att = (
-            self.weight_attack
-            if self.weight_attack is not None
-            else (eff_w if pol < 0 else 0.0)
-        )
-        cal_conf = (
-            self.calibrated_confidence
-            if self.calibrated_confidence is not None
-            else (
-                self.perception_empirical_acc
-                if self.perception_empirical_acc is not None
-                else self.confidence
-            )
-        )
-
-        props: dict[str, Any] = {
-            "scope": self.scope,
-            "confidence": self.confidence,
-            "calibrated_confidence": cal_conf,
-            "class_probability": self.perception_stance_prob,
-            "stance_probability": self.perception_stance_prob,
-            "perception_stance_prob": self.perception_stance_prob,
-            "empirical_accuracy": self.perception_empirical_acc,
-            "perception_empirical_acc": self.perception_empirical_acc,
-            "model_confidence": cal_conf,
-            "inferential_force": self.inferential_warrant,
-            "inferential_warrant": self.inferential_warrant,
-            "is_admissible": self.is_admissible,
-            "active_weight": self.active_weight,
-            "effective_weight": eff_w,
-            "weight": self.weight if self.weight is not None else eff_w,
-            "decision_engine_provider": self.decision_engine_provider,
-            "weight_support": w_supp,
-            "weight_attack": w_att,
-        }
-        if self.structural_correspondence is not None:
-            props["structural_correspondence"] = self.structural_correspondence
-        if self.edge_tenability is not None:
-            props["tenability"] = self.edge_tenability
-            props["edge_tenability"] = self.edge_tenability
-        return props
-
     @property
     def from_id(self) -> str:
-        """Alias for source_id."""
+        """Alias for ``source_id``."""
         return self.source_id
 
     @property
     def to_id(self) -> str:
-        """Alias for target_id."""
+        """Alias for ``target_id``."""
         return self.target_id
 
     @property
@@ -922,151 +627,6 @@ class TheoryRelation(BaseModel):
             self.relation_type,
             1 if (self.weight or 0) > 0 else (-1 if (self.weight or 0) < 0 else 0),
         )
-
-    @classmethod
-    def from_graph_properties(
-        cls,
-        source_id: str,
-        relation_type: str,
-        target_id: str,
-        properties: dict[str, Any] | None = None,
-    ) -> TheoryRelation:
-        """Reconstruct a TheoryRelation from serialized graph properties.
-
-        Parameters
-        ----------
-        source_id : str
-            Source atom/component identifier.
-        relation_type : str
-            Canonical relation type identifier.
-        target_id : str
-            Target atom/component identifier.
-        properties : dict of str to Any, optional
-            Serialized graph edge property map.
-
-        Returns
-        -------
-        TheoryRelation
-            Validated domain relation instance.
-        """
-        props = properties or {}
-        raw_scope = props.get("scope", "global")
-        scope_val: Literal["local", "global"] = "local" if raw_scope == "local" else "global"
-        weight_val = (
-            float(props["weight"])
-            if "weight" in props and props["weight"] is not None
-            else None
-        )
-        eff_weight_val = (
-            float(props["effective_weight"])
-            if "effective_weight" in props and props["effective_weight"] is not None
-            else None
-        )
-        confidence_val = float(props.get("confidence", 1.0) or 1.0)
-        raw_warrant = props.get("inferential_warrant", props.get("inferential_force"))
-        inferential_val = float(raw_warrant if raw_warrant is not None else 0.75)
-        stance_prob_val = props.get(
-            "perception_stance_prob",
-            props.get("stance_probability", props.get("class_probability")),
-        )
-        emp_acc_val = props.get(
-            "perception_empirical_acc", props.get("empirical_accuracy")
-        )
-        model_conf_val = props.get(
-            "model_confidence",
-            props.get("calibrated_confidence", emp_acc_val),
-        )
-        is_admissible_val = bool(props.get("is_admissible", True))
-        active_weight_val = float(
-            props.get("active_weight", eff_weight_val or inferential_val) or inferential_val
-        )
-        ts_val = props.get("edge_tenability", props.get("tenability"))
-
-        return cls(
-            source_id=source_id,
-            target_id=target_id,
-            relation_type=relation_type,
-            confidence=confidence_val,
-            scope=scope_val,
-            weight=weight_val,
-            class_probability=props.get("class_probability", stance_prob_val),
-            stance_probability=stance_prob_val,
-            perception_stance_prob=stance_prob_val,
-            empirical_accuracy=emp_acc_val,
-            perception_empirical_acc=emp_acc_val,
-            model_confidence=model_conf_val,
-            inferential_force=inferential_val,
-            inferential_warrant=inferential_val,
-            is_admissible=is_admissible_val,
-            active_weight=active_weight_val,
-            effective_weight=eff_weight_val,
-            decision_engine_provider=props.get("decision_engine_provider"),
-            tenability=ts_val,
-            edge_tenability=ts_val,
-            structural_correspondence=props.get("structural_correspondence"),
-            calibrated_confidence=props.get("calibrated_confidence"),
-            weight_support=props.get("weight_support"),
-            weight_attack=props.get("weight_attack"),
-        )
-
-    @classmethod
-    def is_theory_edge(
-        cls,
-        relation_type: str,
-        properties: dict[str, Any] | None = None,
-        schema: Any | None = None,
-        source_is_atom: bool = False,
-        target_is_atom: bool = False,
-    ) -> bool:
-        """Determine whether candidate graph edge attributes define a TheoryRelation.
-
-        Parameters
-        ----------
-        relation_type : str
-            Relationship type name.
-        properties : dict of str to Any, optional
-            Edge properties dictionary.
-        schema : SchemaConfig, optional
-            Schema configuration providing dialectical relation definitions.
-        source_is_atom : bool, default False
-            Whether the source node is known to be a TheoryAtom.
-        target_is_atom : bool, default False
-            Whether the target node is known to be a TheoryAtom.
-
-        Returns
-        -------
-        bool
-            True if the edge represents a dialectical TheoryRelation.
-        """
-        # 1. Topological match (Neo4j equivalent: (a:TheoryAtom)-[r]->(b:TheoryAtom))
-        if source_is_atom and target_is_atom:
-            return True
-
-        # 2. Schema taxonomy match
-        from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
-
-        effective_schema = schema or DEFAULT_SCHEMA
-        if (
-            effective_schema.is_dialectical_relation(relation_type)
-            or relation_type in effective_schema.argument_relation_types
-        ):
-            return True
-
-        # 3. Signature theory properties
-        props = properties or {}
-        theory_markers = {
-            "calibrated_confidence",
-            "effective_weight",
-            "inferential_warrant",
-            "inferential_force",
-            "weight_support",
-            "weight_attack",
-        }
-        if any(marker in props for marker in theory_markers):
-            return True
-
-        # 4. Partial atom match (one endpoint is an atom and edge is not structural)
-        return bool((source_is_atom or target_is_atom) and relation_type not in ("CONTAINS", "EXTRACTED_FROM", "SAME_AS", "MENTIONS"))
 
 
 class SubGraph(BaseModel):

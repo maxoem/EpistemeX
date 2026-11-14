@@ -244,8 +244,8 @@ def _extract_l2_state(
         consumed_ids.append(canon_art.artifact_id)
         payload = canon_art.payload
         if isinstance(payload, CanonicalizationArtifact):
-            canon_id = _strip_artifact_prefix(payload.canonical_entity_id)
-            for orig_id in payload.merged_entity_ids:
+            canon_id = _strip_artifact_prefix(payload.canonical_id)
+            for orig_id in payload.original_artifact_ids:
                 clean_orig = _strip_artifact_prefix(orig_id)
                 if clean_orig and clean_orig != canon_id:
                     alias_map[clean_orig] = canon_id
@@ -803,7 +803,6 @@ class Phase4ArtifactsView(EpistemicStateView):
                         updated_rels.append(
                             rel.model_copy(
                                 update={
-                                    "tenability": ts_val,
                                     "edge_tenability": ts_val,
                                 }
                             )
@@ -837,7 +836,6 @@ class Phase4ArtifactsView(EpistemicStateView):
                         updates["parameters"] = merged_params
                 if atom.id in equilibrium_map:
                     updates["equilibrium_strength"] = equilibrium_map[atom.id]
-                    updates["plausibility"] = equilibrium_map[atom.id]
                 if updates:
                     updated_atoms.append(atom.model_copy(update=updates))
                 else:

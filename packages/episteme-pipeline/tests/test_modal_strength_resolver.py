@@ -347,8 +347,7 @@ class TestPhase6TheoryNetProjectorIntegration:
         tnet: TheoryNet = projector.project(view)
 
         assert len(tnet.atoms) == 1
-        assert pytest.approx(tnet.atoms[0].modal_strength) == 0.777
-        assert pytest.approx(tnet.atoms[0].base_score) == 0.777
+        assert pytest.approx(tnet.atoms[0].modal_prior) == 0.777
 
 
 def test_ensure_modal_strength_resolver() -> None:

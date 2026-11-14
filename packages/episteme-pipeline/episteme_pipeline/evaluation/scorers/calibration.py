@@ -194,11 +194,11 @@ class DefaultCalibrationDataExtractor:
                 data.calibrated_confidence
                 if data.calibrated_confidence is not None
                 else (
-                    data.empirical_accuracy
-                    if data.empirical_accuracy is not None
+                    data.perception_empirical_acc
+                    if data.perception_empirical_acc is not None
                     else (
-                        data.class_probability
-                        if data.class_probability is not None
+                        data.perception_stance_prob
+                        if data.perception_stance_prob is not None
                         else data.confidence
                     )
                 )
@@ -208,7 +208,15 @@ class DefaultCalibrationDataExtractor:
 
         if isinstance(data, TheoryAtom):
             key = f"{data.id}::{data.component_type}".lower()
-            conf = data.plausibility if data.plausibility is not None else data.confidence
+            conf = (
+                data.equilibrium_strength
+                if data.equilibrium_strength is not None
+                else (
+                    data.confidence
+                    if data.confidence is not None
+                    else data.modal_prior
+                )
+            )
             items.append((key, float(conf if conf is not None else 1.0)))
             return items
 

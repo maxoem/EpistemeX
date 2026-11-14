@@ -51,7 +51,7 @@ async def test_jev_acc_classifier() -> None:
     assert atoms[0].text == "The mind constructs reality."
     assert atoms[0].component_type == "TheoreticalHypothesis"
     assert atoms[0].confidence == 0.92
-    assert atoms[0].plausibility == 0.90
+    assert atoms[0].modal_prior == 0.90
     assert rels == []
 
 

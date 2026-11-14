@@ -182,9 +182,8 @@ def test_theory_atom_codec_roundtrip() -> None:
         component_type="TheoreticalHypothesis",
         source_chunk_id="chunk-42",
         confidence=0.94,
-        plausibility=0.89,
-        modal_strength=0.75,
-        base_score=0.75,
+        equilibrium_strength=0.89,
+        modal_prior=0.75,
         entity_ids=["entity-anschauung", "entity-sinnlichkeit"],
         epistemic_status="Analytisch",
         scope_type="Essentieller Allsatz",
@@ -207,16 +206,10 @@ def test_theory_relation_codec_roundtrip() -> None:
         confidence=0.91,
         scope="global",
         weight=0.82,
-        tenability=0.88,
         edge_tenability=0.88,
         structural_correspondence=0.93,
-        class_probability=0.85,
-        stance_probability=0.85,
         perception_stance_prob=0.85,
-        empirical_accuracy=0.87,
         perception_empirical_acc=0.87,
-        model_confidence=0.91,
-        inferential_force=0.80,
         inferential_warrant=0.80,
         is_admissible=True,
         active_weight=0.82,
@@ -421,7 +414,7 @@ async def test_theoretical_enrichment_persists_via_upsert_theory_relations() -> 
         relation_type="SUPPORTS",
         confidence=0.9,
         scope="local",
-        inferential_force=0.85,
+        inferential_warrant=0.85,
         active_weight=0.85,
     )
 
@@ -451,5 +444,5 @@ async def test_theoretical_enrichment_persists_via_upsert_theory_relations() -> 
     assert len(persisted_batch) == 1
     persisted_rel = persisted_batch[0]
     assert isinstance(persisted_rel, TheoryRelation)
-    assert persisted_rel.inferential_force == 0.85
+    assert persisted_rel.inferential_warrant == 0.85
     assert persisted_rel.active_weight == 0.85

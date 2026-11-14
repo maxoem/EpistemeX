@@ -257,7 +257,13 @@ class TestCalibrationScorer:
     def test_default_extractor_atoms_and_relations(self):
         """Verify DefaultCalibrationDataExtractor directly extracts typed atoms and relations."""
         extractor = DefaultCalibrationDataExtractor()
-        atom = TheoryAtom(id="atom_1", text="Test Atom", component_type="CLAIM", source_chunk_id="chunk_1", plausibility=0.85)
+        atom = TheoryAtom(
+            id="atom_1",
+            text="Test Atom",
+            component_type="CLAIM",
+            source_chunk_id="chunk_1",
+            equilibrium_strength=0.85,
+        )
         rel = TheoryRelation(
             source_id="atom_1",
             target_id="atom_2",

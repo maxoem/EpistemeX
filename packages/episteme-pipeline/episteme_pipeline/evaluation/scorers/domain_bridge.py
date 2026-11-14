@@ -165,7 +165,11 @@ def theory_net_to_theory_graph(
         attrs = {
             "formalAxiom": atom.text,
             "formal_axiom": atom.text,
-            "plausibility": atom.plausibility,
+            "plausibility": (
+                atom.equilibrium_strength
+                if atom.equilibrium_strength is not None
+                else atom.modal_prior
+            ),
             "layer": "L4",
         }
         if anchor_dict:

@@ -28,6 +28,11 @@ from episteme_pipeline.contracts.domain import (
     TheoryAtom,
     TheoryRelation,
 )
+from episteme_pipeline.graph.theory_graph_mapper import (
+    is_theory_edge,
+    theory_relation_from_graph_properties,
+    theory_relation_to_graph_properties,
+)
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
@@ -518,15 +523,15 @@ class InMemoryGraphStore(ProcessingGraph):
         }
         self._generic_relations.append(rel_dict)
 
-        # Delegate theory edge classification and domain reconstruction to TheoryRelation
-        if TheoryRelation.is_theory_edge(
+        # Delegate theory edge classification and domain reconstruction to graph mapper
+        if is_theory_edge(
             relation_type=relation_type,
             properties=props,
             source_is_atom=from_id in self._theory_atoms,
             target_is_atom=to_id in self._theory_atoms,
         ):
             self._theory_relations.append(
-                TheoryRelation.from_graph_properties(
+                theory_relation_from_graph_properties(
                     source_id=from_id,
                     relation_type=relation_type,
                     target_id=to_id,
@@ -547,7 +552,7 @@ class InMemoryGraphStore(ProcessingGraph):
             "from_id": relation.source_id,
             "relation_type": relation.relation_type,
             "to_id": relation.target_id,
-            "properties": relation.to_graph_properties(),
+            "properties": theory_relation_to_graph_properties(relation),
         })
 
     async def upsert_theory_relations(self, relations: list[TheoryRelation]) -> None:

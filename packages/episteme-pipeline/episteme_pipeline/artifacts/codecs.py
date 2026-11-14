@@ -14,6 +14,7 @@ from episteme_pipeline.artifacts.models import (
     GlobalRelationArtifact,
     LinkedEntityArtifact,
     LocalRelationArtifact,
+    MentionId,
     TheoryAtomArtifact,
     TheoryRelationArtifact,
 )
@@ -198,7 +199,7 @@ class LinkedEntityCodec:
             Lossless linked entity artifact payload.
         """
         mention_ids = [
-            f"mention::{domain_obj.id}::{cid}" for cid in domain_obj.source_chunk_ids
+            MentionId.format(domain_obj.id, cid) for cid in domain_obj.source_chunk_ids
         ]
         return LinkedEntityArtifact(
             entity_id=domain_obj.id,
@@ -230,11 +231,9 @@ class LinkedEntityCodec:
         chunk_ids: list[str] = list(payload.source_chunk_ids)
         if not chunk_ids and payload.mention_ids:
             for mid in payload.mention_ids:
-                parts = mid.removeprefix("artifact::").split("::")
-                if len(parts) == 3 and parts[0] == "mention" and parts[2]:
-                    chunk_ids.append(parts[2])
-                elif len(parts) == 2 and parts[0] == "mention" and parts[1]:
-                    chunk_ids.append(parts[1])
+                _, parsed_cid = MentionId.parse(mid)
+                if parsed_cid:
+                    chunk_ids.append(parsed_cid)
         # Deduplicate while preserving order
         seen: set[str] = set()
         uniq_chunk_ids = [c for c in chunk_ids if not (c in seen or seen.add(c))]
@@ -427,9 +426,15 @@ class TheoryAtomCodec:
         TheoryAtomArtifact
             Lossless theory atom artifact payload.
         """
-        extra: dict[str, float] = {}
-        if "modal_prior" in domain_obj.model_fields_set or domain_obj.modal_prior != 0.6:
-            extra["modal_prior"] = domain_obj.modal_prior
+        modal_prior = (
+            domain_obj.modal_prior
+            if (
+                "modal_prior" in domain_obj.model_fields_set
+                or domain_obj.resolver_type is not None
+                or domain_obj.modal_prior != 0.6
+            )
+            else None
+        )
         return TheoryAtomArtifact(
             component_id=domain_obj.id,
             chunk_id=domain_obj.source_chunk_id,
@@ -439,6 +444,7 @@ class TheoryAtomCodec:
             epistemic_status=domain_obj.epistemic_status,
             scope_type=domain_obj.scope_type,
             entity_ids=list(domain_obj.entity_ids),
+            modal_prior=modal_prior,
             local_tenability=domain_obj.local_tenability,
             equilibrium_strength=domain_obj.equilibrium_strength,
             controversy_volatility=domain_obj.controversy_volatility,
@@ -448,7 +454,6 @@ class TheoryAtomCodec:
             measurements=list(domain_obj.measurements),
             parameters=dict(domain_obj.parameters),
             tenability=domain_obj.tenability,
-            **extra,
         )
 
     @classmethod
@@ -466,7 +471,7 @@ class TheoryAtomCodec:
             Reconstructed theory atom contract.
         """
         extra: dict[str, float] = {}
-        if "modal_prior" in payload.model_fields_set or payload.modal_prior != 0.6:
+        if payload.modal_prior is not None:
             extra["modal_prior"] = payload.modal_prior
         return TheoryAtom(
             id=payload.component_id,
@@ -508,9 +513,14 @@ class TheoryRelationCodec:
             Lossless theory relation artifact payload.
         """
         relation_id = f"argument-relation::{domain_obj.source_id}::{domain_obj.relation_type}::{domain_obj.target_id}"
-        extra: dict[str, float] = {}
-        if "inferential_warrant" in domain_obj.model_fields_set or domain_obj.inferential_warrant != 0.75:
-            extra["inferential_warrant"] = domain_obj.inferential_warrant
+        inferential_warrant = (
+            domain_obj.inferential_warrant
+            if (
+                "inferential_warrant" in domain_obj.model_fields_set
+                or domain_obj.inferential_warrant != 0.75
+            )
+            else None
+        )
         return TheoryRelationArtifact(
             relation_id=relation_id,
             source_component_id=domain_obj.source_id,
@@ -521,6 +531,7 @@ class TheoryRelationCodec:
             weight=domain_obj.weight,
             perception_stance_prob=domain_obj.perception_stance_prob,
             perception_empirical_acc=domain_obj.perception_empirical_acc,
+            inferential_warrant=inferential_warrant,
             structural_correspondence=domain_obj.structural_correspondence,
             is_admissible=domain_obj.is_admissible,
             active_weight=domain_obj.active_weight,
@@ -530,7 +541,6 @@ class TheoryRelationCodec:
             calibrated_confidence=domain_obj.calibrated_confidence,
             weight_support=domain_obj.weight_support,
             weight_attack=domain_obj.weight_attack,
-            **extra,
         )
 
     @classmethod
@@ -549,7 +559,7 @@ class TheoryRelationCodec:
         """
         scope_lit = "local" if payload.scope == "local" else "global"
         extra: dict[str, float] = {}
-        if "inferential_warrant" in payload.model_fields_set or payload.inferential_warrant != 0.75:
+        if payload.inferential_warrant is not None:
             extra["inferential_warrant"] = payload.inferential_warrant
         return TheoryRelation(
             source_id=payload.source_component_id,

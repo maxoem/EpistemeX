@@ -3,9 +3,7 @@ from __future__ import annotations
 from episteme_pipeline.artifacts.codecs import (
     ChunkCodec,
     DocumentCodec,
-    GlobalRelationCodec,
     LinkedEntityCodec,
-    LocalRelationCodec,
     TheoryAtomCodec,
     TheoryRelationCodec,
 )
@@ -14,15 +12,11 @@ from episteme_pipeline.artifacts.models import (
     ArtifactKind,
     ArtifactProvenance,
     CanonicalizationArtifact,
-    ChunkArtifact,
-    DocumentArtifact,
     EntityMentionArtifact,
     FusionDecisionArtifact,
     GlobalRelationArtifact,
-    LinkedEntityArtifact,
     LocalRelationArtifact,
-    TheoryAtomArtifact,
-    TheoryRelationArtifact,
+    MentionId,
 )
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
@@ -64,7 +58,7 @@ def build_chunk_artifact(chunk: L1Chunk, *, run_id: str, phase_name: str, method
 
 
 def build_entity_mention_artifact(entity: L2Entity, chunk_id: str, *, run_id: str, phase_name: str, method: str) -> ArtifactEnvelope:
-    mention_id = f"mention::{entity.id}::{chunk_id}"
+    mention_id = MentionId.format(entity.id, chunk_id)
     return ArtifactEnvelope(
         artifact_id=f"artifact::{mention_id}",
         identity_key=f"entity_mention::{mention_id}",
@@ -90,11 +84,8 @@ def build_entity_mention_artifact(entity: L2Entity, chunk_id: str, *, run_id: st
 
 def parse_mention_id(mention_id: str) -> tuple[str, str]:
     """Parse a mention ID into its component entity ID and chunk ID."""
-    parts = mention_id.split("::")
-    if len(parts) == 3 and parts[0] == "mention":
-        return parts[1], parts[2]
-    # Fallback in case of unexpected format
-    return mention_id, ""
+    entity_id, chunk_id = MentionId.parse(mention_id)
+    return entity_id, chunk_id or ""
 
 
 def build_linked_entity_artifact(

@@ -106,21 +106,21 @@ def get_cypher_projection_query(
     if admissibility_mode == "hard":
         return f"""CALL gds.graph.project.cypher(
   '{graph_name}',
-  'MATCH (n:TheoryAtom) RETURN id(n) AS id, n.modal_strength AS base_score',
+  'MATCH (n:TheoryAtom) RETURN id(n) AS id, n.modal_prior AS base_score',
   'MATCH (s:TheoryAtom)-[r:THEORY_RELATION]->(t:TheoryAtom)
-   WHERE r.stance_probability >= {p_val} AND r.model_confidence >= {c_val}
+   WHERE r.perception_stance_prob >= {p_val} AND r.calibrated_confidence >= {c_val}
    RETURN id(s) AS source, id(t) AS target,
-          r.inferential_force AS weight,
+          r.inferential_warrant AS weight,
           type(r) AS relation_type'
 )"""
     return f"""CALL gds.graph.project.cypher(
   '{graph_name}',
-  'MATCH (n:TheoryAtom) RETURN id(n) AS id, n.modal_strength AS base_score',
+  'MATCH (n:TheoryAtom) RETURN id(n) AS id, n.modal_prior AS base_score',
   'MATCH (s:TheoryAtom)-[r:THEORY_RELATION]->(t:TheoryAtom)
    RETURN id(s) AS source, id(t) AS target,
-          r.inferential_force AS inferential_force,
-          r.stance_probability AS stance_probability,
-          r.model_confidence AS model_confidence,
+          r.inferential_warrant AS inferential_warrant,
+          r.perception_stance_prob AS perception_stance_prob,
+          r.calibrated_confidence AS calibrated_confidence,
           type(r) AS relation_type'
 )"""
 
@@ -258,42 +258,21 @@ class TheoryNetProjector:
             rel = r.model_copy()
 
             # Apply upstream heuristic warrant mapping if not explicitly defined
-            if (
-                "inferential_force" not in rel.model_fields_set
-                and "inferential_warrant" not in rel.model_fields_set
-            ):
-                warrant = derive_relation_warrant(rel)
-                rel.inferential_force = warrant
-                rel.inferential_warrant = warrant
+            if "inferential_warrant" not in rel.model_fields_set:
+                rel.inferential_warrant = derive_relation_warrant(rel)
 
             p_val = (
                 rel.perception_stance_prob
                 if rel.perception_stance_prob is not None
-                else (
-                    rel.stance_probability
-                    if rel.stance_probability is not None
-                    else (
-                        rel.class_probability
-                        if rel.class_probability is not None
-                        else (rel.confidence if rel.confidence is not None else 1.0)
-                    )
-                )
+                else (rel.confidence if rel.confidence is not None else 1.0)
             )
             c_val = (
                 rel.perception_empirical_acc
                 if rel.perception_empirical_acc is not None
                 else (
-                    rel.model_confidence
-                    if rel.model_confidence is not None
-                    else (
-                        rel.calibrated_confidence
-                        if rel.calibrated_confidence is not None
-                        else (
-                            rel.empirical_accuracy
-                            if rel.empirical_accuracy is not None
-                            else (rel.confidence if rel.confidence is not None else 1.0)
-                        )
-                    )
+                    rel.calibrated_confidence
+                    if rel.calibrated_confidence is not None
+                    else (rel.confidence if rel.confidence is not None else 1.0)
                 )
             )
 
@@ -317,10 +296,9 @@ class TheoryNetProjector:
                         continue
                     else:
                         rel.active_weight = 0.0
-                        rel.tenability = 0.0
                         rel.edge_tenability = 0.0
                 else:
-                    rel.active_weight = rel.inferential_force
+                    rel.active_weight = rel.inferential_warrant
             else:
                 # Mode 2: Continuous sigmoidal relaxation with k1 = k2 = 20
                 rel.is_admissible = bool(p_val >= self.tau_p and c_val >= self.tau_c)
@@ -330,7 +308,7 @@ class TheoryNetProjector:
                 exp_p = math.exp(-20.0 * max(-30.0, min(30.0, diff_p)))
                 exp_c = math.exp(-20.0 * max(-30.0, min(30.0, diff_c)))
                 f_soft = (1.0 / (1.0 + exp_p)) * (1.0 / (1.0 + exp_c))
-                rel.active_weight = float(rel.inferential_force * f_soft)
+                rel.active_weight = float(rel.inferential_warrant * f_soft)
 
             rel.weight = self.compute_relation_weight(rel)
             relations.append(rel)
@@ -344,17 +322,9 @@ class TheoryNetProjector:
         atoms: list[TheoryAtom] = []
         for c in source_atoms:
             atom = c.model_copy()
-            if (
-                "modal_prior" not in atom.model_fields_set
-                and "modal_strength" not in atom.model_fields_set
-                and "base_score" not in atom.model_fields_set
-            ):
-                resolved_mod = self.modal_resolver.resolve_modality_sync(atom)
-                atom.modal_prior = resolved_mod
-                atom.modal_strength = resolved_mod
-                atom.base_score = resolved_mod
-            atom.plausibility = self.compute_weight(atom)
-            atom.equilibrium_strength = atom.plausibility
+            if "modal_prior" not in atom.model_fields_set and atom.resolver_type is None:
+                atom.modal_prior = self.modal_resolver.resolve_modality_sync(atom)
+            atom.equilibrium_strength = self.compute_weight(atom)
             atoms.append(atom)
 
         # Execute Gradual Semantics Convergence via sovereign epistemetrics solver
@@ -368,7 +338,6 @@ class TheoryNetProjector:
             )
             for atom in atoms:
                 if atom.id in solver_res.degrees:
-                    atom.plausibility = solver_res.degrees[atom.id]
                     atom.equilibrium_strength = solver_res.degrees[atom.id]
                 if solver_res.volatility_index and atom.id in solver_res.volatility_index:
                     atom.controversy_volatility = solver_res.volatility_index[atom.id]
@@ -428,10 +397,10 @@ class TheoryNetProjector:
                     confidence=rel.confidence if rel.confidence is not None else 1.0,
                     weight=rel.weight if rel.weight is not None else 1.0,
                     polarity=pol,
-                    inferential_force=rel.inferential_force,
-                    stance_probability=rel.stance_probability,
-                    model_confidence=rel.model_confidence,
-                    empirical_accuracy=rel.empirical_accuracy,
+                    inferential_force=rel.inferential_warrant,
+                    stance_probability=rel.perception_stance_prob,
+                    model_confidence=rel.calibrated_confidence,
+                    empirical_accuracy=rel.perception_empirical_acc,
                     active_weight=solver_eff_weight,
                     effective_weight=solver_eff_weight,
                 )
@@ -494,12 +463,12 @@ class TheoryNetProjector:
             base = rel.active_weight
         elif rel.effective_weight is not None:
             base = rel.effective_weight
-        elif rel.class_probability is not None:
-            base = rel.inferential_warrant * rel.class_probability
+        elif rel.perception_stance_prob is not None:
+            base = rel.inferential_warrant * rel.perception_stance_prob
         elif rel.weight is not None:
             base = abs(rel.weight)
         else:
-            base = rel.inferential_force
+            base = rel.inferential_warrant
 
         polarity = self.schema.relation_polarities.get(rel.relation_type, 0)
         return float(base * polarity)

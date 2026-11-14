@@ -106,7 +106,7 @@ class ProjectionBatch(ProjectionBatchAccumulator):
                 theory_relations = [
                     rel.model_copy(
                         update={
-                            "tenability": edge_tenabilities[
+                            "edge_tenability": edge_tenabilities[
                                 f"{rel.source_id}->{rel.relation_type}->{rel.target_id}"
                             ]
                         }

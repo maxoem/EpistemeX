@@ -31,7 +31,9 @@ from episteme_pipeline.artifacts.execution import (
     Phase5ArtifactsView,
 )
 from episteme_pipeline.artifacts.models import (
+    ArtifactEnvelope,
     ArtifactKind,
+    TheoryAtomArtifact,
     TheoryRelationArtifact,
 )
 from episteme_pipeline.config import Phase6Config, TheoreticalEnrichmentConfig
@@ -45,6 +47,11 @@ from episteme_pipeline.contracts.domain import (
 )
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.decision.modal_resolver import HybridModalResolver
+from episteme_pipeline.graph.theory_graph_mapper import (
+    theory_atom_to_graph_properties,
+    theory_relation_from_graph_properties,
+    theory_relation_to_graph_properties,
+)
 from episteme_pipeline.phases.phase6_theorynet.runner import Phase6Runner
 from episteme_pipeline.post_processing.theoretical_enrichment import (
     TheoreticalEnrichmentRunner,
@@ -61,9 +68,19 @@ from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 # 1. Ontological Separation & Removal of Edge-Level `modal_strength`
 # ---------------------------------------------------------------------------
 def test_modal_strength_removed_from_theory_relation_and_artifact() -> None:
-    """Verify `modal_strength` is absent from TheoryRelation and TheoryRelationArtifact."""
-    assert "modal_strength" not in TheoryRelation.model_fields
-    assert "modal_strength" not in TheoryRelationArtifact.model_fields
+    """Verify legacy aliases are absent and canonical fields round-trip on relations."""
+    legacy_attrs = (
+        "modal_strength",
+        "inferential_force",
+        "stance_probability",
+        "class_probability",
+        "empirical_accuracy",
+        "model_confidence",
+        "tenability",
+    )
+    for legacy_attr in legacy_attrs:
+        assert legacy_attr not in TheoryRelation.model_fields
+        assert legacy_attr not in TheoryRelationArtifact.model_fields
 
     rel = TheoryRelation(
         source_id="a1",
@@ -77,35 +94,33 @@ def test_modal_strength_removed_from_theory_relation_and_artifact() -> None:
         structural_correspondence=0.88,
         edge_tenability=0.95,
     )
-    assert not hasattr(rel, "modal_strength")
+    for legacy_attr in legacy_attrs:
+        assert not hasattr(rel, legacy_attr)
     assert rel.inferential_warrant == pytest.approx(0.80)
-    assert rel.inferential_force == pytest.approx(0.80)
     assert rel.perception_stance_prob == pytest.approx(0.90)
-    assert rel.stance_probability == pytest.approx(0.90)
-    assert rel.class_probability == pytest.approx(0.90)
     assert rel.perception_empirical_acc == pytest.approx(0.92)
-    assert rel.empirical_accuracy == pytest.approx(0.92)
     assert rel.structural_correspondence == pytest.approx(0.88)
     assert rel.edge_tenability == pytest.approx(0.95)
-    assert rel.tenability == pytest.approx(0.95)
 
-    # Verify graph serialization omits modal_strength and preserves orthogonal fields
-    props = rel.to_graph_properties(polarity=1)
+    # Verify graph serialization omits legacy keys and preserves orthogonal fields
+    props = theory_relation_to_graph_properties(rel, polarity=1)
     assert "modal_strength" not in props
+    assert "inferential_force" not in props
     assert props["inferential_warrant"] == pytest.approx(0.80)
-    assert props["inferential_force"] == pytest.approx(0.80)
+    assert props["perception_stance_prob"] == pytest.approx(0.90)
+    assert props["perception_empirical_acc"] == pytest.approx(0.92)
     assert props["structural_correspondence"] == pytest.approx(0.88)
     assert props["edge_tenability"] == pytest.approx(0.95)
 
     # Verify roundtrip from graph properties and artifact codec
-    reconstructed = TheoryRelation.from_graph_properties("a1", "SUPPORTS", "a2", props)
+    reconstructed = theory_relation_from_graph_properties("a1", "SUPPORTS", "a2", props)
     assert reconstructed.inferential_warrant == pytest.approx(0.80)
     assert reconstructed.structural_correspondence == pytest.approx(0.88)
     assert reconstructed.edge_tenability == pytest.approx(0.95)
 
     payload = TheoryRelationCodec.to_payload(rel)
-    assert not hasattr(payload, "modal_strength")
-    assert "modal_strength" not in payload.to_graph_properties(polarity=1)
+    for legacy_attr in legacy_attrs:
+        assert not hasattr(payload, legacy_attr)
     hydrated = TheoryRelationCodec.to_domain(payload)
     assert hydrated == rel
 
@@ -158,22 +173,32 @@ def test_stratified_theory_atom_state_tuple_and_codec_roundtrip() -> None:
         syntax_bounds=(0.20, 0.85),
     )
 
-    # Layer 1 synchronization
+    # Layer 1 canonical modal_prior (no legacy alias attributes)
     assert atom.modal_prior == pytest.approx(0.80)
-    assert atom.modal_strength == pytest.approx(0.80)
-    assert atom.base_score == pytest.approx(0.80)
+    assert not hasattr(atom, "modal_strength")
+    assert not hasattr(atom, "base_score")
+    assert not hasattr(atom, "plausibility")
 
     # Layer 3 synchronization
     assert atom.local_tenability == pytest.approx(0.40)
     # Effective prior = tau_0(a) * TS_local(a) = 0.80 * 0.40 = 0.32
     assert atom.effective_base_prior() == pytest.approx(0.32)
 
-    # Layer 4 synchronization
+    # Layer 4 canonical equilibrium & metadata
     assert atom.equilibrium_strength == pytest.approx(0.35)
-    assert atom.plausibility == pytest.approx(0.35)
     assert atom.controversy_volatility == pytest.approx(0.12)
     assert atom.resolver_type == "hybrid_guardrail"
     assert atom.syntax_bounds == (0.20, 0.85)
+
+    # Graph property serialization contains canonical keys only
+    atom_props = theory_atom_to_graph_properties(atom)
+    assert atom_props["modal_prior"] == pytest.approx(0.80)
+    assert atom_props["local_tenability"] == pytest.approx(0.40)
+    assert atom_props["equilibrium_strength"] == pytest.approx(0.35)
+    assert atom_props["controversy_volatility"] == pytest.approx(0.12)
+    assert "modal_strength" not in atom_props
+    assert "base_score" not in atom_props
+    assert "plausibility" not in atom_props
 
     # Codec roundtrip
     payload = TheoryAtomCodec.to_payload(atom)
@@ -186,6 +211,49 @@ def test_stratified_theory_atom_state_tuple_and_codec_roundtrip() -> None:
 
     hydrated = TheoryAtomCodec.to_domain(payload)
     assert hydrated == atom
+
+    # JSON round-trip preserves unset modal_prior / inferential_warrant as None
+    # so TheoryNetProjector derives them instead of treating defaults as overrides.
+    atom_unset = TheoryAtom(
+        id="atom_unset",
+        text="Perhaps empirical space is emergent.",
+        component_type="TentativeConjecture",
+        source_chunk_id="chunk_1",
+    )
+    atom_target = TheoryAtom(
+        id="atom_target",
+        text="Target claim.",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="chunk_1",
+    )
+    rel_unset = TheoryRelation(
+        source_id="atom_unset",
+        target_id="atom_target",
+        relation_type="ENTAILS",
+        confidence=0.90,
+        scope="local",
+    )
+    env_atom_json = build_argument_component_artifact(
+        atom_unset, run_id="run-json", phase_name="P4", method="m"
+    ).model_dump_json()
+    env_rel_json = build_argument_relation_artifact(
+        rel_unset, run_id="run-json", phase_name="P4", method="m"
+    ).model_dump_json()
+
+    reloaded_atom_env = ArtifactEnvelope[TheoryAtomArtifact].model_validate_json(env_atom_json)
+    reloaded_rel_env = ArtifactEnvelope[TheoryRelationArtifact].model_validate_json(env_rel_json)
+    assert reloaded_atom_env.payload.modal_prior is None
+    assert reloaded_rel_env.payload.inferential_warrant is None
+
+    projector = TheoryNetProjector(schema=DEFAULT_SCHEMA)
+    projected = projector.project(
+        Phase4ArtifactsView(
+            theory_atoms=[reloaded_atom_env.payload.to_domain(), atom_target],
+            theory_relations=[reloaded_rel_env.payload.to_domain()],
+        )
+    )
+    assert projected.atoms[0].modal_prior == pytest.approx(0.35)
+    assert projected.relations[0].inferential_warrant == pytest.approx(1.00)
 
 
 @pytest.mark.asyncio
@@ -203,9 +271,6 @@ async def test_hybrid_modal_resolver_populates_resolver_type_and_syntax_bounds()
     score = await resolver.resolve_modality(atom)
     assert score > 0.85
     assert atom.modal_prior == pytest.approx(score)
-    # Post-init mutation of modal_prior MUST immediately reflect on modal_strength and base_score properties
-    assert atom.modal_strength == pytest.approx(score)
-    assert atom.base_score == pytest.approx(score)
     assert atom.resolver_type == "structural"
     assert atom.syntax_bounds is not None
     assert len(atom.syntax_bounds) == 2
@@ -336,7 +401,6 @@ def test_projector_modulates_dqbaf_equilibrium_by_local_and_edge_tenability() ->
     assert atoms_bad["hyp_bad"].equilibrium_strength is not None
     assert atoms_good["hyp_good"].equilibrium_strength > 0.75
     assert atoms_bad["hyp_bad"].equilibrium_strength < 0.50
-    assert atoms_bad["hyp_bad"].plausibility == atoms_bad["hyp_bad"].equilibrium_strength
 
     # Downstream conclusion supported by falsified hypothesis & low-tenability edge is also degraded
     assert atoms_good["claim_good"].equilibrium_strength > atoms_bad["claim_bad"].equilibrium_strength
@@ -460,7 +524,6 @@ async def test_theoretical_enrichment_runner_reconverges_dqbaf_on_falsified_hypo
     downstream_final = final_atoms["claim_downstream"]
     assert falsified_final.local_tenability is not None and falsified_final.local_tenability < 0.50
     assert falsified_final.equilibrium_strength is not None and falsified_final.equilibrium_strength < 0.50
-    assert falsified_final.plausibility == pytest.approx(falsified_final.equilibrium_strength)
     # Modal prior tau_0(a) remains preserved (0.88), while equilibrium tau*(a) is degraded (< 0.50)
     assert falsified_final.modal_prior == pytest.approx(0.88)
     # Downstream claim's justification also dropped relative to pre-enrichment

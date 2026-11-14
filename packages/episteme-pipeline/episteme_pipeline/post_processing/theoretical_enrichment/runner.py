@@ -418,7 +418,6 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                     # Stage relation for graph and D-QBAF update
                     base_rel = updated_rels_by_key.get(rel_key, rel)
                     rel_copy = base_rel.model_copy()
-                    rel_copy.tenability = ts_edge
                     rel_copy.edge_tenability = ts_edge
                     updated_rels_by_key[rel_key] = rel_copy
 
@@ -532,7 +531,6 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             reconv = reconverged_atoms_by_id.get(aid)
             if reconv is not None:
                 orig_updated.equilibrium_strength = reconv.equilibrium_strength
-                orig_updated.plausibility = reconv.plausibility
                 orig_updated.controversy_volatility = reconv.controversy_volatility
             atoms_to_update.append(orig_updated)
 
@@ -541,8 +539,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             if reconv.id not in updated_atoms_by_id:
                 orig_atom = atoms_by_id.get(reconv.id)
                 if orig_atom is not None and (
-                    orig_atom.plausibility != reconv.plausibility
-                    or orig_atom.equilibrium_strength != reconv.equilibrium_strength
+                    orig_atom.equilibrium_strength != reconv.equilibrium_strength
                 ):
                     atoms_to_update.append(reconv)
 

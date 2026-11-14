@@ -197,8 +197,7 @@ class StubACCClassifier:
                 text="Argument text",
                 component_type="CLAIM",
                 source_chunk_id=chunk_id,
-                base_score=0.7,
-                modal_strength=0.7,
+                modal_prior=0.7,
             )
         ]
         relations = [
@@ -632,8 +631,7 @@ async def test_phase6_modality_overrides() -> None:
         text="Synthetic a priori knowledge is possible.",
         component_type="CLAIM",
         source_chunk_id="c1",
-        base_score=0.40,
-        modal_strength=0.40,
+        modal_prior=0.40,
     )
     rel = TheoryRelation(
         source_id="atom_synthetic_apriori",
@@ -661,8 +659,7 @@ async def test_phase6_modality_overrides() -> None:
 
     projected_atoms = [a.payload for a in output.of_kind(ArtifactKind.THEORY_ATOM)]
     projected_target = next(a for a in projected_atoms if a.component_id == "atom_synthetic_apriori")
-    assert projected_target.modal_strength == 0.95
-    assert projected_target.base_score == 0.95
+    assert projected_target.modal_prior == 0.95
 
 
 @pytest.mark.asyncio
@@ -689,8 +686,7 @@ async def test_phase3_and_phase4_incremental_delta_hydration() -> None:
         text="Prior argument",
         component_type="CLAIM",
         source_chunk_id="c1",
-        base_score=0.7,
-        modal_strength=0.7,
+        modal_prior=0.7,
     )
     prior_collection = ArtifactCollection([
         build_global_relation_artifact(
@@ -959,6 +955,6 @@ def test_curation_ledger_theory_relation_revalidation() -> None:
     assert updated.polarity == -1
     assert updated.weight_support is None
     assert updated.weight_attack is None
-    assert "inferential_force" not in updated.model_fields_set
+    assert "inferential_warrant" not in updated.model_fields_set
 
 

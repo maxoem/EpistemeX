@@ -92,6 +92,7 @@ class LLMACCClassifier(ACCClassifier):
                 continue
             stable_id = _stable_component_id(chunk_id, ext.id)
             id_map[ext.id] = stable_id
+            prior_val = ext.plausibility if ext.plausibility is not None else ext.confidence
             components.append(
                 TheoryAtom(
                     id=stable_id,
@@ -99,7 +100,7 @@ class LLMACCClassifier(ACCClassifier):
                     component_type=ext.component_type,
                     source_chunk_id=chunk_id,
                     confidence=ext.confidence,
-                    plausibility=ext.plausibility if ext.plausibility is not None else ext.confidence,
+                    **({"modal_prior": prior_val} if prior_val is not None else {}),
                     entity_ids=ext.entity_ids,
                     epistemic_status=ext.epistemic_status,
                     scope_type=ext.scope_type,

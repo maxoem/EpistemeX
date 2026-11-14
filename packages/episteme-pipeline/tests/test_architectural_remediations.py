@@ -207,7 +207,7 @@ def test_symmetrical_dag_structure_comparison():
 def test_qbaf_projection_preserves_weights():
     """Verify TheoryNetProjector.compute_weight preserves pre-computed weights."""
     proj = TheoryNetProjector()
-    comp = TheoryAtom(id="a1", text="Text", component_type="ANTECEDENT", source_chunk_id="c1", plausibility=0.85)
+    comp = TheoryAtom(id="a1", text="Text", component_type="ANTECEDENT", source_chunk_id="c1", modal_prior=0.85)
     rel = TheoryRelation(source_id="a1", target_id="a2", relation_type="SUPPORTS", confidence=0.9, scope="local", weight=0.75)
 
     assert proj.compute_weight(comp) == 0.85

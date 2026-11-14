@@ -198,8 +198,6 @@ class StructuralistModalResolver:
         """
         profile = self.evaluate_syntax_profile(atom)
         atom.modal_prior = profile.score
-        atom.modal_strength = profile.score
-        atom.base_score = profile.score
         atom.resolver_type = "structural"
         atom.syntax_bounds = profile.bounds
         return profile.score

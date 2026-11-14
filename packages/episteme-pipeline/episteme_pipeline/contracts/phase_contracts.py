@@ -302,10 +302,7 @@ class EpistemicCurationLedger(BaseModel):
                 # so downstream TheoryNetProjector can derive the warrant for a changed relation_type.
                 extra_kwargs: dict[str, Any] = {}
                 if (
-                    (
-                        "inferential_warrant" in rel.model_fields_set
-                        or "inferential_force" in rel.model_fields_set
-                    )
+                    "inferential_warrant" in rel.model_fields_set
                     and override.relation_type == rel.relation_type
                 ):
                     extra_kwargs["inferential_warrant"] = rel.inferential_warrant
@@ -350,7 +347,6 @@ class EpistemicCurationLedger(BaseModel):
                     effective_weight=override.confidence,
                     active_weight=abs(override.confidence),
                     calibrated_confidence=override.confidence,
-                    model_confidence=override.confidence,
                 )
                 filtered.append(injected)
                 existing_pairs.add(pair)

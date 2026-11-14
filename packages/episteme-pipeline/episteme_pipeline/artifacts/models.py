@@ -8,10 +8,9 @@ described in `docs/architecture/artifact_run_model.md` and `docs/architecture/ov
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeVar
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -42,15 +41,60 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def _split_mention_id(mention_id: str) -> tuple[str, str]:
-    """Parse a canonical ``mention::<entity_id>::<chunk_id>`` identifier."""
-    stripped = mention_id.removeprefix("artifact::")
-    parts = stripped.split("::")
-    if len(parts) == 3 and parts[0] == "mention":
-        return parts[1], parts[2]
-    if len(parts) == 2 and parts[0] == "mention":
-        return "", parts[1]
-    return stripped, ""
+class MentionId:
+    """Structured identifier helper for L2 entity mentions within L1 chunks.
+
+    Canonical wire format is ``mention::<entity_id>::<chunk_id>`` (or
+    ``mention::<chunk_id>`` when no entity ID is bound), optionally prefixed with
+    ``artifact::`` in artifact envelopes.
+    """
+
+    PREFIX: ClassVar[str] = "mention"
+    ARTIFACT_PREFIX: ClassVar[str] = "artifact::"
+    SEPARATOR: ClassVar[str] = "::"
+
+    @classmethod
+    def format(cls, entity_id: str, chunk_id: str | None = None) -> str:
+        """Build a canonical mention identifier from entity and chunk IDs.
+
+        Parameters
+        ----------
+        entity_id : str
+            Canonical or raw entity identifier.
+        chunk_id : str or None, optional
+            Source chunk identifier, by default None.
+
+        Returns
+        -------
+        str
+            Formatted mention identifier string.
+        """
+        if chunk_id:
+            return f"{cls.PREFIX}{cls.SEPARATOR}{entity_id}{cls.SEPARATOR}{chunk_id}"
+        return f"{cls.PREFIX}{cls.SEPARATOR}{entity_id}"
+
+    @classmethod
+    def parse(cls, raw_id: str) -> tuple[str, str | None]:
+        """Parse a canonical or artifact-prefixed mention identifier.
+
+        Parameters
+        ----------
+        raw_id : str
+            Raw mention identifier string.
+
+        Returns
+        -------
+        tuple of (str, str or None)
+            ``(entity_id, chunk_id)`` pair extracted from ``raw_id``. If the
+            format does not match ``mention::...``, returns ``(stripped_id, None)``.
+        """
+        stripped = raw_id.removeprefix(cls.ARTIFACT_PREFIX)
+        parts = stripped.split(cls.SEPARATOR)
+        if len(parts) == 3 and parts[0] == cls.PREFIX:
+            return parts[1], (parts[2] or None)
+        if len(parts) == 2 and parts[0] == cls.PREFIX:
+            return "", (parts[1] or None)
+        return stripped, None
 
 
 class BaseArtifactPayload(BaseModel, ABC):
@@ -198,7 +242,7 @@ class EntityMentionArtifact(BaseArtifactPayload):
 
     def to_relation_spec(self) -> dict[str, Any]:
         """Build the ``EXTRACTED_FROM`` edge specification for this mention."""
-        parsed_entity_id, _ = _split_mention_id(self.mention_id)
+        parsed_entity_id, _ = MentionId.parse(self.mention_id)
         resolved_entity_id = self.entity_id or parsed_entity_id or self.mention_id
         props: dict[str, Any] = {
             "entity_type": self.entity_type,
@@ -332,36 +376,6 @@ class CanonicalizationArtifact(BaseArtifactPayload):
     canonical_type: str = "entity"
     rationale: str | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_canonicalization_fields(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            normalized = dict(data)
-            if not normalized.get("canonical_id") and normalized.get(
-                "canonical_entity_id"
-            ):
-                normalized["canonical_id"] = normalized["canonical_entity_id"]
-            if not normalized.get("original_artifact_ids") and normalized.get(
-                "merged_entity_ids"
-            ):
-                normalized["original_artifact_ids"] = list(
-                    normalized["merged_entity_ids"]
-                )
-            if not normalized.get("canonical_label") and normalized.get("canonical_id"):
-                normalized["canonical_label"] = str(normalized["canonical_id"])
-            return normalized
-        return data
-
-    @property
-    def canonical_entity_id(self) -> str:
-        """Return the canonical entity identifier."""
-        return self.canonical_id
-
-    @property
-    def merged_entity_ids(self) -> list[str]:
-        """Return the list of merged alias entity identifiers."""
-        return self.original_artifact_ids
-
     def to_relation_specs(self) -> list[dict[str, Any]]:
         """Build ``SAME_AS`` edge specifications for all non-canonical alias IDs."""
         return [
@@ -405,7 +419,7 @@ class TheoryAtomArtifact(DomainObjectPayload[TheoryAtom]):
     epistemic_status: str | None = None
     scope_type: str | None = None
     entity_ids: list[str] = Field(default_factory=list)
-    modal_prior: float = 0.6
+    modal_prior: float | None = None
     local_tenability: float | None = None
     equilibrium_strength: float | None = None
     controversy_volatility: float | None = None
@@ -415,75 +429,6 @@ class TheoryAtomArtifact(DomainObjectPayload[TheoryAtom]):
     measurements: list[Measurement] = Field(default_factory=list)
     parameters: dict[str, Any] = Field(default_factory=dict)
     tenability: TenabilityResult | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_atom_artifact_fields(cls, data: Any) -> Any:
-        """Normalize legacy alias keys into canonical TheoryAtomArtifact fields."""
-        if not isinstance(data, Mapping):
-            return data
-        normalized = dict(data)
-        if "modal_prior" not in normalized or normalized["modal_prior"] is None:
-            if "modal_strength" in normalized and normalized["modal_strength"] is not None:
-                normalized["modal_prior"] = normalized["modal_strength"]
-            elif "base_score" in normalized and normalized["base_score"] is not None:
-                normalized["modal_prior"] = normalized["base_score"]
-        normalized.pop("modal_strength", None)
-        normalized.pop("base_score", None)
-        if "equilibrium_strength" not in normalized or normalized["equilibrium_strength"] is None:
-            if "plausibility" in normalized and normalized["plausibility"] is not None:
-                normalized["equilibrium_strength"] = normalized["plausibility"]
-        normalized.pop("plausibility", None)
-        return normalized
-
-    @property
-    def modal_strength(self) -> float:
-        """Author propositional modal certainty :math:`M(\\phi_a)` (alias for ``modal_prior``)."""
-        return self.modal_prior
-
-    @modal_strength.setter
-    def modal_strength(self, value: float) -> None:
-        self.modal_prior = float(value)
-
-    @property
-    def base_score(self) -> float:
-        """Prior plausibility :math:`\\tau_0(a)` for D-QBAF (alias for ``modal_prior``)."""
-        return self.modal_prior
-
-    @base_score.setter
-    def base_score(self, value: float) -> None:
-        self.modal_prior = float(value)
-
-    @property
-    def plausibility(self) -> float | None:
-        """Dialectical equilibrium justification degree :math:`\\tau^*(a)` (alias for ``equilibrium_strength``)."""
-        return self.equilibrium_strength
-
-    @plausibility.setter
-    def plausibility(self, value: float | None) -> None:
-        self.equilibrium_strength = float(value) if value is not None else None
-
-    def model_copy(
-        self,
-        *,
-        update: Mapping[str, Any] | None = None,
-        deep: bool = False,
-    ) -> Self:
-        """Create a copy of the artifact payload, normalizing legacy alias keys in ``update``."""
-        if update:
-            norm = dict(update)
-            if "modal_prior" not in norm:
-                if "modal_strength" in norm and norm["modal_strength"] is not None:
-                    norm["modal_prior"] = norm["modal_strength"]
-                elif "base_score" in norm and norm["base_score"] is not None:
-                    norm["modal_prior"] = norm["base_score"]
-            norm.pop("modal_strength", None)
-            norm.pop("base_score", None)
-            if "equilibrium_strength" not in norm and "plausibility" in norm:
-                norm["equilibrium_strength"] = norm["plausibility"]
-            norm.pop("plausibility", None)
-            update = norm
-        return super().model_copy(update=update, deep=deep)
 
     def to_domain(self) -> TheoryAtom:
         """Hydrate into a :class:`TheoryAtom` via :class:`TheoryAtomCodec`."""
@@ -521,27 +466,28 @@ class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
         Local or global scope.
     confidence : float
         Extraction confidence score.
-    weight : float | None, optional
+    weight : float or None, optional
         Relational edge weight.
-    perception_stance_prob : float | None, optional
+    perception_stance_prob : float or None, optional
         System 1 perception stance probability :math:`P(\\text{stance})`.
-    perception_empirical_acc : float | None, optional
+    perception_empirical_acc : float or None, optional
         System 1 calibrated empirical accuracy :math:`C`.
-    inferential_warrant : float, default 0.75
-        Toulminian inferential warrant validity :math:`I_{j \\to i} \\in [0, 1]`.
-    structural_correspondence : float | None, optional
+    inferential_warrant : float or None, optional
+        Explicit Toulminian inferential warrant validity :math:`I_{j \\to i} \\in [0, 1]`,
+        or ``None`` if unset (allowing downstream derivation from relation type).
+    structural_correspondence : float or None, optional
         :math:`\\kappa`-structural correspondence score from ADR-0007.
-    edge_tenability : float | None, optional
+    edge_tenability : float or None, optional
         Intertheoretical edge tenability :math:`TS_{\\text{edge}}` from ADR-0015.
-    effective_weight : float | None, optional
+    effective_weight : float or None, optional
         Decoupled mathematical edge weight.
-    decision_engine_provider : str | None, optional
+    decision_engine_provider : str or None, optional
         Provenance identifier of decision provider.
-    calibrated_confidence : float | None, optional
+    calibrated_confidence : float or None, optional
         Empirically calibrated confidence score.
-    weight_support : float | None, optional
+    weight_support : float or None, optional
         Directed support weight contribution in [0.0, 1.0].
-    weight_attack : float | None, optional
+    weight_attack : float or None, optional
         Directed attack weight contribution in [0.0, 1.0].
     """
 
@@ -554,7 +500,7 @@ class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
     weight: float | None = None
     perception_stance_prob: float | None = None
     perception_empirical_acc: float | None = None
-    inferential_warrant: float = 0.75
+    inferential_warrant: float | None = None
     structural_correspondence: float | None = None
     is_admissible: bool = True
     active_weight: float = 0.75
@@ -564,127 +510,6 @@ class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
     calibrated_confidence: float | None = None
     weight_support: float | None = None
     weight_attack: float | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_relation_artifact_fields(cls, data: Any) -> Any:
-        """Normalize legacy alias keys into canonical TheoryRelationArtifact fields."""
-        if not isinstance(data, Mapping):
-            return data
-        normalized = dict(data)
-        if "inferential_warrant" not in normalized or normalized["inferential_warrant"] is None:
-            if "inferential_force" in normalized and normalized["inferential_force"] is not None:
-                normalized["inferential_warrant"] = normalized["inferential_force"]
-        normalized.pop("inferential_force", None)
-
-        if "perception_stance_prob" not in normalized or normalized["perception_stance_prob"] is None:
-            if "stance_probability" in normalized and normalized["stance_probability"] is not None:
-                normalized["perception_stance_prob"] = normalized["stance_probability"]
-            elif "class_probability" in normalized and normalized["class_probability"] is not None:
-                normalized["perception_stance_prob"] = normalized["class_probability"]
-        normalized.pop("stance_probability", None)
-        normalized.pop("class_probability", None)
-
-        if "perception_empirical_acc" not in normalized or normalized["perception_empirical_acc"] is None:
-            if "empirical_accuracy" in normalized and normalized["empirical_accuracy"] is not None:
-                normalized["perception_empirical_acc"] = normalized["empirical_accuracy"]
-        normalized.pop("empirical_accuracy", None)
-
-        if "calibrated_confidence" not in normalized or normalized["calibrated_confidence"] is None:
-            if "model_confidence" in normalized and normalized["model_confidence"] is not None:
-                normalized["calibrated_confidence"] = normalized["model_confidence"]
-        normalized.pop("model_confidence", None)
-
-        if "edge_tenability" not in normalized or normalized["edge_tenability"] is None:
-            if "tenability" in normalized and normalized["tenability"] is not None:
-                normalized["edge_tenability"] = normalized["tenability"]
-        normalized.pop("tenability", None)
-        return normalized
-
-    @property
-    def inferential_force(self) -> float:
-        """Toulminian inferential warrant validity :math:`I_{j \\to i}` (alias for ``inferential_warrant``)."""
-        return self.inferential_warrant
-
-    @inferential_force.setter
-    def inferential_force(self, value: float) -> None:
-        self.inferential_warrant = float(value)
-
-    @property
-    def stance_probability(self) -> float | None:
-        """Perception stance probability :math:`P(\\text{stance})` (alias for ``perception_stance_prob``)."""
-        return self.perception_stance_prob
-
-    @stance_probability.setter
-    def stance_probability(self, value: float | None) -> None:
-        self.perception_stance_prob = float(value) if value is not None else None
-
-    @property
-    def class_probability(self) -> float | None:
-        """Softmax class probability :math:`P(\\text{stance})` (alias for ``perception_stance_prob``)."""
-        return self.perception_stance_prob
-
-    @class_probability.setter
-    def class_probability(self, value: float | None) -> None:
-        self.perception_stance_prob = float(value) if value is not None else None
-
-    @property
-    def empirical_accuracy(self) -> float | None:
-        """Calibrated empirical accuracy :math:`C` (alias for ``perception_empirical_acc``)."""
-        return self.perception_empirical_acc
-
-    @empirical_accuracy.setter
-    def empirical_accuracy(self, value: float | None) -> None:
-        self.perception_empirical_acc = float(value) if value is not None else None
-
-    @property
-    def model_confidence(self) -> float | None:
-        """Calibrated model confidence (alias for ``calibrated_confidence``)."""
-        return self.calibrated_confidence
-
-    @model_confidence.setter
-    def model_confidence(self, value: float | None) -> None:
-        self.calibrated_confidence = float(value) if value is not None else None
-
-    @property
-    def tenability(self) -> float | None:
-        """Intertheoretical edge tenability :math:`TS_{\\text{edge}}` (alias for ``edge_tenability``)."""
-        return self.edge_tenability
-
-    @tenability.setter
-    def tenability(self, value: float | None) -> None:
-        self.edge_tenability = float(value) if value is not None else None
-
-    def model_copy(
-        self,
-        *,
-        update: Mapping[str, Any] | None = None,
-        deep: bool = False,
-    ) -> Self:
-        """Create a copy of the artifact payload, normalizing legacy alias keys in ``update``."""
-        if update:
-            norm = dict(update)
-            if "inferential_warrant" not in norm and "inferential_force" in norm:
-                norm["inferential_warrant"] = norm["inferential_force"]
-            norm.pop("inferential_force", None)
-            if "perception_stance_prob" not in norm:
-                if "stance_probability" in norm:
-                    norm["perception_stance_prob"] = norm["stance_probability"]
-                elif "class_probability" in norm:
-                    norm["perception_stance_prob"] = norm["class_probability"]
-            norm.pop("stance_probability", None)
-            norm.pop("class_probability", None)
-            if "perception_empirical_acc" not in norm and "empirical_accuracy" in norm:
-                norm["perception_empirical_acc"] = norm["empirical_accuracy"]
-            norm.pop("empirical_accuracy", None)
-            if "calibrated_confidence" not in norm and "model_confidence" in norm:
-                norm["calibrated_confidence"] = norm["model_confidence"]
-            norm.pop("model_confidence", None)
-            if "edge_tenability" not in norm and "tenability" in norm:
-                norm["edge_tenability"] = norm["tenability"]
-            norm.pop("tenability", None)
-            update = norm
-        return super().model_copy(update=update, deep=deep)
 
     def to_domain(self) -> TheoryRelation:
         """Hydrate into a :class:`TheoryRelation` via :class:`TheoryRelationCodec`."""
@@ -699,21 +524,6 @@ class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
     def collect_for_projection(self, batch: ProjectionBatchAccumulator) -> None:
         """Register this theory relation into ``batch``."""
         batch.add_theory_relation(self.to_domain())
-
-    def to_graph_properties(self, polarity: int = 0) -> dict[str, Any]:
-        """Convert artifact payload into serialized projection properties.
-
-        Parameters
-        ----------
-        polarity : int, default 0
-            Epistemic polarity (+1, -1, 0).
-
-        Returns
-        -------
-        dict of str to Any
-            Graph edge properties conforming to the projection schema.
-        """
-        return self.to_domain().to_graph_properties(polarity=polarity)
 
 
 class TheoreticalEnrichmentArtifact(BaseArtifactPayload):
