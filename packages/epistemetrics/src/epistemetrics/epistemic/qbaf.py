@@ -152,6 +152,18 @@ class QBAFSolverResult(BaseModel, Mapping[str, float]):
         default=0,
         description="Count of edges pruned by the empirical accuracy admissibility gate.",
     )
+    perspective: str | None = Field(
+        default=None,
+        description="Evaluated epistemic perspective filter ('author', agent name, or None).",
+    )
+    suppositional_isolated_count: int = Field(
+        default=0,
+        description="Number of suppositional/Reductio nodes isolated from contributing unconditioned positive prior.",
+    )
+    perspective_filtered_count: int = Field(
+        default=0,
+        description="Number of cross-perspective or off-perspective nodes isolated during evaluation.",
+    )
 
     @property
     def volatility(self) -> dict[str, float]:
@@ -446,6 +458,16 @@ class QBAFGradualSemanticsSolver:
         Perception calibration confidence threshold.
     use_continuous : bool, default False
         Whether to route solve() to the unified continuous WeightedQuadraticEnergySolver.
+    perspective : str or None, optional
+        Optional epistemic perspective filter (e.g., ``"author"``, ``"asserted"``,
+        or an attributed agent/school identifier).
+    isolate_suppositional : bool, default True
+        Whether nodes with ``intensional_mode == "suppositional"`` (e.g., *Reductio*
+        assumptions) have their base prior zeroed and outgoing cross-scope edges isolated.
+    isolate_attributed : bool, default True
+        Whether ``attributed`` / ``historical`` nodes are isolated from directly
+        inflating or deflating ``asserted`` authorial claims when evaluating the
+        author's theory base.
     """
 
     def __init__(
@@ -459,6 +481,9 @@ class QBAFGradualSemanticsSolver:
         tau_p: float = 0.0,
         tau_c: float = 0.0,
         use_continuous: bool = False,
+        perspective: str | None = None,
+        isolate_suppositional: bool = True,
+        isolate_attributed: bool = True,
     ) -> None:
         if isinstance(semantics_model, str):
             semantics_model = GradualSemanticsModel(semantics_model.lower())
@@ -471,6 +496,9 @@ class QBAFGradualSemanticsSolver:
         self.tau_p = tau_p
         self.tau_c = tau_c
         self.use_continuous = use_continuous
+        self.perspective = perspective
+        self.isolate_suppositional = isolate_suppositional
+        self.isolate_attributed = isolate_attributed
 
     def solve(
         self,
@@ -482,6 +510,9 @@ class QBAFGradualSemanticsSolver:
         tau_p: float | None = None,
         tau_c: float | None = None,
         continuous: bool | None = None,
+        perspective: str | None = None,
+        isolate_suppositional: bool | None = None,
+        isolate_attributed: bool | None = None,
     ) -> QBAFSolverResult:
         """Compute equilibrium justification degrees over an argumentation network.
 
@@ -501,6 +532,12 @@ class QBAFGradualSemanticsSolver:
             Model confidence threshold override.
         continuous : bool, optional
             Whether to solve using continuous WeightedQuadraticEnergySolver. Defaults to instance setting.
+        perspective : str or None, optional
+            Optional perspective filter overriding instance setting.
+        isolate_suppositional : bool or None, optional
+            Optional supposition-isolation override.
+        isolate_attributed : bool or None, optional
+            Optional attribution-isolation override.
 
         Returns
         -------
@@ -515,6 +552,9 @@ class QBAFGradualSemanticsSolver:
                 admissibility_mode=admissibility_mode,
                 tau_p=tau_p,
                 tau_c=tau_c,
+                perspective=perspective,
+                isolate_suppositional=isolate_suppositional,
+                isolate_attributed=isolate_attributed,
             )
 
         if isinstance(normalization_mode, str):
@@ -523,14 +563,24 @@ class QBAFGradualSemanticsSolver:
         active_adm_mode = admissibility_mode or self.admissibility_mode
         active_tau_p = tau_p if tau_p is not None else self.tau_p
         active_tau_c = tau_c if tau_c is not None else self.tau_c
+        active_perspective = perspective if perspective is not None else self.perspective
 
-        base_tau, admissible_edges, admissibility_pruned = self._prepare_graph_data(
+        (
+            base_tau,
+            admissible_edges,
+            admissibility_pruned,
+            suppositional_isolated,
+            perspective_filtered,
+        ) = self._prepare_graph_data(
             nodes=nodes,
             edges=edges,
             normalization_mode=normalization_mode,
             active_adm_mode=active_adm_mode,
             active_tau_p=active_tau_p,
             active_tau_c=active_tau_c,
+            perspective=perspective,
+            isolate_suppositional=isolate_suppositional,
+            isolate_attributed=isolate_attributed,
         )
 
         incoming_edges: dict[str, list[_AdmissibleEdge]] = {nid: [] for nid in base_tau}
@@ -611,6 +661,9 @@ class QBAFGradualSemanticsSolver:
             total_weight_of_evidence=total_evidence,
             volatility_index=volatility,
             admissibility_pruned_count=admissibility_pruned,
+            perspective=active_perspective,
+            suppositional_isolated_count=suppositional_isolated,
+            perspective_filtered_count=perspective_filtered,
         )
 
     def solve_continuous(
@@ -622,6 +675,9 @@ class QBAFGradualSemanticsSolver:
         admissibility_mode: Literal["hard", "soft"] | None = None,
         tau_p: float | None = None,
         tau_c: float | None = None,
+        perspective: str | None = None,
+        isolate_suppositional: bool | None = None,
+        isolate_attributed: bool | None = None,
     ) -> QBAFSolverResult:
         """Solve QBAF equilibrium using the unified continuous WeightedQuadraticEnergySolver.
 
@@ -643,6 +699,12 @@ class QBAFGradualSemanticsSolver:
             Stance probability threshold override.
         tau_c : float, optional
             Model confidence threshold override.
+        perspective : str or None, optional
+            Optional perspective filter overriding instance setting.
+        isolate_suppositional : bool or None, optional
+            Optional supposition-isolation override.
+        isolate_attributed : bool or None, optional
+            Optional attribution-isolation override.
 
         Returns
         -------
@@ -655,14 +717,24 @@ class QBAFGradualSemanticsSolver:
         active_adm_mode = admissibility_mode or self.admissibility_mode
         active_tau_p = tau_p if tau_p is not None else self.tau_p
         active_tau_c = tau_c if tau_c is not None else self.tau_c
+        active_perspective = perspective if perspective is not None else self.perspective
 
-        base_tau, admissible_edges, admissibility_pruned = self._prepare_graph_data(
+        (
+            base_tau,
+            admissible_edges,
+            admissibility_pruned,
+            suppositional_isolated,
+            perspective_filtered,
+        ) = self._prepare_graph_data(
             nodes=nodes,
             edges=edges,
             normalization_mode=normalization_mode,
             active_adm_mode=active_adm_mode,
             active_tau_p=active_tau_p,
             active_tau_c=active_tau_c,
+            perspective=perspective,
+            isolate_suppositional=isolate_suppositional,
+            isolate_attributed=isolate_attributed,
         )
 
         node_list = list(base_tau.keys())
@@ -705,6 +777,9 @@ class QBAFGradualSemanticsSolver:
             total_weight_of_evidence=total_evidence,
             volatility_index=volatility,
             admissibility_pruned_count=admissibility_pruned,
+            perspective=active_perspective,
+            suppositional_isolated_count=suppositional_isolated,
+            perspective_filtered_count=perspective_filtered,
         )
 
     def compare_weight_modes(
@@ -836,8 +911,11 @@ class QBAFGradualSemanticsSolver:
         active_adm_mode: Literal["hard", "soft"],
         active_tau_p: float,
         active_tau_c: float,
-    ) -> tuple[dict[str, float], list[_AdmissibleEdge], int]:
-        """Normalize node base plausibilities and filter dialectical edges with admissibility gating.
+        perspective: str | None = None,
+        isolate_suppositional: bool | None = None,
+        isolate_attributed: bool | None = None,
+    ) -> tuple[dict[str, float], list[_AdmissibleEdge], int, int, int]:
+        """Normalize node base plausibilities, apply intensional scoping, and filter edges.
 
         Parameters
         ----------
@@ -853,11 +931,19 @@ class QBAFGradualSemanticsSolver:
             Stance probability threshold.
         active_tau_c : float
             Model confidence threshold.
+        perspective : str or None, optional
+            Optional epistemic perspective filter overriding instance setting.
+        isolate_suppositional : bool or None, optional
+            Optional override controlling whether suppositional nodes are isolated.
+        isolate_attributed : bool or None, optional
+            Optional override controlling whether attributed nodes are isolated from
+            asserted authorial claims.
 
         Returns
         -------
-        tuple of (dict[str, float], list[_AdmissibleEdge], int)
-            Normalized node base priors, filtered admissible edges, and pruned edge count.
+        tuple of (dict[str, float], list[_AdmissibleEdge], int, int, int)
+            Normalized node base priors, filtered admissible edges, admissibility-pruned
+            edge count, isolated suppositional node count, and filtered perspective node count.
         """
         if isinstance(nodes, TheoryGraph):
             raw_nodes: Mapping[str, Any] | Sequence[Any] = nodes.nodes
@@ -866,18 +952,88 @@ class QBAFGradualSemanticsSolver:
             raw_nodes = nodes
             raw_edges = edges if edges is not None else ()
 
+        eff_perspective = perspective if perspective is not None else self.perspective
+        active_perspective = (
+            eff_perspective.strip().lower() if eff_perspective is not None else None
+        )
+        eff_isolate_sup = (
+            self.isolate_suppositional
+            if isolate_suppositional is None
+            else isolate_suppositional
+        )
+        eff_isolate_attr = (
+            self.isolate_attributed
+            if isolate_attributed is None
+            else isolate_attributed
+        )
+
         base_tau: dict[str, float] = {}
+        node_modes: dict[str, str] = {}
+        node_attributions: dict[str, str | None] = {}
+
         if isinstance(raw_nodes, Mapping):
             for nid, val in raw_nodes.items():
+                nid_str = str(nid)
                 if isinstance(val, (int, float)):
-                    base_tau[str(nid)] = max(0.0, min(1.0, float(val)))
+                    base_tau[nid_str] = max(0.0, min(1.0, float(val)))
+                    node_modes[nid_str] = "asserted"
+                    node_attributions[nid_str] = None
                 else:
-                    _, extracted_tau = self._extract_node_plausibility(val)
-                    base_tau[str(nid)] = max(0.0, min(1.0, extracted_tau))
+                    _, extracted_tau, mode, attr = self._extract_node_spec(val)
+                    base_tau[nid_str] = max(0.0, min(1.0, extracted_tau))
+                    node_modes[nid_str] = mode
+                    node_attributions[nid_str] = attr
         else:
             for item in raw_nodes:
-                nid, val = self._extract_node_plausibility(item)
+                nid, val, mode, attr = self._extract_node_spec(item)
                 base_tau[nid] = max(0.0, min(1.0, val))
+                node_modes[nid] = mode
+                node_attributions[nid] = attr
+
+        def _is_authorial(nid: str) -> bool:
+            attr_norm = (node_attributions.get(nid) or "").strip().lower()
+            mode = node_modes.get(nid, "asserted")
+            allowed_modes = (
+                ("asserted",) if eff_isolate_sup else ("asserted", "suppositional")
+            )
+            return mode in allowed_modes and attr_norm in (
+                "",
+                "author",
+                "self",
+            )
+
+        def _matches_agent(nid: str, agent_norm: str) -> bool:
+            attr_norm = (node_attributions.get(nid) or "").strip().lower()
+            return attr_norm == agent_norm and (
+                not eff_isolate_sup or node_modes.get(nid, "asserted") != "suppositional"
+            )
+
+        suppositional_isolated = 0
+        perspective_filtered_nodes: set[str] = set()
+
+        for nid in list(base_tau.keys()):
+            mode = node_modes.get(nid, "asserted")
+            if (
+                eff_isolate_sup
+                and mode == "suppositional"
+                and active_perspective != "suppositional"
+            ):
+                base_tau[nid] = 0.0
+                suppositional_isolated += 1
+
+            if active_perspective is not None and active_perspective not in (
+                "all",
+                "suppositional",
+            ):
+                if active_perspective in ("author", "asserted"):
+                    if not _is_authorial(nid):
+                        base_tau[nid] = 0.0
+                        if mode != "suppositional" or not eff_isolate_sup:
+                            perspective_filtered_nodes.add(nid)
+                elif not _matches_agent(nid, active_perspective):
+                    base_tau[nid] = 0.0
+                    if mode != "suppositional" or not eff_isolate_sup:
+                        perspective_filtered_nodes.add(nid)
 
         admissible_edges: list[_AdmissibleEdge] = []
         admissibility_pruned = 0
@@ -891,9 +1047,44 @@ class QBAFGradualSemanticsSolver:
 
             # Ensure both endpoints exist in node index
             if src not in base_tau:
-                base_tau[src] = 0.5
+                if active_perspective is not None and active_perspective not in ("all", "suppositional"):
+                    base_tau[src] = 0.0
+                else:
+                    base_tau[src] = 0.5
+                node_modes.setdefault(src, "asserted")
+                node_attributions.setdefault(src, None)
             if tgt not in base_tau:
-                base_tau[tgt] = 0.5
+                if active_perspective is not None and active_perspective not in ("all", "suppositional"):
+                    base_tau[tgt] = 0.0
+                else:
+                    base_tau[tgt] = 0.5
+                node_modes.setdefault(tgt, "asserted")
+                node_attributions.setdefault(tgt, None)
+
+            src_mode = node_modes.get(src, "asserted")
+            tgt_mode = node_modes.get(tgt, "asserted")
+
+            # Enforce intensional supposition & perspective boundary isolation
+            if (
+                eff_isolate_sup
+                and src_mode == "suppositional"
+                and tgt_mode != "suppositional"
+                and active_perspective != "suppositional"
+            ):
+                continue
+
+            if active_perspective is None:
+                if eff_isolate_attr and _is_authorial(tgt) and not _is_authorial(src):
+                    perspective_filtered_nodes.add(src)
+                    continue
+            elif active_perspective in ("author", "asserted"):
+                if not (_is_authorial(src) and _is_authorial(tgt)):
+                    continue
+            elif active_perspective not in ("all", "suppositional") and not (
+                _matches_agent(src, active_perspective)
+                and _matches_agent(tgt, active_perspective)
+            ):
+                continue
 
             # Enforce admissibility gating based on mode
             if active_adm_mode == "hard":
@@ -943,7 +1134,86 @@ class QBAFGradualSemanticsSolver:
                 )
             )
 
-        return base_tau, admissible_edges, admissibility_pruned
+        return (
+            base_tau,
+            admissible_edges,
+            admissibility_pruned,
+            suppositional_isolated,
+            len(perspective_filtered_nodes),
+        )
+
+    def _extract_node_spec(self, node: Any) -> tuple[str, float, str, str | None]:
+        """Extract canonical ID, prior plausibility, intensional mode, and attribution.
+
+        Parameters
+        ----------
+        node : Any
+            Node representation (TheoryNode, BaseModel, Mapping, tuple, or identifier).
+
+        Returns
+        -------
+        tuple of (str, float, str, str or None)
+            Tuple of ``(node_id, tau_0, intensional_mode, attributed_to)``.
+        """
+        if isinstance(node, TheoryNode):
+            if "base_score" in node.model_fields_set:
+                tau = node.base_score
+            elif "confidence" in node.model_fields_set:
+                tau = node.confidence
+            else:
+                tau = node.base_score
+            return (
+                node.id,
+                float(tau),
+                str(node.intensional_mode).strip().lower(),
+                node.attributed_to,
+            )
+
+        if isinstance(node, Mapping):
+            nid = str(node.get("id") or node.get("node_id") or "unknown")
+            raw_tau = node.get("base_score")
+            if raw_tau is None:
+                raw_tau = node.get("plausibility")
+            if raw_tau is None:
+                modal_prior = node.get("modal_prior")
+                if modal_prior is not None:
+                    local_ten = node.get("local_tenability")
+                    raw_tau = float(modal_prior) * float(local_ten if local_ten is not None else 1.0)
+            if raw_tau is None:
+                raw_tau = node.get("confidence")
+            tau = float(raw_tau) if raw_tau is not None else 0.5
+            mode = str(node.get("intensional_mode") or "asserted").strip().lower()
+            raw_attr = node.get("attributed_to")
+            attr = str(raw_attr) if raw_attr is not None else None
+            return nid, tau, mode, attr
+
+        if isinstance(node, BaseModel):
+            data = node.model_dump()
+            nid = str(data.get("id") or data.get("node_id") or "unknown")
+            raw_tau = data.get("base_score")
+            if raw_tau is None and data.get("modal_prior") is not None:
+                local_ten = data.get("local_tenability")
+                if local_ten is None and isinstance(data.get("tenability"), Mapping):
+                    local_ten = data["tenability"].get("local_score")
+                raw_tau = float(data["modal_prior"]) * float(local_ten if local_ten is not None else 1.0)
+            if raw_tau is None:
+                raw_tau = data.get("plausibility")
+            if raw_tau is None:
+                raw_tau = data.get("confidence")
+            tau = float(raw_tau) if raw_tau is not None else 0.5
+            mode = str(data.get("intensional_mode") or "asserted").strip().lower()
+            raw_attr = data.get("attributed_to")
+            attr = str(raw_attr) if raw_attr is not None else None
+            return nid, tau, mode, attr
+
+        if isinstance(node, (tuple, list)) and len(node) >= 2:
+            nid = str(node[0])
+            tau = float(node[1])
+            mode = str(node[2]).strip().lower() if len(node) >= 3 and node[2] is not None else "asserted"
+            attr = str(node[3]) if len(node) >= 4 and node[3] is not None else None
+            return nid, tau, mode, attr
+
+        return str(node), 0.5, "asserted", None
 
     def _extract_node_plausibility(self, node: Any) -> tuple[str, float]:
         """Extract canonical ID and prior plausibility from diverse node representations.
@@ -958,35 +1228,8 @@ class QBAFGradualSemanticsSolver:
         tuple of (str, float)
             Tuple of canonical node ID and prior plausibility tau_0 in [0, 1].
         """
-        if isinstance(node, TheoryNode):
-            if "base_score" in node.model_fields_set:
-                tau = node.base_score
-            elif "confidence" in node.model_fields_set:
-                tau = node.confidence
-            else:
-                tau = node.base_score
-            return node.id, float(tau)
-
-        if isinstance(node, dict):
-            nid = str(node.get("id") or node.get("node_id") or "unknown")
-            tau = node.get("base_score") or node.get("plausibility") or node.get("confidence") or 0.5
-            return nid, float(tau)
-
-        if isinstance(node, (tuple, list)) and len(node) >= 2:
-            return str(node[0]), float(node[1])
-
-        if hasattr(node, "id"):
-            nid = str(node.id)
-            tau = 0.5
-            if hasattr(node, "base_score") and node.base_score is not None:
-                tau = node.base_score
-            elif hasattr(node, "plausibility") and node.plausibility is not None:
-                tau = node.plausibility
-            elif hasattr(node, "confidence") and node.confidence is not None:
-                tau = node.confidence
-            return nid, float(tau)
-
-        return str(node), 0.5
+        nid, tau, _, _ = self._extract_node_spec(node)
+        return nid, tau
 
     def _parse_edge(
         self, edge: Any
@@ -1247,6 +1490,9 @@ def solve_qbaf_gradual_semantics(
     max_iterations: int = 50,
     tolerance: float = 1e-4,
     continuous: bool = False,
+    perspective: str | None = None,
+    isolate_suppositional: bool = True,
+    isolate_attributed: bool = True,
 ) -> QBAFSolverResult:
     """Convenience functional interface for solving QBAF gradual semantics.
 
@@ -1274,6 +1520,12 @@ def solve_qbaf_gradual_semantics(
         Numerical convergence threshold.
     continuous : bool, default False
         Whether to solve via unified continuous WeightedQuadraticEnergySolver.
+    perspective : str or None, optional
+        Optional epistemic perspective filter ('author', agent name, or None).
+    isolate_suppositional : bool, default True
+        Whether suppositional nodes are isolated from contributing positive prior weight.
+    isolate_attributed : bool, default True
+        Whether attributed nodes are isolated from directly inflating asserted claims.
 
     Returns
     -------
@@ -1289,6 +1541,9 @@ def solve_qbaf_gradual_semantics(
         tau_p=tau_p,
         tau_c=tau_c,
         use_continuous=continuous,
+        perspective=perspective,
+        isolate_suppositional=isolate_suppositional,
+        isolate_attributed=isolate_attributed,
     )
     return solver.solve(
         nodes=nodes,
@@ -1298,6 +1553,9 @@ def solve_qbaf_gradual_semantics(
         tau_p=tau_p,
         tau_c=tau_c,
         continuous=continuous,
+        perspective=perspective,
+        isolate_suppositional=isolate_suppositional,
+        isolate_attributed=isolate_attributed,
     )
 
 
@@ -1310,6 +1568,9 @@ def solve_continuous_qbaf(
     tau_p: float = 0.0,
     tau_c: float = 0.0,
     tolerance: float = 1e-4,
+    perspective: str | None = None,
+    isolate_suppositional: bool = True,
+    isolate_attributed: bool = True,
 ) -> QBAFSolverResult:
     """Convenience functional interface for continuous Quadratic Energy QBAF solving.
 
@@ -1329,6 +1590,12 @@ def solve_continuous_qbaf(
         Model confidence threshold.
     tolerance : float, default 1e-4
         Numerical convergence threshold.
+    perspective : str or None, optional
+        Optional epistemic perspective filter ('author', agent name, or None).
+    isolate_suppositional : bool, default True
+        Whether suppositional nodes are isolated from contributing positive prior weight.
+    isolate_attributed : bool, default True
+        Whether attributed nodes are isolated from directly inflating asserted claims.
 
     Returns
     -------
@@ -1341,8 +1608,18 @@ def solve_continuous_qbaf(
         admissibility_mode=admissibility_mode,
         tau_p=tau_p,
         tau_c=tau_c,
+        perspective=perspective,
+        isolate_suppositional=isolate_suppositional,
+        isolate_attributed=isolate_attributed,
     )
-    return solver.solve_continuous(nodes=nodes, edges=edges, normalization_mode=normalization_mode)
+    return solver.solve_continuous(
+        nodes=nodes,
+        edges=edges,
+        normalization_mode=normalization_mode,
+        perspective=perspective,
+        isolate_suppositional=isolate_suppositional,
+        isolate_attributed=isolate_attributed,
+    )
 
 
 def compare_qbaf_weight_modes(

@@ -27,6 +27,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from episteme_pipeline.contracts.domain import (
+    EntityConception,
     L1Chunk,
     L2Entity,
     L2Triple,
@@ -417,6 +418,8 @@ class _Neo4jWriteMixin:
             props = e.model_dump(exclude={"id", "label"})
             if not e.is_mature:
                 props.pop("is_mature", None)
+            if not e.conceptions:
+                props.pop("conceptions", None)
             
             label_safe = _cypher_identifier(e.label, kind="label")
             entities_by_label.setdefault(label_safe, []).append(
@@ -614,6 +617,27 @@ _ENTITY_RETURN = (
 
 def _entity_from_row(row: dict) -> L2Entity:
     props = row.get("props") or {}
+    raw_conceptions = props.get("conceptions")
+    conceptions: list[EntityConception] = []
+    if isinstance(raw_conceptions, str):
+        try:
+            loaded_c = json.loads(raw_conceptions)
+            if isinstance(loaded_c, list):
+                conceptions = [
+                    c if isinstance(c, EntityConception) else EntityConception.model_validate(c)
+                    for c in loaded_c
+                ]
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            logger.warning(
+                "Failed to parse conceptions JSON for entity %s: %s",
+                row.get("id"),
+                exc,
+            )
+    elif isinstance(raw_conceptions, list):
+        conceptions = [
+            c if isinstance(c, EntityConception) else EntityConception.model_validate(c)
+            for c in raw_conceptions
+        ]
     return L2Entity(
         id=row["id"],
         label=row["label"],
@@ -623,6 +647,8 @@ def _entity_from_row(row: dict) -> L2Entity:
         is_mature=props.get("is_mature", False),
         confidence=props.get("confidence"),
         source_chunk_ids=props.get("source_chunk_ids", []),
+        conceptions=conceptions,
+        polysemy_variance=props.get("polysemy_variance"),
     )
 
 
@@ -724,6 +750,7 @@ class _Neo4jReadMixin:
             "n.modal_prior as modal_prior, n.local_tenability as local_tenability, "
             "n.equilibrium_strength as equilibrium_strength, "
             "n.controversy_volatility as controversy_volatility, "
+            "n.intensional_mode as intensional_mode, n.attributed_to as attributed_to, "
             "n.resolver_type as resolver_type, n.syntax_bounds as syntax_bounds, "
             "n.epistemic_status as epistemic_status, n.scope_type as scope_type, "
             "n.entity_ids as entity_ids, n.parameters as parameters, "
@@ -824,6 +851,8 @@ class _Neo4jReadMixin:
                 "local_tenability": row.get("local_tenability"),
                 "equilibrium_strength": row.get("equilibrium_strength"),
                 "controversy_volatility": row.get("controversy_volatility"),
+                "intensional_mode": row.get("intensional_mode") or "asserted",
+                "attributed_to": row.get("attributed_to"),
                 "resolver_type": row.get("resolver_type"),
                 "syntax_bounds": syntax_bounds,
                 "epistemic_status": row.get("epistemic_status"),

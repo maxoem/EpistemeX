@@ -210,6 +210,30 @@ class EntityMaturationSynthesized(BaseEvent):
     synthesized_description: str
 
 
+class EntityConceptionStratified(BaseEvent):
+    """Emitted when an entity's mention envelopes diverge across theories/perspectives.
+
+    Attributes
+    ----------
+    entity_id : str
+        Identifier of the parent canonical :class:`L2Entity` (Referential Topic).
+    entity_name : str
+        Display name of the canonical entity.
+    conception_count : int
+        Number of distinct perspective-specific conceptions synthesized.
+    polysemy_variance : float
+        Measured spherical dispersion across mention envelopes triggering stratification.
+    perspectives : list of str
+        Perspective or cluster labels for the synthesized conceptions.
+    """
+
+    entity_id: str
+    entity_name: str
+    conception_count: int
+    polysemy_variance: float
+    perspectives: list[str]
+
+
 class EnvelopeInjectionAttempted(BaseEvent):
     """An attempt was made to inject a textual envelope for a mention.
     

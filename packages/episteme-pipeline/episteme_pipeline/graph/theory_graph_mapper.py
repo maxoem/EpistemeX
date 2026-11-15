@@ -51,7 +51,10 @@ def theory_atom_to_graph_properties(atom: TheoryAtom) -> dict[str, Any]:
         "component_type": atom.component_type,
         "source_chunk_id": atom.source_chunk_id,
         "modal_prior": atom.modal_prior,
+        "intensional_mode": atom.intensional_mode,
     }
+    if atom.attributed_to is not None:
+        props["attributed_to"] = atom.attributed_to
     if atom.local_tenability is not None:
         props["local_tenability"] = atom.local_tenability
     if atom.equilibrium_strength is not None:

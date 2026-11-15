@@ -291,6 +291,20 @@ class Phase4EntityMaturationConfig(BaseModel):
         geometric centroid for LLM synthesis.
     batch_size : int, default 10
         The number of entities to synthesize concurrently via the LLM API.
+    enable_conception_stratification : bool, default True
+        Whether to detect multi-modal / high-variance entity mention envelopes
+        across documents or theories and synthesize perspective-specific
+        :class:`EntityConception` facets.
+    polysemy_variance_threshold : float, default 0.15
+        Spherical dispersion threshold :math:`\\tau_{\\text{polysemy}}` above which
+        entity mention envelopes trigger multi-centroid conception stratification.
+    min_silhouette_score : float, default 0.15
+        Minimum cosine silhouette score required to accept a multi-centroid
+        spherical k-means partition when explicit perspective separation is absent.
+    max_conceptions_per_entity : int, default 4
+        Maximum number of perspective-specific conceptions K synthesized per entity.
+    min_envelopes_for_stratification : int, default 2
+        Minimum number of mention envelopes required to test for polysemous variance.
     entity_synthesis_prompts : StructuredPromptBundle
         The prompt bundle used when calling the LLM to synthesize a mature
         entity description.
@@ -299,6 +313,11 @@ class Phase4EntityMaturationConfig(BaseModel):
     """
     maturation_top_k: int = 5
     batch_size: int = 10
+    enable_conception_stratification: bool = True
+    polysemy_variance_threshold: float = Field(default=0.15, ge=0.0, le=2.0)
+    min_silhouette_score: float = Field(default=0.15, ge=-1.0, le=1.0)
+    max_conceptions_per_entity: int = Field(default=4, ge=2, le=10)
+    min_envelopes_for_stratification: int = Field(default=2, ge=2)
     entity_synthesis_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
         direct_template=ENTITY_SYNTHESIS_PROMPT,
         name="entity_synthesis",
@@ -459,6 +478,15 @@ class Phase6Config(BaseModel):
         Perception stance probability threshold.
     tau_c : float, default 0.0
         Perception calibration confidence threshold.
+    perspective : str or None, optional
+        Optional epistemic perspective filter for QBAF evaluation ('author',
+        agent name, or None for isolated authorial evaluation).
+    isolate_suppositional : bool, default True
+        Whether suppositional/Reductio premises are isolated from inflating
+        authorial claim justification.
+    isolate_attributed : bool, default True
+        Whether attributed opponent summaries are isolated from directly inflating
+        asserted authorial claims.
     """
 
     enabled: bool = True
@@ -471,6 +499,9 @@ class Phase6Config(BaseModel):
     admissibility_mode: Literal["hard", "soft"] = "hard"
     tau_p: float = 0.0
     tau_c: float = 0.0
+    perspective: str | None = None
+    isolate_suppositional: bool = True
+    isolate_attributed: bool = True
     modal_resolver: ModalResolverConfig = Field(default_factory=lambda: ModalResolverConfig())
 
 

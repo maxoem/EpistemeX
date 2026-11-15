@@ -39,6 +39,7 @@ from episteme_pipeline.artifacts.models import (
 from episteme_pipeline.artifacts.subgraph_reader import ArtifactSubgraphReader
 from episteme_pipeline.contracts.domain import (
     CandidatePair,
+    EntityConception,
     L1Chunk,
     L1Document,
     L2Entity,
@@ -285,6 +286,8 @@ def _extract_l2_state(
                 "mention_id": f"mention::{canon_eid}::{cid}" if cid else payload.mention_id,
                 "chunk_id": cid,
             }
+            if payload.textual_envelope:
+                mention_rec["textual_envelope"] = payload.textual_envelope
             if mention_rec not in recs:
                 recs.append(mention_rec)
 
@@ -342,6 +345,22 @@ def _extract_l2_state(
         conf_vals = [m.confidence for m in group if m.confidence is not None]
         max_conf = max(conf_vals) if conf_vals else rep.confidence
 
+        merged_conceptions_by_id: dict[str, EntityConception] = {}
+        for c in rep.conceptions:
+            merged_conceptions_by_id[c.id] = c
+        for member in group:
+            for c in member.conceptions:
+                if c.id not in merged_conceptions_by_id:
+                    merged_conceptions_by_id[c.id] = c
+        polysemy_variance = (
+            rep.polysemy_variance
+            if rep.polysemy_variance is not None
+            else next(
+                (m.polysemy_variance for m in group if m.polysemy_variance is not None),
+                None,
+            )
+        )
+
         canon_entity = rep.model_copy(
             update={
                 "id": canon_id,
@@ -350,6 +369,8 @@ def _extract_l2_state(
                 "textual_envelope": textual_envelope,
                 "is_mature": is_mature,
                 "confidence": max_conf,
+                "conceptions": list(merged_conceptions_by_id.values()),
+                "polysemy_variance": polysemy_variance,
             }
         )
         canonical_entities.append(canon_entity)
@@ -518,6 +539,10 @@ def _resolve_l3_atoms_and_relations(
         else:
             best_eq = rep.equilibrium_strength
 
+        attributed_to = rep.attributed_to or next(
+            (m.attributed_to for m in group if m.attributed_to),
+            None,
+        )
         canonical_atoms.append(
             rep.model_copy(
                 update={
@@ -530,6 +555,8 @@ def _resolve_l3_atoms_and_relations(
                     "modal_prior": max_modal,
                     "local_tenability": local_ts,
                     "tenability": tenability,
+                    "intensional_mode": rep.intensional_mode,
+                    "attributed_to": attributed_to,
                 }
             )
         )

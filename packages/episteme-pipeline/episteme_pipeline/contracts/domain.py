@@ -111,6 +111,43 @@ class L1Document(BaseModel):
     structural_anchor: GlobalStructuralAnchor | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+class EntityConception(BaseModel):
+    """Intensional, theory-laden or perspective-specific conception of an L2Entity.
+
+    Separates the canonical Referential Topic (:class:`L2Entity`) from divergent
+    theory-laden conceptualizations (Kuhn, 1962; Quine, 1951) across authors,
+    documents, or multi-modal latent clusters.
+
+    Attributes
+    ----------
+    id : str
+        Deterministic identifier for the conception facet.
+    entity_id : str
+        Canonical identifier of the parent :class:`L2Entity` (Referential Topic).
+    perspective : str
+        Theoretical perspective, document identifier, or cluster label.
+    description : str
+        Synthesized intensional description scoped to ``perspective``.
+    representative_envelopes : list of str, default []
+        Top-k contextual mention envelopes closest to this conception's centroid.
+    source_chunk_ids : list of str, default []
+        Identifiers of source chunks grounding this conception.
+    centroid_dispersion : float or None, optional
+        Intra-cluster spherical/cosine dispersion around this conception's centroid.
+    confidence : float or None, optional
+        Cluster coherence or synthesis confidence in ``[0.0, 1.0]``.
+    """
+
+    id: str
+    entity_id: str
+    perspective: str
+    description: str
+    representative_envelopes: list[str] = Field(default_factory=list)
+    source_chunk_ids: list[str] = Field(default_factory=list)
+    centroid_dispersion: float | None = Field(default=None, ge=0.0)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
 class L2Entity(BaseModel):
     """Layer 2 (global/logical) entity representation.
 
@@ -132,6 +169,12 @@ class L2Entity(BaseModel):
         and protected against further epistemic drift.
     source_chunk_ids : list of str, default []
         Identifiers of all the source chunks where this entity has been mentioned.
+    conceptions : list of EntityConception, default []
+        Perspective-specific or multi-modal conceptions stratified when entity
+        mention envelopes exhibit high cross-theory variance.
+    polysemy_variance : float or None, optional
+        Spherical dispersion across mention envelopes measuring cross-perspective
+        polysemy prior to or after conception stratification.
     """
     id: str
     label: str
@@ -142,6 +185,8 @@ class L2Entity(BaseModel):
     confidence: float | None = None
     text_anchor: TextAnchor | None = None
     source_chunk_ids: list[str] = Field(default_factory=list)
+    conceptions: list[EntityConception] = Field(default_factory=list)
+    polysemy_variance: float | None = Field(default=None, ge=0.0)
 
 
 class L2Triple(BaseModel):
@@ -313,6 +358,54 @@ class EpistemicStatus(str, Enum):
         return None
 
 
+class IntensionalMode(str, Enum):
+    """Intensional and perspectival scoping mode for propositions (Layer 3).
+
+    Distinguishes genuine authorial assertions from exegetical attributions,
+    counterfactual/*Reductio* suppositions, and historical background contexts
+    to prevent epistemic scope pollution in D-QBAF evaluation.
+    """
+
+    ASSERTED = "asserted"
+    ATTRIBUTED = "attributed"
+    SUPPOSITIONAL = "suppositional"
+    HISTORICAL = "historical"
+
+    @classmethod
+    def from_str(cls, val: str | IntensionalMode | None) -> IntensionalMode:
+        """Parse or normalize an intensional mode label into a canonical member.
+
+        Parameters
+        ----------
+        val : str or IntensionalMode or None
+            Raw or candidate intensional mode value.
+
+        Returns
+        -------
+        IntensionalMode
+            Normalized mode member, defaulting to ``IntensionalMode.ASSERTED``.
+        """
+        if val is None:
+            return cls.ASSERTED
+        if isinstance(val, cls):
+            return val
+        s = str(val).strip().lower().replace("-", "_").replace(" ", "_")
+        if not s:
+            return cls.ASSERTED
+        for member in cls:
+            if s == member.value or s == member.name.lower():
+                return member
+        if any(k in s for k in ("suppos", "reductio", "counterfactual", "hypothesized", "assum")):
+            return cls.SUPPOSITIONAL
+        if any(k in s for k in ("attrib", "exeget", "opponent", "report", "cited", "interlocutor")):
+            return cls.ATTRIBUTED
+        if any(k in s for k in ("histor", "archiv", "background", "chronolog")):
+            return cls.HISTORICAL
+        if any(k in s for k in ("assert", "author")):
+            return cls.ASSERTED
+        return cls.ASSERTED
+
+
 class TheoryAtom(BaseModel):
     """Propositional claim, hypothesis, axiom, or observation unit (Layer 3).
 
@@ -321,6 +414,7 @@ class TheoryAtom(BaseModel):
     - Layer 3 (Empirical Tenability): ``local_tenability`` (:math:`TS_{\\text{local}}(a)`) and ``tenability``.
     - Layer 4 (Dialectical Equilibrium): ``equilibrium_strength`` (:math:`\\tau^*(a)`)
       and ``controversy_volatility`` (:math:`\\mathcal{V}(a)`).
+    - Intensional Scope: ``intensional_mode`` and ``attributed_to``.
 
     Parameters
     ----------
@@ -342,6 +436,12 @@ class TheoryAtom(BaseModel):
         Dialectical equilibrium justification degree :math:`\\tau^*(a) \\in [0, 1]` from D-QBAF.
     controversy_volatility : float or None, optional
         Keynes-Gärdenfors epistemic weight volatility :math:`\\mathcal{V}(a) \\ge 0`.
+    intensional_mode : {"asserted", "attributed", "suppositional", "historical"}, default "asserted"
+        Intensional context scope preventing *Reductio* or attributed premises from
+        polluting authorial justification evaluation.
+    attributed_to : str or None, optional
+        Canonical agent, author, or school reference when ``intensional_mode`` is
+        ``"attributed"`` (or ``"historical"``).
     resolver_type : str or None, optional
         Modality resolver identifier (e.g. ``'structuralist_syntax'``, ``'decision_engine_llm'``, ``'hybrid'``).
     syntax_bounds : tuple of (float, float) or None, optional
@@ -371,6 +471,14 @@ class TheoryAtom(BaseModel):
     local_tenability: float | None = Field(default=None, ge=0.0, le=1.0, description="Empirical local tenability TS_local(a) in [0, 1]")
     equilibrium_strength: float | None = Field(default=None, ge=0.0, le=1.0, description="Dialectical equilibrium justification degree tau*(a) in [0, 1]")
     controversy_volatility: float | None = Field(default=None, ge=0.0, description="Keynes-Gardenfors epistemic weight volatility V(a)")
+    intensional_mode: Literal["asserted", "attributed", "suppositional", "historical"] = Field(
+        default="asserted",
+        description="Intensional context scope ('asserted', 'attributed', 'suppositional', or 'historical').",
+    )
+    attributed_to: str | None = Field(
+        default=None,
+        description="Optional agent, author, or school identifier when claim is attributed.",
+    )
     resolver_type: str | None = None
     syntax_bounds: tuple[float, float] | None = None
     entity_ids: list[str] = Field(default_factory=list)
@@ -380,6 +488,21 @@ class TheoryAtom(BaseModel):
     measurements: list[Measurement] = Field(default_factory=list)
     parameters: dict[str, Any] = Field(default_factory=dict)
     tenability: TenabilityResult | None = None
+
+    @field_validator("intensional_mode", mode="before")
+    @classmethod
+    def normalize_intensional_mode(
+        cls, v: Any
+    ) -> Literal["asserted", "attributed", "suppositional", "historical"]:
+        """Normalize intensional_mode via IntensionalMode enum."""
+        normalized = IntensionalMode.from_str(v).value
+        if normalized == "attributed":
+            return "attributed"
+        if normalized == "suppositional":
+            return "suppositional"
+        if normalized == "historical":
+            return "historical"
+        return "asserted"
 
     @field_validator("scope_type", mode="before")
     @classmethod
@@ -415,14 +538,60 @@ class TheoryAtom(BaseModel):
             self.tenability.local_score = float(self.local_tenability)
         return self
 
-    def effective_base_prior(self) -> float:
-        """Compute tenability-modulated prior :math:`\\tilde{\\tau}_0(a) = \\tau_0(a) \\cdot TS_{\\text{local}}(a)`.
+    def effective_base_prior(
+        self,
+        *,
+        include_suppositional: bool = False,
+        perspective: str | None = None,
+    ) -> float:
+        """Compute tenability-modulated prior :math:`\\tilde{\\tau}_0(a) = \\tau_0(a) \\cdot TS_{\\text{local}}(a)` with intensional scoping.
+
+        Parameters
+        ----------
+        include_suppositional : bool, default False
+            When False, atoms with ``intensional_mode == "suppositional"`` return
+            ``0.0`` so counterfactual or *Reductio* premises do not contribute
+            unconditioned prior weight to the author's asserted theory base.
+        perspective : str or None, optional
+            Optional perspective filter (``"author"``, ``"asserted"``, or an
+            attributed agent/school identifier). When specified, atoms outside the
+            requested perspective return ``0.0``.
 
         Returns
         -------
         float
             Effective D-QBAF prior in ``[0.0, 1.0]``.
         """
+        active_perspective = (
+            perspective.strip().lower() if perspective is not None else None
+        )
+        if (
+            self.intensional_mode == "suppositional"
+            and not include_suppositional
+            and active_perspective != "suppositional"
+        ):
+            return 0.0
+
+        if active_perspective is not None and active_perspective not in (
+            "all",
+            "suppositional",
+        ):
+            attr_norm = (self.attributed_to or "").strip().lower()
+            if active_perspective in ("author", "asserted"):
+                allowed_author_modes = (
+                    ("asserted", "suppositional")
+                    if include_suppositional
+                    else ("asserted",)
+                )
+                if self.intensional_mode not in allowed_author_modes or attr_norm not in (
+                    "",
+                    "author",
+                    "self",
+                ):
+                    return 0.0
+            elif attr_norm != active_perspective:
+                return 0.0
+
         prior = self.modal_prior if self.modal_prior is not None else 0.6
         ts_local = (
             self.local_tenability

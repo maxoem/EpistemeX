@@ -97,6 +97,7 @@ We implement a modular, pluggable **Propositional Modal Strength Resolution Fram
 - **Full Inversion of Control:** Resolvers can be mocked, swapped, or tuned via configuration without touching phase
   logic.
 - **Clean Decoupling:** Replaces ad-hoc string regexes with a typed, observable protocol backed by unit tests.
+- **Orthogonal to Intensional Scoping ([ADR 0023](0023-intensional-perspectival-scoping-and-conception-stratification.md)):** `ModalStrengthResolver` computes intrinsic modal certainty $\tau_0(a) = M(\phi_a)$ independently of whether the claim is `asserted`, `suppositional` (*Reductio*), `attributed` to another philosopher, or `historical`; downstream D-QBAF projection applies perspective and supposition gating (`effective_base_prior` and `QBAFGradualSemanticsSolver`) without altering $M(\phi_a)$.
 
 ### Negative / Trade-offs
 

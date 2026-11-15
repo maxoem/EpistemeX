@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Epistemic Representation, Intensional Logic, Conceptual Drift) |
 | **Target Package(s)** | `packages/episteme-pipeline`, `packages/epistemetrics` (`contracts/domain.py`, `phases/phase2_entity_discovery/`, `phases/phase4_entity_maturation/`, `phases/phase4_argument_mining/`) |
 | **Priority** | **High** |
-| **Status** | `Open` |
+| **Status** | `Completed` |
 | **Evaluated Docs & ADRs** | [`docs/concepts/formal_graph_model.md`](../../docs/concepts/formal_graph_model.md), [`docs/concepts/assumptions_limitations.md`](../../docs/concepts/assumptions_limitations.md), [`ADR-0003`](../../docs/adr/0003-coreference-absorbed-into-fusion.md), [`ADR-0016-attribute-alignment`](../../docs/adr/0016-attribute-alignment-deferred.md), [`ADR-0020`](../../docs/adr/0020-propositional-modal-strength-resolver.md) |
 
 ---
@@ -70,6 +70,6 @@ flowchart TB
 
 ## 4. Acceptance Criteria
 
-- [ ] `TheoryAtom` and `TheoryAtomArtifact` include `intensional_mode` (`asserted`, `attributed`, `suppositional`) and optional `attributed_to` agent reference.
-- [ ] `QBAFGradualSemanticsSolver` supports perspective-filtered and supposition-aware evaluation so *Reductio* assumptions and opponent summaries do not artificially inflate authorial claim justification.
-- [ ] `Phase4EntityMaturationRunner` detects high-variance / multi-modal entity envelopes across documents/theories and preserves perspective-specific conceptions rather than forcing a single global average description.
+- [x] `TheoryAtom` and `TheoryAtomArtifact` include `intensional_mode` (`asserted`, `attributed`, `suppositional`) and optional `attributed_to` agent reference.
+- [x] `QBAFGradualSemanticsSolver` supports perspective-filtered and supposition-aware evaluation so *Reductio* assumptions and opponent summaries do not artificially inflate authorial claim justification.
+- [x] `Phase4EntityMaturationRunner` detects high-variance / multi-modal entity envelopes across documents/theories and preserves perspective-specific conceptions rather than forcing a single global average description.

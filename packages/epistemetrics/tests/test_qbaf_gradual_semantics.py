@@ -398,3 +398,138 @@ class TestQBAFGradualSemantics:
         assert res_soft.admissibility_pruned_count == 0
         # Conclusion receives positive support from relaxed edge
         assert res_soft.degrees["conclusion"] > 0.5
+
+
+class TestPerspectivalAndSuppositionalScoping:
+    """Deterministic unit tests for Issue-054 intensional & perspectival D-QBAF scoping."""
+
+    def test_suppositional_reductio_isolation_prevents_inflation(self) -> None:
+        """Verify Reductio assumptions do not inflate asserted claims when isolated."""
+        from epistemetrics.core.models import TheoryNode
+        from epistemetrics.epistemic.qbaf import QBAFGradualSemanticsSolver
+
+        nodes = [
+            TheoryNode(
+                id="author_thesis",
+                name="Author Thesis",
+                base_score=0.5,
+                intensional_mode="asserted",
+            ),
+            TheoryNode(
+                id="reductio_premise",
+                name="Reductio Premise",
+                base_score=0.95,
+                intensional_mode="suppositional",
+            ),
+        ]
+        edges = [
+            {
+                "source": "reductio_premise",
+                "target": "author_thesis",
+                "relation_type": "SUPPORTS",
+                "inferential_force": 1.0,
+            }
+        ]
+
+        isolated = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            isolate_suppositional=True,
+        )
+        assert isolated.suppositional_isolated_count == 1
+        assert isolated.degrees["author_thesis"] == pytest.approx(0.5)
+
+        unisolated = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            isolate_suppositional=False,
+        )
+        assert unisolated.suppositional_isolated_count == 0
+        assert unisolated.degrees["author_thesis"] > 0.5
+
+        solver = QBAFGradualSemanticsSolver(isolate_suppositional=True)
+        continuous = solver.solve_continuous(nodes=nodes, edges=edges)
+        assert continuous.converged
+        assert continuous.suppositional_isolated_count == 1
+        assert continuous.degrees["author_thesis"] == pytest.approx(0.5, abs=1e-4)
+
+    def test_perspective_filtering_author_vs_attributed_agents(self) -> None:
+        """Verify attributed opponent claims are isolated under authorial evaluation."""
+        nodes = {
+            "author_claim": {
+                "prior": 0.5,
+                "intensional_mode": "asserted",
+            },
+            "hume_premise": {
+                "prior": 0.9,
+                "intensional_mode": "attributed",
+                "attributed_to": "David Hume",
+            },
+            "hume_conclusion": {
+                "prior": 0.5,
+                "intensional_mode": "attributed",
+                "attributed_to": "David Hume",
+            },
+            "leibniz_critique": {
+                "prior": 0.85,
+                "intensional_mode": "attributed",
+                "attributed_to": "Leibniz",
+            },
+        }
+        edges = [
+            {
+                "source": "hume_premise",
+                "target": "author_claim",
+                "relation_type": "SUPPORTS",
+                "inferential_force": 1.0,
+            },
+            {
+                "source": "hume_premise",
+                "target": "hume_conclusion",
+                "relation_type": "SUPPORTS",
+                "inferential_force": 1.0,
+            },
+            {
+                "source": "leibniz_critique",
+                "target": "hume_conclusion",
+                "relation_type": "ATTACKS",
+                "inferential_force": 1.0,
+            },
+        ]
+
+        res_author = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="author",
+        )
+        assert res_author.perspective == "author"
+        assert res_author.perspective_filtered_count == 3
+        assert res_author.degrees["author_claim"] == pytest.approx(0.5)
+
+        res_hume = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="David Hume",
+        )
+        assert res_hume.perspective == "David Hume"
+        assert res_hume.perspective_filtered_count == 2
+        assert res_hume.degrees["hume_conclusion"] > 0.5
+
+        res_all = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="all",
+            isolate_attributed=False,
+        )
+        assert res_all.perspective == "all"
+        assert res_all.perspective_filtered_count == 0
+        assert res_all.degrees["author_claim"] > 0.5
+
+        res_cont_hume = solve_continuous_qbaf(
+            nodes=nodes,
+            edges=edges,
+            perspective="David Hume",
+        )
+        assert res_cont_hume.converged
+        assert res_cont_hume.perspective_filtered_count == 2
+        assert res_cont_hume.degrees["hume_conclusion"] > 0.5

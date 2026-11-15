@@ -114,6 +114,7 @@ Where:
 - $\gamma: \mathcal{V}_{\text{L2}} \to [0, 1]$ assigns extraction confidence scores.
 - $\delta: \mathcal{E}_{\text{L2}} \to [0, 1] \times \mathcal{P} (L1)$ assigns relationship certainty paired with explicit evidentiary text
   snippets from $L1$.
+- **Referent-vs-Conception Stratification ([ADR 0023](../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)):** Each canonical node $e \in \mathcal{V}_{\text{L2}}$ serves as the shared *Referential Topic*, optionally carrying perspective-specific `EntityConception` facets and spherical dispersion `polysemy_variance` when mention envelopes diverge across theories or documents.
 
 ### Layer 3: Abstract Argumentation Framework ($L3$)
 
@@ -187,9 +188,10 @@ where:
 3. $\mathcal{R}_{sup} \subseteq \mathcal{A} \times \mathcal{A}$ is a binary relation representing dialectical warrant, verification, or inductive support, with $\mathcal{R}_{att} \cap \mathcal{R}_{sup} = \emptyset$.
 4. $\tau_0: \mathcal{A} \to [0, 1]$ is the **intrinsic propositional base score function**, mapping each claim $a \in \mathcal{A}$ to the authorial modal certainty asserted in the text:
    $$\tau_0(a) \equiv M(\phi_a)$$
-5. $\mathcal{I}: \mathcal{R} \to [0, 1]$ is the **inferential warrant force function**, quantifying the conditional validity of the inferential link under Toulminian argument schemes (deductive entailment vs. empirical corroboration vs. defeasible analogy).
-6. $\mathcal{P}: \mathcal{R} \to [0, 1]$ is the **stance class probability function**, mapping an edge $r \in \mathcal{R}$ to the perception engine's softmax probability $P(\text{stance} \mid \text{text})$.
-7. $\mathcal{C}: \mathcal{R} \to [0, 1]$ is the **perception calibration confidence score**, representing the expected empirical precision under calibrated temperature buckets (e.g., Conformal Prediction / Jev).
+5. $\iota: \mathcal{A} \to \{\text{asserted}, \text{attributed}, \text{suppositional}, \text{historical}\}$ and optional $\alpha: \mathcal{A} \to \mathcal{V}_{\text{L2}} \cup \text{Agent}$ capture the claim's **intensional mode and epistemic attribution** ([ADR 0023](../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)), isolating *Reductio* (`suppositional`) premises and opponent summaries (`attributed`) during perspective-filtered D-QBAF convergence ($\tau^*$).
+6. $\mathcal{I}: \mathcal{R} \to [0, 1]$ is the **inferential warrant force function**, quantifying the conditional validity of the inferential link under Toulminian argument schemes (deductive entailment vs. empirical corroboration vs. defeasible analogy).
+7. $\mathcal{P}: \mathcal{R} \to [0, 1]$ is the **stance class probability function**, mapping an edge $r \in \mathcal{R}$ to the perception engine's softmax probability $P(\text{stance} \mid \text{text})$.
+8. $\mathcal{C}: \mathcal{R} \to [0, 1]$ is the **perception calibration confidence score**, representing the expected empirical precision under calibrated temperature buckets (e.g., Conformal Prediction / Jev).
 
 ```
                       ONTOLOGICAL STRATIFICATION OF UNCERTAINTY

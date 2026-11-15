@@ -19,6 +19,7 @@ from episteme_pipeline.artifacts.models import (
     TheoryRelationArtifact,
 )
 from episteme_pipeline.contracts.domain import (
+    EntityConception,
     L1Chunk,
     L1Document,
     L2Entity,
@@ -212,6 +213,8 @@ class LinkedEntityCodec:
             is_mature=domain_obj.is_mature,
             confidence=domain_obj.confidence,
             text_anchor=domain_obj.text_anchor,
+            conceptions=[c.model_copy(deep=True) for c in domain_obj.conceptions],
+            polysemy_variance=domain_obj.polysemy_variance,
         )
 
     @classmethod
@@ -248,6 +251,8 @@ class LinkedEntityCodec:
             confidence=payload.confidence,
             text_anchor=payload.text_anchor,
             source_chunk_ids=uniq_chunk_ids,
+            conceptions=[EntityConception.model_validate(c) for c in payload.conceptions],
+            polysemy_variance=payload.polysemy_variance,
         )
 
 
@@ -448,6 +453,8 @@ class TheoryAtomCodec:
             local_tenability=domain_obj.local_tenability,
             equilibrium_strength=domain_obj.equilibrium_strength,
             controversy_volatility=domain_obj.controversy_volatility,
+            intensional_mode=domain_obj.intensional_mode,
+            attributed_to=domain_obj.attributed_to,
             resolver_type=domain_obj.resolver_type,
             syntax_bounds=domain_obj.syntax_bounds,
             text_anchor=domain_obj.text_anchor,
@@ -482,6 +489,8 @@ class TheoryAtomCodec:
             local_tenability=payload.local_tenability,
             equilibrium_strength=payload.equilibrium_strength,
             controversy_volatility=payload.controversy_volatility,
+            intensional_mode=payload.intensional_mode,
+            attributed_to=payload.attributed_to,
             resolver_type=payload.resolver_type,
             syntax_bounds=payload.syntax_bounds,
             entity_ids=list(payload.entity_ids),

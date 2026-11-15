@@ -446,6 +446,9 @@ class PipelineFactory(Fingerprintable):
                 semantics_model=p6_cfg.semantics_model,
                 modal_resolver=components.modal_resolver,
                 use_continuous=p6_cfg.use_continuous,
+                perspective=p6_cfg.perspective,
+                isolate_suppositional=p6_cfg.isolate_suppositional,
+                isolate_attributed=p6_cfg.isolate_attributed,
             )
             phases.append(
                 TheoreticalEnrichmentRunner(

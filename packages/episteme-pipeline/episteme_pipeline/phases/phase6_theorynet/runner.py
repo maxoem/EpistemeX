@@ -113,6 +113,9 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             semantics_model=config.semantics_model,
             modal_resolver=self.modal_resolver,
             use_continuous=config.use_continuous,
+            perspective=config.perspective,
+            isolate_suppositional=config.isolate_suppositional,
+            isolate_attributed=config.isolate_attributed,
         )
 
     async def run(
@@ -185,7 +188,10 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             atoms_to_upsert: list[TheoryAtom] = []
             for atom in theory_net.atoms:
                 if atom.equilibrium_strength is None:
-                    atom.equilibrium_strength = atom.effective_base_prior()
+                    atom.equilibrium_strength = atom.effective_base_prior(
+                        include_suppositional=not self.config.isolate_suppositional,
+                        perspective=self.config.perspective,
+                    )
                 atoms_to_upsert.append(atom)
                 atoms_updated += 1
 

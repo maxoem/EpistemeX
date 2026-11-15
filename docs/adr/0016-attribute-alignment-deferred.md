@@ -22,6 +22,8 @@ Under the formal model of the Theory Graph (TheoryNet $TF = (At, R)$ grounded in
 
 Building an automated conflict resolver would obscure real-world disagreements in the source literature, contradicting the intended purpose of the theory graph. Therefore, automated attribute fusion is deferred indefinitely until a theoretically sound method for capturing both consensus and contradiction is modeled.
 
+> **Extension ([ADR 0023](0023-intensional-perspectival-scoping-and-conception-stratification.md)):** While incompatible doctrinal descriptions are still never flattened via destructive attribute merging, Phase 4 Entity Maturation now stratifies divergent entity mention envelopes into coexisting, perspective-scoped `EntityConception` facets attached to the shared canonical `L2Entity` referential topic.
+
 ## Consequences
 
 ### Positive
@@ -36,3 +38,4 @@ Building an automated conflict resolver would obscure real-world disagreements i
 - [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md)
 - [ADR 0006: QBAF Weight Computation Deferred](0006-qbaf-mapping-deferred.md)
 - [ADR 0005: Two-Pass Fusion Strategy](0005-two-pass-fusion-strategy.md)
+- [ADR 0023: Intensional & Perspectival Scoping and Conception Stratification](0023-intensional-perspectival-scoping-and-conception-stratification.md)

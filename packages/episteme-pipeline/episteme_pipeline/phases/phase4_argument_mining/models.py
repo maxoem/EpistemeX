@@ -7,7 +7,7 @@ LLM-local IDs (e.g. "AC1", "AC2") that need remapping to stable graph IDs.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -40,6 +40,31 @@ class ExtractedComponent(BaseModel):
     entity_ids: list[str] = Field(default_factory=list, description="List of entity IDs mentioned or discussed in this component.")
     epistemic_status: str | None = Field(default=None, description="Epistemic Status: Synthetisch or Analytisch.")
     scope_type: str | None = Field(default=None, description="Scope / Type of the proposition.")
+    intensional_mode: Literal["asserted", "attributed", "suppositional", "historical"] = Field(
+        default="asserted",
+        description="Intensional context mode: 'asserted', 'attributed', 'suppositional', or 'historical'.",
+    )
+    attributed_to: str | None = Field(
+        default=None,
+        description="Agent, author, or school identifier when intensional_mode is 'attributed'.",
+    )
+
+    @field_validator("intensional_mode", mode="before")
+    @classmethod
+    def normalize_intensional_mode(
+        cls, v: Any
+    ) -> Literal["asserted", "attributed", "suppositional", "historical"]:
+        """Normalize intensional_mode via IntensionalMode enum."""
+        from episteme_pipeline.contracts.domain import IntensionalMode
+
+        norm = IntensionalMode.from_str(v).value
+        if norm == "attributed":
+            return "attributed"
+        if norm == "suppositional":
+            return "suppositional"
+        if norm == "historical":
+            return "historical"
+        return "asserted"
 
     @field_validator("text")
     @classmethod

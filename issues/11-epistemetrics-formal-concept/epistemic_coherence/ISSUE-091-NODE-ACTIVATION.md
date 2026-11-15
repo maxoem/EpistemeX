@@ -8,7 +8,7 @@
 | **Target Package(s)** | `epistemetrics` (`src/epistemetrics/epistemic/qbaf.py`), `episteme-pipeline` |
 | **Priority** | **Critical** (complete split-brain with the implemented D-QBAF solver in `qbaf.py`, omits evidence clamping so every node in any DAG decays to $a_j^* = 0.0$, lacks bounds clamping when $\|\text{net}_j(t)\| > 1$ causing divergent oscillation, and initializes $[-1, 1]$ activations with $[0, 1]$ priors) |
 | **Status** | `Open` |
-| **Related Issues** | [`ISSUE-093`](ISSUE-093-SYSTEM-COHERENCE.md), [`ISSUE-095`](../ISSUE-095-EPISTEMIC-COHERENCE-CROSS-CUTTING.md), [`ISSUE-009`](../../03-epistemic-metrics/ISSUE-009-global-qbaf-solvers-and-thagardian-harmony.md), [`ISSUE-050`](../../09-architecture-workflow-domain/ISSUE-050-ontological-schism-tf-vs-dqbaf-vs-structuralist-tenability-feedback.md), [`ISSUE-082`](../ISSUE-082-METATHEORETICAL-CROSS-CUTTING.md) |
+| **Related Issues** | [`ISSUE-093`](ISSUE-093-SYSTEM-COHERENCE.md), [`ISSUE-095`](../ISSUE-095-EPISTEMIC-COHERENCE-CROSS-CUTTING.md), [`ISSUE-009`](../../03-epistemic-metrics/ISSUE-009-global-qbaf-solvers-and-thagardian-harmony.md), [`ISSUE-050`](../../09-architecture-workflow-domain/resolved/ISSUE-050-ontological-schism-tf-vs-dqbaf-vs-structuralist-tenability-feedback.md), [`ISSUE-082`](../ISSUE-082-METATHEORETICAL-CROSS-CUTTING.md) |
 
 Severity legend: **Critical** = invalidates the metric's mathematical/conceptual core or makes it uncomputable · **Major** = significant formal flaw, semantic shift, or literature misattribution · **Minor** = notation, alignment, or presentation issue.
 

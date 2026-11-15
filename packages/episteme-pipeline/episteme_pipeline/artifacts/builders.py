@@ -170,6 +170,8 @@ def build_theory_atom_artifact(component: TheoryAtom, *, run_id: str, phase_name
             "text": component.text,
             "epistemic_status": component.epistemic_status,
             "scope_type": component.scope_type,
+            "intensional_mode": component.intensional_mode,
+            "attributed_to": component.attributed_to,
         }),
     )
 

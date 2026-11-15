@@ -52,6 +52,7 @@ post-KG-build graph operation rather than a pre-NER text operation.
   instruction (see `docs/workflow/2_entity_discovery/prompting.md`).
 - Entities that are never co-extracted in the same chunk but are actually the same will be unified in Phase 3b prior to
   Phase 4 Argument Mining.
+- Canonical referent unification in Phase 3b does not force semantic flattening: Phase 4 Entity Maturation ([ADR 0023](0023-intensional-perspectival-scoping-and-conception-stratification.md)) detects multi-modal envelope dispersion across perspectives on unified `L2Entity` topics and preserves divergent definitions as separate `EntityConception` facets.
 
 ## Related
 
@@ -59,4 +60,5 @@ post-KG-build graph operation rather than a pre-NER text operation.
 - `docs/workflow/3b_consolidation/index.md` — Phase 3b Latent Graph Consolidation Workflow
 - `docs/concepts/dense_alignment.md` — Epistemic Grounding and Dense Alignment
 - ADR 0005 — Pipeline runner sequence and fusion architecture
+- [ADR 0023: Intensional & Perspectival Scoping and Conception Stratification](0023-intensional-perspectival-scoping-and-conception-stratification.md)
 

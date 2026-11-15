@@ -1,5 +1,7 @@
 from episteme_pipeline.contracts.domain import (
+    EntityConception,
     EpistemicStatus,
+    IntensionalMode,
     L1Chunk,
     L1Document,
     L2Entity,
@@ -15,7 +17,9 @@ from episteme_pipeline.contracts.domain import (
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 
 __all__ = [
+    "EntityConception",
     "EpistemicStatus",
+    "IntensionalMode",
     "L1Chunk",
     "L1Document",
     "L2Entity",

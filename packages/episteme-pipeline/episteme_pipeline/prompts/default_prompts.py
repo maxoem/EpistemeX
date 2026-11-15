@@ -259,12 +259,13 @@ classify each ADU and identify all support and attack relations between them.
 2. Identify all local support and attack relations between ADUs.
 3. Determine which of the available entities are explicitly mentioned or primarily discussed in each ADU.
 4. For each component, determine its Epistemic Status (Synthetisch or Analytisch) and Scope/Type (Essentieller Allsatz, Existenzsatz, Statistischer/probabilistischer Allsatz, Lokalisierter Existenzsatz, or Lokalisierter Allsatz).
-5. Output strictly valid JSON. No text outside the JSON.
-6. Validate: the number of classified components must equal the number of input AC tags.
+5. Classify each component's `intensional_mode` ("asserted" = committed by author, "attributed" = opponent/prior thinker view, "suppositional" = Reductio ad absurdum / counterfactual premise, "historical" = archival background) and set `attributed_to` when attributed.
+6. Output strictly valid JSON. No text outside the JSON.
+7. Validate: the number of classified components must equal the number of input AC tags.
 
 ### Output Schema
 {{
-  "components": [{{"id": "<ACn>", "component_type": "<type>", "text": "<original span>", "plausibility": <float 0-1>, "entity_ids": ["<entity_id>"], "epistemic_status": "<Synthetisch|Analytisch>", "scope_type": "<Essentieller Allsatz|Existenzsatz|Statistischer/probabilistischer Allsatz|Lokalisierter Existenzsatz|Lokalisierter Allsatz>"}}],
+  "components": [{{"id": "<ACn>", "component_type": "<type>", "text": "<original span>", "plausibility": <float 0-1>, "entity_ids": ["<entity_id>"], "epistemic_status": "<Synthetisch|Analytisch>", "scope_type": "<Essentieller Allsatz|Existenzsatz|Statistischer/probabilistischer Allsatz|Lokalisierter Existenzsatz|Lokalisierter Allsatz>", "intensional_mode": "<asserted|attributed|suppositional|historical>", "attributed_to": "<agent_name_or_null>"}}],
   "relations":  [{{"source_id": "<ACn>", "relation": "<relation_type>", "target_id": "<ACm>", "confidence": <float 0-1>, "weight": <float 0-1>}}]
 }}
 
@@ -289,7 +290,7 @@ Analyze the following text with pre-identified Argumentative Discourse Units (AD
 1. For each <ACn> tag, discuss which component type it represents based on its content.
 2. Discuss which of the available entities are mentioned or discussed in each ADU.
 3. Analyze potential local support and attack relations between the ADUs.
-4. Analyze the Epistemic Status (Synthetisch vs. Analytisch) and Scope/Type (Essentieller Allsatz, Existenzsatz, Statistischer/probabilistischer Allsatz, Lokalisierter Existenzsatz, Lokalisierter Allsatz) for each component.
+4. Analyze the Epistemic Status (Synthetisch vs. Analytisch) and Scope/Type (Essentieller Allsatz, Existenzsatz, Statistischer/probabilistischer Allsatz, Lokalisierter Existenzsatz, Lokalisierter Allsatz) for each component, plus its intensional_mode ("asserted", "attributed", "suppositional", or "historical") and attributed_to agent if attributed.
 5. Ensure every AC tag is discussed.
 Provide a detailed chain-of-thought reasoning step by step. Do NOT output JSON.
 
@@ -315,7 +316,7 @@ You are an expert data extractor. Convert the provided argumentation reasoning i
 
 ### Output Schema
 {{
-  "components": [{{"id": "<ACn>", "component_type": "<type>", "text": "<original span>", "plausibility": <float 0-1>, "entity_ids": ["<entity_id>"], "epistemic_status": "<Synthetisch|Analytisch>", "scope_type": "<Essentieller Allsatz|Existenzsatz|Statistischer/probabilistischer Allsatz|Lokalisierter Existenzsatz|Lokalisierter Allsatz>"}}],
+  "components": [{{"id": "<ACn>", "component_type": "<type>", "text": "<original span>", "plausibility": <float 0-1>, "entity_ids": ["<entity_id>"], "epistemic_status": "<Synthetisch|Analytisch>", "scope_type": "<Essentieller Allsatz|Existenzsatz|Statistischer/probabilistischer Allsatz|Lokalisierter Existenzsatz|Lokalisierter Allsatz>", "intensional_mode": "<asserted|attributed|suppositional|historical>", "attributed_to": "<agent_name_or_null>"}}],
   "relations":  [{{"source_id": "<ACn>", "relation": "<relation_type>", "target_id": "<ACm>", "confidence": <float 0-1>, "weight": <float 0-1>}}]
 }}
 """

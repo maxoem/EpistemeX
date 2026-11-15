@@ -30,6 +30,7 @@ approach: [ADR 0008: Diátaxis Documentation Framework](0008-diataxis-documentat
 
 ### Recent Changes
 
+- **0023** - [Intensional & Perspectival Scoping and Conception Stratification](0023-intensional-perspectival-scoping-and-conception-stratification.md) (2026-11-14)
 - **0022** - Unified Stratified Epistemic Metamodel: Reconciling TF, D-QBAF, and Structuralist Tenability Feedback (2026-11-07)
 - **0021** - Incremental Corpus Evolution, Declarative Artifact Hydration, and Persistent HITL Constraint Ledgers (2026-10-25)
 - **0020** - Propositional Modal Strength Resolver, Structuralist Syntax Priors, and Neuro-Symbolic Hybrid Estimation (2026-10-07)

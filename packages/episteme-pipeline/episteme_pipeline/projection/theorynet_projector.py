@@ -159,6 +159,13 @@ class TheoryNetProjector:
     use_continuous : bool, default True
         Whether to use the continuous WeightedQuadraticEnergySolver (closed-form DAG
         and adaptive RK45/Radau ODE integration) when semantics_model is 'quadratic'.
+    perspective : str or None, optional
+        Optional epistemic perspective filter ('author', agent name, or None).
+    isolate_suppositional : bool, default True
+        Whether suppositional/Reductio nodes are isolated from contributing positive prior.
+    isolate_attributed : bool, default True
+        Whether attributed opponent summaries are isolated from directly inflating
+        asserted authorial claims.
     """
 
     def __init__(
@@ -175,6 +182,9 @@ class TheoryNetProjector:
         semantics_model: GradualSemanticsModel | str = GradualSemanticsModel.QUADRATIC,
         modal_resolver: ModalStrengthResolver | None = None,
         use_continuous: bool = True,
+        perspective: str | None = None,
+        isolate_suppositional: bool = True,
+        isolate_attributed: bool = True,
     ) -> None:
         self.schema = schema or SchemaConfig()
         self.modal_resolver = modal_resolver or StructuralistModalResolver()
@@ -194,6 +204,9 @@ class TheoryNetProjector:
             use_continuous
             and self.semantics_model == GradualSemanticsModel.QUADRATIC.value
         )
+        self.perspective = perspective
+        self.isolate_suppositional = isolate_suppositional
+        self.isolate_attributed = isolate_attributed
         self.solver = solver or QBAFGradualSemanticsSolver(
             semantics_model=self.semantics_model,
             max_iterations=iterations,
@@ -201,6 +214,9 @@ class TheoryNetProjector:
             admissibility_threshold=admissibility_threshold,
             prune_inadmissible=prune_inadmissible,
             use_continuous=self.use_continuous,
+            perspective=perspective,
+            isolate_suppositional=isolate_suppositional,
+            isolate_attributed=isolate_attributed,
         )
 
     def fingerprint(self) -> dict[str, Any]:
@@ -224,6 +240,9 @@ class TheoryNetProjector:
             "tolerance": self.tolerance,
             "semantics_model": self.semantics_model,
             "use_continuous": self.use_continuous,
+            "perspective": self.perspective,
+            "isolate_suppositional": self.isolate_suppositional,
+            "isolate_attributed": self.isolate_attributed,
             "modal_resolver": (
                 self.modal_resolver.fingerprint()
                 if isinstance(self.modal_resolver, Fingerprintable)
@@ -234,6 +253,7 @@ class TheoryNetProjector:
     def project(
         self,
         view: Phase4ArtifactsView,
+        perspective: str | None = None,
     ) -> TheoryNet:
         """Constructs the full TheoryNet formal model from pipeline artifacts.
 
@@ -241,12 +261,16 @@ class TheoryNetProjector:
         ----------
         view : Phase4ArtifactsView
             Extracted theory atoms and dialectical relations from Phase 4.
+        perspective : str or None, optional
+            Optional perspective filter overriding ``self.perspective`` for
+            perspective-scoped QBAF projection.
 
         Returns
         -------
         TheoryNet
             Materialized TheoryNet with equilibrium justification plausibilities.
         """
+        active_perspective = perspective if perspective is not None else self.perspective
         # Retrieve and filter all theory relations with decoupled weights
         source_relations = (
             view.canonical_theory_relations
@@ -324,17 +348,20 @@ class TheoryNetProjector:
             atom = c.model_copy()
             if "modal_prior" not in atom.model_fields_set and atom.resolver_type is None:
                 atom.modal_prior = self.modal_resolver.resolve_modality_sync(atom)
-            atom.equilibrium_strength = self.compute_weight(atom)
+            atom.equilibrium_strength = self.compute_weight(atom, perspective=active_perspective)
             atoms.append(atom)
 
         # Execute Gradual Semantics Convergence via sovereign epistemetrics solver
         if atoms and relations:
             theory_edges = self._to_theory_edges(relations)
-            node_priors = self._to_node_priors(atoms)
+            solver_nodes = self._to_solver_nodes(atoms, perspective=active_perspective)
             solver_res = self.solver.solve(
-                nodes=node_priors,
+                nodes=solver_nodes,
                 edges=theory_edges,
                 normalization_mode=WeightNormalizationMode.CALIBRATED_MODAL,
+                perspective=active_perspective,
+                isolate_suppositional=self.isolate_suppositional,
+                isolate_attributed=self.isolate_attributed,
             )
             for atom in atoms:
                 if atom.id in solver_res.degrees:
@@ -407,6 +434,36 @@ class TheoryNetProjector:
             )
         return theory_edges
 
+    def _to_solver_nodes(
+        self,
+        atoms: list[TheoryAtom],
+        perspective: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Convert theoretical atoms into intensionally-scoped solver node payloads.
+
+        Parameters
+        ----------
+        atoms : list of TheoryAtom
+            Theoretical atoms with base scores, local tenability, and intensional scope.
+        perspective : str or None, optional
+            Optional active perspective filter.
+
+        Returns
+        -------
+        list of dict
+            Node payloads carrying ``id``, ``base_score``, ``intensional_mode``,
+            and ``attributed_to`` for :class:`QBAFGradualSemanticsSolver`.
+        """
+        return [
+            {
+                "id": atom.id,
+                "base_score": self.compute_weight(atom, perspective=perspective),
+                "intensional_mode": atom.intensional_mode,
+                "attributed_to": atom.attributed_to,
+            }
+            for atom in atoms
+        ]
+
     def _to_node_priors(self, atoms: list[TheoryAtom]) -> dict[str, float]:
         """Extract tenability-modulated node prior plausibility mappings from theoretical atoms.
 
@@ -425,23 +482,36 @@ class TheoryNetProjector:
             for atom in atoms
         }
 
-    def compute_weight(self, atom: TheoryAtom) -> float:
+    def compute_weight(
+        self,
+        atom: TheoryAtom,
+        perspective: str | None = None,
+    ) -> float:
         """Derive tenability-modulated prior plausibility weight :math:`\\tilde{\\tau}_0(a)` for a theoretical atom.
 
         .. math::
             \\tilde{\\tau}_0(a) = \\tau_0(a) \\cdot TS_{\\text{local}}(a)
 
+        Applies intensional scoping so suppositional (*Reductio*) and off-perspective
+        atoms return ``0.0`` when isolated.
+
         Parameters
         ----------
         atom : TheoryAtom
             Target atom.
+        perspective : str or None, optional
+            Optional perspective override; falls back to ``self.perspective``.
 
         Returns
         -------
         float
             Assigned prior plausibility in ``[0.0, 1.0]``.
         """
-        return atom.effective_base_prior()
+        active_perspective = perspective if perspective is not None else self.perspective
+        return atom.effective_base_prior(
+            include_suppositional=not self.isolate_suppositional,
+            perspective=active_perspective,
+        )
 
     def compute_relation_weight(self, rel: TheoryRelation) -> float:
         """Compute signed directional relation weight.

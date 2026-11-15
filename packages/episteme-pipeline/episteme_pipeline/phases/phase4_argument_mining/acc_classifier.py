@@ -13,8 +13,9 @@ the same IDs, so Neo4j deduplicates automatically.
 
 from __future__ import annotations
 
-import hashlib
 import logging
+from enum import Enum
+from typing import Any
 
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom, TheoryRelation
 from episteme_pipeline.llm import ensure_structured_llm
@@ -47,10 +48,11 @@ class LLMACCClassifier(ACCClassifier):
         dict of str to Any
             Dictionary containing strategy and LLM fingerprint.
         """
-        from enum import Enum
         from episteme_pipeline.runs.fingerprints import fingerprint_method
 
-        strategy_str = self.strategy.value if isinstance(self.strategy, Enum) else str(self.strategy)
+        strategy_str = (
+            self.strategy.value if isinstance(self.strategy, Enum) else str(self.strategy)
+        )
         return {
             "class": self.__class__.__name__,
             "strategy": strategy_str,
@@ -104,6 +106,8 @@ class LLMACCClassifier(ACCClassifier):
                     entity_ids=ext.entity_ids,
                     epistemic_status=ext.epistemic_status,
                     scope_type=ext.scope_type,
+                    intensional_mode=ext.intensional_mode,
+                    attributed_to=ext.attributed_to,
                 )
             )
 

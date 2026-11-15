@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeVar
 from pydantic import BaseModel, Field, model_validator
 
 from episteme_pipeline.contracts.domain import (
+    EntityConception,
     GlobalStructuralAnchor,
     L1Chunk,
     L1Document,
@@ -285,6 +286,8 @@ class LinkedEntityArtifact(DomainObjectPayload[L2Entity]):
     is_mature: bool = False
     confidence: float | None = None
     text_anchor: TextAnchor | None = None
+    conceptions: list[EntityConception] = Field(default_factory=list)
+    polysemy_variance: float | None = Field(default=None, ge=0.0)
 
     def to_domain(self) -> L2Entity:
         """Hydrate into an :class:`L2Entity` via :class:`LinkedEntityCodec`."""
@@ -423,6 +426,8 @@ class TheoryAtomArtifact(DomainObjectPayload[TheoryAtom]):
     local_tenability: float | None = None
     equilibrium_strength: float | None = None
     controversy_volatility: float | None = None
+    intensional_mode: Literal["asserted", "attributed", "suppositional", "historical"] = "asserted"
+    attributed_to: str | None = None
     resolver_type: str | None = None
     syntax_bounds: tuple[float, float] | None = None
     text_anchor: TextAnchor | None = None
