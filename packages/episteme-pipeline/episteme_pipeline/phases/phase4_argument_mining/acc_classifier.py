@@ -112,7 +112,9 @@ class LLMACCClassifier(ACCClassifier):
             )
 
         valid_arg_rel_types = set(schema.argument_relation_types)
-        relations: list[TheoryRelation] = []
+        pending: list[Any] = [
+            r for r in raw.relations if r.relation in valid_arg_rel_types
+        ]
         for r in raw.relations:
             if r.relation not in valid_arg_rel_types:
                 logger.warning(
@@ -120,20 +122,74 @@ class LLMACCClassifier(ACCClassifier):
                     r.relation,
                     chunk_id,
                 )
-                continue
-            source_id = id_map.get(r.source_id)
-            target_id = id_map.get(r.target_id)
-            if source_id is None or target_id is None:
-                continue
-            relations.append(
-                TheoryRelation(
+
+        # Fixed-point resolution so local relation references (undercuts_relation_id / target_id)
+        # resolve deterministically regardless of relation order in ACCOutput.relations.
+        relations: list[TheoryRelation] = []
+        local_rel_id_map: dict[str, str] = {}
+        while pending:
+            progressed = False
+            next_pending: list[Any] = []
+            for r in pending:
+                raw_premises = (
+                    r.premise_ids
+                    if r.premise_ids
+                    else ([r.source_id] if r.source_id else [])
+                )
+                mapped_premises: list[str] = []
+                missing_premise = False
+                for pid in raw_premises:
+                    mapped_pid = id_map.get(pid)
+                    if mapped_pid is None:
+                        missing_premise = True
+                        break
+                    mapped_premises.append(mapped_pid)
+                if missing_premise or not mapped_premises:
+                    continue
+
+                source_id = mapped_premises[0]
+                premise_tuple = (
+                    tuple(mapped_premises) if len(mapped_premises) > 1 or r.premise_ids else ()
+                )
+
+                undercuts_rel_id: str | None = None
+                if r.undercuts_relation_id is not None:
+                    if r.undercuts_relation_id in local_rel_id_map:
+                        undercuts_rel_id = local_rel_id_map[r.undercuts_relation_id]
+                    else:
+                        next_pending.append(r)
+                        continue
+
+                if r.target_id in id_map:
+                    target_id = id_map[r.target_id]
+                elif r.target_id in local_rel_id_map:
+                    target_id = local_rel_id_map[r.target_id]
+                elif undercuts_rel_id is not None and not r.target_id:
+                    target_id = undercuts_rel_id
+                else:
+                    # Wait in case r.target_id references a local relation ID not yet resolved
+                    if any(other.id == r.target_id for other in pending):
+                        next_pending.append(r)
+                        continue
+                    continue
+
+                rel = TheoryRelation(
                     source_id=source_id,
                     target_id=target_id,
+                    premise_ids=premise_tuple,
+                    undercuts_relation_id=undercuts_rel_id,
                     relation_type=r.relation,
                     confidence=r.confidence,
                     scope="local",
                     weight=r.weight if r.weight is not None else r.confidence,
                 )
-            )
+                relations.append(rel)
+                if r.id:
+                    local_rel_id_map[r.id] = rel.relation_id
+                progressed = True
+
+            if not progressed:
+                break
+            pending = next_pending
 
         return components, relations

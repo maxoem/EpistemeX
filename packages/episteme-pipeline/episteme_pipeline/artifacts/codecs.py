@@ -521,7 +521,7 @@ class TheoryRelationCodec:
         TheoryRelationArtifact
             Lossless theory relation artifact payload.
         """
-        relation_id = f"argument-relation::{domain_obj.source_id}::{domain_obj.relation_type}::{domain_obj.target_id}"
+        relation_id = domain_obj.relation_id
         inferential_warrant = (
             domain_obj.inferential_warrant
             if (
@@ -534,6 +534,9 @@ class TheoryRelationCodec:
             relation_id=relation_id,
             source_component_id=domain_obj.source_id,
             target_component_id=domain_obj.target_id,
+            id=domain_obj.id,
+            premise_ids=domain_obj.premise_ids,
+            undercuts_relation_id=domain_obj.undercuts_relation_id,
             relation_type=domain_obj.relation_type,
             scope=domain_obj.scope,
             confidence=domain_obj.confidence,
@@ -571,8 +574,11 @@ class TheoryRelationCodec:
         if payload.inferential_warrant is not None:
             extra["inferential_warrant"] = payload.inferential_warrant
         return TheoryRelation(
+            id=payload.id,
             source_id=payload.source_component_id,
             target_id=payload.target_component_id,
+            premise_ids=payload.premise_ids,
+            undercuts_relation_id=payload.undercuts_relation_id,
             relation_type=payload.relation_type,
             confidence=payload.confidence,
             scope=scope_lit,

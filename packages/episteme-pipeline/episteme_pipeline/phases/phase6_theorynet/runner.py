@@ -116,6 +116,7 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             perspective=config.perspective,
             isolate_suppositional=config.isolate_suppositional,
             isolate_attributed=config.isolate_attributed,
+            t_norm=config.conjunctive_t_norm,
         )
 
     async def run(
@@ -235,13 +236,14 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
         z1_connected: set[str] = set()
 
         for rel in theory_net.relations:
-            if rel.source_id in a_atoms and rel.target_id in b_atoms:
-                z1_connected.add(rel.source_id)
-            elif rel.target_id in a_atoms and rel.source_id in b_atoms:
-                z1_connected.add(rel.target_id)
-            elif rel.source_id in a_atoms and rel.target_id in a_atoms:
-                adj[rel.source_id].add(rel.target_id)
-                adj[rel.target_id].add(rel.source_id)
+            for p_id in rel.effective_premise_ids:
+                if p_id in a_atoms and rel.target_id in b_atoms:
+                    z1_connected.add(p_id)
+                elif rel.target_id in a_atoms and p_id in b_atoms:
+                    z1_connected.add(rel.target_id)
+                elif p_id in a_atoms and rel.target_id in a_atoms:
+                    adj[p_id].add(rel.target_id)
+                    adj[rel.target_id].add(p_id)
 
         visited = set(z1_connected)
         queue = list(z1_connected)

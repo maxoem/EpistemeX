@@ -166,6 +166,9 @@ class TheoryNetProjector:
     isolate_attributed : bool, default True
         Whether attributed opponent summaries are isolated from directly inflating
         asserted authorial claims.
+    t_norm : Literal["product", "godel"], default "product"
+        Conjunctive t-norm operator applied across multi-premise inferences in QBAF
+        solvers (``"product"`` or ``"godel"``).
     """
 
     def __init__(
@@ -185,6 +188,7 @@ class TheoryNetProjector:
         perspective: str | None = None,
         isolate_suppositional: bool = True,
         isolate_attributed: bool = True,
+        t_norm: Literal["product", "godel"] = "product",
     ) -> None:
         self.schema = schema or SchemaConfig()
         self.modal_resolver = modal_resolver or StructuralistModalResolver()
@@ -207,6 +211,7 @@ class TheoryNetProjector:
         self.perspective = perspective
         self.isolate_suppositional = isolate_suppositional
         self.isolate_attributed = isolate_attributed
+        self.t_norm: Literal["product", "godel"] = t_norm
         self.solver = solver or QBAFGradualSemanticsSolver(
             semantics_model=self.semantics_model,
             max_iterations=iterations,
@@ -217,6 +222,7 @@ class TheoryNetProjector:
             perspective=perspective,
             isolate_suppositional=isolate_suppositional,
             isolate_attributed=isolate_attributed,
+            t_norm=self.t_norm,
         )
 
     def fingerprint(self) -> dict[str, Any]:
@@ -243,6 +249,7 @@ class TheoryNetProjector:
             "perspective": self.perspective,
             "isolate_suppositional": self.isolate_suppositional,
             "isolate_attributed": self.isolate_attributed,
+            "t_norm": self.t_norm,
             "modal_resolver": (
                 self.modal_resolver.fingerprint()
                 if isinstance(self.modal_resolver, Fingerprintable)
@@ -428,6 +435,9 @@ class TheoryNetProjector:
                     confidence=rel.confidence if rel.confidence is not None else 1.0,
                     weight=rel.weight if rel.weight is not None else 1.0,
                     polarity=pol,
+                    id=rel.relation_id,
+                    premise_ids=rel.premise_ids,
+                    undercuts_relation_id=rel.undercuts_relation_id,
                     inferential_force=rel.inferential_warrant,
                     stance_probability=rel.perception_stance_prob,
                     model_confidence=rel.calibrated_confidence,

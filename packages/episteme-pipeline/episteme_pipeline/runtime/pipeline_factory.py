@@ -449,6 +449,7 @@ class PipelineFactory(Fingerprintable):
                 perspective=p6_cfg.perspective,
                 isolate_suppositional=p6_cfg.isolate_suppositional,
                 isolate_attributed=p6_cfg.isolate_attributed,
+                t_norm=p6_cfg.conjunctive_t_norm,
             )
             phases.append(
                 TheoreticalEnrichmentRunner(

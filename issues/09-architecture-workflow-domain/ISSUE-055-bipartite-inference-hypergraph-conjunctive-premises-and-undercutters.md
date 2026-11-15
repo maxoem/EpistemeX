@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Formal Graph Model, Argumentation Theory, D-QBAF Semantics) |
 | **Target Package(s)** | `packages/episteme-pipeline`, `packages/epistemetrics` (`contracts/domain.py`, `phases/phase4_argument_mining/`, `phases/phase6_theorynet/`, `epistemetrics/epistemic/qbaf/`) |
 | **Priority** | **High** |
-| **Status** | `Open` |
+| **Status** | `Completed` |
 | **Evaluated Docs & ADRs** | [`docs/concepts/formal_graph_model.md`](../../docs/concepts/formal_graph_model.md), [`ADR-0004`](../../docs/adr/0004-acc-outputs-triples-single-pass.md), [`ADR-0011`](../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), [`ADR-0020`](../../docs/adr/0020-propositional-modal-strength-resolver.md) |
 
 ---
@@ -81,6 +81,6 @@ flowchart LR
 
 ## 4. Acceptance Criteria
 
-- [ ] Support optional `premise_ids: tuple[str, ...]` (conjunctive premise sets) and `undercuts_relation_id: str | None` on `TheoryRelation` / `TheoryInferenceArtifact`.
-- [ ] Project multi-premise inferences and undercutters as `:TheoryInference` intermediate nodes in `ArtifactGraphProjector` when $|\text{Prem}| > 1$ or when targeted by an undercutter/backing.
-- [ ] Extend `WeightedQuadraticEnergySolver` in `epistemetrics` to evaluate Product/Gödel t-norms over conjunctive premise sets and propagate undercutting/backing energy onto inference warrants.
+- [x] Support optional `premise_ids: tuple[str, ...]` (conjunctive premise sets) and `undercuts_relation_id: str | None` on `TheoryRelation` / `TheoryInferenceArtifact`.
+- [x] Project multi-premise inferences and undercutters as `:TheoryInference` intermediate nodes in `ArtifactGraphProjector` when $|\text{Prem}| > 1$ or when targeted by an undercutter/backing.
+- [x] Extend `WeightedQuadraticEnergySolver` in `epistemetrics` to evaluate Product/Gödel t-norms over conjunctive premise sets and propagate undercutting/backing energy onto inference warrants.
