@@ -11,6 +11,7 @@ from episteme_pipeline.contracts.domain import (
     SubGraph,
     TextAnchor,
     TheoryAtom,
+    TheoryInference,
     TheoryNet,
     TheoryRelation,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "SubGraph",
     "TextAnchor",
     "TheoryAtom",
+    "TheoryInference",
     "TheoryNet",
     "TheoryRelation",
 ]

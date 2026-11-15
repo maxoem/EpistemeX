@@ -668,6 +668,12 @@ class TheoryEdge(BaseModel):
         Continuous edge weight (default: 1.0).
     polarity : int, optional
         Epistemic polarity: +1 (support), -1 (attack), 0 (structural).
+    id : str or None, optional
+        Optional explicit identifier for this inference edge/warrant node.
+    premise_ids : tuple of str, optional
+        Ordered conjunctive premise node identifiers for multi-premise inferences.
+    undercuts_relation_id : str or None, optional
+        Target inference/edge identifier when acting as an undercutting defeater.
     attributes : dict[str, Any], optional
         Domain-specific properties (e.g. scope, layer).
     """
@@ -680,6 +686,15 @@ class TheoryEdge(BaseModel):
     confidence: float = Field(default=1.0, description="Confidence score.")
     weight: float = Field(default=1.0, description="Edge weight.")
     polarity: int = Field(default=1, description="Epistemic polarity (-1, 0, +1).")
+    id: str | None = Field(default=None, description="Optional identifier for this inference edge/warrant.")
+    premise_ids: tuple[str, ...] = Field(
+        default=(),
+        description="Conjunctive premise node IDs when representing a multi-premise inference.",
+    )
+    undercuts_relation_id: str | None = Field(
+        default=None,
+        description="Target relation/inference ID when acting as a Pollockian undercutter.",
+    )
     inferential_force: float = Field(default=0.75, ge=0.0, le=1.0, description="Toulminian warrant validity I_(j->i).")
     stance_probability: float | None = Field(default=None, description="Canonical perception class probability P(stance).")
     model_confidence: float | None = Field(default=None, description="Perception calibration confidence score C.")
@@ -690,6 +705,19 @@ class TheoryEdge(BaseModel):
     modal_strength: float = Field(default=1.0, description="Propositional modal strength in [0, 1].")
     effective_weight: float | None = Field(default=None, description="Decoupled mathematical edge weight w = M * P.")
     attributes: dict[str, Any] = Field(default_factory=dict, description="Arbitrary domain attributes.")
+
+    @property
+    def effective_premise_ids(self) -> tuple[str, ...]:
+        """Return conjunctive premise identifiers for this edge.
+
+        Returns
+        -------
+        tuple of str
+            ``premise_ids`` if non-empty, otherwise ``(source,)``.
+        """
+        if self.premise_ids:
+            return self.premise_ids
+        return (self.source,) if self.source else ()
 
     @property
     def type(self) -> RelationType:

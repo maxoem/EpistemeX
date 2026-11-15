@@ -180,7 +180,10 @@ build_argument_component_artifact = build_theory_atom_artifact
 
 
 def build_theory_relation_artifact(relation: TheoryRelation, *, run_id: str, phase_name: str, method: str) -> ArtifactEnvelope:
-    relation_id = f"argument-relation::{relation.source_id}::{relation.relation_type}::{relation.target_id}"
+    relation_id = relation.relation_id
+    upstream_ids = [f"artifact::{pid}" for pid in relation.effective_premise_ids]
+    target_ref = relation.undercuts_relation_id or relation.target_id
+    upstream_ids.append(f"artifact::{target_ref}")
     return ArtifactEnvelope(
         artifact_id=f"artifact::{relation_id}",
         identity_key=f"argument_relation::{relation_id}",
@@ -188,9 +191,15 @@ def build_theory_relation_artifact(relation: TheoryRelation, *, run_id: str, pha
         run_id=run_id,
         phase_name=phase_name,
         method=method,
-        provenance=ArtifactProvenance(upstream_artifact_ids=[f"artifact::{relation.source_id}", f"artifact::{relation.target_id}"]),
+        provenance=ArtifactProvenance(upstream_artifact_ids=upstream_ids),
         payload=TheoryRelationCodec.to_payload(relation),
-        dependency_fingerprint=stable_fingerprint({"relation_id": relation_id, "relation_type": relation.relation_type, "scope": relation.scope}),
+        dependency_fingerprint=stable_fingerprint({
+            "relation_id": relation_id,
+            "relation_type": relation.relation_type,
+            "scope": relation.scope,
+            "premise_ids": list(relation.effective_premise_ids),
+            "undercuts_relation_id": relation.undercuts_relation_id,
+        }),
     )
 
 

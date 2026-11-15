@@ -616,16 +616,27 @@ class TheoryRelation(BaseModel):
 
     Parameters
     ----------
-    source_id : str
-        Domain identifier of the source TheoryAtom.
-    target_id : str
-        Domain identifier of the target TheoryAtom.
+    source_id : str, optional
+        Domain identifier of the primary source TheoryAtom (or first premise when
+        ``premise_ids`` is supplied).
+    target_id : str, optional
+        Domain identifier of the target TheoryAtom (or target relation when
+        ``undercuts_relation_id`` is supplied).
     relation_type : str
-        Relational taxonomy classification (e.g. 'SUPPORTS', 'ATTACKS').
+        Relational taxonomy classification (e.g. 'SUPPORTS', 'ATTACKS', 'UNDERCUTS').
     confidence : float
         Extraction confidence score in [0.0, 1.0].
     scope : Literal["local", "global"]
         Structural visibility scope ('local' intra-chunk vs 'global' cross-chunk).
+    id : str or None, optional
+        Explicit identifier for this inference/relation (enabling undercutter and
+        backing references onto :class:`TheoryInference` warrant nodes).
+    premise_ids : tuple of str, optional
+        Ordered conjunctive premise atom identifiers :math:`\\text{Prem}(w_k)` for
+        hypergraph inferences (:math:`|\\text{Prem}(w_k)| > 1`).
+    undercuts_relation_id : str or None, optional
+        Canonical identifier of the target relation/warrant undercut by this
+        relation (Pollockian undercutting defeater).
     weight : float or None, optional
         Directed relational weight for QBAF semantics. If None, derived from
         ``effective_weight``.
@@ -656,11 +667,23 @@ class TheoryRelation(BaseModel):
         Directed attack weight contribution in [0.0, 1.0].
     """
 
-    source_id: str
-    target_id: str
+    source_id: str = ""
+    target_id: str = ""
     relation_type: str
     confidence: float
     scope: Literal["local", "global"]
+    id: str | None = Field(
+        default=None,
+        description="Optional explicit identifier for this inference/relation.",
+    )
+    premise_ids: tuple[str, ...] = Field(
+        default=(),
+        description="Conjunctive premise atom IDs for multi-premise inferences.",
+    )
+    undercuts_relation_id: str | None = Field(
+        default=None,
+        description="Target relation/inference ID when acting as a Pollockian undercutter.",
+    )
     weight: float | None = None
     edge_tenability: float | None = Field(default=None, ge=0.0, le=1.0)
     structural_correspondence: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -677,14 +700,40 @@ class TheoryRelation(BaseModel):
 
     @model_validator(mode="after")
     def compute_default_weights(self) -> TheoryRelation:
-        """Compute decoupled effective weight, calibrated confidence, and active weight.
+        """Normalize premise/target endpoints and compute decoupled weights.
 
         Returns
         -------
         TheoryRelation
-            Validated relation with populated default weights and calibrated
-            confidence.
+            Validated relation with normalized premise tuple, resolved endpoints,
+            populated default weights, and calibrated confidence.
         """
+        if self.premise_ids:
+            seen_p: set[str] = set()
+            cleaned_p: list[str] = []
+            for pid in self.premise_ids:
+                p_str = str(pid).strip()
+                if p_str and p_str not in seen_p:
+                    seen_p.add(p_str)
+                    cleaned_p.append(p_str)
+            self.premise_ids = tuple(cleaned_p)
+
+        if self.undercuts_relation_id is not None:
+            u_str = str(self.undercuts_relation_id).strip()
+            self.undercuts_relation_id = u_str or None
+
+        if not self.source_id and self.premise_ids:
+            self.source_id = self.premise_ids[0]
+        if not self.source_id:
+            raise ValueError("TheoryRelation requires non-empty 'source_id' or 'premise_ids'.")
+
+        if not self.target_id and self.undercuts_relation_id:
+            self.target_id = self.undercuts_relation_id
+        if not self.target_id:
+            raise ValueError(
+                "TheoryRelation requires non-empty 'target_id' or 'undercuts_relation_id'."
+            )
+
         warrant_explicit = "inferential_warrant" in self.model_fields_set
         ts_edge = float(self.edge_tenability) if self.edge_tenability is not None else 1.0
 
@@ -721,6 +770,41 @@ class TheoryRelation(BaseModel):
                 )
             )
         return self
+
+    @property
+    def effective_premise_ids(self) -> tuple[str, ...]:
+        """Return the ordered conjunctive premise identifiers for this relation.
+
+        Returns
+        -------
+        tuple of str
+            ``premise_ids`` if populated, otherwise ``(source_id,)``.
+        """
+        if self.premise_ids:
+            return self.premise_ids
+        return (self.source_id,) if self.source_id else ()
+
+    @property
+    def has_conjunctive_premises(self) -> bool:
+        """Return True if this relation binds multiple conjunctive premises."""
+        return len(self.effective_premise_ids) > 1
+
+    @property
+    def relation_id(self) -> str:
+        """Return canonical deterministic identifier for this inference/relation.
+
+        Returns
+        -------
+        str
+            Explicit ``self.id`` if set, otherwise canonical ``argument-relation::...`` key.
+        """
+        if self.id:
+            return self.id
+        if not self.premise_ids and self.undercuts_relation_id is None:
+            return f"argument-relation::{self.source_id}::{self.relation_type}::{self.target_id}"
+        premises_part = "+".join(self.effective_premise_ids)
+        target_part = self.undercuts_relation_id or self.target_id
+        return f"argument-relation::{premises_part}::{self.relation_type}::{target_part}"
 
     def compute_effective_weight(
         self,
@@ -842,6 +926,9 @@ class SearchResult(BaseModel):
 class TheoryNet(BaseModel):
     atoms: list[TheoryAtom]
     relations: list[TheoryRelation]
+
+
+TheoryInference = TheoryRelation
 
 
 class PhaseItemRecord(BaseModel):

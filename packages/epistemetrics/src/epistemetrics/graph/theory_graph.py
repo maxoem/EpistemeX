@@ -7,7 +7,7 @@ in-memory multi-directed graph structure suitable for epistemic evaluation.
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 import networkx as nx
@@ -238,20 +238,26 @@ class TheoryGraph:
         empirical_accuracy: float | None = None,
         modal_strength: float = 1.0,
         effective_weight: float | None = None,
+        id: str | None = None,
+        premise_ids: tuple[str, ...] | Sequence[str] = (),
+        undercuts_relation_id: str | None = None,
+        inferential_force: float | None = None,
         attributes: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> TheoryEdge:
-        """Add a typed edge between two nodes in the TheoryGraph.
+        """Add a typed edge or hyperedge between nodes in the TheoryGraph.
 
-        If either source or target does not exist, an unclassified node is
-        implicitly registered to maintain topological validity.
+        If source, conjunctive premises, or target atom do not exist in
+        ``self._nodes``, unclassified nodes are implicitly registered to
+        maintain topological validity. Relation/warrant IDs referenced via
+        ``undercuts_relation_id`` are not materialized as atom nodes.
 
         Parameters
         ----------
         source : str
-            Domain identifier of the origin node.
+            Domain identifier of the origin node (or primary premise).
         target : str
-            Domain identifier of the destination node.
+            Domain identifier of the destination node (or target inference ID).
         relation_type : RelationType or str, optional
             Relational classification (default: RelationType.EXPLAINS).
         confidence : float, optional
@@ -268,6 +274,16 @@ class TheoryGraph:
             Propositional modal strength score in [0.0, 1.0].
         effective_weight : float | None, optional
             Decoupled mathematical edge weight w = M * P.
+        id : str | None, optional
+            Optional explicit identifier for this inference edge/warrant node.
+        premise_ids : tuple of str or Sequence of str, optional
+            Ordered conjunctive premise identifiers for hypergraph inferences.
+        undercuts_relation_id : str | None, optional
+            Target relation/inference identifier when acting as a Pollockian
+            undercutter.
+        inferential_force : float | None, optional
+            Toulminian inferential warrant validity in [0.0, 1.0]. Defaults to
+            0.75 when omitted.
         attributes : dict[str, Any] | None, optional
             Additional relation properties.
         **kwargs : Any
@@ -278,9 +294,21 @@ class TheoryGraph:
         TheoryEdge
             The created and registered TheoryEdge instance.
         """
-        if source not in self._nodes:
-            self.add_node(source, name=source, node_type=NodeType.CONCEPT)
-        if target not in self._nodes:
+        norm_premises = tuple(p for p in premise_ids if p)
+        effective_source = source or (norm_premises[0] if norm_premises else "")
+        known_edge_ids = {e.id for e in self._edges if e.id}
+
+        if effective_source and effective_source not in self._nodes:
+            self.add_node(effective_source, name=effective_source, node_type=NodeType.CONCEPT)
+        for prem_id in norm_premises:
+            if prem_id not in self._nodes:
+                self.add_node(prem_id, name=prem_id, node_type=NodeType.CONCEPT)
+        if (
+            target
+            and target not in self._nodes
+            and target != undercuts_relation_id
+            and target not in known_edge_ids
+        ):
             self.add_node(target, name=target, node_type=NodeType.CONCEPT)
 
         resolved_relation = RelationType.from_str(relation_type)
@@ -297,13 +325,19 @@ class TheoryGraph:
             else:
                 eff_w = float(weight)
 
+        resolved_warrant = 0.75 if inferential_force is None else float(inferential_force)
+
         edge = TheoryEdge(
-            source=source,
+            source=effective_source,
             target=target,
             relation_type=resolved_relation,
             confidence=confidence,
             weight=weight,
             polarity=resolved_polarity,
+            id=id,
+            premise_ids=norm_premises,
+            undercuts_relation_id=undercuts_relation_id,
+            inferential_force=resolved_warrant,
             class_probability=class_probability,
             empirical_accuracy=empirical_accuracy,
             modal_strength=modal_strength,
@@ -324,16 +358,19 @@ class TheoryGraph:
                 "polarity",
             }
         }
-        self._nx_graph.add_edge(
-            source,
-            target,
-            relation_type=resolved_relation.value,
-            type=resolved_relation.value,
-            confidence=confidence,
-            weight=weight,
-            polarity=resolved_polarity,
-            **nx_edge_attrs,
-        )
+        nx_source = effective_source
+        nx_target = target or undercuts_relation_id or ""
+        if nx_source and nx_target:
+            self._nx_graph.add_edge(
+                nx_source,
+                nx_target,
+                relation_type=resolved_relation.value,
+                type=resolved_relation.value,
+                confidence=confidence,
+                weight=weight,
+                polarity=resolved_polarity,
+                **nx_edge_attrs,
+            )
         return edge
 
     def get_node(self, node_id: str) -> TheoryNode | None:

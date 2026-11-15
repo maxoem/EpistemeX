@@ -487,6 +487,9 @@ class Phase6Config(BaseModel):
     isolate_attributed : bool, default True
         Whether attributed opponent summaries are isolated from directly inflating
         asserted authorial claims.
+    conjunctive_t_norm : Literal["product", "godel"], default "product"
+        Conjunctive t-norm operator applied over multi-premise inferences in QBAF
+        gradual semantics evaluation (``"product"`` or ``"godel"``).
     """
 
     enabled: bool = True
@@ -502,6 +505,7 @@ class Phase6Config(BaseModel):
     perspective: str | None = None
     isolate_suppositional: bool = True
     isolate_attributed: bool = True
+    conjunctive_t_norm: Literal["product", "godel"] = "product"
     modal_resolver: ModalResolverConfig = Field(default_factory=lambda: ModalResolverConfig())
 
 

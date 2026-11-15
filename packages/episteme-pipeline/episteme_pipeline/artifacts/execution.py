@@ -585,24 +585,77 @@ def _resolve_l3_atoms_and_relations(
                 )
             )
 
-    deduped_relations: dict[tuple[str, str, str], TheoryRelation] = {}
+    # First pass: rewrite atom-level endpoints (`source_id`, `premise_ids`, `target_id`)
+    # and record canonical relation ID shifts when atom merges alter a relation's canonical ID.
+    preliminary_relations: list[tuple[TheoryRelation, str]] = []
+    rel_id_alias_map: dict[str, str] = {}
     for rel in theory_relations:
+        old_rel_id = rel.relation_id
         new_src = _resolve_alias_chain(rel.source_id, effective_alias_map)
         new_tgt = _resolve_alias_chain(rel.target_id, effective_alias_map)
-        if rel.source_id != rel.target_id and new_src == new_tgt:
+
+        new_premises: tuple[str, ...] = ()
+        if rel.premise_ids:
+            seen_p: set[str] = set()
+            cleaned_p: list[str] = []
+            for pid in rel.premise_ids:
+                canon_pid = _resolve_alias_chain(pid, effective_alias_map)
+                if canon_pid and canon_pid not in seen_p:
+                    seen_p.add(canon_pid)
+                    cleaned_p.append(canon_pid)
+            new_premises = tuple(cleaned_p)
+            if new_premises and new_src not in seen_p:
+                new_src = new_premises[0]
+
+        eff_premises = new_premises if new_premises else (new_src,)
+        # Drop self-loops induced by atom merging only when no distinct premise or
+        # undercutter target remains.
+        if (
+            rel.undercuts_relation_id is None
+            and rel.source_id != rel.target_id
+            and len(eff_premises) == 1
+            and eff_premises[0] == new_tgt
+        ):
             continue
-        rewritten = (
-            rel.model_copy(update={"source_id": new_src, "target_id": new_tgt})
-            if (new_src != rel.source_id or new_tgt != rel.target_id)
-            else rel
+
+        updates: dict[str, Any] = {}
+        if new_src != rel.source_id:
+            updates["source_id"] = new_src
+        if new_tgt != rel.target_id:
+            updates["target_id"] = new_tgt
+        if new_premises != rel.premise_ids:
+            updates["premise_ids"] = new_premises
+
+        rewritten = rel.model_copy(update=updates) if updates else rel
+        candidate_new_id = rewritten.relation_id
+        if old_rel_id != candidate_new_id:
+            rel_id_alias_map[old_rel_id] = candidate_new_id
+        if rel.id and rel.id != candidate_new_id:
+            rel_id_alias_map[rel.id] = candidate_new_id
+        preliminary_relations.append((rewritten, candidate_new_id))
+
+    deduped_relations: dict[tuple[tuple[str, ...], str, str, str | None], TheoryRelation] = {}
+    for rel, _ in preliminary_relations:
+        extra_updates: dict[str, Any] = {}
+        if rel.undercuts_relation_id is not None:
+            resolved_u = _resolve_alias_chain(rel.undercuts_relation_id, rel_id_alias_map)
+            if resolved_u != rel.undercuts_relation_id:
+                extra_updates["undercuts_relation_id"] = resolved_u
+        if rel.target_id in rel_id_alias_map:
+            resolved_tgt_rel = _resolve_alias_chain(rel.target_id, rel_id_alias_map)
+            if resolved_tgt_rel != rel.target_id:
+                extra_updates["target_id"] = resolved_tgt_rel
+
+        final_rel = rel.model_copy(update=extra_updates) if extra_updates else rel
+        rkey = (
+            final_rel.effective_premise_ids,
+            final_rel.relation_type,
+            final_rel.target_id,
+            final_rel.undercuts_relation_id,
         )
-        rkey = (rewritten.source_id, rewritten.relation_type, rewritten.target_id)
         existing = deduped_relations.get(rkey)
-        if existing is None:
-            deduped_relations[rkey] = rewritten
-        else:
-            if (rewritten.confidence or 0.0) > (existing.confidence or 0.0):
-                deduped_relations[rkey] = rewritten
+        if existing is None or (final_rel.confidence or 0.0) > (existing.confidence or 0.0):
+            deduped_relations[rkey] = final_rel
 
     return canonical_atoms, list(deduped_relations.values())
 
@@ -1417,19 +1470,44 @@ class ArtifactHydrator:
 
         surviving_atom_ids = {atom.id for atom in hydrated_components}
 
-        hydrated_local_relations: list[TheoryRelation] = []
+        candidate_local_rels: list[TheoryRelation] = []
         for art in prior_artifacts.artifacts:
             if isinstance(art.payload, TheoryRelationArtifact):
                 rel = art.payload.to_domain()
                 prov_chunk = art.provenance.source_chunk_id if art.provenance else None
                 chunk_ok = prov_chunk is None or prov_chunk in scope.unchanged_chunk_ids
-                if (
-                    rel.scope == "local"
-                    and chunk_ok
-                    and rel.source_id in surviving_atom_ids
-                    and rel.target_id in surviving_atom_ids
-                ):
+                if rel.scope == "local" and chunk_ok:
+                    candidate_local_rels.append(rel)
+
+        # Fixed-point hydration so reified relations and undercutters/backings
+        # referencing surviving relation IDs are retained consistently.
+        hydrated_local_relations: list[TheoryRelation] = []
+        surviving_rel_ids: set[str] = set()
+        remaining = list(candidate_local_rels)
+        while remaining:
+            progressed = False
+            next_remaining: list[TheoryRelation] = []
+            valid_targets = surviving_atom_ids | surviving_rel_ids
+            for rel in remaining:
+                premises_ok = all(pid in surviving_atom_ids for pid in rel.effective_premise_ids)
+                if not premises_ok:
+                    continue
+                target_ok = rel.target_id in valid_targets
+                undercut_ok = (
+                    rel.undercuts_relation_id is None
+                    or rel.undercuts_relation_id in surviving_rel_ids
+                )
+                if target_ok and undercut_ok:
                     hydrated_local_relations.append(rel)
+                    surviving_rel_ids.add(rel.relation_id)
+                    if rel.id:
+                        surviving_rel_ids.add(rel.id)
+                    progressed = True
+                else:
+                    next_remaining.append(rel)
+            if not progressed:
+                break
+            remaining = next_remaining
 
         delta_chunks = [c for c in chunks if c.id not in scope.unchanged_chunk_ids]
 

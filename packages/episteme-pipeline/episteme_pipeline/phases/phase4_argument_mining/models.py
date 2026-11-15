@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---------------------------------------------------------------------------
 # ADU Segmentation output
@@ -98,13 +98,54 @@ class ExtractedComponent(BaseModel):
 
 
 class ExtractedTheoryRelation(BaseModel):
-    source_id: str = Field(description="References an ExtractedComponent.id.")
+    """LLM-extracted local dialectical relation or multi-premise inference."""
+
+    id: str | None = Field(
+        default=None,
+        description="Optional local identifier for the relation (e.g. 'R1') so undercutters/backings can reference it.",
+    )
+    source_id: str = Field(
+        default="",
+        description="References primary premise ExtractedComponent.id.",
+    )
+    premise_ids: list[str] = Field(
+        default_factory=list,
+        description="Optional ordered list of conjunctive premise IDs (e.g. ['AC1', 'AC2']).",
+    )
     relation: str = Field(
         description="Argument relation type label. Validated against schema.argument_relation_types at runtime."
     )
-    target_id: str = Field(description="References an ExtractedComponent.id.")
+    target_id: str = Field(
+        default="",
+        description="References target ExtractedComponent.id (or relation ID for undercutters/backings).",
+    )
+    undercuts_relation_id: str | None = Field(
+        default=None,
+        description="Optional target local relation ID (e.g. 'R1') when acting as an undercutting defeater.",
+    )
     confidence: float = Field(ge=0.0, le=1.0, default=0.8)
     weight: float | None = Field(default=None, ge=0.0, le=1.0, description="Strength weight phi of the relation.")
+
+    @model_validator(mode="after")
+    def normalize_hyperedge_refs(self) -> ExtractedTheoryRelation:
+        """Normalize conjunctive ``premise_ids`` and undercutter target references."""
+        if self.premise_ids:
+            seen: set[str] = set()
+            cleaned: list[str] = []
+            for pid in self.premise_ids:
+                p_str = str(pid).strip()
+                if p_str and p_str not in seen:
+                    seen.add(p_str)
+                    cleaned.append(p_str)
+            self.premise_ids = cleaned
+            if not self.source_id and self.premise_ids:
+                self.source_id = self.premise_ids[0]
+        if self.undercuts_relation_id is not None:
+            u_str = str(self.undercuts_relation_id).strip()
+            self.undercuts_relation_id = u_str or None
+        if not self.target_id and self.undercuts_relation_id:
+            self.target_id = self.undercuts_relation_id
+        return self
 
     @field_validator("confidence", mode="before")
     @classmethod
@@ -120,13 +161,37 @@ class ACCOutput(BaseModel):
     relations: list[ExtractedTheoryRelation] = Field(default_factory=list)
 
     def validate_references(self) -> ACCOutput:
-        """Remove relations whose source/target references a non-existent component."""
-        valid_ids = {c.id for c in self.components}
-        valid_relations = [
-            r
-            for r in self.relations
-            if r.source_id in valid_ids and r.target_id in valid_ids
-        ]
+        """Remove relations whose source, conjunctive premises, or target references do not exist."""
+        valid_atom_ids = {c.id for c in self.components}
+        prelim: list[ExtractedTheoryRelation] = []
+        for r in self.relations:
+            eff_premises = r.premise_ids if r.premise_ids else ([r.source_id] if r.source_id else [])
+            if eff_premises and all(pid in valid_atom_ids for pid in eff_premises):
+                prelim.append(r)
+
+        valid_relations: list[ExtractedTheoryRelation] = []
+        valid_rel_ids: set[str] = set()
+        remaining = prelim
+        while remaining:
+            progressed = False
+            next_remaining: list[ExtractedTheoryRelation] = []
+            valid_targets = valid_atom_ids | valid_rel_ids
+            for r in remaining:
+                target_ok = r.target_id in valid_targets
+                undercut_ok = (
+                    r.undercuts_relation_id is None
+                    or r.undercuts_relation_id in valid_rel_ids
+                )
+                if target_ok and undercut_ok:
+                    valid_relations.append(r)
+                    if r.id:
+                        valid_rel_ids.add(r.id)
+                    progressed = True
+                else:
+                    next_remaining.append(r)
+            if not progressed:
+                break
+            remaining = next_remaining
         return ACCOutput(components=self.components, relations=valid_relations)
 
 

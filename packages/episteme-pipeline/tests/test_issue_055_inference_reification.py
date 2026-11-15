@@ -1,0 +1,543 @@
+"""Deterministic tests for ISSUE-055: Bipartite Inference Hypergraph in episteme-pipeline.
+
+Covers contracts, codecs, Phase 4 ACC local resolution, Phase 5 canonical
+resolution, ArtifactGraphProjector (:TheoryInference node/edge projection +
+domain event emission + fingerprinting), and Phase 6 TheoryNetProjector
+end-to-end execution under Product and Godel t-norms.
+"""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from episteme_pipeline.artifacts.builders import (
+    build_theory_atom_artifact,
+    build_theory_relation_artifact,
+)
+from episteme_pipeline.artifacts.codecs import TheoryRelationCodec
+from episteme_pipeline.artifacts.execution import (
+    ArtifactCollection,
+    Phase4ArtifactsView,
+    _resolve_l3_atoms_and_relations,
+)
+from episteme_pipeline.artifacts.models import (
+    FusionDecisionArtifact,
+    TheoryInferenceArtifact,
+    TheoryRelationArtifact,
+)
+from episteme_pipeline.config import Phase6Config
+from episteme_pipeline.contracts.domain import (
+    TheoryAtom,
+    TheoryInference,
+    TheoryRelation,
+)
+from episteme_pipeline.contracts.phase_contracts import EpistemicCurationLedger
+from episteme_pipeline.events import (
+    ArtifactProjected,
+    EventObserver,
+    SimpleEventEmitter,
+    use_event_emitter,
+)
+from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
+from episteme_pipeline.graph.theory_graph_mapper import (
+    is_theory_edge,
+    theory_relation_from_graph_properties,
+    theory_relation_to_graph_properties,
+)
+from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import (
+    LLMACCClassifier,
+)
+from episteme_pipeline.phases.phase4_argument_mining.models import (
+    ACCOutput,
+    ExtractedComponent,
+    ExtractedTheoryRelation,
+)
+from episteme_pipeline.phases.phase4_argument_mining.pairing import stable_component_id
+from episteme_pipeline.projection.artifact_projector import ArtifactGraphProjector
+from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
+from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
+
+
+class _RecordingObserver(EventObserver):
+    def __init__(self) -> None:
+        self.events: list[object] = []
+
+    def on_event(self, event: object) -> None:
+        self.events.append(event)
+
+
+def _atom(atom_id: str, text: str = "claim", modal: float = 0.85, ctype: str = "Premise") -> TheoryAtom:
+    return TheoryAtom(
+        id=atom_id,
+        text=text,
+        component_type=ctype,
+        source_chunk_id="c1",
+        confidence=0.95,
+        modal_prior=modal,
+    )
+
+
+class TestDomainContractsAndCodecs:
+    """Verify TheoryRelation / TheoryInference fields, validators, and codec round-trip."""
+
+    def test_conjunctive_and_undercutting_properties_and_codec_roundtrip(self) -> None:
+        conj = TheoryInference(
+            id="inf_1",
+            source_id="",
+            premise_ids=("a1", "a2", "a1"),
+            target_id="a3",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
+            inferential_warrant=0.8,
+        )
+        assert conj.source_id == "a1"
+        assert conj.premise_ids == ("a1", "a2")
+        assert conj.effective_premise_ids == ("a1", "a2")
+        assert conj.has_conjunctive_premises is True
+        assert conj.relation_id == "inf_1"
+
+        und = TheoryRelation(
+            source_id="u1",
+            target_id="",
+            undercuts_relation_id="inf_1",
+            relation_type="UNDERCUTS",
+            confidence=0.88,
+            scope="local",
+        )
+        assert und.target_id == "inf_1"
+        assert und.relation_id == "argument-relation::u1::UNDERCUTS::inf_1"
+
+        # Lossless codec + artifact round-trip
+        for rel in (conj, und):
+            payload = TheoryRelationCodec.to_payload(rel)
+            assert isinstance(payload, TheoryInferenceArtifact)
+            assert TheoryRelationCodec.to_domain(payload) == rel
+
+        # Graph properties serialization / reconstruction round-trip
+        props = theory_relation_to_graph_properties(conj)
+        assert props["id"] == "inf_1"
+        assert props["premise_ids"] == ["a1", "a2"]
+        reconstructed = theory_relation_from_graph_properties(
+            conj.source_id, conj.relation_type, conj.target_id, props
+        )
+        assert reconstructed.id == "inf_1"
+        assert reconstructed.premise_ids == ("a1", "a2")
+
+        # Structural bipartite edge labels are excluded from pairwise theory edge detection
+        assert is_theory_edge(relation_type="HAS_PREMISE", source_is_atom=True) is False
+        assert is_theory_edge(relation_type="CONCLUDES", target_is_atom=True) is False
+
+    def test_curation_ledger_preserves_hyperedge_fields(self) -> None:
+        conj = TheoryRelation(
+            id="inf_c",
+            source_id="a1",
+            premise_ids=("a1", "a2"),
+            target_id="c1",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="global",
+        )
+        und = TheoryRelation(
+            id="und_c",
+            source_id="u1",
+            target_id="inf_c",
+            undercuts_relation_id="inf_c",
+            relation_type="UNDERCUTS",
+            confidence=0.85,
+            scope="global",
+        )
+        ledger = EpistemicCurationLedger()
+        curated = ledger.apply_to_theory_relations([conj, und])
+        assert curated[0].id == "inf_c"
+        assert curated[0].premise_ids == ("a1", "a2")
+        assert curated[1].undercuts_relation_id == "inf_c"
+
+
+class TestPhase4AndPhase5Resolution:
+    """Verify local Phase 4 extraction remapping and Phase 5 canonical merging."""
+
+    def test_acc_output_validates_conjunctive_premises_and_undercuts(self) -> None:
+        comp1 = ExtractedComponent(id="AC1", component_type="EmpiricalStatement", text="Premise 1")
+        comp2 = ExtractedComponent(id="AC2", component_type="ObservationUnit", text="Premise 2")
+        comp3 = ExtractedComponent(id="AC3", component_type="TheoreticalHypothesis", text="Conclusion")
+        comp_u = ExtractedComponent(id="AC4", component_type="ObservationUnit", text="Undercutter")
+
+        good = ACCOutput(
+            components=[comp1, comp2, comp3, comp_u],
+            relations=[
+                ExtractedTheoryRelation(
+                    id="R1",
+                    premise_ids=["AC1", "AC2"],
+                    target_id="AC3",
+                    relation="SUPPORTS_ARG",
+                ),
+                ExtractedTheoryRelation(
+                    id="R2",
+                    source_id="AC4",
+                    undercuts_relation_id="R1",
+                    relation="UNDERCUTS",
+                ),
+            ],
+        )
+        validated = good.validate_references()
+        assert len(validated.relations) == 2
+
+        dangling_und = ACCOutput(
+            components=[comp1, comp3, comp_u],
+            relations=[
+                ExtractedTheoryRelation(
+                    id="R2",
+                    source_id="AC4",
+                    undercuts_relation_id="R99",
+                    relation="UNDERCUTS",
+                ),
+            ],
+        )
+        assert dangling_und.validate_references().relations == []
+
+        # Dropping a premise must cascade-drop dependent conjunctive relation AND its undercutter
+        with_missing_prem = ACCOutput(
+            components=[comp1, comp3, comp_u],
+            relations=[
+                ExtractedTheoryRelation(
+                    id="R1",
+                    premise_ids=["AC1", "AC99"],
+                    target_id="AC3",
+                    relation="SUPPORTS_ARG",
+                ),
+                ExtractedTheoryRelation(
+                    id="R2",
+                    source_id="AC4",
+                    undercuts_relation_id="R1",
+                    relation="UNDERCUTS",
+                ),
+            ],
+        )
+        assert with_missing_prem.validate_references().relations == []
+
+    @pytest.mark.asyncio
+    async def test_llm_acc_classifier_resolves_local_hyperedges_and_undercutters(self) -> None:
+        acc_output = ACCOutput(
+            components=[
+                ExtractedComponent(id="AC1", component_type="TheoreticalHypothesis", text="Universal law L."),
+                ExtractedComponent(id="AC2", component_type="ObservationUnit", text="Boundary condition B."),
+                ExtractedComponent(id="AC3", component_type="EmpiricalStatement", text="Derived consequence C."),
+                ExtractedComponent(id="AC4", component_type="ObservationUnit", text="Instrument calibration failure U."),
+            ],
+            relations=[
+                ExtractedTheoryRelation(
+                    id="R1",
+                    premise_ids=["AC1", "AC2"],
+                    target_id="AC3",
+                    relation="SUPPORTS_ARG",
+                    confidence=0.9,
+                ),
+                ExtractedTheoryRelation(
+                    id="R2",
+                    source_id="AC4",
+                    undercuts_relation_id="R1",
+                    relation="UNDERCUTS",
+                    confidence=0.85,
+                ),
+            ],
+        )
+        mock_llm = MagicMock()
+        mock_llm.predict_structured = AsyncMock(return_value=acc_output)
+        mock_llm.predict_text = AsyncMock(return_value="")
+        classifier = LLMACCClassifier(llm=mock_llm)
+        # Bypass disk cache in unit test while keeping ensure_structured_llm contract exercised
+        classifier.llm = mock_llm
+
+        atoms, rels = await classifier.classify(
+            chunk_id="chunk-42",
+            tagged_text="<AC1>L</AC1><AC2>B</AC2><AC3>C</AC3><AC4>U</AC4>",
+            adu_ids=["AC1", "AC2", "AC3", "AC4"],
+            schema=DEFAULT_SCHEMA,
+        )
+
+        expected_ids = {
+            k: stable_component_id("chunk-42", k) for k in ("AC1", "AC2", "AC3", "AC4")
+        }
+        assert {a.id for a in atoms} == set(expected_ids.values())
+        assert len(rels) == 2
+
+        conj_rel = next(r for r in rels if r.relation_type == "SUPPORTS_ARG")
+        und_rel = next(r for r in rels if r.relation_type == "UNDERCUTS")
+        assert conj_rel.premise_ids == (expected_ids["AC1"], expected_ids["AC2"])
+        assert conj_rel.target_id == expected_ids["AC3"]
+        assert und_rel.source_id == expected_ids["AC4"]
+        assert und_rel.undercuts_relation_id == conj_rel.relation_id
+        assert und_rel.target_id == conj_rel.relation_id
+
+    def test_phase5_canonical_resolution_remaps_premises_and_undercut_targets(self) -> None:
+        a1_canon = _atom("canon_a1", "Law")
+        a1 = _atom("raw_a1", "Law")
+        a2 = _atom("raw_a2", "Condition")
+        c_canon = _atom("canon_c", "Result")
+        c = _atom("raw_c", "Result")
+        u = _atom("raw_u", "Confounder")
+
+        r1 = TheoryRelation(
+            id=None,
+            source_id="raw_a1",
+            premise_ids=("raw_a1", "raw_a2"),
+            target_id="raw_c",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
+        )
+        r2 = TheoryRelation(
+            source_id="raw_u",
+            target_id=r1.relation_id,
+            undercuts_relation_id=r1.relation_id,
+            relation_type="UNDERCUTS",
+            confidence=0.8,
+            scope="local",
+        )
+        decisions = [
+            FusionDecisionArtifact(
+                decision_id="fd_1",
+                decision_type="merge",
+                canonical_artifact_id="canon_a1",
+                artifact_ids=["canon_a1", "raw_a1"],
+            ),
+            FusionDecisionArtifact(
+                decision_id="fd_2",
+                decision_type="merge",
+                canonical_artifact_id="canon_c",
+                artifact_ids=["canon_c", "raw_c"],
+            ),
+        ]
+        canon_atoms, canon_rels = _resolve_l3_atoms_and_relations(
+            [a1_canon, a1, a2, c_canon, c, u], [r1, r2], decisions
+        )
+        assert {a.id for a in canon_atoms} == {"canon_a1", "raw_a2", "canon_c", "raw_u"}
+
+        resolved_conj = next(r for r in canon_rels if r.relation_type == "SUPPORTS")
+        resolved_und = next(r for r in canon_rels if r.relation_type == "UNDERCUTS")
+        assert resolved_conj.premise_ids == ("canon_a1", "raw_a2")
+        assert resolved_conj.source_id == "canon_a1"
+        assert resolved_conj.target_id == "canon_c"
+        assert resolved_und.undercuts_relation_id == resolved_conj.relation_id
+        assert resolved_und.undercuts_relation_id != r1.relation_id
+        assert resolved_und.target_id == resolved_conj.relation_id
+
+
+class TestArtifactGraphProjectorBipartiteReification:
+    """Verify :TheoryInference node materialization, bipartite edges, events, and fingerprints."""
+
+    @pytest.mark.asyncio
+    async def test_project_collection_reifies_conjunctive_and_targeted_inferences(self) -> None:
+        store = InMemoryGraphStore()
+        atoms = [
+            _atom("a_law", "Law"),
+            _atom("a_cond", "Condition"),
+            _atom("a_conc", "Conclusion"),
+            _atom("a_pair", "Pairwise premise"),
+            _atom("a_under", "Undercutter"),
+            _atom("a_back", "Backing"),
+        ]
+        conj_rel = TheoryRelation(
+            id="inf_conj",
+            source_id="a_law",
+            premise_ids=("a_law", "a_cond"),
+            target_id="a_conc",
+            relation_type="SUPPORTS",
+            confidence=0.92,
+            scope="global",
+            inferential_warrant=0.8,
+        )
+        targeted_unary = TheoryRelation(
+            id="inf_unary_undercut",
+            source_id="a_pair",
+            target_id="a_conc",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="global",
+            inferential_warrant=0.75,
+        )
+        undercut_rel = TheoryRelation(
+            source_id="a_under",
+            target_id="inf_unary_undercut",
+            undercuts_relation_id="inf_unary_undercut",
+            relation_type="UNDERCUTS",
+            confidence=0.88,
+            scope="global",
+        )
+        back_rel = TheoryRelation(
+            source_id="a_back",
+            target_id="inf_conj",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="global",
+        )
+        plain_unary = TheoryRelation(
+            source_id="a_law",
+            target_id="a_pair",
+            relation_type="SUPPORTS",
+            confidence=0.85,
+            scope="global",
+        )
+
+        envelopes = [
+            build_theory_atom_artifact(a, run_id="r1", phase_name="phase4", method="test")
+            for a in atoms
+        ] + [
+            build_theory_relation_artifact(r, run_id="r1", phase_name="phase4", method="test")
+            for r in (conj_rel, targeted_unary, undercut_rel, back_rel, plain_unary)
+        ]
+        collection = ArtifactCollection(envelopes)
+
+        recorder = _RecordingObserver()
+        emitter = SimpleEventEmitter()
+        emitter.register_observer(recorder)
+
+        projector = ArtifactGraphProjector(store, schema=DEFAULT_SCHEMA, t_norm="godel")
+        assert projector.fingerprint()["t_norm"] == "godel"
+
+        with use_event_emitter(emitter):
+            await projector.project_collection(collection)
+
+        # Two reified :TheoryInference nodes created (conjunctive + targeted unary)
+        inf_nodes = {
+            nid: props
+            for nid, props in store._nodes.items()
+            if props.get("label") == "TheoryInference"
+        }
+        assert set(inf_nodes.keys()) == {"inf_conj", "inf_unary_undercut"}
+        assert inf_nodes["inf_conj"]["premise_ids"] == ["a_law", "a_cond"]
+        assert inf_nodes["inf_conj"]["t_norm"] == "godel"
+
+        # Inspect bipartite edges stored in generic relations
+        edge_triples = {
+            (e["from_id"], e["relation_type"], e["to_id"])
+            for e in store._generic_relations
+        }
+        assert ("a_law", "HAS_PREMISE", "inf_conj") in edge_triples
+        assert ("a_cond", "HAS_PREMISE", "inf_conj") in edge_triples
+        assert ("inf_conj", "CONCLUDES", "a_conc") in edge_triples
+        assert ("a_back", "BACKS", "inf_conj") in edge_triples
+        assert ("a_pair", "HAS_PREMISE", "inf_unary_undercut") in edge_triples
+        assert ("inf_unary_undercut", "CONCLUDES", "a_conc") in edge_triples
+        assert ("a_under", "UNDERCUTS", "inf_unary_undercut") in edge_triples
+
+        # Plain untargeted unary relation remains direct pairwise TheoryRelation
+        assert any(
+            r.source_id == "a_law" and r.target_id == "a_pair"
+            for r in await store.get_all_theory_relations()
+        )
+        # Event emitter recorded successful ArtifactProjected event
+        projected_events = [e for e in recorder.events if isinstance(e, ArtifactProjected)]
+        assert len(projected_events) == 1
+        assert projected_events[0].success is True
+
+    @pytest.mark.asyncio
+    async def test_single_envelope_projection_emits_event_and_reifies_conjunctive_artifact(
+        self,
+    ) -> None:
+        store = InMemoryGraphStore()
+        rel = TheoryRelation(
+            id="inf_single",
+            source_id="p1",
+            premise_ids=("p1", "p2"),
+            target_id="c1",
+            relation_type="EXPLAINS",
+            confidence=0.9,
+            scope="global",
+        )
+        payload = TheoryRelationCodec.to_payload(rel)
+        assert isinstance(payload, TheoryRelationArtifact)
+        env = build_theory_relation_artifact(
+            payload.to_domain(), run_id="r1", phase_name="phase4", method="test"
+        )
+        recorder = _RecordingObserver()
+        emitter = SimpleEventEmitter()
+        emitter.register_observer(recorder)
+
+        projector = ArtifactGraphProjector(store)
+        with use_event_emitter(emitter):
+            await projector.project(env)
+
+        assert store._nodes["inf_single"]["label"] == "TheoryInference"
+        triples = {(e["from_id"], e["relation_type"], e["to_id"]) for e in store._generic_relations}
+        assert ("p1", "HAS_PREMISE", "inf_single") in triples
+        assert ("p2", "HAS_PREMISE", "inf_single") in triples
+        assert ("inf_single", "CONCLUDES", "c1") in triples
+        assert any(isinstance(e, ArtifactProjected) and e.success for e in recorder.events)
+
+
+class TestPhase6TheoryNetProjectorHypergraph:
+    """Verify TheoryNetProjector end-to-end integration with Phase6Config.conjunctive_t_norm."""
+
+    def test_theorynet_projector_respects_t_norm_and_undercuts_end_to_end(self) -> None:
+        atoms = [
+            _atom("law", "Universal law", modal=0.9, ctype="CoreAxiom"),
+            _atom("cond_true", "Present condition", modal=0.5, ctype="ObservationUnit"),
+            _atom("cond_false", "Falsified condition", modal=0.0, ctype="ObservationUnit"),
+            _atom("conc_active", "Supported conclusion", modal=0.2, ctype="EmpiricalStatement"),
+            _atom("conc_falsified", "Blocked conclusion", modal=0.2, ctype="EmpiricalStatement"),
+            _atom("undercutter", "Methodological defeater", modal=1.0, ctype="Claim"),
+        ]
+        rels = [
+            TheoryRelation(
+                id="inf_active",
+                source_id="law",
+                premise_ids=("law", "cond_true"),
+                target_id="conc_active",
+                relation_type="SUPPORTS",
+                confidence=1.0,
+                scope="global",
+                inferential_warrant=0.8,
+                perception_stance_prob=1.0,
+            ),
+            TheoryRelation(
+                id="inf_blocked",
+                source_id="law",
+                premise_ids=("law", "cond_false"),
+                target_id="conc_falsified",
+                relation_type="SUPPORTS",
+                confidence=1.0,
+                scope="global",
+                inferential_warrant=0.8,
+                perception_stance_prob=1.0,
+            ),
+        ]
+        view = Phase4ArtifactsView(theory_atoms=atoms, theory_relations=rels)
+
+        proj_prod = TheoryNetProjector(t_norm="product")
+        proj_godel = TheoryNetProjector(t_norm="godel")
+        assert proj_prod.fingerprint() != proj_godel.fingerprint()
+        assert Phase6Config().conjunctive_t_norm == "product"
+
+        net_prod = proj_prod.project(view)
+        net_godel = proj_godel.project(view)
+
+        by_id_prod = {a.id: a.equilibrium_strength for a in net_prod.atoms}
+        by_id_godel = {a.id: a.equilibrium_strength for a in net_godel.atoms}
+
+        # Falsified boundary condition blocks support in both t-norms
+        assert by_id_prod["conc_falsified"] == pytest.approx(0.2, abs=1e-5)
+        assert by_id_godel["conc_falsified"] == pytest.approx(0.2, abs=1e-5)
+        # Godel min(0.9, 0.5)=0.5 > Product 0.9*0.5=0.45
+        assert by_id_godel["conc_active"] > by_id_prod["conc_active"]
+
+        # Adding an undercutter targeting inf_active reduces conc_active without dropping below 0.2
+        undercut_rels = rels + [
+            TheoryRelation(
+                source_id="undercutter",
+                target_id="inf_active",
+                undercuts_relation_id="inf_active",
+                relation_type="UNDERCUTS",
+                confidence=1.0,
+                scope="global",
+                inferential_warrant=1.0,
+                perception_stance_prob=1.0,
+            )
+        ]
+        net_undercut = proj_prod.project(
+            Phase4ArtifactsView(theory_atoms=atoms, theory_relations=undercut_rels)
+        )
+        by_id_und = {a.id: a.equilibrium_strength for a in net_undercut.atoms}
+        assert 0.2 < by_id_und["conc_active"] < by_id_prod["conc_active"]

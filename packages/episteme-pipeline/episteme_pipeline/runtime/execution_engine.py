@@ -226,7 +226,11 @@ class ArtifactExecutionEngine:
         self.artifact_store = artifact_store or JsonArtifactStore(
             self.config.execution.artifacts_dir
         )
-        self.projector = projector or ArtifactGraphProjector(projection_graph)
+        self.projector = projector or ArtifactGraphProjector(
+            projection_graph,
+            schema=config.graph_schema,
+            t_norm=config.phase6.conjunctive_t_norm,
+        )
 
     def fingerprint(self) -> dict[str, Any]:
         """Return a deterministic fingerprint dictionary for the execution engine.

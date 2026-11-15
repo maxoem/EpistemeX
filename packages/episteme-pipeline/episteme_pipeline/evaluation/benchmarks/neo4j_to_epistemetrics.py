@@ -112,6 +112,10 @@ async def export_neo4j_to_theory_graph(
                     relation_type=em.RelationType.from_str(rel.relation_type),
                     confidence=rel.confidence or 1.0,
                     weight=rel.weight or 1.0,
+                    id=rel.id,
+                    premise_ids=rel.premise_ids,
+                    undercuts_relation_id=rel.undercuts_relation_id,
+                    inferential_force=rel.inferential_warrant,
                     attributes={"scope": rel.scope, "layer": "L3"},
                 )
         except Exception as exc:

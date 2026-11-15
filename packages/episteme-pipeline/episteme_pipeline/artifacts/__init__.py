@@ -1,3 +1,6 @@
+from episteme_pipeline.artifacts.checkpoint_store import (
+    FileSystemCheckpointStore,
+)
 from episteme_pipeline.artifacts.codecs import (
     ArtifactCodec,
     ChunkCodec,
@@ -23,11 +26,8 @@ from episteme_pipeline.artifacts.models import (
     LinkedEntityArtifact,
     LocalRelationArtifact,
     TheoryAtomArtifact,
+    TheoryInferenceArtifact,
     TheoryRelationArtifact,
-)
-
-from episteme_pipeline.artifacts.checkpoint_store import (
-    FileSystemCheckpointStore,
 )
 from episteme_pipeline.artifacts.subgraph_reader import ArtifactSubgraphReader
 
@@ -54,6 +54,7 @@ __all__ = [
     "LocalRelationCodec",
     "TheoryAtomArtifact",
     "TheoryAtomCodec",
+    "TheoryInferenceArtifact",
     "TheoryRelationArtifact",
     "TheoryRelationCodec",
     "TripleCodec",

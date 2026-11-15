@@ -13,7 +13,7 @@ from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
 
 _STRUCTURAL_EDGE_TYPES: frozenset[str] = frozenset(
-    {"CONTAINS", "EXTRACTED_FROM", "SAME_AS", "MENTIONS"}
+    {"CONTAINS", "EXTRACTED_FROM", "SAME_AS", "MENTIONS", "HAS_PREMISE", "CONCLUDES"}
 )
 _THEORY_PROPERTY_MARKERS: frozenset[str] = frozenset(
     {
@@ -158,6 +158,12 @@ def theory_relation_to_graph_properties(
         "weight_support": w_supp,
         "weight_attack": w_att,
     }
+    if rel.id is not None:
+        props["id"] = rel.id
+    if rel.premise_ids:
+        props["premise_ids"] = list(rel.premise_ids)
+    if rel.undercuts_relation_id is not None:
+        props["undercuts_relation_id"] = rel.undercuts_relation_id
     if rel.perception_stance_prob is not None:
         props["perception_stance_prob"] = rel.perception_stance_prob
     if rel.perception_empirical_acc is not None:
@@ -171,6 +177,162 @@ def theory_relation_to_graph_properties(
     if rel.structural_correspondence is not None:
         props["structural_correspondence"] = rel.structural_correspondence
     return props
+
+
+def is_backing_relation_type(relation_type: str | None) -> bool:
+    """Return True if ``relation_type`` denotes Toulmin backing or positive support."""
+    r_upper = (relation_type or "").strip().upper()
+    return r_upper in {"BACKS", "SUPPORTS", "SUPPORTS_ARG", "WARRANTS"}
+
+
+def theory_inference_node_properties(
+    rel: TheoryRelation,
+    *,
+    schema: SchemaConfig | None = None,
+    t_norm: str | None = None,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    """Serialize a reified :class:`TheoryRelation` into ``:TheoryInference`` node properties.
+
+    Parameters
+    ----------
+    rel : TheoryRelation
+        Reified dialectical inference relation.
+    schema : SchemaConfig or None, optional
+        Schema configuration for polarity resolution.
+    t_norm : str or None, optional
+        Conjunctive t-norm operator (``'product'`` or ``'godel'``) used during
+        equilibrium evaluation.
+    run_id : str or None, optional
+        Optional run identifier stamped onto the projected node.
+
+    Returns
+    -------
+    dict of str to Any
+        Graph property dictionary for the ``:TheoryInference`` node.
+    """
+    props = theory_relation_to_graph_properties(rel, schema=schema)
+    props["id"] = rel.relation_id
+    props["relation_type"] = rel.relation_type
+    props["target_id"] = rel.target_id
+    props["premise_ids"] = list(rel.effective_premise_ids)
+    if t_norm is not None:
+        props["t_norm"] = t_norm
+    if run_id is not None:
+        props["run_id"] = run_id
+    return props
+
+
+def build_reified_inference_edges(
+    rel: TheoryRelation,
+    *,
+    is_reified: bool,
+    reified_ids: set[str],
+    schema: SchemaConfig | None = None,
+    run_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Build property-graph edge specs for reified inferences, undercutters, and backings.
+
+    Parameters
+    ----------
+    rel : TheoryRelation
+        Domain relation to translate into hypergraph edges.
+    is_reified : bool
+        Whether ``rel`` itself has a reified ``:TheoryInference`` node.
+    reified_ids : set of str
+        Identifiers of all reified ``:TheoryInference`` warrant nodes.
+    schema : SchemaConfig or None, optional
+        Schema configuration for polarity resolution.
+    run_id : str or None, optional
+        Optional run identifier stamped on generated edge properties.
+
+    Returns
+    -------
+    list of dict of str to Any
+        Edge dictionaries compatible with ``GraphWriter.upsert_relations``.
+    """
+    rel_props = theory_relation_to_graph_properties(rel, schema=schema)
+    if run_id is not None:
+        rel_props["run_id"] = run_id
+    edges: list[dict[str, Any]] = []
+
+    if is_reified:
+        w_id = rel.relation_id
+        for pid in rel.effective_premise_ids:
+            p_props: dict[str, Any] = {"inference_id": w_id}
+            if run_id is not None:
+                p_props["run_id"] = run_id
+            edges.append(
+                {
+                    "from_id": pid,
+                    "relation_type": "HAS_PREMISE",
+                    "to_id": w_id,
+                    "properties": p_props,
+                }
+            )
+        target_w = rel.undercuts_relation_id or rel.target_id
+        if rel.undercuts_relation_id is not None or (
+            rel.relation_type.strip().upper() == "UNDERCUTS" and target_w in reified_ids
+        ):
+            edges.append(
+                {
+                    "from_id": w_id,
+                    "relation_type": "UNDERCUTS",
+                    "to_id": target_w,
+                    "properties": {**rel_props, "inference_id": w_id},
+                }
+            )
+        elif target_w in reified_ids and is_backing_relation_type(rel.relation_type):
+            edges.append(
+                {
+                    "from_id": w_id,
+                    "relation_type": "BACKS",
+                    "to_id": target_w,
+                    "properties": {**rel_props, "inference_id": w_id},
+                }
+            )
+        else:
+            edges.append(
+                {
+                    "from_id": w_id,
+                    "relation_type": "CONCLUDES",
+                    "to_id": rel.target_id,
+                    "properties": {
+                        **rel_props,
+                        "relation_type": rel.relation_type,
+                        "inference_id": w_id,
+                    },
+                }
+            )
+        return edges
+
+    target_w = rel.undercuts_relation_id or rel.target_id
+    if rel.undercuts_relation_id is not None or (
+        rel.relation_type.strip().upper() == "UNDERCUTS" and target_w in reified_ids
+    ):
+        edges.append(
+            {
+                "from_id": rel.source_id,
+                "relation_type": "UNDERCUTS",
+                "to_id": target_w,
+                "properties": rel_props,
+            }
+        )
+    elif target_w in reified_ids:
+        edge_type = (
+            "BACKS"
+            if is_backing_relation_type(rel.relation_type)
+            else rel.relation_type.strip().upper()
+        )
+        edges.append(
+            {
+                "from_id": rel.source_id,
+                "relation_type": edge_type,
+                "to_id": target_w,
+                "properties": rel_props,
+            }
+        )
+    return edges
 
 
 def theory_relation_from_graph_properties(
@@ -219,6 +381,9 @@ def theory_relation_from_graph_properties(
         "relation_type": relation_type,
         "confidence": confidence_val,
         "scope": scope_val,
+        "id": props.get("id"),
+        "premise_ids": tuple(props.get("premise_ids") or ()),
+        "undercuts_relation_id": props.get("undercuts_relation_id"),
         "weight": weight_val,
         "edge_tenability": props.get("edge_tenability"),
         "structural_correspondence": props.get("structural_correspondence"),
@@ -266,6 +431,9 @@ def is_theory_edge(
     bool
         ``True`` if the edge represents a dialectical ``TheoryRelation``.
     """
+    if relation_type and relation_type in _STRUCTURAL_EDGE_TYPES:
+        return False
+
     if source_is_atom and target_is_atom:
         return True
 
@@ -288,8 +456,11 @@ def is_theory_edge(
 
 
 __all__ = [
+    "build_reified_inference_edges",
+    "is_backing_relation_type",
     "is_theory_edge",
     "theory_atom_to_graph_properties",
+    "theory_inference_node_properties",
     "theory_relation_from_graph_properties",
     "theory_relation_to_graph_properties",
 ]

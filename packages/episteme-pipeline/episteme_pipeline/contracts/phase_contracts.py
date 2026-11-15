@@ -307,8 +307,11 @@ class EpistemicCurationLedger(BaseModel):
                 ):
                     extra_kwargs["inferential_warrant"] = rel.inferential_warrant
                 updated = TheoryRelation(
+                    id=rel.id,
                     source_id=rel.source_id,
                     target_id=rel.target_id,
+                    premise_ids=rel.premise_ids,
+                    undercuts_relation_id=rel.undercuts_relation_id,
                     relation_type=override.relation_type,
                     confidence=override.confidence,
                     scope=rel.scope,
