@@ -15,6 +15,7 @@ from episteme_pipeline.protocols.decision import (
     ensure_decision_engine,
     ensure_decision_question,
 )
+from episteme_pipeline.protocols.entity_maturation import ConceptionClustererProtocol
 from episteme_pipeline.protocols.extractors import (
     CrossEncoder,
     EmbeddingModel,
@@ -66,6 +67,7 @@ __all__ = [
     "ARCClassifier",
     "ARIIdentifier",
     "ArgumentClustering",
+    "ConceptionClustererProtocol",
     "CrossEncoder",
     "DataSourceAdapter",
     "DecisionEngine",

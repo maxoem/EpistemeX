@@ -27,6 +27,7 @@ from episteme_pipeline.phases.phase4_argument_mining.models import ARCRelationOu
 from episteme_pipeline.phases.phase4_argument_mining.pairing import (
     build_cross_chunk_candidate_pairs,
 )
+from episteme_pipeline.prompts.input_formatters import format_component_type_with_scope
 from episteme_pipeline.protocols.argument_mining import ARCClassifier
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
 from episteme_pipeline.protocols.graph_store import GraphReader, PhaseCheckpointStore
@@ -432,10 +433,10 @@ class TAGARCClassifier(ARCClassifier):
                 self.prompts,
                 strategy=self.strategy,
                 component_a_id=component_a.id,
-                component_a_type=component_a.component_type,
+                component_a_type=format_component_type_with_scope(component_a),
                 component_a_text=component_a.text,
                 component_b_id=component_b.id,
-                component_b_type=component_b.component_type,
+                component_b_type=format_component_type_with_scope(component_b),
                 component_b_text=component_b.text,
                 subgraph_envelope=envelope_text,
                 argument_relation_types=schema.argument_relation_types_str(),

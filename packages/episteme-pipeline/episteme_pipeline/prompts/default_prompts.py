@@ -531,6 +531,28 @@ DECISION_ACC_CRITERIA = {
     ),
 }
 
+DECISION_INTENSIONAL_MODE_QUESTION = """\
+What is the intensional epistemic mode and attribution status of the following argumentative unit?
+"""
+
+DECISION_INTENSIONAL_MODE_CRITERIA = {
+    "asserted": (
+        "A claim directly endorsed or asserted as true in the author's own primary voice."
+    ),
+    "attributed": (
+        "A position, thesis, or objection attributed to another thinker, interlocutor, "
+        "opponent, or school of thought rather than endorsed by the author."
+    ),
+    "suppositional": (
+        "A hypothetical, counterfactual, or Reductio ad absurdum assumption entertained "
+        "only provisionally for the sake of argument or derivation."
+    ),
+    "historical": (
+        "Background historical context, established mathematical or empirical tradition, "
+        "or general scholarly framing not tied to an unshared opponent position."
+    ),
+}
+
 DECISION_ARC_QUESTION = """\
 What argumentative or dialectical relation holds from the source proposition to the target proposition?
 """

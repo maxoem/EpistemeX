@@ -232,39 +232,6 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
     def gleaning_gate(self) -> GleaningStoppingOracle:
         return self.stopping_oracle
 
-    @staticmethod
-    def _guard_systematic_failure(
-        batch: list[L1Chunk], failures: list[Exception], succeeded: int
-    ) -> None:
-        """Abort the phase when a whole batch fails identically and nothing has worked yet.
-
-        Parameters
-        ----------
-        batch : list of L1Chunk
-            The chunk batch being evaluated.
-        failures : list of Exception
-            Exceptions raised by processing chunks in this batch.
-        succeeded : int
-            Total count of chunks successfully processed so far.
-
-        Raises
-        ------
-        SystematicChunkFailure
-            When all chunks in the first batch fail with the same exception type.
-        """
-        if succeeded or not failures or len(failures) != len(batch):
-            return
-        failure_types = {type(exc) for exc in failures}
-        if len(failure_types) != 1:
-            return
-        exc = failures[0]
-        raise SystematicChunkFailure(
-            f"All {len(batch)} chunks of the first batch failed with "
-            f"{type(exc).__name__}: {exc}. This is a configuration or interface "
-            f"error, not a per-chunk data error — aborting Phase 4 instead of "
-            f"completing with an empty graph."
-        ) from exc
-
     async def run(
         self, input: Phase3ArtifactsView, context: ArtifactExecutionContext
     ) -> ArtifactCollection:

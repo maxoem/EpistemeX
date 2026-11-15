@@ -533,3 +533,98 @@ class TestPerspectivalAndSuppositionalScoping:
         assert res_cont_hume.converged
         assert res_cont_hume.perspective_filtered_count == 2
         assert res_cont_hume.degrees["hume_conclusion"] > 0.5
+
+    def test_reductio_ad_absurdum_discharge_vs_unrefuted_supposition(self) -> None:
+        """Verify refuted Reductio chains discharge via modus tollens while unrefuted ones stay isolated."""
+        nodes = {
+            "thesis": {"prior": 0.5, "intensional_mode": "asserted"},
+            "rival_supp": {"prior": 0.9, "intensional_mode": "suppositional"},
+            "absurd_conseq": {"prior": 0.85, "intensional_mode": "suppositional"},
+            "empirical_fact": {"prior": 0.95, "intensional_mode": "asserted"},
+            "other_thesis": {"prior": 0.5, "intensional_mode": "asserted"},
+            "unrefuted_supp": {"prior": 0.95, "intensional_mode": "suppositional"},
+            "false_support_supp": {"prior": 0.9, "intensional_mode": "suppositional"},
+        }
+        edges = [
+            # Classic 2-hop reductio: rival_supp -> absurd_conseq, attacked by empirical_fact
+            {"source": "rival_supp", "target": "absurd_conseq", "relation_type": "SUPPORTS", "inferential_force": 0.9},
+            {"source": "empirical_fact", "target": "absurd_conseq", "relation_type": "ATTACKS", "inferential_force": 0.95},
+            {"source": "rival_supp", "target": "thesis", "relation_type": "ATTACKS", "inferential_force": 0.9},
+            # Unrefuted supposition attacking other_thesis stays isolated
+            {"source": "unrefuted_supp", "target": "other_thesis", "relation_type": "ATTACKS", "inferential_force": 0.95},
+            # Refuted supposition that merely SUPPORTED other_thesis must NOT discharge positive support
+            {"source": "empirical_fact", "target": "false_support_supp", "relation_type": "ATTACKS", "inferential_force": 0.9},
+            {"source": "false_support_supp", "target": "other_thesis", "relation_type": "SUPPORTS", "inferential_force": 0.9},
+        ]
+
+        res = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="author",
+            isolate_suppositional=True,
+        )
+        assert res.degrees["thesis"] > 0.5
+        assert res.degrees["other_thesis"] == pytest.approx(0.5)
+        assert res.degrees["unrefuted_supp"] == pytest.approx(0.0)
+        assert res.degrees["rival_supp"] < 0.9
+
+        res_cont = solve_continuous_qbaf(
+            nodes=nodes,
+            edges=edges,
+            perspective="author",
+            isolate_suppositional=True,
+        )
+        assert res_cont.converged
+        assert res_cont.degrees["thesis"] > 0.5
+        assert res_cont.degrees["other_thesis"] == pytest.approx(0.5, abs=1e-4)
+
+    def test_dialectical_mode_preserves_external_attacks_blocks_external_support(self) -> None:
+        """Verify isolate_attributed=False keeps incoming opponent ATTACKS while blocking off-perspective SUPPORTS."""
+        nodes = {
+            "hume_claim": {"prior": 0.5, "intensional_mode": "attributed", "attributed_to": "David Hume"},
+            "kant_attack": {"prior": 0.9, "intensional_mode": "attributed", "attributed_to": "Immanuel Kant"},
+            "kant_support": {"prior": 0.9, "intensional_mode": "attributed", "attributed_to": "Immanuel Kant"},
+            "hume_target_for_support": {"prior": 0.5, "intensional_mode": "attributed", "attributed_to": "David Hume"},
+        }
+        edges = [
+            {"source": "kant_attack", "target": "hume_claim", "relation_type": "ATTACKS", "inferential_force": 0.9},
+            {"source": "kant_support", "target": "hume_target_for_support", "relation_type": "SUPPORTS", "inferential_force": 0.9},
+        ]
+
+        res_dialectic = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="David Hume",
+            isolate_attributed=False,
+        )
+        assert res_dialectic.degrees["hume_claim"] < 0.5
+        assert res_dialectic.degrees["hume_target_for_support"] == pytest.approx(0.5)
+
+    def test_historical_unattributed_shared_vs_agent_attributed(self) -> None:
+        """Verify unattributed historical claims act as shared premises while attributed historical claims isolate."""
+        nodes = {
+            "author_claim": {"prior": 0.5, "intensional_mode": "asserted"},
+            "hist_shared": {"prior": 0.85, "intensional_mode": "historical"},
+            "hist_aristotle": {"prior": 0.9, "intensional_mode": "historical", "attributed_to": "Aristotle"},
+        }
+        edges = [
+            {"source": "hist_shared", "target": "author_claim", "relation_type": "SUPPORTS", "inferential_force": 0.8},
+            {"source": "hist_aristotle", "target": "author_claim", "relation_type": "SUPPORTS", "inferential_force": 0.9},
+        ]
+
+        res_author = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="author",
+        )
+        assert res_author.perspective_filtered_count == 1
+        assert res_author.degrees["author_claim"] > 0.5
+        assert res_author.degrees["hist_aristotle"] == pytest.approx(0.0)
+
+        res_aristotle = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="Aristotle",
+        )
+        assert res_aristotle.degrees["hist_shared"] == pytest.approx(0.85)
+        assert res_aristotle.degrees["hist_aristotle"] == pytest.approx(0.9)

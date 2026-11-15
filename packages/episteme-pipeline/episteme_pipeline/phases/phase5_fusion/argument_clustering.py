@@ -48,6 +48,33 @@ from episteme_pipeline.utils.similarity import cosine_similarity_matrix
 logger = logging.getLogger(__name__)
 
 
+def are_intensional_scopes_compatible(a: TheoryAtom, b: TheoryAtom) -> bool:
+    """Return whether two TheoryAtoms share a compatible intensional scope.
+
+    Prevents Phase 5 embedding clustering from collapsing claims that differ in
+    intensional mode (e.g., ``asserted`` vs. ``suppositional`` or ``attributed``)
+    or epistemic agent attribution (ISSUE-054).
+
+    Parameters
+    ----------
+    a : TheoryAtom
+        First candidate theory atom.
+    b : TheoryAtom
+        Second candidate theory atom.
+
+    Returns
+    -------
+    bool
+        ``True`` if both atoms have identical ``intensional_mode`` and matching
+        normalized ``attributed_to`` agent strings.
+    """
+    if a.intensional_mode != b.intensional_mode:
+        return False
+    attr_a = (a.attributed_to or "").strip().lower()
+    attr_b = (b.attributed_to or "").strip().lower()
+    return attr_a == attr_b
+
+
 class EmbeddingArgumentClustering(ArgumentClustering):
     """
     Cosine-similarity connected-components clustering over L3 argument components.
@@ -129,12 +156,13 @@ class EmbeddingArgumentClustering(ArgumentClustering):
 
         sim = cosine_similarity_matrix(raw_embeddings)
 
-        # Collect edges where similarity ≥ threshold (upper triangle only)
+        # Collect edges where similarity >= threshold and intensional scopes match
         edges = [
             (i, j)
             for i in range(n)
             for j in range(i + 1, n)
             if sim[i, j] >= self.similarity_threshold
+            and are_intensional_scopes_compatible(components[i], components[j])
         ]
 
         if not edges:
@@ -182,6 +210,8 @@ def _format_cluster_summary(cluster_nodes: list[TheoryAtom | L2Entity]) -> dict[
                     "text": node.text,
                     "epistemic_status": node.epistemic_status,
                     "scope_type": node.scope_type,
+                    "intensional_mode": node.intensional_mode,
+                    "attributed_to": node.attributed_to,
                 })
             case L2Entity():
                 items.append({

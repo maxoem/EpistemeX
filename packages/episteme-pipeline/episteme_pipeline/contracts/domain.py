@@ -577,20 +577,21 @@ class TheoryAtom(BaseModel):
             "suppositional",
         ):
             attr_norm = (self.attributed_to or "").strip().lower()
+            is_unattributed = attr_norm in ("", "author", "self")
             if active_perspective in ("author", "asserted"):
                 allowed_author_modes = (
-                    ("asserted", "suppositional")
+                    ("asserted", "historical", "suppositional")
                     if include_suppositional
-                    else ("asserted",)
+                    else ("asserted", "historical")
                 )
-                if self.intensional_mode not in allowed_author_modes or attr_norm not in (
-                    "",
-                    "author",
-                    "self",
-                ):
+                if self.intensional_mode not in allowed_author_modes or not is_unattributed:
                     return 0.0
-            elif attr_norm != active_perspective:
-                return 0.0
+            else:
+                is_shared_historical = (
+                    self.intensional_mode == "historical" and is_unattributed
+                )
+                if attr_norm != active_perspective and not is_shared_historical:
+                    return 0.0
 
         prior = self.modal_prior if self.modal_prior is not None else 0.6
         ts_local = (

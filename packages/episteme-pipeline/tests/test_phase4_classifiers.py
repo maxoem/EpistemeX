@@ -467,3 +467,131 @@ def test_cascading_classifiers_direct_instantiation() -> None:
     assert cascade_arc.stochastic_audit_rate == 0.03
 
 
+@pytest.mark.asyncio
+async def test_jev_acc_intensional_mode_and_cascading_escalation_on_attributed() -> None:
+    """Verify JevACCClassifier delegates intensional mode to DecisionEngine and escalates attributed claims to LLM."""
+    from episteme_pipeline.prompts.default_prompts import DECISION_INTENSIONAL_MODE_QUESTION
+
+    captured_questions: list[str] = []
+
+    async def fake_eval_suppositional(state: str, question: str, options: dict[str, str]) -> DecisionScore:
+        captured_questions.append(question)
+        if len(captured_questions) == 1:
+            return DecisionScore(
+                selected_option="TheoreticalHypothesis",
+                class_probability=0.95,
+                empirical_accuracy=0.90,
+            )
+        return DecisionScore(
+            selected_option="suppositional",
+            class_probability=0.92,
+            empirical_accuracy=0.90,
+        )
+
+    mock_engine = MagicMock()
+    mock_engine.evaluate_choice = AsyncMock(side_effect=fake_eval_suppositional)
+    clf = JevACCClassifier(mock_engine, infer_intensional_mode=True)
+
+    atoms, _ = await clf.classify(
+        "c1",
+        "<AC1>Suppose space were flat.</AC1>",
+        ["AC1"],
+        DEFAULT_SCHEMA,
+    )
+    assert len(captured_questions) == 2
+    assert DECISION_INTENSIONAL_MODE_QUESTION.strip() in captured_questions[1]
+    assert atoms[0].intensional_mode == "suppositional"
+
+    # When DecisionEngine selects 'attributed', standalone JevACCClassifier fails cleanly
+    mock_attr_engine = MagicMock()
+    mock_attr_engine.evaluate_choice = AsyncMock(
+        side_effect=[
+            DecisionScore(
+                selected_option="TheoreticalHypothesis",
+                class_probability=0.95,
+                empirical_accuracy=0.90,
+            ),
+            DecisionScore(
+                selected_option="attributed",
+                class_probability=0.93,
+                empirical_accuracy=0.90,
+            ),
+        ]
+    )
+    fast_attr = JevACCClassifier(mock_attr_engine, infer_intensional_mode=True)
+    with pytest.raises(ValueError, match="LLMACCClassifier"):
+        await fast_attr.classify(
+            "c2",
+            "<AC1>Hume denied necessary connection.</AC1>",
+            ["AC1"],
+            DEFAULT_SCHEMA,
+        )
+
+    # CascadingACCClassifier catches that ValueError and escalates to llm_classifier
+    llm_atom = TheoryAtom(
+        id="ac_llm",
+        text="Hume denied necessary connection.",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="c2",
+        intensional_mode="attributed",
+        attributed_to="David Hume",
+    )
+    llm_acc = MagicMock(spec=ACCClassifier)
+    llm_acc.classify = AsyncMock(return_value=([llm_atom], []))
+    mock_attr_engine.evaluate_choice.side_effect = [
+        DecisionScore(
+            selected_option="TheoreticalHypothesis",
+            class_probability=0.95,
+            empirical_accuracy=0.90,
+        ),
+        DecisionScore(
+            selected_option="attributed",
+            class_probability=0.93,
+            empirical_accuracy=0.90,
+        ),
+    ]
+    cascade = CascadingACCClassifier(fast_attr, llm_acc, stochastic_audit_rate=0.0)
+    out_atoms, _ = await cascade.classify(
+        "c2",
+        "<AC1>Hume denied necessary connection.</AC1>",
+        ["AC1"],
+        DEFAULT_SCHEMA,
+    )
+    assert llm_acc.classify.called
+    assert out_atoms == [llm_atom]
+
+
+def test_centralized_scope_input_formatters() -> None:
+    """Verify centralized ARC scope formatters render default and attributed components cleanly."""
+    from episteme_pipeline.prompts.input_formatters import (
+        format_arc_decision_pair_state,
+        format_component_type_with_scope,
+    )
+
+    asserted_atom = TheoryAtom(
+        id="a1",
+        text="Space is a priori.",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="c1",
+        intensional_mode="asserted",
+    )
+    hume_atom = TheoryAtom(
+        id="a2",
+        text="Causation is constant conjunction.",
+        component_type="Premise",
+        source_chunk_id="c2",
+        intensional_mode="attributed",
+        attributed_to="David Hume",
+    )
+
+    assert format_component_type_with_scope(asserted_atom) == "TheoreticalHypothesis"
+    assert (
+        format_component_type_with_scope(hume_atom)
+        == "Premise [mode=attributed, attributed_to=David Hume]"
+    )
+    assert format_arc_decision_pair_state(asserted_atom, hume_atom) == (
+        "Source: Space is a priori.\n"
+        "Target [mode=attributed, attributed_to=David Hume]: Causation is constant conjunction."
+    )
+
+

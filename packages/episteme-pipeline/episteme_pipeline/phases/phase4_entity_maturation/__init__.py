@@ -44,6 +44,7 @@ from episteme_pipeline.events.models import (
     EntityMaturationSynthesized,
 )
 from episteme_pipeline.llm import ensure_structured_llm
+from episteme_pipeline.protocols.entity_maturation import ConceptionClustererProtocol
 from episteme_pipeline.protocols.extractors import EmbeddingModel, as_tensor
 from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.graph_store import (
@@ -461,6 +462,7 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
         llm: Any,
         graph_store: ProcessingGraph | GraphReader | None = None,
         embedding_model: EmbeddingModel | None = None,
+        conception_clusterer: ConceptionClustererProtocol | None = None,
     ) -> None:
         self.config = config
         self.llm = ensure_structured_llm(llm)
@@ -468,12 +470,23 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
         self.embedding_model: EmbeddingModel = (
             embedding_model or _default_embedding_model()
         )
-        self.conception_clusterer = ConceptionClusterer(
-            polysemy_variance_threshold=config.polysemy_variance_threshold,
-            min_silhouette_score=config.min_silhouette_score,
-            max_conceptions=config.max_conceptions_per_entity,
-            min_envelopes=config.min_envelopes_for_stratification,
-            top_k_per_conception=config.maturation_top_k,
+        if conception_clusterer is not None and not isinstance(
+            conception_clusterer, ConceptionClustererProtocol
+        ):
+            raise TypeError(
+                "conception_clusterer must implement ConceptionClustererProtocol "
+                f"(got {type(conception_clusterer).__name__})."
+            )
+        self.conception_clusterer: ConceptionClustererProtocol = (
+            conception_clusterer
+            if conception_clusterer is not None
+            else ConceptionClusterer(
+                polysemy_variance_threshold=config.polysemy_variance_threshold,
+                min_silhouette_score=config.min_silhouette_score,
+                max_conceptions=config.max_conceptions_per_entity,
+                min_envelopes=config.min_envelopes_for_stratification,
+                top_k_per_conception=config.maturation_top_k,
+            )
         )
 
     async def run(
@@ -592,7 +605,7 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
         if not mention_records:
             return [""] * n, [""] * n
 
-        env_meta: dict[str, tuple[str, str]] = {}
+        env_meta: dict[str, list[tuple[str, str]]] = {}
         has_env_text = False
         for rec in mention_records:
             cid = rec.get("chunk_id", "")
@@ -602,12 +615,23 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
             env_text = rec.get("textual_envelope", "")
             if env_text:
                 has_env_text = True
-                if env_text not in env_meta:
-                    env_meta[env_text] = (cid, persp)
+                env_meta.setdefault(env_text, []).append((cid, persp))
 
         if has_env_text:
-            aligned_cids = [env_meta.get(env, ("", ""))[0] for env in envelopes]
-            aligned_persps = [env_meta.get(env, ("", ""))[1] for env in envelopes]
+            env_cursors: dict[str, int] = {}
+            aligned_cids: list[str] = []
+            aligned_persps: list[str] = []
+            for env in envelopes:
+                entries = env_meta.get(env)
+                if not entries:
+                    aligned_cids.append("")
+                    aligned_persps.append("")
+                    continue
+                idx = env_cursors.get(env, 0)
+                cid, persp = entries[min(idx, len(entries) - 1)]
+                env_cursors[env] = idx + 1
+                aligned_cids.append(cid)
+                aligned_persps.append(persp)
             return aligned_cids, aligned_persps
 
         if len(mention_records) == n:
@@ -686,14 +710,25 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
         L2Entity or None
             Updated mature entity, or ``None`` if structured synthesis fails.
         """
-        if input_envelopes:
-            envelopes = list(input_envelopes)
-        elif mention_records and any(rec.get("textual_envelope") for rec in mention_records):
-            envelopes = [
+        mention_envelopes = (
+            [
                 rec["textual_envelope"]
                 for rec in mention_records
                 if rec.get("textual_envelope")
             ]
+            if mention_records
+            else []
+        )
+        if mention_envelopes and (
+            not input_envelopes
+            or (
+                set(input_envelopes).issubset(set(mention_envelopes))
+                and len(mention_envelopes) >= len(input_envelopes)
+            )
+        ):
+            envelopes = mention_envelopes
+        elif input_envelopes:
+            envelopes = list(input_envelopes)
         elif isinstance(self.graph_store, GraphReader):
             envelopes = await self.graph_store.get_entity_envelopes(entity.id)
         elif entity.textual_envelope:

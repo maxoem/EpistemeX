@@ -94,7 +94,7 @@ class LLMACCClassifier(ACCClassifier):
                 continue
             stable_id = _stable_component_id(chunk_id, ext.id)
             id_map[ext.id] = stable_id
-            prior_val = ext.plausibility if ext.plausibility is not None else ext.confidence
+            prior_val = ext.plausibility
             components.append(
                 TheoryAtom(
                     id=stable_id,

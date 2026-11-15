@@ -11,7 +11,7 @@ import logging
 import math
 from typing import Any, Literal
 
-from epistemetrics.core.models import RelationType, TheoryEdge
+from epistemetrics.core.models import RelationType, TheoryEdge, TheoryNode
 from epistemetrics.epistemic.qbaf import (
     GradualSemanticsModel,
     QBAFGradualSemanticsSolver,
@@ -348,13 +348,13 @@ class TheoryNetProjector:
             atom = c.model_copy()
             if "modal_prior" not in atom.model_fields_set and atom.resolver_type is None:
                 atom.modal_prior = self.modal_resolver.resolve_modality_sync(atom)
-            atom.equilibrium_strength = self.compute_weight(atom, perspective=active_perspective)
             atoms.append(atom)
 
         # Execute Gradual Semantics Convergence via sovereign epistemetrics solver
-        if atoms and relations:
+        # Single source of truth: solver handles intensional supposition discharge & perspective scoping
+        if atoms:
             theory_edges = self._to_theory_edges(relations)
-            solver_nodes = self._to_solver_nodes(atoms, perspective=active_perspective)
+            solver_nodes = self._to_solver_nodes(atoms)
             solver_res = self.solver.solve(
                 nodes=solver_nodes,
                 edges=theory_edges,
@@ -366,6 +366,10 @@ class TheoryNetProjector:
             for atom in atoms:
                 if atom.id in solver_res.degrees:
                     atom.equilibrium_strength = solver_res.degrees[atom.id]
+                else:
+                    atom.equilibrium_strength = self.compute_weight(
+                        atom, perspective=active_perspective
+                    )
                 if solver_res.volatility_index and atom.id in solver_res.volatility_index:
                     atom.controversy_volatility = solver_res.volatility_index[atom.id]
 
@@ -437,30 +441,39 @@ class TheoryNetProjector:
     def _to_solver_nodes(
         self,
         atoms: list[TheoryAtom],
-        perspective: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """Convert theoretical atoms into intensionally-scoped solver node payloads.
+    ) -> list[TheoryNode]:
+        """Convert theoretical atoms into strongly-typed :class:`TheoryNode` inputs.
+
+        Preserves each atom's intrinsic tenability-modulated prior
+        (:math:`M(\\phi) \\cdot TS_{\\text{local}}(\\phi)`) alongside ``intensional_mode``
+        and ``attributed_to`` so :class:`QBAFGradualSemanticsSolver` remains the
+        single source of truth for perspective and supposition (*Reductio*) scoping.
 
         Parameters
         ----------
         atoms : list of TheoryAtom
             Theoretical atoms with base scores, local tenability, and intensional scope.
-        perspective : str or None, optional
-            Optional active perspective filter.
 
         Returns
         -------
-        list of dict
-            Node payloads carrying ``id``, ``base_score``, ``intensional_mode``,
-            and ``attributed_to`` for :class:`QBAFGradualSemanticsSolver`.
+        list of TheoryNode
+            Typed solver nodes carrying intrinsic ``base_score``, ``intensional_mode``,
+            and ``attributed_to``.
         """
         return [
-            {
-                "id": atom.id,
-                "base_score": self.compute_weight(atom, perspective=perspective),
-                "intensional_mode": atom.intensional_mode,
-                "attributed_to": atom.attributed_to,
-            }
+            TheoryNode(
+                id=atom.id,
+                name=atom.id,
+                base_score=atom.effective_base_prior(
+                    include_suppositional=True,
+                    perspective="all",
+                ),
+                modal_strength=atom.modal_prior if atom.modal_prior is not None else 0.6,
+                intensional_mode=atom.intensional_mode,
+                attributed_to=atom.attributed_to,
+                description=atom.text,
+                provenance=[atom.source_chunk_id] if atom.source_chunk_id else [],
+            )
             for atom in atoms
         ]
 

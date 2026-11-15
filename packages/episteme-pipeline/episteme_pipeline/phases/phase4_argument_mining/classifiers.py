@@ -12,17 +12,24 @@ import hashlib
 import logging
 import re
 from collections import defaultdict
+from typing import Literal
 
 from episteme_pipeline.config import Phase4Config
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom, TheoryRelation
 from episteme_pipeline.decision.cascade import should_audit_deterministically
-from episteme_pipeline.phases.phase4_argument_mining.pairing import stable_component_id
+from episteme_pipeline.phases.phase4_argument_mining.pairing import (
+    build_cross_chunk_candidate_pairs,
+    stable_component_id,
+)
 from episteme_pipeline.prompts.default_prompts import (
     DECISION_ACC_CRITERIA,
     DECISION_ACC_QUESTION,
     DECISION_ARC_CRITERIA,
     DECISION_ARC_QUESTION,
+    DECISION_INTENSIONAL_MODE_CRITERIA,
+    DECISION_INTENSIONAL_MODE_QUESTION,
 )
+from episteme_pipeline.prompts.input_formatters import format_arc_decision_pair_state
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.protocols.argument_mining import ACCClassifier, ARCClassifier
 from episteme_pipeline.protocols.decision import (
@@ -73,8 +80,19 @@ class JevACCClassifier(ACCClassifier):
     ----------
     decision_engine : DecisionEngine
         The calibrated decision engine instance.
-    prompts : Any or None, default None
+    prompts : StructuredPromptBundle or None, default None
         Optional prompt bundle carrying classification instructions or rubrics.
+    modal_resolver : ModalStrengthResolver or None, default None
+        Optional resolver for proposition modal prior strength.
+    infer_intensional_mode : bool, default False
+        Whether to evaluate an additional ``DecisionEngine`` prompt to classify
+        intensional framing (``asserted``, ``suppositional``, ``historical``,
+        ``attributed``). Raises ``ValueError`` on ``"attributed"`` so cascading
+        orchestrators escalate to an LLM capable of extracting speaker identity.
+    intensional_prompts : StructuredPromptBundle or None, default None
+        Optional prompt bundle supplying custom intensional mode decision templates
+        and criteria; defaults to ``DECISION_INTENSIONAL_MODE_QUESTION`` and
+        ``DECISION_INTENSIONAL_MODE_CRITERIA``.
     """
 
     def __init__(
@@ -82,6 +100,8 @@ class JevACCClassifier(ACCClassifier):
         decision_engine: DecisionEngine,
         prompts: StructuredPromptBundle | None = None,
         modal_resolver: ModalStrengthResolver | None = None,
+        infer_intensional_mode: bool = False,
+        intensional_prompts: StructuredPromptBundle | None = None,
     ) -> None:
         self.decision_engine = decision_engine
         self.prompts = prompts
@@ -97,6 +117,26 @@ class JevACCClassifier(ACCClassifier):
             raise ValueError("No decision prompt configured for JevACCClassifier.")
         self.decision_template = question.strip()
         self.criteria = criteria or DECISION_ACC_CRITERIA
+
+        self.infer_intensional_mode = infer_intensional_mode or (
+            intensional_prompts is not None
+        )
+        int_question = (
+            intensional_prompts.decision_template
+            if intensional_prompts and intensional_prompts.decision_template
+            else DECISION_INTENSIONAL_MODE_QUESTION
+        )
+        self.intensional_question = int_question.strip()
+        raw_int_criteria = (
+            intensional_prompts.decision_criteria
+            if intensional_prompts and intensional_prompts.decision_criteria
+            else DECISION_INTENSIONAL_MODE_CRITERIA
+        )
+        self.intensional_criteria: dict[str, str] = (
+            dict(raw_int_criteria)
+            if isinstance(raw_int_criteria, dict)
+            else dict(DECISION_INTENSIONAL_MODE_CRITERIA)
+        )
 
     async def classify(
         self,
@@ -149,6 +189,28 @@ class JevACCClassifier(ACCClassifier):
             selected_type = str(decision.selected_option) if decision.selected_option in options else schema.component_types[0]
             confidence = decision.class_probability
             empirical_accuracy = decision.empirical_accuracy
+            intensional_mode: Literal[
+                "asserted", "attributed", "suppositional", "historical"
+            ] = "asserted"
+            if self.infer_intensional_mode:
+                mode_decision: DecisionScore = (
+                    await self.decision_engine.evaluate_choice(
+                        state=state,
+                        question=f"{self.intensional_question} Unit ID: {adu_id}",
+                        options=self.intensional_criteria,
+                    )
+                )
+                candidate_mode = str(mode_decision.selected_option).strip().lower()
+                if candidate_mode == "attributed":
+                    raise ValueError(
+                        "JevACCClassifier cannot extract open-ended speaker attribution "
+                        "('attributed_to') for attributed claims; use LLMACCClassifier or "
+                        "CascadingACCClassifier with an LLM fallback."
+                    )
+                if candidate_mode == "suppositional":
+                    intensional_mode = "suppositional"
+                elif candidate_mode == "historical":
+                    intensional_mode = "historical"
 
             stable_id = stable_component_id(chunk_id, adu_id)
             atom = TheoryAtom(
@@ -162,6 +224,7 @@ class JevACCClassifier(ACCClassifier):
                     if empirical_accuracy is not None
                     else {}
                 ),
+                intensional_mode=intensional_mode,
             )
             if self.modal_resolver:
                 resolved_mod = await self.modal_resolver.resolve_modality(atom, context=state)
@@ -242,9 +305,19 @@ class CascadingACCClassifier(ACCClassifier):
         tuple of (list of TheoryAtom, list of TheoryRelation)
             Extracted theory atoms and relations.
         """
-        atoms, relations = await self.fast_classifier.classify(
-            chunk_id, tagged_text, adu_ids, schema, chunk_entities
-        )
+        try:
+            atoms, relations = await self.fast_classifier.classify(
+                chunk_id, tagged_text, adu_ids, schema, chunk_entities
+            )
+        except ValueError as exc:
+            logger.info(
+                "CascadingACCClassifier escalating chunk %s to LLM: %s",
+                chunk_id,
+                exc,
+            )
+            return await self.llm_classifier.classify(
+                chunk_id, tagged_text, adu_ids, schema, chunk_entities
+            )
 
         if not atoms:
             return await self.llm_classifier.classify(
@@ -255,15 +328,28 @@ class CascadingACCClassifier(ACCClassifier):
         audit_rate = self.stochastic_audit_rate
 
         is_uncertain = any(a.confidence is None or a.confidence < threshold for a in atoms)
+        has_non_asserted = any(
+            a.intensional_mode != "asserted" or a.attributed_to is not None
+            for a in atoms
+        )
+        missing_multi_adu_relations = len(adu_ids) > 1 and not relations
+        has_entity_context = bool(chunk_entities)
         is_audit = (
             should_audit_deterministically(chunk_id, "phase4_acc", chunk_id, audit_rate)
             if audit_rate > 0.0
             else False
         )
 
-        # When fast classifier produces uncertain results, or during deterministic audits,
-        # fall back to LLM
-        if is_uncertain or is_audit:
+        # Escalate to LLM on low confidence, deterministic audit, non-asserted
+        # intensional scope, multi-ADU chunks lacking System 1 relations, or
+        # chunk entity mention context requiring semantic binding.
+        if (
+            is_uncertain
+            or is_audit
+            or has_non_asserted
+            or missing_multi_adu_relations
+            or has_entity_context
+        ):
             return await self.llm_classifier.classify(
                 chunk_id, tagged_text, adu_ids, schema, chunk_entities
             )
@@ -436,7 +522,7 @@ class JevARCClassifier(ARCClassifier):
             Extracted relations and boolean flag indicating whether the pair was escalated
             to System 2 (due to conformal ambiguity, low confidence, or deterministic audit).
         """
-        state = f"Source: {source_atom.text}\nTarget: {target_atom.text}"
+        state = format_arc_decision_pair_state(source_atom, target_atom)
         pair_key = f"{source_atom.id}:{target_atom.id}"
         is_audit = (
             should_audit_deterministically(run_seed, "phase4_arc", pair_key, audit_rate)
@@ -653,33 +739,9 @@ class JevARCClassifier(ARCClassifier):
         self, components: list[TheoryAtom], schema: SchemaConfig
     ) -> list[tuple[TheoryAtom, TheoryAtom]]:
         """Pair argument components across different source chunks."""
-        partner_count: dict[str, int] = defaultdict(int)
-        seen: set[tuple[str, str]] = set()
-        pairs: list[tuple[TheoryAtom, TheoryAtom]] = []
-
-        priority_rank = {ctype: idx for idx, ctype in enumerate(schema.component_types)}
-        sorted_components = sorted(
-            components, key=lambda c: priority_rank.get(c.component_type, 99)
+        return build_cross_chunk_candidate_pairs(
+            components, schema, self.max_candidates_per_component
         )
-
-        for i, a in enumerate(sorted_components):
-            for b in sorted_components[i + 1 :]:
-                if a.source_chunk_id == b.source_chunk_id:
-                    continue
-                key = (min(a.id, b.id), max(a.id, b.id))
-                if key in seen:
-                    continue
-                if (
-                    partner_count[a.id] >= self.max_candidates_per_component
-                    or partner_count[b.id] >= self.max_candidates_per_component
-                ):
-                    continue
-                seen.add(key)
-                pairs.append((a, b))
-                partner_count[a.id] += 1
-                partner_count[b.id] += 1
-
-        return pairs
 
 
 class CascadingARCClassifier(ARCClassifier):

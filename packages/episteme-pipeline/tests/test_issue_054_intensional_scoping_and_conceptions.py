@@ -869,3 +869,340 @@ def test_issue_054_documentation_and_adr_sync() -> None:
     assert "`Completed`" in issue_text
     assert "- [ ]" not in issue_text
     assert "- [x]" in issue_text
+
+
+def test_theorynet_projector_reductio_discharge_and_dialectical_critique() -> None:
+    """Verify TheoryNetProjector handles Reductio discharge, historical premises, and dialectical attacks."""
+    from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
+    from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
+
+    thesis = TheoryAtom(
+        id="p_thesis",
+        text="A priori synthetic judgments are possible.",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="c1",
+        modal_prior=0.50,
+        intensional_mode="asserted",
+    )
+    rival_supp = TheoryAtom(
+        id="p_rival",
+        text="Suppose all knowledge derives strictly from habit.",
+        component_type="Premise",
+        source_chunk_id="c1",
+        modal_prior=0.90,
+        intensional_mode="suppositional",
+    )
+    absurd_conseq = TheoryAtom(
+        id="p_absurd",
+        text="Mathematics would lack universal necessity.",
+        component_type="Premise",
+        source_chunk_id="c1",
+        modal_prior=0.85,
+        intensional_mode="suppositional",
+    )
+    math_fact = TheoryAtom(
+        id="p_math",
+        text="Arithmetic propositions possess universal necessity.",
+        component_type="Evidence",
+        source_chunk_id="c1",
+        modal_prior=0.95,
+        intensional_mode="historical",
+    )
+    other_thesis = TheoryAtom(
+        id="p_other",
+        text="Causality grounds objective succession.",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="c2",
+        modal_prior=0.50,
+        intensional_mode="asserted",
+    )
+    unrefuted_supp = TheoryAtom(
+        id="p_unrefuted",
+        text="Suppose causality were merely subjective.",
+        component_type="Premise",
+        source_chunk_id="c2",
+        modal_prior=0.95,
+        intensional_mode="suppositional",
+    )
+    hume_critique = TheoryAtom(
+        id="p_hume",
+        text="No impression of necessary connection exists.",
+        component_type="CounterArgument",
+        source_chunk_id="c2",
+        modal_prior=0.90,
+        intensional_mode="attributed",
+        attributed_to="David Hume",
+    )
+
+    rels = [
+        TheoryRelation(
+            source_id="p_rival",
+            target_id="p_absurd",
+            relation_type="SUPPORTS",
+            confidence=0.95,
+            inferential_warrant=0.9,
+            scope="local",
+        ),
+        TheoryRelation(
+            source_id="p_math",
+            target_id="p_absurd",
+            relation_type="ATTACKS",
+            confidence=0.95,
+            inferential_warrant=0.95,
+            scope="local",
+        ),
+        TheoryRelation(
+            source_id="p_rival",
+            target_id="p_thesis",
+            relation_type="ATTACKS",
+            confidence=0.95,
+            inferential_warrant=0.9,
+            scope="local",
+        ),
+        TheoryRelation(
+            source_id="p_unrefuted",
+            target_id="p_other",
+            relation_type="ATTACKS",
+            confidence=0.95,
+            inferential_warrant=0.95,
+            scope="local",
+        ),
+        TheoryRelation(
+            source_id="p_hume",
+            target_id="p_other",
+            relation_type="ATTACKS",
+            confidence=0.95,
+            inferential_warrant=0.9,
+            scope="local",
+        ),
+    ]
+    view = Phase4ArtifactsView(
+        theory_atoms=[
+            thesis,
+            rival_supp,
+            absurd_conseq,
+            math_fact,
+            other_thesis,
+            unrefuted_supp,
+            hume_critique,
+        ],
+        theory_relations=rels,
+    )
+
+    isolated_proj = TheoryNetProjector(
+        schema=DEFAULT_SCHEMA,
+        perspective="author",
+        isolate_suppositional=True,
+        isolate_attributed=True,
+    )
+    net_iso = isolated_proj.project(view)
+    by_iso = {a.id: a for a in net_iso.atoms}
+    assert by_iso["p_thesis"].equilibrium_strength is not None
+    assert by_iso["p_thesis"].equilibrium_strength > 0.50
+    assert by_iso["p_other"].equilibrium_strength == pytest.approx(0.50)
+
+    dialectic_proj = TheoryNetProjector(
+        schema=DEFAULT_SCHEMA,
+        perspective="author",
+        isolate_suppositional=True,
+        isolate_attributed=False,
+    )
+    net_dia = dialectic_proj.project(view)
+    by_dia = {a.id: a for a in net_dia.atoms}
+    assert by_dia["p_other"].equilibrium_strength is not None
+    assert by_dia["p_other"].equilibrium_strength < 0.50
+
+
+@pytest.mark.asyncio
+async def test_llm_acc_classifier_defers_to_modal_resolver_when_plausibility_unset(
+    tmp_path: Path,
+) -> None:
+    """Verify LLMACCClassifier leaves modal_prior unset when ext.plausibility is None."""
+
+    class _FakeUnsetPlausibilityLLM:
+        async def predict_text(self, *args: Any, **kwargs: Any) -> str:
+            return ""
+
+        async def predict_structured(self, *args: Any, **kwargs: Any) -> ACCOutput:
+            return ACCOutput(
+                components=[
+                    ExtractedComponent(
+                        id="AC1",
+                        text="Bodies attract with inverse-square force.",
+                        component_type="TheoreticalHypothesis",
+                        confidence=0.80,
+                        plausibility=None,
+                    )
+                ],
+                relations=[],
+            )
+
+    clf = LLMACCClassifier(
+        llm=DiskCachedStructuredLLM(
+            _FakeUnsetPlausibilityLLM(),
+            cache_dir=tmp_path / "unset_plaus_cache",
+        )
+    )
+    atoms, _ = await clf.classify(
+        chunk_id="c1",
+        tagged_text="<AC1>Bodies attract with inverse-square force.</AC1>",
+        adu_ids=["AC1"],
+        schema=DEFAULT_SCHEMA,
+    )
+    assert len(atoms) == 1
+    assert atoms[0].modal_prior == pytest.approx(0.6)
+    assert "modal_prior" not in atoms[0].model_fields_set
+
+
+@pytest.mark.asyncio
+async def test_phase5_fusion_preserves_distinct_intensional_scopes() -> None:
+    """Verify Phase 5 clustering and L3 fusion never merge incompatible intensional scopes."""
+    from episteme_pipeline.artifacts.execution import _resolve_l3_atoms_and_relations
+    from episteme_pipeline.artifacts.models import FusionDecisionArtifact
+    from episteme_pipeline.phases.phase5_fusion.argument_clustering import (
+        EmbeddingArgumentClustering,
+    )
+
+    atom_author_1 = TheoryAtom(
+        id="ac_auth_1",
+        text="Reason supplies universal laws.",
+        component_type="Premise",
+        source_chunk_id="c1",
+        intensional_mode="asserted",
+    )
+    atom_author_2 = TheoryAtom(
+        id="ac_auth_2",
+        text="Reason provides universal principles.",
+        component_type="Premise",
+        source_chunk_id="c2",
+        intensional_mode="asserted",
+    )
+    atom_hume = TheoryAtom(
+        id="ac_hume_1",
+        text="Reason supplies universal laws.",
+        component_type="Premise",
+        source_chunk_id="c3",
+        intensional_mode="attributed",
+        attributed_to="David Hume",
+    )
+
+    class _IdenticalEmbedder:
+        async def aget_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:
+            return [[1.0, 0.0, 0.0] for _ in texts]
+
+    class _FakeGraphReader:
+        async def get_theory_atoms(self) -> list[TheoryAtom]:
+            return [atom_author_1, atom_hume]
+
+    clusterer = EmbeddingArgumentClustering(
+        embedding_model=_IdenticalEmbedder(),
+        similarity_threshold=0.85,
+    )
+    clusters = await clusterer.cluster(_FakeGraphReader())  # type: ignore[arg-type]
+    assert clusters == []
+
+    # Even if an upstream decision groups incompatible scopes, _resolve_l3_atoms_and_relations splits safely.
+    decision = FusionDecisionArtifact(
+        decision_id="fd_1",
+        decision_type="merge",
+        canonical_artifact_id="ac_auth_1",
+        artifact_ids=["ac_auth_1", "ac_auth_2", "ac_hume_1"],
+    )
+    relations = [
+        TheoryRelation(
+            source_id="ac_auth_2",
+            target_id="ac_hume_1",
+            relation_type="ATTACKS",
+            confidence=0.9,
+            scope="global",
+        )
+    ]
+    resolved_atoms, resolved_rels = _resolve_l3_atoms_and_relations(
+        [atom_author_1, atom_author_2, atom_hume],
+        relations,
+        [decision],
+    )
+    resolved_ids = {a.id for a in resolved_atoms}
+    assert resolved_ids == {"ac_auth_1", "ac_hume_1"}
+    assert len(resolved_rels) == 1
+    assert resolved_rels[0].source_id == "ac_auth_1"
+    assert resolved_rels[0].target_id == "ac_hume_1"
+
+
+@pytest.mark.asyncio
+async def test_entity_maturation_protocol_injection_and_duplicate_envelopes(
+    tmp_path: Path,
+) -> None:
+    """Verify ConceptionClustererProtocol DI and preservation of duplicate envelopes across chunks."""
+    from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
+    from episteme_pipeline.phases.phase4_entity_maturation import (
+        ConceptionCluster,
+        Phase4EntityMaturationRunner,
+    )
+    from episteme_pipeline.protocols.entity_maturation import ConceptionClustererProtocol
+
+    seen_envelopes: list[str] = []
+
+    class _CustomClusterer:
+        def fingerprint(self) -> dict[str, Any]:
+            return {"component": "_CustomClusterer"}
+
+        def compute_spherical_variance(self, embeddings: np.ndarray) -> float:
+            return 0.0
+
+        def stratify(
+            self,
+            envelopes: list[str],
+            embeddings: np.ndarray,
+            *,
+            envelope_chunk_ids: list[str] | None = None,
+            envelope_perspectives: list[str] | None = None,
+        ) -> tuple[float, list[ConceptionCluster]]:
+            seen_envelopes.extend(envelopes)
+            assert envelope_chunk_ids == ["c1", "c2"]
+            assert envelope_perspectives == ["doc_1", "doc_2"]
+            return 0.0, []
+
+    custom = _CustomClusterer()
+    assert isinstance(custom, ConceptionClustererProtocol)
+
+    with pytest.raises(TypeError, match="ConceptionClustererProtocol"):
+        Phase4EntityMaturationRunner(
+            config=Phase4EntityMaturationConfig(),
+            llm=DiskCachedStructuredLLM(
+                _DeterministicMaturationLLM(),
+                cache_dir=tmp_path / "bad_clusterer_cache",
+            ),
+            embedding_model=_DeterministicBiEncoder(),
+            conception_clusterer="invalid",  # type: ignore[arg-type]
+        )
+
+    runner = Phase4EntityMaturationRunner(
+        config=Phase4EntityMaturationConfig(),
+        llm=DiskCachedStructuredLLM(
+            _DeterministicMaturationLLM(),
+            cache_dir=tmp_path / "custom_clusterer_cache",
+        ),
+        embedding_model=_DeterministicBiEncoder(),
+        conception_clusterer=custom,
+    )
+
+    entity = L2Entity(
+        id="ent_dup",
+        name="Matter",
+        label="Concept",
+        is_mature=False,
+    )
+    identical_env = "Matter is extended substance."
+    out = await runner._process_entity(
+        entity,
+        run_id="run_dup",
+        input_envelopes=[identical_env],
+        mention_records=[
+            {"chunk_id": "c1", "textual_envelope": identical_env},
+            {"chunk_id": "c2", "textual_envelope": identical_env},
+        ],
+        chunk_to_doc={"c1": "doc_1", "c2": "doc_2"},
+    )
+    assert out is not None
+    assert seen_envelopes == [identical_env, identical_env]

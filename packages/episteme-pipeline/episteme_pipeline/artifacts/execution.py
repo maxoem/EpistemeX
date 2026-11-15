@@ -493,78 +493,102 @@ def _resolve_l3_atoms_and_relations(
         grouped_atoms.setdefault(canon_id, []).append(atom)
 
     canonical_atoms: list[TheoryAtom] = []
+    effective_alias_map: dict[str, str] = {}
     for canon_id, group in grouped_atoms.items():
-        rep = next((a for a in group if a.id == canon_id), group[0])
-        if len(group) == 1 and rep.id == canon_id:
-            canonical_atoms.append(rep)
-            continue
-
-        merged_entity_ids: list[str] = []
-        merged_measurements = list(rep.measurements)
-        merged_parameters: dict[str, Any] = dict(rep.parameters)
+        primary_rep = next((a for a in group if a.id == canon_id), group[0])
+        primary_scope = (
+            primary_rep.intensional_mode,
+            (primary_rep.attributed_to or "").strip().lower(),
+        )
+        scoped_subgroups: dict[tuple[str, str], list[TheoryAtom]] = {}
         for member in group:
-            for eid in member.entity_ids:
-                if eid not in merged_entity_ids:
-                    merged_entity_ids.append(eid)
-            for meas in member.measurements:
-                if meas not in merged_measurements:
-                    merged_measurements.append(meas)
-            for pk, pv in member.parameters.items():
-                merged_parameters.setdefault(pk, pv)
-
-        conf_vals = [m.confidence for m in group if m.confidence is not None]
-        max_conf = max(conf_vals) if conf_vals else rep.confidence
-        modal_vals = [m.modal_prior for m in group if m.modal_prior is not None]
-        max_modal = max(modal_vals) if modal_vals else rep.modal_prior
-        tenabilities = [m.tenability for m in group if m.tenability is not None]
-        tenability = (
-            min(tenabilities, key=lambda t: t.local_score)
-            if tenabilities
-            else rep.tenability
-        )
-        local_ts_vals = [
-            m.local_tenability for m in group if m.local_tenability is not None
-        ]
-        if tenabilities:
-            local_ts_vals.extend(t.local_score for t in tenabilities)
-        local_ts = min(local_ts_vals) if local_ts_vals else rep.local_tenability
-
-        eq_vals = [
-            m.equilibrium_strength
-            for m in group
-            if m.equilibrium_strength is not None
-        ]
-        if eq_vals:
-            best_eq = min(eq_vals) if (local_ts is not None and local_ts < 1.0) else max(eq_vals)
-        else:
-            best_eq = rep.equilibrium_strength
-
-        attributed_to = rep.attributed_to or next(
-            (m.attributed_to for m in group if m.attributed_to),
-            None,
-        )
-        canonical_atoms.append(
-            rep.model_copy(
-                update={
-                    "id": canon_id,
-                    "entity_ids": merged_entity_ids,
-                    "measurements": merged_measurements,
-                    "parameters": merged_parameters,
-                    "confidence": max_conf,
-                    "equilibrium_strength": best_eq,
-                    "modal_prior": max_modal,
-                    "local_tenability": local_ts,
-                    "tenability": tenability,
-                    "intensional_mode": rep.intensional_mode,
-                    "attributed_to": attributed_to,
-                }
+            skey = (
+                member.intensional_mode,
+                (member.attributed_to or "").strip().lower(),
             )
-        )
+            scoped_subgroups.setdefault(skey, []).append(member)
+
+        for skey, subgroup in scoped_subgroups.items():
+            sub_canon_id = canon_id if skey == primary_scope else subgroup[0].id
+            rep = next((a for a in subgroup if a.id == sub_canon_id), subgroup[0])
+            for member in subgroup:
+                if member.id != sub_canon_id:
+                    effective_alias_map[member.id] = sub_canon_id
+
+            if len(subgroup) == 1 and rep.id == sub_canon_id:
+                canonical_atoms.append(rep)
+                continue
+
+            merged_entity_ids: list[str] = []
+            merged_measurements = list(rep.measurements)
+            merged_parameters: dict[str, Any] = dict(rep.parameters)
+            for member in subgroup:
+                for eid in member.entity_ids:
+                    if eid not in merged_entity_ids:
+                        merged_entity_ids.append(eid)
+                for meas in member.measurements:
+                    if meas not in merged_measurements:
+                        merged_measurements.append(meas)
+                for pk, pv in member.parameters.items():
+                    merged_parameters.setdefault(pk, pv)
+
+            conf_vals = [m.confidence for m in subgroup if m.confidence is not None]
+            max_conf = max(conf_vals) if conf_vals else rep.confidence
+            modal_vals = [m.modal_prior for m in subgroup if m.modal_prior is not None]
+            max_modal = max(modal_vals) if modal_vals else rep.modal_prior
+            tenabilities = [m.tenability for m in subgroup if m.tenability is not None]
+            tenability = (
+                min(tenabilities, key=lambda t: t.local_score)
+                if tenabilities
+                else rep.tenability
+            )
+            local_ts_vals = [
+                m.local_tenability for m in subgroup if m.local_tenability is not None
+            ]
+            if tenabilities:
+                local_ts_vals.extend(t.local_score for t in tenabilities)
+            local_ts = min(local_ts_vals) if local_ts_vals else rep.local_tenability
+
+            eq_vals = [
+                m.equilibrium_strength
+                for m in subgroup
+                if m.equilibrium_strength is not None
+            ]
+            if eq_vals:
+                best_eq = (
+                    min(eq_vals)
+                    if (local_ts is not None and local_ts < 1.0)
+                    else max(eq_vals)
+                )
+            else:
+                best_eq = rep.equilibrium_strength
+
+            attributed_to = rep.attributed_to or next(
+                (m.attributed_to for m in subgroup if m.attributed_to),
+                None,
+            )
+            canonical_atoms.append(
+                rep.model_copy(
+                    update={
+                        "id": sub_canon_id,
+                        "entity_ids": merged_entity_ids,
+                        "measurements": merged_measurements,
+                        "parameters": merged_parameters,
+                        "confidence": max_conf,
+                        "equilibrium_strength": best_eq,
+                        "modal_prior": max_modal,
+                        "local_tenability": local_ts,
+                        "tenability": tenability,
+                        "intensional_mode": rep.intensional_mode,
+                        "attributed_to": attributed_to,
+                    }
+                )
+            )
 
     deduped_relations: dict[tuple[str, str, str], TheoryRelation] = {}
     for rel in theory_relations:
-        new_src = _resolve_alias_chain(rel.source_id, atom_alias_map)
-        new_tgt = _resolve_alias_chain(rel.target_id, atom_alias_map)
+        new_src = _resolve_alias_chain(rel.source_id, effective_alias_map)
+        new_tgt = _resolve_alias_chain(rel.target_id, effective_alias_map)
         if rel.source_id != rel.target_id and new_src == new_tgt:
             continue
         rewritten = (
