@@ -17,8 +17,8 @@ configuration.
 ### Example Usage
 
 ```python
-from pipeline import Pipeline
-from pipeline.graph import (
+from episteme_pipeline import Pipeline
+from episteme_pipeline.graph import (
     Neo4jGraphReader,
     Neo4jGraphWriter,
     Neo4jProcessingGraph,

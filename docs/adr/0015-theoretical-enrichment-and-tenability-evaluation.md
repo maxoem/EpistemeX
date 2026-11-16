@@ -15,7 +15,7 @@ Furthermore, evaluating whether an empirical application satisfies a theory requ
 
 ## Decision
 
-We implement a dedicated, modular post-processing runner: **Theoretical Enrichment & Tenability Evaluation** (`TheoreticalEnrichmentRunner`), decoupled from sequential pipeline phase numbers into `pipeline/post_processing/theoretical_enrichment/`, executing the dual-enrichment architecture $\Phi(y) = \Phi_{\text{spec}}(\Phi_{\text{gen}}(y))$:
+We implement a dedicated, modular post-processing runner: **Theoretical Enrichment & Tenability Evaluation** (`TheoreticalEnrichmentRunner`), decoupled from sequential pipeline phase numbers into `packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/`, executing the dual-enrichment architecture $\Phi(y) = \Phi_{\text{spec}}(\Phi_{\text{gen}}(y))$:
 
 ### 1. Separation of Domain-Agnostic Extraction from Specific Enrichment
 * **General Extraction ($\Phi_{\text{gen}}$)** remains in core Phases 1–5, emitting domain-agnostic `ObservationUnit` (Partition $B$), `EmpiricalStatement` ($B$), and `TheoreticalHypothesis` ($A$) nodes with typed relations (`CONSTRAINS`, `REDUCES_TO`, `COHERES_WITH`).
@@ -47,6 +47,10 @@ $$TS_{\text{edge}}(e) = \sup \{ 1 - \delta_C \mid (\Phi(y_a), \Phi(y_b)) \in v_{
 * The inducer inspects the graph's `TheoreticalHypothesis` nodes (Partition $A$) and empirical observation types (Partition $B$) at macro graph scope to discover active Theory-Elements $T = \langle K, I \rangle$ with their non-theoretical dimensions ($M_{pp}$), latent parameters ($M_p$), and symbolic constraint laws ($M$).
 * Core laws are evaluated safely via an AST-based formula evaluator (`SafeFormulaEvaluator`), eliminating `eval()` security risks while supporting non-linear and functional constraints.
 
+### 6. Closed-Loop D-QBAF Re-Convergence & Top-Down Deficit Emission ([ADR-0022](0022-unified-stratified-epistemic-metamodel.md), [ADR-0024](0024-closed-loop-hermeneutic-refinement.md))
+* Following Step 4 (`TS_edge` evaluation), `TheoreticalEnrichmentRunner` executes Step 4.5 via `TheoryNetProjector.project(...)` to propagate $TS_{\text{local}}$ and $TS_{\text{edge}}$ back into D-QBAF equilibrium justification $\tau^*(a)$ and controversy volatility $\mathcal{V}(a)$ ([ADR-0022](0022-unified-stratified-epistemic-metamodel.md)).
+* When configured with an `EpistemicDeficitDetector` (`TheoryNetDeficitDetector`), `TheoreticalEnrichmentRunner` translates failing empirical/structural criteria ($TS_{\text{local}} < 0.5$, `is_tenable == False`, missing $M_{pp}$ `required_dimensions`, or $TS_{\text{edge}} < 0.5$ / elevated $\mathcal{V}$ bridging incompatible clusters) into typed `EpistemicDeficitArtifact` signals (`UNGROUNDED_AXIOM`, `POLYSEMY_COLLISION`, `ENTHYMEME_GAP`) triggering localized top-down recovery ([ADR-0024](0024-closed-loop-hermeneutic-refinement.md)).
+
 ## Alternatives Considered
 
 1. **Extracting Parameters During Ingestion (Phase 2/4):** Rejected because it destroys pipeline domain-independence, blows up prompt sizes, and fails when texts discuss novel or conflicting theories.
@@ -67,6 +71,8 @@ $$TS_{\text{edge}}(e) = \sup \{ 1 - \delta_C \mid (\Phi(y_a), \Phi(y_b)) \in v_{
 
 - [`docs/concepts/theory/metrics/epistemic_coherence/tenability.md`](../concepts/theory/metrics/epistemic_coherence/tenability.md) — Mathematical specification of tenability and admissible blurs.
 - [`docs/reference/theoretical_enrichment.md`](../reference/theoretical_enrichment.md) — Theoretical Enrichment post-processor reference documentation.
-- [`pipeline/post_processing/theoretical_enrichment/runner.py`](../../pipeline/post_processing/theoretical_enrichment/runner.py) — Post-processor runner implementation.
+- [`packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py`](../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py) — Post-processor runner implementation.
 - [ADR 0006: QBAF Mapping Deferred](0006-qbaf-mapping-deferred.md) — Early precedent for deferring quantitative weight computation.
 - [ADR 0011: Declarative Graph Metrics Framework](0011-declarative-graph-metrics-and-qbaf-semantics.md) — Async metrics architecture.
+- [ADR 0022: Unified Stratified Epistemic Metamodel](0022-unified-stratified-epistemic-metamodel.md) — Coupled D-QBAF feedback from $TS_{\text{local}}$ and $TS_{\text{edge}}$.
+- [ADR 0024: Closed-Loop Hermeneutic Refinement](0024-closed-loop-hermeneutic-refinement.md) — Top-down `EpistemicDeficitArtifact` emission and localized recovery triggered by tenability anomalies.

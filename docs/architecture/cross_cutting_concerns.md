@@ -18,7 +18,7 @@ Prompts, Caching, and Logging) in the `episteme-pipeline` without overcomplicati
 
 ---
 
-## Events & Observability (`pipeline/events`)
+## Events & Observability (`episteme_pipeline/events`)
 
 ### Design Pattern: Task-Local Context (`contextvars`)
 
@@ -30,7 +30,7 @@ active `EventEmitter` instances are bound to the execution context using `contex
 The pipeline orchestrator binds the active emitter at run time:
 
 ```python
-from pipeline.events import use_event_emitter, SimpleEventEmitter
+from episteme_pipeline.events import use_event_emitter, SimpleEventEmitter
 
 emitter = SimpleEventEmitter()
 emitter.register_observer(LoggingObserver())
@@ -46,7 +46,7 @@ Components retrieve the active emitter dynamically without needing `event_emitte
 methods:
 
 ```python
-from pipeline.events import get_event_emitter, TripleCommitted
+from episteme_pipeline.events import get_event_emitter, TripleCommitted
 
 # Retrieves context emitter, or fallback NoOpEventEmitter if none set
 get_event_emitter().emit(TripleCommitted(subject_id=..., predicate=..., object_id=...))
@@ -54,13 +54,13 @@ get_event_emitter().emit(TripleCommitted(subject_id=..., predicate=..., object_i
 
 ---
 
-## Prompt Management (`pipeline/prompts` & `pipeline/config.py`)
+## Prompt Management (`episteme_pipeline/prompts` & `episteme_pipeline/config.py`)
 
 ### Design Pattern: Unified `StructuredPromptBundle` via Constructor Injection
 
-Prompts are managed using a single canonical Pydantic model (`StructuredPromptBundle` in `pipeline/config.py`).
+Prompts are managed using a single canonical Pydantic model (`StructuredPromptBundle` in `episteme_pipeline/config.py`).
 
-#### Canonical Schema (`pipeline/config.py`)
+#### Canonical Schema (`episteme_pipeline/config.py`)
 
 ```python
 class StructuredPromptBundle(BaseModel):
@@ -70,9 +70,9 @@ class StructuredPromptBundle(BaseModel):
     gleaning_template: str | None = None
 ```
 
-#### Prompt Constants (`pipeline/prompts/default_prompts.py`)
+#### Prompt Constants (`episteme_pipeline/prompts/default_prompts.py`)
 
-All default prompt templates live in `pipeline/prompts/default_prompts.py`.
+All default prompt templates live in `episteme_pipeline/prompts/default_prompts.py`.
 
 #### Component Injection (`LLMNERExtractor`)
 
@@ -97,7 +97,7 @@ class LLMNERExtractor(NERExtractor):
 
 ---
 
-## LLM Caching (`pipeline/llm/cache.py`)
+## LLM Caching (`episteme_pipeline/llm/cache.py`)
 
 ### Design Pattern: Decorator / Adapter Wrapping
 
@@ -105,7 +105,7 @@ Caching is decoupled from business logic. Extractor implementations do not check
 Instead, structured LLMs are wrapped via `DiskCachedStructuredLLM`:
 
 ```python
-from pipeline.llm.cache import DiskCachedStructuredLLM
+from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
 
 # LLM adapter is wrapped cleanly
 cached_llm = DiskCachedStructuredLLM(llm_adapter)

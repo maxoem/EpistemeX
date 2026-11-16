@@ -28,20 +28,20 @@ The artifact and run model solves this by establishing two decoupled architectur
 
 ```mermaid
 flowchart TD
-    subgraph Orchestration ["Pipeline Orchestration (pipeline/pipeline.py)"]
+    subgraph Orchestration ["Runtime Orchestration (episteme_pipeline/runtime/execution_engine.py)"]
         ManifestStore["JsonRunManifestStore<br/>(runs_dir/run-id/manifest.json)"]
         ArtifactStore["JsonArtifactStore<br/>(artifacts_dir/run-id/kind/id.json)"]
         Context["ArtifactExecutionContext<br/>(run_id, manifest, input, previous)"]
     end
 
-    subgraph PhaseExecution ["Phase Runner Execution"]
+    subgraph PhaseExecution ["Phase Runner & Refinement Execution"]
         InputView["Typed ArtifactsView<br/>(e.g., Phase2ArtifactsView)"]
-        Runner["PhaseRunner.run(input, context)"]
-        Collection["ArtifactCollection<br/>([ArtifactEnvelope, ...])"]
+        Runner["PhaseRunner.run(input, context)<br/>+ ClosedLoopRefinementCoordinator"]
+        Collection["ArtifactCollection<br/>(history + latest_by_identity)"]
     end
 
     subgraph Downstream ["Persistence & Projection"]
-        Projector["ArtifactGraphProjector<br/>(pipeline/projection/)"]
+        Projector["ArtifactGraphProjector<br/>(episteme_pipeline/projection/)"]
         Neo4j[("Neo4j Projection Graph")]
     end
 
@@ -58,7 +58,7 @@ flowchart TD
 
 ## The Run Model
 
-Located in `pipeline/runs/models.py` and persisted via `pipeline/runs/persistence.py`.
+Located in `episteme_pipeline/runs/models.py` and persisted via `episteme_pipeline/runs/persistence.py`.
 
 ### `RunManifest`
 
@@ -70,22 +70,25 @@ The `RunManifest` is the central execution record for a pipeline run:
 - **`schema_version`**: Active `SchemaConfig.version` tracking ontology/taxonomy versions.
 - **`source_fingerprint` & `input_fingerprint`**: Deterministic hashes of source document paths, bibtex files, and structural anchors.
 - **`document_fingerprints`**: Map of `{document_id: sha256_hash}` tracking per-document content hashes for fine-grained delta extraction.
+- **`curation_ledger_fingerprint`**: Deterministic hash of applied `EpistemicCurationLedger` constraints.
 - **`config_snapshot`**: Full JSON-serialized snapshot of `PipelineConfig`.
 - **`phase_config_fingerprints`**: Per-phase configuration hashes derived from serialized phase configs (including fine-grained nested leaf fingerprints).
 - **`method_fingerprints`**: Fine-grained fingerprints of models, extractors, and prompts used by each phase (e.g., LLM parameters, embedding model dimensions, and prompt bundles).
 - **`phase_records`**: List of `RunPhaseRecord` tracking execution status and artifact outputs per phase.
+- **`refinement_pass`**: Non-negative integer (`default=0`) recording the highest closed-loop hermeneutic refinement pass executed for this run (`0` for purely feed-forward runs).
 
 ### `RunPhaseRecord`
 
-Tracks execution state for an individual phase:
+Tracks execution state for an individual phase (or refinement pass):
 
-- `phase_name` and `phase_ordinal` (1-based index).
+- `phase_name`, `phase_ordinal` (1-based index, aliased as `ordinal`), and `phase_key` (machine key, e.g., `"phase4"` or `"refinement"`).
 - `status`: `RunStatus` for this specific phase.
 - `started_at` and `completed_at` timestamps.
 - `input_artifact_ids`: IDs of artifacts consumed as input.
-- `output_artifact_ids`: IDs of artifacts produced by this phase.
+- `output_artifact_ids` and `artifact_ids`: IDs of artifacts produced by this phase.
 - `output_fingerprint`: Stable hash of the emitted artifact collection.
 - `reused`: Boolean flag indicating whether the phase was reused from a prior run.
+- `refinement_pass`: Non-negative integer (`default=0`) distinguishing forward executions (`0`) from pass-$r$ refinement records ($r \ge 1$).
 
 ### `RunReport`
 
@@ -101,13 +104,23 @@ At run completion, a `RunReport` is generated summarizing:
 
 ## The Artifact Model
 
-Located in `pipeline/artifacts/models.py` and persisted via `pipeline/artifacts/store.py`.
+Located in `episteme_pipeline/artifacts/models.py` and persisted via `episteme_pipeline/artifacts/store.py`.
 
-### `ArtifactEnvelope[T]`
+### `ArtifactEnvelope[T]` and `ArtifactProvenance`
 
-Every artifact emitted by the pipeline is wrapped in a generic `ArtifactEnvelope[T]`:
+Every artifact emitted by the pipeline is wrapped in a generic `ArtifactEnvelope[T]` carrying a typed `ArtifactProvenance`:
 
 ```python
+class ArtifactProvenance(BaseModel):
+    source_path: str | None = None
+    source_document_id: str | None = None
+    source_chunk_id: str | None = None
+    upstream_artifact_ids: list[str] = Field(default_factory=list)
+    notes: dict[str, str] = Field(default_factory=dict)
+    refinement_pass: int = Field(default=0, ge=0)
+    deficit_id: str | None = None
+
+
 class ArtifactEnvelope(BaseModel, Generic[ArtifactPayloadT]):
     artifact_id: str
     identity_key: str | None = None
@@ -124,12 +137,13 @@ class ArtifactEnvelope(BaseModel, Generic[ArtifactPayloadT]):
     metadata: dict[str, Any] = Field(default_factory=dict)
 ```
 
-#### Dual Identifier System
+#### Dual Identifier System & Pass-Scoped IDs
 
 Every artifact carries two complementary identifiers:
 
-1. **`artifact_id`** (`artifact::<uuid>`): Unique identifier representing the specific artifact instance in a particular run. Used in `provenance.upstream_artifact_ids` to track concrete data lineage.
-2. **`identity_key`** (`<kind>::<canonical_identifier>`): Stable semantic identity across runs (e.g., `linked_entity::kant_crp_space`). Used by the invalidation DAG and cross-run comparison tools to correlate equivalent entities across parameter changes.
+1. **`artifact_id`** (`artifact::<base_id>` for pass 0, or pass-scoped `artifact::<base_id>::pass<r>` for `refinement_pass = r > 0` via `_scoped_artifact_id` in `episteme_pipeline/artifacts/builders.py`): Unique identifier representing the specific artifact instance in a particular run and refinement pass. Used in `provenance.upstream_artifact_ids` to track concrete data lineage and preserve pass history on disk.
+2. **`identity_key`** (`<kind>::<canonical_identifier>`): Stable semantic identity across runs and refinement passes (e.g., `linked_entity::kant_crp_space`, `epistemic_deficit::<deficit_id>`). Used by `ArtifactCollection.latest_by_identity`, the invalidation DAG, and cross-run comparison tools to correlate equivalent entities across parameter changes and localized refinement overlays.
+3. **Refinement Provenance (`refinement_pass`, `deficit_id`)**: Artifacts emitted or updated during top-down refinement record the pass number (`refinement_pass >= 1`) and the triggering `EpistemicDeficit.deficit_id` (`provenance.deficit_id`).
 
 ### Payload Families
 
@@ -140,29 +154,30 @@ The pipeline defines typed payloads for each construction stage:
 | `document` | `DocumentArtifact` | Phase 1 | Ingested source document with structural anchor |
 | `chunk` | `ChunkArtifact` | Phase 1 | Segmented and embedded text chunks |
 | `entity_mention` | `EntityMentionArtifact` | Phase 2 | Extracted surface mentions in text |
-| `linked_entity` | `LinkedEntityArtifact` | Phase 2 | Canonicalized and linked entities |
+| `linked_entity` | `LinkedEntityArtifact` | Phase 2 / Phase 4m | Canonicalized, linked, and matured entities |
 | `local_relation` | `LocalRelationArtifact` | Phase 2 | Intra-chunk entity relationships |
 | `global_relation` | `GlobalRelationArtifact` | Phase 3 | Cross-chunk / document-wide relationships |
-| `theory_atom` | `TheoryAtomArtifact` | Phase 4 | Argument components (premises, claims) |
-| `theory_relation` | `TheoryRelationArtifact` | Phase 4 | Argumentative relations (supports, attacks) |
-| `fusion_decision` | `FusionDecisionArtifact` | Phase 5 | Entity alignment & fusion decisions |
-| `canonicalization` | `CanonicalizationArtifact` | Phase 5 | Canonical entity representations |
+| `canonicalization` | `CanonicalizationArtifact` | Phase 3b | Entity canonicalization (`SAME_AS`) merge decisions |
+| `theory_atom` | `TheoryAtomArtifact` | Phase 4 / Phase 6 | Argument components (premises, claims, axioms, observations) |
+| `theory_relation` | `TheoryRelationArtifact` | Phase 4 / Phase 6 | Argumentative relations (supports, attacks, undercuts) |
+| `fusion_decision` | `FusionDecisionArtifact` | Phase 5 | Argument equivalence alignment & fusion decisions |
 | `theoretical_enrichment` | `TheoreticalEnrichmentArtifact` | Post-processing | Theoretical enrichment & tenability scores |
+| `epistemic_deficit` | `EpistemicDeficitArtifact` | Phase 6 / Post-processing / Refinement | Top-down deficit signals (`enthymeme_gap`, `polysemy_collision`, `ungrounded_axiom`) |
 
 ---
 
 ## Execution & Inter-Phase Handoff
 
-Located in `pipeline/artifacts/execution.py`, `pipeline/artifacts/subgraph_reader.py`, and `pipeline/artifacts/checkpoint_store.py`.
+Located in `episteme_pipeline/artifacts/execution.py`, `episteme_pipeline/artifacts/subgraph_reader.py`, and `episteme_pipeline/artifacts/checkpoint_store.py`.
 
-### Identity-Keyed `ArtifactCollection`
+### Identity-Keyed `ArtifactCollection` & Refinement Overlays
 
 An `ArtifactCollection` is a typed container holding emitted `ArtifactEnvelope` instances across two views:
 
-1. **`history`**: The complete append-only sequence of all emitted `ArtifactEnvelope` instances, preserving full version history for `ArtifactStore` persistence and provenance inspection.
+1. **`history`**: The complete append-only sequence of all emitted `ArtifactEnvelope` instances, preserving full per-pass version history (pass `0`, pass `1`, ..., pass $r$) for `JsonArtifactStore` persistence and provenance inspection.
 2. **`latest_by_identity`**: A deterministic last-write-wins index keyed by `identity_key` (or `artifact_id` when `identity_key` is `None`).
 
-`collection.of_kind(*kinds, latest_only: bool = True)` defaults to returning only the latest version for each `identity_key`. When a downstream phase (such as `Phase4EntityMaturationRunner`) emits an updated `LinkedEntityArtifact` for an existing `identity_key`, downstream views receive the matured entity without duplicate-entity collisions while preserving the Phase 2 raw artifact in `collection.history`.
+`collection.of_kind(*kinds, latest_only: bool = True)` defaults to returning only the latest version for each `identity_key`. When a downstream phase (such as `Phase4EntityMaturationRunner`) or a **hermeneutic refinement cycle** ([ADR 0024](../adr/0024-closed-loop-hermeneutic-refinement.md)) emits an updated envelope sharing the same `identity_key` with a pass-scoped `artifact_id` (`::pass<r>`), downstream `EpistemicStateView`s see the refined entity, relation, or atom immediately while pass-0 artifacts remain preserved in `collection.history` and **unaffected subgraphs remain untouched**.
 
 ### Cumulative `EpistemicStateView` & Canonical L2/L3 Resolution
 
@@ -171,10 +186,11 @@ Phases consume upstream data through cumulative typed views inheriting from `Epi
 - **`Phase1ArtifactsView`**: Provides `documents: list[L1Document]` (including `structural_anchor` ToC trees) and `chunks: list[L1Chunk]`. Consumed by Phase 2.
 - **`Phase2ArtifactsView`**: Cumulative L1 + L2 state (`documents`, `chunks`, canonicalized `entities`, canonicalized `local_triples`, `entity_envelopes_by_id`, and `entity_mentions_by_id`). Consumed by Phase 3.
 - **`Phase3ArtifactsView`**: Cumulative L1 + L2 + global relation state (`documents`, `chunks`, canonicalized `entities`, `local_triples`, `global_triples`, `entity_envelopes_by_id`, and `relation_type_distribution`). Automatically applies Phase 3b `CanonicalizationArtifact` (`SAME_AS`) alias mappings $\pi_{L2}: \text{entity\_id} \to \text{canonical\_entity\_id}$ to merge duplicate entities, combine mention textual envelopes, and rewrite/deduplicate `local_triples` and `global_triples` (dropping induced self-loops). Consumed by Phase 3b, Phase 4 Maturation, and Phase 4 Argument Mining.
-- **`Phase4ArtifactsView` / `Phase5ArtifactsView`**: Cumulative L1 + L2 + L3 state (`theory_atoms`, `theory_relations`, `fusion_decisions`, `canonical_theory_atoms`, `canonical_theory_relations`, plus all upstream L1/L2 fields). Automatically applies Phase 5 `FusionDecisionArtifact` cluster/merge decisions $\pi_{L3}: \text{atom\_id} \to \text{canonical\_atom\_id}$ so Phase 6 (`TheoryNet` / QBAF gradual semantics) and `TheoreticalEnrichmentRunner` evaluate canonical equivalence classes without multi-counting duplicate claims.
+- **`Phase4ArtifactsView` / `Phase5ArtifactsView`**: Cumulative L1 + L2 + L3 state (`theory_atoms`, `theory_relations`, `fusion_decisions`, `canonical_theory_atoms`, `canonical_theory_relations`, `theoretical_enrichments`, plus all upstream L1/L2 fields). Automatically applies Phase 5 `FusionDecisionArtifact` cluster/merge decisions $\pi_{L3}: \text{atom\_id} \to \text{canonical\_atom\_id}$ so Phase 6 (`TheoryNet` / QBAF gradual semantics) and `TheoreticalEnrichmentRunner` evaluate canonical equivalence classes without multi-counting duplicate claims.
 - **`TheoreticalEnrichmentArtifactsView`**: Provides `enrichments: list[TheoreticalEnrichmentArtifact]`.
+- **`EpistemicDeficitArtifactsView`**: Hydrates full L1–L4 state plus active `epistemic_deficits: list[EpistemicDeficitArtifact]` (`to_domain_deficits()`). Kept intentionally separate from forward `Phase1ArtifactsView`–`Phase4ArtifactsView` `_allowed_kinds` so `WorkflowDAG` preserves strict forward acyclicity while refinement detectors and coordinators access complete state and active deficits.
 
-Every view tracks the exact list of `consumed_artifact_ids` read during `from_collection(collection)`, which `Pipeline._execute()` records directly on `RunPhaseRecord.input_artifact_ids`.
+Every view tracks the exact list of `consumed_artifact_ids` read during `from_collection(collection)`, which `ArtifactExecutionEngine.execute()` records directly on `RunPhaseRecord.input_artifact_ids`. During post-forward refinement (`_run_refinement_stage()`), `ArtifactExecutionEngine._record_new_artifacts_in_report()` records newly emitted refinement and deficit artifacts as `ArtifactReportEntry` records in `RunReport` and updates per-kind/per-phase counts.
 
 ### In-Memory `ArtifactSubgraphReader` & `FileSystemCheckpointStore`
 
@@ -199,7 +215,7 @@ The orchestrator builds the appropriate view via `entry.input_view.from_collecti
 
 ## Graph Projection & Decoupling
 
-Located in `pipeline/projection/artifact_projector.py` and `pipeline/projection/theorynet_projector.py`.
+Located in `episteme_pipeline/projection/artifact_projector.py` and `episteme_pipeline/projection/theorynet_projector.py`.
 
 Execution is strictly decoupled from graph storage:
 
@@ -227,6 +243,7 @@ Execution is strictly decoupled from graph storage:
 | `CanonicalizationArtifact` | Edge (Batched) | `(:Entity)-[:SAME_AS]->(:Entity)` | `confidence: 1.0`, `source: "phase3b_consolidation"` |
 | `FusionDecisionArtifact` | Node/Edge (Batched) | `:Community` / `(:TheoryAtom)-[:EQUIVALENT_FUSION]->(:TheoryAtom)` | Community memberships and equivalence fusion links |
 | `TheoreticalEnrichmentArtifact` | Node + Edges | `:Theory`, `:HAS_THEORY_ELEMENT`, `:GOVERNED_BY` | Postulated theoretical parameters, local/edge tenabilities |
+| `EpistemicDeficitArtifact` | Explicit No-Op | — | Audit/coordination signal (`project_to_graph` and `collect_for_projection` are explicit no-ops) |
 
 ---
 
@@ -234,12 +251,12 @@ Execution is strictly decoupled from graph storage:
 
 Artifact hydration operates at two complementary granularities:
 
-### 1. Whole-Phase Lineage Hydration (`_hydrate_previous_collection`)
+### 1. Whole-Phase Lineage Hydration (`ArtifactExecutionEngine.hydrate_previous_collection`)
 
-When a run is resumed via `resume_from_run()` or reuses phases via `_choose_reuse_source()`:
+When a run is resumed via `resume_from_run()` or reuses phases via `ArtifactExecutionEngine.choose_reuse_source()`:
 
 1. The orchestrator identifies the source run (`parent_run_id`).
-2. `_hydrate_previous_collection(phase_number, source_run_id)` retrieves all artifacts produced prior to the resume boundary.
+2. `ArtifactExecutionEngine.hydrate_previous_collection(phase_number, source_run_id)` retrieves all artifacts produced prior to the resume boundary.
 3. If an artifact was inherited across multiple resume hops, the store traverses the parent-run chain (`run_id -> parent_run_id -> ...`), always selecting the nearest occurrence of each `identity_key`.
 4. Downstream phases execute seamlessly with a fully populated `ArtifactCollection` as if all upstream phases had executed in the current process.
 
@@ -260,14 +277,16 @@ When inputs evolve incrementally ($\mathcal{D}_{t+1} = \mathcal{D}_t \cup \Delta
 
 ## Configuration Controls
 
-The artifact and run model is configured via `ExecutionConfig` in `pipeline/config.py`:
+The artifact and run model is configured via `ExecutionConfig` in `episteme_pipeline/config.py`:
 
 | Parameter | Type | Default | Description |
 |:---|:---|:---|:---|
-| `runs_dir` | `Path` | `.pipeline_runs` | Base directory for serialized `RunManifest` files |
-| `artifacts_dir` | `Path` | `.pipeline_artifacts` | Base directory for serialized JSON artifact files |
+| `runs_dir` | `str` | `".pipeline_runs"` | Base directory for serialized `RunManifest` files |
+| `artifacts_dir` | `str` | `".pipeline_artifacts"` | Base directory for serialized JSON artifact files |
 | `persist_run_manifests` | `bool` | `True` | Whether to write `manifest.json` on disk |
-| `project_artifacts_to_graph` | `bool` | `True` | Whether to project emitted artifacts to Neo4j |
+| `persist_theoretical_enrichment_artifacts` | `bool` | `True` | Whether to persist `TheoreticalEnrichmentRunner` artifacts |
+| `persist_refinement_artifacts` | `bool` | `True` | Whether to persist `EpistemicDeficitArtifact` and pass-$r$ delta artifacts |
+| `project_artifacts_to_graph` | `bool` | `False` | Whether to project emitted artifacts to Neo4j |
 | `allow_phase_reuse` | `bool` | `True` | Whether to reuse valid phases from compatible prior runs |
 | `allow_artifact_hydration` | `bool` | `True` | Whether to hydrate upstream artifacts across runs |
 
@@ -279,5 +298,5 @@ The artifact and run model is configured via `ExecutionConfig` in `pipeline/conf
 - **Runtime and Complexity**: [Pipeline Runtime Analysis](runtime_analysis.md)
 - **System Overview**: [System Architecture Overview](overview.md)
 - **Pipeline Architecture**: [Pipeline Architecture](pipeline_architecture.md)
-- **ADRs**: [ADR 0001: Neo4j Async Graph Backend](../adr/0001-neo4j-async-graph-backend.md), [ADR 0014: Deterministic Identity Diffing](../adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [ADR 0021: Incremental Corpus Evolution & HITL Constraint Ledger](../adr/0021-incremental-corpus-evolution-and-persistent-hitl-constraint-ledger.md)
+- **ADRs**: [ADR 0001: Neo4j Async Graph Backend](../adr/0001-neo4j-async-graph-backend.md), [ADR 0014: Deterministic Identity Diffing](../adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [ADR 0021: Incremental Corpus Evolution & HITL Constraint Ledger](../adr/0021-incremental-corpus-evolution-and-persistent-hitl-constraint-ledger.md), [ADR 0024: Closed-Loop Hermeneutic Refinement](../adr/0024-closed-loop-hermeneutic-refinement.md)
 

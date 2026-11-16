@@ -196,7 +196,10 @@ nav = [
             { "ADR 0018: Core Decision Engine Architecture" = "adr/0018-decision-engine-architecture-and-contracts.md" },
             { "ADR 0019: Decision Engine Client Implementation" = "adr/0019-typesafe-jev-client-and-decision-observability.md" },
             { "ADR 0020: Propositional Modal Strength Resolver" = "adr/0020-propositional-modal-strength-resolver.md" },
-            { "ADR 0021: Incremental Corpus Evolution & HITL Constraint Ledger" = "adr/0021-incremental-corpus-evolution-and-persistent-hitl-constraint-ledger.md" }
+            { "ADR 0021: Incremental Corpus Evolution & HITL Constraint Ledger" = "adr/0021-incremental-corpus-evolution-and-persistent-hitl-constraint-ledger.md" },
+            { "ADR 0022: Unified Stratified Epistemic Metamodel" = "adr/0022-unified-stratified-epistemic-metamodel.md" },
+            { "ADR 0023: Intensional Scoping & Conception Stratification" = "adr/0023-intensional-perspectival-scoping-and-conception-stratification.md" },
+            { "ADR 0024: Closed-Loop Hermeneutic Refinement" = "adr/0024-closed-loop-hermeneutic-refinement.md" }
         ] }
     ] },
 

@@ -60,6 +60,10 @@ $$TS_{\text{local}}(y, M) = \sup \{ 1 - \delta \mid \exists x^* \in M : (\Phi(y)
 $$TS_{\text{edge}}(e) = \sup \{ 1 - \delta_C \mid (\Phi(y_a), \Phi(y_b)) \in v_{\delta_C} \}$$
 * Flags edges or hypotheses with $TS < 0.5$ as untenable anomalies.
 
+### Step 4.5–5: Coupled D-QBAF Re-Convergence & Optional Deficit Emission
+* Re-runs `TheoryNetProjector.project(...)` so $TS_{\text{local}}$ and $TS_{\text{edge}}$ modulate D-QBAF equilibrium degrees $\tau^*(a)$ and controversy volatility $\mathcal{V}(a)$ ([ADR 0022](../adr/0022-unified-stratified-epistemic-metamodel.md)).
+* When configured with an `EpistemicDeficitDetector` (`TheoryNetDeficitDetector`), emits `EpistemicDeficitArtifact` signals (`UNGROUNDED_AXIOM`, `POLYSEMY_COLLISION`, `ENTHYMEME_GAP`) for bounded closed-loop refinement ([ADR 0024](../adr/0024-closed-loop-hermeneutic-refinement.md)).
+
 ---
 
 ## Python API Reference
@@ -95,7 +99,7 @@ $$TS_{\text{edge}}(e) = \sup \{ 1 - \delta_C \mid (\Phi(y_a), \Phi(y_b)) \in v_{
 While the runner dynamically induces theories via LLM by default, custom theories can be registered explicitly:
 
 ```python
-from pipeline.post_processing.theoretical_enrichment import (
+from episteme_pipeline.post_processing.theoretical_enrichment import (
     TheoryElementDefinition,
     TheoryLaw,
     TheoryRegistry,
