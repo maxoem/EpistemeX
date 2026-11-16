@@ -440,15 +440,12 @@ class ArtifactSubgraphReader(GraphReader):
                         SearchResult(
                             node_id=chunk.id,
                             score=score,
-                            properties={
-                                "id": chunk.id,
-                                "text": chunk.text,
-                                "source_doc_id": chunk.source_doc_id,
-                            },
+                            node_label="Chunk",
+                            node_name=chunk.id,
                         )
                     )
         results.sort(key=lambda r: r.score, reverse=True)
-        return results[:top_k]
+        return results[: max(0, top_k)]
 
     async def get_theory_atoms(self) -> list[TheoryAtom]:
         """Return all :class:`TheoryAtom` nodes in the artifact subgraph.

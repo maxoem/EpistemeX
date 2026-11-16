@@ -29,6 +29,12 @@ from episteme_pipeline.protocols.extractors import (
 from episteme_pipeline.protocols.modality import ModalStrengthResolver
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.protocols.quality_gate import EpistemicQualityGate
+from episteme_pipeline.protocols.refinement import (
+    EpistemicDeficitDetector,
+    HermeneuticRefinementCoordinator,
+    ensure_deficit_detector,
+    ensure_refinement_coordinator,
+)
 from episteme_pipeline.runs.models import (
     ArtifactReportEntry,
     ExecutionResult,
@@ -84,6 +90,12 @@ class Pipeline:
         Pre-constructed declarative workflow DAG.
     engine : ArtifactExecutionEngine or None, optional
         Pre-constructed artifact execution engine.
+    deficit_detector : EpistemicDeficitDetector or None, optional
+        Optional top-down epistemic deficit detector used when constructing a
+        default :class:`ClosedLoopRefinementCoordinator`.
+    refinement_coordinator : HermeneuticRefinementCoordinator or None, optional
+        Optional closed-loop hermeneutic refinement coordinator invoked after
+        the forward workflow when ``config.refinement.max_refinement_cycles > 0``.
     """
 
     def __init__(
@@ -100,6 +112,8 @@ class Pipeline:
         quality_gates: Sequence[EpistemicQualityGate] | None = None,
         workflow: WorkflowDAG | None = None,
         engine: ArtifactExecutionEngine | None = None,
+        deficit_detector: EpistemicDeficitDetector | None = None,
+        refinement_coordinator: HermeneuticRefinementCoordinator | None = None,
     ) -> None:
         self.config = config
         self.graph_reader = graph_reader
@@ -112,6 +126,12 @@ class Pipeline:
         self.event_emitter: EventEmitter = event_emitter or NoOpEventEmitter()
         self.decision_engine = decision_engine
         self.modal_resolver = modal_resolver
+
+        resolved_detector = ensure_deficit_detector(deficit_detector)
+        resolved_coordinator = ensure_refinement_coordinator(
+            refinement_coordinator
+        )
+        self.deficit_detector = resolved_detector
 
         resolved_gates: Sequence[EpistemicQualityGate] = (
             quality_gates
@@ -132,6 +152,59 @@ class Pipeline:
                 quality_gates=resolved_gates,
             )
 
+        if (
+            engine is None
+            and resolved_coordinator is None
+            and config.refinement.max_refinement_cycles > 0
+        ):
+            from episteme_pipeline.projection.theorynet_projector import (
+                TheoryNetProjector,
+            )
+            from episteme_pipeline.refinement import (
+                ClosedLoopRefinementCoordinator,
+                ConceptionConceptSplitter,
+                TheoryGuidedAxiomGrounder,
+                TheoryNetDeficitDetector,
+            )
+
+            p6_cfg = config.phase6
+            default_projector = TheoryNetProjector(
+                schema=config.graph_schema,
+                admissibility_threshold=p6_cfg.admissibility_threshold,
+                admissibility_mode=p6_cfg.admissibility_mode,
+                tau_p=p6_cfg.tau_p,
+                tau_c=p6_cfg.tau_c,
+                prune_inadmissible=p6_cfg.prune_inadmissible,
+                iterations=p6_cfg.iterations,
+                tolerance=p6_cfg.tolerance,
+                semantics_model=p6_cfg.semantics_model,
+                modal_resolver=self.modal_resolver,
+                use_continuous=p6_cfg.use_continuous,
+                perspective=p6_cfg.perspective,
+                isolate_suppositional=p6_cfg.isolate_suppositional,
+                isolate_attributed=p6_cfg.isolate_attributed,
+                t_norm=p6_cfg.conjunctive_t_norm,
+            )
+            if resolved_detector is None:
+                resolved_detector = TheoryNetDeficitDetector(
+                    config=config.refinement,
+                    schema=config.graph_schema,
+                )
+                self.deficit_detector = resolved_detector
+            resolved_coordinator = ClosedLoopRefinementCoordinator(
+                detector=resolved_detector,
+                concept_splitter=ConceptionConceptSplitter(
+                    schema=config.graph_schema
+                ),
+                axiom_grounder=TheoryGuidedAxiomGrounder(
+                    theory_projector=default_projector,
+                    schema=config.graph_schema,
+                ),
+                theorynet_projector=default_projector,
+                config=config.refinement,
+                schema=config.graph_schema,
+            )
+
         self.engine = engine or ArtifactExecutionEngine(
             workflow=self.workflow,
             config=self.config,
@@ -139,6 +212,7 @@ class Pipeline:
             checkpoint_store=self.checkpoint_store,
             event_emitter=self.event_emitter,
             decision_engine=self.decision_engine,
+            refinement_coordinator=resolved_coordinator,
         )
 
     def fingerprint(self) -> dict[str, Any]:
@@ -187,6 +261,19 @@ class Pipeline:
     def projector(self, value: ArtifactGraphProjector) -> None:
         self.engine.projector = value
 
+    @property
+    def refinement_coordinator(
+        self,
+    ) -> HermeneuticRefinementCoordinator | None:
+        """Return the configured closed-loop refinement coordinator."""
+        return self.engine.refinement_coordinator
+
+    @refinement_coordinator.setter
+    def refinement_coordinator(
+        self, value: HermeneuticRefinementCoordinator | None
+    ) -> None:
+        self.engine.refinement_coordinator = ensure_refinement_coordinator(value)
+
     @classmethod
     def for_task(
         cls,
@@ -211,6 +298,8 @@ class Pipeline:
         ner_extractor: Any | None = None,
         modal_resolver: ModalStrengthResolver | None = None,
         quality_gates: Sequence[EpistemicQualityGate] | None = None,
+        deficit_detector: EpistemicDeficitDetector | None = None,
+        refinement_coordinator: HermeneuticRefinementCoordinator | None = None,
     ) -> Pipeline:
         """Create a pipeline for a specific task via :class:`PipelineFactory`.
 
@@ -256,6 +345,10 @@ class Pipeline:
             Modal strength resolver for Phase 4 and Phase 6.
         quality_gates : Sequence of EpistemicQualityGate or None, optional
             Explicit inter-phase quality gates.
+        deficit_detector : EpistemicDeficitDetector or None, optional
+            Optional override for top-down epistemic deficit detection.
+        refinement_coordinator : HermeneuticRefinementCoordinator or None, optional
+            Optional override for closed-loop hermeneutic refinement coordination.
 
         Returns
         -------
@@ -285,6 +378,8 @@ class Pipeline:
             ner_extractor=ner_extractor,
             modal_resolver=modal_resolver,
             quality_gates=quality_gates,
+            deficit_detector=deficit_detector,
+            refinement_coordinator=refinement_coordinator,
         )
 
     def phase_boundaries(self) -> list[tuple[int, str]]:
