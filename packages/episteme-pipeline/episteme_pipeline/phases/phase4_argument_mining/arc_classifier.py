@@ -27,6 +27,7 @@ from episteme_pipeline.phases.phase4_argument_mining.models import ARCRelationOu
 from episteme_pipeline.phases.phase4_argument_mining.pairing import (
     build_cross_chunk_candidate_pairs,
 )
+from episteme_pipeline.prompts.default_prompts import ARC_DIRECT_PROMPT
 from episteme_pipeline.prompts.input_formatters import format_component_type_with_scope
 from episteme_pipeline.protocols.argument_mining import ARCClassifier
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
@@ -229,10 +230,10 @@ class TAGARCClassifier(ARCClassifier):
 
         async def _eval_pair(pair: tuple[TheoryAtom, TheoryAtom]) -> TheoryRelation | None:
             return await self._classify_pair(
-                pair[0],
-                pair[1],
-                graph_store,
-                effective_schema,
+                component_a=pair[0],
+                component_b=pair[1],
+                graph_store=graph_store,
+                schema=effective_schema,
                 global_extractor=global_extractor,
             )
 
@@ -392,11 +393,10 @@ class TAGARCClassifier(ARCClassifier):
         component_a: TheoryAtom,
         component_b: TheoryAtom,
         graph_store: GraphReader,
-        global_extractor: GlobalRelationExtractor,
-        schema: SchemaConfig,
+        schema: SchemaConfig | None = None,
+        global_extractor: GlobalRelationExtractor | None = None,
     ) -> TheoryRelation | None:
-        """
-        Predict the argument relation between two specific theory atoms.
+        """Predict the argument relation between two specific theory atoms.
 
         This fetches the structural neighborhood for both components, merges them
         into an envelope, and prompts the LLM to decide the stance.
@@ -409,17 +409,20 @@ class TAGARCClassifier(ARCClassifier):
             The second theory atom.
         graph_store : GraphReader
             The graph storage client.
-        schema : SchemaConfig
-            The schema to validate relation types against.
-        global_extractor : GlobalRelationExtractor | None, optional
+        schema : SchemaConfig or None, optional
+            The schema to validate relation types against. Defaults to ``SchemaConfig()``.
+        global_extractor : GlobalRelationExtractor or None, optional
             Deprecated / optional global extractor. Subgraphs are fetched directly
             from graph_store.
 
         Returns
         -------
-        TheoryRelation | None
+        TheoryRelation or None
             The predicted relation, or None if no valid relation was found.
         """
+        del global_extractor
+        effective_schema = schema or SchemaConfig()
+        prompt_bundle = self.prompts if self.prompts is not None else ARC_DIRECT_PROMPT
         env_a, env_b = await asyncio.gather(
             graph_store.get_neighborhood(component_a.id, depth=self.subgraph_depth),
             graph_store.get_neighborhood(component_b.id, depth=self.subgraph_depth),
@@ -430,7 +433,7 @@ class TAGARCClassifier(ARCClassifier):
         try:
             raw: ARCRelationOutput = await self.llm.predict_structured(
                 ARCRelationOutput,
-                self.prompts,
+                prompt_bundle,
                 strategy=self.strategy,
                 component_a_id=component_a.id,
                 component_a_type=format_component_type_with_scope(component_a),
@@ -439,7 +442,7 @@ class TAGARCClassifier(ARCClassifier):
                 component_b_type=format_component_type_with_scope(component_b),
                 component_b_text=component_b.text,
                 subgraph_envelope=envelope_text,
-                argument_relation_types=schema.argument_relation_types_str(),
+                argument_relation_types=effective_schema.argument_relation_types_str(),
             )
         except Exception as exc:
             logger.warning(
@@ -453,7 +456,7 @@ class TAGARCClassifier(ARCClassifier):
         if raw.relation_type is None:
             return None
 
-        if raw.relation_type not in schema.argument_relation_types:
+        if raw.relation_type not in effective_schema.argument_relation_types:
             logger.warning(
                 "ARC: discarded unknown relation type %r for pair (%s, %s)",
                 raw.relation_type,
