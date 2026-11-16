@@ -713,6 +713,7 @@ def _full_state_kwargs(collection: ArtifactCollection) -> dict[str, Any]:
         "canonical_theory_relations": p4.canonical_theory_relations,
         "entity_envelopes_by_id": p4.entity_envelopes_by_id,
         "entity_mentions_by_id": p4.entity_mentions_by_id,
+        "theoretical_enrichments": p4.theoretical_enrichments,
         "epistemic_deficits": deficits,
         "consumed_artifact_ids": [*p4.consumed_artifact_ids, *deficit_ids],
     }
@@ -740,6 +741,9 @@ class EpistemicStateView:
     entity_envelopes_by_id: dict[str, list[str]] = field(default_factory=dict)
     entity_mentions_by_id: dict[str, list[dict[str, str]]] = field(
         default_factory=dict
+    )
+    theoretical_enrichments: list[TheoreticalEnrichmentArtifact] = field(
+        default_factory=list
     )
     epistemic_deficits: list[EpistemicDeficitArtifact] = field(default_factory=list)
     consumed_artifact_ids: list[str] = field(default_factory=list)
@@ -1039,6 +1043,7 @@ class Phase4ArtifactsView(EpistemicStateView):
             relation_type_distribution=p3.relation_type_distribution,
             entity_envelopes_by_id=p3.entity_envelopes_by_id,
             entity_mentions_by_id=p3.entity_mentions_by_id,
+            theoretical_enrichments=enrichments,
             consumed_artifact_ids=[*p3.consumed_artifact_ids, *p4_ids],
         )
 

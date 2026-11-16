@@ -11,6 +11,7 @@ import logging
 from typing import Any
 
 from episteme_pipeline.artifacts.builders import (
+    build_epistemic_deficit_artifact,
     build_theory_atom_artifact,
     build_theory_relation_artifact,
 )
@@ -31,6 +32,10 @@ from episteme_pipeline.protocols.modality import (
     ensure_modal_strength_resolver,
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
+from episteme_pipeline.protocols.refinement import (
+    EpistemicDeficitDetector,
+    ensure_deficit_detector,
+)
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
@@ -57,6 +62,9 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
         System 1 calibrated decision engine instance.
     modal_resolver : ModalStrengthResolver | None, optional
         Propositional modal strength resolver. If None, initialized from config and decision engine.
+    deficit_detector : EpistemicDeficitDetector | None, optional
+        Optional top-down epistemic deficit detector invoked after TheoryNet
+        projection to emit :class:`EpistemicDeficitArtifact` signals.
     """
 
     name = "Phase 6: TheoryNet Projection"
@@ -69,7 +77,13 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             ArtifactKind.FUSION_DECISION,
         }
     )
-    writes_kinds = frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION})
+    writes_kinds = frozenset(
+        {
+            ArtifactKind.THEORY_ATOM,
+            ArtifactKind.THEORY_RELATION,
+            ArtifactKind.EPISTEMIC_DEFICIT,
+        }
+    )
 
     def __init__(
         self,
@@ -79,6 +93,7 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
         projector: TheoryNetProjector | None = None,
         decision_engine: DecisionEngine | None = None,
         modal_resolver: ModalStrengthResolver | None = None,
+        deficit_detector: EpistemicDeficitDetector | None = None,
     ) -> None:
         if config is None:
             config = Phase6Config()
@@ -99,6 +114,9 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
         self.modal_resolver = ensure_modal_strength_resolver(modal_resolver) or HybridModalResolver.create(
             config=config.modal_resolver,
             decision_engine=self.decision_engine,
+        )
+        self.deficit_detector: EpistemicDeficitDetector | None = ensure_deficit_detector(
+            deficit_detector
         )
 
         self.projector = projector or TheoryNetProjector(
@@ -262,12 +280,19 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             len(a_atoms),
         )
 
+        refinement_pass = (
+            context.manifest.refinement_pass
+            if context is not None and context.manifest is not None
+            else 0
+        )
+
         artifacts = [
             build_theory_atom_artifact(
                 atom,
                 run_id=context.run_id,
                 phase_name=self.name,
                 method="phase6.theorynet",
+                refinement_pass=refinement_pass,
             )
             for atom in theory_net.atoms
         ]
@@ -277,7 +302,50 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
                 run_id=context.run_id,
                 phase_name=self.name,
                 method="phase6.theorynet",
+                refinement_pass=refinement_pass,
             )
             for rel in theory_net.relations
         )
+
+        if self.deficit_detector is not None:
+            updated_state = Phase4ArtifactsView(
+                documents=input.documents,
+                chunks=input.chunks,
+                entities=input.entities,
+                local_triples=input.local_triples,
+                entity_count_by_type=input.entity_count_by_type,
+                global_triples=input.global_triples,
+                relation_type_distribution=input.relation_type_distribution,
+                theory_atoms=theory_net.atoms,
+                theory_relations=theory_net.relations,
+                fusion_decisions=input.fusion_decisions,
+                canonical_theory_atoms=theory_net.atoms,
+                canonical_theory_relations=theory_net.relations,
+                entity_envelopes_by_id=input.entity_envelopes_by_id,
+                entity_mentions_by_id=input.entity_mentions_by_id,
+                theoretical_enrichments=input.theoretical_enrichments,
+                epistemic_deficits=input.epistemic_deficits,
+                consumed_artifact_ids=input.consumed_artifact_ids,
+            )
+            deficits = self.deficit_detector.detect_deficits(
+                updated_state,
+                refinement_pass=refinement_pass,
+                context=context,
+            )
+            for deficit in deficits:
+                stamped = (
+                    deficit
+                    if deficit.detected_in_phase
+                    else deficit.model_copy(update={"detected_in_phase": self.phase_key})
+                )
+                artifacts.append(
+                    build_epistemic_deficit_artifact(
+                        stamped,
+                        run_id=context.run_id,
+                        phase_name=self.name,
+                        method=type(self.deficit_detector).__name__,
+                        refinement_pass=refinement_pass,
+                    )
+                )
+
         return ArtifactCollection(artifacts)
