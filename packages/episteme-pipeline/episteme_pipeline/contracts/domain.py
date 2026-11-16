@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -1004,3 +1004,131 @@ class CandidatePair(BaseModel):
         if self.entity_a.id <= self.entity_b.id:
             return f"{self.entity_a.id}::{self.entity_b.id}::{h_a}::{h_b}"
         return f"{self.entity_b.id}::{self.entity_a.id}::{h_b}::{h_a}"
+
+
+class EpistemicDeficitKind(StrEnum):
+    """Taxonomy of top-down epistemic deficit signals for hermeneutic refinement.
+
+    Grounds the bounded top-down feedback loop (L4/L3 -> L2/L1) defined in
+    ISSUE-053 in structuralist and argumentation-theoretic pathologies.
+
+    References
+    ----------
+    .. [1] Pan, S., Luo, L., Wang, Y., Chen, C., Wang, J., & Wu, X. (2024).
+       Unifying Large Language Models and Knowledge Graphs: A Roadmap. IEEE TKDE.
+    """
+
+    ENTHYMEME_GAP = "enthymeme_gap"
+    POLYSEMY_COLLISION = "polysemy_collision"
+    UNGROUNDED_AXIOM = "ungrounded_axiom"
+
+
+class EpistemicDeficit(BaseModel):
+    """Structured top-down epistemic deficit signal emitted by Layer 3/4 evaluators.
+
+    Parameters
+    ----------
+    deficit_id : str
+        Deterministic identifier for this epistemic deficit signal.
+    deficit_kind : EpistemicDeficitKind
+        Canonical taxonomy classification of the detected deficit.
+    severity : float, default 0.5
+        Normalized deficit severity in ``[0.0, 1.0]`` used for cycle prioritization.
+    target_chunk_ids : list of str, optional
+        Identifiers of L1 chunks targeted for localized re-extraction or gleaning.
+    target_entity_ids : list of str, optional
+        Identifiers of L2 entities implicated by the deficit.
+    target_atom_ids : list of str, optional
+        Identifiers of L3 :class:`TheoryAtom` nodes exhibiting the deficit.
+    target_relation_ids : list of str, optional
+        Identifiers of L3 :class:`TheoryRelation` edges implicated by the deficit.
+    theory_id : str or None, optional
+        Identifier of the conditioning Theory-Element, if applicable.
+    theory_lens : dict of str to Any, optional
+        Structured macro-theory schema context (e.g., ``M_pp``, ``M_p``, ``M``)
+        conditioning lower-layer recovery.
+    rationale : str, default ""
+        Human-readable diagnostic summary explaining why the deficit was flagged.
+    metrics : dict of str to float, optional
+        Quantitative diagnostic metrics (e.g., centrality, ``TS_local``,
+        ``TS_edge``, ``controversy_volatility``).
+    detected_in_phase : str, default ""
+        Machine ``phase_key`` or phase name where the deficit was detected.
+    refinement_pass : int, default 0
+        Hermeneutic refinement cycle index (``0`` for initial forward pass).
+    """
+
+    deficit_id: str
+    deficit_kind: EpistemicDeficitKind
+    severity: float = Field(default=0.5, ge=0.0, le=1.0)
+    target_chunk_ids: list[str] = Field(default_factory=list)
+    target_entity_ids: list[str] = Field(default_factory=list)
+    target_atom_ids: list[str] = Field(default_factory=list)
+    target_relation_ids: list[str] = Field(default_factory=list)
+    theory_id: str | None = None
+    theory_lens: dict[str, Any] = Field(default_factory=dict)
+    rationale: str = ""
+    metrics: dict[str, float] = Field(default_factory=dict)
+    detected_in_phase: str = ""
+    refinement_pass: int = Field(default=0, ge=0)
+
+
+class RefinementDelta(BaseModel):
+    """Localized output delta produced by a targeted hermeneutic refinement step.
+
+    Captures only newly recovered or updated domain entities, relations, atoms,
+    and merge-prevention constraints so the orchestrator can overlay them onto
+    an :class:`~episteme_pipeline.artifacts.execution.ArtifactCollection` without
+    invalidating unaffected corpus subgraphs.
+
+    Parameters
+    ----------
+    chunks : list of L1Chunk, optional
+        New or updated L1 chunks produced or enriched during refinement.
+    entities : list of L2Entity, optional
+        Split or newly discovered L2 entities.
+    local_triples : list of L2Triple, optional
+        Localized intra-chunk L2 triples produced or rewritten during refinement.
+    global_triples : list of L2Triple, optional
+        Cross-chunk L2 triples produced or rewritten for refined entities.
+    theory_atoms : list of TheoryAtom, optional
+        Recovered implicit premises, updated observations, or re-scoped atoms.
+    theory_relations : list of TheoryRelation, optional
+        Recovered or re-evaluated dialectical argument relations.
+    cannot_link_pairs : list of tuple of (str, str), optional
+        Entity ID pairs produced by concept splitting that downstream
+        consolidation must never re-merge.
+    resolved_deficit_ids : list of str, optional
+        Identifiers of :class:`EpistemicDeficit` signals addressed by this delta.
+    refinement_pass : int, default 0
+        Refinement cycle iteration producing this delta (``>= 0``).
+    """
+
+    chunks: list[L1Chunk] = Field(default_factory=list)
+    entities: list[L2Entity] = Field(default_factory=list)
+    local_triples: list[L2Triple] = Field(default_factory=list)
+    global_triples: list[L2Triple] = Field(default_factory=list)
+    theory_atoms: list[TheoryAtom] = Field(default_factory=list)
+    theory_relations: list[TheoryRelation] = Field(default_factory=list)
+    cannot_link_pairs: list[tuple[str, str]] = Field(default_factory=list)
+    resolved_deficit_ids: list[str] = Field(default_factory=list)
+    refinement_pass: int = Field(default=0, ge=0)
+
+    @property
+    def is_empty(self) -> bool:
+        """Return True if this delta carries no domain changes or constraints.
+
+        Returns
+        -------
+        bool
+            True when all domain element lists and ``cannot_link_pairs`` are empty.
+        """
+        return not (
+            self.chunks
+            or self.entities
+            or self.local_triples
+            or self.global_triples
+            or self.theory_atoms
+            or self.theory_relations
+            or self.cannot_link_pairs
+        )

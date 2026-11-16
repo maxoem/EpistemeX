@@ -1,11 +1,14 @@
 from episteme_pipeline.contracts.domain import (
     EntityConception,
+    EpistemicDeficit,
+    EpistemicDeficitKind,
     EpistemicStatus,
     IntensionalMode,
     L1Chunk,
     L1Document,
     L2Entity,
     L2Triple,
+    RefinementDelta,
     ScopeType,
     SearchResult,
     SubGraph,
@@ -19,6 +22,8 @@ from episteme_pipeline.contracts.phase_contracts import PipelineInput
 
 __all__ = [
     "EntityConception",
+    "EpistemicDeficit",
+    "EpistemicDeficitKind",
     "EpistemicStatus",
     "IntensionalMode",
     "L1Chunk",
@@ -26,6 +31,7 @@ __all__ = [
     "L2Entity",
     "L2Triple",
     "PipelineInput",
+    "RefinementDelta",
     "ScopeType",
     "SearchResult",
     "SubGraph",

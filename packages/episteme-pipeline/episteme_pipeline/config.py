@@ -546,6 +546,51 @@ class TheoreticalEnrichmentConfig(BaseModel):
     projection_prompts: StructuredPromptBundle | None = None
 
 
+class HermeneuticRefinementConfig(BaseModel):
+    """Configuration for bounded closed-loop hermeneutic refinement (ISSUE-053).
+
+    Controls top-down epistemic deficit detection (L4/L3 -> L2/L1) and
+    localized re-extraction, concept splitting, and premise recovery cycles.
+
+    Parameters
+    ----------
+    max_refinement_cycles : int, default 0
+        Maximum top-down refinement cycles executed after the forward pass
+        (``0`` preserves strictly feed-forward execution).
+    enthymeme_min_centrality : float, default 0.0
+        Minimum graph centrality required for an unwarranted claim or hypothesis
+        to trigger an ``ENTHYMEME_GAP`` deficit.
+    polysemy_edge_tenability_threshold : float, default 0.5
+        Edge tenability floor ``TS_edge`` below which bridging concepts are
+        candidates for ``POLYSEMY_COLLISION`` detection.
+    polysemy_volatility_threshold : float, default 0.25
+        Controversy volatility threshold ``V(a)`` above which bridging entities
+        or atoms trigger ``POLYSEMY_COLLISION`` detection.
+    ungrounded_local_tenability_threshold : float, default 0.5
+        Local tenability floor ``TS_local`` below which empirical clusters or
+        axioms trigger ``UNGROUNDED_AXIOM`` detection.
+    max_deficits_per_cycle : int, default 20
+        Maximum number of prioritized deficits processed in each refinement cycle.
+    enable_theory_guided_premise_recovery : bool, default True
+        Whether ``ENTHYMEME_GAP`` signals dispatch theory-guided premise recovery.
+    enable_targeted_concept_split : bool, default True
+        Whether ``POLYSEMY_COLLISION`` signals dispatch targeted L2 concept splitting.
+    enable_localized_axiom_grounding : bool, default True
+        Whether ``UNGROUNDED_AXIOM`` signals dispatch localized parameter and
+        observation re-extraction.
+    """
+
+    max_refinement_cycles: int = Field(default=0, ge=0, le=5)
+    enthymeme_min_centrality: float = Field(default=0.0, ge=0.0)
+    polysemy_edge_tenability_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    polysemy_volatility_threshold: float = Field(default=0.25, ge=0.0)
+    ungrounded_local_tenability_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    max_deficits_per_cycle: int = Field(default=20, ge=1)
+    enable_theory_guided_premise_recovery: bool = True
+    enable_targeted_concept_split: bool = True
+    enable_localized_axiom_grounding: bool = True
+
+
 class QualityGatesConfig(BaseModel):
     """Configuration for inter-phase epistemic quality gates (ISSUE-058).
 
@@ -606,6 +651,7 @@ class ExecutionConfig(BaseModel):
     persist_phase5_artifacts: bool = True
     persist_phase6_artifacts: bool = True
     persist_theoretical_enrichment_artifacts: bool = True
+    persist_refinement_artifacts: bool = True
     project_artifacts_to_graph: bool = False
     allow_phase_reuse: bool = Field(
         default=True,
@@ -655,6 +701,7 @@ class ExecutionConfig(BaseModel):
             "phase5": self.persist_phase5_artifacts,
             "phase6": self.persist_phase6_artifacts,
             "theoretical_enrichment": self.persist_theoretical_enrichment_artifacts,
+            "refinement": self.persist_refinement_artifacts,
         }
         return mapping.get(phase_key, True)
 
@@ -790,6 +837,7 @@ class PipelineConfig(BaseModel):
     phase5: Phase5Config = Field(default_factory=Phase5Config)
     phase6: Phase6Config = Field(default_factory=Phase6Config)
     theoretical_enrichment: TheoreticalEnrichmentConfig = Field(default_factory=TheoreticalEnrichmentConfig)
+    refinement: HermeneuticRefinementConfig = Field(default_factory=HermeneuticRefinementConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     quality_gates: QualityGatesConfig = Field(default_factory=QualityGatesConfig)
     decision_engine: DecisionEngineConfig | None = Field(default=None)
@@ -838,6 +886,7 @@ class PipelineConfig(BaseModel):
             "phase5": self.phase5,
             "phase6": self.phase6,
             "theoretical_enrichment": self.theoretical_enrichment,
+            "refinement": self.refinement,
         }
         return mapping.get(phase_key)
 

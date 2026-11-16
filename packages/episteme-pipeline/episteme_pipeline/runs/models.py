@@ -37,6 +37,7 @@ class RunPhaseRecord(BaseModel):
     input_artifact_ids: list[str] = Field(default_factory=list)
     output_artifact_ids: list[str] = Field(default_factory=list)
     artifact_ids: list[str] = Field(default_factory=list)
+    refinement_pass: int = Field(default=0, ge=0)
     notes: dict[str, str] = Field(default_factory=dict)
 
 
@@ -64,6 +65,7 @@ class RunManifest(BaseModel):
     parent_run_id: str | None = None
     decision_metrics: dict[str, object] | None = None
     invalidation_reason: str | None = None
+    refinement_pass: int = Field(default=0, ge=0)
 
 
 class ResumePoint(BaseModel):

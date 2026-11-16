@@ -11,6 +11,7 @@ from typing import Protocol, TypeVar
 from episteme_pipeline.artifacts.models import (
     ChunkArtifact,
     DocumentArtifact,
+    EpistemicDeficitArtifact,
     GlobalRelationArtifact,
     LinkedEntityArtifact,
     LocalRelationArtifact,
@@ -20,6 +21,7 @@ from episteme_pipeline.artifacts.models import (
 )
 from episteme_pipeline.contracts.domain import (
     EntityConception,
+    EpistemicDeficit,
     L1Chunk,
     L1Document,
     L2Entity,
@@ -595,4 +597,68 @@ class TheoryRelationCodec:
             weight_support=payload.weight_support,
             weight_attack=payload.weight_attack,
             **extra,
+        )
+
+
+class EpistemicDeficitCodec:
+    """Bidirectional codec for EpistemicDeficit and EpistemicDeficitArtifact."""
+
+    @classmethod
+    def to_payload(cls, domain_obj: EpistemicDeficit) -> EpistemicDeficitArtifact:
+        """Serialize an EpistemicDeficit into EpistemicDeficitArtifact.
+
+        Parameters
+        ----------
+        domain_obj : EpistemicDeficit
+            Source epistemic deficit contract.
+
+        Returns
+        -------
+        EpistemicDeficitArtifact
+            Lossless epistemic deficit artifact payload.
+        """
+        return EpistemicDeficitArtifact(
+            deficit_id=domain_obj.deficit_id,
+            deficit_kind=domain_obj.deficit_kind,
+            severity=domain_obj.severity,
+            target_chunk_ids=list(domain_obj.target_chunk_ids),
+            target_entity_ids=list(domain_obj.target_entity_ids),
+            target_atom_ids=list(domain_obj.target_atom_ids),
+            target_relation_ids=list(domain_obj.target_relation_ids),
+            theory_id=domain_obj.theory_id,
+            theory_lens=dict(domain_obj.theory_lens),
+            rationale=domain_obj.rationale,
+            metrics=dict(domain_obj.metrics),
+            detected_in_phase=domain_obj.detected_in_phase,
+            refinement_pass=domain_obj.refinement_pass,
+        )
+
+    @classmethod
+    def to_domain(cls, payload: EpistemicDeficitArtifact) -> EpistemicDeficit:
+        """Hydrate an EpistemicDeficitArtifact into EpistemicDeficit.
+
+        Parameters
+        ----------
+        payload : EpistemicDeficitArtifact
+            Epistemic deficit artifact payload.
+
+        Returns
+        -------
+        EpistemicDeficit
+            Reconstructed epistemic deficit contract.
+        """
+        return EpistemicDeficit(
+            deficit_id=payload.deficit_id,
+            deficit_kind=payload.deficit_kind,
+            severity=payload.severity,
+            target_chunk_ids=list(payload.target_chunk_ids),
+            target_entity_ids=list(payload.target_entity_ids),
+            target_atom_ids=list(payload.target_atom_ids),
+            target_relation_ids=list(payload.target_relation_ids),
+            theory_id=payload.theory_id,
+            theory_lens=dict(payload.theory_lens),
+            rationale=payload.rationale,
+            metrics=dict(payload.metrics),
+            detected_in_phase=payload.detected_in_phase,
+            refinement_pass=payload.refinement_pass,
         )
