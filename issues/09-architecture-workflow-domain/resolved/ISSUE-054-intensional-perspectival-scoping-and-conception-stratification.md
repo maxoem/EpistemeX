@@ -4,16 +4,16 @@
 | :--- | :--- |
 | **Issue ID** | `ISSUE-054` |
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Epistemic Representation, Intensional Logic, Conceptual Drift) |
-| **Target Package(s)** | `packages/episteme-pipeline`, `packages/epistemetrics` (`contracts/domain.py`, `phases/phase2_entity_discovery/`, `phases/phase4_entity_maturation/`, `phases/phase4_argument_mining/`) |
+| **Target Package(s)** | `../../../packages/episteme-pipeline`, `packages/epistemetrics` (`contracts/domain.py`, `phases/phase2_entity_discovery/`, `phases/phase4_entity_maturation/`, `phases/phase4_argument_mining/`) |
 | **Priority** | **High** |
 | **Status** | `Completed` |
-| **Evaluated Docs & ADRs** | [`docs/concepts/formal_graph_model.md`](../../docs/concepts/formal_graph_model.md), [`docs/concepts/assumptions_limitations.md`](../../docs/concepts/assumptions_limitations.md), [`ADR-0003`](../../docs/adr/0003-coreference-absorbed-into-fusion.md), [`ADR-0016-attribute-alignment`](../../docs/adr/0016-attribute-alignment-deferred.md), [`ADR-0020`](../../docs/adr/0020-propositional-modal-strength-resolver.md) |
+| **Evaluated Docs & ADRs** | [`../../../docs/concepts/formal_graph_model.md`](../../../docs/concepts/formal_graph_model.md), [`../../../docs/concepts/assumptions_limitations.md`](../../../docs/concepts/assumptions_limitations.md), [`ADR-0003`](../../../docs/adr/0003-coreference-absorbed-into-fusion.md), [`ADR-0016-attribute-alignment`](../../../docs/adr/0016-attribute-alignment-deferred.md), [`ADR-0020`](../../../docs/adr/0020-propositional-modal-strength-resolver.md) |
 
 ---
 
 ## 1. Current State
 
-Across the current pipeline architecture ([`formal_graph_model.md`](../../docs/concepts/formal_graph_model.md), [`ADR-0003`](../../docs/adr/0003-coreference-absorbed-into-fusion.md), [`ADR-0020`](../../docs/adr/0020-propositional-modal-strength-resolver.md)):
+Across the current pipeline architecture ([`formal_graph_model.md`](../../../docs/concepts/formal_graph_model.md), [`ADR-0003`](../../../docs/adr/0003-coreference-absorbed-into-fusion.md), [`ADR-0020`](../../../docs/adr/0020-propositional-modal-strength-resolver.md)):
 
 1. **Unattributed Flat Propositional Space (Layer 3)**:
    - `TheoryAtom` models a proposition $a \in \mathcal{A}$ with a single intrinsic base score $\tau_0(a) = M(\phi_a)$ representing "Authorial Propositional Modality" (`ADR-0020`), without an **Epistemic Attribution / Intensional Scope** property indicating *who* asserts $a$ or *under what rhetorical mode* $a$ is introduced.

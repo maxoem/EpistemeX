@@ -27,6 +27,7 @@ See: docs/workflow/4_argument_mining/
 from __future__ import annotations
 
 import logging
+from typing import Iterable
 
 from episteme_pipeline.artifacts.builders import (
     build_argument_component_artifact,
@@ -44,6 +45,55 @@ from episteme_pipeline.contracts.domain import (
     TheoryAtom,
     TheoryRelation,
 )
+
+
+def _filter_valid_local_relations(
+    relations: Iterable[TheoryRelation],
+    valid_atom_ids: set[str],
+) -> list[TheoryRelation]:
+    """Filter local relations using fixed-point validation for hyperedges and modifiers.
+
+    Parameters
+    ----------
+    relations : Iterable of TheoryRelation
+        Candidate local relations to validate.
+    valid_atom_ids : set of str
+        Accepted atom identifiers within the local scope.
+
+    Returns
+    -------
+    list of TheoryRelation
+        Retained relations whose effective premises exist in ``valid_atom_ids``
+        and whose dialectical targets resolve to valid atoms or retained
+        relations.
+    """
+    retained = [
+        rel
+        for rel in relations
+        if rel.effective_premise_ids
+        and all(pid in valid_atom_ids for pid in rel.effective_premise_ids)
+    ]
+    if not retained:
+        return []
+
+    while True:
+        known_rel_ids: set[str] = set()
+        for rel in retained:
+            known_rel_ids.add(rel.relation_id)
+            if rel.id is not None:
+                known_rel_ids.add(rel.id)
+        next_retained = [
+            rel
+            for rel in retained
+            if (
+                rel.undercuts_relation_id in known_rel_ids
+                if rel.undercuts_relation_id is not None
+                else (rel.target_id in valid_atom_ids or rel.target_id in known_rel_ids)
+            )
+        ]
+        if len(next_retained) == len(retained):
+            return next_retained
+        retained = next_retained
 from episteme_pipeline.decision.gleaning import GleaningStoppingOracle, JevGleaningGate
 from episteme_pipeline.decision.modal_resolver import HybridModalResolver
 from episteme_pipeline.phases.chunk_selection import select_pending_chunks
@@ -410,9 +460,14 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                     await self.graph_store.upsert_theory_relations(list(rel_batch))
 
         all_relations = []
-        seen_rel_keys: set[tuple[str, str, str]] = set()
+        seen_rel_keys: set[tuple[tuple[str, ...], str, str, str | None]] = set()
         for rel in all_local_relations + global_relations:
-            r_key = (rel.from_id, rel.relation_type, rel.to_id)
+            r_key = (
+                rel.effective_premise_ids,
+                rel.relation_type,
+                rel.target_id,
+                rel.undercuts_relation_id,
+            )
             if r_key not in seen_rel_keys:
                 seen_rel_keys.add(r_key)
                 all_relations.append(rel)
@@ -484,10 +539,9 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 if c.confidence is None or c.confidence >= self.config.acc_confidence_threshold
             }
             components = [c for c in components if c.id in valid_component_ids]
-            local_relations = [
-                r for r in local_relations
-                if r.source_id in valid_component_ids and r.target_id in valid_component_ids
-            ]
+            local_relations = _filter_valid_local_relations(
+                local_relations, valid_component_ids
+            )
 
         # Step 3: Optional Actor-Critic Gleaning Refinement
         pass_count = 0
@@ -530,9 +584,9 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                     components.append(nc)
                     existing_ids.add(nc.id)
                     added_any = True
-            for nr in new_rels:
-                if nr.source_id in existing_ids and nr.target_id in existing_ids:
-                    local_relations.append(nr)
+            local_relations = _filter_valid_local_relations(
+                local_relations + list(new_rels), existing_ids
+            )
 
             if not added_any:
                 break

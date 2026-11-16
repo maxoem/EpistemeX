@@ -256,7 +256,7 @@ classify each ADU and identify all support and attack relations between them.
 
 ### Instructions
 1. For each <ACn> tag, assign exactly one component type.
-2. Identify all local support and attack relations between ADUs.
+2. Identify all local support, attack, backing, and undercutting relations between ADUs (including optional conjunctive `premise_ids` when multiple premises must hold jointly to support/attack a target, and optional `id` / `undercuts_relation_id` when a relation backs or undercuts a specific inference rather than a node).
 3. Determine which of the available entities are explicitly mentioned or primarily discussed in each ADU.
 4. For each component, determine its Epistemic Status (Synthetisch or Analytisch) and Scope/Type (Essentieller Allsatz, Existenzsatz, Statistischer/probabilistischer Allsatz, Lokalisierter Existenzsatz, or Lokalisierter Allsatz).
 5. Classify each component's `intensional_mode` ("asserted" = committed by author, "attributed" = opponent/prior thinker view, "suppositional" = Reductio ad absurdum / counterfactual premise, "historical" = archival background) and set `attributed_to` when attributed.
@@ -266,7 +266,7 @@ classify each ADU and identify all support and attack relations between them.
 ### Output Schema
 {{
   "components": [{{"id": "<ACn>", "component_type": "<type>", "text": "<original span>", "plausibility": <float 0-1>, "entity_ids": ["<entity_id>"], "epistemic_status": "<Synthetisch|Analytisch>", "scope_type": "<Essentieller Allsatz|Existenzsatz|Statistischer/probabilistischer Allsatz|Lokalisierter Existenzsatz|Lokalisierter Allsatz>", "intensional_mode": "<asserted|attributed|suppositional|historical>", "attributed_to": "<agent_name_or_null>"}}],
-  "relations":  [{{"source_id": "<ACn>", "relation": "<relation_type>", "target_id": "<ACm>", "confidence": <float 0-1>, "weight": <float 0-1>}}]
+  "relations":  [{{"id": "<optional_relation_id>", "source_id": "<ACn>", "premise_ids": ["<ACn>", "..."], "relation": "<relation_type>", "target_id": "<ACm>", "undercuts_relation_id": "<optional_target_relation_id>", "confidence": <float 0-1>, "weight": <float 0-1>}}]
 }}
 
 ### Input Text (with ADU markup)
@@ -289,7 +289,7 @@ Analyze the following text with pre-identified Argumentative Discourse Units (AD
 ### Instructions
 1. For each <ACn> tag, discuss which component type it represents based on its content.
 2. Discuss which of the available entities are mentioned or discussed in each ADU.
-3. Analyze potential local support and attack relations between the ADUs.
+3. Analyze potential local support, attack, backing, and undercutting relations between the ADUs, noting where multiple premises operate conjunctively (`premise_ids`) or where an ADU undercuts/backs an inference link (`undercuts_relation_id`).
 4. Analyze the Epistemic Status (Synthetisch vs. Analytisch) and Scope/Type (Essentieller Allsatz, Existenzsatz, Statistischer/probabilistischer Allsatz, Lokalisierter Existenzsatz, Lokalisierter Allsatz) for each component, plus its intensional_mode ("asserted", "attributed", "suppositional", or "historical") and attributed_to agent if attributed.
 5. Ensure every AC tag is discussed.
 Provide a detailed chain-of-thought reasoning step by step. Do NOT output JSON.
@@ -317,7 +317,7 @@ You are an expert data extractor. Convert the provided argumentation reasoning i
 ### Output Schema
 {{
   "components": [{{"id": "<ACn>", "component_type": "<type>", "text": "<original span>", "plausibility": <float 0-1>, "entity_ids": ["<entity_id>"], "epistemic_status": "<Synthetisch|Analytisch>", "scope_type": "<Essentieller Allsatz|Existenzsatz|Statistischer/probabilistischer Allsatz|Lokalisierter Existenzsatz|Lokalisierter Allsatz>", "intensional_mode": "<asserted|attributed|suppositional|historical>", "attributed_to": "<agent_name_or_null>"}}],
-  "relations":  [{{"source_id": "<ACn>", "relation": "<relation_type>", "target_id": "<ACm>", "confidence": <float 0-1>, "weight": <float 0-1>}}]
+  "relations":  [{{"id": "<optional_relation_id>", "source_id": "<ACn>", "premise_ids": ["<ACn>", "..."], "relation": "<relation_type>", "target_id": "<ACm>", "undercuts_relation_id": "<optional_target_relation_id>", "confidence": <float 0-1>, "weight": <float 0-1>}}]
 }}
 """
 

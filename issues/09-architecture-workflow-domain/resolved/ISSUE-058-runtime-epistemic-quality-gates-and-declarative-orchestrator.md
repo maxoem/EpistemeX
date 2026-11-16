@@ -4,19 +4,19 @@
 | :--- | :--- |
 | **Issue ID** | `ISSUE-058` |
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Orchestrator Architecture, Runtime Quality Gates, Workflow Composition) |
-| **Target Package(s)** | `packages/episteme-pipeline`, `packages/epistemetrics` (`pipeline.py`, `runtime/`, `protocols/`) |
+| **Target Package(s)** | `../../../packages/episteme-pipeline`, `packages/epistemetrics` (`pipeline.py`, `runtime/`, `protocols/`) |
 | **Priority** | **Medium** |
-| **Status** | `In Progress (Post-Audit Architectural Remediation)` |
-| **Evaluated Docs & ADRs** | [`docs/architecture/overview.md`](../../docs/architecture/overview.md), [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0007`](../../docs/adr/0007-tf-structural-correspondence.md), [`ADR-0011`](../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), [`ADR-0016`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md) |
+| **Status** | `Resolved` |
+| **Evaluated Docs & ADRs** | [`../../../docs/architecture/overview.md`](../../../docs/architecture/overview.md), [`../../../docs/architecture/pipeline_architecture.md`](../../../docs/architecture/pipeline_architecture.md), [`ADR-0007`](../../../docs/adr/0007-tf-structural-correspondence.md), [`ADR-0011`](../../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), [`ADR-0016`](../../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md) |
 
 ---
 
 ## 1. Current State
 
 1. **Evaluation Restricted to Passive Post-Construction Analytics**:
-   - Per [`ADR-0007 §4`](../../docs/adr/0007-tf-structural-correspondence.md) and [`ADR-0011`](../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), topological and epistemic metrics (`epistemetrics`) operate exclusively *after* pipeline completion. During execution, the only automated safety check is [`ADR-0016 §4`](../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md)'s check for a 100% exception rate in Batch 0 of Phase 3.
+   - Per [`ADR-0007 §4`](../../../docs/adr/0007-tf-structural-correspondence.md) and [`ADR-0011`](../../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), topological and epistemic metrics (`epistemetrics`) operate exclusively *after* pipeline completion. During execution, the only automated safety check is [`ADR-0016 §4`](../../../docs/adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md)'s check for a 100% exception rate in Batch 0 of Phase 3.
 2. **Monolithic `Pipeline` Class Fusing 5 Architectural Roles**:
-   - [`Pipeline`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py) currently combines: (a) Composition Root (`for_task`), (b) Workflow Topology (`_SUPPORTED_TASKS = {"knowledge_graph"}`), (c) Cache/Invalidation Policy (`_choose_reuse_source`), (d) Artifact/Manifest/Projection Storage I/O, and (e) Telemetry Scoping (`_execute`).
+   - [`Pipeline`](../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py) currently combines: (a) Composition Root (`for_task`), (b) Workflow Topology (`_SUPPORTED_TASKS = {"knowledge_graph"}`), (c) Cache/Invalidation Policy (`_choose_reuse_source`), (d) Artifact/Manifest/Projection Storage I/O, and (e) Telemetry Scoping (`_execute`).
 
 ---
 
@@ -45,7 +45,7 @@
   - **Conformal Calibration Health Gate (Post-Phase 3 & 4)**: Monitors the empirical rate of empty ($|C(X)| = 0$) and ambiguous ($|C(X)| > 1$) prediction sets, emitting a `QualityGateWarning` or halting (`QualityGateViolationError`) if OOD rates exceed configured bounds.
 
 ### Step 2: Decouple `WorkflowTopology`, `PipelineFactory`, and `ArtifactExecutionEngine`
-Refactor [`pipeline.py`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py) into three clean, single-responsibility collaborators while keeping `Pipeline.for_task()` as a convenient facade:
+Refactor [`pipeline.py`](../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py) into three clean, single-responsibility collaborators while keeping `Pipeline.for_task()` as a convenient facade:
 1. **`PipelineFactory` (Composition Root)**: Wires LLMs, embedders, rerankers, `DecisionEngine`, and `ModalStrengthResolver` from `PipelineConfig`.
 2. **`WorkflowDAG` (Declarative Topology)**: Defines phase nodes, data dependencies (`reads_kinds`/`writes_kinds`), and attached `EpistemicQualityGate`s.
 3. **`ArtifactExecutionEngine` (Runtime)**: Executes any `WorkflowDAG` with manifest fingerprinting, DAG-based cache hydration (`ISSUE-048`), batched graph projection (`ISSUE-046`), and symmetric event lifecycle management (`ISSUE-052`).

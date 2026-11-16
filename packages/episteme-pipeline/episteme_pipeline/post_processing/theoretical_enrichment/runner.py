@@ -60,6 +60,30 @@ from episteme_pipeline.schema.default_schema import SchemaConfig
 logger = logging.getLogger(__name__)
 
 
+def _enrichment_rel_key(rel: TheoryRelation) -> str:
+    """Return a collision-free relation lookup key preserving legacy pairwise keys.
+
+    Parameters
+    ----------
+    rel : TheoryRelation
+        Theory relation to index during enrichment and reconvergence.
+
+    Returns
+    -------
+    str
+        Canonical ``rel.relation_id`` for conjunctive hyperedges, inference
+        modifiers, or explicitly identified relations; otherwise
+        ``"{source_id}->{relation_type}->{target_id}"``.
+    """
+    if (
+        rel.has_conjunctive_premises
+        or rel.undercuts_relation_id is not None
+        or rel.id is not None
+    ):
+        return rel.relation_id
+    return f"{rel.source_id}->{rel.relation_type}->{rel.target_id}"
+
+
 class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
     """Executes Theoretical Enrichment & Tenability Evaluation post-processing.
 
@@ -388,7 +412,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                 edge_anomalies: list[str] = []
 
                 for rel in cluster.relations:
-                    rel_key = f"{rel.source_id}->{rel.relation_type}->{rel.target_id}"
+                    rel_key = _enrichment_rel_key(rel)
 
                     # Look up counterpart params across fully-populated cluster_theory_params
                     target_params = self._find_target_parameters(
@@ -504,9 +528,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         # -------------------------------------------------------------
         merged_atoms = [updated_atoms_by_id.get(a.id, a) for a in atoms]
         merged_relations = [
-            updated_rels_by_key.get(
-                f"{r.source_id}->{r.relation_type}->{r.target_id}", r
-            )
+            updated_rels_by_key.get(_enrichment_rel_key(r), r)
             for r in relations
         ]
         reconverged_net = self.theorynet_projector.project(
@@ -517,7 +539,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         )
         reconverged_atoms_by_id = {a.id: a for a in reconverged_net.atoms}
         reconverged_rels_by_key = {
-            f"{r.source_id}->{r.relation_type}->{r.target_id}": r
+            _enrichment_rel_key(r): r
             for r in reconverged_net.relations
         }
         equilibrium_map = {

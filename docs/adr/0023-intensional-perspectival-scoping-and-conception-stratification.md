@@ -73,7 +73,7 @@ We introduce **Layer 3 Intensional & Perspectival Scoping** and **Layer 2 Refere
 
 ## Related
 
-- [ISSUE-054: Intensional & Perspectival Scoping](../../issues/09-architecture-workflow-domain/ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md)
+- [ISSUE-054: Intensional & Perspectival Scoping](../../issues/09-architecture-workflow-domain/resolved/ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md)
 - [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md)
 - [Assumptions and Limitations](../concepts/assumptions_limitations.md)
 - [ADR-0003: Coreference Resolution Absorbed into Phase 3b](0003-coreference-absorbed-into-fusion.md)

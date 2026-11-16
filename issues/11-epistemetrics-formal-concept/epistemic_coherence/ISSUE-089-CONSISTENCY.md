@@ -8,7 +8,7 @@
 | **Target Package(s)** | `epistemetrics`, `episteme-pipeline` |
 | **Priority** | **Critical** (measures lexical/topical context similarity via embedding cosine rather than logical or axiomatic consistency, is completely blind to direct negation/contradiction, penalizes cross-domain unifying concepts, and divides by zero when $k < 2$) |
 | **Status** | `Open` |
-| **Related Issues** | [`ISSUE-095`](../ISSUE-095-EPISTEMIC-COHERENCE-CROSS-CUTTING.md), [`ISSUE-045`](../../10-decision-engine-and-jev/ISSUE-045-phase3b-consolidation-merge-verification.md), [`ISSUE-054`](../../09-architecture-workflow-domain/ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md), [`ISSUE-067`](../../10-formal-conceptual-docs/ISSUE-067-mathematical-errors-in-formalisms.md) |
+| **Related Issues** | [`ISSUE-095`](../ISSUE-095-EPISTEMIC-COHERENCE-CROSS-CUTTING.md), [`ISSUE-045`](../../10-decision-engine-and-jev/ISSUE-045-phase3b-consolidation-merge-verification.md), [`ISSUE-054`](../../09-architecture-workflow-domain/resolved/ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md), [`ISSUE-067`](../../10-formal-conceptual-docs/ISSUE-067-mathematical-errors-in-formalisms.md) |
 
 Severity legend: **Critical** = invalidates the metric's mathematical/conceptual core or makes it uncomputable · **Major** = significant formal flaw, semantic shift, or literature misattribution · **Minor** = notation, alignment, or presentation issue.
 
@@ -51,7 +51,7 @@ Separate the two distinct constructs that are conflated here:
    $$\text{Consistency}_{\text{logical}}(T) = 1 - \frac{\sum_{(a_i, a_j) \in \mathcal{R}_{att} \cap (A(T) \times A(T))} W_{ij} \, \tau^*(a_i) \, \tau^*(a_j)}{\max\big(1, \, |A(T)|(|A(T)| - 1)/2\big)} \in [0, 1]$$
    (combined with constraint tenability $TS_{\text{edge}}$ across $GC$ in `tenability.md`).
 2. **Lexical Monosemy / Concept Equivocation Score (Layer 2 Entity Hygiene):**
-   Rename $S_{\text{embed}}(t)$ and $S_{\text{sil}}(t)$ to **Conceptual Monosemy / Terminological Stability**, and evaluate it using **definitional/intensional embeddings** (or NLI mutual entailment over extracted definitions of $t$, see [`ISSUE-054`](../../09-architecture-workflow-domain/ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md)) rather than raw surface-context window embeddings that merely reflect topical domain shifts.
+   Rename $S_{\text{embed}}(t)$ and $S_{\text{sil}}(t)$ to **Conceptual Monosemy / Terminological Stability**, and evaluate it using **definitional/intensional embeddings** (or NLI mutual entailment over extracted definitions of $t$, see [`ISSUE-054`](../../09-architecture-workflow-domain/resolved/ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md)) rather than raw surface-context window embeddings that merely reflect topical domain shifts.
 
 ---
 
@@ -139,7 +139,7 @@ Clarify the scope of `consistency.md` by splitting it into (1) **Terminological 
 **Where.** [`consistency.md#L11-L18`](../../../docs/concepts/theory/metrics/epistemic_coherence/consistency.md#L11-L18), [`#L69-L73`](../../../docs/concepts/theory/metrics/epistemic_coherence/consistency.md#L69-L73).
 
 **Finding.**
-Detecting the **fallacy of equivocation** (using the same lexical term $t$ with two incompatible meanings across premises of an argument, e.g. in philosophical prose) is genuinely valuable for GER/ENG scientific and philosophical corpora (and connects directly to [`ISSUE-054: Intensional & Perspectival Scoping`](../../09-architecture-workflow-domain/ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md)). However, Balzer, Moulines & Sneed (1987, p. xviii) and Schurz (2024, sec. 5.2) discuss **formal/logical consistency of a theory**, not contextual word embeddings or $k$-means silhouette scores. Cite computational lexical semantics / word-sense induction literature (e.g., Navigli 2009; Rousseeuw 1987) for the embedding clustering method alongside philosophical references on equivocation and conceptual drift.
+Detecting the **fallacy of equivocation** (using the same lexical term $t$ with two incompatible meanings across premises of an argument, e.g. in philosophical prose) is genuinely valuable for GER/ENG scientific and philosophical corpora (and connects directly to [`ISSUE-054: Intensional & Perspectival Scoping`](../../09-architecture-workflow-domain/resolved/ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md)). However, Balzer, Moulines & Sneed (1987, p. xviii) and Schurz (2024, sec. 5.2) discuss **formal/logical consistency of a theory**, not contextual word embeddings or $k$-means silhouette scores. Cite computational lexical semantics / word-sense induction literature (e.g., Navigli 2009; Rousseeuw 1987) for the embedding clustering method alongside philosophical references on equivocation and conceptual drift.
 
 ---
 

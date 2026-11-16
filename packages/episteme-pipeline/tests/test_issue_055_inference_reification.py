@@ -40,11 +40,13 @@ from episteme_pipeline.events import (
     use_event_emitter,
 )
 from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
+from episteme_pipeline.graph.neo4j_store import _NON_ENTITY_LABELS, Neo4jGraphReader
 from episteme_pipeline.graph.theory_graph_mapper import (
     is_theory_edge,
     theory_relation_from_graph_properties,
     theory_relation_to_graph_properties,
 )
+from episteme_pipeline.phases.phase4_argument_mining import _filter_valid_local_relations
 from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import (
     LLMACCClassifier,
 )
@@ -54,8 +56,16 @@ from episteme_pipeline.phases.phase4_argument_mining.models import (
     ExtractedTheoryRelation,
 )
 from episteme_pipeline.phases.phase4_argument_mining.pairing import stable_component_id
+from episteme_pipeline.post_processing.theoretical_enrichment.runner import (
+    _enrichment_rel_key,
+)
 from episteme_pipeline.projection.artifact_projector import ArtifactGraphProjector
 from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
+from episteme_pipeline.prompts.default_prompts import (
+    ACC_DIRECT_PROMPT,
+    ACC_FORMAT_PROMPT,
+    ACC_REASONING_PROMPT,
+)
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
 
@@ -541,3 +551,275 @@ class TestPhase6TheoryNetProjectorHypergraph:
         )
         by_id_und = {a.id: a.equilibrium_strength for a in net_undercut.atoms}
         assert 0.2 < by_id_und["conc_active"] < by_id_prod["conc_active"]
+
+
+class TestSingleEnvelopeAndStoreRoundTrip:
+    """Verify single-envelope projection, schema/prompt sync, and store round-trips."""
+
+    def test_backs_in_default_schema_and_prompts_updated(self) -> None:
+        assert "BACKS" in DEFAULT_SCHEMA.argument_relation_types
+        assert "BACKS" in DEFAULT_SCHEMA.argument_relation_definitions
+        assert DEFAULT_SCHEMA.relation_polarities["BACKS"] == 1
+        assert "premise_ids" in ACC_DIRECT_PROMPT
+        assert "undercuts_relation_id" in ACC_DIRECT_PROMPT
+        assert "undercuts_relation_id" in ACC_REASONING_PROMPT
+        assert "premise_ids" in ACC_FORMAT_PROMPT
+        assert "undercuts_relation_id" in ACC_FORMAT_PROMPT
+
+    async def test_single_envelope_projection_and_in_memory_roundtrip(self) -> None:
+        store = InMemoryGraphStore()
+        projector = ArtifactGraphProjector(store, t_norm="godel")
+
+        atoms = [_atom("p1"), _atom("p2"), _atom("c1"), _atom("b1"), _atom("u1")]
+        for atom in atoms:
+            await projector.project(
+                build_theory_atom_artifact(atom, run_id="r1", phase_name="p4", method="m")
+            )
+
+        rels = [
+            TheoryRelation(
+                source_id="p1",
+                target_id="c1",
+                relation_type="SUPPORTS",
+                confidence=0.9,
+                scope="local",
+            ),
+            TheoryRelation(
+                source_id="p1",
+                premise_ids=("p1", "p2"),
+                target_id="c1",
+                relation_type="SUPPORTS",
+                confidence=0.85,
+                scope="local",
+            ),
+            TheoryRelation(
+                id="inf_w",
+                source_id="p2",
+                premise_ids=("p2",),
+                target_id="c1",
+                relation_type="ENTAILS",
+                confidence=0.95,
+                scope="local",
+            ),
+            TheoryRelation(
+                source_id="b1",
+                target_id="inf_w",
+                relation_type="SUPPORTS",
+                confidence=0.8,
+                scope="local",
+            ),
+            TheoryRelation(
+                source_id="u1",
+                target_id="c1",
+                undercuts_relation_id="inf_w",
+                relation_type="UNDERCUTS",
+                confidence=0.75,
+                scope="local",
+            ),
+        ]
+        for rel in rels:
+            await projector.project(
+                build_theory_relation_artifact(rel, run_id="r1", phase_name="p4", method="m")
+            )
+
+        recovered = await store.get_all_theory_relations()
+        assert len(recovered) == 5
+
+        by_sig = {
+            (r.id, r.source_id, r.premise_ids, r.relation_type, r.target_id, r.undercuts_relation_id): r
+            for r in recovered
+        }
+        # Auto-ID conjunctive relation preserves id=None and t_norm metadata without leaking IDs
+        conj_key = (None, "p1", ("p1", "p2"), "SUPPORTS", "c1", None)
+        assert conj_key in by_sig
+        assert store._nodes[by_sig[conj_key].relation_id]["t_norm"] == "godel"
+
+        # Single-envelope undercutter targeting existing inf_w does not wipe inf_w properties
+        assert ("inf_w", "p2", ("p2",), "ENTAILS", "c1", None) in by_sig
+        assert (None, "b1", (), "SUPPORTS", "inf_w", None) in by_sig
+        assert (None, "u1", (), "UNDERCUTS", "c1", "inf_w") in by_sig
+
+    async def test_neo4j_get_all_theory_relations_roundtrip_and_labels(self) -> None:
+        assert "TheoryInference" in _NON_ENTITY_LABELS
+
+        captured_queries: list[str] = []
+        mock_result = AsyncMock()
+        mock_result.data.return_value = [
+            {
+                "source_id": "p1",
+                "relation_type": "SUPPORTS",
+                "target_id": "c1",
+                "confidence": 0.9,
+                "scope": "global",
+                "weight": 0.8,
+                "edge_tenability": 0.7,
+                "props": None,
+            },
+            {
+                "source_id": "p1",
+                "relation_type": "SUPPORTS",
+                "target_id": "c1",
+                "confidence": 0.9,
+                "scope": "global",
+                "weight": 0.8,
+                "edge_tenability": None,
+                "props": {
+                    "id": "argument-relation::p1+p2::SUPPORTS::c1",
+                    "has_explicit_id": False,
+                    "source_id": "p1",
+                    "relation_type": "SUPPORTS",
+                    "target_id": "c1",
+                    "premise_ids": ["p1", "p2"],
+                    "has_explicit_premise_ids": True,
+                },
+            },
+            {
+                "source_id": "b1",
+                "relation_type": "SUPPORTS",
+                "target_id": "c1",
+                "confidence": 0.8,
+                "scope": "local",
+                "weight": 0.6,
+                "edge_tenability": None,
+                "props": {
+                    "relation_type": "SUPPORTS",
+                    "target_id": "c1",
+                    "undercuts_relation_id": "inf_w",
+                },
+            },
+        ]
+        mock_session = AsyncMock()
+
+        async def _run(query: str, **_: object) -> AsyncMock:
+            captured_queries.append(query)
+            return mock_result
+
+        mock_session.run = _run
+        mock_cm = MagicMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+        store = object.__new__(Neo4jGraphReader)
+        store._session = lambda: mock_cm  # type: ignore[method-assign]
+
+        rels = await store.get_all_theory_relations()
+        assert len(captured_queries) == 1
+        assert "r.edge_tenability as edge_tenability" in captured_queries[0]
+        assert "UNION ALL" in captured_queries[0]
+        assert len(rels) == 3
+
+        conj = next(r for r in rels if r.premise_ids == ("p1", "p2"))
+        assert conj.id is None
+        back = next(r for r in rels if r.source_id == "b1")
+        assert back.relation_type == "SUPPORTS"
+        assert back.undercuts_relation_id == "inf_w"
+
+
+class TestPhase4AndEnrichmentHypergraphPreservation:
+    """Verify fixed-point local relation validation and collision-free keys."""
+
+    def test_fixed_point_local_relation_filtering_and_chain_pruning(self) -> None:
+        valid_atoms = {"p1", "p2", "c1", "u1", "u2"}
+        r_valid_conj = TheoryRelation(
+            id="inf_keep",
+            source_id="p1",
+            premise_ids=("p1", "p2"),
+            target_id="c1",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
+        )
+        r_bad_conj = TheoryRelation(
+            id="inf_drop",
+            source_id="p1",
+            premise_ids=("p1", "missing_atom"),
+            target_id="c1",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
+        )
+        r_und_keep_1 = TheoryRelation(
+            id="u_rel_1",
+            source_id="u1",
+            target_id="c1",
+            undercuts_relation_id="inf_keep",
+            relation_type="UNDERCUTS",
+            confidence=0.9,
+            scope="local",
+        )
+        r_und_keep_2 = TheoryRelation(
+            id="u_rel_2",
+            source_id="u2",
+            target_id="u_rel_1",
+            undercuts_relation_id="u_rel_1",
+            relation_type="UNDERCUTS",
+            confidence=0.9,
+            scope="local",
+        )
+        r_und_drop_1 = TheoryRelation(
+            id="u_dead_1",
+            source_id="u1",
+            target_id="c1",
+            undercuts_relation_id="inf_drop",
+            relation_type="UNDERCUTS",
+            confidence=0.9,
+            scope="local",
+        )
+        r_und_drop_2 = TheoryRelation(
+            id="u_dead_2",
+            source_id="u2",
+            target_id="u_dead_1",
+            undercuts_relation_id="u_dead_1",
+            relation_type="UNDERCUTS",
+            confidence=0.9,
+            scope="local",
+        )
+
+        # Put second-order modifiers BEFORE their targets to ensure order-independent fixed-point
+        retained = _filter_valid_local_relations(
+            [r_und_drop_2, r_und_keep_2, r_und_drop_1, r_und_keep_1, r_bad_conj, r_valid_conj],
+            valid_atoms,
+        )
+        retained_ids = [r.relation_id for r in retained]
+        assert retained_ids == ["u_rel_2", "u_rel_1", "inf_keep"]
+
+    def test_enrichment_rel_key_distinguishes_conjunctive_and_modifier_variants(self) -> None:
+        pairwise = TheoryRelation(
+            source_id="p1", target_id="c1", relation_type="SUPPORTS", confidence=0.9, scope="local"
+        )
+        conj_a = TheoryRelation(
+            source_id="p1",
+            premise_ids=("p1", "p2"),
+            target_id="c1",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
+        )
+        conj_b = TheoryRelation(
+            source_id="p1",
+            premise_ids=("p1", "p3"),
+            target_id="c1",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
+        )
+        und_a = TheoryRelation(
+            source_id="u1",
+            target_id="c1",
+            undercuts_relation_id="w1",
+            relation_type="UNDERCUTS",
+            confidence=0.9,
+            scope="local",
+        )
+        und_b = TheoryRelation(
+            source_id="u1",
+            target_id="c1",
+            undercuts_relation_id="w2",
+            relation_type="UNDERCUTS",
+            confidence=0.9,
+            scope="local",
+        )
+
+        assert _enrichment_rel_key(pairwise) == "p1->SUPPORTS->c1"
+        keys = {_enrichment_rel_key(r) for r in (pairwise, conj_a, conj_b, und_a, und_b)}
+        assert len(keys) == 5

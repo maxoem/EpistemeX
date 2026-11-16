@@ -213,9 +213,14 @@ def theory_inference_node_properties(
     """
     props = theory_relation_to_graph_properties(rel, schema=schema)
     props["id"] = rel.relation_id
+    props["has_explicit_id"] = rel.id is not None
+    if rel.id is not None:
+        props["explicit_id"] = rel.id
+    props["source_id"] = rel.source_id
     props["relation_type"] = rel.relation_type
     props["target_id"] = rel.target_id
     props["premise_ids"] = list(rel.effective_premise_ids)
+    props["has_explicit_premise_ids"] = bool(rel.premise_ids)
     if t_norm is not None:
         props["t_norm"] = t_norm
     if run_id is not None:
@@ -252,6 +257,8 @@ def build_reified_inference_edges(
         Edge dictionaries compatible with ``GraphWriter.upsert_relations``.
     """
     rel_props = theory_relation_to_graph_properties(rel, schema=schema)
+    rel_props["relation_type"] = rel.relation_type
+    rel_props["target_id"] = rel.target_id
     if run_id is not None:
         rel_props["run_id"] = run_id
     edges: list[dict[str, Any]] = []
@@ -375,14 +382,36 @@ def theory_relation_from_graph_properties(
     confidence_raw = props.get("confidence")
     confidence_val = float(confidence_raw if confidence_raw is not None else 1.0)
 
+    resolved_source_id = str(props.get("source_id") or source_id)
+    resolved_rel_type = str(props.get("relation_type") or relation_type)
+    resolved_target_id = str(props.get("target_id") or target_id)
+
+    if "has_explicit_id" in props:
+        resolved_id = (
+            (props.get("explicit_id") or props.get("id"))
+            if props["has_explicit_id"]
+            else None
+        )
+    else:
+        resolved_id = props.get("explicit_id") or props.get("id")
+
+    if "has_explicit_premise_ids" in props:
+        resolved_premises = (
+            tuple(props.get("premise_ids") or ())
+            if props["has_explicit_premise_ids"]
+            else ()
+        )
+    else:
+        resolved_premises = tuple(props.get("premise_ids") or ())
+
     kwargs: dict[str, Any] = {
-        "source_id": source_id,
-        "target_id": target_id,
-        "relation_type": relation_type,
+        "source_id": resolved_source_id,
+        "target_id": resolved_target_id,
+        "relation_type": resolved_rel_type,
         "confidence": confidence_val,
         "scope": scope_val,
-        "id": props.get("id"),
-        "premise_ids": tuple(props.get("premise_ids") or ()),
+        "id": resolved_id,
+        "premise_ids": resolved_premises,
         "undercuts_relation_id": props.get("undercuts_relation_id"),
         "weight": weight_val,
         "edge_tenability": props.get("edge_tenability"),

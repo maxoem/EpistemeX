@@ -449,7 +449,31 @@ class InMemoryGraphStore(ProcessingGraph):
         return list(self._theory_atoms.values())
 
     async def get_all_theory_relations(self) -> list[TheoryRelation]:
-        return list(self._theory_relations)
+        """Return all stored pairwise and reified :class:`TheoryRelation` items."""
+        by_id: dict[str, TheoryRelation] = {
+            rel.relation_id: rel for rel in self._theory_relations
+        }
+        for node_id, node in self._nodes.items():
+            if node.get("label") != "TheoryInference":
+                continue
+            rel_type = node.get("relation_type")
+            if not rel_type:
+                continue
+            source_id = node.get("source_id")
+            if not source_id:
+                premises = node.get("premise_ids") or ()
+                source_id = premises[0] if premises else node_id
+            target_id = node.get("target_id") or ""
+            if not target_id:
+                continue
+            rel = theory_relation_from_graph_properties(
+                source_id=str(source_id),
+                relation_type=str(rel_type),
+                target_id=str(target_id),
+                properties=node,
+            )
+            by_id[rel.relation_id] = rel
+        return list(by_id.values())
 
     async def find_entities_by_name(
         self, name: str, label: str | None = None
@@ -484,11 +508,17 @@ class InMemoryGraphStore(ProcessingGraph):
         extra_labels: tuple[str, ...] = (),
         create_only_properties: dict | None = None,
     ) -> None:
-        self._nodes[node_id] = {
-            "label": label,
-            "extra_labels": extra_labels,
-            **properties,
-        }
+        existing = self._nodes.get(node_id)
+        if existing is None:
+            merged: dict[str, Any] = {}
+            if create_only_properties:
+                merged.update(create_only_properties)
+        else:
+            merged = dict(existing)
+        merged["label"] = label
+        merged["extra_labels"] = extra_labels
+        merged.update(properties)
+        self._nodes[node_id] = merged
 
     async def prune_document_children(
         self,
@@ -523,6 +553,16 @@ class InMemoryGraphStore(ProcessingGraph):
         }
         self._generic_relations.append(rel_dict)
 
+        # Reified hyperedge segments (HAS_PREMISE, CONCLUDES, and outgoing
+        # modifiers originating from :TheoryInference nodes) are reconstructed
+        # directly from their :TheoryInference nodes in get_all_theory_relations().
+        if (
+            relation_type == "HAS_PREMISE"
+            or "inference_id" in props
+            or self._nodes.get(from_id, {}).get("label") == "TheoryInference"
+        ):
+            return
+
         # Delegate theory edge classification and domain reconstruction to graph mapper
         if is_theory_edge(
             relation_type=relation_type,
@@ -533,7 +573,7 @@ class InMemoryGraphStore(ProcessingGraph):
             self._theory_relations.append(
                 theory_relation_from_graph_properties(
                     source_id=from_id,
-                    relation_type=relation_type,
+                    relation_type=str(props.get("relation_type") or relation_type),
                     target_id=to_id,
                     properties=props,
                 )

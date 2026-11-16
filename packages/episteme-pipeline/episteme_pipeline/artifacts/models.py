@@ -532,41 +532,14 @@ class TheoryRelationArtifact(DomainObjectPayload[TheoryRelation]):
         return TheoryRelationCodec.to_domain(self)
 
     async def project_to_graph(self, graph_store: ProjectionGraph) -> None:
-        """Project this theory relation into ``graph_store``."""
-        rel = self.to_domain()
-        if rel.has_conjunctive_premises or rel.undercuts_relation_id is not None:
-            from episteme_pipeline.graph.theory_graph_mapper import (
-                build_reified_inference_edges,
-                theory_inference_node_properties,
-            )
+        """Project this theory relation into ``graph_store``.
 
-            is_reified = rel.has_conjunctive_premises
-            reified_ids: set[str] = set()
-            if is_reified:
-                w_id = rel.relation_id
-                reified_ids.add(w_id)
-                await graph_store.upsert_node(
-                    "TheoryInference",
-                    w_id,
-                    theory_inference_node_properties(rel),
-                )
-            if rel.undercuts_relation_id is not None:
-                reified_ids.add(rel.undercuts_relation_id)
-                await graph_store.upsert_node(
-                    "TheoryInference",
-                    rel.undercuts_relation_id,
-                    {"id": rel.undercuts_relation_id},
-                )
-            edges = build_reified_inference_edges(
-                rel,
-                is_reified=is_reified,
-                reified_ids=reified_ids,
-            )
-            if edges:
-                await graph_store.upsert_relations(edges)
-            return
-
-        await graph_store.upsert_theory_relation(rel)
+        Parameters
+        ----------
+        graph_store : ProjectionGraph
+            Target graph store receiving the theory relation.
+        """
+        await graph_store.upsert_theory_relation(self.to_domain())
 
     def collect_for_projection(self, batch: ProjectionBatchAccumulator) -> None:
         """Register this theory relation into ``batch``."""

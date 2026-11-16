@@ -15,6 +15,7 @@ from episteme_pipeline.artifacts.models import (
     BaseArtifactPayload,
     DocumentArtifact,
     TheoreticalEnrichmentArtifact,
+    TheoryRelationArtifact,
 )
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
@@ -308,6 +309,34 @@ class ArtifactGraphProjector(GraphProjectionProtocol):
         emitter = get_event_emitter()
         artifact_kind_label = artifact.kind.value
         payload = artifact.payload
+        if isinstance(payload, TheoryRelationArtifact):
+            try:
+                batch = ProjectionBatch(schema=self.schema, t_norm=self.t_norm)
+                batch.add_theory_relation(payload.to_domain())
+                await batch.flush(
+                    self.graph_store,
+                    batch_size=1,
+                    schema=self.schema,
+                    t_norm=self.t_norm,
+                )
+            except Exception:
+                emitter.emit(
+                    ArtifactProjected(
+                        artifact_type=artifact_kind_label,
+                        duration_seconds=time.perf_counter() - start,
+                        success=False,
+                    )
+                )
+                raise
+            emitter.emit(
+                ArtifactProjected(
+                    artifact_type=artifact_kind_label,
+                    duration_seconds=time.perf_counter() - start,
+                    success=True,
+                )
+            )
+            return
+
         if isinstance(payload, BaseArtifactPayload):
             try:
                 await payload.project_to_graph(self.graph_store)

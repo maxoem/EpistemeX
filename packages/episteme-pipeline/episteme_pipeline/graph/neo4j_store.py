@@ -59,7 +59,14 @@ ENTITY_LABEL = "Entity"
 
 #: Labels that are structurally *not* entities. Used only by the one-time
 #: backfill migration, which has to reproduce the old exclusion heuristic.
-_NON_ENTITY_LABELS = ("Chunk", "Chapter", "Document", "TheoryAtom", "Community")
+_NON_ENTITY_LABELS = (
+    "Chunk",
+    "Chapter",
+    "Document",
+    "TheoryAtom",
+    "TheoryInference",
+    "Community",
+)
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -868,22 +875,38 @@ class _Neo4jReadMixin:
         return atoms
 
     async def get_all_theory_relations(self) -> list[TheoryRelation]:
+        """Fetch all pairwise and reified theory relations from Neo4j."""
         query = (
             "MATCH (a:TheoryAtom)-[r]->(b:TheoryAtom) "
             "RETURN a.id as source_id, type(r) as relation_type, b.id as target_id, "
+            "coalesce(r.confidence, 1.0) as confidence, coalesce(r.scope, 'global') as scope, "
+            "r.weight as weight, r.edge_tenability as edge_tenability, properties(r) as props "
+            "UNION ALL "
+            "MATCH (w:TheoryInference) "
+            "WHERE w.relation_type IS NOT NULL AND w.target_id IS NOT NULL "
+            "RETURN coalesce(w.source_id, w.premise_ids[0], w.id) as source_id, "
+            "w.relation_type as relation_type, w.target_id as target_id, "
+            "coalesce(w.confidence, 1.0) as confidence, coalesce(w.scope, 'global') as scope, "
+            "w.weight as weight, w.edge_tenability as edge_tenability, properties(w) as props "
+            "UNION ALL "
+            "MATCH (a:TheoryAtom)-[r]->(w:TheoryInference) "
+            "WHERE type(r) <> 'HAS_PREMISE' "
+            "RETURN a.id as source_id, coalesce(r.relation_type, type(r)) as relation_type, "
+            "coalesce(r.target_id, w.id) as target_id, "
             "coalesce(r.confidence, 1.0) as confidence, coalesce(r.scope, 'global') as scope, "
             "r.weight as weight, r.edge_tenability as edge_tenability, properties(r) as props"
         )
         async with self._session() as session:
             result = await session.run(query)
             rows = await result.data()
-        return [
-            theory_relation_from_graph_properties(
+        by_id: dict[str, TheoryRelation] = {}
+        for row in rows:
+            rel = theory_relation_from_graph_properties(
                 source_id=row["source_id"],
                 relation_type=row["relation_type"],
                 target_id=row["target_id"],
                 properties={
-                    **row.get("props", {}),
+                    **(row.get("props") or {}),
                     **{
                         k: v
                         for k, v in row.items()
@@ -892,8 +915,8 @@ class _Neo4jReadMixin:
                     },
                 },
             )
-            for row in rows
-        ]
+            by_id[rel.relation_id] = rel
+        return list(by_id.values())
 
     async def find_entities_by_name(self, name: str, label: str | None = None) -> list[L2Entity]:
         label_filter = (

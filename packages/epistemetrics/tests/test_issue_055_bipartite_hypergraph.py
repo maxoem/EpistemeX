@@ -15,6 +15,7 @@ from epistemetrics.core.models import (
     NodeType,
     RelationType,
     TheoryEdge,
+    TheoryNode,
 )
 from epistemetrics.epistemic.qbaf import (
     GradualSemanticsModel,
@@ -472,7 +473,7 @@ class TestSolverEquivalenceAndDynamics:
         assert fp_godel["t_norm"] == "godel"
         assert WeightedQuadraticEnergySolver(t_norm="godel").fingerprint()["t_norm"] == "godel"
 
-        # Dangling undercutter target does not crash solver
+        # Dangling undercutter target does not crash solver or leak into degrees
         dangling_res = solve_qbaf_gradual_semantics(
             nodes={"U": 0.9, "C": 0.4},
             edges=[
@@ -487,4 +488,210 @@ class TestSolverEquivalenceAndDynamics:
             ],
             continuous=True,
         )
+        assert "nonexistent_inf" not in dangling_res.degrees
         assert dangling_res.degrees["C"] == pytest.approx(0.4, abs=1e-6)
+
+    def test_continuous_solver_injection_and_fingerprinting(self) -> None:
+        """Injected continuous_solver is fingerprinted and used during solve_continuous."""
+        calls: list[int] = []
+
+        class _RecordingContinuousSolver(WeightedQuadraticEnergySolver):
+            def solve(self, base_scores, g_supp, g_att, hyperedges=None):  # type: ignore[override]
+                calls.append(len(hyperedges or ()))
+                return super().solve(base_scores, g_supp, g_att, hyperedges=hyperedges)
+
+        inj = _RecordingContinuousSolver(rtol=1e-5, atol=1e-7, t_max=20.0, t_norm="product")
+        solver_a = QBAFGradualSemanticsSolver(
+            use_continuous=True, t_norm="product", continuous_solver=inj
+        )
+        solver_b = QBAFGradualSemanticsSolver(
+            use_continuous=True,
+            t_norm="product",
+            continuous_solver=WeightedQuadraticEnergySolver(t_max=10.0, t_norm="product"),
+        )
+        assert solver_a.fingerprint() != solver_b.fingerprint()
+        assert solver_a.fingerprint()["continuous_solver"]["t_max"] == 20.0
+
+        nodes = {"P1": 0.9, "P2": 0.8, "C": 0.2}
+        edges = [
+            TheoryEdge(
+                source="P1",
+                premise_ids=("P1", "P2"),
+                target="C",
+                id="inf_c",
+                relation_type=RelationType.SUPPORTS,
+                effective_weight=0.8,
+            )
+        ]
+        res = solver_a.solve(nodes, edges=edges)
+        assert calls == [1]
+        assert res.degrees["C"] > 0.2
+
+    @pytest.mark.parametrize("continuous", [False, True])
+    def test_unweighted_binary_hyperedges_do_not_inflate_warrant(self, continuous: bool) -> None:
+        """UNWEIGHTED_BINARY forces w0=1.0 and gate_factor=1.0 on admissible hyperedges."""
+        nodes = {"P1": 0.8, "P2": 0.5, "C": 0.1}
+        edges = [
+            TheoryEdge(
+                source="P1",
+                premise_ids=("P1", "P2"),
+                target="C",
+                id="inf_bin",
+                relation_type=RelationType.SUPPORTS,
+                weight=0.3,
+                inferential_force=0.3,
+                effective_weight=0.3,
+            )
+        ]
+
+        solver = QBAFGradualSemanticsSolver(use_continuous=continuous, t_norm="product")
+        res = solver.solve(
+            nodes, edges=edges, normalization_mode=WeightNormalizationMode.UNWEIGHTED_BINARY
+        )
+        assert res.warrant_states["inf_bin"] == pytest.approx(1.0, abs=1e-6)
+        # Expected energy onto C under UNWEIGHTED_BINARY is 1.0 * (0.8 * 0.5) = 0.4
+        expected_c = (
+            _quadratic_update(0.1, 0.4)
+            if continuous
+            else _discrete_quadratic_update(0.1, 0.4)
+        )
+        assert res.degrees["C"] == pytest.approx(expected_c, abs=1e-4)
+
+    @pytest.mark.parametrize("continuous", [False, True])
+    def test_higher_order_undercutter_reinstatement(self, continuous: bool) -> None:
+        """Second-order undercutter on an undercutter reinstates the primary warrant."""
+
+        def _build_inputs(e_prior: float):
+            nodes = {"P": 0.9, "C": 0.2, "D": 0.95, "E": e_prior}
+            edges = [
+                TheoryEdge(
+                    source="P",
+                    target="C",
+                    id="w1",
+                    relation_type=RelationType.SUPPORTS,
+                    weight=0.8,
+                    inferential_force=0.8,
+                    effective_weight=0.8,
+                ),
+                TheoryEdge(
+                    source="D",
+                    target="w1",
+                    id="w_u1",
+                    undercuts_relation_id="w1",
+                    relation_type=RelationType.ATTACKS,
+                    polarity=-1,
+                    weight=0.9,
+                    inferential_force=0.9,
+                    effective_weight=0.9,
+                ),
+                TheoryEdge(
+                    source="E",
+                    target="w_u1",
+                    id="w_u2",
+                    undercuts_relation_id="w_u1",
+                    relation_type=RelationType.ATTACKS,
+                    polarity=-1,
+                    weight=1.0,
+                    inferential_force=1.0,
+                    effective_weight=1.0,
+                ),
+            ]
+            return nodes, edges
+
+        solver = QBAFGradualSemanticsSolver(
+            use_continuous=continuous,
+            max_iterations=100,
+            tolerance=1e-6,
+        )
+        nodes_und, edges_und = _build_inputs(0.0)
+        nodes_rein, edges_rein = _build_inputs(0.95)
+        res_undercut = solver.solve(nodes_und, edges=edges_und)
+        res_reinstated = solver.solve(nodes_rein, edges=edges_rein)
+
+        assert res_undercut.converged
+        assert res_reinstated.converged
+        assert "w1" in res_reinstated.warrant_states
+        assert "w_u1" in res_reinstated.warrant_states
+        assert res_undercut.warrant_states["w_u1"] == pytest.approx(0.9, abs=1e-5)
+        # Active second-order undercutter weakens w_u1, raising w1 and reinstating C
+        assert res_reinstated.warrant_states["w_u1"] < res_undercut.warrant_states["w_u1"]
+        assert res_reinstated.warrant_states["w1"] > res_undercut.warrant_states["w1"]
+        assert res_reinstated.degrees["C"] > res_undercut.degrees["C"]
+
+    def test_conjunctive_reductio_discharge_and_perspective_isolation(self) -> None:
+        """Conjunctive (asserted + suppositional) Reductio premises propagate refutation and discharge."""
+        nodes = [
+            TheoryNode(id="A", name="A", node_type=NodeType.CLAIM, base_score=0.9, intensional_mode="asserted"),
+            TheoryNode(id="S", name="S", node_type=NodeType.CLAIM, base_score=0.85, intensional_mode="suppositional"),
+            TheoryNode(id="Q", name="Q", node_type=NodeType.CLAIM, base_score=0.5, intensional_mode="suppositional"),
+            TheoryNode(id="R", name="R", node_type=NodeType.CLAIM, base_score=0.95, intensional_mode="asserted"),
+            TheoryNode(id="T", name="T", node_type=NodeType.CLAIM, base_score=0.3, intensional_mode="asserted"),
+            TheoryNode(
+                id="Opp",
+                name="Opp",
+                node_type=NodeType.CLAIM,
+                base_score=0.9,
+                intensional_mode="attributed",
+                attributed_to="Opponent",
+            ),
+            TheoryNode(id="S2", name="S2", node_type=NodeType.CLAIM, base_score=0.85, intensional_mode="suppositional"),
+            TheoryNode(id="Q_opp", name="Q_opp", node_type=NodeType.CLAIM, base_score=0.5, intensional_mode="suppositional"),
+            TheoryNode(id="T_opp", name="T_opp", node_type=NodeType.CLAIM, base_score=0.25, intensional_mode="asserted"),
+        ]
+        edges = [
+            # Valid conjunctive reductio: (A & S) -> Q; R -| Q; S -| T
+            TheoryEdge(
+                source="A",
+                premise_ids=("A", "S"),
+                target="Q",
+                relation_type=RelationType.SUPPORTS,
+                effective_weight=0.9,
+            ),
+            TheoryEdge(
+                source="R",
+                target="Q",
+                relation_type=RelationType.ATTACKS,
+                polarity=-1,
+                effective_weight=1.0,
+            ),
+            TheoryEdge(
+                source="S",
+                target="T",
+                relation_type=RelationType.ATTACKS,
+                polarity=-1,
+                effective_weight=0.9,
+            ),
+            # Attributed + suppositional mixed conjunctive premise must remain isolated under author perspective
+            TheoryEdge(
+                source="Opp",
+                premise_ids=("Opp", "S2"),
+                target="Q_opp",
+                relation_type=RelationType.SUPPORTS,
+                effective_weight=0.9,
+            ),
+            TheoryEdge(
+                source="R",
+                target="Q_opp",
+                relation_type=RelationType.ATTACKS,
+                polarity=-1,
+                effective_weight=1.0,
+            ),
+            TheoryEdge(
+                source="S2",
+                target="T_opp",
+                relation_type=RelationType.ATTACKS,
+                polarity=-1,
+                effective_weight=0.9,
+            ),
+        ]
+
+        res = QBAFGradualSemanticsSolver(
+            perspective="author",
+            isolate_suppositional=True,
+            isolate_attributed=True,
+            t_norm="product",
+        ).solve(nodes, edges=edges)
+        # R refutes Q -> modus tollens drops S -> discharge boosts T
+        assert res.degrees["T"] > 0.3
+        # Isolated attributed mixture (Opp & S2) cannot propagate refutation to S2 or discharge onto T_opp
+        assert res.degrees["T_opp"] == pytest.approx(0.25, abs=1e-6)

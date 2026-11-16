@@ -8,7 +8,7 @@
 | **Target Package(s)** | `epistemetrics`, `episteme-pipeline` |
 | **Priority** | **Critical** ($S_{\text{global}}(H) = E(G \setminus H)/E(G)$ is completely blind to graph edges and penalizes cross-domain unifying hypotheses, multi-label cluster mapping $\gamma: V \to 2^L$ violates $\sum_l p(l, H) = 1$ in Shannon entropy, and binary-graph $\mathcal{A}_b$ conflates convergent independent evidence with conjunctive auxiliary premises) |
 | **Status** | `Open` |
-| **Related Issues** | [`ISSUE-090`](ISSUE-090-ELEGANCE-AND-ECONOMY.md), [`ISSUE-095`](../ISSUE-095-EPISTEMIC-COHERENCE-CROSS-CUTTING.md), [`ISSUE-006`](../../03-epistemic-metrics/ISSUE-006-novacek-hypothesis-virtues-suite.md), [`ISSUE-055`](../../09-architecture-workflow-domain/ISSUE-055-bipartite-inference-hypergraph-conjunctive-premises-and-undercutters.md), [`ISSUE-068`](../../10-formal-conceptual-docs/ISSUE-068-conceptual-and-domain-errors.md) |
+| **Related Issues** | [`ISSUE-090`](ISSUE-090-ELEGANCE-AND-ECONOMY.md), [`ISSUE-095`](../ISSUE-095-EPISTEMIC-COHERENCE-CROSS-CUTTING.md), [`ISSUE-006`](../../03-epistemic-metrics/ISSUE-006-novacek-hypothesis-virtues-suite.md), [`ISSUE-055`](../../09-architecture-workflow-domain/resolved/ISSUE-055-bipartite-inference-hypergraph-conjunctive-premises-and-undercutters.md), [`ISSUE-068`](../../10-formal-conceptual-docs/ISSUE-068-conceptual-and-domain-errors.md) |
 
 Severity legend: **Critical** = invalidates the metric's mathematical/conceptual core or makes it uncomputable · **Major** = significant formal flaw, semantic shift, or literature misattribution · **Minor** = notation, alignment, or presentation issue.
 
@@ -63,14 +63,14 @@ To measure whether introducing hypothesis $H = (V_H, E_H)$ actually **simplifies
 **Finding.**
 L74–92 defines $\mathcal{A}_b = \{a_1, \dots, a_n\} \subseteq A$ as the set of co-antecedents grounding empirical sentence $b \in B$, and scales every edge weight $\phi(a_i, b)$ inversely by the sum of complexities across $\mathcal{A}_b$:
 $$\phi(a_i, b) = \frac{\phi_{\text{base}}}{\sum_{a_j \in \mathcal{A}_b} c(a_j)}, \qquad SR_{\text{MDL}}(\mathcal{E}) = \frac{1}{\sum_{a_j \in \mathcal{A}_{\mathcal{E}}} c(a_j)}.$$
-However, in `epistemetrics.TheoryGraph` (`models.py`) and Neo4j Layer 3 (as well as the Mermaid diagram on L147–148), relations are stored as **binary directed edges** $(a_i, b) \in E$, **not hyperedges** $Z(\mathcal{A}_b, b)$ (see [`ISSUE-055`](../../09-architecture-workflow-domain/ISSUE-055-bipartite-inference-hypergraph-conjunctive-premises-and-undercutters.md) and [`ISSUE-068` C-05](../../10-formal-conceptual-docs/ISSUE-068-conceptual-and-domain-errors.md)).
+However, in `epistemetrics.TheoryGraph` (`models.py`) and Neo4j Layer 3 (as well as the Mermaid diagram on L147–148), relations are stored as **binary directed edges** $(a_i, b) \in E$, **not hyperedges** $Z(\mathcal{A}_b, b)$ (see [`ISSUE-055`](../../09-architecture-workflow-domain/resolved/ISSUE-055-bipartite-inference-hypergraph-conjunctive-premises-and-undercutters.md) and [`ISSUE-068` C-05](../../10-formal-conceptual-docs/ISSUE-068-conceptual-and-domain-errors.md)).
 
 On a binary graph, if $\mathcal{A}_b$ is collected as all antecedents with a supportive edge to $b$ ($\mathcal{A}_b = \{a \in A \mid (a, b) \in \mathcal{R}_{sup}\}$), the formula **conflates two opposite epistemological structures**:
 1. **Conjunctive (Linked) Co-Premises ($a_1 \land a_2 \land a_3 \vdash b$):** Three auxiliary assumptions are *jointly necessary* to explain $b$. Here, diluting each edge by $1/\sum_{j=1}^3 c(a_j)$ is justified (Thagard 1989 Principle E2c).
 2. **Convergent (Independent) Explanations ($a_1 \vdash b$ and $a_2 \vdash b$ and $a_3 \vdash b$):** Three independent lines of theoretical derivation or three distinct experiments each independently entail/corroborate $b$. Grouping them into $\mathcal{A}_b$ divides every edge weight by $3$ and drops $SR_{\text{MDL}}$ to $1/3$, **punishing consilience and independent corroboration as "ad-hoc complexity"**!
 
 **Fix.**
-Group co-antecedents by **inference step / hyperedge ID** (`inference_id` on `TheoryEdge.attributes` or bipartite inference node $r \in V_{\text{inf}}$ as specified in [`ISSUE-055`](../../09-architecture-workflow-domain/ISSUE-055-bipartite-inference-hypergraph-conjunctive-premises-and-undercutters.md)):
+Group co-antecedents by **inference step / hyperedge ID** (`inference_id` on `TheoryEdge.attributes` or bipartite inference node $r \in V_{\text{inf}}$ as specified in [`ISSUE-055`](../../09-architecture-workflow-domain/resolved/ISSUE-055-bipartite-inference-hypergraph-conjunctive-premises-and-undercutters.md)):
 - For each individual conjunctive inference $r$ with premise set $\mathcal{A}_r \subseteq A$ concluding $b$:
   $$\phi_r(a_i, b) = \frac{\phi_{\text{base}}(r)}{\sum_{a_j \in \mathcal{A}_r} c(a_j)} \quad \forall a_i \in \mathcal{A}_r.$$
 - Independent derivations $r_1 \neq r_2$ concluding the same $b$ aggregate positively in QBAF without diluting one another.
