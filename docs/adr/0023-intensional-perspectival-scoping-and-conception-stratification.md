@@ -80,3 +80,4 @@ We introduce **Layer 3 Intensional & Perspectival Scoping** and **Layer 2 Refere
 - [ADR-0016: Attribute Alignment Deferred](0016-attribute-alignment-deferred.md)
 - [ADR-0020: Propositional Modal Strength Resolver](0020-propositional-modal-strength-resolver.md)
 - [ADR-0022: Unified Stratified Epistemic Metamodel](0022-unified-stratified-epistemic-metamodel.md)
+- [ADR-0024: Closed-Loop Hermeneutic Refinement](0024-closed-loop-hermeneutic-refinement.md) — Escalates `EntityConception` stratification to targeted post-hoc L2 concept splitting (`ConceptionConceptSplitter` with `cannot_link` guards) when `POLYSEMY_COLLISION` deficits arise.

@@ -60,3 +60,14 @@ Every `TheoryAtom` $a \in \mathcal{A}$ and `TheoryRelation` $e \in \mathcal{R}$ 
 - **Zero $M^2$ Double-Penalization**: Removing `modal_strength` from `TheoryRelation` and `TheoryRelationArtifact` ensures node modality $M(\phi_a)$ is applied once at the node prior $\tau_0(a)$ while edges carry `inferential_warrant` $I_{j \to i}$.
 - **Bidirectional Empirical-Dialectical Coherence**: Empirically falsified hypotheses ($TS_{\text{local}} < 0.5$) can no longer retain artificially high D-QBAF equilibrium justification $\tau^*(a)$ merely because the author asserted them with high rhetorical certainty.
 - **Lossless Artifact Hydration**: `TheoryAtomCodec`, `TheoryRelationCodec`, and `Phase4ArtifactsView` preserve all four layers of the Stratified Epistemic State Tuple across checkpointing and DAG branch reuse.
+
+---
+
+## Related
+
+- [ADR-0007: TF Structural Correspondence](0007-tf-structural-correspondence.md)
+- [ADR-0011: Declarative Graph Metrics & D-QBAF](0011-declarative-graph-metrics-and-qbaf-semantics.md)
+- [ADR-0015: Theoretical Enrichment & Tenability](0015-theoretical-enrichment-and-tenability-evaluation.md)
+- [ADR-0020: Propositional Modal Strength Resolver](0020-propositional-modal-strength-resolver.md)
+- [ADR-0023: Intensional & Perspectival Scoping and Conception Stratification](0023-intensional-perspectival-scoping-and-conception-stratification.md)
+- [ADR-0024: Closed-Loop Hermeneutic Refinement](0024-closed-loop-hermeneutic-refinement.md) — Uses Layer 3/4 tenability ($TS_{\text{local}}$, $TS_{\text{edge}}$) and D-QBAF telemetry ($\tau^*$, $\mathcal{V}$) to emit `EpistemicDeficitArtifact` signals driving bounded top-down refinement.

@@ -6,7 +6,7 @@
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Macro-Architecture, Bidirectional Reasoning, Hermeneutic Loop) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`pipeline.py`, `phases/`, `post_processing/theoretical_enrichment/`) |
 | **Priority** | **High** |
-| **Status** | `Open` |
+| **Status** | `Completed` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0002`](../../docs/adr/0002-tag-reranker-global-relation-extraction.md), [`ADR-0015`](../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md) |
 
 ---
@@ -74,6 +74,6 @@ flowchart TB
 
 ## 4. Acceptance Criteria
 
-- [ ] Define `EpistemicDeficitArtifact` (`ENTHYMEME_GAP`, `POLYSEMY_COLLISION`, `UNGROUNDED_AXIOM`) in `artifacts/models.py`.
-- [ ] Implement a bounded refinement pass in the orchestrator that routes deficit artifacts back to targeted L2/L3 extractors without invalidating unaffected subgraphs.
-- [ ] Record refinement iteration lineage (`refinement_pass: int`) in `RunManifest` and `ArtifactProvenance`.
+- [x] Define `EpistemicDeficitArtifact` (`ENTHYMEME_GAP`, `POLYSEMY_COLLISION`, `UNGROUNDED_AXIOM`) in `artifacts/models.py`.
+- [x] Implement a bounded refinement pass in the orchestrator that routes deficit artifacts back to targeted L2/L3 extractors without invalidating unaffected subgraphs.
+- [x] Record refinement iteration lineage (`refinement_pass: int`) in `RunManifest` and `ArtifactProvenance`.
