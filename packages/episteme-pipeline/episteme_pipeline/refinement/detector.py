@@ -44,6 +44,7 @@ if TYPE_CHECKING:
         ArtifactExecutionContext,
         EpistemicStateView,
     )
+    from episteme_pipeline.contracts.phase_contracts import EpistemicCurationLedger
 
 _AXIS_A_TOKENS = (
     "HYPOTHESIS",
@@ -651,6 +652,11 @@ class TheoryNetDeficitDetector:
                 refinement_pass=refinement_pass,
             )
         )
+        curation_ledger = (
+            context.pipeline_input.resolved_curation_ledger()
+            if context is not None
+            else None
+        )
         candidates.extend(
             self._detect_polysemy_collisions(
                 atoms=atoms,
@@ -665,6 +671,7 @@ class TheoryNetDeficitDetector:
                 cfg=cfg,
                 phase_label=phase_label,
                 refinement_pass=refinement_pass,
+                curation_ledger=curation_ledger,
             )
         )
         candidates.extend(
@@ -922,6 +929,51 @@ class TheoryNetDeficitDetector:
             )
         return deficits
 
+    @staticmethod
+    def _is_relation_disambiguated_by_split(
+        rel: TheoryRelation,
+        atoms_by_id: dict[str, TheoryAtom],
+        curation_ledger: EpistemicCurationLedger | None,
+    ) -> bool:
+        """Return whether ``rel`` spans distinct entities already separated by split/cannot-link."""
+        endpoint_ids = [
+            pid for pid in rel.effective_premise_ids if pid in atoms_by_id
+        ]
+        if rel.target_id in atoms_by_id:
+            endpoint_ids.append(rel.target_id)
+        if len(endpoint_ids) < 2:
+            return False
+
+        entity_sets = [
+            set(atoms_by_id[aid].entity_ids)
+            for aid in endpoint_ids
+            if atoms_by_id[aid].entity_ids
+        ]
+        if len(entity_sets) < 2:
+            return False
+
+        for idx, eids_a in enumerate(entity_sets):
+            for eids_b in entity_sets[idx + 1 :]:
+                if eids_a & eids_b:
+                    continue
+                for ea in eids_a:
+                    for eb in eids_b:
+                        if ea == eb:
+                            continue
+                        if (
+                            curation_ledger is not None
+                            and curation_ledger.is_cannot_link(ea, eb)
+                        ):
+                            return True
+                        if (
+                            "__sense_" in ea
+                            and "__sense_" in eb
+                            and ea.split("__sense_", 1)[0]
+                            == eb.split("__sense_", 1)[0]
+                        ):
+                            return True
+        return False
+
     def _detect_polysemy_collisions(
         self,
         *,
@@ -937,11 +989,23 @@ class TheoryNetDeficitDetector:
         cfg: HermeneuticRefinementConfig,
         phase_label: str,
         refinement_pass: int,
+        curation_ledger: EpistemicCurationLedger | None = None,
     ) -> list[EpistemicDeficit]:
         """Detect entity/atom polysemy bridges across incompatible clusters."""
         deficits: list[EpistemicDeficit] = []
         covered_atoms: set[str] = set()
         covered_relations: set[str] = set()
+
+        split_parent_ids: set[str] = {
+            e.id.split("__sense_", 1)[0]
+            for e in entities
+            if "__sense_" in e.id
+        }
+        cannot_link_ids: set[str] = set()
+        if curation_ledger is not None:
+            for eid_a, eid_b in curation_ledger.cannot_link_entities:
+                cannot_link_ids.add(eid_a)
+                cannot_link_ids.add(eid_b)
 
         triples_by_entity: dict[str, list[L2Triple]] = {}
         for triple in triples:
@@ -962,9 +1026,12 @@ class TheoryNetDeficitDetector:
 
         # 1. Entity-centric polysemy collisions
         for ent in sorted(entities, key=lambda e: e.id):
+            if ent.id in split_parent_ids:
+                continue
             linked_atoms = [a for a in atoms if ent.id in a.entity_ids]
             if (
                 not linked_atoms
+                and ent.id not in cannot_link_ids
                 and (len(ent.conceptions) >= 2 or (ent.polysemy_variance or 0.0) > 0.0)
                 and ent.source_chunk_ids
             ):
@@ -991,6 +1058,18 @@ class TheoryNetDeficitDetector:
                 )
             )
             if not incompatible:
+                continue
+            if (
+                len(ent.conceptions) < 2
+                and len(set(ent.source_chunk_ids)) <= 1
+                and implicated_rels
+                and all(
+                    self._is_relation_disambiguated_by_split(
+                        rel, atoms_by_id, curation_ledger
+                    )
+                    for rel in implicated_rels
+                )
+            ):
                 continue
 
             implicated_atom_ids: set[str] = set(linked_ids)
@@ -1123,6 +1202,13 @@ class TheoryNetDeficitDetector:
                 )
             )
             if not incompatible:
+                continue
+            if implicated_rels and all(
+                self._is_relation_disambiguated_by_split(
+                    rel, atoms_by_id, curation_ledger
+                )
+                for rel in implicated_rels
+            ):
                 continue
 
             implicated_rel_ids = [r.relation_id for r in implicated_rels]

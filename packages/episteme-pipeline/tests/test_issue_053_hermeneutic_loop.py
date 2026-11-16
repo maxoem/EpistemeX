@@ -50,6 +50,7 @@ from episteme_pipeline.artifacts.execution import (
     EpistemicStateView,
     Phase4ArtifactsView,
 )
+from episteme_pipeline.artifacts.invalidate import ArtifactDependencyGraph
 from episteme_pipeline.artifacts.models import (
     ArtifactEnvelope,
     ArtifactKind,
@@ -1325,6 +1326,10 @@ async def test_end_to_end_closed_loop_refinement_and_localization(
     )
     full_collection = ArtifactCollection(persisted)
 
+    # Dependency DAG over persisted Pass-0 + Pass-1 artifacts must stay strictly acyclic
+    topsorted = ArtifactDependencyGraph.from_artifacts(persisted).topsort()
+    assert len(topsorted) > 0
+
     deficit_envs = [
         e for e in persisted if e.kind == ArtifactKind.EPISTEMIC_DEFICIT
     ]
@@ -1645,6 +1650,7 @@ async def test_localized_enrichment_rescoring_only_touches_affected_subgraph() -
 
         def __init__(self) -> None:
             self.seen_atom_ids: list[str] = []
+            self.seen_lineage_fingerprint: str | None = None
 
         def fingerprint(self) -> dict[str, Any]:
             return {"class": "_RecordingEnrichmentRunner"}
@@ -1653,6 +1659,7 @@ async def test_localized_enrichment_rescoring_only_touches_affected_subgraph() -
             self, input_view: Phase4ArtifactsView, ctx: ArtifactExecutionContext
         ) -> ArtifactCollection:
             self.seen_atom_ids = sorted(a.id for a in input_view.theory_atoms)
+            self.seen_lineage_fingerprint = ctx.lineage_fingerprint
             payload = TheoreticalEnrichmentArtifact(
                 enrichment_id="enr_t_loc",
                 cluster_id="cluster-ch_a",
@@ -1758,14 +1765,150 @@ async def test_localized_enrichment_rescoring_only_touches_affected_subgraph() -
     )
     manifest = RunManifest(run_id="r_enr")
     ctx = ArtifactExecutionContext(
-        run_id="r_enr", manifest=manifest, pipeline_input=PipelineInput(source_paths=[])
+        run_id="r_enr",
+        manifest=manifest,
+        pipeline_input=PipelineInput(source_paths=[]),
+        lineage_fingerprint="pass0-lineage",
     )
     out = await coord.refine(coll, ctx)
 
     assert "atom_a" in enr.seen_atom_ids
     assert "atom_a_prem" in enr.seen_atom_ids
     assert "atom_b_clean" not in enr.seen_atom_ids
+    assert enr.seen_lineage_fingerprint == "pass0-lineage::refine_pass1"
     assert "theoretical_enrichment::t_loc::cluster-ch_a" in out.latest_by_identity
+
+
+@pytest.mark.asyncio
+async def test_multicycle_two_passes_stabilizes_without_cascading_splits(
+    tmp_path: Path,
+) -> None:
+    """Verify ``max_refinement_cycles=2`` avoids cascading re-splits and preserves DAG acyclicity."""
+    cfg = _make_config(
+        tmp_path, max_cycles=2, max_deficits_per_cycle=10, project_to_graph=False
+    )
+
+    def _llm_resolver(output_cls: type[Any], _kwargs: dict[str, Any]) -> Any:
+        if output_cls is PremiseRecoveryOutput:
+            return PremiseRecoveryOutput(
+                recovered_premises=[
+                    RecoveredImplicitPremise(
+                        local_id="P_warrant",
+                        text="Moral responsibility requires reasons-responsive agency.",
+                        component_type="ObservationUnit",
+                        source_chunk_id="chunk_a2",
+                        target_atom_id="ac_claim_a",
+                        relation_type="SUPPORTS",
+                        confidence=0.92,
+                    )
+                ]
+            )
+        if output_cls is AxiomGroundingOutput:
+            return AxiomGroundingOutput(
+                observations=[
+                    RecoveredObservationAtom(
+                        local_id="OBS_STUDY",
+                        text="Trial recorded N=42 with p=0.01.",
+                        component_type="ObservationUnit",
+                        source_chunk_id="chunk_a3",
+                        target_atom_id="ac_axiom_a",
+                        relation_type="SUPPORTS",
+                        confidence=0.92,
+                        measurements=[
+                            RecoveredMeasurement(dimension="sample_size", value="42"),
+                            RecoveredMeasurement(dimension="p_value", value="0.01"),
+                        ],
+                    )
+                ]
+            )
+        return output_cls()
+
+    stub_llm = _StubStructuredLLM(_llm_resolver)
+    stub_embedder = _StubEmbeddingModel()
+    coordinator = ClosedLoopRefinementCoordinator(
+        detector=TheoryNetDeficitDetector(config=cfg.refinement, schema=DEFAULT_SCHEMA),
+        premise_recoverer=LLMTheoryGuidedPremiseRecoverer(llm=stub_llm),
+        concept_splitter=ConceptionConceptSplitter(
+            embedding_model=stub_embedder, schema=DEFAULT_SCHEMA
+        ),
+        axiom_grounder=TheoryGuidedAxiomGrounder(
+            llm=stub_llm,
+            theory_projector=GenericTheoryProjector(),
+            embedding_model=stub_embedder,
+            schema=DEFAULT_SCHEMA,
+            vector_top_k=2,
+        ),
+        theorynet_projector=TheoryNetProjector(schema=DEFAULT_SCHEMA),
+        config=cfg.refinement,
+        schema=DEFAULT_SCHEMA,
+    )
+    pipeline = Pipeline(
+        phases=_build_two_subgraph_forward_phases(),
+        config=cfg,
+        refinement_coordinator=coordinator,
+    )
+    res = await pipeline.run(
+        PipelineInput(source_paths=[], curation_ledger=EpistemicCurationLedger()),
+        run_id="run_two_cycles",
+    )
+    assert res.manifest.status == RunStatus.COMPLETED
+
+    persisted = sorted(
+        await pipeline.artifact_store.list_run_artifacts("run_two_cycles"),
+        key=lambda env: (env.provenance.refinement_pass, env.artifact_id),
+    )
+    assert len(ArtifactDependencyGraph.from_artifacts(persisted).topsort()) > 0
+
+    entity_ids = [
+        env.payload.entity_id
+        for env in persisted
+        if env.kind == ArtifactKind.LINKED_ENTITY
+    ]
+    assert not any("__sense_" in eid.split("__sense_", 1)[1] for eid in entity_ids if "__sense_" in eid)
+    assert "ent_action__sense_1" in entity_ids
+    assert "ent_action__sense_2" in entity_ids
+
+    # Also verify ConceptionConceptSplitter directly refuses cross-entity chunk pulling
+    single_sense_ent = L2Entity(
+        id="ent_single__sense_2",
+        label="Concept",
+        name="Action (Normative)",
+        source_chunk_ids=["chunk_a2"],
+    )
+    atom_own = TheoryAtom(
+        id="atom_own",
+        text="Normative claim",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="chunk_a2",
+        entity_ids=["ent_single__sense_2"],
+    )
+    atom_partner = TheoryAtom(
+        id="atom_partner",
+        text="Physical partner claim",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="chunk_a1",
+        entity_ids=["ent_single__sense_1"],
+    )
+    direct_state = EpistemicStateView(
+        chunks=[
+            L1Chunk(id="chunk_a1", source_doc_id="doc_a", sequence_index=0, token_count=3, text="Physical"),
+            L1Chunk(id="chunk_a2", source_doc_id="doc_a", sequence_index=1, token_count=3, text="Normative"),
+        ],
+        entities=[single_sense_ent],
+        theory_atoms=[atom_own, atom_partner],
+    )
+    cross_deficit = EpistemicDeficit(
+        deficit_id="polysemy_collision::entity::ent_single__sense_2",
+        deficit_kind=EpistemicDeficitKind.POLYSEMY_COLLISION,
+        severity=0.9,
+        target_entity_ids=["ent_single__sense_2"],
+        target_chunk_ids=["chunk_a1", "chunk_a2"],
+        target_atom_ids=["atom_own", "atom_partner"],
+    )
+    direct_delta = await ConceptionConceptSplitter(schema=DEFAULT_SCHEMA).split_concept(
+        cross_deficit, direct_state
+    )
+    assert direct_delta.is_empty
 
 
 @pytest.mark.asyncio
@@ -1907,7 +2050,9 @@ def test_step_3b_files_have_no_getattr_or_hasattr_and_have_docstrings() -> None:
     """Enforce zero ``getattr``/``hasattr`` and module/class/method docstrings on Step 3b files."""
     target_paths = [
         PACKAGE_ROOT / "artifacts" / "subgraph_reader.py",
+        PACKAGE_ROOT / "refinement" / "concept_splitter.py",
         PACKAGE_ROOT / "refinement" / "coordinator.py",
+        PACKAGE_ROOT / "refinement" / "detector.py",
         PACKAGE_ROOT / "refinement" / "__init__.py",
         PACKAGE_ROOT / "runtime" / "execution_engine.py",
         PACKAGE_ROOT / "runtime" / "pipeline_factory.py",

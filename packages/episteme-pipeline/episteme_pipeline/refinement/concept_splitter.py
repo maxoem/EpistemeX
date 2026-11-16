@@ -386,7 +386,11 @@ class ConceptionConceptSplitter:
         if deficit.target_chunk_ids:
             target_atom_set = set(deficit.target_atom_ids)
             for atom in all_atoms:
-                if atom.id in target_atom_set and atom.source_chunk_id:
+                if (
+                    atom.id in target_atom_set
+                    and entity.id in atom.entity_ids
+                    and atom.source_chunk_id
+                ):
                     chunk_ids.append(atom.source_chunk_id)
 
         deduped_chunks = list(dict.fromkeys(cid for cid in chunk_ids if cid))

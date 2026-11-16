@@ -654,6 +654,39 @@ class ClosedLoopRefinementCoordinator:
                 ledger.cannot_link_entities.add((id_a, id_b))
         context.pipeline_input.curation_ledger = ledger
 
+    @staticmethod
+    def _strip_cycle_forming_upstreams(
+        envelopes: Sequence[ArtifactEnvelope[ArtifactPayload]],
+        collection: ArtifactCollection,
+        deficit_artifact_id: str,
+    ) -> list[ArtifactEnvelope[ArtifactPayload]]:
+        """Prevent dependency cycles between deficit signals and updated pre-existing identities.
+
+        Any newly minted delta artifact (not present in ``collection.latest_by_identity``)
+        depends on ``deficit_artifact_id`` and preceding pre-existing artifacts. Conversely,
+        modified versions of already-existing identities must not depend on
+        ``deficit_artifact_id`` or newly minted artifacts from the same deficit (whose
+        ``EpistemicDeficitArtifact`` already depends on those pre-existing targets), while
+        preserving ``provenance.deficit_id`` for full audit lineage.
+        """
+        new_pass_artifact_ids: set[str] = {deficit_artifact_id}
+        for env in envelopes:
+            ikey = env.identity_key or env.artifact_id
+            if ikey not in collection.latest_by_identity:
+                new_pass_artifact_ids.add(env.artifact_id)
+
+        for env in envelopes:
+            ikey = env.identity_key or env.artifact_id
+            if ikey in collection.latest_by_identity:
+                filtered = [
+                    uid
+                    for uid in env.provenance.upstream_artifact_ids
+                    if uid not in new_pass_artifact_ids
+                ]
+                if len(filtered) != len(env.provenance.upstream_artifact_ids):
+                    env.provenance.upstream_artifact_ids = filtered
+        return list(envelopes)
+
     def _build_delta_envelopes(
         self,
         delta: RefinementDelta,
@@ -825,7 +858,9 @@ class ClosedLoopRefinementCoordinator:
                 )
             )
 
-        return envelopes
+        return self._strip_cycle_forming_upstreams(
+            envelopes, collection, deficit_artifact_id
+        )
 
     def _merge_pass_envelopes(
         self,
@@ -904,12 +939,17 @@ class ClosedLoopRefinementCoordinator:
         # Preserve original manifest intact until pass completion while giving
         # TheoreticalEnrichmentRunner the current pass index.
         pass_manifest = context.manifest.model_copy(update={"refinement_pass": pass_idx})
+        pass_lineage_fp = (
+            f"{context.lineage_fingerprint}::refine_pass{pass_idx}"
+            if context.lineage_fingerprint
+            else f"refine_pass{pass_idx}"
+        )
         enrichment_ctx = ArtifactExecutionContext(
             run_id=context.run_id,
             manifest=pass_manifest,
             pipeline_input=context.pipeline_input,
             previous=working_collection,
-            lineage_fingerprint=context.lineage_fingerprint,
+            lineage_fingerprint=pass_lineage_fp,
             prior_artifacts=context.prior_artifacts,
             prior_manifest=context.prior_manifest,
         )
