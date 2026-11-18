@@ -25,6 +25,7 @@ from episteme_pipeline.config import Phase6Config
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet
 from episteme_pipeline.decision.modal_resolver import HybridModalResolver
 from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
+from episteme_pipeline.utils.graph_algorithms import compute_z1_grounding
 from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.graph_store import ProjectionGraph
 from episteme_pipeline.protocols.modality import (
@@ -239,45 +240,16 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             )
 
         # Baseline empirical content ratio calculation (Z1 path from theoretical antecedents to empirical base)
-        a_atoms = {
-            a.id
-            for a in theory_net.atoms
-            if self.schema.component_partitions.get(a.component_type) == "A"
-        }
-        b_atoms = {
-            a.id
-            for a in theory_net.atoms
-            if self.schema.component_partitions.get(a.component_type) == "B"
-        }
-
-        adj: dict[str, set[str]] = {a_id: set() for a_id in a_atoms}
-        z1_connected: set[str] = set()
-
-        for rel in theory_net.relations:
-            for p_id in rel.effective_premise_ids:
-                if p_id in a_atoms and rel.target_id in b_atoms:
-                    z1_connected.add(p_id)
-                elif rel.target_id in a_atoms and p_id in b_atoms:
-                    z1_connected.add(rel.target_id)
-                elif p_id in a_atoms and rel.target_id in a_atoms:
-                    adj[p_id].add(rel.target_id)
-                    adj[rel.target_id].add(p_id)
-
-        visited = set(z1_connected)
-        queue = list(z1_connected)
-        while queue:
-            curr = queue.pop(0)
-            for neighbor in adj.get(curr, []):
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    queue.append(neighbor)
-
-        empirical_content = len(visited) / len(a_atoms) if a_atoms else 0.0
+        z1_result = compute_z1_grounding(
+            theory_net.atoms,
+            theory_net.relations,
+            self.schema,
+        )
         logger.info(
             "Phase 6: Empirical Content metric = %.3f (%d/%d A-atoms with a Z1 path to B)",
-            empirical_content,
-            len(visited),
-            len(a_atoms),
+            z1_result.empirical_content_ratio,
+            len(z1_result.z1_grounded_ids),
+            len(z1_result.a_atom_ids),
         )
 
         refinement_pass = (

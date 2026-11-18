@@ -1,238 +1,179 @@
-"""Theory-guided implicit premise (enthymeme) recovery handler (ISSUE-053).
+"""Theory-conditioned implicit premise recoverer for ``ENTHYMEME_GAP`` deficits.
 
 Implements :class:`LLMTheoryGuidedPremiseRecoverer`, satisfying
-:class:`~episteme_pipeline.protocols.refinement.TheoryGuidedPremiseRecoverer` and
-:class:`~episteme_pipeline.protocols.fingerprint.Fingerprintable`.
+:class:`~episteme_pipeline.protocols.refinement.TheoryGuidedPremiseRecoverer`.
 
-Operates strictly on the targeted source chunks and claim atoms named in an
-``ENTHYMEME_GAP`` deficit without invalidating or modifying unaffected subgraphs.
+When top-down Graph-of-Thought deficit detection flags an unwarranted or
+:math:`Z_1`-disconnected theoretical component, this recoverer:
+
+1. Applies a System 1 ``DecisionEngine.evaluate_noul`` triage gate (with
+   deterministic false-negative auditing) before invoking System 2 extraction.
+2. Re-reads strictly the targeted chunks via the managed ``premise_recovery``
+   prompt bundle conditioned on ``deficit.theory_lens``.
+3. Recovers implicit premises carrying full ADR-0023 scoping metadata
+   (``scope_type``, ``epistemic_status``, ``intensional_mode``, ``attributed_to``)
+   and links entities via ``EntityLinker`` + ``EpistemicCurationLedger``.
+4. Resolves calibrated ``modal_prior`` via ``ModalStrengthResolver`` and runs
+   ``ARCClassifier.classify_pairs`` strictly on delta pairs linking newly
+   recovered premises to target claims and immediate 1-hop neighbors.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
-import time
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
+from episteme_pipeline.artifacts.execution import (
+    ArtifactExecutionContext,
+    EpistemicStateView,
+)
+from episteme_pipeline.config import HermeneuticRefinementConfig
 from episteme_pipeline.contracts.domain import (
     EpistemicDeficit,
     EpistemicDeficitKind,
-    L1Chunk,
     L2Entity,
     RefinementDelta,
     TheoryAtom,
     TheoryRelation,
 )
-from episteme_pipeline.events.context import get_event_emitter
-from episteme_pipeline.events.models import ComponentCompleted, ComponentStarted
-from episteme_pipeline.llm.structured import StructuredLLM, ensure_structured_llm
+from episteme_pipeline.llm.structured import (
+    StructuredLLM,
+    StructuredPredictable,
+    normalize_structured_llm,
+)
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.protocols.argument_mining import ARCClassifier
-from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
+from episteme_pipeline.protocols.decision import DecisionEngine
+from episteme_pipeline.protocols.extractors import (
+    EntityLinker,
+    GlobalRelationExtractor,
+)
 from episteme_pipeline.protocols.fingerprint import Fingerprintable
+from episteme_pipeline.protocols.modality import ModalStrengthResolver
+from episteme_pipeline.refinement._shared import (
+    compact_theory_lens,
+    entity_ids_matching_text,
+    evaluate_binary_triage,
+    refinement_component_scope,
+    resolve_atom_modal_prior,
+    resolve_curation_ledger,
+    resolve_grounding_entity,
+    resolve_refinement_pass,
+    resolve_schema_component_type,
+    resolve_schema_relation_type,
+)
 from episteme_pipeline.runs.fingerprints import fingerprint_method
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
-
-if TYPE_CHECKING:
-    from episteme_pipeline.artifacts.execution import (
-        ArtifactExecutionContext,
-        EpistemicStateView,
-    )
+from episteme_pipeline.utils.identifiers import dedup_preserve_order
 
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_PREMISE_RECOVERY_PROMPT = """\
-You are an expert in formal argumentation, philosophy of science, and structuralist metatheory.
-An argument component lacks explicit supporting premises or a bridging warrant (an enthymeme gap).
-Re-read ONLY the provided source chunk(s) through the supplied macro-theory lens and recover any
-implicit premises or bridging warrants implied by the prose.
-
-### Theory Context (Macro-Theory Lens)
-Theory ID: {theory_id}
-Theory Lens: {theory_lens}
-Deficit Rationale: {rationale}
-
-### Target Ungrounded Claim(s)
-{target_claims}
-
-### Existing Argument Components in Target Chunks
-{existing_atoms}
-
-### Scoped Entities
-{chunk_entities}
-
-### Allowed Component Types
-{component_types}
-
-### Allowed Argument Relation Types
-{argument_relation_types}
-
-### Source Chunk Text(s)
-{source_chunks}
-
-### Instructions
-1. Identify implicit premises, unstated auxiliary assumptions, or bridging warrants present or
-   presupposed in the source chunk(s) that directly support or attack the target claim(s).
-2. Ground each recovered premise in its exact ``source_chunk_id`` from [{target_chunk_ids}].
-3. Specify ``target_atom_id`` and ``relation_type`` (typically ``SUPPORTS_ARG`` or ``ATTACKS``).
-4. Do not duplicate components already listed in Existing Argument Components.
-5. Output strictly valid JSON matching the schema.
-"""
-
-
-@runtime_checkable
-class _StructuredPredictPort(Protocol):
-    """Minimal structural port for objects exposing ``predict_structured``."""
-
-    async def predict_structured(
-        self,
-        output_cls: type[Any],
-        prompt_bundle: Any,
-        strategy: Any = "direct_constrained",
-        fallback_behavior: Any = "retry_then_omit",
-        llm_kwargs: dict[str, Any] | None = None,
-        **prompt_args: Any,
-    ) -> Any:
-        """Predict a structured Pydantic output."""
-        ...
-
-
 class RecoveredImplicitPremise(BaseModel):
-    """Structured LLM prediction for a single recovered implicit premise.
+    """Single implicit premise or bridging warrant predicted by System 2 LLM.
 
-    Attributes
+    Parameters
     ----------
-    local_id : str, default "P1"
-        Local identifier within the recovery response.
+    local_id : str
+        Transient identifier within one LLM response.
     text : str
-        Recovered implicit premise or bridging warrant statement.
-    component_type : str, default "EmpiricalStatement"
-        Ontological component type validated against ``SchemaConfig``.
-    source_chunk_id : str, default ""
-        Identifier of the targeted L1 chunk grounding this premise.
-    target_atom_id : str, default ""
-        Identifier of the target :class:`TheoryAtom` this premise bears upon.
+        Recovered implicit premise or warrant statement.
+    component_type : str, default "TheoreticalHypothesis"
+        Schema component type label (e.g. ``TheoreticalHypothesis``, ``EmpiricalStatement``).
+    source_chunk_id : str
+        Originating chunk identifier strictly selected from target chunks.
+    target_atom_id : str
+        Target unwarranted claim identifier supported or attacked by this premise.
     relation_type : str, default "SUPPORTS_ARG"
-        Dialectical relation connecting this premise to ``target_atom_id``.
-    confidence : float, default 0.85
-        Normalized extraction confidence in ``[0.0, 1.0]``.
-    weight : float or None, optional
-        Optional dialectical relation weight in ``[0.0, 1.0]``.
-    entity_ids : list of str, optional
-        Identifiers of scoped L2 entities referenced by the premise.
-    reasoning : str, default ""
-        Brief diagnostic rationale explaining the enthymeme bridge.
+        Argument relation type matching ``SchemaConfig.argument_relation_types``.
+    confidence : float, default 0.8
+        Extractor confidence in ``[0.0, 1.0]``.
+    weight : float, default 0.8
+        Estimated inferential link strength in ``[0.0, 1.0]``.
+    scope_type : str or None, optional
+        Optional quantifier/scope classification from ``SchemaConfig.scope_types``.
+    epistemic_status : str or None, optional
+        Optional epistemic classification (e.g., ``Analytisch`` vs ``Synthetisch``).
+    intensional_mode : {"asserted", "attributed", "suppositional", "historical"}, default "asserted"
+        ADR-0023 intensional scoping classification for this premise.
+    attributed_to : str or None, optional
+        Attributed theorist or school when ``intensional_mode`` is attributed/historical.
+    entity_names : list of str, optional
+        Surface concept names referenced by this premise for entity linking.
     """
 
     local_id: str = "P1"
     text: str
-    component_type: str = "EmpiricalStatement"
+    component_type: str = "TheoreticalHypothesis"
     source_chunk_id: str = ""
     target_atom_id: str = ""
     relation_type: str = "SUPPORTS_ARG"
-    confidence: float = Field(default=0.85, ge=0.0, le=1.0)
-    weight: float | None = Field(default=None, ge=0.0, le=1.0)
-    entity_ids: list[str] = Field(default_factory=list)
-    reasoning: str = ""
-
-    @field_validator("text")
-    @classmethod
-    def _strip_non_empty_text(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("Recovered implicit premise text must not be empty.")
-        return cleaned
-
-    @field_validator("confidence", mode="before")
-    @classmethod
-    def _clamp_confidence(cls, value: Any) -> float:
-        try:
-            return max(0.0, min(1.0, float(value)))
-        except (TypeError, ValueError):
-            return 0.85
+    confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+    weight: float = Field(default=0.8, ge=0.0, le=1.0)
+    scope_type: str | None = None
+    epistemic_status: str | None = None
+    intensional_mode: Literal[
+        "asserted", "attributed", "suppositional", "historical"
+    ] = "asserted"
+    attributed_to: str | None = None
+    entity_names: list[str] = Field(default_factory=list)
 
 
 class PremiseRecoveryOutput(BaseModel):
-    """Structured LLM response envelope for theory-guided premise recovery.
+    """Structured batch of recovered implicit premises from System 2 extraction.
 
-    Attributes
+    Parameters
     ----------
-    recovered_premises : list of RecoveredImplicitPremise, optional
-        Implicit premises or bridging warrants recovered from targeted chunks.
+    recovered_premises : list of RecoveredImplicitPremise
+        Ordered list of recovered implicit premises or warrants.
     """
 
     recovered_premises: list[RecoveredImplicitPremise] = Field(default_factory=list)
 
 
-def _normalize_structured_llm(llm: Any | None) -> StructuredLLM | _StructuredPredictPort | None:
-    """Normalize an optional LLM backend to a structured prediction port."""
-    if llm is None:
-        return None
-    if isinstance(llm, _StructuredPredictPort):
-        return llm
-    return ensure_structured_llm(llm, use_cache=False)
-
-
-def _stable_premise_atom_id(
-    deficit_id: str,
-    chunk_id: str,
-    local_id: str,
-    text: str,
-) -> str:
-    """Compute a deterministic identifier for a recovered premise atom.
-
-    Parameters
-    ----------
-    deficit_id : str
-        Triggering epistemic deficit identifier.
-    chunk_id : str
-        Source L1 chunk identifier.
-    local_id : str
-        Local premise tag from the structured response.
-    text : str
-        Canonicalized premise text.
-
-    Returns
-    -------
-    str
-        Deterministic atom identifier prefixed with ``ac_ref_``.
-    """
+def _stable_recovered_id(deficit_id: str, chunk_id: str, local_id: str, text: str) -> str:
+    """Compute a deterministic identifier for a recovered implicit premise atom."""
     payload = f"{deficit_id}:{chunk_id}:{local_id}:{text.strip()}"
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:14]
-    return f"ac_ref_{digest}"
+    return f"ac_enthymeme_{digest}"
 
 
 class LLMTheoryGuidedPremiseRecoverer:
     """Theory-conditioned premise recoverer for ``ENTHYMEME_GAP`` deficits.
 
-    Inspects strictly the targeted source chunks and target claim atoms named in
-    an ``ENTHYMEME_GAP`` deficit, conditions a structured LLM prompt on the
-    discovered macro-theory lens (``deficit.theory_lens``), emits recovered
-    :class:`TheoryAtom` and :class:`TheoryRelation` deltas, and optionally runs
-    ``arc_classifier.classify_pairs(...)`` strictly over pairs connecting newly
-    recovered premises to the target atom and its immediate 1-hop neighbors.
+    Integrates System 1 ``DecisionEngine`` triage gating, managed prompt
+    bundles, entity linking with ``EpistemicCurationLedger`` compliance,
+    calibrated ``ModalStrengthResolver`` prior estimation, and localized
+    ``ARCClassifier`` relation discovery.
 
     Parameters
     ----------
-    llm : StructuredLLM or Any or None, optional
+    llm : StructuredLLM or StructuredPredictable or Any or None, optional
         Structured LLM adapter or LlamaIndex LLM facade used for premise gleaning.
     arc_classifier : ARCClassifier or None, optional
         Optional argument relation classifier run strictly on delta pairs
         ``(recovered_premise, target_atom_and_neighbors)``.
     global_extractor : GlobalRelationExtractor or None, optional
         Optional global extractor forwarded to ``arc_classifier.classify_pairs``.
+    entity_linker : EntityLinker or None, optional
+        Optional entity linker associating premise mentions with L2 entities.
+    modal_resolver : ModalStrengthResolver or None, optional
+        Optional modal prior resolver applied to newly recovered atoms.
+    decision_engine : DecisionEngine or None, optional
+        Optional System 1 engine gating enthymeme recoverability before LLM calls.
+    config : HermeneuticRefinementConfig or None, optional
+        Configuration supplying prompt bundles, decoding strategy, and thresholds.
     schema : SchemaConfig, optional
         Pipeline schema configuration, defaulting to ``DEFAULT_SCHEMA``.
     prompts : StructuredPromptBundle or str or None, optional
-        Optional custom prompt bundle or template string.
-    strategy : Any, default "direct_constrained"
-        Structured decoding strategy forwarded to ``llm.predict_structured``.
+        Optional prompt bundle override overriding ``config.premise_recovery_prompts``.
+    strategy : Any, optional
+        Optional decoding strategy override overriding
+        ``config.premise_recovery_decoding_strategy``.
     confidence_threshold : float, default 0.5
         Minimum confidence required to retain a recovered implicit premise.
     """
@@ -243,85 +184,90 @@ class LLMTheoryGuidedPremiseRecoverer:
         *,
         arc_classifier: ARCClassifier | None = None,
         global_extractor: GlobalRelationExtractor | None = None,
+        entity_linker: EntityLinker | None = None,
+        modal_resolver: ModalStrengthResolver | None = None,
+        decision_engine: DecisionEngine | None = None,
+        config: HermeneuticRefinementConfig | None = None,
         schema: SchemaConfig = DEFAULT_SCHEMA,
         prompts: StructuredPromptBundle | str | None = None,
-        strategy: Any = "direct_constrained",
+        strategy: Any = None,
         confidence_threshold: float = 0.5,
     ) -> None:
-        self.llm = _normalize_structured_llm(llm)
+        self.llm: StructuredPredictable | None = normalize_structured_llm(llm)
         self.arc_classifier = arc_classifier
         self.global_extractor = global_extractor
+        self.entity_linker = entity_linker
+        self.modal_resolver = modal_resolver
+        self.decision_engine = decision_engine
+        self.config = config or HermeneuticRefinementConfig()
         self.schema = schema
+
         if isinstance(prompts, StructuredPromptBundle):
             self.prompts: StructuredPromptBundle = prompts
-        else:
-            self.prompts = StructuredPromptBundle(
-                direct_template=prompts or DEFAULT_PREMISE_RECOVERY_PROMPT,
-                name="refinement_premise_recovery",
+        elif isinstance(prompts, str):
+            self.prompts = self.config.premise_recovery_prompts.model_copy(
+                update={"direct_template": prompts}
             )
-        self.strategy = strategy
-        self.confidence_threshold = confidence_threshold
+        else:
+            self.prompts = self.config.premise_recovery_prompts
+
+        self.strategy = (
+            strategy
+            if strategy is not None
+            else self.config.premise_recovery_decoding_strategy
+        )
+        self.confidence_threshold = float(confidence_threshold)
 
     def fingerprint(self) -> dict[str, Any]:
-        """Return deterministic configuration fingerprint for cache lineage.
+        """Return deterministic configuration fingerprint for cache invalidation.
 
         Returns
         -------
         dict of str to Any
-            JSON-serializable dictionary capturing component settings and
-            sub-component fingerprints.
+            JSON-serializable snapshot of prompt, threshold, and sub-components.
         """
         strategy_str = (
             self.strategy.value if isinstance(self.strategy, Enum) else str(self.strategy)
         )
-        llm_fp = (
-            self.llm.fingerprint()
-            if isinstance(self.llm, Fingerprintable)
-            else fingerprint_method(self.llm)
-        )
-        arc_fp = (
-            self.arc_classifier.fingerprint()
-            if isinstance(self.arc_classifier, Fingerprintable)
-            else fingerprint_method(self.arc_classifier)
-        )
-        global_fp = (
-            self.global_extractor.fingerprint()
-            if isinstance(self.global_extractor, Fingerprintable)
-            else fingerprint_method(self.global_extractor)
-        )
         return {
             "class": self.__class__.__name__,
             "schema_version": self.schema.version,
-            "strategy": strategy_str,
             "confidence_threshold": self.confidence_threshold,
+            "strategy": strategy_str,
+            "use_decision_engine_gating": self.config.use_decision_engine_gating,
+            "decision_confidence_threshold": self.config.decision_confidence_threshold,
             "prompts": self.prompts.fingerprint(),
-            "llm": llm_fp,
-            "arc_classifier": arc_fp,
-            "global_extractor": global_fp,
+            "llm": (
+                self.llm.fingerprint()
+                if isinstance(self.llm, Fingerprintable)
+                else fingerprint_method(self.llm)
+            ),
+            "arc_classifier": (
+                self.arc_classifier.fingerprint()
+                if isinstance(self.arc_classifier, Fingerprintable)
+                else fingerprint_method(self.arc_classifier)
+            ),
+            "global_extractor": (
+                self.global_extractor.fingerprint()
+                if isinstance(self.global_extractor, Fingerprintable)
+                else fingerprint_method(self.global_extractor)
+            ),
+            "entity_linker": (
+                self.entity_linker.fingerprint()
+                if isinstance(self.entity_linker, Fingerprintable)
+                else fingerprint_method(self.entity_linker)
+            ),
+            "modal_resolver": (
+                self.modal_resolver.fingerprint()
+                if isinstance(self.modal_resolver, Fingerprintable)
+                else fingerprint_method(self.modal_resolver)
+            ),
+            "decision_engine": (
+                self.decision_engine.fingerprint()
+                if isinstance(self.decision_engine, Fingerprintable)
+                else fingerprint_method(self.decision_engine)
+            ),
         }
-
-    def _resolve_component_type(self, candidate: str) -> str:
-        """Resolve a predicted component type against the configured schema."""
-        if candidate in self.schema.component_types:
-            return candidate
-        if "EmpiricalStatement" in self.schema.component_types:
-            return "EmpiricalStatement"
-        if "ObservationUnit" in self.schema.component_types:
-            return "ObservationUnit"
-        return self.schema.component_types[0]
-
-    def _resolve_relation_type(self, candidate: str) -> str:
-        """Resolve a predicted dialectical relation type against the schema."""
-        resolved = self.schema.resolve_relation_type(candidate)
-        if resolved is not None:
-            return resolved
-        fallback = self.schema.resolve_relation_type("SUPPORTS_ARG")
-        if fallback is not None:
-            return fallback
-        support_rels = self.schema.get_support_relations()
-        if support_rels:
-            return support_rels[0]
-        return self.schema.argument_relation_types[0]
 
     async def recover_premises(
         self,
@@ -330,246 +276,275 @@ class LLMTheoryGuidedPremiseRecoverer:
         *,
         context: ArtifactExecutionContext | None = None,
     ) -> RefinementDelta:
-        """Perform localized theory-guided premise recovery for an ``ENTHYMEME_GAP``.
+        """Recover implicit premises for an ``ENTHYMEME_GAP`` deficit.
 
         Parameters
         ----------
         deficit : EpistemicDeficit
-            Target ``ENTHYMEME_GAP`` deficit specifying target chunks, target atoms,
-            and the conditioning ``theory_lens``.
+            Target ``ENTHYMEME_GAP`` deficit naming target chunks, atoms, and
+            theory-lens expectations.
         state : EpistemicStateView
-            Cumulative epistemic state view providing chunks, entities, and L3 atoms.
+            Cumulative epistemic state view providing chunks, entities, and atoms.
         context : ArtifactExecutionContext or None, optional
-            Optional active execution context for event lineage.
+            Optional active execution context for event lineage and curation ledger.
 
         Returns
         -------
         RefinementDelta
-            Delta carrying newly recovered implicit premise atoms and dialectical
-            relations strictly within the targeted subgraph.
-
-        Raises
-        ------
-        ValueError
-            If ``deficit.deficit_kind`` is not ``ENTHYMEME_GAP`` or no structured
-            LLM is configured.
+            Delta containing newly recovered implicit ``TheoryAtom``s,
+            ``TheoryRelation``s, optional linked ``L2Entity`` updates, and
+            resolved deficit IDs.
         """
         if deficit.deficit_kind != EpistemicDeficitKind.ENTHYMEME_GAP:
             raise ValueError(
                 f"LLMTheoryGuidedPremiseRecoverer only handles ENTHYMEME_GAP deficits "
-                f"(got {deficit.deficit_kind})."
+                f"(got {deficit.deficit_kind.value})"
             )
+
         if self.llm is None:
             raise ValueError(
-                "LLMTheoryGuidedPremiseRecoverer requires a configured StructuredLLM."
+                "LLMTheoryGuidedPremiseRecoverer requires a configured StructuredLLM "
+                "instance to recover implicit premises."
             )
 
-        run_id = context.run_id if context is not None else None
-        next_pass = deficit.refinement_pass + 1
-        emitter = get_event_emitter()
-        comp_name = f"{self.__class__.__name__}:{deficit.deficit_id}"
-        start_time = time.perf_counter()
-        emitter.emit(
-            ComponentStarted(
-                run_id=run_id,
-                phase="refinement",
-                component_name=comp_name,
-                input_description=(
-                    f"chunks={len(deficit.target_chunk_ids)}, "
-                    f"atoms={len(deficit.target_atom_ids)}"
-                ),
-            )
-        )
+        next_pass = resolve_refinement_pass(context, deficit)
+        run_id = context.run_id if context is not None else "unknown"
+        comp_name = type(self).__name__
+        curation_ledger = resolve_curation_ledger(context)
 
-        try:
-            all_atoms = (
-                state.canonical_theory_atoms
-                if state.canonical_theory_atoms
-                else state.theory_atoms
-            )
-            all_relations = (
-                state.canonical_theory_relations
-                if state.canonical_theory_relations
-                else state.theory_relations
-            )
-            atoms_by_id: dict[str, TheoryAtom] = {a.id: a for a in all_atoms}
-            target_atoms: list[TheoryAtom] = [
-                atoms_by_id[aid] for aid in deficit.target_atom_ids if aid in atoms_by_id
-            ]
+        all_atoms = list(state.canonical_theory_atoms or state.theory_atoms)
+        all_relations = list(state.canonical_theory_relations or state.theory_relations)
+        atoms_by_id = {a.id: a for a in all_atoms}
+        chunks_by_id = {c.id: c for c in state.chunks}
+        entities_by_id = {e.id: e for e in state.entities}
 
-            if deficit.target_chunk_ids:
-                ordered_chunk_ids = list(dict.fromkeys(deficit.target_chunk_ids))
-            else:
-                ordered_chunk_ids = list(
-                    dict.fromkeys(
-                        a.source_chunk_id for a in target_atoms if a.source_chunk_id
-                    )
+        with refinement_component_scope(
+            comp_name,
+            context,
+            input_description=f"deficit={deficit.deficit_id}",
+        ) as outcome:
+            if self.llm is None:
+                logger.warning(
+                    "LLMTheoryGuidedPremiseRecoverer invoked without LLM backend for %s",
+                    deficit.deficit_id,
                 )
-
-            target_chunk_id_set = set(ordered_chunk_ids)
-            chunks_by_id: dict[str, L1Chunk] = {c.id: c for c in state.chunks}
-            target_chunks: list[L1Chunk] = [
-                chunks_by_id[cid] for cid in ordered_chunk_ids if cid in chunks_by_id
-            ]
-
-            if not target_chunks:
-                emitter.emit(
-                    ComponentCompleted(
-                        run_id=run_id,
-                        phase="refinement",
-                        component_name=comp_name,
-                        duration_seconds=time.perf_counter() - start_time,
-                        output_description="no_matching_target_chunks",
-                        success=True,
-                    )
-                )
+                outcome.output_description = "skipped_no_llm"
                 return RefinementDelta(refinement_pass=next_pass)
 
-            scoped_entity_ids: set[str] = {
-                eid for atom in target_atoms for eid in atom.entity_ids
-            }
-            for ent in state.entities:
-                if any(cid in target_chunk_id_set for cid in ent.source_chunk_ids):
-                    scoped_entity_ids.add(ent.id)
-            scoped_entities: list[L2Entity] = [
-                ent for ent in state.entities if ent.id in scoped_entity_ids
+            target_atoms = [
+                atoms_by_id[aid]
+                for aid in deficit.target_atom_ids
+                if aid in atoms_by_id
             ]
-            all_entity_ids: set[str] = {ent.id for ent in state.entities}
+            target_chunk_ids = dedup_preserve_order(
+                [
+                    *deficit.target_chunk_ids,
+                    *(a.source_chunk_id for a in target_atoms),
+                ]
+            )
+            available_chunk_ids = [cid for cid in target_chunk_ids if cid in chunks_by_id]
+            if not available_chunk_ids or not target_atoms:
+                outcome.output_description = "no_target_chunks_or_atoms"
+                return RefinementDelta(refinement_pass=next_pass)
 
-            existing_chunk_atoms = [
-                a for a in all_atoms if a.source_chunk_id in target_chunk_id_set
+            target_chunk_set = set(available_chunk_ids)
+            source_chunks_str = "\n\n".join(
+                f"[{cid}]\n{chunks_by_id[cid].text}" for cid in available_chunk_ids
+            )
+            target_claims_str = "\n".join(
+                f"- [{a.id}] ({a.component_type}, chunk={a.source_chunk_id}): {a.text}"
+                for a in target_atoms
+            )
+
+            # System 1 DecisionEngine pre-gate before expensive System 2 LLM extraction.
+            if self.prompts.decision_template:
+                triage = await evaluate_binary_triage(
+                    self.decision_engine,
+                    state_payload=(
+                        f"Theory: {deficit.theory_id or 'unspecified'}\n"
+                        f"Rationale: {deficit.rationale}\n"
+                        f"Target Claims:\n{target_claims_str}\n"
+                        f"Passages:\n{source_chunks_str[:1600]}"
+                    ),
+                    question=self.prompts.decision_template,
+                    run_id=run_id,
+                    phase_key="refinement_premise_recovery",
+                    item_id=deficit.deficit_id,
+                    config=self.config,
+                )
+                if not triage.value:
+                    outcome.output_description = "gated_out_by_decision_engine"
+                    return RefinementDelta(refinement_pass=next_pass)
+
+            existing_in_chunks = [
+                a for a in all_atoms if a.source_chunk_id in target_chunk_set
             ]
-
-            target_claims_text = (
+            existing_atoms_str = (
                 "\n".join(
-                    f"- [{a.id}] ({a.component_type}, chunk={a.source_chunk_id}) {a.text}"
-                    for a in target_atoms
+                    f"- [{a.id}] ({a.component_type}, chunk={a.source_chunk_id}): {a.text}"
+                    for a in existing_in_chunks
                 )
-                if target_atoms
-                else "No explicit target atom resolved."
+                or "None."
             )
-            existing_atoms_text = (
-                "\n".join(
-                    f"- [{a.id}] ({a.component_type}, chunk={a.source_chunk_id}) {a.text}"
-                    for a in existing_chunk_atoms
-                )
-                if existing_chunk_atoms
-                else "None."
-            )
-            chunk_entities_text = (
-                "\n".join(
-                    f"- {e.id}: {e.name} ({e.label})" for e in scoped_entities
-                )
-                if scoped_entities
-                else "None."
-            )
-            source_chunks_text = "\n\n".join(
-                f"[Chunk {c.id} (doc={c.source_doc_id}, seq={c.sequence_index})]\n{c.text}"
-                for c in target_chunks
+            scoped_entities = [
+                ent
+                for ent in state.entities
+                if any(cid in target_chunk_set for cid in ent.source_chunk_ids)
+                or ent.id in deficit.target_entity_ids
+            ]
+            chunk_entities_str = (
+                "\n".join(f"- [{e.id}] ({e.label}) {e.name}" for e in scoped_entities)
+                or "None."
             )
 
-            raw_output: PremiseRecoveryOutput = await self.llm.predict_structured(
+            result: PremiseRecoveryOutput = await self.llm.predict_structured(
                 PremiseRecoveryOutput,
                 self.prompts,
                 strategy=self.strategy,
                 theory_id=deficit.theory_id or "unspecified",
-                theory_lens=json.dumps(
-                    deficit.theory_lens, sort_keys=True, ensure_ascii=False
-                ),
-                rationale=deficit.rationale or "Enthymeme gap detected.",
-                target_claims=target_claims_text,
-                existing_atoms=existing_atoms_text,
-                chunk_entities=chunk_entities_text,
-                source_chunks=source_chunks_text,
-                target_chunk_ids=", ".join(c.id for c in target_chunks),
+                theory_lens=compact_theory_lens(deficit.theory_lens),
+                rationale=deficit.rationale or "Missing explicit premises.",
+                target_claims=target_claims_str,
+                existing_atoms=existing_atoms_str,
+                chunk_entities=chunk_entities_str,
                 component_types=self.schema.component_types_str(),
                 argument_relation_types=self.schema.argument_relation_types_str(),
+                source_chunks=source_chunks_str,
+                target_chunk_ids=", ".join(available_chunk_ids),
             )
 
-            default_chunk_id = target_chunks[0].id
-            existing_texts = {
-                (a.source_chunk_id, a.text.strip().lower()) for a in existing_chunk_atoms
+            primary_target_id = target_atoms[0].id
+            target_id_set = {a.id for a in target_atoms}
+            default_chunk_id = available_chunk_ids[0]
+            default_comp_type = self.schema.default_hypothesis_component_type()
+
+            norm_existing_texts = {
+                " ".join(a.text.lower().split()) for a in existing_in_chunks
+            }
+            seen_rel_keys = {
+                (r.source_id, r.relation_type, r.target_id) for r in all_relations
             }
 
             recovered_atoms: list[TheoryAtom] = []
             recovered_relations: list[TheoryRelation] = []
-            seen_rel_keys: set[tuple[str, str, str]] = set()
+            recovered_entities: list[L2Entity] = []
+            seen_entity_updates: set[str] = set()
+            reader = state.to_graph_reader()
 
-            for idx, item in enumerate(raw_output.recovered_premises, start=1):
-                if item.confidence < self.confidence_threshold:
+            for cand in result.recovered_premises:
+                text = cand.text.strip()
+                if not text or float(cand.confidence) < self.confidence_threshold:
                     continue
+                norm_text = " ".join(text.lower().split())
+                if norm_text in norm_existing_texts:
+                    continue
+                norm_existing_texts.add(norm_text)
 
-                assigned_chunk_id = (
-                    item.source_chunk_id
-                    if item.source_chunk_id in target_chunk_id_set
+                chunk_id = (
+                    cand.source_chunk_id
+                    if cand.source_chunk_id in target_chunk_set
                     else default_chunk_id
                 )
-                if (assigned_chunk_id, item.text.strip().lower()) in existing_texts:
-                    continue
-
-                atom_id = _stable_premise_atom_id(
-                    deficit.deficit_id,
-                    assigned_chunk_id,
-                    item.local_id or f"P{idx}",
-                    item.text,
+                target_id = (
+                    cand.target_atom_id
+                    if cand.target_atom_id in target_id_set
+                    else primary_target_id
                 )
+                comp_type = resolve_schema_component_type(
+                    cand.component_type,
+                    self.schema,
+                    fallback=default_comp_type,
+                )
+                rel_type = resolve_schema_relation_type(cand.relation_type, self.schema)
+                atom_id = _stable_recovered_id(
+                    deficit.deficit_id, chunk_id, cand.local_id, text
+                )
+                chunk_text = chunks_by_id[chunk_id].text if chunk_id in chunks_by_id else ""
 
-                valid_entity_ids = [
-                    eid for eid in item.entity_ids if eid in all_entity_ids
-                ]
-                if not valid_entity_ids and scoped_entities:
-                    low_text = item.text.lower()
-                    valid_entity_ids = [
-                        ent.id
-                        for ent in scoped_entities
-                        if ent.name.strip() and ent.name.strip().lower() in low_text
-                    ]
+                # Resolve entity links via EntityLinker / scoped entities.
+                linked_entity_ids = entity_ids_matching_text(text, scoped_entities)
+                for raw_ename in cand.entity_names:
+                    clean_ename = raw_ename.strip()
+                    if not clean_ename:
+                        continue
+                    ent_obj, should_emit = await resolve_grounding_entity(
+                        name=clean_ename,
+                        label=self.schema.node_types[0]
+                        if self.schema.node_types
+                        else "Concept",
+                        description=None,
+                        chunk_id=chunk_id,
+                        chunk_text=chunk_text,
+                        confidence=float(cand.confidence),
+                        entities_by_id=entities_by_id,
+                        entity_linker=self.entity_linker,
+                        graph_reader=reader,
+                        curation_ledger=curation_ledger,
+                        schema=self.schema,
+                    )
+                    if ent_obj.id not in linked_entity_ids:
+                        linked_entity_ids.append(ent_obj.id)
+                    if should_emit and ent_obj.id not in seen_entity_updates:
+                        seen_entity_updates.add(ent_obj.id)
+                        recovered_entities.append(ent_obj)
+                        reader.register_entity(ent_obj)
+
+                atom_params: dict[str, Any] = {}
+                if deficit.theory_id:
+                    atom_params["theory_id"] = deficit.theory_id
+
+                scope_val = (
+                    cand.scope_type
+                    if cand.scope_type in self.schema.scope_types
+                    else None
+                )
+                status_val = (
+                    cand.epistemic_status
+                    if cand.epistemic_status in self.schema.epistemic_statuses
+                    else None
+                )
 
                 new_atom = TheoryAtom(
                     id=atom_id,
-                    text=item.text,
-                    component_type=self._resolve_component_type(item.component_type),
-                    source_chunk_id=assigned_chunk_id,
-                    confidence=item.confidence,
-                    entity_ids=valid_entity_ids,
+                    text=text,
+                    component_type=comp_type,
+                    source_chunk_id=chunk_id,
+                    confidence=float(cand.confidence),
+                    modal_prior=max(0.0, min(1.0, float(cand.confidence))),
+                    entity_ids=dedup_preserve_order(linked_entity_ids),
+                    scope_type=scope_val,
+                    epistemic_status=status_val,
+                    intensional_mode=cand.intensional_mode,
+                    attributed_to=cand.attributed_to,
+                    parameters=atom_params,
+                )
+                new_atom = await resolve_atom_modal_prior(
+                    new_atom,
+                    self.modal_resolver,
+                    context_text=chunk_text or None,
                 )
                 recovered_atoms.append(new_atom)
-                existing_texts.add((assigned_chunk_id, item.text.strip().lower()))
+                reader.register_theory_atom(new_atom)
 
-                resolved_target: TheoryAtom | None = None
-                if item.target_atom_id and item.target_atom_id in atoms_by_id:
-                    resolved_target = atoms_by_id[item.target_atom_id]
-                elif target_atoms:
-                    resolved_target = target_atoms[0]
+                edge_weight = max(0.0, min(1.0, float(cand.weight)))
+                target_chunk = atoms_by_id[target_id].source_chunk_id
+                rel_scope = "local" if target_chunk == chunk_id else "global"
+                rel = TheoryRelation(
+                    source_id=atom_id,
+                    target_id=target_id,
+                    relation_type=rel_type,
+                    confidence=float(cand.confidence),
+                    weight=edge_weight,
+                    active_weight=edge_weight,
+                    scope=rel_scope,
+                )
+                rkey = (rel.source_id, rel.relation_type, rel.target_id)
+                if rkey not in seen_rel_keys:
+                    seen_rel_keys.add(rkey)
+                    recovered_relations.append(rel)
 
-                if resolved_target is not None and resolved_target.id != new_atom.id:
-                    rel_type = self._resolve_relation_type(item.relation_type)
-                    rel_scope = (
-                        "local"
-                        if new_atom.source_chunk_id == resolved_target.source_chunk_id
-                        else "global"
-                    )
-                    rel_weight = (
-                        item.weight if item.weight is not None else item.confidence
-                    )
-                    rel = TheoryRelation(
-                        source_id=new_atom.id,
-                        target_id=resolved_target.id,
-                        relation_type=rel_type,
-                        confidence=item.confidence,
-                        scope=rel_scope,
-                        weight=rel_weight,
-                    )
-                    rkey = (rel.source_id, rel.relation_type, rel.target_id)
-                    if rkey not in seen_rel_keys:
-                        seen_rel_keys.add(rkey)
-                        recovered_relations.append(rel)
-
+            # Run ARCClassifier strictly on delta pairs (new_premise, target & 1-hop neighbors).
             if self.arc_classifier is not None and recovered_atoms and target_atoms:
-                reader = state.to_graph_reader()
-                for atom in recovered_atoms:
-                    reader.register_theory_atom(atom)
-
                 target_id_set = {a.id for a in target_atoms}
                 neighbor_ids: set[str] = set()
                 for rel in all_relations:
@@ -611,43 +586,20 @@ class LLMTheoryGuidedPremiseRecoverer:
                 if (recovered_atoms or recovered_relations)
                 else []
             )
-            delta = RefinementDelta(
+            outcome.output_description = (
+                f"atoms={len(recovered_atoms)}, relations={len(recovered_relations)}, "
+                f"entities={len(recovered_entities)}"
+            )
+            return RefinementDelta(
+                entities=recovered_entities,
                 theory_atoms=recovered_atoms,
                 theory_relations=recovered_relations,
                 resolved_deficit_ids=resolved_ids,
                 refinement_pass=next_pass,
             )
-            emitter.emit(
-                ComponentCompleted(
-                    run_id=run_id,
-                    phase="refinement",
-                    component_name=comp_name,
-                    duration_seconds=time.perf_counter() - start_time,
-                    output_description=(
-                        f"recovered_atoms={len(recovered_atoms)}, "
-                        f"recovered_relations={len(recovered_relations)}"
-                    ),
-                    success=True,
-                )
-            )
-            return delta
-        except Exception as exc:
-            emitter.emit(
-                ComponentCompleted(
-                    run_id=run_id,
-                    phase="refinement",
-                    component_name=comp_name,
-                    duration_seconds=time.perf_counter() - start_time,
-                    output_description="failed",
-                    success=False,
-                    error_message=f"{type(exc).__name__}: {exc}",
-                )
-            )
-            raise
 
 
 __all__ = [
-    "DEFAULT_PREMISE_RECOVERY_PROMPT",
     "LLMTheoryGuidedPremiseRecoverer",
     "PremiseRecoveryOutput",
     "RecoveredImplicitPremise",

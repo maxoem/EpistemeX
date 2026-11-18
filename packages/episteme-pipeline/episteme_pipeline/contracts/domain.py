@@ -871,15 +871,13 @@ class TheoryRelation(BaseModel):
         int
             Sign of relational polarity (+1, -1, 0).
         """
-        if self.weight_support is not None and self.weight_support > 0:
-            return 1
-        if self.weight_attack is not None and self.weight_attack > 0:
-            return -1
         from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
-        return DEFAULT_SCHEMA.relation_polarities.get(
+        return DEFAULT_SCHEMA.resolve_edge_polarity(
             self.relation_type,
-            1 if (self.weight or 0) > 0 else (-1 if (self.weight or 0) < 0 else 0),
+            weight_support=self.weight_support,
+            weight_attack=self.weight_attack,
+            weight=self.weight,
         )
 
 
@@ -1098,6 +1096,13 @@ class RefinementDelta(BaseModel):
     cannot_link_pairs : list of tuple of (str, str), optional
         Entity ID pairs produced by concept splitting that downstream
         consolidation must never re-merge.
+    retired_entity_ids : list of str, optional
+        Pre-existing L2 entity IDs completely superseded (e.g., fully split
+        parent hub entities) that must be retired from active L2/projection views.
+    split_entity_parents : dict of (str, str), optional
+        Mapping ``{sense_entity_id: parent_entity_id}`` recording split child
+        provenance so stale mentions on ``parent_entity_id`` in reassigned chunks
+        are retired and re-minted for each sense entity.
     resolved_deficit_ids : list of str, optional
         Identifiers of :class:`EpistemicDeficit` signals addressed by this delta.
     refinement_pass : int, default 0
@@ -1111,6 +1116,8 @@ class RefinementDelta(BaseModel):
     theory_atoms: list[TheoryAtom] = Field(default_factory=list)
     theory_relations: list[TheoryRelation] = Field(default_factory=list)
     cannot_link_pairs: list[tuple[str, str]] = Field(default_factory=list)
+    retired_entity_ids: list[str] = Field(default_factory=list)
+    split_entity_parents: dict[str, str] = Field(default_factory=dict)
     resolved_deficit_ids: list[str] = Field(default_factory=list)
     refinement_pass: int = Field(default=0, ge=0)
 
@@ -1121,7 +1128,8 @@ class RefinementDelta(BaseModel):
         Returns
         -------
         bool
-            True when all domain element lists and ``cannot_link_pairs`` are empty.
+            True when all domain element lists, retirements, and
+            ``cannot_link_pairs`` are empty.
         """
         return not (
             self.chunks
@@ -1131,4 +1139,5 @@ class RefinementDelta(BaseModel):
             or self.theory_atoms
             or self.theory_relations
             or self.cannot_link_pairs
+            or self.retired_entity_ids
         )

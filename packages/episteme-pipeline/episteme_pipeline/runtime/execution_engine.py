@@ -322,6 +322,11 @@ class ArtifactExecutionEngine:
         for phase_key, cfg in vars(self.config).items():
             if not isinstance(cfg, BaseModel):
                 continue
+            if (
+                phase_key == "refinement"
+                and self.config.refinement.max_refinement_cycles <= 0
+            ):
+                continue
             prompts: dict[str, str] = {}
             for comp_name, comp_obj in find_components(cfg).items():
                 if isinstance(comp_obj, StructuredPromptBundle):

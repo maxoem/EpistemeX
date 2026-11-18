@@ -226,6 +226,22 @@ def _extract_l1_state(
     return documents, chunks, consumed_ids
 
 
+def _collect_retired_entity_ids(
+    envelopes: Iterable[ArtifactEnvelope[ArtifactPayload]],
+    alias_map: dict[str, str],
+) -> set[str]:
+    """Return canonical and raw entity IDs marked retired in ``envelopes``."""
+    retired: set[str] = set()
+    for artifact in envelopes:
+        if artifact.kind == ArtifactKind.LINKED_ENTITY and isinstance(
+            artifact.payload, LinkedEntityArtifact
+        ):
+            if artifact.payload.is_retired:
+                retired.add(artifact.payload.entity_id)
+                retired.add(_resolve_alias_chain(artifact.payload.entity_id, alias_map))
+    return retired
+
+
 def _extract_l2_state(
     collection: ArtifactCollection,
 ) -> tuple[
@@ -263,6 +279,7 @@ def _extract_l2_state(
         ArtifactKind.LOCAL_RELATION,
         latest_only=True,
     )
+    retired_entity_ids = _collect_retired_entity_ids(l2_envelopes, alias_map)
 
     for artifact in l2_envelopes:
         if artifact.kind == ArtifactKind.ENTITY_MENTION and isinstance(
@@ -270,10 +287,14 @@ def _extract_l2_state(
         ):
             consumed_ids.append(artifact.artifact_id)
             payload = artifact.payload
+            if payload.is_retired:
+                continue
             raw_eid, parsed_cid = parse_mention_id(payload.mention_id)
             eid = payload.entity_id or raw_eid
             cid = payload.chunk_id or parsed_cid
             canon_eid = _resolve_alias_chain(eid, alias_map)
+            if eid in retired_entity_ids or canon_eid in retired_entity_ids:
+                continue
 
             if cid:
                 cids = mention_chunk_ids_by_entity.setdefault(canon_eid, [])
@@ -302,7 +323,8 @@ def _extract_l2_state(
             payload, LinkedEntityArtifact
         ):
             consumed_ids.append(artifact.artifact_id)
-            raw_entities.append(payload.to_domain())
+            if not payload.is_retired:
+                raw_entities.append(payload.to_domain())
         elif artifact.kind == ArtifactKind.LOCAL_RELATION and isinstance(
             payload, LocalRelationArtifact
         ):
@@ -380,7 +402,11 @@ def _extract_l2_state(
             entity_count_by_type.get(canon_entity.label, 0) + 1
         )
 
-    canonical_local_triples = _canonicalize_triples(raw_local_triples, alias_map)
+    canonical_local_triples = _canonicalize_triples(
+        raw_local_triples,
+        alias_map,
+        retired_entity_ids=retired_entity_ids,
+    )
     return (
         canonical_entities,
         canonical_local_triples,
@@ -393,16 +419,21 @@ def _extract_l2_state(
 
 
 def _canonicalize_triples(
-    triples: list[L2Triple], alias_map: dict[str, str]
+    triples: list[L2Triple],
+    alias_map: dict[str, str],
+    *,
+    retired_entity_ids: set[str] | frozenset[str] = frozenset(),
 ) -> list[L2Triple]:
-    """Rewrite triple endpoints via ``alias_map`` and deduplicate parallel edges."""
-    if not alias_map:
+    """Rewrite triple endpoints via ``alias_map``, drop retired endpoints, and deduplicate."""
+    if not alias_map and not retired_entity_ids:
         return list(triples)
 
     deduped: dict[tuple[str, str, str, str, str | None], L2Triple] = {}
     for triple in triples:
         new_subj = _resolve_alias_chain(triple.subject_id, alias_map)
         new_obj = _resolve_alias_chain(triple.object_id, alias_map)
+        if new_subj in retired_entity_ids or new_obj in retired_entity_ids:
+            continue
         # Drop self-loops induced by merging two distinct alias entities
         if triple.subject_id != triple.object_id and new_subj == new_obj:
             continue
@@ -881,7 +912,15 @@ class Phase3ArtifactsView(EpistemicStateView):
                 l3_ids.append(artifact.artifact_id)
                 raw_global_triples.append(payload.to_domain())
 
-        global_triples = _canonicalize_triples(raw_global_triples, alias_map)
+        retired_entity_ids = _collect_retired_entity_ids(
+            collection.of_kind(ArtifactKind.LINKED_ENTITY, latest_only=True),
+            alias_map,
+        )
+        global_triples = _canonicalize_triples(
+            raw_global_triples,
+            alias_map,
+            retired_entity_ids=retired_entity_ids,
+        )
         distribution: dict[str, int] = {}
         for triple in global_triples:
             distribution[triple.predicate] = (

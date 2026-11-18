@@ -157,53 +157,17 @@ class Pipeline:
             and resolved_coordinator is None
             and config.refinement.max_refinement_cycles > 0
         ):
-            from episteme_pipeline.projection.theorynet_projector import (
-                TheoryNetProjector,
-            )
-            from episteme_pipeline.refinement import (
-                ClosedLoopRefinementCoordinator,
-                ConceptionConceptSplitter,
-                TheoryGuidedAxiomGrounder,
-                TheoryNetDeficitDetector,
-            )
+            from episteme_pipeline.runtime.pipeline_factory import PipelineFactory
 
-            p6_cfg = config.phase6
-            default_projector = TheoryNetProjector(
-                schema=config.graph_schema,
-                admissibility_threshold=p6_cfg.admissibility_threshold,
-                admissibility_mode=p6_cfg.admissibility_mode,
-                tau_p=p6_cfg.tau_p,
-                tau_c=p6_cfg.tau_c,
-                prune_inadmissible=p6_cfg.prune_inadmissible,
-                iterations=p6_cfg.iterations,
-                tolerance=p6_cfg.tolerance,
-                semantics_model=p6_cfg.semantics_model,
-                modal_resolver=self.modal_resolver,
-                use_continuous=p6_cfg.use_continuous,
-                perspective=p6_cfg.perspective,
-                isolate_suppositional=p6_cfg.isolate_suppositional,
-                isolate_attributed=p6_cfg.isolate_attributed,
-                t_norm=p6_cfg.conjunctive_t_norm,
-            )
-            if resolved_detector is None:
-                resolved_detector = TheoryNetDeficitDetector(
-                    config=config.refinement,
-                    schema=config.graph_schema,
+            resolved_detector, resolved_coordinator = (
+                PipelineFactory.build_standalone_refinement(
+                    config=config,
+                    decision_engine=self.decision_engine,
+                    modal_resolver=self.modal_resolver,
+                    detector=resolved_detector,
                 )
-                self.deficit_detector = resolved_detector
-            resolved_coordinator = ClosedLoopRefinementCoordinator(
-                detector=resolved_detector,
-                concept_splitter=ConceptionConceptSplitter(
-                    schema=config.graph_schema
-                ),
-                axiom_grounder=TheoryGuidedAxiomGrounder(
-                    theory_projector=default_projector,
-                    schema=config.graph_schema,
-                ),
-                theorynet_projector=default_projector,
-                config=config.refinement,
-                schema=config.graph_schema,
             )
+            self.deficit_detector = resolved_detector
 
         self.engine = engine or ArtifactExecutionEngine(
             workflow=self.workflow,

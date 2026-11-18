@@ -503,8 +503,8 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                     candidate_atoms = [
                         obs
                         for obs in cluster.observations
-                        if self.schema.component_partitions.get(obs.component_type) == "A"
-                        or obs.component_type != "ObservationUnit"
+                        if self.schema.resolve_component_partition(obs.component_type)
+                        == "A"
                     ]
                 if not candidate_atoms:
                     candidate_atoms = list(cluster.observations)

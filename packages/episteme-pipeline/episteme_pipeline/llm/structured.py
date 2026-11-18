@@ -13,7 +13,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel
 
@@ -32,8 +32,9 @@ class StructuredPredictionError(RuntimeError):
     """Raised when a structured prediction cannot be recovered."""
 
 
-class StructuredLLM(Protocol):
-    """Owned boundary for structured LLM prediction in the pipeline."""
+@runtime_checkable
+class StructuredPredictable(Protocol):
+    """Minimal owned protocol for async structured Pydantic prediction."""
 
     async def predict_structured(
         self,
@@ -45,6 +46,11 @@ class StructuredLLM(Protocol):
         **prompt_args: Any,
     ) -> ModelT:
         """Predict a Pydantic model from a prompt bundle or string."""
+
+
+@runtime_checkable
+class StructuredLLM(StructuredPredictable, Protocol):
+    """Owned boundary for structured and text LLM prediction in the pipeline."""
 
     async def predict_text(
         self,
@@ -486,22 +492,68 @@ class LlamaIndexStructuredLLMAdapter:
 
 
 def ensure_structured_llm(llm: Any | None, use_cache: bool = True) -> StructuredLLM | None:
-    """Return an owned structured-output adapter for an LLM facade."""
+    """Return an owned structured-output adapter for an LLM facade.
+
+    Parameters
+    ----------
+    llm : Any or None
+        Raw LlamaIndex LLM facade or existing ``StructuredLLM`` implementation.
+    use_cache : bool, default True
+        Whether to wrap non-cached adapters in ``DiskCachedStructuredLLM``.
+
+    Returns
+    -------
+    StructuredLLM or None
+        Adapted structured LLM port, or ``None`` if ``llm`` is ``None``.
+    """
     if llm is None:
         return None
 
     from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
+
     if isinstance(llm, DiskCachedStructuredLLM):
         return llm
-        
-    if hasattr(llm, "predict_structured") and hasattr(llm, "predict_text"):
-        adapter = llm
+
+    if isinstance(llm, StructuredPredictable) or (
+        hasattr(llm, "predict_structured") and hasattr(llm, "predict_text")
+    ):
+        adapter: Any = llm
     else:
         adapter = LlamaIndexStructuredLLMAdapter(llm)
-        
+
     if use_cache:
         return DiskCachedStructuredLLM(adapter)
     return adapter
+
+
+def normalize_structured_llm(
+    llm: Any | None,
+    *,
+    use_cache: bool = True,
+) -> StructuredPredictable | None:
+    """Normalize an optional LLM facade or port to ``StructuredPredictable``.
+
+    Preserves existing ``StructuredPredictable`` ports (including already-cached
+    ``DiskCachedStructuredLLM`` instances and lightweight test doubles) without
+    re-wrapping, while adapting raw LLM facades via ``ensure_structured_llm``.
+
+    Parameters
+    ----------
+    llm : Any or None
+        Optional raw LLM facade, ``StructuredLLM``, or ``StructuredPredictable`` port.
+    use_cache : bool, default True
+        Whether newly adapted raw LLM facades enable disk caching.
+
+    Returns
+    -------
+    StructuredPredictable or None
+        Normalized structured prediction port, or ``None``.
+    """
+    if llm is None:
+        return None
+    if isinstance(llm, StructuredPredictable):
+        return llm
+    return ensure_structured_llm(llm, use_cache=use_cache)
 
 
 def sanitize_structured_output(text: str) -> SanitizedStructuredOutput:

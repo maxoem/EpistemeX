@@ -6,11 +6,16 @@ complexity using path compression.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Sequence
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
+    from episteme_pipeline.schema.default_schema import SchemaConfig
 
 
 def union_find_components(n: int, edges: Sequence[tuple[int, int]]) -> list[list[int]]:
@@ -155,4 +160,131 @@ def clique_constrained_components(
             del cluster_members[c_v]
 
     return sorted([sorted(members) for members in cluster_members.values()], key=lambda c: c[0])
+
+
+@dataclass(frozen=True, slots=True)
+class Z1GroundingResult:
+    """Result of Schurz-Lakatos :math:`Z_1` empirical-base reachability analysis.
+
+    Attributes
+    ----------
+    a_atom_ids : frozenset of str
+        Theoretical (partition ``"A"``) atom identifiers.
+    b_atom_ids : frozenset of str
+        Empirical/observational (partition ``"B"``) atom identifiers.
+    z1_grounded_ids : frozenset of str
+        Theoretical atom identifiers reachable from partition ``"B"`` via
+        eligible derivation or corroboration links.
+    in_support_degree : dict of (str, int)
+        Count of distinct incoming positive-polarity support hyperedges for
+        each theoretical atom.
+    empirical_content_ratio : float
+        Fraction ``|z1_grounded_ids| / |a_atom_ids|`` (``0.0`` when empty).
+    """
+
+    a_atom_ids: frozenset[str]
+    b_atom_ids: frozenset[str]
+    z1_grounded_ids: frozenset[str]
+    in_support_degree: dict[str, int]
+    empirical_content_ratio: float
+
+
+def compute_z1_grounding(
+    atoms: Sequence[TheoryAtom],
+    relations: Sequence[TheoryRelation],
+    schema: SchemaConfig,
+    *,
+    require_admissible: bool = True,
+    non_negative_only: bool = True,
+) -> Z1GroundingResult:
+    """Compute theoretical-to-empirical :math:`Z_1` reachability and support degrees.
+
+    Implements Schurz (1991) / Lakatos (1970) empirical content grounding by
+    partitioning atoms via ``schema.resolve_component_partition`` into
+    theoretical (``A``) and empirical (``B``) sets and running multi-source BFS
+    from ``A`` atoms directly coupled to ``B`` atoms through ``A-A`` links.
+
+    Parameters
+    ----------
+    atoms : Sequence of TheoryAtom
+        Active theory atoms in the graph or subnetwork.
+    relations : Sequence of TheoryRelation
+        Active theory hyperedges connecting atoms.
+    schema : SchemaConfig
+        Single source of truth for component partitions and relation polarities.
+    require_admissible : bool, default True
+        When True, ignores inadmissible, zero-weight, or undercut relations.
+    non_negative_only : bool, default True
+        When True, excludes negative-polarity attack relations from :math:`Z_1`
+        grounding paths.
+
+    Returns
+    -------
+    Z1GroundingResult
+        Frozen summary of ``A``/``B`` partitions, grounded ``A`` atoms, incoming
+        support counts, and empirical content ratio.
+    """
+    a_atoms: set[str] = set()
+    b_atoms: set[str] = set()
+    for atom in atoms:
+        part = schema.resolve_component_partition(atom.component_type)
+        if part == "A":
+            a_atoms.add(atom.id)
+        elif part == "B":
+            b_atoms.add(atom.id)
+
+    in_support_degree: dict[str, int] = {aid: 0 for aid in a_atoms}
+    adj: dict[str, set[str]] = {aid: set() for aid in a_atoms}
+    z1_seeds: set[str] = set()
+
+    for rel in relations:
+        if require_admissible and (
+            not rel.is_admissible
+            or rel.active_weight <= 0.0
+            or rel.undercuts_relation_id is not None
+        ):
+            continue
+
+        pol = schema.resolve_edge_polarity(
+            rel.relation_type,
+            weight_support=rel.weight_support,
+            weight_attack=rel.weight_attack,
+            weight=rel.weight,
+        )
+        premises = rel.effective_premise_ids
+
+        if pol > 0 and rel.target_id in in_support_degree:
+            if any(pid != rel.target_id for pid in premises):
+                in_support_degree[rel.target_id] += 1
+
+        if non_negative_only and pol < 0:
+            continue
+
+        for p_id in premises:
+            if p_id in a_atoms and rel.target_id in b_atoms:
+                z1_seeds.add(p_id)
+            elif rel.target_id in a_atoms and p_id in b_atoms:
+                z1_seeds.add(rel.target_id)
+            elif p_id in a_atoms and rel.target_id in a_atoms and p_id != rel.target_id:
+                adj[p_id].add(rel.target_id)
+                adj[rel.target_id].add(p_id)
+
+    z1_grounded = set(z1_seeds)
+    queue: deque[str] = deque(sorted(z1_seeds))
+    while queue:
+        curr = queue.popleft()
+        for neighbor in sorted(adj.get(curr, ())):
+            if neighbor not in z1_grounded:
+                z1_grounded.add(neighbor)
+                queue.append(neighbor)
+
+    empirical_content = len(z1_grounded) / len(a_atoms) if a_atoms else 0.0
+    return Z1GroundingResult(
+        a_atom_ids=frozenset(a_atoms),
+        b_atom_ids=frozenset(b_atoms),
+        z1_grounded_ids=frozenset(z1_grounded),
+        in_support_degree=in_support_degree,
+        empirical_content_ratio=empirical_content,
+    )
+
 

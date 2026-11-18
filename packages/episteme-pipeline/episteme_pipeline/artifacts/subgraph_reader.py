@@ -10,7 +10,6 @@ mutable shared Neo4j state during execution.
 
 from __future__ import annotations
 
-import math
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
@@ -25,38 +24,13 @@ from episteme_pipeline.contracts.domain import (
     TheoryRelation,
 )
 from episteme_pipeline.protocols.graph_store import GraphReader
+from episteme_pipeline.utils.similarity import cosine_similarity
 
 if TYPE_CHECKING:
     from episteme_pipeline.artifacts.execution import (
         ArtifactCollection,
         EpistemicStateView,
     )
-
-
-def _cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
-    """Compute cosine similarity between two float vectors.
-
-    Parameters
-    ----------
-    vec_a : list of float
-        First vector.
-    vec_b : list of float
-        Second vector.
-
-    Returns
-    -------
-    float
-        Cosine similarity in ``[-1.0, 1.0]``, or ``0.0`` if norms are zero or
-        dimensions mismatch.
-    """
-    if not vec_a or not vec_b or len(vec_a) != len(vec_b):
-        return 0.0
-    dot = sum(a * b for a, b in zip(vec_a, vec_b, strict=False))
-    norm_a = math.sqrt(sum(a * a for a in vec_a))
-    norm_b = math.sqrt(sum(b * b for b in vec_b))
-    if norm_a <= 1e-12 or norm_b <= 1e-12:
-        return 0.0
-    return float(dot / (norm_a * norm_b))
 
 
 class ArtifactSubgraphReader(GraphReader):
@@ -435,7 +409,7 @@ class ArtifactSubgraphReader(GraphReader):
         if node_label is None or node_label.lower() == "chunk":
             for chunk in self._chunks.values():
                 if chunk.embedding:
-                    score = _cosine_similarity(embedding, chunk.embedding)
+                    score = cosine_similarity(embedding, chunk.embedding)
                     results.append(
                         SearchResult(
                             node_id=chunk.id,

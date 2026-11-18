@@ -255,20 +255,18 @@ flowchart LR
 
 | Deficit Kind | Detector Criteria (`TheoryNetDeficitDetector`) | Localized Handler (`protocols/refinement.py`) | Subgraph Scope & Guards |
 |:---|:---|:---|:---|
-| `ENTHYMEME_GAP` | Partition-`A` `TheoryAtom` with `epistemetrics.page_rank` $\ge$ `enthymeme_min_centrality` and `in_support_degree == 0` or broken $Z_1$ path from Partition `B` | `LLMTheoryGuidedPremiseRecoverer` (`premise_recovery.py`) | Re-reads only `target_chunk_ids` conditioned on `theory_lens`; runs `ARCClassifier.classify_pairs` only on `(recovered_premise, target_atom_and_neighbors)` |
-| `POLYSEMY_COLLISION` | `L2Entity` or `TheoryAtom` bridging incompatible clusters, `louvain_communities`, `EntityConception`s, or conflicting edges with $\mathcal{V} \ge$ `polysemy_volatility_threshold` (`0.25`) or $TS_{\text{edge}} <$ `polysemy_edge_tenability_threshold` (`0.5`) | `ConceptionConceptSplitter` (`concept_splitter.py`) | Partitions via `entity.conceptions` ([ADR 0023](../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)), `ConceptionClusterer`, or conflict partitioning; emits `cannot_link_pairs` (`EpistemicCurationLedger.is_cannot_link`); rewires only affected chunks' triples/atoms; optionally runs `GlobalRelationExtractor.extract_pairs` on split senses |
-| `UNGROUNDED_AXIOM` | Failing `TheoreticalEnrichmentArtifact` ($TS_{\text{local}} < 0.5$, `is_tenable == False`, missing $M_{pp}$ dimensions) or `A`-atom lacking $Z_1$ empirical base in cluster | `TheoryGuidedAxiomGrounder` (`axiom_grounder.py`) | Expands locally to `sequence_index ± neighbor_window` + bounded `ArtifactSubgraphReader.vector_search`; invokes `NERExtractor.extract(..., anchor=...)` / structured LLM / `TheoryProjector` |
+| `ENTHYMEME_GAP` | `SchemaConfig`-partitioned `A`-atom (`utils/graph_algorithms.compute_z1_grounding`) with `epistemetrics.page_rank` $\ge$ `enthymeme_min_centrality` and `in_support_degree == 0` or broken $Z_1$ path when Partition-`B` bases exist | `LLMTheoryGuidedPremiseRecoverer` (`premise_recovery.py`) | System 1 `DecisionEngine.evaluate_noul` gate + audit; re-reads only `target_chunk_ids` with centralized prompt bundle; preserves [ADR-0023](../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md) scoping; resolves entities (`EntityLinker` + `EpistemicCurationLedger`) & `modal_prior` (`HybridModalResolver`); runs shared `CascadingARCClassifier.classify_pairs` on local pairs |
+| `POLYSEMY_COLLISION` | `L2Entity` or `TheoryAtom` bridging incompatible clusters, `louvain_communities`, `EntityConception`s, ambiguity cues, or conflicting edges (`SchemaConfig.get_relation_polarity`) with $\mathcal{V} \ge 0.25$ or $TS_{\text{edge}} < 0.5$ | `ConceptionConceptSplitter` (`concept_splitter.py`) | System 1 `DecisionEngine.evaluate_choice` conformal triage gate (`UNIVOCAL_DISAGREEMENT` vs `TRUE_POLYSEMY_SPLIT`); scopes strictly to deficit entities; checks real `EmbeddingModel` centroid cosine divergence (`utils/similarity.cosine_similarity`); retires split parent entities/mentions (`retired_entity_ids`, `split_entity_parents`); emits `cannot_link_pairs`; rewires local triples/atoms & runs Phase 3 pair filtering |
+| `UNGROUNDED_AXIOM` | Failing `TheoreticalEnrichmentArtifact` ($TS_{\text{local}} < 0.5$, `is_tenable == False`, missing $M_{pp}$ dimensions) or `A`-atom lacking $Z_1$ empirical base in cluster | `TheoryGuidedAxiomGrounder` (`axiom_grounder.py`) | System 1 `DecisionEngine.evaluate_noul` gate + audit; expands locally (`sequence_index ± neighbor_window` + bounded `ArtifactSubgraphReader.vector_search`); invokes shared `NERExtractor`, centralized prompt bundle, `EntityLinker`, `HybridModalResolver`, and `TheoryProjector` |
 
-### Refinement Configuration (`HermeneuticRefinementConfig`)
+### Refinement Configuration & Overlay Architecture
 
-Configured on `PipelineConfig.refinement` in `episteme_pipeline/config.py`:
+Configured on `PipelineConfig.refinement` (`HermeneuticRefinementConfig` in `episteme_pipeline/config.py`), orchestrated by `ClosedLoopRefinementCoordinator` (`coordinator.py`) over `artifacts/refinement_overlay.py` (`slice_phase4_component_view`, pass-aware `ArtifactDependencyGraph`, and intra-pass working overlay refresh):
 
-- `max_refinement_cycles: int = 0` (`0..5`; `0` preserves strictly feed-forward runs with unchanged manifest fingerprints)
-- `enthymeme_min_centrality: float = 0.0`
-- `polysemy_edge_tenability_threshold: float = 0.5`
-- `polysemy_volatility_threshold: float = 0.25`
-- `ungrounded_local_tenability_threshold: float = 0.5`
-- `max_deficits_per_cycle: int = 20`
+- `max_refinement_cycles: int = 0` (`0..5`; `0` preserves strictly feed-forward runs with unchanged manifest & prompt fingerprints)
+- Central prompt bundles & strategies: `concept_split_prompts`, `premise_recovery_prompts`, `axiom_grounding_prompts` (registered in `DefaultPromptProvider`, `LangfusePromptProvider`, `FilePromptProvider`)
+- System 1 gating & triage: `use_decision_engine_gating: bool = True`, `decision_confidence_threshold: float = 0.85`, `conformal_alpha: float = 0.05`, `stochastic_audit_rate: float = 0.05`, `polysemy_ambiguity_similarity_threshold: float = 0.88`
+- Detection thresholds & caps: `enthymeme_min_centrality: float = 0.0`, `polysemy_edge_tenability_threshold: float = 0.5`, `polysemy_volatility_threshold: float = 0.25`, `ungrounded_local_tenability_threshold: float = 0.5`, `max_deficits_per_cycle: int = 20`
 - Enable flags: `enable_theory_guided_premise_recovery`, `enable_targeted_concept_split`, `enable_localized_axiom_grounding` (plus `ExecutionConfig.persist_refinement_artifacts = True`).
 
 ---

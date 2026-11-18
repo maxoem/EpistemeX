@@ -267,6 +267,7 @@ class EntityMentionArtifact(BaseArtifactPayload):
     start_char: int | None = None
     end_char: int | None = None
     confidence: float | None = None
+    is_retired: bool = False
 
     def to_relation_spec(self) -> dict[str, Any]:
         """Build the ``EXTRACTED_FROM`` edge specification for this mention."""
@@ -315,6 +316,7 @@ class LinkedEntityArtifact(DomainObjectPayload[L2Entity]):
     text_anchor: TextAnchor | None = None
     conceptions: list[EntityConception] = Field(default_factory=list)
     polysemy_variance: float | None = Field(default=None, ge=0.0)
+    is_retired: bool = False
 
     def to_domain(self) -> L2Entity:
         """Hydrate into an :class:`L2Entity` via :class:`LinkedEntityCodec`."""

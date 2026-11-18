@@ -201,8 +201,10 @@ def build_entity_mention_artifact(
     run_id: str,
     phase_name: str,
     method: str,
+    upstream_artifact_ids: list[str] | None = None,
     refinement_pass: int = 0,
     deficit_id: str | None = None,
+    is_retired: bool = False,
 ) -> ArtifactEnvelope:
     """Build an :class:`ArtifactEnvelope` wrapping an :class:`EntityMentionArtifact`.
 
@@ -218,10 +220,14 @@ def build_entity_mention_artifact(
         Name of the emitting phase.
     method : str
         Method or strategy identifier.
+    upstream_artifact_ids : list of str or None, optional
+        Explicit upstream artifact IDs for provenance lineage.
     refinement_pass : int, default 0
         Hermeneutic refinement iteration index.
     deficit_id : str or None, optional
         Triggering epistemic deficit identifier, if any.
+    is_retired : bool, default False
+        When True, marks a superseded mention after entity splitting.
 
     Returns
     -------
@@ -229,6 +235,11 @@ def build_entity_mention_artifact(
         Constructed entity mention artifact envelope.
     """
     mention_id = MentionId.format(entity.id, chunk_id)
+    resolved_upstream = (
+        list(dict.fromkeys(upstream_artifact_ids))
+        if upstream_artifact_ids is not None
+        else [f"artifact::{chunk_id}"]
+    )
     return ArtifactEnvelope(
         artifact_id=_scoped_artifact_id(mention_id, refinement_pass),
         identity_key=f"entity_mention::{mention_id}",
@@ -238,7 +249,7 @@ def build_entity_mention_artifact(
         method=method,
         provenance=_build_provenance(
             source_chunk_id=chunk_id,
-            upstream_artifact_ids=[f"artifact::{chunk_id}"],
+            upstream_artifact_ids=resolved_upstream,
             refinement_pass=refinement_pass,
             deficit_id=deficit_id,
         ),
@@ -252,8 +263,11 @@ def build_entity_mention_artifact(
             start_char=entity.text_anchor.char_start if entity.text_anchor else None,
             end_char=entity.text_anchor.char_end if entity.text_anchor else None,
             confidence=entity.confidence,
+            is_retired=is_retired,
         ),
-        dependency_fingerprint=stable_fingerprint({"mention_id": mention_id, "chunk_id": chunk_id}),
+        dependency_fingerprint=stable_fingerprint(
+            {"mention_id": mention_id, "chunk_id": chunk_id, "is_retired": is_retired}
+        ),
     )
 
 
@@ -273,6 +287,7 @@ def build_linked_entity_artifact(
     upstream_artifact_ids: list[str] | None = None,
     refinement_pass: int = 0,
     deficit_id: str | None = None,
+    is_retired: bool = False,
 ) -> ArtifactEnvelope:
     """Build an :class:`ArtifactEnvelope` wrapping a :class:`LinkedEntityArtifact`.
 
@@ -294,6 +309,8 @@ def build_linked_entity_artifact(
         Hermeneutic refinement iteration index.
     deficit_id : str or None, optional
         Triggering epistemic deficit identifier, if any.
+    is_retired : bool, default False
+        When True, marks a superseded entity after full concept splitting.
 
     Returns
     -------
@@ -302,6 +319,7 @@ def build_linked_entity_artifact(
     """
     payload = LinkedEntityCodec.to_payload(entity)
     payload.mention_ids = [artifact_id.removeprefix("artifact::") for artifact_id in mention_artifact_ids]
+    payload.is_retired = is_retired
     resolved_upstream = (
         list(dict.fromkeys(upstream_artifact_ids))
         if upstream_artifact_ids is not None
@@ -321,7 +339,14 @@ def build_linked_entity_artifact(
             deficit_id=deficit_id,
         ),
         payload=payload,
-        dependency_fingerprint=stable_fingerprint({"entity_id": entity.id, "canonical_name": entity.name, "entity_type": entity.label}),
+        dependency_fingerprint=stable_fingerprint(
+            {
+                "entity_id": entity.id,
+                "canonical_name": entity.name,
+                "entity_type": entity.label,
+                "is_retired": is_retired,
+            }
+        ),
     )
 
 
