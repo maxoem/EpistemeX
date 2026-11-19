@@ -66,6 +66,7 @@ class RunManifest(BaseModel):
     decision_metrics: dict[str, object] | None = None
     invalidation_reason: str | None = None
     refinement_pass: int = Field(default=0, ge=0)
+    refinement_lineage_fingerprint: str | None = None
 
 
 class ResumePoint(BaseModel):

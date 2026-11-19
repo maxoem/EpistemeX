@@ -29,6 +29,7 @@ from episteme_pipeline.contracts.domain import (
     TheoryAtom,
     TheoryRelation,
 )
+from episteme_pipeline.schema.default_schema import StructuralRelationType
 
 if TYPE_CHECKING:
     from episteme_pipeline.protocols.graph_projection import (
@@ -186,8 +187,10 @@ class DocumentArtifact(DomainObjectPayload[L1Document]):
     document_id: str
     title: str
     source_path: str
+    chapter_count: int | None = None
+    chunk_count: int | None = None
     structural_anchor: GlobalStructuralAnchor | None = None
-    metadata: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     ingested_at: datetime = Field(default_factory=utc_now)
 
     def to_domain(self) -> L1Document:
@@ -202,6 +205,10 @@ class DocumentArtifact(DomainObjectPayload[L1Document]):
             "title": self.title,
             "source_path": self.source_path,
         }
+        if self.chapter_count is not None:
+            props["chapter_count"] = self.chapter_count
+        if self.chunk_count is not None:
+            props["chunk_count"] = self.chunk_count
         if self.structural_anchor is not None:
             anchor = self.structural_anchor
             if anchor.toc_structure:
@@ -283,13 +290,20 @@ class EntityMentionArtifact(BaseArtifactPayload):
             props["confidence"] = self.confidence
         return {
             "from_id": resolved_entity_id,
-            "relation_type": "EXTRACTED_FROM",
+            "relation_type": StructuralRelationType.EXTRACTED_FROM.value,
             "to_id": self.chunk_id,
             "properties": props,
         }
 
     async def project_to_graph(self, graph_store: ProjectionGraph) -> None:
-        """Project this mention as an ``EXTRACTED_FROM`` relation."""
+        """Project this mention as an ``EXTRACTED_FROM`` relation, or prune if retired."""
+        parsed_entity_id, _ = MentionId.parse(self.mention_id)
+        resolved_entity_id = self.entity_id or parsed_entity_id or self.mention_id
+        if self.is_retired:
+            await graph_store.prune_retired_mentions(
+                [(resolved_entity_id, self.chunk_id)]
+            )
+            return
         rel_spec = self.to_relation_spec()
         await graph_store.upsert_relation(
             rel_spec["from_id"],
@@ -299,7 +313,12 @@ class EntityMentionArtifact(BaseArtifactPayload):
         )
 
     def collect_for_projection(self, batch: ProjectionBatchAccumulator) -> None:
-        """Register this mention's ``EXTRACTED_FROM`` relation into ``batch``."""
+        """Register this mention's ``EXTRACTED_FROM`` relation or retirement into ``batch``."""
+        if self.is_retired:
+            parsed_entity_id, _ = MentionId.parse(self.mention_id)
+            resolved_entity_id = self.entity_id or parsed_entity_id or self.mention_id
+            batch.add_retired_mention(resolved_entity_id, self.chunk_id)
+            return
         batch.add_relation(self.to_relation_spec())
 
 
@@ -325,11 +344,17 @@ class LinkedEntityArtifact(DomainObjectPayload[L2Entity]):
         return LinkedEntityCodec.to_domain(self)
 
     async def project_to_graph(self, graph_store: ProjectionGraph) -> None:
-        """Project this entity into ``graph_store``."""
+        """Project this entity into ``graph_store``, or prune if retired."""
+        if self.is_retired:
+            await graph_store.prune_retired_entities([self.entity_id])
+            return
         await graph_store.upsert_entity(self.to_domain())
 
     def collect_for_projection(self, batch: ProjectionBatchAccumulator) -> None:
-        """Register this entity into ``batch``."""
+        """Register this entity or retirement pruning into ``batch``."""
+        if self.is_retired:
+            batch.add_retired_entity(self.entity_id)
+            return
         batch.add_entity(self.to_domain())
 
 
@@ -338,7 +363,7 @@ class LocalRelationArtifact(DomainObjectPayload[L2Triple]):
     subject_entity_id: str
     predicate: str
     object_entity_id: str
-    source_chunk_id: str
+    source_chunk_id: str | None = None
     confidence: float
     rerank_score: float | None = None
     scope: Literal["local"] = "local"
@@ -413,7 +438,7 @@ class CanonicalizationArtifact(BaseArtifactPayload):
         return [
             {
                 "from_id": original_id,
-                "relation_type": "SAME_AS",
+                "relation_type": StructuralRelationType.SAME_AS.value,
                 "to_id": self.canonical_id,
                 "properties": {
                     "confidence": 1.0,

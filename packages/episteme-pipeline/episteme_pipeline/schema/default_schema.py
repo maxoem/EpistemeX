@@ -1,8 +1,45 @@
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+
+class StructuralRelationType(StrEnum):
+    """Schema-owned property-graph structural edge type constants.
+
+    These edges represent provenance, containment, structural alignment,
+    community membership, and hyperedge reification plumbing rather than
+    domain semantic predicates injected into extraction prompts.
+    """
+
+    CONTAINS = "CONTAINS"
+    EXTRACTED_FROM = "EXTRACTED_FROM"
+    SAME_AS = "SAME_AS"
+    MENTIONS = "MENTIONS"
+    HAS_PREMISE = "HAS_PREMISE"
+    CONCLUDES = "CONCLUDES"
+    IN_COMMUNITY = "IN_COMMUNITY"
+
+
+STRUCTURAL_EDGE_TYPES: frozenset[str] = frozenset(StructuralRelationType)
+
+POLARITY_OVERRIDE_TOKENS: dict[str, int] = {
+    "+": 1,
+    "+1": 1,
+    "1": 1,
+    "POS": 1,
+    "POSITIVE": 1,
+    "SUPPORT": 1,
+    "-": -1,
+    "-1": -1,
+    "NEG": -1,
+    "NEGATIVE": -1,
+    "ATTACK": -1,
+    "0": 0,
+    "NEUTRAL": 0,
+}
 
 L2_NODE_TYPES: list[str] = [
     "Concept",
@@ -484,6 +521,131 @@ class SchemaConfig(BaseModel):
                 if self.relation_polarities.get(r) == cand_pol:
                     return r
         return None
+
+    def parse_polarity_override(self, polarity: str | None) -> int | None:
+        """Parse an optional curation polarity override into a signed polarity.
+
+        Checks the configured ``relation_polarities`` mapping before falling
+        back to shorthand stance tokens in ``POLARITY_OVERRIDE_TOKENS``.
+
+        Parameters
+        ----------
+        polarity : str or None
+            Raw polarity override string (e.g. ``"+"``, ``"-"``, ``"NEUTRAL"``,
+            or a schema-registered relation label).
+
+        Returns
+        -------
+        int or None
+            ``1`` for positive support, ``-1`` for negative attack, ``0`` for
+            neutral, or ``None`` when ``polarity`` is unset, blank, or unknown.
+        """
+        if polarity is None:
+            return None
+        raw = polarity.strip()
+        if not raw:
+            return None
+        upper = raw.upper()
+
+        schema_pol: int | None = None
+        if raw in self.relation_polarities:
+            schema_pol = self.relation_polarities[raw]
+        elif upper in self.relation_polarities:
+            schema_pol = self.relation_polarities[upper]
+        else:
+            for rel_key, rel_pol in self.relation_polarities.items():
+                if rel_key.upper() == upper:
+                    schema_pol = rel_pol
+                    break
+        if schema_pol is not None:
+            if schema_pol > 0:
+                return 1
+            if schema_pol < 0:
+                return -1
+            return 0
+
+        return POLARITY_OVERRIDE_TOKENS.get(upper)
+
+    def default_l2_relation_for_polarity(self, polarity: int) -> str:
+        """Return the canonical L2 relation label matching ``polarity``.
+
+        Parameters
+        ----------
+        polarity : int
+            Signed epistemic polarity (``> 0`` support, ``< 0`` refute/attack,
+            or ``0`` neutral).
+
+        Returns
+        -------
+        str
+            Schema-registered L2 predicate label for the requested polarity.
+        """
+        if polarity > 0:
+            if "SUPPORTS" in self.relation_types and self.get_relation_polarity("SUPPORTS") > 0:
+                return "SUPPORTS"
+            for rel in self.relation_types:
+                if self.get_relation_polarity(rel) > 0:
+                    return rel
+            return self.default_support_relation()
+        if polarity < 0:
+            if "REFUTES" in self.relation_types and self.get_relation_polarity("REFUTES") < 0:
+                return "REFUTES"
+            for rel in self.relation_types:
+                if self.get_relation_polarity(rel) < 0:
+                    return rel
+            return self.default_attack_relation()
+        for rel in self.relation_types:
+            if self.get_relation_polarity(rel) == 0:
+                return rel
+        return self.relation_types[0] if self.relation_types else "RELATED_TO"
+
+    def resolve_relation_override(
+        self,
+        relation_type: str,
+        polarity: str | None = None,
+        *,
+        layer: Literal["l2", "l3"] = "l3",
+    ) -> tuple[str, int | None]:
+        """Resolve an effective relation label and signed polarity under this schema.
+
+        Parameters
+        ----------
+        relation_type : str
+            Base curated relation type or ``"REJECTED"``.
+        polarity : str or None, optional
+            Optional explicit polarity override string.
+        layer : {"l2", "l3"}, default "l3"
+            Target graph layer used when resolving a fallback relation label
+            from a shorthand polarity token.
+
+        Returns
+        -------
+        tuple of (str, int or None)
+            ``(effective_relation_type, resolved_polarity_sign)``.
+        """
+        if relation_type.strip().upper() == "REJECTED":
+            return "REJECTED", None
+        sign = self.parse_polarity_override(polarity)
+        if sign is None or sign == 0:
+            return relation_type, sign
+
+        base_type = relation_type.strip()
+        if base_type and self.get_relation_polarity(base_type) == sign:
+            return relation_type, sign
+
+        if polarity is not None:
+            pol_upper = polarity.strip().upper()
+            if self.get_relation_polarity(pol_upper) == sign:
+                return pol_upper, sign
+
+        if layer == "l2":
+            return self.default_l2_relation_for_polarity(sign), sign
+        default_l3 = (
+            self.default_support_relation()
+            if sign > 0
+            else self.default_attack_relation()
+        )
+        return default_l3, sign
 
 
 DEFAULT_SCHEMA = SchemaConfig()

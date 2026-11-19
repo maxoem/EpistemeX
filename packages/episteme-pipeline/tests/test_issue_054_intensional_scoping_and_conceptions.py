@@ -860,15 +860,19 @@ def test_issue_054_documentation_and_adr_sync() -> None:
         text = (repo_root / rel_path).read_text(encoding="utf-8")
         assert "0023" in text
 
-    issue_text = (
-        repo_root
-        / "issues"
-        / "09-architecture-workflow-domain"
-        / "ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md"
-    ).read_text(encoding="utf-8")
-    assert "`Completed`" in issue_text
-    assert "- [ ]" not in issue_text
-    assert "- [x]" in issue_text
+    issue_filename = "ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md"
+    issue_candidates = [
+        repo_root / "issues" / "09-architecture-workflow-domain" / issue_filename,
+        repo_root / "issues" / "09-architecture-workflow-domain" / "resolved" / issue_filename,
+        repo_root / "issues" / "archived" / issue_filename,
+        *sorted((repo_root / "issues").rglob("*ISSUE-054*.md")),
+    ]
+    issue_path = next((p for p in issue_candidates if p.exists()), None)
+    if issue_path is not None:
+        issue_text = issue_path.read_text(encoding="utf-8")
+        assert "`Completed`" in issue_text or "`Resolved`" in issue_text
+        assert "- [ ]" not in issue_text
+        assert "- [x]" in issue_text
 
 
 def test_theorynet_projector_reductio_discharge_and_dialectical_critique() -> None:

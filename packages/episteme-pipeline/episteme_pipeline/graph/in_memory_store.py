@@ -34,7 +34,10 @@ from episteme_pipeline.graph.theory_graph_mapper import (
     theory_relation_to_graph_properties,
 )
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
-from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
+from episteme_pipeline.schema.default_schema import (
+    DEFAULT_SCHEMA,
+    StructuralRelationType,
+)
 
 
 def deterministic_text_embedding(text: str, dim: int = 128) -> list[float]:
@@ -537,6 +540,78 @@ class InMemoryGraphStore(ProcessingGraph):
             del self._chunks[cid]
         return {"chunks": len(dead), "chapters": 0}
 
+    async def prune_retired_entities(self, entity_ids: list[str]) -> int:
+        """Delete retired entity nodes and incident edges from the in-memory store.
+
+        Parameters
+        ----------
+        entity_ids : list of str
+            Retired entity identifiers to prune.
+
+        Returns
+        -------
+        int
+            Number of retired entity records removed.
+        """
+        target_ids = {eid for eid in entity_ids if eid}
+        if not target_ids:
+            return 0
+        removed = 0
+        for eid in target_ids:
+            if eid in self._entities:
+                del self._entities[eid]
+                removed += 1
+            if (
+                eid in self._nodes
+                and eid not in self._chunks
+                and eid not in self._theory_atoms
+            ):
+                del self._nodes[eid]
+            self._embeddings.pop(eid, None)
+            self._node_run_ids.pop(eid, None)
+        self._triples = [
+            t
+            for t in self._triples
+            if t.subject_id not in target_ids and t.object_id not in target_ids
+        ]
+        self._generic_relations = [
+            r
+            for r in self._generic_relations
+            if r.get("from_id") not in target_ids
+            and r.get("to_id") not in target_ids
+        ]
+        return removed
+
+    async def prune_retired_mentions(
+        self, mentions: list[tuple[str, str]]
+    ) -> int:
+        """Delete retired ``EXTRACTED_FROM`` mention edges from the in-memory store.
+
+        Parameters
+        ----------
+        mentions : list of tuple of (str, str)
+            Pairs of ``(entity_id, chunk_id)`` identifying retired mentions.
+
+        Returns
+        -------
+        int
+            Number of mention edges removed.
+        """
+        target_mentions = {(eid, cid) for eid, cid in mentions if eid and cid}
+        if not target_mentions:
+            return 0
+        before = len(self._generic_relations)
+        self._generic_relations = [
+            r
+            for r in self._generic_relations
+            if not (
+                r.get("relation_type") == StructuralRelationType.EXTRACTED_FROM
+                and (str(r.get("from_id", "")), str(r.get("to_id", "")))
+                in target_mentions
+            )
+        ]
+        return before - len(self._generic_relations)
+
     async def upsert_relation(
         self,
         from_id: str,
@@ -557,7 +632,7 @@ class InMemoryGraphStore(ProcessingGraph):
         # modifiers originating from :TheoryInference nodes) are reconstructed
         # directly from their :TheoryInference nodes in get_all_theory_relations().
         if (
-            relation_type == "HAS_PREMISE"
+            relation_type == StructuralRelationType.HAS_PREMISE
             or "inference_id" in props
             or self._nodes.get(from_id, {}).get("label") == "TheoryInference"
         ):
@@ -652,7 +727,7 @@ class InMemoryGraphStore(ProcessingGraph):
             self._generic_relations.append(
                 {
                     "from_id": e_id,
-                    "relation_type": "IN_COMMUNITY",
+                    "relation_type": StructuralRelationType.IN_COMMUNITY.value,
                     "to_id": community_id,
                     "properties": {"level": level},
                 }

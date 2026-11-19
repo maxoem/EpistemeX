@@ -211,6 +211,38 @@ class GraphWriter(GraphHandle, ABC):
     @abstractmethod
     async def upsert_communities(self, communities: list[dict]) -> None: ...
 
+    async def prune_retired_entities(self, entity_ids: list[str]) -> int:
+        """Delete retired entity nodes and incident edges from the projection graph.
+
+        Parameters
+        ----------
+        entity_ids : list of str
+            Canonical identifiers of entities retired by concept splitting.
+
+        Returns
+        -------
+        int
+            Number of retired entity nodes deleted.
+        """
+        return 0
+
+    async def prune_retired_mentions(
+        self, mentions: list[tuple[str, str]]
+    ) -> int:
+        """Delete retired ``EXTRACTED_FROM`` mention edges from the projection graph.
+
+        Parameters
+        ----------
+        mentions : list of tuple of (str, str)
+            Pairs of ``(entity_id, chunk_id)`` whose mention edges were retired.
+
+        Returns
+        -------
+        int
+            Number of retired mention relationships deleted.
+        """
+        return 0
+
 
 class PhaseCheckpointStore(GraphHandle, ABC):
     @abstractmethod

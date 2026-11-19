@@ -589,20 +589,28 @@ class ArtifactExecutionEngine:
         InvalidationDecision
             Decision detailing reused and invalidated phase ordinals with reason.
         """
+        if not self.config.execution.allow_phase_reuse:
+            return InvalidationDecision(
+                resume_point=ResumePoint(run_id=None),
+                reused_phase_ordinals=[],
+                invalidated_phase_ordinals=[e.index for e in self.workflow.nodes],
+                reason="no-prior-or-reuse-disabled",
+            )
+
         prior: RunManifest | None = None
         if current.parent_run_id:
             prior = self.manifest_store.read_manifest(current.parent_run_id)
         if prior is None:
             prior = self.manifest_store.latest_manifest()
-        resume_point = ResumePoint(run_id=prior.run_id if prior else None)
 
-        if not prior or not self.config.execution.allow_phase_reuse:
+        if not prior:
             return InvalidationDecision(
-                resume_point=resume_point,
+                resume_point=ResumePoint(run_id=None),
                 reused_phase_ordinals=[],
                 invalidated_phase_ordinals=[e.index for e in self.workflow.nodes],
                 reason="no-prior-or-reuse-disabled",
             )
+        resume_point = ResumePoint(run_id=prior.run_id)
 
         de_keys = {
             k
@@ -621,7 +629,13 @@ class ArtifactExecutionEngine:
         input_changed = prior.input_fingerprint != current.input_fingerprint
         input_reason: str | None = None
         if input_changed:
-            if prior.document_fingerprints and all(
+            if (
+                prior.curation_ledger_fingerprint
+                != current.curation_ledger_fingerprint
+                and prior.source_fingerprint == current.source_fingerprint
+            ):
+                input_reason = "curation-ledger-changed"
+            elif prior.document_fingerprints and all(
                 current.document_fingerprints.get(k) == v
                 for k, v in prior.document_fingerprints.items()
             ):
@@ -763,9 +777,12 @@ class ArtifactExecutionEngine:
                 self.workflow.nodes[idx - 1].name for idx in range(1, phase_number)
             }
         chain_artifacts = await self._collect_parent_chain_artifacts(run_id)
+        source_manifest = self.manifest_store.read_manifest(run_id)
         all_artifacts = self._dedup_chain_artifacts(
             chain_artifacts,
             allowed_phase_names=wanted_phase_names,
+            phase_order=self._phase_order_map(source_manifest),
+            preserve_per_phase=True,
         )
         if not all_artifacts:
             return None
@@ -1009,8 +1026,14 @@ class ArtifactExecutionEngine:
             rec.phase_ordinal: rec for rec in manifest.phase_records
         }
 
+        can_load_prior = self.config.execution.allow_artifact_hydration and (
+            self.config.execution.allow_phase_reuse
+            or invalidation_decision.reason == "explicit-resume-boundary"
+        )
         prior_run_id = (
-            invalidation_decision.resume_point.run_id or manifest.parent_run_id
+            (invalidation_decision.resume_point.run_id or manifest.parent_run_id)
+            if can_load_prior
+            else None
         )
         prior_manifest: RunManifest | None = None
         prior_artifacts: ArtifactCollection | None = None
@@ -1446,6 +1469,108 @@ class ArtifactExecutionEngine:
                 ),
             }
         )
+
+        if (
+            self.config.execution.allow_phase_reuse
+            and self.config.execution.allow_artifact_hydration
+            and prior_manifest is not None
+            and prior_manifest.status == RunStatus.COMPLETED
+            and prior_manifest.refinement_lineage_fingerprint == refine_lineage_fp
+            and prior_manifest.phase_config_fingerprints.get("refinement")
+            == manifest.phase_config_fingerprints.get("refinement")
+        ):
+            prior_ref_records = [
+                rec
+                for rec in prior_manifest.phase_records
+                if rec.phase_key == "refinement"
+            ]
+            if all(rec.status == RunStatus.COMPLETED for rec in prior_ref_records):
+                reused_ref_artifacts: list[Any] = []
+                ref_artifacts_complete = True
+                if prior_ref_records:
+                    ref_phase_names = {rec.phase_name for rec in prior_ref_records}
+                    chain_artifacts = await self._collect_parent_chain_artifacts(
+                        prior_manifest.run_id
+                    )
+                    reused_ref_artifacts = self._dedup_chain_artifacts(
+                        chain_artifacts,
+                        allowed_phase_names=ref_phase_names,
+                        phase_order=self._phase_order_map(prior_manifest),
+                        preserve_per_phase=True,
+                    )
+                    expected_ref_ids = {
+                        aid
+                        for rec in prior_ref_records
+                        for aid in (rec.output_artifact_ids or rec.artifact_ids or [])
+                    }
+                    loaded_ref_ids = {
+                        art.artifact_id for art in reused_ref_artifacts
+                    }
+                    ref_artifacts_complete = expected_ref_ids.issubset(
+                        loaded_ref_ids
+                    )
+
+                if ref_artifacts_complete:
+                    for rec in prior_ref_records:
+                        copied_rec = rec.model_copy(update={"reused": True})
+                        manifest.phase_records.append(copied_rec)
+                        self.event_emitter.emit(
+                            PhaseReused(
+                                phase_name=copied_rec.phase_name,
+                                source_run_id=prior_manifest.run_id,
+                                artifact_count=len(copied_rec.artifact_ids or []),
+                                run_id=run_id,
+                                phase=copied_rec.phase_name,
+                            )
+                        )
+                    manifest.refinement_pass = prior_manifest.refinement_pass
+                    manifest.refinement_lineage_fingerprint = refine_lineage_fp
+                    report.phase_records = list(manifest.phase_records)
+                    report.manifest = manifest
+
+                    for art in reused_ref_artifacts:
+                        kind_str = _artifact_kind_str(art.kind)
+                        self._increment_count(
+                            report.artifact_counts_by_kind, kind_str
+                        )
+                        self._increment_count(
+                            report.artifact_counts_by_phase, art.phase_name
+                        )
+                        self._increment_count(
+                            report.reused_artifact_counts_by_kind, kind_str
+                        )
+                        self._increment_count(
+                            report.reused_artifact_counts_by_phase, art.phase_name
+                        )
+                        report.artifact_entries.append(
+                            ArtifactReportEntry(
+                                artifact_id=art.artifact_id,
+                                identity_key=art.identity_key or art.artifact_id,
+                                kind=kind_str,
+                                phase_name=art.phase_name,
+                                run_id=art.run_id,
+                                reused=True,
+                            )
+                        )
+
+                    if (
+                        self.config.execution.project_artifacts_to_graph
+                        and reused_ref_artifacts
+                    ):
+                        latest_reused = list(
+                            ArtifactCollection(
+                                reused_ref_artifacts
+                            ).latest_by_identity.values()
+                        )
+                        if latest_reused:
+                            await self.projector.project_collection(
+                                ArtifactCollection(latest_reused), batch_size=500
+                            )
+
+                    return ArtifactCollection(
+                        forward_collection.history + reused_ref_artifacts
+                    )
+
         refine_context = ArtifactExecutionContext(
             run_id=run_id,
             manifest=manifest,
@@ -1496,6 +1621,10 @@ class ArtifactExecutionEngine:
                 self.manifest_store.write_manifest(manifest)
             raise
 
+        manifest.refinement_lineage_fingerprint = refine_lineage_fp
+        for rec in manifest.phase_records:
+            if rec.phase_key == "refinement" and rec.input_fingerprint is None:
+                rec.input_fingerprint = refine_lineage_fp
         report.phase_records = list(manifest.phase_records)
         report.manifest = manifest
 
@@ -1890,6 +2019,7 @@ class ArtifactExecutionEngine:
         artifacts = self._dedup_chain_artifacts(
             chain_artifacts,
             allowed_phase_names=reused_phase_names,
+            phase_order=self._phase_order_map(source_manifest),
         )
 
         return [
@@ -1935,17 +2065,42 @@ class ArtifactExecutionEngine:
                 current_parent = parent_manifest.parent_run_id
         return all_artifacts
 
+    def _phase_order_map(
+        self, manifest: RunManifest | None = None
+    ) -> dict[str, int]:
+        """Build a mapping from phase display name to workflow execution ordinal.
+
+        Parameters
+        ----------
+        manifest : RunManifest or None, optional
+            Optional run manifest supplying historical or refinement phase records.
+
+        Returns
+        -------
+        dict of str to int
+            Mapping from ``phase_name`` to 1-based execution ordinal.
+        """
+        order: dict[str, int] = {
+            node.name: node.index for node in self.workflow.nodes
+        }
+        if manifest is not None:
+            for rec in manifest.phase_records:
+                order.setdefault(rec.phase_name, rec.phase_ordinal)
+        return order
+
     @staticmethod
     def _dedup_chain_artifacts(
         chain_artifacts: Sequence[Any],
         *,
         allowed_phase_names: set[str] | None = None,
+        phase_order: dict[str, int] | None = None,
+        preserve_per_phase: bool = False,
     ) -> list[Any]:
-        """Deduplicate parent-chain artifacts by identity key deterministically.
+        """Deduplicate parent-chain artifacts deterministically.
 
         Preserves child-run precedence over parent runs while preferring higher
-        ``provenance.refinement_pass`` when multiple overlays exist within the
-        same ``run_id``.
+        ``provenance.refinement_pass`` and later workflow ordinals when multiple
+        forward versions exist within the same ``run_id``.
 
         Parameters
         ----------
@@ -1953,12 +2108,53 @@ class ArtifactExecutionEngine:
             Artifact envelopes collected from child to parent runs.
         allowed_phase_names : set of str or None, optional
             Optional phase-name filter applied prior to identity deduplication.
+        phase_order : dict of str to int or None, optional
+            Optional mapping from ``phase_name`` to workflow ordinal used to rank
+            same-pass forward updates and order per-phase hydration output.
+        preserve_per_phase : bool, default False
+            When True, retains one latest envelope per ``(phase_name, identity_key)``
+            sorted in topological phase and pass order so partial reuse preserves
+            each reused phase's own artifacts.
 
         Returns
         -------
         list of Any
-            Deduplicated artifact envelopes ordered deterministically by key.
+            Deduplicated artifact envelopes ordered deterministically.
         """
+        if preserve_per_phase:
+            per_phase_unique: dict[tuple[str, str], Any] = {}
+            for art in chain_artifacts:
+                if (
+                    allowed_phase_names is not None
+                    and art.phase_name not in allowed_phase_names
+                ):
+                    continue
+                ident = art.identity_key or art.artifact_id
+                dedup_key = (art.phase_name, ident)
+                existing = per_phase_unique.get(dedup_key)
+                if existing is None:
+                    per_phase_unique[dedup_key] = art
+                    continue
+                if art.run_id == existing.run_id and (
+                    art.provenance.refinement_pass,
+                    art.artifact_id,
+                ) > (
+                    existing.provenance.refinement_pass,
+                    existing.artifact_id,
+                ):
+                    per_phase_unique[dedup_key] = art
+            return sorted(
+                per_phase_unique.values(),
+                key=lambda a: (
+                    a.provenance.refinement_pass,
+                    phase_order.get(a.phase_name, 10**9)
+                    if phase_order is not None
+                    else 0,
+                    a.identity_key or a.artifact_id,
+                    a.artifact_id,
+                ),
+            )
+
         unique_artifacts: dict[str, Any] = {}
         for art in chain_artifacts:
             if (
@@ -1971,11 +2167,23 @@ class ArtifactExecutionEngine:
             if existing is None:
                 unique_artifacts[key] = art
                 continue
+            art_phase_rank = (
+                phase_order.get(art.phase_name, -1)
+                if phase_order is not None
+                else 0
+            )
+            existing_phase_rank = (
+                phase_order.get(existing.phase_name, -1)
+                if phase_order is not None
+                else 0
+            )
             if art.run_id == existing.run_id and (
                 art.provenance.refinement_pass,
+                art_phase_rank,
                 art.artifact_id,
             ) > (
                 existing.provenance.refinement_pass,
+                existing_phase_rank,
                 existing.artifact_id,
             ):
                 unique_artifacts[key] = art
@@ -1995,7 +2203,11 @@ class ArtifactExecutionEngine:
             Deduplicated artifact envelopes ordered deterministically by identity key.
         """
         chain_artifacts = await self._collect_parent_chain_artifacts(run_id)
-        return self._dedup_chain_artifacts(chain_artifacts)
+        manifest = self.manifest_store.read_manifest(run_id)
+        return self._dedup_chain_artifacts(
+            chain_artifacts,
+            phase_order=self._phase_order_map(manifest),
+        )
 
     async def diff_artifacts(
         self, run_id: str, baseline_run_id: str
@@ -2055,6 +2267,7 @@ class ArtifactExecutionEngine:
         artifacts = self._dedup_chain_artifacts(
             chain_artifacts,
             allowed_phase_names=active_phase_names,
+            phase_order=self._phase_order_map(manifest),
         )
 
         by_kind: dict[str, int] = {}

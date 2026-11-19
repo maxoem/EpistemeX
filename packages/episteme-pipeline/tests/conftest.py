@@ -24,7 +24,11 @@ from episteme_pipeline.contracts.phase_contracts import (
     SubGraph,
 )
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
-from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
+from episteme_pipeline.schema.default_schema import (
+    DEFAULT_SCHEMA,
+    SchemaConfig,
+    StructuralRelationType,
+)
 
 # ---------------------------------------------------------------------------
 # In-memory GraphStore (no Neo4j required)
@@ -90,6 +94,46 @@ class InMemoryGraphStore(ProcessingGraph):
             del self._chunks[cid]
         # Chapters are not modelled as nodes here.
         return {"chunks": len(dead), "chapters": 0}
+
+    async def prune_retired_entities(self, entity_ids: list[str]) -> int:
+        """Delete retired entity records and incident edges from the fixture store."""
+        target_ids = {eid for eid in entity_ids if eid}
+        if not target_ids:
+            return 0
+        removed = 0
+        for eid in target_ids:
+            if eid in self._entities:
+                del self._entities[eid]
+                removed += 1
+        self._triples = [
+            t
+            for t in self._triples
+            if t.subject_id not in target_ids and t.object_id not in target_ids
+        ]
+        self._relations = [
+            r
+            for r in self._relations
+            if r[0] not in target_ids and r[2] not in target_ids
+        ]
+        return removed
+
+    async def prune_retired_mentions(
+        self, mentions: list[tuple[str, str]]
+    ) -> int:
+        """Delete retired ``EXTRACTED_FROM`` edges from the fixture store."""
+        target_mentions = {(eid, cid) for eid, cid in mentions if eid and cid}
+        if not target_mentions:
+            return 0
+        before = len(self._relations)
+        self._relations = [
+            r
+            for r in self._relations
+            if not (
+                r[1] == StructuralRelationType.EXTRACTED_FROM
+                and (r[0], r[2]) in target_mentions
+            )
+        ]
+        return before - len(self._relations)
 
     async def upsert_relation(self, from_id, relation_type, to_id, properties=None) -> None:
         self._relations.append((from_id, relation_type, to_id, properties or {}))

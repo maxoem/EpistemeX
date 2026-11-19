@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import re
+
 from episteme_pipeline.artifacts.codecs import (
     ChunkCodec,
     DocumentCodec,
     EpistemicDeficitCodec,
     LinkedEntityCodec,
+    LocalRelationCodec,
     TheoryAtomCodec,
     TheoryRelationCodec,
 )
@@ -31,8 +34,13 @@ from episteme_pipeline.contracts.domain import (
 from episteme_pipeline.runs.fingerprints import stable_fingerprint
 
 
-def _scoped_artifact_id(base_id: str, refinement_pass: int = 0) -> str:
-    """Build a pass-scoped artifact identifier preserving per-pass history on disk.
+def _scoped_artifact_id(
+    base_id: str,
+    refinement_pass: int = 0,
+    *,
+    phase_tag: str | None = None,
+) -> str:
+    """Build a phase- and pass-scoped artifact identifier preserving history on disk.
 
     Parameters
     ----------
@@ -40,15 +48,24 @@ def _scoped_artifact_id(base_id: str, refinement_pass: int = 0) -> str:
         Canonical domain or identity key segment.
     refinement_pass : int, default 0
         Hermeneutic refinement iteration index (``0`` for initial forward pass).
+    phase_tag : str or None, optional
+        Optional semantic producer phase tag (e.g. ``"phase4_maturation"``,
+        ``"phase6"``, ``"theoretical_enrichment"``) disambiguating forward-pass
+        updates on disk without altering semantic ``identity_key``.
 
     Returns
     -------
     str
         Deterministic artifact identifier string.
     """
+    parts = ["artifact", base_id]
+    if phase_tag is not None:
+        cleaned_tag = re.sub(r"[^a-zA-Z0-9._-]+", "_", phase_tag.strip()).strip("_")
+        if cleaned_tag:
+            parts.append(cleaned_tag)
     if refinement_pass > 0:
-        return f"artifact::{base_id}::pass{refinement_pass}"
-    return f"artifact::{base_id}"
+        parts.append(f"pass{refinement_pass}")
+    return "::".join(parts)
 
 
 def _build_provenance(
@@ -288,6 +305,7 @@ def build_linked_entity_artifact(
     refinement_pass: int = 0,
     deficit_id: str | None = None,
     is_retired: bool = False,
+    phase_tag: str | None = None,
 ) -> ArtifactEnvelope:
     """Build an :class:`ArtifactEnvelope` wrapping a :class:`LinkedEntityArtifact`.
 
@@ -311,6 +329,8 @@ def build_linked_entity_artifact(
         Triggering epistemic deficit identifier, if any.
     is_retired : bool, default False
         When True, marks a superseded entity after full concept splitting.
+    phase_tag : str or None, optional
+        Optional semantic producer phase tag disambiguating forward updates.
 
     Returns
     -------
@@ -320,13 +340,17 @@ def build_linked_entity_artifact(
     payload = LinkedEntityCodec.to_payload(entity)
     payload.mention_ids = [artifact_id.removeprefix("artifact::") for artifact_id in mention_artifact_ids]
     payload.is_retired = is_retired
+    artifact_id = _scoped_artifact_id(
+        entity.id, refinement_pass, phase_tag=phase_tag
+    )
     resolved_upstream = (
         list(dict.fromkeys(upstream_artifact_ids))
         if upstream_artifact_ids is not None
         else list(mention_artifact_ids)
     )
+    resolved_upstream = [uid for uid in resolved_upstream if uid != artifact_id]
     return ArtifactEnvelope(
-        artifact_id=_scoped_artifact_id(entity.id, refinement_pass),
+        artifact_id=artifact_id,
         identity_key=f"linked_entity::{entity.id}",
         kind=ArtifactKind.LINKED_ENTITY,
         run_id=run_id,
@@ -386,7 +410,8 @@ def build_local_relation_artifact(
     """
     # A local relation is per-chunk evidence, so the chunk is part of its identity:
     # the same (s, p, o) asserted in two chunks is two pieces of evidence.
-    relation_id = f"local-relation::{triple.source_chunk_id}::{triple.subject_id}::{triple.predicate}::{triple.object_id}"
+    payload = LocalRelationCodec.to_payload(triple)
+    relation_id = payload.relation_id
     resolved_upstream = (
         upstream_artifact_ids
         if upstream_artifact_ids is not None
@@ -405,7 +430,7 @@ def build_local_relation_artifact(
             refinement_pass=refinement_pass,
             deficit_id=deficit_id,
         ),
-        payload=LocalRelationArtifact(relation_id=relation_id, subject_entity_id=triple.subject_id, predicate=triple.predicate, object_entity_id=triple.object_id, source_chunk_id=triple.source_chunk_id or "", confidence=triple.confidence),
+        payload=payload,
         dependency_fingerprint=stable_fingerprint({"relation_id": relation_id, "predicate": triple.predicate, "scope": triple.scope}),
     )
 
@@ -482,6 +507,7 @@ def build_theory_atom_artifact(
     upstream_artifact_ids: list[str] | None = None,
     refinement_pass: int = 0,
     deficit_id: str | None = None,
+    phase_tag: str | None = None,
 ) -> ArtifactEnvelope:
     """Build an :class:`ArtifactEnvelope` wrapping a :class:`TheoryAtomArtifact`.
 
@@ -501,19 +527,25 @@ def build_theory_atom_artifact(
         Hermeneutic refinement iteration index.
     deficit_id : str or None, optional
         Triggering epistemic deficit identifier, if any.
+    phase_tag : str or None, optional
+        Optional semantic producer phase tag disambiguating forward updates.
 
     Returns
     -------
     ArtifactEnvelope
         Constructed theory atom artifact envelope.
     """
+    artifact_id = _scoped_artifact_id(
+        component.id, refinement_pass, phase_tag=phase_tag
+    )
     resolved_upstream = (
         upstream_artifact_ids
         if upstream_artifact_ids is not None
         else [f"artifact::{component.source_chunk_id}"]
     )
+    resolved_upstream = [uid for uid in resolved_upstream if uid != artifact_id]
     return ArtifactEnvelope(
-        artifact_id=_scoped_artifact_id(component.id, refinement_pass),
+        artifact_id=artifact_id,
         identity_key=f"argument_component::{component.id}",
         kind=ArtifactKind.THEORY_ATOM,
         run_id=run_id,
@@ -550,6 +582,7 @@ def build_theory_relation_artifact(
     upstream_artifact_ids: list[str] | None = None,
     refinement_pass: int = 0,
     deficit_id: str | None = None,
+    phase_tag: str | None = None,
 ) -> ArtifactEnvelope:
     """Build an :class:`ArtifactEnvelope` wrapping a :class:`TheoryRelationArtifact`.
 
@@ -569,6 +602,8 @@ def build_theory_relation_artifact(
         Hermeneutic refinement iteration index.
     deficit_id : str or None, optional
         Triggering epistemic deficit identifier, if any.
+    phase_tag : str or None, optional
+        Optional semantic producer phase tag disambiguating forward updates.
 
     Returns
     -------
@@ -576,14 +611,18 @@ def build_theory_relation_artifact(
         Constructed theory relation artifact envelope.
     """
     relation_id = relation.relation_id
+    artifact_id = _scoped_artifact_id(
+        relation_id, refinement_pass, phase_tag=phase_tag
+    )
     default_upstream = [f"artifact::{pid}" for pid in relation.effective_premise_ids]
     target_ref = relation.undercuts_relation_id or relation.target_id
     default_upstream.append(f"artifact::{target_ref}")
     resolved_upstream = (
         upstream_artifact_ids if upstream_artifact_ids is not None else default_upstream
     )
+    resolved_upstream = [uid for uid in resolved_upstream if uid != artifact_id]
     return ArtifactEnvelope(
-        artifact_id=_scoped_artifact_id(relation_id, refinement_pass),
+        artifact_id=artifact_id,
         identity_key=f"argument_relation::{relation_id}",
         kind=ArtifactKind.THEORY_RELATION,
         run_id=run_id,

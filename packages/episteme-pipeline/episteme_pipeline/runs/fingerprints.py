@@ -308,6 +308,16 @@ def fingerprint_curation_ledger(ledger: Any | None) -> str | None:
 
     if isinstance(ledger, BaseModel):
         dumped = ledger.model_dump(mode="json")
+        if isinstance(dumped, dict):
+            for pair_key in ("must_link_entities", "cannot_link_entities"):
+                raw_pairs = dumped.get(pair_key)
+                if isinstance(raw_pairs, list):
+                    dumped[pair_key] = sorted(
+                        sorted(str(item) for item in pair)
+                        if isinstance(pair, (list, tuple))
+                        else [str(pair)]
+                        for pair in raw_pairs
+                    )
     else:
         dumped = str(ledger)
     return stable_fingerprint(dumped)

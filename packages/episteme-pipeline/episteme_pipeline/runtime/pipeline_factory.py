@@ -9,7 +9,7 @@ execution.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -281,6 +281,8 @@ class PipelineFactory(Fingerprintable):
         decision_engine: DecisionEngine | None = None,
         modal_resolver: ModalStrengthResolver | None = None,
         detector: EpistemicDeficitDetector | None = None,
+        llm: Any | None = None,
+        phases: Sequence[PhaseRunner[Any]] = (),
     ) -> tuple[EpistemicDeficitDetector, HermeneuticRefinementCoordinator]:
         """Construct default refinement detector and coordinator for standalone ``Pipeline``.
 
@@ -294,21 +296,90 @@ class PipelineFactory(Fingerprintable):
             Optional modal strength resolver for TheoryNet projection and atom priors.
         detector : EpistemicDeficitDetector or None, optional
             Optional pre-constructed deficit detector.
+        llm : Any or None, optional
+            Optional LLM facade used by premise recovery, splitting, and grounding.
+        phases : Sequence of PhaseRunner, optional
+            Optional standalone workflow phase runners inspected for reusable
+            collaborators (LLM, ARC classifier, extractors, enrichment runner).
 
         Returns
         -------
         tuple of (EpistemicDeficitDetector, HermeneuticRefinementCoordinator)
             Configured deficit detector and coordinator.
         """
+        from episteme_pipeline.post_processing.theoretical_enrichment import (
+            TheoreticalEnrichmentRunner,
+        )
         from episteme_pipeline.post_processing.theoretical_enrichment.projectors import (
             GenericTheoryProjector,
+            LLMTheoryProjector,
+            TheoryProjector,
         )
+        from episteme_pipeline.protocols.argument_mining import ARCClassifier
+        from episteme_pipeline.protocols.extractors import (
+            EntityLinker,
+            NERExtractor,
+        )
+        from episteme_pipeline.protocols.fingerprint import find_components
         from episteme_pipeline.refinement import (
             ClosedLoopRefinementCoordinator,
             ConceptionConceptSplitter,
+            LLMTheoryGuidedPremiseRecoverer,
             TheoryGuidedAxiomGrounder,
             TheoryNetDeficitDetector,
         )
+
+        resolved_llm: Any = llm
+        resolved_arc: Any = None
+        resolved_global: Any = None
+        resolved_linker: Any = None
+        resolved_ner: Any = None
+        resolved_embedding: Any = None
+        resolved_enrichment: TheoreticalEnrichmentRunner | None = None
+
+        for phase in phases:
+            if (
+                isinstance(phase, TheoreticalEnrichmentRunner)
+                and resolved_enrichment is None
+            ):
+                resolved_enrichment = phase
+            try:
+                phase_attrs = vars(phase)
+            except TypeError:
+                phase_attrs = {}
+            if resolved_llm is None and phase_attrs.get("llm") is not None:
+                resolved_llm = phase_attrs.get("llm")
+            if (
+                resolved_embedding is None
+                and phase_attrs.get("embedding_model") is not None
+            ):
+                resolved_embedding = phase_attrs.get("embedding_model")
+            comps = (
+                phase.components()
+                if isinstance(phase, PhaseRunner)
+                else find_components(phase)
+            )
+            for comp_key, comp in comps.items():
+                if comp is None:
+                    continue
+                if resolved_llm is None and (
+                    comp_key == "llm" or comp_key.endswith(".llm")
+                ):
+                    resolved_llm = comp
+                if resolved_arc is None and isinstance(comp, ARCClassifier):
+                    resolved_arc = comp
+                if resolved_global is None and isinstance(
+                    comp, GlobalRelationExtractor
+                ):
+                    resolved_global = comp
+                if resolved_linker is None and isinstance(comp, EntityLinker):
+                    resolved_linker = comp
+                if resolved_ner is None and isinstance(comp, NERExtractor):
+                    resolved_ner = comp
+                if resolved_embedding is None and isinstance(
+                    comp, EmbeddingModel
+                ):
+                    resolved_embedding = comp
 
         resolved_modal = ensure_modal_strength_resolver(
             modal_resolver
@@ -323,21 +394,58 @@ class PipelineFactory(Fingerprintable):
             config=config.refinement,
             schema=config.graph_schema,
         )
+        shared_theory_projector: TheoryProjector
+        if resolved_enrichment is not None:
+            shared_theory_projector = resolved_enrichment.projector
+        elif resolved_llm is not None:
+            enr_cfg = config.theoretical_enrichment
+            shared_theory_projector = LLMTheoryProjector(
+                llm=resolved_llm,
+                prompts=enr_cfg.projection_prompts if enr_cfg is not None else None,
+                strategy=(
+                    enr_cfg.decoding_strategy
+                    if enr_cfg is not None
+                    else "direct_constrained"
+                ),
+            )
+        else:
+            shared_theory_projector = GenericTheoryProjector()
+
+        premise_recoverer = LLMTheoryGuidedPremiseRecoverer(
+            llm=resolved_llm,
+            arc_classifier=resolved_arc,
+            global_extractor=resolved_global,
+            entity_linker=resolved_linker,
+            modal_resolver=resolved_modal,
+            decision_engine=decision_engine,
+            config=config.refinement,
+            schema=config.graph_schema,
+            confidence_threshold=config.phase4.arc_confidence_threshold,
+        )
         coordinator = ClosedLoopRefinementCoordinator(
             detector=resolved_detector,
+            premise_recoverer=premise_recoverer,
             concept_splitter=ConceptionConceptSplitter(
+                global_extractor=resolved_global,
+                llm=resolved_llm,
+                embedding_model=resolved_embedding,
                 decision_engine=decision_engine,
                 config=config.refinement,
                 schema=config.graph_schema,
             ),
             axiom_grounder=TheoryGuidedAxiomGrounder(
-                theory_projector=GenericTheoryProjector(),
+                ner_extractor=resolved_ner,
+                llm=resolved_llm,
+                theory_projector=shared_theory_projector,
+                embedding_model=resolved_embedding,
+                entity_linker=resolved_linker,
                 modal_resolver=resolved_modal,
                 decision_engine=decision_engine,
                 config=config.refinement,
                 schema=config.graph_schema,
             ),
             theorynet_projector=default_theorynet_projector,
+            enrichment_runner=resolved_enrichment,
             modal_resolver=resolved_modal,
             config=config.refinement,
             schema=config.graph_schema,

@@ -20,7 +20,7 @@ from episteme_pipeline.artifacts.execution import (
     ArtifactExecutionContext,
     Phase4ArtifactsView,
 )
-from episteme_pipeline.artifacts.models import ArtifactKind
+from episteme_pipeline.artifacts.models import ArtifactKind, FusionDecisionArtifact
 from episteme_pipeline.config import Phase6Config
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet
 from episteme_pipeline.decision.modal_resolver import HybridModalResolver
@@ -193,7 +193,9 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
 
             if curation_ledger is not None:
                 source_relations = curation_ledger.apply_to_theory_relations(
-                    source_relations, {a.id for a in source_atoms}
+                    source_relations,
+                    {a.id for a in source_atoms},
+                    schema=self.schema,
                 )
                 if input.canonical_theory_relations:
                     input.canonical_theory_relations = source_relations
@@ -258,26 +260,114 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             else 0
         )
 
-        artifacts = [
-            build_theory_atom_artifact(
+        prev_collection = context.previous if context is not None else None
+        fusion_upstreams_by_atom: dict[str, list[str]] = {}
+        if prev_collection is not None:
+            for f_env in prev_collection.of_kind(
+                ArtifactKind.FUSION_DECISION, latest_only=True
+            ):
+                if isinstance(f_env.payload, FusionDecisionArtifact):
+                    f_ids = [
+                        aid.removeprefix("artifact::")
+                        for aid in f_env.payload.artifact_ids
+                    ]
+                    if f_env.payload.canonical_artifact_id:
+                        f_ids.append(
+                            f_env.payload.canonical_artifact_id.removeprefix(
+                                "artifact::"
+                            )
+                        )
+                    for member_id in f_ids:
+                        fusion_upstreams_by_atom.setdefault(
+                            member_id, []
+                        ).append(f_env.artifact_id)
+
+        artifacts = []
+        emitted_atom_ids: dict[str, str] = {}
+        for atom in theory_net.atoms:
+            atom_upstreams: list[str] = []
+            if prev_collection is not None:
+                prev_atom_env = prev_collection.latest_by_identity.get(
+                    f"argument_component::{atom.id}"
+                )
+                if prev_atom_env is not None:
+                    atom_upstreams.append(prev_atom_env.artifact_id)
+            if not atom_upstreams:
+                atom_upstreams.append(f"artifact::{atom.id}")
+            atom_upstreams.extend(fusion_upstreams_by_atom.get(atom.id, ()))
+            if atom.source_chunk_id:
+                atom_upstreams.append(f"artifact::{atom.source_chunk_id}")
+            atom_env = build_theory_atom_artifact(
                 atom,
                 run_id=context.run_id,
                 phase_name=self.name,
                 method="phase6.theorynet",
+                upstream_artifact_ids=atom_upstreams,
                 refinement_pass=refinement_pass,
+                phase_tag=self.phase_key,
             )
-            for atom in theory_net.atoms
-        ]
-        artifacts.extend(
-            build_theory_relation_artifact(
-                rel,
-                run_id=context.run_id,
-                phase_name=self.name,
-                method="phase6.theorynet",
-                refinement_pass=refinement_pass,
+            emitted_atom_ids[atom.id] = atom_env.artifact_id
+            artifacts.append(atom_env)
+
+        for rel in theory_net.relations:
+            rel_upstreams: list[str] = []
+            if prev_collection is not None:
+                prev_rel_env = prev_collection.latest_by_identity.get(
+                    f"argument_relation::{rel.relation_id}"
+                )
+                if prev_rel_env is not None:
+                    rel_upstreams.append(prev_rel_env.artifact_id)
+            for pid in rel.effective_premise_ids:
+                if pid in emitted_atom_ids:
+                    rel_upstreams.append(emitted_atom_ids[pid])
+                elif (
+                    prev_collection is not None
+                    and f"argument_component::{pid}" in prev_collection.latest_by_identity
+                ):
+                    rel_upstreams.append(
+                        prev_collection.latest_by_identity[
+                            f"argument_component::{pid}"
+                        ].artifact_id
+                    )
+                else:
+                    rel_upstreams.append(f"artifact::{pid}")
+            target_ref = rel.undercuts_relation_id or rel.target_id
+            if rel.undercuts_relation_id is not None:
+                if (
+                    prev_collection is not None
+                    and f"argument_relation::{target_ref}" in prev_collection.latest_by_identity
+                ):
+                    rel_upstreams.append(
+                        prev_collection.latest_by_identity[
+                            f"argument_relation::{target_ref}"
+                        ].artifact_id
+                    )
+                else:
+                    rel_upstreams.append(f"artifact::{target_ref}")
+            elif target_ref in emitted_atom_ids:
+                rel_upstreams.append(emitted_atom_ids[target_ref])
+            elif (
+                prev_collection is not None
+                and f"argument_component::{target_ref}" in prev_collection.latest_by_identity
+            ):
+                rel_upstreams.append(
+                    prev_collection.latest_by_identity[
+                        f"argument_component::{target_ref}"
+                    ].artifact_id
+                )
+            else:
+                rel_upstreams.append(f"artifact::{target_ref}")
+            artifacts.append(
+                build_theory_relation_artifact(
+                    rel,
+                    run_id=context.run_id,
+                    phase_name=self.name,
+                    method="phase6.theorynet",
+                    upstream_artifact_ids=rel_upstreams,
+                    refinement_pass=refinement_pass,
+                    phase_tag=self.phase_key,
+                )
             )
-            for rel in theory_net.relations
-        )
 
         if self.deficit_detector is not None:
             updated_state = Phase4ArtifactsView(

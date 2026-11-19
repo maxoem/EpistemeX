@@ -10,11 +10,14 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
-from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
-
-_STRUCTURAL_EDGE_TYPES: frozenset[str] = frozenset(
-    {"CONTAINS", "EXTRACTED_FROM", "SAME_AS", "MENTIONS", "HAS_PREMISE", "CONCLUDES"}
+from episteme_pipeline.schema.default_schema import (
+    DEFAULT_SCHEMA,
+    STRUCTURAL_EDGE_TYPES,
+    SchemaConfig,
+    StructuralRelationType,
 )
+
+_STRUCTURAL_EDGE_TYPES: frozenset[str] = STRUCTURAL_EDGE_TYPES
 _THEORY_PROPERTY_MARKERS: frozenset[str] = frozenset(
     {
         "inferential_warrant",
@@ -272,7 +275,7 @@ def build_reified_inference_edges(
             edges.append(
                 {
                     "from_id": pid,
-                    "relation_type": "HAS_PREMISE",
+                    "relation_type": StructuralRelationType.HAS_PREMISE.value,
                     "to_id": w_id,
                     "properties": p_props,
                 }
@@ -302,7 +305,7 @@ def build_reified_inference_edges(
             edges.append(
                 {
                     "from_id": w_id,
-                    "relation_type": "CONCLUDES",
+                    "relation_type": StructuralRelationType.CONCLUDES.value,
                     "to_id": rel.target_id,
                     "properties": {
                         **rel_props,

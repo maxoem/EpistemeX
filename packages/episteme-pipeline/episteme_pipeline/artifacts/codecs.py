@@ -87,15 +87,14 @@ class DocumentCodec:
         DocumentArtifact
             Lossless document artifact payload.
         """
-        metadata = {str(k): str(v) for k, v in domain_obj.metadata.items()}
-        metadata["chapter_count"] = str(domain_obj.chapter_count)
-        metadata["chunk_count"] = str(domain_obj.chunk_count)
         return DocumentArtifact(
             document_id=domain_obj.id,
             title=domain_obj.title,
             source_path=domain_obj.source_path,
+            chapter_count=domain_obj.chapter_count,
+            chunk_count=domain_obj.chunk_count,
             structural_anchor=domain_obj.structural_anchor,
-            metadata=metadata,
+            metadata=dict(domain_obj.metadata),
             ingested_at=domain_obj.ingested_at,
         )
 
@@ -114,8 +113,16 @@ class DocumentCodec:
             Reconstructed document contract.
         """
         raw_meta = dict(payload.metadata)
-        chapter_count = int(raw_meta.pop("chapter_count", "0"))
-        chunk_count = int(raw_meta.pop("chunk_count", "0"))
+        chapter_count = (
+            payload.chapter_count
+            if payload.chapter_count is not None
+            else int(raw_meta.pop("chapter_count", "0"))
+        )
+        chunk_count = (
+            payload.chunk_count
+            if payload.chunk_count is not None
+            else int(raw_meta.pop("chunk_count", "0"))
+        )
         return L1Document(
             id=payload.document_id,
             title=payload.title,
@@ -275,14 +282,14 @@ class LocalRelationCodec:
         LocalRelationArtifact
             Local relation artifact payload.
         """
-        cid = domain_obj.source_chunk_id or ""
-        relation_id = f"local-relation::{cid}::{domain_obj.subject_id}::{domain_obj.predicate}::{domain_obj.object_id}"
+        cid_key = domain_obj.source_chunk_id or ""
+        relation_id = f"local-relation::{cid_key}::{domain_obj.subject_id}::{domain_obj.predicate}::{domain_obj.object_id}"
         return LocalRelationArtifact(
             relation_id=relation_id,
             subject_entity_id=domain_obj.subject_id,
             predicate=domain_obj.predicate,
             object_entity_id=domain_obj.object_id,
-            source_chunk_id=cid,
+            source_chunk_id=domain_obj.source_chunk_id,
             confidence=domain_obj.confidence,
             rerank_score=domain_obj.rerank_score,
             scope="local",

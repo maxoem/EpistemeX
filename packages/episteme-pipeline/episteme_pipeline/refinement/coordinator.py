@@ -253,10 +253,18 @@ class ClosedLoopRefinementCoordinator:
     ) -> bool:
         """Check whether ``config`` and wired ports enable handling ``deficit_kind``."""
         if deficit_kind == EpistemicDeficitKind.ENTHYMEME_GAP:
-            return (
-                config.enable_theory_guided_premise_recovery
-                and self.premise_recoverer is not None
+            if not config.enable_theory_guided_premise_recovery or self.premise_recoverer is None:
+                return False
+            from episteme_pipeline.refinement.premise_recovery import (
+                LLMTheoryGuidedPremiseRecoverer,
             )
+
+            if (
+                isinstance(self.premise_recoverer, LLMTheoryGuidedPremiseRecoverer)
+                and self.premise_recoverer.llm is None
+            ):
+                return False
+            return True
         if deficit_kind == EpistemicDeficitKind.POLYSEMY_COLLISION:
             return (
                 config.enable_targeted_concept_split

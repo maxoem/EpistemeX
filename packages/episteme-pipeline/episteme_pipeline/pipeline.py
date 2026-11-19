@@ -165,6 +165,7 @@ class Pipeline:
                     decision_engine=self.decision_engine,
                     modal_resolver=self.modal_resolver,
                     detector=resolved_detector,
+                    phases=self.phases,
                 )
             )
             self.deficit_detector = resolved_detector

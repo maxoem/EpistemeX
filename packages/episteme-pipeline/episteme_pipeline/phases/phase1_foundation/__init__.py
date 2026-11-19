@@ -62,6 +62,7 @@ from episteme_pipeline.protocols.data_source import DataSourceAdapter
 from episteme_pipeline.protocols.extractors import EmbeddingModel
 from episteme_pipeline.protocols.graph_store import GraphWriter
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
+from episteme_pipeline.schema.default_schema import StructuralRelationType
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +251,9 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
                         },
                         create_only_properties=created,
                     )
-                    await self.graph_store.upsert_relation(d_id, "CONTAINS", chap_id)
+                    await self.graph_store.upsert_relation(
+                        d_id, StructuralRelationType.CONTAINS.value, chap_id
+                    )
 
             chap_id = seen_chapters[raw.chapter_title]
             c_id = chunk_id(chap_id, raw.sequence_index, raw.text)
@@ -281,7 +284,9 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
             # 4. Upsert relations
             prev_chunk_id: str | None = None
             for chunk in chunks:
-                await self.graph_store.upsert_relation(chunk.chapter_id, "CONTAINS", chunk.id)
+                await self.graph_store.upsert_relation(
+                    chunk.chapter_id, StructuralRelationType.CONTAINS.value, chunk.id
+                )
                 if prev_chunk_id is not None:
                     await self.graph_store.upsert_relation(
                         prev_chunk_id, "NEXT", chunk.id, {"distance": 1}

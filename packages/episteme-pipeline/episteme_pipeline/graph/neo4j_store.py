@@ -51,6 +51,7 @@ from episteme_pipeline.protocols.graph_store import (
     ProcessingGraph,
     ProjectionGraph,
 )
+from episteme_pipeline.schema.default_schema import StructuralRelationType
 
 logger = logging.getLogger(__name__)
 
@@ -413,6 +414,72 @@ class _Neo4jWriteMixin:
                 document_id,
             )
         return deleted
+
+    async def prune_retired_entities(self, entity_ids: list[str]) -> int:
+        """Delete retired entity nodes and incident edges from Neo4j.
+
+        Parameters
+        ----------
+        entity_ids : list of str
+            Retired entity identifiers to delete.
+
+        Returns
+        -------
+        int
+            Number of retired entity nodes deleted.
+        """
+        cleaned = [eid for eid in dict.fromkeys(entity_ids) if eid]
+        if not cleaned:
+            return 0
+        query = (
+            "UNWIND $entity_ids AS eid "
+            f"MATCH (n:`{ENTITY_LABEL}` {{id: eid}}) "
+            "WITH collect(DISTINCT n) AS dead "
+            "FOREACH (x IN dead | DETACH DELETE x) "
+            "RETURN size(dead) AS deleted_count"
+        )
+        async with self._session() as session:
+            async with await session.begin_transaction() as tx:
+                result = await tx.run(query, entity_ids=cleaned)
+                row = await result.single()
+                await tx.commit()
+        return int(row["deleted_count"]) if row else 0
+
+    async def prune_retired_mentions(
+        self, mentions: list[tuple[str, str]]
+    ) -> int:
+        """Delete retired ``EXTRACTED_FROM`` edges between entities and chunks in Neo4j.
+
+        Parameters
+        ----------
+        mentions : list of tuple of (str, str)
+            Pairs of ``(entity_id, chunk_id)`` identifying retired mentions.
+
+        Returns
+        -------
+        int
+            Number of ``EXTRACTED_FROM`` relationships deleted.
+        """
+        payload = [
+            {"entity_id": eid, "chunk_id": cid}
+            for eid, cid in dict.fromkeys(mentions)
+            if eid and cid
+        ]
+        if not payload:
+            return 0
+        query = (
+            "UNWIND $mentions AS m "
+            f"MATCH (e:`{ENTITY_LABEL}` {{id: m.entity_id}})-[r:{StructuralRelationType.EXTRACTED_FROM.value}]->(c:Chunk {{id: m.chunk_id}}) "
+            "WITH collect(DISTINCT r) AS dead_rels "
+            "FOREACH (rel IN dead_rels | DELETE rel) "
+            "RETURN size(dead_rels) AS deleted_count"
+        )
+        async with self._session() as session:
+            async with await session.begin_transaction() as tx:
+                result = await tx.run(query, mentions=payload)
+                row = await result.single()
+                await tx.commit()
+        return int(row["deleted_count"]) if row else 0
 
     async def upsert_entities(self, entities: list[L2Entity]) -> None:
         if not entities:
@@ -890,7 +957,7 @@ class _Neo4jReadMixin:
             "w.weight as weight, w.edge_tenability as edge_tenability, properties(w) as props "
             "UNION ALL "
             "MATCH (a:TheoryAtom)-[r]->(w:TheoryInference) "
-            "WHERE type(r) <> 'HAS_PREMISE' "
+            f"WHERE type(r) <> '{StructuralRelationType.HAS_PREMISE.value}' "
             "RETURN a.id as source_id, coalesce(r.relation_type, type(r)) as relation_type, "
             "coalesce(r.target_id, w.id) as target_id, "
             "coalesce(r.confidence, 1.0) as confidence, coalesce(r.scope, 'global') as scope, "
@@ -1000,7 +1067,7 @@ class _Neo4jReadMixin:
 
     async def get_entity_envelopes(self, entity_id: str) -> list[str]:
         query = (
-            "MATCH (e {id: $entity_id})-[r:EXTRACTED_FROM]->(c:Chunk) "
+            f"MATCH (e {{id: $entity_id}})-[r:{StructuralRelationType.EXTRACTED_FROM.value}]->(c:Chunk) "
             "WHERE r.textual_envelope IS NOT NULL "
             "RETURN r.textual_envelope AS envelope"
         )
@@ -1011,7 +1078,7 @@ class _Neo4jReadMixin:
 
     async def get_chunk_entities(self, chunk_id: str) -> list[L2Entity]:
         query = (
-            f"MATCH (n:`{ENTITY_LABEL}`)-[:EXTRACTED_FROM]->(c:Chunk {{id: $chunk_id}}) "
+            f"MATCH (n:`{ENTITY_LABEL}`)-[:{StructuralRelationType.EXTRACTED_FROM.value}]->(c:Chunk {{id: $chunk_id}}) "
             f"{_ENTITY_RETURN}"
         )
         async with self._session() as session:

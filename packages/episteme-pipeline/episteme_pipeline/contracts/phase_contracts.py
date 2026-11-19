@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from episteme_pipeline.runs.models import RunManifest, RunReport
+    from episteme_pipeline.schema.default_schema import SchemaConfig
 
 from episteme_pipeline.contracts.domain import (
     CandidatePair,
@@ -47,6 +48,57 @@ class RelationOverride(BaseModel):
     relation_type: str
     polarity: str | None = None
     confidence: float = 1.0
+
+    def _resolve_schema(self, schema: SchemaConfig | None) -> SchemaConfig:
+        """Return ``schema`` when provided or fall back to ``DEFAULT_SCHEMA``."""
+        if schema is not None:
+            return schema
+        from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
+
+        return DEFAULT_SCHEMA
+
+    def resolved_polarity_sign(
+        self, schema: SchemaConfig | None = None
+    ) -> int | None:
+        """Parse optional ``polarity`` override via the configured ``SchemaConfig``.
+
+        Parameters
+        ----------
+        schema : SchemaConfig or None, optional
+            Schema defining valid relation polarities (defaults to ``DEFAULT_SCHEMA``).
+
+        Returns
+        -------
+        int or None
+            ``1`` for positive support, ``-1`` for negative attack, ``0`` for
+            neutral, or ``None`` when ``polarity`` is unset or blank.
+        """
+        return self._resolve_schema(schema).parse_polarity_override(self.polarity)
+
+    def resolved_relation_type(
+        self,
+        schema: SchemaConfig | None = None,
+        *,
+        layer: Literal["l2", "l3"] = "l3",
+    ) -> str:
+        """Resolve effective relation label via the configured ``SchemaConfig``.
+
+        Parameters
+        ----------
+        schema : SchemaConfig or None, optional
+            Schema defining L2/L3 relation types and polarities (defaults to ``DEFAULT_SCHEMA``).
+        layer : {"l2", "l3"}, default "l3"
+            Target graph layer used when resolving a fallback relation label.
+
+        Returns
+        -------
+        str
+            Effective relation predicate or dialectical relation type.
+        """
+        rel_type, _ = self._resolve_schema(schema).resolve_relation_override(
+            self.relation_type, self.polarity, layer=layer
+        )
+        return rel_type
 
 
 class EpistemicCurationLedger(BaseModel):
@@ -192,11 +244,25 @@ class EpistemicCurationLedger(BaseModel):
         """
         return self.modality_overrides.get(atom_id)
 
+    @staticmethod
+    def _polarity_weight_kwargs(
+        pol_sign: int | None, confidence: float
+    ) -> dict[str, float]:
+        """Build directional support/attack weights from an explicit polarity sign."""
+        if pol_sign is None:
+            return {}
+        if pol_sign > 0:
+            return {"weight_support": abs(confidence), "weight_attack": 0.0}
+        if pol_sign < 0:
+            return {"weight_support": 0.0, "weight_attack": abs(confidence)}
+        return {"weight_support": 0.0, "weight_attack": 0.0}
+
     def apply_to_triples(
         self,
         triples: Sequence[L2Triple],
         valid_entity_ids: set[str] | None = None,
         scope: Literal["local", "global"] = "global",
+        schema: SchemaConfig | None = None,
     ) -> list[L2Triple]:
         """
         Filter rejected triples, apply predicate/confidence overrides, and inject curated edges.
@@ -210,6 +276,8 @@ class EpistemicCurationLedger(BaseModel):
             must connect nodes within this set, by default None.
         scope : {"local", "global"}, default "global"
             Scope assigned to newly injected triples, by default "global".
+        schema : SchemaConfig | None, optional
+            Schema configuration governing L2 relation types and polarities, by default None.
 
         Returns
         -------
@@ -226,10 +294,13 @@ class EpistemicCurationLedger(BaseModel):
             pair = (t.subject_id, t.object_id)
             override = self.get_relation_override(t.subject_id, t.object_id)
             if override is not None:
-                if override.relation_type == "REJECTED" or pair in handled_pairs:
+                effective_predicate = override.resolved_relation_type(
+                    schema=schema, layer="l2"
+                )
+                if effective_predicate == "REJECTED" or pair in handled_pairs:
                     continue
                 updated = t.model_copy(
-                    update={"predicate": override.relation_type, "confidence": override.confidence}
+                    update={"predicate": effective_predicate, "confidence": override.confidence}
                 )
                 filtered.append(updated)
                 handled_pairs.add(pair)
@@ -239,8 +310,11 @@ class EpistemicCurationLedger(BaseModel):
         existing_pairs = {(t.subject_id, t.object_id) for t in filtered}
         for override in self.relation_overrides.values():
             pair = (override.source_id, override.target_id)
+            effective_predicate = override.resolved_relation_type(
+                schema=schema, layer="l2"
+            )
             if (
-                override.relation_type != "REJECTED"
+                effective_predicate != "REJECTED"
                 and pair not in existing_pairs
                 and (
                     valid_entity_ids is None
@@ -250,7 +324,7 @@ class EpistemicCurationLedger(BaseModel):
                 filtered.append(
                     L2Triple(
                         subject_id=override.source_id,
-                        predicate=override.relation_type,
+                        predicate=effective_predicate,
                         object_id=override.target_id,
                         confidence=override.confidence,
                         scope=scope,
@@ -265,6 +339,7 @@ class EpistemicCurationLedger(BaseModel):
         relations: Sequence[TheoryRelation],
         valid_atom_ids: set[str] | None = None,
         scope: Literal["local", "global"] = "local",
+        schema: SchemaConfig | None = None,
     ) -> list[TheoryRelation]:
         """
         Filter rejected relations, apply type and confidence overrides, and inject curated edges.
@@ -278,6 +353,8 @@ class EpistemicCurationLedger(BaseModel):
             must connect atoms within this set, by default None.
         scope : {"local", "global"}, default "local"
             Scope assigned to newly injected theory relations, by default "local".
+        schema : SchemaConfig | None, optional
+            Schema configuration governing L3 relation types and polarities, by default None.
 
         Returns
         -------
@@ -294,16 +371,23 @@ class EpistemicCurationLedger(BaseModel):
             pair = (rel.source_id, rel.target_id)
             override = self.get_relation_override(rel.source_id, rel.target_id)
             if override is not None:
-                if override.relation_type == "REJECTED" or pair in handled_pairs:
+                effective_rel_type = override.resolved_relation_type(
+                    schema=schema, layer="l3"
+                )
+                if effective_rel_type == "REJECTED" or pair in handled_pairs:
                     continue
+                pol_sign = override.resolved_polarity_sign(schema=schema)
                 # Fresh initialization triggers @model_validator(mode="after")
                 # to recompute effective_weight, active_weight, and clear stale polarity caches.
-                # Only preserve inferential_force if explicitly set and relation_type did not change,
+                # Only preserve inferential_warrant if explicitly set and neither relation_type nor polarity changed,
                 # so downstream TheoryNetProjector can derive the warrant for a changed relation_type.
-                extra_kwargs: dict[str, Any] = {}
+                extra_kwargs: dict[str, Any] = self._polarity_weight_kwargs(
+                    pol_sign, override.confidence
+                )
                 if (
                     "inferential_warrant" in rel.model_fields_set
-                    and override.relation_type == rel.relation_type
+                    and effective_rel_type == rel.relation_type
+                    and pol_sign is None
                 ):
                     extra_kwargs["inferential_warrant"] = rel.inferential_warrant
                 updated = TheoryRelation(
@@ -312,7 +396,7 @@ class EpistemicCurationLedger(BaseModel):
                     target_id=rel.target_id,
                     premise_ids=rel.premise_ids,
                     undercuts_relation_id=rel.undercuts_relation_id,
-                    relation_type=override.relation_type,
+                    relation_type=effective_rel_type,
                     confidence=override.confidence,
                     scope=rel.scope,
                     weight=override.confidence,
@@ -332,24 +416,30 @@ class EpistemicCurationLedger(BaseModel):
         existing_pairs = {(r.source_id, r.target_id) for r in filtered}
         for override in self.relation_overrides.values():
             pair = (override.source_id, override.target_id)
+            effective_rel_type = override.resolved_relation_type(
+                schema=schema, layer="l3"
+            )
             if (
-                override.relation_type != "REJECTED"
+                effective_rel_type != "REJECTED"
                 and pair not in existing_pairs
                 and (
                     valid_atom_ids is None
                     or (override.source_id in valid_atom_ids and override.target_id in valid_atom_ids)
                 )
             ):
+                pol_sign = override.resolved_polarity_sign(schema=schema)
+                extra_inj = self._polarity_weight_kwargs(pol_sign, override.confidence)
                 injected = TheoryRelation(
                     source_id=override.source_id,
                     target_id=override.target_id,
-                    relation_type=override.relation_type,
+                    relation_type=effective_rel_type,
                     confidence=override.confidence,
                     scope=scope,
                     weight=override.confidence,
                     effective_weight=override.confidence,
                     active_weight=abs(override.confidence),
                     calibrated_confidence=override.confidence,
+                    **extra_inj,
                 )
                 filtered.append(injected)
                 existing_pairs.add(pair)

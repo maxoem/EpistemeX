@@ -34,6 +34,7 @@ from episteme_pipeline.protocols.graph_projection import (
     GraphProjectionProtocol,
     ProjectionBatchAccumulator,
 )
+from episteme_pipeline.schema.default_schema import StructuralRelationType
 from episteme_pipeline.protocols.graph_store import ProjectionGraph
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
@@ -73,6 +74,8 @@ class ProjectionBatch(ProjectionBatchAccumulator):
     triples: list[L2Triple] = field(default_factory=list)
     theory_relations: list[TheoryRelation] = field(default_factory=list)
     enrichments: list[TheoreticalEnrichmentArtifact] = field(default_factory=list)
+    retired_entity_ids: list[str] = field(default_factory=list)
+    retired_mentions: list[tuple[str, str]] = field(default_factory=list)
     schema: SchemaConfig | None = None
     t_norm: str | None = None
 
@@ -107,6 +110,16 @@ class ProjectionBatch(ProjectionBatchAccumulator):
     def add_enrichment(self, enrichment: TheoreticalEnrichmentArtifact) -> None:
         """Register a theoretical enrichment payload for post-projection edge updates."""
         self.enrichments.append(enrichment)
+
+    def add_retired_entity(self, entity_id: str) -> None:
+        """Register a retired entity identifier to prune from the projection graph."""
+        if entity_id:
+            self.retired_entity_ids.append(entity_id)
+
+    def add_retired_mention(self, entity_id: str, chunk_id: str) -> None:
+        """Register a retired ``(entity_id, chunk_id)`` mention edge to prune."""
+        if entity_id and chunk_id:
+            self.retired_mentions.append((entity_id, chunk_id))
 
     async def flush(
         self,
@@ -185,6 +198,53 @@ class ProjectionBatch(ProjectionBatchAccumulator):
 
         all_reified_ids = reified_ids | targeted_rel_ids
 
+        retired_entity_list = list(
+            dict.fromkeys(eid for eid in self.retired_entity_ids if eid)
+        )
+        retired_entity_set = set(retired_entity_list)
+        retired_mention_list = list(
+            dict.fromkeys(
+                (eid, cid) for eid, cid in self.retired_mentions if eid and cid
+            )
+        )
+        retired_mention_set = set(retired_mention_list)
+
+        if retired_mention_list:
+            await graph_store.prune_retired_mentions(retired_mention_list)
+        if retired_entity_list:
+            await graph_store.prune_retired_entities(retired_entity_list)
+
+        active_entities = (
+            [e for e in self.entities if e.id not in retired_entity_set]
+            if retired_entity_set
+            else self.entities
+        )
+        active_relations = (
+            [
+                r
+                for r in self.relations
+                if r.get("from_id") not in retired_entity_set
+                and r.get("to_id") not in retired_entity_set
+                and not (
+                    r.get("relation_type") == StructuralRelationType.EXTRACTED_FROM
+                    and (str(r.get("from_id", "")), str(r.get("to_id", "")))
+                    in retired_mention_set
+                )
+            ]
+            if (retired_entity_set or retired_mention_set)
+            else self.relations
+        )
+        active_triples = (
+            [
+                t
+                for t in self.triples
+                if t.subject_id not in retired_entity_set
+                and t.object_id not in retired_entity_set
+            ]
+            if retired_entity_set
+            else self.triples
+        )
+
         # ------------------------------------------------------------------
         # Pass 1: Nodes (Documents -> Chunks -> Entities -> TheoryAtoms -> TheoryInferences)
         # ------------------------------------------------------------------
@@ -194,7 +254,7 @@ class ProjectionBatch(ProjectionBatchAccumulator):
         for chunk_batch in batched(self.chunks, effective_batch):
             await graph_store.upsert_chunks(list(chunk_batch))
 
-        for entity_batch in batched(self.entities, effective_batch):
+        for entity_batch in batched(active_entities, effective_batch):
             await graph_store.upsert_entities(list(entity_batch))
 
         for atom_batch in batched(self.theory_atoms, effective_batch):
@@ -221,10 +281,10 @@ class ProjectionBatch(ProjectionBatchAccumulator):
         # ------------------------------------------------------------------
         # Pass 2: Edges (Mentions/Canonicalizations -> Triples -> Reified Hyperedges -> TheoryRelations)
         # ------------------------------------------------------------------
-        for rel_batch in batched(self.relations, effective_batch):
+        for rel_batch in batched(active_relations, effective_batch):
             await graph_store.upsert_relations(list(rel_batch))
 
-        for triple_batch in batched(self.triples, effective_batch):
+        for triple_batch in batched(active_triples, effective_batch):
             await graph_store.upsert_triples(list(triple_batch))
 
         hypergraph_edges: list[dict[str, Any]] = []

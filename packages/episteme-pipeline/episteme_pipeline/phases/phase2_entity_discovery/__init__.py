@@ -87,7 +87,10 @@ from episteme_pipeline.runtime.batch_executor import (
     CheckpointedStreamExecutor,
     SystematicBatchFailureError,
 )
-from episteme_pipeline.schema.default_schema import SchemaConfig
+from episteme_pipeline.schema.default_schema import (
+    SchemaConfig,
+    StructuralRelationType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -310,11 +313,19 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             return ArtifactCollection([])
 
         if not chunks:
-            deduped_entities = self._deduplicate_entities(
-                all_entities, curation_ledger=curation_ledger
+            deduped_entities, deduped_triples, rewritten_envelopes = (
+                self._deduplicate_entities(
+                    all_entities,
+                    curation_ledger=curation_ledger,
+                    triples=all_triples,
+                    mention_envelopes=mention_envelopes,
+                )
             )
             return self._build_artifacts(
-                deduped_entities, all_triples, mention_envelopes, context.run_id
+                deduped_entities,
+                deduped_triples,
+                rewritten_envelopes,
+                context.run_id,
             )
 
         async def _process_chunk_step(
@@ -359,7 +370,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                 relations_to_upsert.append(
                     {
                         "from_id": entity.id,
-                        "relation_type": "EXTRACTED_FROM",
+                        "relation_type": StructuralRelationType.EXTRACTED_FROM.value,
                         "to_id": chunk_id,
                         "properties": {"confidence": 1.0, "textual_envelope": env},
                     }
@@ -417,29 +428,65 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                     str(exc).replace("items", "chunks")
                 ) from exc
 
-        deduped_entities = self._deduplicate_entities(
-            all_entities, curation_ledger=curation_ledger
+        deduped_entities, deduped_triples, rewritten_envelopes = (
+            self._deduplicate_entities(
+                all_entities,
+                curation_ledger=curation_ledger,
+                triples=all_triples,
+                mention_envelopes=mention_envelopes,
+            )
         )
         return self._build_artifacts(
-            deduped_entities, all_triples, mention_envelopes, context.run_id
+            deduped_entities,
+            deduped_triples,
+            rewritten_envelopes,
+            context.run_id,
         )
 
     @staticmethod
     def _deduplicate_entities(
         entities: list[L2Entity],
         curation_ledger: EpistemicCurationLedger | None = None,
-    ) -> list[L2Entity]:
-        """Deduplicate discovered entities by ID and must-link constraints, merging source_chunk_ids."""
+        *,
+        triples: list[L2Triple] | None = None,
+        mention_envelopes: dict[tuple[str, str], str] | None = None,
+    ) -> tuple[list[L2Entity], list[L2Triple], dict[tuple[str, str], str]]:
+        """Deduplicate entities by ID and must-link constraints and rewrite incident state.
+
+        Parameters
+        ----------
+        entities : list of L2Entity
+            Discovered or hydrated entities across processed chunks.
+        curation_ledger : EpistemicCurationLedger or None, optional
+            Optional HITL curation ledger enforcing must-link entity merges.
+        triples : list of L2Triple or None, optional
+            Local relation triples whose endpoints are remapped on merge.
+        mention_envelopes : dict of tuple of (str, str) to str or None, optional
+            Mention textual envelopes keyed by ``(entity_id, chunk_id)``.
+
+        Returns
+        -------
+        tuple of (list of L2Entity, list of L2Triple, dict of tuple of (str, str) to str)
+            Deduplicated entities, endpoint-remapped triples, and remapped mention envelopes.
+        """
         merged: dict[str, L2Entity] = {}
+        merged_members: dict[str, list[tuple[str, str]]] = {}
+        id_remap: dict[str, str] = {}
         for entity in entities:
-            target_id = entity.id
-            if curation_ledger is not None:
-                for existing_id, existing_ent in merged.items():
-                    if curation_ledger.is_must_link(
-                        entity.id, existing_id, entity.name, existing_ent.name
+            target_id = id_remap.get(entity.id, entity.id)
+            if target_id not in merged and curation_ledger is not None:
+                for existing_id, members in merged_members.items():
+                    if any(
+                        curation_ledger.is_must_link(
+                            entity.id, m_id, entity.name, m_name
+                        )
+                        for m_id, m_name in members
                     ):
                         target_id = existing_id
                         break
+
+            if target_id != entity.id:
+                id_remap[entity.id] = target_id
 
             if target_id not in merged:
                 merged[target_id] = entity.model_copy(
@@ -450,8 +497,10 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                         ),
                     }
                 )
+                merged_members[target_id] = [(entity.id, entity.name)]
             else:
                 existing = merged[target_id]
+                merged_members[target_id].append((entity.id, entity.name))
                 combined_chunks = list(
                     dict.fromkeys(
                         existing.source_chunk_ids + entity.source_chunk_ids
@@ -473,7 +522,47 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                         ),
                     }
                 )
-        return list(merged.values())
+
+        rewritten_envelopes: dict[tuple[str, str], str] = {}
+        if mention_envelopes:
+            for (ent_id, chunk_id), env_text in mention_envelopes.items():
+                canon_id = id_remap.get(ent_id, ent_id)
+                key = (canon_id, chunk_id)
+                if key not in rewritten_envelopes or (
+                    not rewritten_envelopes[key] and env_text
+                ):
+                    rewritten_envelopes[key] = env_text
+
+        rewritten_triples: list[L2Triple] = []
+        if triples:
+            deduped_triples: dict[
+                tuple[str, str, str, str, str | None], L2Triple
+            ] = {}
+            for triple in triples:
+                new_subj = id_remap.get(triple.subject_id, triple.subject_id)
+                new_obj = id_remap.get(triple.object_id, triple.object_id)
+                if triple.subject_id != triple.object_id and new_subj == new_obj:
+                    continue
+                updated = (
+                    triple.model_copy(
+                        update={"subject_id": new_subj, "object_id": new_obj}
+                    )
+                    if (new_subj != triple.subject_id or new_obj != triple.object_id)
+                    else triple
+                )
+                t_key = (
+                    updated.subject_id,
+                    updated.predicate,
+                    updated.object_id,
+                    updated.scope,
+                    updated.source_chunk_id if updated.scope == "local" else None,
+                )
+                existing_t = deduped_triples.get(t_key)
+                if existing_t is None or updated.confidence > existing_t.confidence:
+                    deduped_triples[t_key] = updated
+            rewritten_triples = list(deduped_triples.values())
+
+        return list(merged.values()), rewritten_triples, rewritten_envelopes
 
     def _build_artifacts(
         self,

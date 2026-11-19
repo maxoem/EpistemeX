@@ -260,7 +260,10 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
         )
         if curation_ledger is not None:
             deduped_triples = curation_ledger.apply_to_triples(
-                deduped_triples, {e.id for e in entities}, scope="global"
+                deduped_triples,
+                {e.id for e in entities},
+                scope="global",
+                schema=self.schema,
             )
 
         relation_dist: dict[str, int] = defaultdict(int)

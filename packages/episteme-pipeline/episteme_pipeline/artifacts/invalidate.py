@@ -43,6 +43,7 @@ class ArtifactDependencyGraph:
         self.nodes: dict[str, ArtifactEnvelope] = {}
         self._identity_by_artifact_id: dict[str, str] = {}
         self._envelopes_by_artifact_id: dict[str, ArtifactEnvelope] = {}
+        self._versions_by_key: dict[str, list[ArtifactEnvelope]] = defaultdict(list)
         self._raw_upstream: dict[str, tuple[str, ...]] = {}
         self._downstream: dict[str, set[str]] = defaultdict(set)
         self._upstream: dict[str, set[str]] = defaultdict(set)
@@ -50,19 +51,33 @@ class ArtifactDependencyGraph:
         self._edges_resolved = False
 
     def add(self, artifact: ArtifactEnvelope) -> None:
+        """Register an artifact envelope and keep the latest non-superseded version per key.
+
+        Parameters
+        ----------
+        artifact : ArtifactEnvelope
+            Artifact envelope to add to the dependency graph.
+        """
         key = artifact.identity_key
         if key is None:
             return
         self._envelopes_by_artifact_id[artifact.artifact_id] = artifact
         self._identity_by_artifact_id[artifact.artifact_id] = key
-        existing = self.nodes.get(key)
-        if (
-            existing is not None
-            and artifact.provenance.refinement_pass < existing.provenance.refinement_pass
-        ):
-            return
-        self.nodes[key] = artifact
-        self._raw_upstream[key] = tuple(artifact.provenance.upstream_artifact_ids)
+        versions = self._versions_by_key[key]
+        versions.append(artifact)
+
+        max_pass = max(v.provenance.refinement_pass for v in versions)
+        top_versions = [
+            v for v in versions if v.provenance.refinement_pass == max_pass
+        ]
+        referenced_ids: set[str] = set()
+        for v in versions:
+            referenced_ids.update(v.provenance.upstream_artifact_ids)
+        sinks = [v for v in top_versions if v.artifact_id not in referenced_ids]
+        chosen = sinks[-1] if sinks else top_versions[-1]
+
+        self.nodes[key] = chosen
+        self._raw_upstream[key] = tuple(chosen.provenance.upstream_artifact_ids)
         self._edges_resolved = False
 
     def _resolve_edges(self) -> None:

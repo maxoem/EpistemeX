@@ -551,11 +551,24 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
             batch_entities: list[L2Entity],
             records: list[PhaseItemRecord],
         ) -> None:
+            prev_collection = context.previous if context is not None else None
             for matured_entity in batch_entities:
                 mention_ids = [
                     f"artifact::mention::{matured_entity.id}::{cid}"
                     for cid in matured_entity.source_chunk_ids
                 ]
+                prev_entity_env = (
+                    prev_collection.latest_by_identity.get(
+                        f"linked_entity::{matured_entity.id}"
+                    )
+                    if prev_collection is not None
+                    else None
+                )
+                prev_entity_art_id = (
+                    prev_entity_env.artifact_id
+                    if prev_entity_env is not None
+                    else f"artifact::{matured_entity.id}"
+                )
                 matured_artifacts.append(
                     build_linked_entity_artifact(
                         matured_entity,
@@ -564,9 +577,10 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
                         phase_name=self.name,
                         method="Phase4EntityMaturationRunner",
                         upstream_artifact_ids=[
-                            f"artifact::{matured_entity.id}",
+                            prev_entity_art_id,
                             *mention_ids,
                         ],
+                        phase_tag=self.phase_key,
                     )
                 )
 

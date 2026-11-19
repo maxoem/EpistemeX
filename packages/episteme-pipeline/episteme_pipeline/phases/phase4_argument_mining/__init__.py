@@ -135,7 +135,10 @@ from episteme_pipeline.runtime.batch_executor import (
     CheckpointedBatchExecutor,
     SystematicBatchFailureError,
 )
-from episteme_pipeline.schema.default_schema import SchemaConfig
+from episteme_pipeline.schema.default_schema import (
+    SchemaConfig,
+    StructuralRelationType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +154,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         {
             ArtifactKind.CHUNK,
             ArtifactKind.LINKED_ENTITY,
+            ArtifactKind.CANONICALIZATION,
             ArtifactKind.GLOBAL_RELATION,
         }
     )
@@ -363,7 +367,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                     relations_to_upsert.append(
                         {
                             "from_id": component.id,
-                            "relation_type": "EXTRACTED_FROM",
+                            "relation_type": StructuralRelationType.EXTRACTED_FROM.value,
                             "to_id": c_id,
                             "properties": {"confidence": 1.0},
                         }
@@ -372,7 +376,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                         relations_to_upsert.append(
                             {
                                 "from_id": component.id,
-                                "relation_type": "MENTIONS",
+                                "relation_type": StructuralRelationType.MENTIONS.value,
                                 "to_id": entity_id,
                                 "properties": {"confidence": 1.0},
                             }
@@ -479,7 +483,10 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         )
         if curation_ledger is not None:
             all_relations = curation_ledger.apply_to_theory_relations(
-                all_relations, {a.id for a in all_components}, scope="local"
+                all_relations,
+                {a.id for a in all_components},
+                scope="local",
+                schema=self.schema,
             )
 
         artifacts = []

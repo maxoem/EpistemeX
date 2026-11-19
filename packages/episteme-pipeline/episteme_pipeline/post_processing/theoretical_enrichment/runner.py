@@ -118,9 +118,15 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
 
     name = "Theoretical Enrichment & Tenability Evaluation"
     phase_key = "theoretical_enrichment"
-    dependencies = ("phase4",)
+    dependencies = None
     input_view = Phase4ArtifactsView
-    reads_kinds = frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION})
+    reads_kinds = frozenset(
+        {
+            ArtifactKind.THEORY_ATOM,
+            ArtifactKind.THEORY_RELATION,
+            ArtifactKind.FUSION_DECISION,
+        }
+    )
     writes_kinds = frozenset(
         {
             ArtifactKind.THEORETICAL_ENRICHMENT,
@@ -186,6 +192,61 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         )
 
 
+    def _resolve_curated_inputs(
+        self,
+        input: Phase4ArtifactsView,
+        context: ArtifactExecutionContext | None,
+    ) -> tuple[list[TheoryAtom], list[TheoryRelation]]:
+        """Resolve canonical atoms and relations with HITL curation ledger overrides.
+
+        Parameters
+        ----------
+        input : Phase4ArtifactsView
+            Typed slice of upstream Phase 4/5/6 theory atoms and relations.
+        context : ArtifactExecutionContext or None
+            Active execution context optionally carrying an ``EpistemicCurationLedger``.
+
+        Returns
+        -------
+        tuple of (list of TheoryAtom, list of TheoryRelation)
+            Curated theory atoms and relations ready for enrichment evaluation.
+        """
+        atoms = (
+            input.canonical_theory_atoms
+            if input.canonical_theory_atoms
+            else input.theory_atoms
+        )
+        relations = (
+            input.canonical_theory_relations
+            if input.canonical_theory_relations
+            else input.theory_relations
+        )
+        curation_ledger = (
+            context.pipeline_input.resolved_curation_ledger()
+            if context is not None and context.pipeline_input is not None
+            else None
+        )
+        if curation_ledger is not None:
+            updated_curated_atoms: list[TheoryAtom] = []
+            for atom in atoms:
+                override_val = curation_ledger.get_modality_override(atom.id)
+                if override_val is not None:
+                    updated_curated_atoms.append(
+                        atom.model_copy(
+                            update={
+                                "modal_prior": override_val,
+                                "resolver_type": "curation_ledger_override",
+                            }
+                        )
+                    )
+                else:
+                    updated_curated_atoms.append(atom)
+            atoms = updated_curated_atoms
+            relations = curation_ledger.apply_to_theory_relations(
+                relations, {a.id for a in atoms}, schema=self.schema
+            )
+        return atoms, relations
+
     async def run(
         self, input: Phase4ArtifactsView, context: ArtifactExecutionContext
     ) -> ArtifactCollection:
@@ -203,16 +264,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         ArtifactCollection
             Collection of emitted TheoreticalEnrichmentArtifact envelopes.
         """
-        atoms = (
-            input.canonical_theory_atoms
-            if input.canonical_theory_atoms
-            else input.theory_atoms
-        )
-        relations = (
-            input.canonical_theory_relations
-            if input.canonical_theory_relations
-            else input.theory_relations
-        )
+        atoms, relations = self._resolve_curated_inputs(input, context)
         logger.info(
             "Theoretical Enrichment: Beginning evaluation on %d atoms and %d relations",
             len(atoms),
@@ -250,16 +302,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         tuple of (ArtifactCollection, int)
             Collection of generated artifacts and total update count.
         """
-        atoms = (
-            input.canonical_theory_atoms
-            if input.canonical_theory_atoms
-            else input.theory_atoms
-        )
-        relations = (
-            input.canonical_theory_relations
-            if input.canonical_theory_relations
-            else input.theory_relations
-        )
+        atoms, relations = self._resolve_curated_inputs(input, context)
         # -------------------------------------------------------------
         # Stage 0: Dynamic Theory-Element Induction (Macro Scope)
         # -------------------------------------------------------------
@@ -609,24 +652,88 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             )
             enrichment_artifacts.append(envelope)
 
+        prev_collection = context.previous if context is not None else None
+        emitted_atom_ids: dict[str, str] = {}
         for atom_upd in atoms_to_update:
-            enrichment_artifacts.append(
-                build_theory_atom_artifact(
-                    atom_upd,
-                    run_id=context.run_id,
-                    phase_name=self.name,
-                    method="theoretical_enrichment.dqbaf_reconvergence",
-                    refinement_pass=refinement_pass,
+            atom_upstreams: list[str] = []
+            if prev_collection is not None:
+                prev_atom_env = prev_collection.latest_by_identity.get(
+                    f"argument_component::{atom_upd.id}"
                 )
+                if prev_atom_env is not None:
+                    atom_upstreams.append(prev_atom_env.artifact_id)
+            if not atom_upstreams:
+                atom_upstreams.append(f"artifact::{atom_upd.id}")
+            if atom_upd.source_chunk_id:
+                atom_upstreams.append(f"artifact::{atom_upd.source_chunk_id}")
+            atom_env = build_theory_atom_artifact(
+                atom_upd,
+                run_id=context.run_id,
+                phase_name=self.name,
+                method="theoretical_enrichment.dqbaf_reconvergence",
+                upstream_artifact_ids=atom_upstreams,
+                refinement_pass=refinement_pass,
+                phase_tag=self.phase_key,
             )
+            emitted_atom_ids[atom_upd.id] = atom_env.artifact_id
+            enrichment_artifacts.append(atom_env)
         for rel_upd in relations_to_update:
+            rel_upstreams: list[str] = []
+            if prev_collection is not None:
+                prev_rel_env = prev_collection.latest_by_identity.get(
+                    f"argument_relation::{rel_upd.relation_id}"
+                )
+                if prev_rel_env is not None:
+                    rel_upstreams.append(prev_rel_env.artifact_id)
+            for pid in rel_upd.effective_premise_ids:
+                if pid in emitted_atom_ids:
+                    rel_upstreams.append(emitted_atom_ids[pid])
+                elif (
+                    prev_collection is not None
+                    and f"argument_component::{pid}" in prev_collection.latest_by_identity
+                ):
+                    rel_upstreams.append(
+                        prev_collection.latest_by_identity[
+                            f"argument_component::{pid}"
+                        ].artifact_id
+                    )
+                else:
+                    rel_upstreams.append(f"artifact::{pid}")
+            target_ref = rel_upd.undercuts_relation_id or rel_upd.target_id
+            if rel_upd.undercuts_relation_id is not None:
+                if (
+                    prev_collection is not None
+                    and f"argument_relation::{target_ref}" in prev_collection.latest_by_identity
+                ):
+                    rel_upstreams.append(
+                        prev_collection.latest_by_identity[
+                            f"argument_relation::{target_ref}"
+                        ].artifact_id
+                    )
+                else:
+                    rel_upstreams.append(f"artifact::{target_ref}")
+            elif target_ref in emitted_atom_ids:
+                rel_upstreams.append(emitted_atom_ids[target_ref])
+            elif (
+                prev_collection is not None
+                and f"argument_component::{target_ref}" in prev_collection.latest_by_identity
+            ):
+                rel_upstreams.append(
+                    prev_collection.latest_by_identity[
+                        f"argument_component::{target_ref}"
+                    ].artifact_id
+                )
+            else:
+                rel_upstreams.append(f"artifact::{target_ref}")
             enrichment_artifacts.append(
                 build_argument_relation_artifact(
                     rel_upd,
                     run_id=context.run_id,
                     phase_name=self.name,
                     method="theoretical_enrichment.dqbaf_reconvergence",
+                    upstream_artifact_ids=rel_upstreams,
                     refinement_pass=refinement_pass,
+                    phase_tag=self.phase_key,
                 )
             )
 

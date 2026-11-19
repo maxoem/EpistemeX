@@ -55,6 +55,14 @@ class ProjectionBatchAccumulator(Protocol):
         """Register a theoretical enrichment payload for post-projection edge updates."""
         ...
 
+    def add_retired_entity(self, entity_id: str) -> None:
+        """Register a retired entity identifier to prune from the projection graph."""
+        ...
+
+    def add_retired_mention(self, entity_id: str, chunk_id: str) -> None:
+        """Register a retired ``(entity_id, chunk_id)`` mention edge to prune."""
+        ...
+
 
 class GraphProjectionProtocol(ABC):
     """Projects durable artifacts into the graph representation."""

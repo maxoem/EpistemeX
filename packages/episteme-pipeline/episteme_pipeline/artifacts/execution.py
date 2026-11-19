@@ -567,8 +567,29 @@ def _resolve_l3_atoms_and_relations(
 
             conf_vals = [m.confidence for m in subgroup if m.confidence is not None]
             max_conf = max(conf_vals) if conf_vals else rep.confidence
-            modal_vals = [m.modal_prior for m in subgroup if m.modal_prior is not None]
-            max_modal = max(modal_vals) if modal_vals else rep.modal_prior
+            curated_modals = [
+                m.modal_prior
+                for m in subgroup
+                if m.resolver_type == "curation_ledger_override"
+                and m.modal_prior is not None
+            ]
+            resolved_members = [
+                m
+                for m in subgroup
+                if (m.resolver_type is not None or m.equilibrium_strength is not None)
+                and m.modal_prior is not None
+            ]
+            if curated_modals:
+                max_modal = curated_modals[0]
+                resolved_resolver_type = "curation_ledger_override"
+            elif resolved_members:
+                chosen = rep if rep in resolved_members else resolved_members[0]
+                max_modal = chosen.modal_prior
+                resolved_resolver_type = chosen.resolver_type
+            else:
+                modal_vals = [m.modal_prior for m in subgroup if m.modal_prior is not None]
+                max_modal = max(modal_vals) if modal_vals else rep.modal_prior
+                resolved_resolver_type = rep.resolver_type
             tenabilities = [m.tenability for m in subgroup if m.tenability is not None]
             tenability = (
                 min(tenabilities, key=lambda t: t.local_score)
@@ -610,6 +631,7 @@ def _resolve_l3_atoms_and_relations(
                         "confidence": max_conf,
                         "equilibrium_strength": best_eq,
                         "modal_prior": max_modal,
+                        "resolver_type": resolved_resolver_type,
                         "local_tenability": local_ts,
                         "tenability": tenability,
                         "intensional_mode": rep.intensional_mode,
@@ -1101,6 +1123,7 @@ class TheoreticalEnrichmentArtifactsView:
     """
 
     _allowed_kinds = (ArtifactKind.THEORETICAL_ENRICHMENT,)
+    allowed_kinds = _allowed_kinds
 
     enrichments: list[TheoreticalEnrichmentArtifact] = field(default_factory=list)
     consumed_artifact_ids: list[str] = field(default_factory=list)
@@ -1270,8 +1293,11 @@ class IncrementalRetentionScope:
 
         unmodified_prior_entity_chunks: dict[str, frozenset[str]] = {}
         if prior_artifacts is not None and unchanged_chunk_ids:
-            for art in prior_artifacts.artifacts:
-                if isinstance(art.payload, LinkedEntityArtifact):
+            for art in prior_artifacts.latest_by_identity.values():
+                if (
+                    isinstance(art.payload, LinkedEntityArtifact)
+                    and not art.payload.is_retired
+                ):
                     cids = frozenset(art.payload.source_chunk_ids)
                     if cids and cids.issubset(unchanged_chunk_ids):
                         unmodified_prior_entity_chunks[art.payload.entity_id] = cids
@@ -1377,10 +1403,12 @@ class ArtifactHydrator:
 
     @property
     def can_hydrate(self) -> bool:
-        """Check if prior artifacts and manifests exist and phase configuration is unchanged."""
+        """Check if prior artifacts and manifests exist and phase configuration and ledger are unchanged."""
         return (
             self.context.prior_artifacts is not None
             and self.context.prior_manifest is not None
+            and self.context.manifest.curation_ledger_fingerprint
+            == self.context.prior_manifest.curation_ledger_fingerprint
             and is_phase_unchanged(
                 self.context.manifest,
                 self.context.prior_manifest,
@@ -1483,8 +1511,11 @@ class ArtifactHydrator:
         prior_artifacts = self.context.prior_artifacts
 
         surviving_entities: list[L2Entity] = []
-        for art in prior_artifacts.artifacts:
-            if isinstance(art.payload, LinkedEntityArtifact):
+        for art in prior_artifacts.latest_by_identity.values():
+            if (
+                isinstance(art.payload, LinkedEntityArtifact)
+                and not art.payload.is_retired
+            ):
                 ent = art.payload.to_domain()
                 valid_chunks = [cid for cid in ent.source_chunk_ids if cid in scope.unchanged_chunk_ids]
                 if valid_chunks:
@@ -1494,8 +1525,11 @@ class ArtifactHydrator:
         surviving_entity_ids = {e.id for e in surviving_entities}
 
         mention_envelopes: dict[tuple[str, str], str] = {}
-        for art in prior_artifacts.artifacts:
-            if isinstance(art.payload, EntityMentionArtifact):
+        for art in prior_artifacts.latest_by_identity.values():
+            if (
+                isinstance(art.payload, EntityMentionArtifact)
+                and not art.payload.is_retired
+            ):
                 if art.payload.chunk_id in scope.unchanged_chunk_ids:
                     eid = art.payload.entity_id or art.payload.mention_id
                     if eid in surviving_entity_ids:
