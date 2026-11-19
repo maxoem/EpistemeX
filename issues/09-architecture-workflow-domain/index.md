@@ -67,7 +67,19 @@ Grounded in **[Design Patterns, Clean Code & Architectural Standards (`docs/arch
 
 ---
 
-## 5. Recommended Staged Roadmap
+## 5. Part IV: Post-Audit Integration Regressions & Hardening Issues (`ISSUE-108` – `ISSUE-110`)
+
+Following comprehensive codebase verification of `ISSUE-046` through `ISSUE-065`, these open follow-up issues capture cross-issue regressions, disconnected wiring, incomplete remediation scopes, and remaining resilience/determinism gaps identified prior to archiving:
+
+| Issue ID | Remediation Title | Originating Issues | Priority | Core Remaining Defect Summary |
+| :--- | :--- | :--- | :--- | :--- |
+| [**ISSUE-108**](ISSUE-108-orchestrator-dag-artifact-versioning-and-incremental-hydration-integrity.md) | **Orchestrator DAG Integrity, Forward-Pass Artifact Versioning & Incremental Hydration Remediation** | `047`, `048`, `050`, `053`, `054`, `057`, `062` | **Critical** | Restores Phase 5/6 -> `TheoreticalEnrichmentRunner` DAG edges; disambiguates forward-pass `artifact_id`s on disk; fixes non-deterministic `fingerprint_curation_ledger()` and missing ledger invalidation/reuse-flag guards in hydration; suppresses `is_retired` graph re-projection; fixes failing `ISSUE-054` doc-sync test path and codec edge cases. |
+| [**ISSUE-109**](ISSUE-109-system1-cascades-compositional-conformal-risk-and-audit-determinism.md) | **System 1/2 Cascade Regression, Compositional Conformal Risk Budgeting & Audit Determinism** | `049`, `054`, `056`, `060` | **High** | Resolves `CascadingACCClassifier` ~100% multi-ADU/entity escalation regression and ambiguous cluster confirmation; wires `phase4.conformal_alpha` and `ConformalCalibrator` $\alpha_m$ budgets end-to-end; fixes Phase 3b CSLS/cosine mismatch, rejected-pair chaining & non-discriminating tests; replaces 2 remaining `random.random()` gates and stratum `self.alpha` mutation. |
+| [**ISSUE-110**](ISSUE-110-checkpointing-wiring-neo4j-isolation-and-workflow-quality-gate-hardening.md) | **Checkpointing Resilience, Neo4j Isolation & Workflow/Quality-Gate Hardening** | `046`, `051`, `052`, `058`, `059`, `061`, `065` | **Medium** | Fixes `Neo4jCheckpointStore` `:` validation crash & unscoped clearing; wires `checkpoint_store` to Maturation, Enrichment & Phase 4 ARC + poison-pill quarantine; fixes Phase 2 STM eviction snapshots, pre-crash recovery & Phase 3b z-score/$K_{\text{eff}}$; finishes `ISSUE-058` eager `WorkflowDAG` validation & pure quality gates; closes minor telemetry/protocol hygiene gaps. |
+
+---
+
+## 6. Recommended Staged Roadmap
 
 ```mermaid
 flowchart LR
@@ -99,6 +111,12 @@ flowchart LR
         I56["ISSUE-056<br/>Non-Transitive Clustering & RCPS"]
     end
 
-    Stage0 --> Stage1 --> Stage2 --> Stage3 --> Stage4
+    subgraph Stage5 ["Stage 5: Post-Audit Integration & Hardening"]
+        I108["ISSUE-108<br/>DAG, Versioning & Hydration"]
+        I109["ISSUE-109<br/>Cascades, Budgets & Determinism"]
+        I110["ISSUE-110<br/>Checkpointing, Neo4j & Gates"]
+    end
+
+    Stage0 --> Stage1 --> Stage2 --> Stage3 --> Stage4 --> Stage5
 ```
 
