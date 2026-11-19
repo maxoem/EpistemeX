@@ -201,7 +201,8 @@ nav = [
             { "ADR 0021: Incremental Corpus Evolution & HITL Constraint Ledger" = "adr/0021-incremental-corpus-evolution-and-persistent-hitl-constraint-ledger.md" },
             { "ADR 0022: Unified Stratified Epistemic Metamodel" = "adr/0022-unified-stratified-epistemic-metamodel.md" },
             { "ADR 0023: Intensional Scoping & Conception Stratification" = "adr/0023-intensional-perspectival-scoping-and-conception-stratification.md" },
-            { "ADR 0024: Closed-Loop Hermeneutic Refinement" = "adr/0024-closed-loop-hermeneutic-refinement.md" }
+            { "ADR 0024: Closed-Loop Hermeneutic Refinement" = "adr/0024-closed-loop-hermeneutic-refinement.md" },
+            { "ADR 0025: Embedded SQLite Persistence & Storage Ports" = "adr/0025-embedded-sqlite-persistence-and-storage-ports.md" }
         ] }
     ] },
 
