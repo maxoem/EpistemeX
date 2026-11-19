@@ -94,6 +94,33 @@ Settings for alignment fusion including entity matching thresholds.
       show_root_heading: false
       show_root_toc_entry: false
 
+### Phase 6 Configuration
+
+Settings for TheoryNet materialization, D-QBAF gradual semantics, and intensional scoping.
+
+::: episteme_pipeline.config.Phase6Config
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+### Theoretical Enrichment Configuration
+
+Settings for structuralist Theory-Element induction and tenability evaluation post-processing.
+
+::: episteme_pipeline.config.TheoreticalEnrichmentConfig
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+### Hermeneutic Refinement Configuration
+
+Settings for bounded top-down epistemic deficit detection and localized refinement (`ISSUE-053`).
+
+::: episteme_pipeline.config.HermeneuticRefinementConfig
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
 ## Graph Schema Configuration
 
 Defines the expected structure and constraints for the constructed theory graph.

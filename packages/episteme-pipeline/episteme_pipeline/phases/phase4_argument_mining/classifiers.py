@@ -8,15 +8,16 @@ DecisionEngine protocols.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import re
-from collections import defaultdict
-from typing import Literal
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from episteme_pipeline.config import Phase4Config
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom, TheoryRelation
-from episteme_pipeline.decision.cascade import should_audit_deterministically
+from episteme_pipeline.decision.cascade import (
+    TriageDecision,
+    should_audit_deterministically,
+)
 from episteme_pipeline.phases.phase4_argument_mining.pairing import (
     build_cross_chunk_candidate_pairs,
     stable_component_id,
@@ -41,11 +42,51 @@ from episteme_pipeline.protocols.extractors import (
     EmbeddingModel,
     GlobalRelationExtractor,
 )
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.protocols.modality import ModalStrengthResolver
+from episteme_pipeline.runs.fingerprints import fingerprint_method
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class PairTriageARCClassifier(Protocol):
+    """Protocol for System 1 ARC classifiers supporting per-pair conformal triage."""
+
+    async def classify_pairs_with_triage(
+        self,
+        pairs: list[tuple[TheoryAtom, TheoryAtom]],
+        graph_store: GraphReader,
+        global_extractor: GlobalRelationExtractor | None = None,
+        schema: SchemaConfig | None = None,
+        audit_rate: float = 0.0,
+        run_seed: str = "phase4_arc",
+    ) -> tuple[list[TheoryRelation], list[tuple[TheoryAtom, TheoryAtom]]]:
+        """Classify candidate pairs and return confirmed edges plus escalated pairs.
+
+        Parameters
+        ----------
+        pairs : list of tuple of (TheoryAtom, TheoryAtom)
+            Candidate argument component pairs to evaluate.
+        graph_store : GraphReader
+            Reader for graph context.
+        global_extractor : GlobalRelationExtractor or None, default None
+            Optional extractor for structural neighborhoods.
+        schema : SchemaConfig or None, default None
+            Schema taxonomy.
+        audit_rate : float, default 0.0
+            Deterministic stochastic audit rate.
+        run_seed : str, default "phase4_arc"
+            Deterministic seed for audit hashing.
+
+        Returns
+        -------
+        tuple of (list of TheoryRelation, list of tuple of (TheoryAtom, TheoryAtom))
+            Confirmed System 1 relations and pairs escalated to System 2.
+        """
+        ...
 
 
 def _extract_adu_text(tagged_text: str, adu_id: str) -> str:
@@ -408,6 +449,36 @@ class JevARCClassifier(ARCClassifier):
         self.decision_template = question.strip()
         self.criteria = criteria or DECISION_ARC_CRITERIA
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic Jev ARC classifier configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing mode, thresholds, prompt template, and sub-component
+            fingerprints.
+        """
+        de_fp = (
+            self.decision_engine.fingerprint()
+            if isinstance(self.decision_engine, Fingerprintable)
+            else fingerprint_method(self.decision_engine)
+        )
+        emb_fp = (
+            self.embedding_model.fingerprint()
+            if self.embedding_model is not None and isinstance(self.embedding_model, Fingerprintable)
+            else fingerprint_method(self.embedding_model)
+        )
+        return {
+            "class": self.__class__.__name__,
+            "arc_mode": self.arc_mode,
+            "confidence_threshold": self.confidence_threshold,
+            "max_candidates_per_component": self.max_candidates_per_component,
+            "default_inferential_warrant": self.default_inferential_warrant,
+            "decision_template": self.decision_template,
+            "decision_engine": de_fp,
+            "embedding_model": emb_fp,
+        }
+
     def _resolve_inferential_warrant(
         self,
         source_atom: TheoryAtom,
@@ -493,6 +564,160 @@ class JevARCClassifier(ARCClassifier):
         options["NEUTRAL"] = self._resolve_neutral_criterion()
         return options
 
+    async def classify_pair_decision(
+        self,
+        source_atom: TheoryAtom,
+        target_atom: TheoryAtom,
+        schema: SchemaConfig,
+        audit_rate: float = 0.0,
+        run_seed: str = "phase4_arc",
+    ) -> TriageDecision[list[TheoryRelation]]:
+        """Evaluate dialectical stance for a pair as a calibrated :class:`TriageDecision`.
+
+        Parameters
+        ----------
+        source_atom : TheoryAtom
+            The source argument component.
+        target_atom : TheoryAtom
+            The target argument component.
+        schema : SchemaConfig
+            Schema configuration defining allowable relation types.
+        audit_rate : float, default 0.0
+            Deterministic stochastic audit rate.
+        run_seed : str, default "phase4_arc"
+            Deterministic seed for audit hashing.
+
+        Returns
+        -------
+        TriageDecision of list of TheoryRelation
+            Calibrated triage decision envelope containing predicted relations,
+            empirical accuracy, prediction set, ambiguity status, and audit flag.
+        """
+        state = format_arc_decision_pair_state(source_atom, target_atom)
+        pair_key = f"{source_atom.id}:{target_atom.id}"
+        is_audit = (
+            should_audit_deterministically(run_seed, "phase4_arc", pair_key, audit_rate)
+            if audit_rate > 0.0
+            else False
+        )
+
+        if self.arc_mode == "multiplex":
+            rels: list[TheoryRelation] = []
+            is_ambiguous = False
+            acc_vals: list[float] = []
+            for r_type in schema.argument_relation_types:
+                rel_def = schema.argument_relation_definitions.get(
+                    r_type, f"relation {r_type.lower()}"
+                )
+                if "{relation_type}" in self.decision_template:
+                    question = self.decision_template.format(relation_type=r_type.lower())
+                else:
+                    question = (
+                        f"Does the source statement have the following relation to the "
+                        f"target statement: '{r_type}' ({rel_def})?"
+                    )
+
+                noul_decision: DecisionNoulResult = await self.decision_engine.evaluate_noul(
+                    state=state,
+                    question=question,
+                )
+                acc_vals.append(float(noul_decision.empirical_accuracy))
+                if (
+                    noul_decision.probability < self.confidence_threshold
+                    and noul_decision.probability > (1.0 - self.confidence_threshold)
+                ):
+                    is_ambiguous = True
+                elif noul_decision.passed and noul_decision.probability >= self.confidence_threshold:
+                    warrant = self._resolve_inferential_warrant(source_atom, target_atom)
+                    eff_w = float(warrant * noul_decision.probability)
+                    rels.append(
+                        TheoryRelation(
+                            source_id=source_atom.id,
+                            target_id=target_atom.id,
+                            relation_type=r_type,
+                            confidence=noul_decision.probability,
+                            scope="global",
+                            weight=eff_w,
+                            perception_stance_prob=noul_decision.probability,
+                            perception_empirical_acc=noul_decision.empirical_accuracy,
+                            inferential_warrant=warrant,
+                            effective_weight=eff_w,
+                            decision_engine_provider="jev",
+                        )
+                    )
+            return TriageDecision(
+                value=[] if (is_ambiguous or is_audit) else rels,
+                decision=None,
+                empirical_accuracy=min(acc_vals) if acc_vals else 1.0,
+                prediction_set=[r.relation_type for r in rels],
+                is_ambiguous=is_ambiguous,
+                is_audit=is_audit,
+            )
+
+        options = self._build_choice_options(schema)
+        decision: DecisionScore = await self.decision_engine.evaluate_choice(
+            state=state,
+            question=self.decision_template,
+            options=options,
+        )
+
+        pred_set = decision.prediction_set
+        is_ambiguous = (
+            (len(pred_set) != 1 or decision.class_probability < self.confidence_threshold)
+            if pred_set is not None
+            else decision.class_probability < self.confidence_threshold
+        )
+
+        if is_ambiguous or is_audit:
+            return TriageDecision(
+                value=[],
+                decision=decision,
+                empirical_accuracy=decision.empirical_accuracy,
+                prediction_set=list(pred_set) if pred_set is not None else [],
+                is_ambiguous=is_ambiguous,
+                is_audit=is_audit,
+            )
+
+        selected = str(decision.selected_option) if decision.selected_option else "NEUTRAL"
+        resolved_type = schema.resolve_relation_type(selected)
+
+        if resolved_type and decision.class_probability >= self.confidence_threshold:
+            warrant = self._resolve_inferential_warrant(source_atom, target_atom)
+            eff_w = float(warrant * decision.class_probability)
+            rels = [
+                TheoryRelation(
+                    source_id=source_atom.id,
+                    target_id=target_atom.id,
+                    relation_type=resolved_type,
+                    confidence=decision.class_probability,
+                    scope="global",
+                    weight=eff_w,
+                    perception_stance_prob=decision.class_probability,
+                    perception_empirical_acc=decision.empirical_accuracy,
+                    inferential_warrant=warrant,
+                    effective_weight=eff_w,
+                    decision_engine_provider="jev",
+                    calibrated_confidence=decision.empirical_accuracy or decision.class_probability,
+                )
+            ]
+            return TriageDecision(
+                value=rels,
+                decision=decision,
+                empirical_accuracy=decision.empirical_accuracy,
+                prediction_set=list(pred_set) if pred_set is not None else [selected],
+                is_ambiguous=False,
+                is_audit=False,
+            )
+
+        return TriageDecision(
+            value=[],
+            decision=decision,
+            empirical_accuracy=decision.empirical_accuracy,
+            prediction_set=list(pred_set) if pred_set is not None else [selected],
+            is_ambiguous=False,
+            is_audit=False,
+        )
+
     async def classify_pair_with_triage(
         self,
         source_atom: TheoryAtom,
@@ -522,92 +747,14 @@ class JevARCClassifier(ARCClassifier):
             Extracted relations and boolean flag indicating whether the pair was escalated
             to System 2 (due to conformal ambiguity, low confidence, or deterministic audit).
         """
-        state = format_arc_decision_pair_state(source_atom, target_atom)
-        pair_key = f"{source_atom.id}:{target_atom.id}"
-        is_audit = (
-            should_audit_deterministically(run_seed, "phase4_arc", pair_key, audit_rate)
-            if audit_rate > 0.0
-            else False
+        triage = await self.classify_pair_decision(
+            source_atom,
+            target_atom,
+            schema,
+            audit_rate=audit_rate,
+            run_seed=run_seed,
         )
-
-        if self.arc_mode == "multiplex":
-            rels: list[TheoryRelation] = []
-            should_escalate = is_audit
-            for r_type in schema.argument_relation_types:
-                rel_def = schema.argument_relation_definitions.get(r_type, f"relation {r_type.lower()}")
-                if "{relation_type}" in self.decision_template:
-                    question = self.decision_template.format(relation_type=r_type.lower())
-                else:
-                    question = f"Does the source statement have the following relation to the target statement: '{r_type}' ({rel_def})?"
-
-                decision: DecisionNoulResult = await self.decision_engine.evaluate_noul(
-                    state=state,
-                    question=question,
-                )
-                if decision.probability < self.confidence_threshold and decision.probability > (1.0 - self.confidence_threshold):
-                    should_escalate = True
-                elif decision.passed and decision.probability >= self.confidence_threshold:
-                    warrant = self._resolve_inferential_warrant(source_atom, target_atom)
-                    eff_w = float(warrant * decision.probability)
-                    rels.append(
-                        TheoryRelation(
-                            source_id=source_atom.id,
-                            target_id=target_atom.id,
-                            relation_type=r_type,
-                            confidence=decision.probability,
-                            scope="global",
-                            weight=eff_w,
-                            perception_stance_prob=decision.probability,
-                            perception_empirical_acc=decision.empirical_accuracy,
-                            inferential_warrant=warrant,
-                            effective_weight=eff_w,
-                            decision_engine_provider="jev",
-                        )
-                    )
-            return rels, should_escalate
-
-        options = self._build_choice_options(schema)
-        decision: DecisionScore = await self.decision_engine.evaluate_choice(
-            state=state,
-            question=self.decision_template,
-            options=options,
-        )
-
-        pred_set = decision.prediction_set
-        is_ambiguous = (
-            len(pred_set) != 1
-            if pred_set is not None
-            else decision.class_probability < self.confidence_threshold
-        )
-        should_escalate = is_ambiguous or is_audit
-
-        if should_escalate:
-            return [], True
-
-        selected = str(decision.selected_option) if decision.selected_option else "NEUTRAL"
-        resolved_type = schema.resolve_relation_type(selected)
-
-        if resolved_type and decision.class_probability >= self.confidence_threshold:
-            warrant = self._resolve_inferential_warrant(source_atom, target_atom)
-            eff_w = float(warrant * decision.class_probability)
-            return [
-                TheoryRelation(
-                    source_id=source_atom.id,
-                    target_id=target_atom.id,
-                    relation_type=resolved_type,
-                    confidence=decision.class_probability,
-                    scope="global",
-                    weight=eff_w,
-                    perception_stance_prob=decision.class_probability,
-                    perception_empirical_acc=decision.empirical_accuracy,
-                    inferential_warrant=warrant,
-                    effective_weight=eff_w,
-                    decision_engine_provider="jev",
-                    calibrated_confidence=decision.empirical_accuracy or decision.class_probability,
-                )
-            ], False
-
-        return [], False
+        return triage.value, (triage.is_ambiguous or triage.is_audit)
 
     async def classify_pair(
         self,
@@ -633,6 +780,105 @@ class JevARCClassifier(ARCClassifier):
         """
         rels, _ = await self.classify_pair_with_triage(source_atom, target_atom, schema)
         return rels
+
+    async def classify_pairs_with_triage(
+        self,
+        pairs: list[tuple[TheoryAtom, TheoryAtom]],
+        graph_store: GraphReader,
+        global_extractor: GlobalRelationExtractor | None = None,
+        schema: SchemaConfig | None = None,
+        audit_rate: float = 0.0,
+        run_seed: str = "phase4_arc",
+    ) -> tuple[list[TheoryRelation], list[tuple[TheoryAtom, TheoryAtom]]]:
+        """Classify specific candidate pairs with System 1 triage and escalation.
+
+        Parameters
+        ----------
+        pairs : list of tuple of (TheoryAtom, TheoryAtom)
+            Candidate argument component pairs to evaluate.
+        graph_store : GraphReader
+            Reader for graph context.
+        global_extractor : GlobalRelationExtractor or None, default None
+            Optional extractor for structural neighborhoods.
+        schema : SchemaConfig or None, default None
+            Schema taxonomy.
+        audit_rate : float, default 0.0
+            Deterministic stochastic audit rate.
+        run_seed : str, default "phase4_arc"
+            Deterministic seed for audit hashing.
+
+        Returns
+        -------
+        tuple of (list of TheoryRelation, list of tuple of (TheoryAtom, TheoryAtom))
+            Confirmed System 1 relations and pairs escalated to System 2.
+        """
+        del graph_store, global_extractor
+        if not pairs:
+            return [], []
+
+        effective_schema = schema or SchemaConfig()
+        tasks = [
+            self.classify_pair_decision(
+                a,
+                b,
+                effective_schema,
+                audit_rate=audit_rate,
+                run_seed=run_seed,
+            )
+            for a, b in pairs
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        confirmed_relations: list[TheoryRelation] = []
+        escalated_pairs: list[tuple[TheoryAtom, TheoryAtom]] = []
+
+        for (a, b), res in zip(pairs, results):
+            if isinstance(res, Exception):
+                logger.warning(
+                    "JevARC pair classification failed for (%s, %s): %s", a.id, b.id, res
+                )
+                escalated_pairs.append((a, b))
+            elif isinstance(res, TriageDecision):
+                if res.is_ambiguous or res.is_audit:
+                    escalated_pairs.append((a, b))
+                else:
+                    confirmed_relations.extend(res.value)
+
+        return confirmed_relations, escalated_pairs
+
+    async def classify_pairs(
+        self,
+        pairs: list[tuple[TheoryAtom, TheoryAtom]],
+        graph_store: GraphReader,
+        schema: SchemaConfig | None = None,
+        global_extractor: GlobalRelationExtractor | None = None,
+    ) -> list[TheoryRelation]:
+        """Classify specific candidate component pairs using the decision engine.
+
+        Parameters
+        ----------
+        pairs : list of tuple of (TheoryAtom, TheoryAtom)
+            Candidate argument component pairs to evaluate.
+        graph_store : GraphReader
+            Reader for graph context.
+        schema : SchemaConfig or None, optional
+            Schema taxonomy. If None, defaults to ``SchemaConfig()``.
+        global_extractor : GlobalRelationExtractor or None, optional
+            Optional extractor for structural neighborhoods.
+
+        Returns
+        -------
+        list of TheoryRelation
+            Predicted argument relations for the specified pairs.
+        """
+        confirmed, _ = await self.classify_pairs_with_triage(
+            pairs=pairs,
+            graph_store=graph_store,
+            global_extractor=global_extractor,
+            schema=schema,
+            audit_rate=0.0,
+        )
+        return confirmed
 
     async def classify_global_with_triage(
         self,
@@ -668,34 +914,17 @@ class JevARCClassifier(ARCClassifier):
         tuple of (list of TheoryRelation, list of tuple of (TheoryAtom, TheoryAtom))
             (confirmed_relations, escalated_pairs).
         """
+        del local_relations
         effective_schema = schema or SchemaConfig()
         pairs = self._get_cross_chunk_pairs(local_components, effective_schema)
-        if not pairs:
-            return [], []
-
-        tasks = [
-            self.classify_pair_with_triage(
-                a, b, effective_schema, audit_rate=audit_rate, run_seed=run_seed
-            )
-            for a, b in pairs
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        confirmed_relations: list[TheoryRelation] = []
-        escalated_pairs: list[tuple[TheoryAtom, TheoryAtom]] = []
-
-        for (a, b), res in zip(pairs, results):
-            if isinstance(res, Exception):
-                logger.warning("JevARC pair classification failed for (%s, %s): %s", a.id, b.id, res)
-                escalated_pairs.append((a, b))
-            elif isinstance(res, tuple):
-                rels, should_escalate = res
-                if should_escalate:
-                    escalated_pairs.append((a, b))
-                else:
-                    confirmed_relations.extend(rels)
-
-        return confirmed_relations, escalated_pairs
+        return await self.classify_pairs_with_triage(
+            pairs=pairs,
+            graph_store=graph_store,
+            global_extractor=global_extractor,
+            schema=effective_schema,
+            audit_rate=audit_rate,
+            run_seed=run_seed,
+        )
 
     async def classify_global(
         self,
@@ -777,6 +1006,123 @@ class CascadingARCClassifier(ARCClassifier):
             if config is not None
             else stochastic_audit_rate
         )
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic cascading ARC classifier configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing audit rate and fingerprints of fast and LLM classifiers.
+        """
+        fast_fp = (
+            self.fast_classifier.fingerprint()
+            if isinstance(self.fast_classifier, Fingerprintable)
+            else fingerprint_method(self.fast_classifier)
+        )
+        llm_fp = (
+            self.llm_classifier.fingerprint()
+            if isinstance(self.llm_classifier, Fingerprintable)
+            else fingerprint_method(self.llm_classifier)
+        )
+        return {
+            "class": self.__class__.__name__,
+            "stochastic_audit_rate": self.stochastic_audit_rate,
+            "fast_classifier": fast_fp,
+            "llm_classifier": llm_fp,
+        }
+
+    async def classify_pairs(
+        self,
+        pairs: list[tuple[TheoryAtom, TheoryAtom]],
+        graph_store: GraphReader,
+        schema: SchemaConfig | None = None,
+        global_extractor: GlobalRelationExtractor | None = None,
+    ) -> list[TheoryRelation]:
+        """Classify specific candidate pairs via per-item System 1 -> System 2 cascade.
+
+        Executes ``fast_classifier`` over ``pairs`` without re-scanning the corpus,
+        escalating only ambiguous, low-confidence, or deterministically audited
+        pairs to ``llm_classifier.classify_pairs(...)``.
+
+        Parameters
+        ----------
+        pairs : list of tuple of (TheoryAtom, TheoryAtom)
+            Candidate argument component pairs to evaluate.
+        graph_store : GraphReader
+            Reader for graph context.
+        schema : SchemaConfig or None, optional
+            Schema taxonomy. If None, defaults to ``SchemaConfig()``.
+        global_extractor : GlobalRelationExtractor or None, optional
+            Optional extractor for structural neighborhoods.
+
+        Returns
+        -------
+        list of TheoryRelation
+            Merged argument relations confirmed by System 1 or System 2.
+        """
+        if not pairs:
+            return []
+
+        effective_schema = schema or SchemaConfig()
+
+        if isinstance(self.fast_classifier, PairTriageARCClassifier):
+            fast_relations, escalated_pairs = (
+                await self.fast_classifier.classify_pairs_with_triage(
+                    pairs=pairs,
+                    graph_store=graph_store,
+                    global_extractor=global_extractor,
+                    schema=effective_schema,
+                    audit_rate=self.stochastic_audit_rate,
+                )
+            )
+        else:
+            raw_fast = await self.fast_classifier.classify_pairs(
+                pairs=pairs,
+                graph_store=graph_store,
+                schema=effective_schema,
+                global_extractor=global_extractor,
+            )
+            rels_by_pair: dict[tuple[str, str], list[TheoryRelation]] = {}
+            for rel in raw_fast:
+                ukey = (min(rel.source_id, rel.target_id), max(rel.source_id, rel.target_id))
+                rels_by_pair.setdefault(ukey, []).append(rel)
+
+            fast_relations = []
+            escalated_pairs = []
+            for a, b in pairs:
+                ukey = (min(a.id, b.id), max(a.id, b.id))
+                pair_key = f"{a.id}:{b.id}"
+                is_audit = (
+                    should_audit_deterministically(
+                        "phase4_arc", "phase4_arc", pair_key, self.stochastic_audit_rate
+                    )
+                    if self.stochastic_audit_rate > 0.0
+                    else False
+                )
+                matched = rels_by_pair.get(ukey, [])
+                if is_audit or not matched:
+                    escalated_pairs.append((a, b))
+                else:
+                    fast_relations.extend(matched)
+
+        if not escalated_pairs:
+            return fast_relations
+
+        llm_relations = await self.llm_classifier.classify_pairs(
+            pairs=escalated_pairs,
+            graph_store=graph_store,
+            schema=effective_schema,
+            global_extractor=global_extractor,
+        )
+
+        merged: dict[tuple[str, str], TheoryRelation] = {
+            (r.source_id, r.target_id): r for r in fast_relations
+        }
+        for r in llm_relations:
+            merged[(r.source_id, r.target_id)] = r
+
+        return list(merged.values())
 
     async def classify_global(
         self,

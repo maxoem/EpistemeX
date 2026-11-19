@@ -42,6 +42,7 @@ class ArtifactDependencyGraph:
     def __init__(self) -> None:
         self.nodes: dict[str, ArtifactEnvelope] = {}
         self._identity_by_artifact_id: dict[str, str] = {}
+        self._envelopes_by_artifact_id: dict[str, ArtifactEnvelope] = {}
         self._raw_upstream: dict[str, tuple[str, ...]] = {}
         self._downstream: dict[str, set[str]] = defaultdict(set)
         self._upstream: dict[str, set[str]] = defaultdict(set)
@@ -52,8 +53,15 @@ class ArtifactDependencyGraph:
         key = artifact.identity_key
         if key is None:
             return
-        self.nodes[key] = artifact
+        self._envelopes_by_artifact_id[artifact.artifact_id] = artifact
         self._identity_by_artifact_id[artifact.artifact_id] = key
+        existing = self.nodes.get(key)
+        if (
+            existing is not None
+            and artifact.provenance.refinement_pass < existing.provenance.refinement_pass
+        ):
+            return
+        self.nodes[key] = artifact
         self._raw_upstream[key] = tuple(artifact.provenance.upstream_artifact_ids)
         self._edges_resolved = False
 
@@ -65,6 +73,7 @@ class ArtifactDependencyGraph:
         self._upstream = defaultdict(set)
         self._unresolved_upstream = defaultdict(set)
         for key, raw_ids in self._raw_upstream.items():
+            node = self.nodes[key]
             for up_id in raw_ids:
                 up_key = self._identity_by_artifact_id.get(up_id)
                 if up_key is None:
@@ -76,6 +85,18 @@ class ArtifactDependencyGraph:
                     self._unresolved_upstream[key].add(up_id)
                     continue
                 if up_key == key:
+                    continue
+                up_node = self.nodes.get(up_key)
+                up_source = self._envelopes_by_artifact_id.get(up_id)
+                if (
+                    up_node is not None
+                    and up_source is not None
+                    and up_node.artifact_id != up_source.artifact_id
+                    and up_node.provenance.refinement_pass > node.provenance.refinement_pass
+                ):
+                    # ``up_source`` was superseded by a later refinement pass on ``up_key``.
+                    # A later-pass version cannot be a topological prerequisite of an earlier pass.
+                    self._unresolved_upstream[key].add(up_id)
                     continue
                 self._downstream[up_key].add(key)
                 self._upstream[key].add(up_key)

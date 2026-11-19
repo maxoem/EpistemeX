@@ -11,7 +11,7 @@ artifact dependency diffing** for fine-grained staleness detection.
 
 Invalidation operates across two distinct, complementary layers:
 
-1. **Pre-Execution Phase Reuse (`Pipeline._choose_reuse_source`)**:
+1. **Pre-Execution Phase Reuse (`ArtifactExecutionEngine.choose_reuse_source`)**:
    Evaluated *before* execution starts. Compares the current run's manifest fingerprints (source, config, models,
    prompts) against the parent or latest completed run to determine which upstream phases can be reused without
    recomputation.
@@ -22,12 +22,12 @@ Invalidation operates across two distinct, complementary layers:
 
 ```mermaid
 flowchart TD
-    subgraph PreExec ["1. Pre-Execution Phase Reuse (Pipeline._choose_reuse_source)"]
+    subgraph PreExec ["1. Pre-Execution Phase Reuse (ArtifactExecutionEngine.choose_reuse_source)"]
         ManifestCurrent["Current RunManifest<br/>(Fingerprints: Sources, Configs, Methods, Prompts)"]
         ManifestPrior["Prior RunManifest<br/>(parent_run_id or latest)"]
         Compare{"Fingerprint Diff"}
         Decision["InvalidationDecision<br/>(reused_ordinals, invalidated_ordinals)"]
-        Hydrate["_hydrate_previous_collection()<br/>(Loads artifacts from parent chain)"]
+        Hydrate["ArtifactExecutionEngine.hydrate_previous_collection()<br/>(Loads artifacts from parent chain)"]
         ManifestCurrent --> Compare
         ManifestPrior --> Compare
         Compare --> Decision
@@ -51,7 +51,7 @@ flowchart TD
 
 ## Run Modes
 
-The pipeline provides three execution and resumption entry points in `pipeline/pipeline.py`:
+The pipeline facade (`episteme_pipeline/pipeline.py`, delegating to `ArtifactExecutionEngine` in `episteme_pipeline/runtime/execution_engine.py`) provides three execution and resumption entry points:
 
 ### 2.1 Standard Execution with Automated Reuse (`Pipeline.run`)
 
@@ -65,7 +65,7 @@ async def run(
 ```
 
 - Assembles the initial `RunManifest` with all current fingerprints.
-- Calls `_choose_reuse_source(manifest)` to compare against `parent_run_id` (or the latest completed run).
+- Calls `ArtifactExecutionEngine.choose_reuse_source(manifest)` to compare against `parent_run_id` (or the latest completed run).
 - Hydrates upstream artifacts from the prior run lineage for all reused phases.
 - Starts execution at the first invalidated phase ordinal.
 
@@ -105,7 +105,7 @@ async def resume_from_run(
 
 ## Fingerprint System
 
-Fingerprints are deterministic SHA-256 hashes generated via `pipeline/runs/fingerprints.py`:
+Fingerprints are deterministic SHA-256 hashes generated via `episteme_pipeline/runs/fingerprints.py`:
 
 ### Source and Input Fingerprints
 
@@ -191,12 +191,12 @@ protocol and recursive discovery ([
 
 ---
 
-## Phase Invalidation Logic (`_choose_reuse_source`)
+## Phase Invalidation Logic (`ArtifactExecutionEngine.choose_reuse_source`)
 
 When `Pipeline.run()` is invoked with phase reuse enabled (`config.execution.allow_phase_reuse = True`):
 
 1. **Topological Phase DAG Dependency Evaluation**:
-   Phase reuse is evaluated along the declarative phase dependency DAG rather than as a rigid linear array.
+   Phase reuse is evaluated along the declarative `WorkflowDAG` (`episteme_pipeline/runtime/workflow_dag.py`) rather than as a rigid linear array.
    Dependencies are resolved from declared artifact contracts (`reads_kinds` $\cap$ `writes_kinds`) and explicit
    runner dependencies (`runner.dependencies`):
    - Appending modular analytical passes (e.g. `TheoreticalEnrichmentRunner`, custom evaluators) automatically
@@ -229,14 +229,14 @@ When `Pipeline.run()` is invoked with phase reuse enabled (`config.execution.all
 
 6. **Artifact Hydration & Delta-Aware Context**:
    If `config.execution.allow_artifact_hydration = True`:
-   - Reused upstream phases hydrate their artifacts from historical lineage via `_hydrate_previous_collection(wanted_phase_names=...)`.
+   - Reused upstream phases hydrate their artifacts from historical lineage via `ArtifactExecutionEngine.hydrate_previous_collection(wanted_phase_names=...)`.
    - When an invalidated phase executes on incremental corpus changes, `ArtifactExecutionContext.hydrator(phase_key, phase_name)` verifies phase config and method stability by semantic `phase_key` (`is_phase_unchanged`) and selectively carries forward unmodified prior artifacts via `IncrementalRetentionScope` without redundant LLM recomputation.
 
 ---
 
 ## Declarative Incremental Artifact Hydration (`ArtifactHydrator`)
 
-Located in `pipeline/artifacts/execution.py`.
+Located in `episteme_pipeline/artifacts/execution.py`.
 
 When corpus documents evolve incrementally ($\mathcal{G}_t + \Delta D \to \mathcal{G}_{t+1}$), phase runners do not
 recompute artifacts for unchanged documents. Instead, `ArtifactExecutionContext.hydrator(phase_key, phase_name)`
@@ -288,7 +288,7 @@ Derived deterministically by comparing `prior_manifest.document_fingerprints` wi
 
 ## Persistent Epistemic Curation Ledger (`EpistemicCurationLedger`)
 
-Located in `pipeline/contracts/phase_contracts.py`.
+Located in `episteme_pipeline/contracts/phase_contracts.py`.
 
 To ensure that human domain expert adjudications in Episteme Studio are preserved across incremental runs rather than
 being lost as throwaway post-processing edits, the pipeline accepts a persistent curation ledger via
@@ -317,7 +317,7 @@ being lost as throwaway post-processing edits, the pipeline accepts a persistent
 
 ## Artifact Dependency Graph Diffing (`ArtifactDependencyGraph`)
 
-Located in `pipeline/artifacts/invalidate.py`.
+Located in `episteme_pipeline/artifacts/invalidate.py`.
 
 While phase reuse decisions must be made *before* a run executes, fine-grained artifact comparison operates across
 completed runs to analyze the exact downstream impact of parameter changes.
@@ -361,14 +361,22 @@ The pipeline exposes `diff_artifacts(run_id, baseline_run_id) -> dict[str, list[
 
 ---
 
-## Open Architecture Enhancements
+## Closed-Loop Refinement Overlays vs. Phase Invalidation
 
-As tracked in the [Project & Research Roadmap](../roadmap.md):
+Closed-loop hermeneutic refinement ([ADR 0024](../adr/0024-closed-loop-hermeneutic-refinement.md)) introduces top-down $\text{L4/L3} \to \text{L2/L1}$ feedback **without violating `WorkflowDAG` acyclicity or triggering whole-phase invalidation of unaffected subgraphs**:
 
-- **DAG Stage Execution Planning**:
-  The orchestrator currently executes phase runners in a sequential 1-based ordinal loop. Refactoring `_execute` to
-  support arbitrary DAG execution plans (`_build_execution_plan`, `_resolve_phase_order`, `_execute_via_plan`) remains
-  an active architecture enhancement to allow non-linear, branching phase topologies.
+1. **Acyclic Forward DAG + Bounded Outer Loop**:
+   `WorkflowDAG.topological_order()` uses Kahn's algorithm and strictly forbids cycles. Top-down deficit signals (`ArtifactKind.EPISTEMIC_DEFICIT`) are therefore excluded from forward `Phase1ArtifactsView`–`Phase4ArtifactsView` `_allowed_kinds` and exposed instead through `EpistemicDeficitArtifactsView`. When `config.refinement.max_refinement_cycles > 0` (`ArtifactExecutionEngine._is_refinement_active()`), `ClosedLoopRefinementCoordinator` executes a bounded outer loop (`1..max_refinement_cycles`) inside `ArtifactExecutionEngine._run_refinement_stage()` *after* the forward `WorkflowDAG` completes. When `max_refinement_cycles == 0` (the default), `PipelineFactory` omits the coordinator and `ArtifactExecutionEngine` omits refinement keys from `method_fingerprints` and `phase_config_fingerprints`, keeping forward manifest fingerprints and phase reuse 100% unchanged.
+2. **Pass-Scoped Lineage (`refinement_pass`, `deficit_id`)**:
+   - `RunManifest.refinement_pass` tracks the highest refinement pass completed on a run (`0` for pure feed-forward runs).
+   - `RunPhaseRecord.refinement_pass` distinguishes per-pass refinement records (`phase_key="refinement"`) from forward phase executions.
+   - `ArtifactProvenance.refinement_pass` and `ArtifactProvenance.deficit_id` stamp each refined envelope, while `artifacts/builders.py` assigns pass-scoped `artifact_id`s (`artifact::<base_id>::pass<r>` for $r > 0$).
+   - Parent-chain hydration (`ArtifactExecutionEngine._collect_parent_chain_artifacts` / `_dedup_chain_artifacts`) deduplicates inherited envelopes cleanly across resumed runs.
+3. **`ArtifactCollection.latest_by_identity` Delta Overlays**:
+   Localized handlers (`LLMTheoryGuidedPremiseRecoverer`, `ConceptionConceptSplitter`, `TheoryGuidedAxiomGrounder`) produce a `RefinementDelta` scoped strictly to the chunks, entities, and atoms named in `EpistemicDeficit`. Overlaying only delta `ArtifactEnvelope`s onto `ArtifactCollection` updates `latest_by_identity` by semantic `identity_key` while keeping pass-0 artifacts intact in `history`. Unaffected documents, chunks, entities, and subgraphs retain their original pass-0 `artifact_id` and `refinement_pass == 0`, avoiding whole-phase recomputation. `ArtifactExecutionEngine._record_new_artifacts_in_report()` records only newly produced refinement/deficit artifacts into `RunReport`.
+4. **Refinement-Scoped Isolation & Merge Guards**:
+   - `ConceptionConceptSplitter` emits `cannot_link_pairs` across split sense entities, which `ClosedLoopRefinementCoordinator` persists onto `context.pipeline_input.curation_ledger.cannot_link_entities` so `EpistemicCurationLedger.is_cannot_link()` prevents Phase 3b from collapsing disambiguated senses in subsequent runs.
+   - Within-phase `PhaseCheckpointStore` WAL entries are keyed by `phase_key:lineage_fingerprint`, isolating forward checkpoint state from refinement overlays.
 
 ---
 
@@ -378,4 +386,4 @@ As tracked in the [Project & Research Roadmap](../roadmap.md):
 - **Runtime and Complexity**: [Pipeline Runtime Analysis](runtime_analysis.md)
 - **System Architecture Overview**: [System Architecture Overview](overview.md)
 - **Pipeline Architecture**: [Pipeline Architecture](pipeline_architecture.md)
-- **ADRs**: [ADR 0014: Deterministic Identity Diffing](../adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [ADR 0016: Phase 3 Checkpointing & Atomicity](../adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), [ADR 0021: Incremental Corpus Evolution & HITL Constraint Ledger](../adr/0021-incremental-corpus-evolution-and-persistent-hitl-constraint-ledger.md)
+- **ADRs**: [ADR 0014: Deterministic Identity Diffing](../adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [ADR 0016: Phase 3 Checkpointing & Atomicity](../adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md), [ADR 0021: Incremental Corpus Evolution & HITL Constraint Ledger](../adr/0021-incremental-corpus-evolution-and-persistent-hitl-constraint-ledger.md), [ADR 0024: Closed-Loop Hermeneutic Refinement](../adr/0024-closed-loop-hermeneutic-refinement.md)

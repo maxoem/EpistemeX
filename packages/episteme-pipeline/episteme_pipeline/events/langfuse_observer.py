@@ -21,6 +21,7 @@ from .models import (
     EntityLinkingCandidatesRetrieved,
     EntityLinkingReranked,
     EntityMaturationSynthesized,
+    EpistemicDeficitDetected,
     EvaluationCompleted,
     EvaluationScoreLogged,
     FusionDecisionMade,
@@ -31,6 +32,8 @@ from .models import (
     PhaseFailed,
     PhaseReused,
     PipelineEvent,
+    RefinementCycleCompleted,
+    RefinementCycleStarted,
     RerankerScoreAssigned,
     RunCompleted,
     RunFailed,
@@ -100,6 +103,8 @@ class LangfuseObserver(EventObserver):
                     RunStarted,
                     RunCompleted,
                     RunFailed,
+                    RefinementCycleStarted,
+                    RefinementCycleCompleted,
                 ),
             ):
                 self._handle_lifecycle_event(event, trace_context_arg)
@@ -162,6 +167,8 @@ class LangfuseObserver(EventObserver):
             | RunStarted
             | RunCompleted
             | RunFailed
+            | RefinementCycleStarted
+            | RefinementCycleCompleted
         ),
         trace_context: dict[str, str] | None,
     ) -> None:
@@ -272,6 +279,38 @@ class LangfuseObserver(EventObserver):
                 },
                 level="ERROR",
                 status_message=event.error_message,
+            )
+            observation.end()
+
+        elif isinstance(event, RefinementCycleStarted):
+            observation = self.client.start_observation(
+                as_type="span",
+                name="refinement.cycle.started",
+                trace_context=trace_context,
+                input={
+                    "refinement_pass": event.refinement_pass,
+                    "deficit_count": event.deficit_count,
+                    "deficit_ids": event.deficit_ids,
+                    "target_chunk_ids": event.target_chunk_ids,
+                    "target_entity_ids": event.target_entity_ids,
+                },
+            )
+            observation.end()
+
+        elif isinstance(event, RefinementCycleCompleted):
+            observation = self.client.start_observation(
+                as_type="span",
+                name="refinement.cycle.completed",
+                trace_context=trace_context,
+                input={"refinement_pass": event.refinement_pass},
+                output={
+                    "resolved_deficit_count": event.resolved_deficit_count,
+                    "remaining_deficit_count": event.remaining_deficit_count,
+                    "resolved_deficit_ids": event.resolved_deficit_ids,
+                    "delta_artifact_count": event.delta_artifact_count,
+                    "duration_seconds": event.duration_seconds,
+                    "converged": event.converged,
+                },
             )
             observation.end()
 
@@ -590,6 +629,30 @@ class LangfuseObserver(EventObserver):
                 output={
                     "confidence": event.confidence,
                     "reason": event.reason,
+                },
+            )
+            observation.end()
+
+        elif isinstance(event, EpistemicDeficitDetected):
+            observation = self.client.start_observation(
+                as_type="span",
+                name="refinement.deficit.detected",
+                trace_context=trace_context,
+                input=_drop_none(
+                    {
+                        "deficit_id": event.deficit_id,
+                        "deficit_kind": event.deficit_kind,
+                        "theory_id": event.theory_id,
+                        "refinement_pass": event.refinement_pass,
+                    }
+                ),
+                output={
+                    "severity": event.severity,
+                    "target_chunk_ids": event.target_chunk_ids,
+                    "target_entity_ids": event.target_entity_ids,
+                    "target_atom_ids": event.target_atom_ids,
+                    "target_relation_ids": event.target_relation_ids,
+                    "rationale": event.rationale,
                 },
             )
             observation.end()

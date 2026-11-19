@@ -11,6 +11,7 @@ import logging
 from typing import Any
 
 from episteme_pipeline.artifacts.builders import (
+    build_epistemic_deficit_artifact,
     build_theory_atom_artifact,
     build_theory_relation_artifact,
 )
@@ -24,6 +25,7 @@ from episteme_pipeline.config import Phase6Config
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet
 from episteme_pipeline.decision.modal_resolver import HybridModalResolver
 from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
+from episteme_pipeline.utils.graph_algorithms import compute_z1_grounding
 from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.graph_store import ProjectionGraph
 from episteme_pipeline.protocols.modality import (
@@ -31,6 +33,10 @@ from episteme_pipeline.protocols.modality import (
     ensure_modal_strength_resolver,
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
+from episteme_pipeline.protocols.refinement import (
+    EpistemicDeficitDetector,
+    ensure_deficit_detector,
+)
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
@@ -57,6 +63,9 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
         System 1 calibrated decision engine instance.
     modal_resolver : ModalStrengthResolver | None, optional
         Propositional modal strength resolver. If None, initialized from config and decision engine.
+    deficit_detector : EpistemicDeficitDetector | None, optional
+        Optional top-down epistemic deficit detector invoked after TheoryNet
+        projection to emit :class:`EpistemicDeficitArtifact` signals.
     """
 
     name = "Phase 6: TheoryNet Projection"
@@ -69,7 +78,13 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             ArtifactKind.FUSION_DECISION,
         }
     )
-    writes_kinds = frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION})
+    writes_kinds = frozenset(
+        {
+            ArtifactKind.THEORY_ATOM,
+            ArtifactKind.THEORY_RELATION,
+            ArtifactKind.EPISTEMIC_DEFICIT,
+        }
+    )
 
     def __init__(
         self,
@@ -79,6 +94,7 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
         projector: TheoryNetProjector | None = None,
         decision_engine: DecisionEngine | None = None,
         modal_resolver: ModalStrengthResolver | None = None,
+        deficit_detector: EpistemicDeficitDetector | None = None,
     ) -> None:
         if config is None:
             config = Phase6Config()
@@ -99,6 +115,9 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
         self.modal_resolver = ensure_modal_strength_resolver(modal_resolver) or HybridModalResolver.create(
             config=config.modal_resolver,
             decision_engine=self.decision_engine,
+        )
+        self.deficit_detector: EpistemicDeficitDetector | None = ensure_deficit_detector(
+            deficit_detector
         )
 
         self.projector = projector or TheoryNetProjector(
@@ -221,45 +240,22 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             )
 
         # Baseline empirical content ratio calculation (Z1 path from theoretical antecedents to empirical base)
-        a_atoms = {
-            a.id
-            for a in theory_net.atoms
-            if self.schema.component_partitions.get(a.component_type) == "A"
-        }
-        b_atoms = {
-            a.id
-            for a in theory_net.atoms
-            if self.schema.component_partitions.get(a.component_type) == "B"
-        }
-
-        adj: dict[str, set[str]] = {a_id: set() for a_id in a_atoms}
-        z1_connected: set[str] = set()
-
-        for rel in theory_net.relations:
-            for p_id in rel.effective_premise_ids:
-                if p_id in a_atoms and rel.target_id in b_atoms:
-                    z1_connected.add(p_id)
-                elif rel.target_id in a_atoms and p_id in b_atoms:
-                    z1_connected.add(rel.target_id)
-                elif p_id in a_atoms and rel.target_id in a_atoms:
-                    adj[p_id].add(rel.target_id)
-                    adj[rel.target_id].add(p_id)
-
-        visited = set(z1_connected)
-        queue = list(z1_connected)
-        while queue:
-            curr = queue.pop(0)
-            for neighbor in adj.get(curr, []):
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    queue.append(neighbor)
-
-        empirical_content = len(visited) / len(a_atoms) if a_atoms else 0.0
+        z1_result = compute_z1_grounding(
+            theory_net.atoms,
+            theory_net.relations,
+            self.schema,
+        )
         logger.info(
             "Phase 6: Empirical Content metric = %.3f (%d/%d A-atoms with a Z1 path to B)",
-            empirical_content,
-            len(visited),
-            len(a_atoms),
+            z1_result.empirical_content_ratio,
+            len(z1_result.z1_grounded_ids),
+            len(z1_result.a_atom_ids),
+        )
+
+        refinement_pass = (
+            context.manifest.refinement_pass
+            if context is not None and context.manifest is not None
+            else 0
         )
 
         artifacts = [
@@ -268,6 +264,7 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
                 run_id=context.run_id,
                 phase_name=self.name,
                 method="phase6.theorynet",
+                refinement_pass=refinement_pass,
             )
             for atom in theory_net.atoms
         ]
@@ -277,7 +274,50 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
                 run_id=context.run_id,
                 phase_name=self.name,
                 method="phase6.theorynet",
+                refinement_pass=refinement_pass,
             )
             for rel in theory_net.relations
         )
+
+        if self.deficit_detector is not None:
+            updated_state = Phase4ArtifactsView(
+                documents=input.documents,
+                chunks=input.chunks,
+                entities=input.entities,
+                local_triples=input.local_triples,
+                entity_count_by_type=input.entity_count_by_type,
+                global_triples=input.global_triples,
+                relation_type_distribution=input.relation_type_distribution,
+                theory_atoms=theory_net.atoms,
+                theory_relations=theory_net.relations,
+                fusion_decisions=input.fusion_decisions,
+                canonical_theory_atoms=theory_net.atoms,
+                canonical_theory_relations=theory_net.relations,
+                entity_envelopes_by_id=input.entity_envelopes_by_id,
+                entity_mentions_by_id=input.entity_mentions_by_id,
+                theoretical_enrichments=input.theoretical_enrichments,
+                epistemic_deficits=input.epistemic_deficits,
+                consumed_artifact_ids=input.consumed_artifact_ids,
+            )
+            deficits = self.deficit_detector.detect_deficits(
+                updated_state,
+                refinement_pass=refinement_pass,
+                context=context,
+            )
+            for deficit in deficits:
+                stamped = (
+                    deficit
+                    if deficit.detected_in_phase
+                    else deficit.model_copy(update={"detected_in_phase": self.phase_key})
+                )
+                artifacts.append(
+                    build_epistemic_deficit_artifact(
+                        stamped,
+                        run_id=context.run_id,
+                        phase_name=self.name,
+                        method=type(self.deficit_detector).__name__,
+                        refinement_pass=refinement_pass,
+                    )
+                )
+
         return ArtifactCollection(artifacts)

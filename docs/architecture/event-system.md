@@ -51,7 +51,7 @@ flowchart TD
 
 A major design challenge in pipeline architectures is passing telemetry sinks through deeply nested component
 hierarchies. Episteme avoids constructor parameter drilling ("prop-drilling") and global singletons by using Python's
-`contextvars` module (`pipeline/events/context.py`):
+`contextvars` module (`episteme_pipeline/events/context.py`):
 
 - **Task-Local Binding**: An `EventEmitter` instance is bound to the async task context using the `use_event_emitter`
   context manager at the runner level.
@@ -60,8 +60,8 @@ hierarchies. Episteme avoids constructor parameter drilling ("prop-drilling") an
   guaranteeing that events from one run never leak into the observer stream of another.
 
 ```python
-from pipeline.events import use_event_emitter, get_event_emitter
-from pipeline.events.models import TripleCommitted
+from episteme_pipeline.events import use_event_emitter, get_event_emitter
+from episteme_pipeline.events.models import TripleCommitted
 
 # 1. Pipeline runner binds the emitter to the execution scope:
 with use_event_emitter(emitter):
@@ -118,6 +118,7 @@ Pipeline execution is fully enclosed in symmetric start/end brackets with guaran
 
 - **Run Lifecycle**: Runs emit `RunStarted` at invocation, `RunCompleted` upon successful execution, and `RunFailed` upon unhandled exceptions.
 - **Phase Lifecycle**: Every phase begins with `ComponentStarted`. Upon normal completion, `ComponentCompleted(success=True)` and `PhaseCompleted(success=True)` are emitted. Upon exception, `ComponentCompleted(success=False, error=...)`, `PhaseCompleted(success=False, error=...)`, and `PhaseFailed(...)` are guaranteed to fire before the exception propagates.
+- **Refinement Lifecycle (`ISSUE-053`)**: Top-down deficit detectors emit `EpistemicDeficitDetected`, and bounded outer refinement passes (`ClosedLoopRefinementCoordinator` inside `ArtifactExecutionEngine._run_refinement_stage()`) bracket each cycle with `RefinementCycleStarted` and `RefinementCycleCompleted`.
 - **Phase Reuse & Provenance**: Reused phases emit `PhaseReused(phase_name, source_run_id, artifact_count)` to establish end-to-end lineage across resumed runs.
 - **Flush Barrier**: Both `use_event_emitter` and `_run_observability_scope` invoke `emitter.flush()` inside guaranteed `finally:` blocks, ensuring that all buffered network spans (e.g., `LangfuseObserver`) and file buffers (e.g., `JsonlRunObserver`) are fully committed before process exit.
 
@@ -136,7 +137,7 @@ Pipeline execution is fully enclosed in symmetric start/end brackets with guaran
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Orch as Pipeline._execute()
+    participant Orch as ArtifactExecutionEngine.execute()
     participant Bus as ContextualEventEmitter
     participant Obs as CompositeObserver (JSONL / Langfuse)
 

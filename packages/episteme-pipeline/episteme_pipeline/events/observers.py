@@ -21,8 +21,11 @@ from .models import (
     CandidateRejectedByThreshold,
     DenseCandidatesGenerated,
     EntityMaturationSynthesized,
+    EpistemicDeficitDetected,
     LLMRelationDecoded,
     PipelineEvent,
+    RefinementCycleCompleted,
+    RefinementCycleStarted,
     RerankerScoreAssigned,
     SchemaValidationRejectedRelation,
     TripleCommitted,
@@ -96,6 +99,25 @@ class LoggingObserver(EventObserver):
             self.logger.info(
                 f"Synthesized mature description for entity '{event.entity_name}' "
                 f"using top {event.top_k_used} of {event.envelope_count} envelopes."
+            )
+        elif isinstance(event, EpistemicDeficitDetected):
+            self.logger.info(
+                f"Epistemic deficit [{event.deficit_kind}] '{event.deficit_id}' "
+                f"(severity={event.severity:.3f}, pass={event.refinement_pass}, "
+                f"chunks={len(event.target_chunk_ids)}, entities={len(event.target_entity_ids)})"
+            )
+        elif isinstance(event, RefinementCycleStarted):
+            self.logger.info(
+                f"Hermeneutic refinement cycle {event.refinement_pass} started "
+                f"for {event.deficit_count} deficit(s) across "
+                f"{len(event.target_chunk_ids)} chunk(s) and {len(event.target_entity_ids)} entity(ies)."
+            )
+        elif isinstance(event, RefinementCycleCompleted):
+            self.logger.info(
+                f"Hermeneutic refinement cycle {event.refinement_pass} completed: "
+                f"resolved={event.resolved_deficit_count}, remaining={event.remaining_deficit_count}, "
+                f"delta_artifacts={event.delta_artifact_count}, converged={event.converged} "
+                f"({event.duration_seconds:.3f}s)"
             )
         else:
             # Generic logging for other events
@@ -196,6 +218,9 @@ class MetricsObserver(EventObserver):
             lambda: {"total": 0, "accepted": 0}
         )
         self.total_triples_committed = 0
+        self.epistemic_deficits_detected: dict[str, int] = defaultdict(int)
+        self.refinement_cycles_completed = 0
+        self.refinement_deficits_resolved = 0
 
     def on_event(self, event: PipelineEvent) -> None:
         """Aggregate metrics from the event.
@@ -215,6 +240,11 @@ class MetricsObserver(EventObserver):
                 self.candidate_acceptance_rates[key]["accepted"] += 1
         elif isinstance(event, TripleCommitted):
             self.total_triples_committed += 1
+        elif isinstance(event, EpistemicDeficitDetected):
+            self.epistemic_deficits_detected[str(event.deficit_kind)] += 1
+        elif isinstance(event, RefinementCycleCompleted):
+            self.refinement_cycles_completed += 1
+            self.refinement_deficits_resolved += event.resolved_deficit_count
 
     def get_candidate_acceptance_rate(self, candidate_key: str) -> float:
         """Get the acceptance rate for a specific candidate.

@@ -58,24 +58,30 @@ flowchart TB
         P1 --> P2 --> P3 --> P3b --> P4m --> P4 --> P5 --> P6
     end
 
-    %% Tier 3: Post-Processing
-    subgraph Extensibility ["3. Post-Processing & Analytical Passes"]
+    %% Tier 3: Post-Processing & Closed-Loop Refinement
+    subgraph Extensibility ["3. Post-Processing & Closed-Loop Hermeneutic Refinement"]
         PP["Theoretical Enrichment & Tenability<br/>(TheoreticalEnrichmentRunner)"]
+        DET["Epistemic Deficit Detector<br/>(TheoryNetDeficitDetector)"]
+        COORD["Closed-Loop Refinement Coordinator<br/>(ClosedLoopRefinementCoordinator, max R_max)"]
         EXTRA["Custom Post-Processors / Extra Phases<br/>(Epistemetrics, Metrics, Evaluation)"]
         P6 --> PP
+        P6 -.->|"Optional structural deficits"| DET
+        PP --> DET
+        DET -->|"EpistemicDeficitArtifact"| COORD
+        COORD -.->|"ENTHYMEME_GAP -> L3 Premise Recovery<br/>POLYSEMY_COLLISION -> L2 Concept Split<br/>UNGROUNDED_AXIOM -> L1/L2/L3 Grounding"| COLL
         PP --> EXTRA
     end
 
     %% Tier 4: Artifact Execution & Storage
     subgraph ArtifactHandoff ["4. Artifact-Native Execution & Storage"]
-        COLL["ArtifactCollection & Typed Views<br/>(Inter-Phase Handoff)"]
+        COLL["ArtifactCollection & Typed Views<br/>(latest_by_identity delta overlay)"]
         ASTORE[("🗄️ JsonArtifactStore<br/>.pipeline_artifacts/")]
         MSTORE[("📋 JsonRunManifestStore<br/>.pipeline_runs/")]
     end
 
     %% Tier 5: Backends & Observers
     subgraph Backends ["5. Projection & Infrastructure Services"]
-        PROJ["ArtifactGraphProjector<br/>(pipeline/projection/)"]
+        PROJ["ArtifactGraphProjector<br/>(episteme_pipeline/projection/)"]
         NEO[("🕸️ Neo4j Projection Graph")]
         CHECK[("🗂️ Ephemeral Checkpoint Store")]
         LLM["🤖 Structured LLM Interface (LiteLLM / Ollama)"]
@@ -127,7 +133,7 @@ The theory-graph construction process is organized into sequential phase runners
   - **Episodic Working Memory**: SOTA Dual-Memory stateful context (RAM Short-Term Memory + Neo4j Long-Term Memory) with ToC anchors and boundary-based eviction.
   - **Constrained Decoding**: Enforces ontology schema constraints while preserving reasoning tokens. See [Constrained Decoding Architecture](constrained_decoding.md).
   - **Local Relation Extraction**: Intra-chunk semantic triples with confidence scores.
-  - **Deterministic Entity Linking (`NameEntityLinker`)**: String containment checks mapping mentions to stable graph IDs.
+  - **Entity Linking (`EntityLinker`)**: Calibrated and dense entity linkers (`DenseEntityLinker`, `JevEntityLinker`, `CascadingEntityLinker`) with deterministic `NameEntityLinker` fallback mapping mentions to stable graph IDs.
 - **Emitted Artifacts**: [`EntityMentionArtifact`](../reference/artifacts.md), [`LinkedEntityArtifact`](../reference/artifacts.md), [`LocalRelationArtifact`](../reference/artifacts.md).
 - **See**: [Phase 2: Entity Discovery Workflow](../workflow/2_entity_discovery/index.md).
 
@@ -176,9 +182,9 @@ The theory-graph construction process is organized into sequential phase runners
 - **Input View**: `Phase3ArtifactsView` (containing consolidated and matured `entities`, `chunks`, `local_triples`, and `global_triples`).
 - **Purpose**: Extract Layer 3 bipolar argumentation structures from the corpus.
 - **Key Operations**:
-  - **ADU Segmentation (`TAGADUSegmenter`)**: Identifies Argumentative Discourse Units and classifies text spans as claims, premises, or conclusions.
-  - **Component Classification (`TAGACCClassifier`)**: Assigns argumentative roles and epistemic statuses (`TheoryAtom`) grounded in matured canonical chunk entities via `ArtifactSubgraphReader`.
-  - **Relation Classification (`TAGARCClassifier`)**: Classifies defeasible support and attack relations (`TheoryRelation`: `SUPPORTS`, `ATTACKS`).
+  - **ADU Segmentation (`LLMADUSegmenter`)**: Identifies Argumentative Discourse Units and segments text spans for classification.
+  - **Component Classification (`LLMACCClassifier` / `JevACCClassifier` / `CascadingACCClassifier`)**: Assigns argumentative roles, intensional modes ([ADR-0023](../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)), and epistemic statuses (`TheoryAtom`) grounded in matured canonical chunk entities via `ArtifactSubgraphReader`.
+  - **Relation Classification (`TAGARCClassifier` / `JevARCClassifier` / `CascadingARCClassifier`)**: Classifies defeasible support, attack, and undercut relations (`TheoryRelation`: `SUPPORTS_ARG`, `ATTACKS`, `UNDERCUTS`).
 - **Emitted Artifacts**: [`TheoryAtomArtifact`](../reference/artifacts.md), [`TheoryRelationArtifact`](../reference/artifacts.md).
 - **See**: [Phase 4: Argument Mining Workflow](../workflow/4_argument_mining/index.md).
 
@@ -223,8 +229,46 @@ Beyond core graph construction (Phases 1–6), modular post-processors can be at
   - Calculates local tenability ($TS_{\text{local}} = \sup \{ 1 - \delta \}$).
   - Evaluates cross-theory constraint edges ($TS_{\text{edge}}$), flagging untenable anomalies ($TS < 0.5$).
   - Executes a coupled D-QBAF re-convergence pass over tenability-modulated priors $\tilde{\tau}_0(a) = \tau_0(a) \cdot TS_{\text{local}}(a)$ and edge weights $W_{ji} \cdot TS_{\text{edge}}(e)$ so empirically falsified hypotheses ($TS_{\text{local}} < 0.5$) reflect degraded equilibrium justification $\tau^*(a)$.
-- **Emitted Artifacts**: [`TheoreticalEnrichmentArtifact`](../reference/artifacts.md) (postulated theoretical parameters, $TS_{\text{local}}$, $TS_{\text{edge}}$, equilibrium strengths $\tau^*$, admissible blurs $\delta^*$) and re-converged [`TheoryAtomArtifact`](../reference/artifacts.md) / [`TheoryRelationArtifact`](../reference/artifacts.md) envelopes.
-- **Governed by**: [ADR 0015](../adr/0015-theoretical-enrichment-and-tenability-evaluation.md) and documented in [Theoretical Enrichment Workflow](../workflow/post_processing/theoretical_enrichment.md).
+- **Emitted Artifacts**: [`TheoreticalEnrichmentArtifact`](../reference/artifacts.md) (postulated theoretical parameters, $TS_{\text{local}}$, $TS_{\text{edge}}$, equilibrium strengths $\tau^*$, admissible blurs $\delta^*$), re-converged [`TheoryAtomArtifact`](../reference/artifacts.md) / [`TheoryRelationArtifact`](../reference/artifacts.md) envelopes, and optional [`EpistemicDeficitArtifact`](../reference/artifacts.md) signals when configured with `EpistemicDeficitDetector`.
+- **Governed by**: [ADR 0015](../adr/0015-theoretical-enrichment-and-tenability-evaluation.md), [ADR 0022](../adr/0022-unified-stratified-epistemic-metamodel.md), and documented in [Theoretical Enrichment Workflow](../workflow/post_processing/theoretical_enrichment.md).
+
+---
+
+## Closed-Loop Hermeneutic Refinement ($\text{L4/L3} \to \text{L2/L1}$)
+
+When `HermeneuticRefinementConfig.max_refinement_cycles > 0` (`PipelineConfig.refinement`), the pipeline closes the macro-architectural feedback loop envisaged by Pan et al. (2024) ([ADR 0024](../adr/0024-closed-loop-hermeneutic-refinement.md)) without introducing cycles into `WorkflowDAG`:
+
+```mermaid
+flowchart LR
+    FWD["Forward DAG Complete<br/>(Phases 1–6 + TheoreticalEnrichment)"] --> DETECT["TheoryNetDeficitDetector<br/>(_detector_analysis.py + _sub_detectors.py:<br/>Z_1 BFS, PageRank, Louvain, TS_local, TS_edge, V)"]
+    DETECT -->|No deficits or pass >= max_refinement_cycles| DONE["Persist & Project Final Artifacts"]
+    DETECT -->|EpistemicDeficitArtifact| LOOP{"Dispatch by EpistemicDeficitKind"}
+    LOOP -->|ENTHYMEME_GAP| G1["LLMTheoryGuidedPremiseRecoverer<br/>(DecisionEngine.evaluate_noul -> chunks + ARC classify_pairs)"]
+    LOOP -->|POLYSEMY_COLLISION| G2["ConceptionConceptSplitter<br/>(DecisionEngine.evaluate_choice -> centroid divergence + L2 split + is_retired)"]
+    LOOP -->|UNGROUNDED_AXIOM| G3["TheoryGuidedAxiomGrounder<br/>(DecisionEngine.evaluate_noul -> vector_search + NER + TheoryProjector)"]
+    G1 & G2 & G3 --> DELTA["RefinementDelta -> refinement_overlay.py<br/>(refinement_pass = r, deficit_id stamped; intra-pass refresh)"]
+    DELTA --> RECONV["Connected-Component Re-Convergence<br/>(slice_phase4_component_view -> TheoryNetProjector)"]
+    RECONV --> DETECT
+```
+
+### Deficit Taxonomy & Localized Recovery (`episteme_pipeline/refinement/`)
+
+| Deficit Kind | Detector Criteria (`TheoryNetDeficitDetector`) | Localized Handler (`protocols/refinement.py`) | Subgraph Scope & Guards |
+|:---|:---|:---|:---|
+| `ENTHYMEME_GAP` | `SchemaConfig`-partitioned `A`-atom (`utils/graph_algorithms.compute_z1_grounding`) with `epistemetrics.page_rank` $\ge$ `enthymeme_min_centrality` and `in_support_degree == 0` or broken $Z_1$ path when Partition-`B` bases exist | `LLMTheoryGuidedPremiseRecoverer` (`premise_recovery.py`) | System 1 `DecisionEngine.evaluate_noul` gate + audit; re-reads only `target_chunk_ids` with centralized prompt bundle; preserves [ADR-0023](../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md) scoping; resolves entities (`EntityLinker` + `EpistemicCurationLedger`) & `modal_prior` (`HybridModalResolver`); runs shared `CascadingARCClassifier.classify_pairs` on local pairs |
+| `POLYSEMY_COLLISION` | `L2Entity` or `TheoryAtom` bridging incompatible clusters, `louvain_communities`, `EntityConception`s, ambiguity cues, or conflicting edges (`SchemaConfig.get_relation_polarity`) with $\mathcal{V} \ge 0.25$ or $TS_{\text{edge}} < 0.5$ | `ConceptionConceptSplitter` (`concept_splitter.py`) | System 1 `DecisionEngine.evaluate_choice` conformal triage gate (`UNIVOCAL_DISAGREEMENT` vs `TRUE_POLYSEMY_SPLIT`); scopes strictly to deficit entities; checks real `EmbeddingModel` centroid cosine divergence (`utils/similarity.cosine_similarity`); retires split parent entities/mentions (`retired_entity_ids`, `split_entity_parents`); emits `cannot_link_pairs`; rewires local triples/atoms & runs Phase 3 pair filtering |
+| `UNGROUNDED_AXIOM` | Failing `TheoreticalEnrichmentArtifact` ($TS_{\text{local}} < 0.5$, `is_tenable == False`, missing $M_{pp}$ dimensions) or `A`-atom lacking $Z_1$ empirical base in cluster | `TheoryGuidedAxiomGrounder` (`axiom_grounder.py`) | System 1 `DecisionEngine.evaluate_noul` gate + audit; expands locally (`sequence_index ± neighbor_window` + bounded `ArtifactSubgraphReader.vector_search`); invokes shared `NERExtractor`, centralized prompt bundle, `EntityLinker`, `HybridModalResolver`, and `TheoryProjector` |
+
+### Refinement Configuration & Overlay Architecture
+
+Configured on `PipelineConfig.refinement` (`HermeneuticRefinementConfig` in `episteme_pipeline/config.py`), orchestrated by `ClosedLoopRefinementCoordinator` (`coordinator.py`) over `artifacts/refinement_overlay.py` (`slice_phase4_component_view`, pass-aware `ArtifactDependencyGraph`, and intra-pass working overlay refresh):
+
+- `max_refinement_cycles: int = 0` (`0..5`; `0` preserves strictly feed-forward runs with unchanged manifest & prompt fingerprints)
+- Central prompt bundles & strategies: `concept_split_prompts`, `premise_recovery_prompts`, `axiom_grounding_prompts` (registered in `DefaultPromptProvider`, `LangfusePromptProvider`, `FilePromptProvider`)
+- System 1 gating & triage: `use_decision_engine_gating: bool = True`, `decision_confidence_threshold: float = 0.70`, `conformal_alpha: float = 0.10`, `stochastic_audit_rate: float = 0.05`, `polysemy_ambiguity_similarity_threshold: float = 0.82`
+- Detection thresholds & caps: `enthymeme_min_centrality: float = 0.0`, `polysemy_edge_tenability_threshold: float = 0.5`, `polysemy_volatility_threshold: float = 0.25`, `ungrounded_local_tenability_threshold: float = 0.5`, `max_deficits_per_cycle: int = 20`
+- Enable flags: `enable_theory_guided_premise_recovery`, `enable_targeted_concept_split`, `enable_localized_axiom_grounding` (plus `ExecutionConfig.persist_refinement_artifacts = True`).
+- Detailed specification & scoring formulas: [Deficit Graph Analysis & Hermeneutic Refinement](../workflow/post_processing/hermeneutic_refinement.md) and [Refinement API Reference](../reference/refinement.md).
 
 ---
 
@@ -250,7 +294,7 @@ flowchart TD
     subgraph MicroLevel ["Level 3: Micro-Level Data & Prompt Transformation (Strategy Pattern)"]
         direction TB
         RawData["Intra-Phase Data<br/>(e.g., SubGraph Envelopes from get_structural_neighborhood)"]
-        Strategy["BaseSubgraphFormatter (Strategy Pattern)<br/>(pipeline/prompts/input_formatters.py)"]
+        Strategy["BaseSubgraphFormatter (Strategy Pattern)<br/>(episteme_pipeline/prompts/input_formatters.py)"]
         FmtJSON["JsonSubgraphFormatter"]
         FmtYAML["YamlSubgraphFormatter"]
         FmtText["TextSubgraphFormatter"]
@@ -266,9 +310,10 @@ flowchart TD
 ### Level 1: Macro Extensibility (`PhaseRunner`, `WorkflowDAG`, & `EpistemicQualityGate`)
 
 - **Declarative Orchestration Trio (`runtime/`)**:
-  - **`PipelineFactory`**: Composition root that normalizes LLMs, embedders, rerankers, `DecisionEngine`, `ModalStrengthResolver`, and `EpistemicQualityGate`s from `PipelineConfig`.
+  - **`PipelineFactory`**: Composition root that normalizes LLMs, embedders, rerankers, `DecisionEngine`, `ModalStrengthResolver`, `EpistemicQualityGate`s, and (when `config.refinement.max_refinement_cycles > 0`) wires `ResolvedPipelineComponents.deficit_detector`, `refinement_coordinator`, and shared `enrichment_runner` via `_build_theorynet_projector`, `resolve_components`, `build_phases`, and `create_for_task`.
   - **`WorkflowDAG`**: Declarative topology graph resolving `WorkflowNode` dataflow dependencies (`reads_kinds` / `writes_kinds`), topological ordering, and per-phase quality gate bindings. Supports both linear pipelines and multi-branch research workflows.
-  - **`ArtifactExecutionEngine`**: Executes any `WorkflowDAG` with manifest fingerprinting, DAG-based cache reuse, inter-phase quality gate evaluation, batched graph projection, and symmetric lifecycle event emission.
+  - **`ArtifactExecutionEngine`**: Executes any `WorkflowDAG` and, when `_is_refinement_active()` holds (`refinement_coordinator` wired and `config.refinement.max_refinement_cycles > 0`), runs `_run_refinement_stage()` (`ClosedLoopRefinementCoordinator.refine(...)`) after the forward DAG loop, persists newly emitted artifacts, records `ArtifactReportEntry`s via `_record_new_artifacts_in_report()`, and preserves manifest fingerprints identically when `max_refinement_cycles == 0`.
+  - **`Pipeline` Facade (`pipeline.py`)**: Accepts and forwards optional `deficit_detector` and `refinement_coordinator` parameters on `Pipeline.__init__` and `Pipeline.for_task(...)`, constructing a standalone deterministic `ClosedLoopRefinementCoordinator` when `max_refinement_cycles > 0`.
 - **Inter-Phase Epistemic Quality Gates (`protocols/quality_gate.py`, `runtime/quality_gates.py`)**:
   - **`OntologyEntropyGate` (Post-Phase 2)**: Verifies Shannon entropy $H(\text{entity\_types}) \ge H_{\min}$, bounds single-type dominance ratio, and checks non-empty chunk entity density.
   - **`PercolationQualityGate` (Post-Phase 3b & Phase 5)**: Verifies that the largest merged equivalence class does not exceed $\rho_{\max} \cdot |E|$, preventing giant-component percolation collapse.
@@ -286,17 +331,18 @@ flowchart TD
 
 ### Level 2: Component Subsystem Injection (Protocols)
 
-Rather than hardcoding algorithms into phase runners, subsystem behaviors are defined as abstract protocols in `pipeline/protocols/`:
+Rather than hardcoding algorithms into phase runners, subsystem behaviors are defined as abstract protocols in `episteme_pipeline/protocols/`:
 - **`GlobalRelationExtractor`**: Retrieval and candidate pair scoring (`DenseRetrievalGlobalRelationExtractor`, `TAGRelationExtractor`).
 - **`RelationReranker` & `CrossEncoder`**: Joint-attention scoring for relation candidates (`CrossEncoderRelationReranker`).
 - **`GraphReader` & `GraphWriter`**: Isolates storage operations from graph business logic.
 - **`EmbeddingModel`**: Normalized embedding interface supporting LlamaIndex, sentence-transformers, or custom embedding providers.
+- **`EpistemicDeficitDetector` & Refinement Ports (`protocols/refinement.py`, `refinement/`)**: Top-down deficit detection (`TheoryNetDeficitDetector`), coordinator (`ClosedLoopRefinementCoordinator` implementing `HermeneuticRefinementCoordinator` and `TargetedRefinementPort`), and localized recovery ports (`LLMTheoryGuidedPremiseRecoverer`, `ConceptionConceptSplitter`, `TheoryGuidedAxiomGrounder`).
 
-These components are injected at composition time via `Pipeline.for_task(...)`, allowing alternative retrieval or reranking algorithms to be swapped without modifying phase runners.
+These components are injected at composition time via `Pipeline.for_task(...)`, allowing alternative retrieval, reranking, or refinement strategies to be swapped without modifying phase runners.
 
 ### Level 3: Micro-Level Data Transformation & Strategy Pattern
 
-When data within a phase needs to be transformed before consumption (for example, converting a `get_structural_neighborhood()` subgraph envelope into a specialized prompt representation), this is handled via the **Strategy Pattern** in `pipeline/prompts/input_formatters.py`:
+When data within a phase needs to be transformed before consumption (for example, converting a `get_structural_neighborhood()` subgraph envelope into a specialized prompt representation), this is handled via the **Strategy Pattern** in `episteme_pipeline/prompts/input_formatters.py`:
 
 - **`BaseSubgraphFormatter`**: Abstract strategy defining:
   ```python
@@ -321,14 +367,14 @@ When data within a phase needs to be transformed before consumption (for example
 All phase outputs are persisted as typed research artifacts:
 - **Storage**: [`JsonArtifactStore`](../reference/artifacts.md) writes envelopes under `.pipeline_artifacts/<run_id>/<kind>/<id>.json`.
 - **Versioning & Identity**: Dual-identifier system (`artifact_id` for instance lineage, `identity_key` for cross-run semantic matching).
-- **Lineage & Hydration**: When resuming or reusing phases, `_hydrate_previous_collection()` walks the parent run chain (`parent_run_id`), hydrating nearest-run artifacts so downstream phases receive a complete artifact collection without recomputation.
+- **Lineage & Hydration**: When resuming or reusing phases, `ArtifactExecutionEngine.hydrate_previous_collection()` walks the parent run chain (`parent_run_id`), hydrating nearest-run artifacts so downstream phases receive a complete artifact collection without recomputation.
 - **Incremental Intra-Phase Delta Hydration**: When extending a corpus ($\mathcal{D}_{t+1} = \mathcal{D}_t \cup \Delta D$), [`ArtifactHydrator`](../reference/artifacts.md) and [`IncrementalRetentionScope`](../reference/artifacts.md) compare per-document fingerprints (`document_fingerprints`), hydrating unchanged document and chunk artifacts and evaluating only delta items across Phases 1–4.
-- **Persistent Epistemic Curation**: [`EpistemicCurationLedger`](../reference/phase_contracts.md) applies expert human constraints (relation overrides, rejections, polarity corrections, and edge injections) directly to triple streams and theory relations before projection.
+- **Persistent Epistemic Curation**: [`EpistemicCurationLedger`](../reference/phase_contracts.md) applies expert human constraints (relation overrides, rejections, polarity corrections, `cannot_link` pairs, and edge injections) directly to triple streams and theory relations before projection.
 
 ### Decoupled Graph Projection
 
 Phases have no direct write dependencies on the final projection graph:
-- **Artifact Projection**: When `config.execution.project_artifacts_to_graph` is enabled, [`ArtifactGraphProjector`](packages/episteme-pipeline/episteme_pipeline/projection/artifact_projector.py) maps emitted artifacts into Neo4j nodes and edges.
+- **Artifact Projection**: When `config.execution.project_artifacts_to_graph` is enabled, [`ArtifactGraphProjector`](../../packages/episteme-pipeline/episteme_pipeline/projection/artifact_projector.py) maps emitted artifacts into Neo4j nodes and edges.
 - **Dual Graph Architecture**:
   - *Checkpoint Store (Operational Graph)*: Temporary graph tracking extraction working state, co-occurrence blocking, and episodic memory.
   - *Projection Graph*: Final canonical property graph holding the clean, validated theory graph.
@@ -351,7 +397,7 @@ For a rigorous asymptotic complexity analysis across all phases, candidate bound
 
 - **Artifact and Run Model**: [Artifact and Run Model](artifact_run_model.md)
 - **Invalidation and Resume**: [Invalidation and Resume](invalidation_and_resume.md)
-- **Graph Projection**: [Graph Projection Layer](graph_projection_layer.md)
+- **Graph Projection**: [Graph Projection & Decoupling](artifact_run_model.md#graph-projection-decoupling)
 - **System Overview**: [System Architecture Overview](overview.md)
 - **Runtime Analysis**: [Pipeline Runtime Analysis](runtime_analysis.md)
-- **ADRs**: [Architectural Decision Records](../adr/index.md)
+- **ADRs**: [Architectural Decision Records](../adr/index.md), [ADR 0024: Closed-Loop Hermeneutic Refinement](../adr/0024-closed-loop-hermeneutic-refinement.md)

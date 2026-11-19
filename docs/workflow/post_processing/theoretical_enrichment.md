@@ -26,7 +26,7 @@ refinements:
 | **Empirical Clustering**                                       | Grouped by `source_chunk_id`                | In `runner._identify_empirical_clusters()`, observation units sharing a source chunk are partitioned into an `EmpiricalCluster` representing a localized Intended Application ($I_k \subseteq M_{pp}$).                                                         |
 | **Claimant Matching**                                          | `TheoryRegistry.match_claimants()`          | Multi-criteria heuristic: matches cluster measurements against `required_dimensions`, checks text for theory name/keywords, or inspects explicit claimant hypothesis IDs. Defaults to all theories if unassigned.                                               |
 | **Core Law Evaluation**                                        | `SafeFormulaEvaluator`                      | AST-based symbolic expression evaluator supporting `abs`, `min`, `max`, `sqrt`, and basic arithmetic without invoking Python's unsafe `eval()`.                                                                                                                 |
-| **Persistence**                                                | Dual Persistence                            | Emits `TheoreticalEnrichmentArtifact` envelopes and directly calls `graph_store.upsert_argument_components` and `graph_store.upsert_relations` to update Neo4j.                                                                                                 |
+| **Persistence**                                                | Dual Persistence                            | Emits `TheoreticalEnrichmentArtifact`, re-converged `TheoryAtomArtifact` / `TheoryRelationArtifact`, and optional `EpistemicDeficitArtifact` envelopes; when `graph_store` is supplied, calls `upsert_argument_components` and `upsert_theory_relations`. |
 
 ---
 
@@ -65,12 +65,14 @@ flowchart TD
         DELTA_STAR --> EDGE_SOLV
     end
 
-    subgraph Step5 ["Step 5: Aggregation & Graph Persistence"]
+    subgraph Step5 ["Step 4.5–5: D-QBAF Re-Convergence, Deficit Emission & Persistence"]
         AGG["TenabilitySolver.evaluate_theory_tenability()<br>TS_agg = w_local * TS_local + w_edge * avg(TS_edge)"]
         ANOM["Flag anomalies if TS < threshold (default 0.5)"]
-        EMIT["Emit Telemetry Events & ArtifactEnvelopes"]
-        PERSIST[("Neo4j Upsert:<br>obs.parameters & obs.tenability<br>rel.tenability")]
-        EDGE_SOLV --> AGG --> ANOM --> EMIT --> PERSIST
+        DQBAF["Step 4.5: TheoryNetProjector.project()<br>Propagate TS_local & TS_edge into tau* and V"]
+        DEFICIT["Optional TheoryNetDeficitDetector<br>Emit EpistemicDeficitArtifact (UNGROUNDED_AXIOM, POLYSEMY_COLLISION)"]
+        EMIT["Emit Telemetry Events & ArtifactEnvelopes<br>(Enrichment, TheoryAtom, TheoryRelation, Deficit)"]
+        PERSIST[("Neo4j Upsert (optional graph_store):<br>upsert_argument_components & upsert_theory_relations")]
+        EDGE_SOLV --> AGG --> ANOM --> DQBAF --> DEFICIT --> EMIT --> PERSIST
     end
 
     INPUT --> CHECK
@@ -124,6 +126,20 @@ If the `TheoryRegistry` is empty and `config.induce_theories=True`, `LLMTheoryIn
 * Calculates edge tenability $TS_{\text{edge}} = \max (0.0, 1.0 - \delta_C)$.
 * If $TS_{\text{edge}} < \text{threshold}$, emits `TenabilityAnomalyDetected`.
 
+#### Step 4.5: Coupled D-QBAF Equilibrium Re-Convergence ([ADR 0022](../../adr/0022-unified-stratified-epistemic-metamodel.md))
+
+* Invokes `TheoryNetProjector.project(...)` over the enriched `TheoryAtom`s and `TheoryRelation`s so empirical tenability modulates priors ($\tilde{\tau}_0(a) = \tau_0(a) \cdot TS_{\text{local}}(a)$) and edge weights ($W_{ji} \cdot TS_{\text{edge}}(e)$).
+* Recomputes D-QBAF equilibrium justification strengths `equilibrium_strength` ($\tau^*$) and controversy volatility `controversy_volatility` ($\mathcal{V}$) across affected atoms and downstream nodes.
+* Records updated `equilibrium_strengths` on `TheoreticalEnrichmentArtifact` and emits re-converged `TheoryAtomArtifact` and `TheoryRelationArtifact` envelopes stamped with `refinement_pass`.
+
+#### Step 4.6: Epistemic Deficit Emission & Localized Refinement ([ADR 0024](../../adr/0024-closed-loop-hermeneutic-refinement.md))
+
+* When `TheoreticalEnrichmentRunner` is configured with an `EpistemicDeficitDetector` (`TheoryNetDeficitDetector`), inspects the reconverged state and `TheoreticalEnrichmentArtifact` records to emit prioritized `EpistemicDeficitArtifact` envelopes:
+  * **`UNGROUNDED_AXIOM`**: Failing clusters (`is_tenable == False`, $TS_{\text{local}} < 0.5$, local anomalies, or missing $M_{pp}$ `required_dimensions`) or `A`-atoms lacking $Z_1$ empirical observations in their cluster.
+  * **`POLYSEMY_COLLISION`**: Entities or atoms bridging incompatible clusters/conceptions with $TS_{\text{edge}} < 0.5$ or $\mathcal{V} \ge 0.25$.
+  * **`ENTHYMEME_GAP`**: High-centrality `A`-partition claims lacking incoming positive support or $Z_1$ grounding.
+* During bounded outer refinement passes (`max_refinement_cycles > 0`), `ClosedLoopRefinementCoordinator` (`ArtifactExecutionEngine._run_refinement_stage()`) dispatches localized handlers to recover missing observations/premises or split conflated hub concepts and invokes optional localized `TheoreticalEnrichmentRunner` re-scoring without invalidating unaffected subgraphs.
+
 #### Step 5: Aggregation & Graph Persistence
 
 * Aggregates local and edge tenability into `TenabilityResult`:
@@ -131,20 +147,19 @@ If the `TheoryRegistry` is empty and `config.induce_theories=True`, `LLMTheoryIn
 $$TS_{\text{agg}} = w_{\text{local}} \cdot TS_{\text{local}} + w_{\text{edge}} \cdot \overline{TS}_{\text{edge}}$$
 
 * Emits `TenabilityEvaluationCompleted` event.
-* Updates `TheoreticalHypothesis` nodes in the cluster with projected parameters and tenability attributes.
-* Updates relation edges with `tenability = ts_edge`.
-* Emits `ArtifactEnvelope[TheoreticalEnrichmentArtifact]` containing complete optimization metrics.
-* Persists enriched nodes and edges directly into Neo4j via `graph_store.upsert_argument_components()` and
-  `graph_store.upsert_relations()`.
+* Updates `TheoreticalHypothesis` / claimant nodes in the cluster with projected parameters, tenability attributes, and reconverged $\tau^*$ / $\mathcal{V}$.
+* Updates relation edges with `edge_tenability = ts_edge`.
+* Emits `ArtifactEnvelope[TheoreticalEnrichmentArtifact]` alongside re-converged `TheoryAtomArtifact` / `TheoryRelationArtifact` (and optional `EpistemicDeficitArtifact`) envelopes.
+* When `graph_store` is supplied directly, persists enriched nodes and edges into Neo4j via `graph_store.upsert_argument_components()` and `graph_store.upsert_theory_relations()`.
 
 ---
 
 ## Domain Telemetry Events
 
-The post-processor emits four standardized events via `pipeline.events`:
+The post-processor emits four enrichment-specific events via `episteme_pipeline.post_processing.theoretical_enrichment.events` (alongside `EpistemicDeficitDetected` from `episteme_pipeline.events.models` when deficit detection is enabled):
 
 ```python
-from pipeline.post_processing.theoretical_enrichment.events import (
+from episteme_pipeline.post_processing.theoretical_enrichment.events import (
     TheoreticalClusterIdentified,
     TheoreticalParametersProjected,
     TenabilityAnomalyDetected,
@@ -190,14 +205,13 @@ Post-processing behavior is configured via `TheoreticalEnrichmentConfig` under `
 
 ### Outputs
 
-* **`ArtifactCollection`**: Contains `TheoreticalEnrichmentArtifact` envelopes with:
-    * `cluster_id`, `theory_id`
-    * `projected_parameters: dict[str, float]`
-    * `local_tenability: float`, `edge_tenabilities: dict[str, float]`, `aggregated_tenability: float`
-    * `admissible_blur_delta: float`, `is_tenable: bool`, `anomalies: list[str]`
+* **`ArtifactCollection`**: Contains:
+    * `TheoreticalEnrichmentArtifact` envelopes (`cluster_id`, `theory_id`, `claimant_atom_ids`, `projected_parameters`, `local_tenability`, `edge_tenabilities`, `equilibrium_strengths`, `aggregated_tenability`, `admissible_blur_delta`, `is_tenable`, `anomalies`).
+    * Re-converged `TheoryAtomArtifact` and `TheoryRelationArtifact` envelopes carrying updated `equilibrium_strength`, `controversy_volatility`, `local_tenability`, and `edge_tenability`.
+    * Optional `EpistemicDeficitArtifact` envelopes when `deficit_detector` (`EpistemicDeficitDetector`) is attached.
 * **Graph Store (Neo4j)**:
-    * Updated `TheoreticalHypothesis` nodes with `.parameters` and `.tenability`.
-    * Updated `TheoryRelation` edges with `.tenability`.
+    * Updated `TheoryAtom` nodes with `.parameters`, `.local_tenability`, `.tenability`, `.equilibrium_strength`, and `.controversy_volatility`.
+    * Updated `TheoryRelation` edges with `.edge_tenability`.
 
 ### Invariants
 
@@ -213,7 +227,7 @@ Post-processing behavior is configured via `TheoreticalEnrichmentConfig` under `
 While dynamic LLM induction is enabled by default, custom theories can be registered explicitly:
 
 ```python
-from pipeline.post_processing.theoretical_enrichment import (
+from episteme_pipeline.post_processing.theoretical_enrichment import (
     TheoreticalEnrichmentRunner,
     TheoryElementDefinition,
     TheoryLaw,
@@ -248,7 +262,7 @@ runner = TheoreticalEnrichmentRunner(registry=registry)
 ## Related Documentation
 
 - **Architecture Overview**: [Post-Processing System Architecture](index.md)
-- **ADR**: [ADR 0015: Theoretical Enrichment & Tenability Evaluation](../../adr/0015-theoretical-enrichment-and-tenability-evaluation.md)
+- **ADRs**: [ADR 0015: Theoretical Enrichment & Tenability Evaluation](../../adr/0015-theoretical-enrichment-and-tenability-evaluation.md), [ADR 0022: Unified Stratified Epistemic Metamodel](../../adr/0022-unified-stratified-epistemic-metamodel.md), [ADR 0024: Closed-Loop Hermeneutic Refinement](../../adr/0024-closed-loop-hermeneutic-refinement.md)
 - **Concepts**: [Epistemic Coherence: Tenability](../../concepts/theory/metrics/epistemic_coherence/tenability.md)
 - **Reference**: [Theoretical Enrichment API Reference](../../reference/theoretical_enrichment.md)
 - **Code**: `packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/`

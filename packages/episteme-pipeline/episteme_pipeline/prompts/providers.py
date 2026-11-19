@@ -25,6 +25,8 @@ from episteme_pipeline.prompts.default_prompts import (
     ARC_DIRECT_PROMPT,
     ARC_FORMAT_PROMPT,
     ARC_REASONING_PROMPT,
+    AXIOM_GROUNDING_PROMPT,
+    CONCEPT_SPLIT_PROMPT,
     DECISION_ACC_CRITERIA,
     DECISION_ACC_QUESTION,
     DECISION_ARC_CRITERIA,
@@ -34,8 +36,12 @@ from episteme_pipeline.prompts.default_prompts import (
     DECISION_BOUNDARY_CRITERIA,
     DECISION_BOUNDARY_QUESTION,
     DECISION_CANONICAL_ELECTION_QUESTION,
+    DECISION_ENTHYMEME_RECOVERABILITY_QUESTION,
     DECISION_EPISTEMIC_RELEVANCE_CRITERIA,
     DECISION_EPISTEMIC_RELEVANCE_QUESTION,
+    DECISION_OBSERVATION_GROUNDING_QUESTION,
+    DECISION_POLYSEMY_DISAMBIGUATION_CRITERIA,
+    DECISION_POLYSEMY_DISAMBIGUATION_QUESTION,
     DECISION_THEORY_FUSION_CRITERIA,
     DECISION_THEORY_FUSION_QUESTION,
     ENTITY_LINKING_PROMPT,
@@ -48,6 +54,7 @@ from episteme_pipeline.prompts.default_prompts import (
     NER_GLEANING_PROMPT,
     NER_REASONING_PROMPT,
     PAIR_GATING_DECISION_PROMPT,
+    PREMISE_RECOVERY_PROMPT,
 )
 from episteme_pipeline.protocols.prompts import PromptProvider
 
@@ -73,6 +80,45 @@ def _mustache_to_python_format(template: str) -> str:
     # Matches {{ identifier }} or {{identifier}}
     pattern = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
     return pattern.sub(r"{\1}", template)
+
+
+def _populate_pipeline_prompts(
+    provider: PromptProvider,
+    config: PipelineConfig,
+    label_or_version: str | int = "production",
+) -> PipelineConfig:
+    """Populate all phase and refinement prompt bundles on a PipelineConfig.
+
+    Parameters
+    ----------
+    provider : PromptProvider
+        Prompt provider resolving bundles by canonical name.
+    config : PipelineConfig
+        Target configuration instance.
+    label_or_version : str or int, default "production"
+        Target deployment label or version identifier.
+
+    Returns
+    -------
+    PipelineConfig
+        Populated configuration instance.
+    """
+    config.phase2.ner_prompts = provider.get_bundle("ner_extraction", label_or_version)
+    config.phase2.entity_linking_prompts = provider.get_bundle("entity_linking", label_or_version)
+    config.phase2.entity_linking_prompt_template = config.phase2.entity_linking_prompts.direct_template
+    config.phase3.global_relation_prompts = provider.get_bundle("global_relation", label_or_version)
+    config.phase4_maturation.entity_synthesis_prompts = provider.get_bundle("entity_synthesis", label_or_version)
+    config.phase4.adu_segmentation_prompts = provider.get_bundle("adu_segmentation", label_or_version)
+    config.phase4.adu_segmentation_prompt_template = config.phase4.adu_segmentation_prompts.direct_template
+    config.phase4.acc_prompts = provider.get_bundle("acc_classification", label_or_version)
+    config.phase4.arc_prompts = provider.get_bundle("arc_classification", label_or_version)
+    config.phase3b.verification.borderline_merge_prompts = provider.get_bundle("decision_borderline_merge", label_or_version)
+    config.phase3b.verification.canonical_election_prompts = provider.get_bundle("decision_canonical_election", label_or_version)
+    config.phase5.gating.prompt_bundle = provider.get_bundle("decision_theory_fusion", label_or_version)
+    config.refinement.concept_split_prompts = provider.get_bundle("concept_split", label_or_version)
+    config.refinement.premise_recovery_prompts = provider.get_bundle("premise_recovery", label_or_version)
+    config.refinement.axiom_grounding_prompts = provider.get_bundle("axiom_grounding", label_or_version)
+    return config
 
 
 class DefaultPromptProvider:
@@ -171,6 +217,25 @@ class DefaultPromptProvider:
                 name="decision_theory_fusion",
                 provider="default",
             ),
+            "concept_split": StructuredPromptBundle(
+                direct_template=CONCEPT_SPLIT_PROMPT,
+                decision_template=DECISION_POLYSEMY_DISAMBIGUATION_QUESTION,
+                decision_criteria=DECISION_POLYSEMY_DISAMBIGUATION_CRITERIA,
+                name="concept_split",
+                provider="default",
+            ),
+            "premise_recovery": StructuredPromptBundle(
+                direct_template=PREMISE_RECOVERY_PROMPT,
+                decision_template=DECISION_ENTHYMEME_RECOVERABILITY_QUESTION,
+                name="premise_recovery",
+                provider="default",
+            ),
+            "axiom_grounding": StructuredPromptBundle(
+                direct_template=AXIOM_GROUNDING_PROMPT,
+                decision_template=DECISION_OBSERVATION_GROUNDING_QUESTION,
+                name="axiom_grounding",
+                provider="default",
+            ),
         }
         # Add common aliases
         self._aliases = {
@@ -198,6 +263,10 @@ class DefaultPromptProvider:
             "decision_canonical_election": "decision_canonical_election",
             "theory_fusion": "decision_theory_fusion",
             "decision_theory_fusion": "decision_theory_fusion",
+            "concept_splitting": "concept_split",
+            "polysemy_split": "concept_split",
+            "enthymeme_recovery": "premise_recovery",
+            "observation_grounding": "axiom_grounding",
         }
 
     def _normalize_name(self, prompt_name: str) -> str:
@@ -272,24 +341,7 @@ class DefaultPromptProvider:
         PipelineConfig
             Populated configuration instance.
         """
-        config.phase2.ner_prompts = self.get_bundle("ner_extraction", label_or_version)
-        config.phase2.entity_linking_prompts = self.get_bundle("entity_linking", label_or_version)
-        config.phase2.entity_linking_prompt_template = config.phase2.entity_linking_prompts.direct_template
-
-        config.phase3.global_relation_prompts = self.get_bundle("global_relation", label_or_version)
-
-        config.phase4_maturation.entity_synthesis_prompts = self.get_bundle("entity_synthesis", label_or_version)
-
-        config.phase4.adu_segmentation_prompts = self.get_bundle("adu_segmentation", label_or_version)
-        config.phase4.adu_segmentation_prompt_template = config.phase4.adu_segmentation_prompts.direct_template
-        config.phase4.acc_prompts = self.get_bundle("acc_classification", label_or_version)
-        config.phase4.arc_prompts = self.get_bundle("arc_classification", label_or_version)
-
-        config.phase3b.verification.borderline_merge_prompts = self.get_bundle("decision_borderline_merge", label_or_version)
-        config.phase3b.verification.canonical_election_prompts = self.get_bundle("decision_canonical_election", label_or_version)
-        config.phase5.gating.prompt_bundle = self.get_bundle("decision_theory_fusion", label_or_version)
-
-        return config
+        return _populate_pipeline_prompts(self, config, label_or_version)
 
 
 class LangfusePromptProvider:
@@ -758,24 +810,7 @@ class LangfusePromptProvider:
         if sync_defaults and isinstance(label_or_version, str):
             self.sync_defaults_to_langfuse(label=label_or_version)
 
-        config.phase2.ner_prompts = self.get_bundle("ner_extraction", label_or_version)
-        config.phase2.entity_linking_prompts = self.get_bundle("entity_linking", label_or_version)
-        config.phase2.entity_linking_prompt_template = config.phase2.entity_linking_prompts.direct_template
-
-        config.phase3.global_relation_prompts = self.get_bundle("global_relation", label_or_version)
-
-        config.phase4_maturation.entity_synthesis_prompts = self.get_bundle("entity_synthesis", label_or_version)
-
-        config.phase4.adu_segmentation_prompts = self.get_bundle("adu_segmentation", label_or_version)
-        config.phase4.adu_segmentation_prompt_template = config.phase4.adu_segmentation_prompts.direct_template
-        config.phase4.acc_prompts = self.get_bundle("acc_classification", label_or_version)
-        config.phase4.arc_prompts = self.get_bundle("arc_classification", label_or_version)
-
-        config.phase3b.verification.borderline_merge_prompts = self.get_bundle("decision_borderline_merge", label_or_version)
-        config.phase3b.verification.canonical_election_prompts = self.get_bundle("decision_canonical_election", label_or_version)
-        config.phase5.gating.prompt_bundle = self.get_bundle("decision_theory_fusion", label_or_version)
-
-        return config
+        return _populate_pipeline_prompts(self, config, label_or_version)
 
 
 class FilePromptProvider:
@@ -829,21 +864,4 @@ class FilePromptProvider:
         self, config: PipelineConfig, label_or_version: str | int = "production"
     ) -> PipelineConfig:
         """Populate PipelineConfig prompts from file definitions."""
-        config.phase2.ner_prompts = self.get_bundle("ner_extraction", label_or_version)
-        config.phase2.entity_linking_prompts = self.get_bundle("entity_linking", label_or_version)
-        config.phase2.entity_linking_prompt_template = config.phase2.entity_linking_prompts.direct_template
-
-        config.phase3.global_relation_prompts = self.get_bundle("global_relation", label_or_version)
-
-        config.phase4_maturation.entity_synthesis_prompts = self.get_bundle("entity_synthesis", label_or_version)
-
-        config.phase4.adu_segmentation_prompts = self.get_bundle("adu_segmentation", label_or_version)
-        config.phase4.adu_segmentation_prompt_template = config.phase4.adu_segmentation_prompts.direct_template
-        config.phase4.acc_prompts = self.get_bundle("acc_classification", label_or_version)
-        config.phase4.arc_prompts = self.get_bundle("arc_classification", label_or_version)
-
-        config.phase3b.verification.borderline_merge_prompts = self.get_bundle("decision_borderline_merge", label_or_version)
-        config.phase3b.verification.canonical_election_prompts = self.get_bundle("decision_canonical_election", label_or_version)
-        config.phase5.gating.prompt_bundle = self.get_bundle("decision_theory_fusion", label_or_version)
-
-        return config
+        return _populate_pipeline_prompts(self, config, label_or_version)

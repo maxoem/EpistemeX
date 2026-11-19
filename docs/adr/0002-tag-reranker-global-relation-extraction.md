@@ -22,7 +22,8 @@ approach.*"
 ## Decision
 
 Use the **TAG + LLM reranker** approach as the default `GlobalRelationExtractor` implementation (`TAGRelationExtractor`
-in `pipeline/phases/phase3_global_relations/tag_extractor.py`).
+in `packages/episteme-pipeline/episteme_pipeline/phases/phase3_global_relations/tag_extractor.py`, alongside
+`DenseRetrievalGlobalRelationExtractor` in `dense_retrieval_extractor.py`).
 
 Candidate pair blocking is structural (shared `source_chunk_ids`), which reduces the O (N²) pair space to O (E·k) —
 entities that co-occur in the same chunk. For each candidate pair the phase retrieves both entities' k-hop graph
@@ -52,6 +53,9 @@ can be substituted later without touching any phase runner code.
    1-line concept definitions to the LLM prompt. Exploring continuous pseudo-token vector injection (DKPLM / Graph-LLM
    style) remains a future research topic requiring trained projection adapters.
 
+3. **Top-Down Refinement Re-Invocation ([ADR-0024](0024-closed-loop-hermeneutic-refinement.md)):**
+   During bounded hermeneutic refinement cycles, `GlobalRelationExtractor.extract_pairs` and TAG neighborhood envelopes are re-invoked top-down strictly on targeted entity pairs—specifically by `ConceptionConceptSplitter` (`episteme_pipeline/refinement/concept_splitter.py`) after splitting a polysemous hub entity into sense-disambiguated nodes—to discover previously conflated inter-concept relations without re-running Phase 3 globally.
+
 ## Alternatives considered
 
 - **GNN (GATv2 / AGGCN)** — pros: O (N log N) at scale, embedding-space generalisation; cons: requires labelled training
@@ -64,19 +68,16 @@ can be substituted later without touching any phase runner code.
 
 ## Consequences
 
-- The `GlobalRelationExtractor` instance created in `Pipeline.from_config()` is **shared** between Phase 3 and Phase 4
-  ARC to avoid duplicate instantiation. See ADR 0004.
-- Blocking by shared chunks misses cross-chunk relations between entities that never co-occur. This is acceptable for
-  V1 — Phase 3b Latent Graph Consolidation closes the most important gap (aliases sharing no common chunk).
+- The `GlobalRelationExtractor` instance wired in `PipelineFactory.resolve_components()` is **shared** between Phase 3 and Phase 4 ARC to avoid duplicate instantiation (see ADR 0004), and can be injected into localized refinement handlers (`ConceptionConceptSplitter`, `LLMTheoryGuidedPremiseRecoverer`) to execute targeted top-down pair extraction (`GlobalRelationExtractor.extract_pairs`) and TAG envelope formatting over refined subgraphs ([ADR-0024](0024-closed-loop-hermeneutic-refinement.md)).
+- Blocking by shared chunks misses cross-chunk relations between entities that never co-occur. This is mitigated by dense retrieval (`DenseRetrievalGlobalRelationExtractor`), Phase 3b Latent Graph Consolidation (aliases sharing no common chunk), and localized top-down pair re-extraction during refinement passes.
 - GNN transition path: implement `GNNRelationExtractor(GlobalRelationExtractor)` and inject via
   `Phase3Runner(global_extractor=GNNRelationExtractor(...))`.
 
 ## Related
 
-- `pipeline/protocols/extractors.py` — `GlobalRelationExtractor(ABC)`
-- `pipeline/phases/phase3_global_relations/tag_extractor.py` — default implementation
-- `docs/feature/phase_3/step_details.md` — modularity requirement (Proposition A)
-- `docs/feature/warnings.md` — GNN evaluation warning
-- `docs/TODO_unifying_llm.md` — Implementation & Research TODO Register
+- `packages/episteme-pipeline/episteme_pipeline/protocols/extractors.py` — `GlobalRelationExtractor(Fingerprintable, ABC)`
+- `packages/episteme-pipeline/episteme_pipeline/phases/phase3_global_relations/tag_extractor.py` — TAG implementation
+- `packages/episteme-pipeline/episteme_pipeline/phases/phase3_global_relations/dense_retrieval_extractor.py` — Dense retrieval implementation
+- [ADR-0024: Closed-Loop Hermeneutic Refinement](0024-closed-loop-hermeneutic-refinement.md) — Top-down `extract_pairs` re-invocation after concept splitting
 - `docs/research/future_research_goals.md` — Literature Analysis & Future Research Goals
 

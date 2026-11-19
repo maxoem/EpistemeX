@@ -4,21 +4,21 @@
 | :--- | :--- |
 | **Issue ID** | `ISSUE-053` |
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Macro-Architecture, Bidirectional Reasoning, Hermeneutic Loop) |
-| **Target Package(s)** | `packages/episteme-pipeline` (`pipeline.py`, `phases/`, `post_processing/theoretical_enrichment/`) |
+| **Target Package(s)** | `../../../packages/episteme-pipeline` (`pipeline.py`, `phases/`, `post_processing/theoretical_enrichment/`) |
 | **Priority** | **High** |
-| **Status** | `Open` |
-| **Evaluated Docs & ADRs** | [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0002`](../../docs/adr/0002-tag-reranker-global-relation-extraction.md), [`ADR-0015`](../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md) |
+| **Status** | `Completed` |
+| **Evaluated Docs & ADRs** | [`../../../docs/architecture/pipeline_architecture.md`](../../../docs/architecture/pipeline_architecture.md), [`ADR-0002`](../../../docs/adr/0002-tag-reranker-global-relation-extraction.md), [`ADR-0015`](../../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md) |
 
 ---
 
 ## 1. Current State
 
-[`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md) defines Episteme as a **Synergized Bidirectional Reasoning Engine** (grounded in Pan et al., 2024) that combines LLMs and Knowledge Graphs in a mutually beneficial feedback loop.
+[`../../../docs/architecture/pipeline_architecture.md`](../../../docs/architecture/pipeline_architecture.md) defines Episteme as a **Synergized Bidirectional Reasoning Engine** (grounded in Pan et al., 2024) that combines LLMs and Knowledge Graphs in a mutually beneficial feedback loop.
 
 However, at the macro-architectural level, the pipeline executes as a **strictly unidirectional, one-pass feed-forward waterfall**:
 $$\text{Phase 1 (L1 Chunks)} \to \text{Phase 2/3/3b/4m (L2 Ontology)} \to \text{Phase 4/5 (L3 Argument Web)} \to \text{Phase 6 / Post-Processing (L4 TheoryNet & Tenability)}$$
 
-Currently, "gleaning" is restricted to a local, intra-chunk retry loop during initial extraction (Phase 2/4), and higher layers (`Phase 6` D-QBAF and `TheoreticalEnrichmentRunner` in [`ADR-0015`](../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md)) have **no feedback path** to request targeted re-extraction, concept splitting, or premise recovery from lower layers (L1/L2).
+Currently, "gleaning" is restricted to a local, intra-chunk retry loop during initial extraction (Phase 2/4), and higher layers (`Phase 6` D-QBAF and `TheoreticalEnrichmentRunner` in [`ADR-0015`](../../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md)) have **no feedback path** to request targeted re-extraction, concept splitting, or premise recovery from lower layers (L1/L2).
 
 ---
 
@@ -74,6 +74,6 @@ flowchart TB
 
 ## 4. Acceptance Criteria
 
-- [ ] Define `EpistemicDeficitArtifact` (`ENTHYMEME_GAP`, `POLYSEMY_COLLISION`, `UNGROUNDED_AXIOM`) in `artifacts/models.py`.
-- [ ] Implement a bounded refinement pass in the orchestrator that routes deficit artifacts back to targeted L2/L3 extractors without invalidating unaffected subgraphs.
-- [ ] Record refinement iteration lineage (`refinement_pass: int`) in `RunManifest` and `ArtifactProvenance`.
+- [x] Define `EpistemicDeficitArtifact` (`ENTHYMEME_GAP`, `POLYSEMY_COLLISION`, `UNGROUNDED_AXIOM`) in `artifacts/models.py`.
+- [x] Implement a bounded refinement pass in the orchestrator that routes deficit artifacts back to targeted L2/L3 extractors without invalidating unaffected subgraphs.
+- [x] Record refinement iteration lineage (`refinement_pass: int`) in `RunManifest` and `ArtifactProvenance`.

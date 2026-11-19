@@ -60,6 +60,10 @@ from episteme_pipeline.protocols.quality_gate import (
     QualityGateResult,
     QualityGateViolationError,
 )
+from episteme_pipeline.protocols.refinement import (
+    HermeneuticRefinementCoordinator,
+    ensure_refinement_coordinator,
+)
 from episteme_pipeline.runs.fingerprints import (
     compute_document_fingerprints,
     fingerprint_curation_ledger,
@@ -195,6 +199,9 @@ class ArtifactExecutionEngine:
         Optional pre-constructed artifact store.
     projector : ArtifactGraphProjector or None, optional
         Optional pre-constructed artifact graph projector.
+    refinement_coordinator : HermeneuticRefinementCoordinator or None, optional
+        Optional bounded top-down refinement coordinator invoked after the
+        forward DAG completes when ``config.refinement.max_refinement_cycles > 0``.
     """
 
     def __init__(
@@ -209,6 +216,7 @@ class ArtifactExecutionEngine:
         manifest_store: JsonRunManifestStore | None = None,
         artifact_store: JsonArtifactStore | None = None,
         projector: ArtifactGraphProjector | None = None,
+        refinement_coordinator: HermeneuticRefinementCoordinator | None = None,
     ) -> None:
         self.workflow = workflow
         self.config = config
@@ -231,6 +239,23 @@ class ArtifactExecutionEngine:
             schema=config.graph_schema,
             t_norm=config.phase6.conjunctive_t_norm,
         )
+        self.refinement_coordinator: HermeneuticRefinementCoordinator | None = (
+            ensure_refinement_coordinator(refinement_coordinator)
+        )
+
+    def _is_refinement_active(self) -> bool:
+        """Return whether closed-loop hermeneutic refinement is active.
+
+        Returns
+        -------
+        bool
+            ``True`` when a refinement coordinator is configured and
+            ``config.refinement.max_refinement_cycles > 0``.
+        """
+        return (
+            self.refinement_coordinator is not None
+            and self.config.refinement.max_refinement_cycles > 0
+        )
 
     def fingerprint(self) -> dict[str, Any]:
         """Return a deterministic fingerprint dictionary for the execution engine.
@@ -240,13 +265,19 @@ class ArtifactExecutionEngine:
         dict of str to Any
             JSON-serializable representation of the execution engine and workflow.
         """
-        return {
+        payload: dict[str, Any] = {
             "class": self.__class__.__name__,
             "workflow": self.workflow.fingerprint(),
             "allow_phase_reuse": self.config.execution.allow_phase_reuse,
             "allow_artifact_hydration": self.config.execution.allow_artifact_hydration,
             "project_artifacts_to_graph": self.config.execution.project_artifacts_to_graph,
         }
+        if self._is_refinement_active() and self.refinement_coordinator is not None:
+            payload["max_refinement_cycles"] = (
+                self.config.refinement.max_refinement_cycles
+            )
+            payload["refinement_coordinator"] = self.refinement_coordinator.fingerprint()
+        return payload
 
     @contextmanager
     def run_observability_scope(self, run_id: str) -> Iterator[None]:
@@ -290,6 +321,11 @@ class ArtifactExecutionEngine:
         fps: dict[str, dict[str, str]] = {}
         for phase_key, cfg in vars(self.config).items():
             if not isinstance(cfg, BaseModel):
+                continue
+            if (
+                phase_key == "refinement"
+                and self.config.refinement.max_refinement_cycles <= 0
+            ):
                 continue
             prompts: dict[str, str] = {}
             for comp_name, comp_obj in find_components(cfg).items():
@@ -373,6 +409,16 @@ class ArtifactExecutionEngine:
             if engine_fp:
                 fps["decision_engine"] = engine_fp
 
+        if self._is_refinement_active() and self.refinement_coordinator is not None:
+            coord_comps = find_components(self.refinement_coordinator)
+            for comp_name, comp_obj in coord_comps.items():
+                fp = fingerprint_method(comp_obj)
+                if fp:
+                    fps[f"refinement.{comp_name}"] = fp
+            coord_fp = fingerprint_method(self.refinement_coordinator)
+            if coord_fp:
+                fps["refinement"] = coord_fp
+
         return fps
 
     def phase_config(self, entry: WorkflowNode) -> BaseModel | None:
@@ -419,6 +465,8 @@ class ArtifactExecutionEngine:
                 cfg = self.phase_config(entry)
                 if cfg is not None:
                     fps[entry.phase_key] = fingerprint_phase_config(cfg)
+        if nodes is None and self._is_refinement_active():
+            fps["refinement"] = fingerprint_phase_config(self.config.refinement)
         return fps
 
     def phase_dependencies(self) -> dict[str, set[str]]:
@@ -714,10 +762,11 @@ class ArtifactExecutionEngine:
             wanted_phase_names = {
                 self.workflow.nodes[idx - 1].name for idx in range(1, phase_number)
             }
-        chain_artifacts = await self.get_run_artifacts_raw(run_id)
-        all_artifacts = [
-            a for a in chain_artifacts if a.phase_name in wanted_phase_names
-        ]
+        chain_artifacts = await self._collect_parent_chain_artifacts(run_id)
+        all_artifacts = self._dedup_chain_artifacts(
+            chain_artifacts,
+            allowed_phase_names=wanted_phase_names,
+        )
         if not all_artifacts:
             return None
         return ArtifactCollection(all_artifacts)
@@ -1252,30 +1301,29 @@ class ArtifactExecutionEngine:
             if self.config.execution.persist_run_manifests:
                 self.manifest_store.write_manifest(manifest)
 
-            for a in collection.artifacts:
-                self._increment_count(
-                    report.artifact_counts_by_kind, a.kind.value
-                )
-                self._increment_count(report.artifact_counts_by_phase, phase_name)
-                self._increment_count(
-                    report.new_artifact_counts_by_kind, a.kind.value
-                )
-                self._increment_count(
-                    report.new_artifact_counts_by_phase, phase_name
-                )
-                report.artifact_entries.append(
-                    ArtifactReportEntry(
-                        artifact_id=a.artifact_id,
-                        identity_key=a.identity_key or a.artifact_id,
-                        kind=a.kind.value,
-                        phase_name=a.phase_name,
-                        run_id=a.run_id,
-                        reused=False,
-                    )
-                )
+            self._record_new_artifacts_in_report(
+                report,
+                collection.artifacts,
+                phase_name_override=phase_name,
+            )
 
             artifacts_by_key[entry.phase_key] = list(collection.artifacts)
             previous = cumulative_collection
+
+        if self._is_refinement_active() and self.refinement_coordinator is not None:
+            forward_artifacts: list[Any] = list(untagged_initial_artifacts)
+            for topo_node in ordered_nodes:
+                if topo_node.phase_key in artifacts_by_key:
+                    forward_artifacts.extend(artifacts_by_key[topo_node.phase_key])
+            await self._run_refinement_stage(
+                run_id=run_id,
+                pipeline_input=pipeline_input,
+                forward_collection=ArtifactCollection(forward_artifacts),
+                manifest=manifest,
+                report=report,
+                prior_artifacts=prior_artifacts,
+                prior_manifest=prior_manifest,
+            )
 
         manifest.status = RunStatus.COMPLETED
         manifest.completed_at = datetime.now(UTC)
@@ -1303,6 +1351,179 @@ class ArtifactExecutionEngine:
             self.manifest_store.write_manifest(manifest)
 
         return ExecutionResult(manifest=manifest, report=report)
+
+    def _record_new_artifacts_in_report(
+        self,
+        report: RunReport,
+        artifacts: Sequence[Any],
+        *,
+        phase_name_override: str | None = None,
+    ) -> None:
+        """Append newly produced artifact entries and increment report counters.
+
+        Parameters
+        ----------
+        report : RunReport
+            Mutable run report being populated for the active execution.
+        artifacts : Sequence of Any
+            Newly emitted artifact envelopes to record.
+        phase_name_override : str or None, optional
+            Explicit phase label for phase counters when recording a single
+            forward phase. When ``None``, uses each artifact's ``phase_name``.
+        """
+        for art in artifacts:
+            kind_str = _artifact_kind_str(art.kind)
+            entry_phase = phase_name_override or art.phase_name
+            self._increment_count(report.artifact_counts_by_kind, kind_str)
+            self._increment_count(report.artifact_counts_by_phase, entry_phase)
+            self._increment_count(report.new_artifact_counts_by_kind, kind_str)
+            self._increment_count(report.new_artifact_counts_by_phase, entry_phase)
+            report.artifact_entries.append(
+                ArtifactReportEntry(
+                    artifact_id=art.artifact_id,
+                    identity_key=art.identity_key or art.artifact_id,
+                    kind=kind_str,
+                    phase_name=art.phase_name,
+                    run_id=art.run_id,
+                    reused=False,
+                )
+            )
+
+    async def _run_refinement_stage(
+        self,
+        *,
+        run_id: str,
+        pipeline_input: PipelineInput,
+        forward_collection: ArtifactCollection,
+        manifest: RunManifest,
+        report: RunReport,
+        prior_artifacts: ArtifactCollection | None,
+        prior_manifest: RunManifest | None,
+    ) -> ArtifactCollection:
+        """Execute bounded hermeneutic refinement over ``forward_collection``.
+
+        Parameters
+        ----------
+        run_id : str
+            Active execution run identifier.
+        pipeline_input : PipelineInput
+            Pipeline input carrying sources, metadata, and curation ledger.
+        forward_collection : ArtifactCollection
+            Cumulative artifact collection produced by the forward workflow DAG.
+        manifest : RunManifest
+            Active run manifest updated with ``refinement_pass`` and phase records.
+        report : RunReport
+            Active run report updated with new delta artifacts and phase records.
+        prior_artifacts : ArtifactCollection or None
+            Optional prior-run artifact collection for resume lineage.
+        prior_manifest : RunManifest or None
+            Optional prior-run manifest for resume lineage.
+
+        Returns
+        -------
+        ArtifactCollection
+            Updated artifact collection returned by the refinement coordinator.
+        """
+        if self.refinement_coordinator is None:
+            return forward_collection
+
+        refine_lineage_fp = stable_fingerprint(
+            {
+                "phase_key": "refinement",
+                "input_fingerprint": manifest.input_fingerprint,
+                "config_fingerprint": manifest.phase_config_fingerprints.get(
+                    "refinement"
+                ),
+                "method_fingerprints": {
+                    k: v
+                    for k, v in sorted(manifest.method_fingerprints.items())
+                    if k == "refinement"
+                    or k.startswith(("refinement.", "decision_engine."))
+                    or k == "decision_engine"
+                },
+                "upstream_fingerprint": self.fingerprint_collection(
+                    forward_collection
+                ),
+            }
+        )
+        refine_context = ArtifactExecutionContext(
+            run_id=run_id,
+            manifest=manifest,
+            pipeline_input=pipeline_input,
+            previous=forward_collection,
+            lineage_fingerprint=refine_lineage_fp,
+            prior_artifacts=prior_artifacts,
+            prior_manifest=prior_manifest,
+        )
+        refinement_emitter = ContextualEventEmitter(
+            self.event_emitter,
+            defaults={"run_id": run_id, "phase": "Hermeneutic Refinement"},
+        )
+        try:
+            with use_event_emitter(refinement_emitter):
+                refined_collection = await self.refinement_coordinator.refine(
+                    forward_collection,
+                    refine_context,
+                    config=self.config.refinement,
+                )
+        except Exception as exc:
+            logger.exception("Hermeneutic refinement loop failed")
+            fail_time = datetime.now(UTC)
+            manifest.status = RunStatus.FAILED
+            manifest.completed_at = fail_time
+            report.status = RunStatus.FAILED
+            report.completed_at = fail_time
+            report.phase_records = list(manifest.phase_records)
+            report.manifest = manifest
+            total_run_duration = (
+                (manifest.completed_at - report.started_at).total_seconds()
+                if report.started_at and manifest.completed_at
+                else 0.0
+            )
+            self.event_emitter.emit(
+                RunFailed(
+                    error_type=type(exc).__name__,
+                    error_message=str(exc),
+                    duration_seconds=total_run_duration,
+                    run_id=run_id,
+                )
+            )
+            self.event_emitter.flush()
+            report.observer_telemetry = (
+                self.event_emitter.get_observer_telemetry()
+            )
+            if self.config.execution.persist_run_manifests:
+                self.manifest_store.write_manifest(manifest)
+            raise
+
+        report.phase_records = list(manifest.phase_records)
+        report.manifest = manifest
+
+        forward_ids = {art.artifact_id for art in forward_collection.history}
+        new_refinement_artifacts = [
+            art
+            for art in refined_collection.history
+            if art.artifact_id not in forward_ids
+        ]
+        if self.config.execution.should_persist_artifacts("refinement"):
+            for art in new_refinement_artifacts:
+                await self.artifact_store.write_artifact(art)
+
+        latest_new_artifacts = [
+            art
+            for art in refined_collection.latest_by_identity.values()
+            if art.artifact_id not in forward_ids
+        ]
+        if (
+            self.config.execution.project_artifacts_to_graph
+            and latest_new_artifacts
+        ):
+            await self.projector.project_collection(
+                ArtifactCollection(latest_new_artifacts), batch_size=500
+            )
+
+        self._record_new_artifacts_in_report(report, new_refinement_artifacts)
+        return refined_collection
 
     async def run(
         self,
@@ -1663,7 +1884,13 @@ class ArtifactExecutionEngine:
         if not reused_phase_names:
             return []
 
-        artifacts = await self.get_run_artifacts_raw(decision.resume_point.run_id)
+        chain_artifacts = await self._collect_parent_chain_artifacts(
+            decision.resume_point.run_id
+        )
+        artifacts = self._dedup_chain_artifacts(
+            chain_artifacts,
+            allowed_phase_names=reused_phase_names,
+        )
 
         return [
             ArtifactReportEntry(
@@ -1675,11 +1902,10 @@ class ArtifactExecutionEngine:
                 reused=True,
             )
             for artifact in artifacts
-            if artifact.phase_name in reused_phase_names
         ]
 
-    async def get_run_artifacts_raw(self, run_id: str) -> list[Any]:
-        """Retrieve all artifacts visible from ``run_id``, walking parent-run chains.
+    async def _collect_parent_chain_artifacts(self, run_id: str) -> list[Any]:
+        """Load persisted artifact envelopes across ``run_id`` and its parent chain.
 
         Parameters
         ----------
@@ -1689,7 +1915,7 @@ class ArtifactExecutionEngine:
         Returns
         -------
         list of Any
-            Deduplicated artifact envelopes ordered deterministically by identity key.
+            Raw artifact envelopes ordered from ``run_id`` outward through ancestors.
         """
         all_artifacts = list(await self.artifact_store.list_run_artifacts(run_id))
         visited_runs = {run_id}
@@ -1707,13 +1933,69 @@ class ArtifactExecutionEngine:
                 if parent_manifest is None:
                     break
                 current_parent = parent_manifest.parent_run_id
+        return all_artifacts
 
+    @staticmethod
+    def _dedup_chain_artifacts(
+        chain_artifacts: Sequence[Any],
+        *,
+        allowed_phase_names: set[str] | None = None,
+    ) -> list[Any]:
+        """Deduplicate parent-chain artifacts by identity key deterministically.
+
+        Preserves child-run precedence over parent runs while preferring higher
+        ``provenance.refinement_pass`` when multiple overlays exist within the
+        same ``run_id``.
+
+        Parameters
+        ----------
+        chain_artifacts : Sequence of Any
+            Artifact envelopes collected from child to parent runs.
+        allowed_phase_names : set of str or None, optional
+            Optional phase-name filter applied prior to identity deduplication.
+
+        Returns
+        -------
+        list of Any
+            Deduplicated artifact envelopes ordered deterministically by key.
+        """
         unique_artifacts: dict[str, Any] = {}
-        for a in all_artifacts:
-            key = a.identity_key or a.artifact_id
-            if key not in unique_artifacts:
-                unique_artifacts[key] = a
+        for art in chain_artifacts:
+            if (
+                allowed_phase_names is not None
+                and art.phase_name not in allowed_phase_names
+            ):
+                continue
+            key = art.identity_key or art.artifact_id
+            existing = unique_artifacts.get(key)
+            if existing is None:
+                unique_artifacts[key] = art
+                continue
+            if art.run_id == existing.run_id and (
+                art.provenance.refinement_pass,
+                art.artifact_id,
+            ) > (
+                existing.provenance.refinement_pass,
+                existing.artifact_id,
+            ):
+                unique_artifacts[key] = art
         return [unique_artifacts[key] for key in sorted(unique_artifacts)]
+
+    async def get_run_artifacts_raw(self, run_id: str) -> list[Any]:
+        """Retrieve all artifacts visible from ``run_id``, walking parent-run chains.
+
+        Parameters
+        ----------
+        run_id : str
+            Starting run identifier.
+
+        Returns
+        -------
+        list of Any
+            Deduplicated artifact envelopes ordered deterministically by identity key.
+        """
+        chain_artifacts = await self._collect_parent_chain_artifacts(run_id)
+        return self._dedup_chain_artifacts(chain_artifacts)
 
     async def diff_artifacts(
         self, run_id: str, baseline_run_id: str
@@ -1766,13 +2048,14 @@ class ArtifactExecutionEngine:
         if manifest is None:
             raise ValueError(f"No manifest found for run_id={run_id}")
 
-        artifacts = await self.get_run_artifacts_raw(run_id)
+        chain_artifacts = await self._collect_parent_chain_artifacts(run_id)
         active_phase_names = {
             rec.phase_name for rec in manifest.phase_records
         }
-        artifacts = [
-            a for a in artifacts if a.phase_name in active_phase_names
-        ]
+        artifacts = self._dedup_chain_artifacts(
+            chain_artifacts,
+            allowed_phase_names=active_phase_names,
+        )
 
         by_kind: dict[str, int] = {}
         by_phase: dict[str, int] = {}

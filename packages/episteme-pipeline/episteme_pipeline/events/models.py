@@ -944,6 +944,100 @@ class QualityGateEvaluated(BaseEvent):
     message: str = ""
 
 
+class EpistemicDeficitDetected(BaseEvent):
+    """Emitted when a top-down epistemic deficit signal is detected (ISSUE-053).
+
+    Attributes
+    ----------
+    deficit_id : str
+        Deterministic identifier of the detected epistemic deficit.
+    deficit_kind : str
+        Canonical deficit classification (``enthymeme_gap``,
+        ``polysemy_collision``, or ``ungrounded_axiom``).
+    severity : float, default 0.5
+        Normalized severity score in ``[0.0, 1.0]``.
+    target_chunk_ids : list of str, optional
+        Target L1 chunk identifiers flagged for localized refinement.
+    target_entity_ids : list of str, optional
+        Target L2 entity identifiers implicated by the deficit.
+    target_atom_ids : list of str, optional
+        Target L3 theory atom identifiers exhibiting the deficit.
+    target_relation_ids : list of str, optional
+        Target L3 theory relation identifiers implicated by the deficit.
+    theory_id : str or None, optional
+        Identifier of the conditioning Theory-Element, if applicable.
+    refinement_pass : int, default 0
+        Refinement cycle index during which this deficit was detected.
+    rationale : str, default ""
+        Diagnostic explanation of why the deficit was emitted.
+    """
+
+    deficit_id: str
+    deficit_kind: str
+    severity: float = Field(default=0.5, ge=0.0, le=1.0)
+    target_chunk_ids: list[str] = Field(default_factory=list)
+    target_entity_ids: list[str] = Field(default_factory=list)
+    target_atom_ids: list[str] = Field(default_factory=list)
+    target_relation_ids: list[str] = Field(default_factory=list)
+    theory_id: str | None = None
+    refinement_pass: int = Field(default=0, ge=0)
+    rationale: str = ""
+
+
+class RefinementCycleStarted(BaseEvent):
+    """Emitted when a bounded hermeneutic refinement cycle begins execution.
+
+    Attributes
+    ----------
+    refinement_pass : int, default 1
+        1-based index of the refinement pass starting execution.
+    deficit_count : int, default 0
+        Number of prioritized deficits scheduled for this refinement cycle.
+    deficit_ids : list of str, optional
+        Identifiers of the scheduled deficits.
+    target_chunk_ids : list of str, optional
+        Distinct L1 chunk identifiers targeted across scheduled deficits.
+    target_entity_ids : list of str, optional
+        Distinct L2 entity identifiers targeted across scheduled deficits.
+    """
+
+    refinement_pass: int = Field(default=1, ge=0)
+    deficit_count: int = Field(default=0, ge=0)
+    deficit_ids: list[str] = Field(default_factory=list)
+    target_chunk_ids: list[str] = Field(default_factory=list)
+    target_entity_ids: list[str] = Field(default_factory=list)
+
+
+class RefinementCycleCompleted(BaseEvent):
+    """Emitted when a bounded hermeneutic refinement cycle finishes execution.
+
+    Attributes
+    ----------
+    refinement_pass : int, default 1
+        1-based index of the completed refinement pass.
+    resolved_deficit_count : int, default 0
+        Number of epistemic deficits resolved during this pass.
+    remaining_deficit_count : int, default 0
+        Number of epistemic deficits remaining after post-refinement re-evaluation.
+    resolved_deficit_ids : list of str, optional
+        Identifiers of deficits resolved during this pass.
+    delta_artifact_count : int, default 0
+        Total number of delta artifacts emitted during this pass.
+    duration_seconds : float, default 0.0
+        Wall-clock duration of the refinement cycle in seconds.
+    converged : bool, default False
+        True when no further actionable deficits remain or no delta was produced.
+    """
+
+    refinement_pass: int = Field(default=1, ge=0)
+    resolved_deficit_count: int = Field(default=0, ge=0)
+    remaining_deficit_count: int = Field(default=0, ge=0)
+    resolved_deficit_ids: list[str] = Field(default_factory=list)
+    delta_artifact_count: int = Field(default=0, ge=0)
+    duration_seconds: float = Field(default=0.0, ge=0.0)
+    converged: bool = False
+
+
 # Type union for event handling
 PipelineEvent = (
     EntityProcessed |
@@ -957,7 +1051,8 @@ PipelineEvent = (
     ProgressStarted | ProgressAdvanced | ProgressCompleted |
     EvaluationCompleted | EvaluationScoreLogged | ValidationViolationDetected |
     DecisionEvaluationStarted | DecisionEvaluationCompleted | DecisionGatingTriggered |
-    ModalStrengthResolved | QualityGateEvaluated
+    ModalStrengthResolved | QualityGateEvaluated |
+    EpistemicDeficitDetected | RefinementCycleStarted | RefinementCycleCompleted
 )
 
 

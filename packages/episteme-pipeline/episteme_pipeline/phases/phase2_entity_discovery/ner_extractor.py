@@ -16,7 +16,6 @@ CoT strategy (from docs/workflow/2_entity_discovery/prompting.md):
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from enum import Enum
 from typing import Any
@@ -40,17 +39,9 @@ from episteme_pipeline.protocols.extractors import NERExtractor
 from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.prompts import PromptContextual
 from episteme_pipeline.schema.default_schema import SchemaConfig
+from episteme_pipeline.utils.identifiers import stable_entity_id as _stable_entity_id
 
 logger = logging.getLogger(__name__)
-
-
-def _stable_entity_id(label: str, name: str) -> str:
-    """
-    Deterministic entity ID from label + normalized name.
-    Same entity name + label across chunks → same ID → MERGE deduplicates.
-    """
-    key = f"{label.upper()}::{name.strip().lower()}"
-    return f"entity_{hashlib.sha256(key.encode()).hexdigest()[:14]}"
 
 
 DEFAULT_NER_PROMPTS = StructuredPromptBundle(

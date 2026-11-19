@@ -41,11 +41,18 @@ from episteme_pipeline.protocols.quality_gate import (
     EpistemicQualityGate,
     ensure_quality_gates,
 )
+from episteme_pipeline.protocols.refinement import (
+    EpistemicDeficitDetector,
+    HermeneuticRefinementCoordinator,
+    ensure_deficit_detector,
+    ensure_refinement_coordinator,
+)
 from episteme_pipeline.runtime.quality_gates import build_default_quality_gates
 from episteme_pipeline.runtime.workflow_dag import WorkflowDAG
 
 if TYPE_CHECKING:
     from episteme_pipeline.pipeline import Pipeline
+    from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
 
 #: Tasks ``PipelineFactory`` knows how to build.
 SUPPORTED_TASKS: frozenset[str] = frozenset({"knowledge_graph"})
@@ -77,6 +84,23 @@ class ResolvedPipelineComponents:
         Global relation extractor strategy.
     quality_gates : tuple of EpistemicQualityGate
         Inter-phase epistemic quality gates.
+    deficit_detector : EpistemicDeficitDetector or None, optional
+        Top-down epistemic deficit detector wired when hermeneutic refinement
+        is enabled (``config.refinement.max_refinement_cycles > 0``).
+    refinement_coordinator : HermeneuticRefinementCoordinator or None, optional
+        Bounded top-down refinement coordinator wired when hermeneutic
+        refinement is enabled (``config.refinement.max_refinement_cycles > 0``).
+    enrichment_runner : PhaseRunner or None, optional
+        Optional shared theoretical enrichment post-processor instance reused
+        across forward execution and localized refinement re-scoring.
+    entity_linker : Any or None, optional
+        Shared Phase 2 entity linker strategy reused across forward entity linking
+        and backward refinement handlers.
+    ner_extractor : Any or None, optional
+        Shared Phase 2 NER extractor reused by localized axiom grounding.
+    arc_classifier : Any or None, optional
+        Shared Phase 4 ARC classifier reused across forward argument mining and
+        theory-guided premise recovery.
     """
 
     llm: Any
@@ -89,6 +113,12 @@ class ResolvedPipelineComponents:
     event_emitter: EventEmitter
     global_extractor: GlobalRelationExtractor
     quality_gates: tuple[EpistemicQualityGate, ...]
+    deficit_detector: EpistemicDeficitDetector | None = None
+    refinement_coordinator: HermeneuticRefinementCoordinator | None = None
+    enrichment_runner: PhaseRunner[Any] | None = None
+    entity_linker: Any | None = None
+    ner_extractor: Any | None = None
+    arc_classifier: Any | None = None
 
 
 class PipelineFactory(Fingerprintable):
@@ -111,11 +141,208 @@ class PipelineFactory(Fingerprintable):
         dict of str to Any
             JSON-serializable configuration snapshot.
         """
-        return {
+        payload: dict[str, Any] = {
             "class": self.__class__.__name__,
             "schema_version": self.config.graph_schema.version,
             "quality_gates": self.config.quality_gates.model_dump(mode="json"),
         }
+        if self.config.refinement.max_refinement_cycles > 0:
+            payload["refinement"] = self.config.refinement.model_dump(mode="json")
+        return payload
+
+    @classmethod
+    def _build_theorynet_projector(
+        cls,
+        config: PipelineConfig,
+        modal_resolver: ModalStrengthResolver,
+    ) -> TheoryNetProjector:
+        """Instantiate a ``TheoryNetProjector`` configured from ``config.phase6``."""
+        from episteme_pipeline.projection.theorynet_projector import (
+            TheoryNetProjector,
+        )
+
+        p6_cfg = config.phase6
+        return TheoryNetProjector(
+            schema=config.graph_schema,
+            admissibility_threshold=p6_cfg.admissibility_threshold,
+            admissibility_mode=p6_cfg.admissibility_mode,
+            tau_p=p6_cfg.tau_p,
+            tau_c=p6_cfg.tau_c,
+            prune_inadmissible=p6_cfg.prune_inadmissible,
+            iterations=p6_cfg.iterations,
+            tolerance=p6_cfg.tolerance,
+            semantics_model=p6_cfg.semantics_model,
+            modal_resolver=modal_resolver,
+            use_continuous=p6_cfg.use_continuous,
+            perspective=p6_cfg.perspective,
+            isolate_suppositional=p6_cfg.isolate_suppositional,
+            isolate_attributed=p6_cfg.isolate_attributed,
+            t_norm=p6_cfg.conjunctive_t_norm,
+        )
+
+    @classmethod
+    def _build_entity_linker(
+        cls,
+        *,
+        config: PipelineConfig,
+        embedding_model: EmbeddingModel | None,
+        cross_encoder: CrossEncoder | None,
+        decision_engine: DecisionEngine | None,
+    ) -> Any:
+        """Construct the default Phase 2 / refinement ``EntityLinker`` strategy."""
+        from episteme_pipeline.phases.phase2_entity_discovery.entity_linker import (
+            NameEntityLinker,
+        )
+        from episteme_pipeline.phases.phase2_entity_discovery.jev_entity_linker import (
+            CascadingEntityLinker,
+            JevEntityLinker,
+        )
+        from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import (
+            DenseEntityLinker,
+        )
+
+        p2_cfg = config.phase2
+        if embedding_model is None:
+            return NameEntityLinker()
+        dense_linker = DenseEntityLinker(
+            embedding_model=embedding_model,
+            cross_encoder=cross_encoder,
+            tau=p2_cfg.linking_confidence_threshold,
+            top_k=p2_cfg.top_k_linking_candidates,
+        )
+        if decision_engine is not None:
+            fast_linker = JevEntityLinker(
+                decision_engine=decision_engine,
+                embedding_model=embedding_model,
+                alpha=p2_cfg.conformal_linking_alpha,
+                top_k=p2_cfg.top_k_linking_candidates,
+                ooo_threshold=p2_cfg.jev_ooo_threshold,
+            )
+            return CascadingEntityLinker(
+                primary=fast_linker,
+                fallback=dense_linker,
+            )
+        return dense_linker
+
+    @classmethod
+    def _build_arc_classifier(
+        cls,
+        *,
+        config: PipelineConfig,
+        llm: Any,
+        embedding_model: EmbeddingModel | None,
+        decision_engine: DecisionEngine | None,
+    ) -> Any:
+        """Construct the default Phase 4 / refinement ``ARCClassifier`` strategy."""
+        from episteme_pipeline.phases.phase4_argument_mining.arc_classifier import (
+            TAGARCClassifier,
+        )
+        from episteme_pipeline.phases.phase4_argument_mining.classifiers import (
+            CascadingARCClassifier,
+            JevARCClassifier,
+        )
+
+        p4_cfg = config.phase4
+        default_tag_arc = TAGARCClassifier(
+            llm=llm,
+            embedding_model=embedding_model,
+            prompts=p4_cfg.arc_prompts,
+            strategy=p4_cfg.arc_decoding_strategy,
+            confidence_threshold=p4_cfg.arc_confidence_threshold,
+            subgraph_depth=p4_cfg.arc_subgraph_depth,
+            max_candidates_per_component=p4_cfg.arc_max_candidates_per_component,
+            use_priority_rank=p4_cfg.arc_use_priority_rank,
+            use_csls=p4_cfg.arc_use_csls,
+            csls_k_nearest=p4_cfg.arc_csls_k_nearest,
+            use_adaptive_k=p4_cfg.arc_use_adaptive_k,
+            adaptive_k_gamma=p4_cfg.arc_adaptive_k_gamma,
+            adaptive_k_min=p4_cfg.arc_adaptive_k_min,
+            z_score_threshold=p4_cfg.arc_z_score_threshold,
+        )
+        if decision_engine is not None:
+            return CascadingARCClassifier(
+                fast_classifier=JevARCClassifier(
+                    decision_engine=decision_engine,
+                    prompts=p4_cfg.arc_prompts,
+                    embedding_model=embedding_model,
+                    confidence_threshold=p4_cfg.arc_confidence_threshold,
+                    max_candidates_per_component=p4_cfg.arc_max_candidates_per_component,
+                ),
+                llm_classifier=default_tag_arc,
+                config=p4_cfg,
+            )
+        return default_tag_arc
+
+    @classmethod
+    def build_standalone_refinement(
+        cls,
+        *,
+        config: PipelineConfig,
+        decision_engine: DecisionEngine | None = None,
+        modal_resolver: ModalStrengthResolver | None = None,
+        detector: EpistemicDeficitDetector | None = None,
+    ) -> tuple[EpistemicDeficitDetector, HermeneuticRefinementCoordinator]:
+        """Construct default refinement detector and coordinator for standalone ``Pipeline``.
+
+        Parameters
+        ----------
+        config : PipelineConfig
+            Pipeline configuration providing schema, Phase 6, and refinement settings.
+        decision_engine : DecisionEngine or None, optional
+            Optional System 1 decision engine shared with refinement triage gates.
+        modal_resolver : ModalStrengthResolver or None, optional
+            Optional modal strength resolver for TheoryNet projection and atom priors.
+        detector : EpistemicDeficitDetector or None, optional
+            Optional pre-constructed deficit detector.
+
+        Returns
+        -------
+        tuple of (EpistemicDeficitDetector, HermeneuticRefinementCoordinator)
+            Configured deficit detector and coordinator.
+        """
+        from episteme_pipeline.post_processing.theoretical_enrichment.projectors import (
+            GenericTheoryProjector,
+        )
+        from episteme_pipeline.refinement import (
+            ClosedLoopRefinementCoordinator,
+            ConceptionConceptSplitter,
+            TheoryGuidedAxiomGrounder,
+            TheoryNetDeficitDetector,
+        )
+
+        resolved_modal = ensure_modal_strength_resolver(
+            modal_resolver
+        ) or HybridModalResolver.create(
+            config=config.modal_resolver,
+            decision_engine=decision_engine,
+        )
+        default_theorynet_projector = cls._build_theorynet_projector(
+            config, resolved_modal
+        )
+        resolved_detector = ensure_deficit_detector(detector) or TheoryNetDeficitDetector(
+            config=config.refinement,
+            schema=config.graph_schema,
+        )
+        coordinator = ClosedLoopRefinementCoordinator(
+            detector=resolved_detector,
+            concept_splitter=ConceptionConceptSplitter(
+                decision_engine=decision_engine,
+                config=config.refinement,
+                schema=config.graph_schema,
+            ),
+            axiom_grounder=TheoryGuidedAxiomGrounder(
+                theory_projector=GenericTheoryProjector(),
+                modal_resolver=resolved_modal,
+                decision_engine=decision_engine,
+                config=config.refinement,
+                schema=config.graph_schema,
+            ),
+            theorynet_projector=default_theorynet_projector,
+            modal_resolver=resolved_modal,
+            config=config.refinement,
+            schema=config.graph_schema,
+        )
+        return resolved_detector, coordinator
 
     @classmethod
     def resolve_components(
@@ -132,6 +359,12 @@ class PipelineFactory(Fingerprintable):
         decision_engine: DecisionEngine | None = None,
         modal_resolver: ModalStrengthResolver | None = None,
         quality_gates: Iterable[EpistemicQualityGate] | None = None,
+        entity_linker: Any | None = None,
+        ner_extractor: Any | None = None,
+        arc_classifier: Any | None = None,
+        deficit_detector: EpistemicDeficitDetector | None = None,
+        refinement_coordinator: HermeneuticRefinementCoordinator | None = None,
+        enrichment_runner: PhaseRunner[Any] | None = None,
     ) -> ResolvedPipelineComponents:
         """Resolve and normalize all pipeline collaborators from ``config``.
 
@@ -160,6 +393,18 @@ class PipelineFactory(Fingerprintable):
         quality_gates : Iterable of EpistemicQualityGate or None, optional
             Explicit quality gates override. If ``None``, built from
             ``config.quality_gates``.
+        ner_extractor : Any or None, optional
+            Optional custom Phase 2 NER extractor reused by localized axiom
+            grounding when hermeneutic refinement is active.
+        arc_classifier : Any or None, optional
+            Optional custom Phase 4 ARC classifier reused by theory-guided
+            premise recovery when hermeneutic refinement is active.
+        deficit_detector : EpistemicDeficitDetector or None, optional
+            Optional override for top-down epistemic deficit detection.
+        refinement_coordinator : HermeneuticRefinementCoordinator or None, optional
+            Optional override for closed-loop hermeneutic refinement coordination.
+        enrichment_runner : PhaseRunner or None, optional
+            Optional shared theoretical enrichment post-processor instance.
 
         Returns
         -------
@@ -278,6 +523,145 @@ class PipelineFactory(Fingerprintable):
             else build_default_quality_gates(config, decision_engine=decision_engine)
         )
 
+        resolved_detector = ensure_deficit_detector(deficit_detector)
+        resolved_coordinator = ensure_refinement_coordinator(refinement_coordinator)
+
+        enrichment_enabled = (
+            config.theoretical_enrichment is not None
+            and config.theoretical_enrichment.enabled
+        )
+        shared_projector: TheoryNetProjector | None = None
+        if enrichment_enabled or config.refinement.max_refinement_cycles > 0:
+            shared_projector = cls._build_theorynet_projector(
+                config, resolved_modal_resolver
+            )
+
+        resolved_enrichment_runner: PhaseRunner[Any] | None = enrichment_runner
+        if resolved_enrichment_runner is None and enrichment_enabled:
+            from episteme_pipeline.post_processing.theoretical_enrichment import (
+                TheoreticalEnrichmentRunner,
+            )
+
+            assert config.theoretical_enrichment is not None
+            resolved_enrichment_runner = TheoreticalEnrichmentRunner(
+                config=config.theoretical_enrichment,
+                schema=config.graph_schema,
+                graph_store=None,
+                llm=llm,
+                theorynet_projector=shared_projector,
+            )
+
+        from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import (
+            LLMNERExtractor,
+        )
+
+        resolved_entity_linker = entity_linker or cls._build_entity_linker(
+            config=config,
+            embedding_model=normalized_embedding,
+            cross_encoder=cross_encoder,
+            decision_engine=decision_engine,
+        )
+        resolved_ner = ner_extractor or LLMNERExtractor.from_config(
+            llm=llm,
+            config=config.phase2,
+            decision_engine=decision_engine,
+        )
+        resolved_arc_classifier = arc_classifier or cls._build_arc_classifier(
+            config=config,
+            llm=llm,
+            embedding_model=normalized_embedding,
+            decision_engine=decision_engine,
+        )
+
+        if config.refinement.max_refinement_cycles > 0:
+            from episteme_pipeline.post_processing.theoretical_enrichment import (
+                TheoreticalEnrichmentRunner,
+            )
+            from episteme_pipeline.post_processing.theoretical_enrichment.projectors import (
+                CompositeTheoryProjector,
+                LLMTheoryProjector,
+                TheoryProjector,
+            )
+            from episteme_pipeline.refinement import (
+                ClosedLoopRefinementCoordinator,
+                ConceptionConceptSplitter,
+                LLMTheoryGuidedPremiseRecoverer,
+                TheoryGuidedAxiomGrounder,
+                TheoryNetDeficitDetector,
+            )
+
+            if resolved_detector is None:
+                resolved_detector = TheoryNetDeficitDetector(
+                    config=config.refinement,
+                    schema=config.graph_schema,
+                )
+            if resolved_coordinator is None:
+                enrichment_for_coord = (
+                    resolved_enrichment_runner
+                    if isinstance(
+                        resolved_enrichment_runner, TheoreticalEnrichmentRunner
+                    )
+                    else None
+                )
+                shared_theory_projector: TheoryProjector
+                if enrichment_for_coord is not None:
+                    shared_theory_projector = enrichment_for_coord.projector
+                elif llm is not None:
+                    enr_cfg = config.theoretical_enrichment
+                    shared_theory_projector = LLMTheoryProjector(
+                        llm=llm,
+                        prompts=enr_cfg.projection_prompts if enr_cfg is not None else None,
+                        strategy=(
+                            enr_cfg.decoding_strategy
+                            if enr_cfg is not None
+                            else "direct_constrained"
+                        ),
+                    )
+                else:
+                    shared_theory_projector = CompositeTheoryProjector()
+
+                premise_recoverer = LLMTheoryGuidedPremiseRecoverer(
+                    llm=llm,
+                    arc_classifier=resolved_arc_classifier,
+                    global_extractor=global_extractor,
+                    entity_linker=resolved_entity_linker,
+                    modal_resolver=resolved_modal_resolver,
+                    decision_engine=decision_engine,
+                    config=config.refinement,
+                    schema=config.graph_schema,
+                    confidence_threshold=config.phase4.arc_confidence_threshold,
+                )
+                concept_splitter = ConceptionConceptSplitter(
+                    global_extractor=global_extractor,
+                    llm=llm,
+                    embedding_model=normalized_embedding,
+                    decision_engine=decision_engine,
+                    config=config.refinement,
+                    schema=config.graph_schema,
+                )
+                axiom_grounder = TheoryGuidedAxiomGrounder(
+                    ner_extractor=resolved_ner,
+                    llm=llm,
+                    theory_projector=shared_theory_projector,
+                    embedding_model=normalized_embedding,
+                    entity_linker=resolved_entity_linker,
+                    modal_resolver=resolved_modal_resolver,
+                    decision_engine=decision_engine,
+                    config=config.refinement,
+                    schema=config.graph_schema,
+                )
+                resolved_coordinator = ClosedLoopRefinementCoordinator(
+                    detector=resolved_detector,
+                    premise_recoverer=premise_recoverer,
+                    concept_splitter=concept_splitter,
+                    axiom_grounder=axiom_grounder,
+                    theorynet_projector=shared_projector,
+                    enrichment_runner=enrichment_for_coord,
+                    modal_resolver=resolved_modal_resolver,
+                    config=config.refinement,
+                    schema=config.graph_schema,
+                )
+
         return ResolvedPipelineComponents(
             llm=llm,
             embedding_model=normalized_embedding,
@@ -289,6 +673,12 @@ class PipelineFactory(Fingerprintable):
             event_emitter=emitter,
             global_extractor=global_extractor,
             quality_gates=resolved_gates,
+            deficit_detector=resolved_detector,
+            refinement_coordinator=resolved_coordinator,
+            enrichment_runner=resolved_enrichment_runner,
+            entity_linker=resolved_entity_linker,
+            ner_extractor=resolved_ner,
+            arc_classifier=resolved_arc_classifier,
         )
 
     @classmethod
@@ -372,8 +762,8 @@ class PipelineFactory(Fingerprintable):
                 cross_encoder=components.cross_encoder,
                 working_memory_manager=working_memory_manager,
                 decision_engine=components.decision_engine,
-                entity_linker=entity_linker,
-                ner_extractor=ner_extractor,
+                entity_linker=entity_linker or components.entity_linker,
+                ner_extractor=ner_extractor or components.ner_extractor,
             ),
             Phase3Runner(
                 config.phase3,
@@ -403,7 +793,7 @@ class PipelineFactory(Fingerprintable):
                 graph_store=components.checkpoint_store,
                 global_extractor=components.global_extractor,
                 acc_classifier=acc_classifier,
-                arc_classifier=arc_classifier,
+                arc_classifier=arc_classifier or components.arc_classifier,
                 decision_engine=components.decision_engine,
                 modal_resolver=components.modal_resolver,
             ),
@@ -426,40 +816,25 @@ class PipelineFactory(Fingerprintable):
             config.theoretical_enrichment is not None
             and config.theoretical_enrichment.enabled
         ):
-            from episteme_pipeline.post_processing.theoretical_enrichment import (
-                TheoreticalEnrichmentRunner,
-            )
-            from episteme_pipeline.projection.theorynet_projector import (
-                TheoryNetProjector,
-            )
-
-            p6_cfg = config.phase6
-            enrichment_projector = TheoryNetProjector(
-                schema=config.graph_schema,
-                admissibility_threshold=p6_cfg.admissibility_threshold,
-                admissibility_mode=p6_cfg.admissibility_mode,
-                tau_p=p6_cfg.tau_p,
-                tau_c=p6_cfg.tau_c,
-                prune_inadmissible=p6_cfg.prune_inadmissible,
-                iterations=p6_cfg.iterations,
-                tolerance=p6_cfg.tolerance,
-                semantics_model=p6_cfg.semantics_model,
-                modal_resolver=components.modal_resolver,
-                use_continuous=p6_cfg.use_continuous,
-                perspective=p6_cfg.perspective,
-                isolate_suppositional=p6_cfg.isolate_suppositional,
-                isolate_attributed=p6_cfg.isolate_attributed,
-                t_norm=p6_cfg.conjunctive_t_norm,
-            )
-            phases.append(
-                TheoreticalEnrichmentRunner(
-                    config=config.theoretical_enrichment,
-                    schema=config.graph_schema,
-                    graph_store=None,
-                    llm=components.llm,
-                    theorynet_projector=enrichment_projector,
+            if components.enrichment_runner is not None:
+                phases.append(components.enrichment_runner)
+            else:
+                from episteme_pipeline.post_processing.theoretical_enrichment import (
+                    TheoreticalEnrichmentRunner,
                 )
-            )
+
+                enrichment_projector = cls._build_theorynet_projector(
+                    config, components.modal_resolver
+                )
+                phases.append(
+                    TheoreticalEnrichmentRunner(
+                        config=config.theoretical_enrichment,
+                        schema=config.graph_schema,
+                        graph_store=None,
+                        llm=components.llm,
+                        theorynet_projector=enrichment_projector,
+                    )
+                )
 
         if post_processors:
             phases.extend(post_processors)
@@ -524,6 +899,8 @@ class PipelineFactory(Fingerprintable):
         ner_extractor: Any | None = None,
         modal_resolver: ModalStrengthResolver | None = None,
         quality_gates: Iterable[EpistemicQualityGate] | None = None,
+        deficit_detector: EpistemicDeficitDetector | None = None,
+        refinement_coordinator: HermeneuticRefinementCoordinator | None = None,
     ) -> Pipeline:
         """Create a fully wired :class:`Pipeline` for ``task``.
 
@@ -571,6 +948,10 @@ class PipelineFactory(Fingerprintable):
             Propositional modal strength resolver.
         quality_gates : Iterable of EpistemicQualityGate or None, optional
             Explicit inter-phase quality gates.
+        deficit_detector : EpistemicDeficitDetector or None, optional
+            Optional override for top-down epistemic deficit detection.
+        refinement_coordinator : HermeneuticRefinementCoordinator or None, optional
+            Optional override for closed-loop hermeneutic refinement coordination.
 
         Returns
         -------
@@ -594,6 +975,11 @@ class PipelineFactory(Fingerprintable):
             decision_engine=decision_engine,
             modal_resolver=modal_resolver,
             quality_gates=quality_gates,
+            entity_linker=entity_linker,
+            ner_extractor=ner_extractor,
+            arc_classifier=arc_classifier,
+            deficit_detector=deficit_detector,
+            refinement_coordinator=refinement_coordinator,
         )
         phases = cls.build_phases(
             task=task,
@@ -612,6 +998,13 @@ class PipelineFactory(Fingerprintable):
             phases=phases,
             quality_gates=components.quality_gates,
         )
+        extra_pipeline_kwargs: dict[str, Any] = {}
+        if components.deficit_detector is not None:
+            extra_pipeline_kwargs["deficit_detector"] = components.deficit_detector
+        if components.refinement_coordinator is not None:
+            extra_pipeline_kwargs["refinement_coordinator"] = (
+                components.refinement_coordinator
+            )
         return pipeline_cls(
             phases=phases,
             config=config,
@@ -623,4 +1016,5 @@ class PipelineFactory(Fingerprintable):
             modal_resolver=components.modal_resolver,
             quality_gates=components.quality_gates,
             workflow=workflow,
+            **extra_pipeline_kwargs,
         )

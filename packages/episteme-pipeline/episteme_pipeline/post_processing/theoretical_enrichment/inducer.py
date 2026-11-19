@@ -141,8 +141,8 @@ class LLMTheoryInducer:
         observations: list[TheoryAtom] = []
 
         for atom in atoms:
-            part = graph_schema.component_partitions.get(atom.component_type, "")
-            if part == "A" or "hypothesis" in atom.component_type.lower() or "claim" in atom.component_type.lower():
+            part = graph_schema.resolve_component_partition(atom.component_type)
+            if part == "A":
                 hypotheses.append(atom)
             else:
                 observations.append(atom)

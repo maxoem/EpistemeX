@@ -6,6 +6,8 @@ matrix computation with zero-norm safeguards to prevent NaN propagation.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 
 
@@ -78,6 +80,39 @@ def cosine_similarity_matrix(
         return np.dot(norm_a, norm_b)
     else:
         return np.dot(norm_a, norm_b.T)
+
+
+def cosine_similarity(
+    vec_a: Sequence[float] | np.ndarray,
+    vec_b: Sequence[float] | np.ndarray,
+) -> float:
+    """Compute scalar cosine similarity between two equal-length 1D vectors.
+
+    Parameters
+    ----------
+    vec_a : Sequence of float or np.ndarray
+        First embedding vector.
+    vec_b : Sequence of float or np.ndarray
+        Second embedding vector.
+
+    Returns
+    -------
+    float
+        Cosine similarity in ``[-1.0, 1.0]``, or ``0.0`` when inputs are
+        empty, mismatched in dimension, or have zero norm.
+    """
+    arr_a = np.asarray(vec_a, dtype=np.float32)
+    arr_b = np.asarray(vec_b, dtype=np.float32)
+    if (
+        arr_a.ndim != 1
+        or arr_b.ndim != 1
+        or arr_a.size == 0
+        or arr_a.shape != arr_b.shape
+    ):
+        return 0.0
+    if float(np.linalg.norm(arr_a)) <= 1e-12 or float(np.linalg.norm(arr_b)) <= 1e-12:
+        return 0.0
+    return float(cosine_similarity_matrix(arr_a, arr_b))
 
 
 def csls_similarity_matrix(

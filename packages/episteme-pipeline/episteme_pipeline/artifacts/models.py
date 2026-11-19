@@ -16,6 +16,8 @@ from pydantic import BaseModel, Field, model_validator
 
 from episteme_pipeline.contracts.domain import (
     EntityConception,
+    EpistemicDeficit,
+    EpistemicDeficitKind,
     GlobalStructuralAnchor,
     L1Chunk,
     L1Document,
@@ -138,6 +140,7 @@ class ArtifactKind(StrEnum):
     FUSION_DECISION = "fusion_decision"
     CANONICALIZATION = "canonicalization"
     THEORETICAL_ENRICHMENT = "theoretical_enrichment"
+    EPISTEMIC_DEFICIT = "epistemic_deficit"
 
 
 class ArtifactRef(BaseModel):
@@ -148,11 +151,35 @@ class ArtifactRef(BaseModel):
 
 
 class ArtifactProvenance(BaseModel):
+    """Provenance and refinement lineage metadata attached to an artifact envelope.
+
+    Parameters
+    ----------
+    source_path : str or None, optional
+        Source document path on disk, by default None.
+    source_document_id : str or None, optional
+        Originating L1 document identifier, by default None.
+    source_chunk_id : str or None, optional
+        Originating L1 chunk identifier, by default None.
+    upstream_artifact_ids : list of str, optional
+        Artifact IDs consumed to produce this artifact.
+    notes : dict of str to str, optional
+        Freeform provenance key-value notes.
+    refinement_pass : int, default 0
+        Hermeneutic refinement iteration number that produced this artifact
+        (``0`` for initial forward construction).
+    deficit_id : str or None, optional
+        Identifier of the :class:`EpistemicDeficit` that triggered localized
+        refinement for this artifact, if any.
+    """
+
     source_path: str | None = None
     source_document_id: str | None = None
     source_chunk_id: str | None = None
     upstream_artifact_ids: list[str] = Field(default_factory=list)
     notes: dict[str, str] = Field(default_factory=dict)
+    refinement_pass: int = Field(default=0, ge=0)
+    deficit_id: str | None = None
 
 
 class DocumentArtifact(DomainObjectPayload[L1Document]):
@@ -240,6 +267,7 @@ class EntityMentionArtifact(BaseArtifactPayload):
     start_char: int | None = None
     end_char: int | None = None
     confidence: float | None = None
+    is_retired: bool = False
 
     def to_relation_spec(self) -> dict[str, Any]:
         """Build the ``EXTRACTED_FROM`` edge specification for this mention."""
@@ -288,6 +316,7 @@ class LinkedEntityArtifact(DomainObjectPayload[L2Entity]):
     text_anchor: TextAnchor | None = None
     conceptions: list[EntityConception] = Field(default_factory=list)
     polysemy_variance: float | None = Field(default=None, ge=0.0)
+    is_retired: bool = False
 
     def to_domain(self) -> L2Entity:
         """Hydrate into an :class:`L2Entity` via :class:`LinkedEntityCodec`."""
@@ -572,6 +601,79 @@ class TheoreticalEnrichmentArtifact(BaseArtifactPayload):
         batch.add_enrichment(self)
 
 
+class EpistemicDeficitArtifact(DomainObjectPayload[EpistemicDeficit]):
+    """Artifact payload capturing a top-down epistemic deficit signal (ISSUE-053).
+
+    Emitted by Layer 3/4 diagnostic evaluators to guide bounded localized
+    re-extraction, concept splitting, or premise recovery without mutating
+    forward phase DAG dependencies.
+
+    Parameters
+    ----------
+    deficit_id : str
+        Deterministic identifier for this epistemic deficit.
+    deficit_kind : EpistemicDeficitKind
+        Taxonomy kind (``enthymeme_gap``, ``polysemy_collision``, or
+        ``ungrounded_axiom``).
+    severity : float, default 0.5
+        Normalized deficit severity in ``[0.0, 1.0]``.
+    target_chunk_ids : list of str, optional
+        Target L1 chunk identifiers for localized refinement.
+    target_entity_ids : list of str, optional
+        Target L2 entity identifiers implicated by the deficit.
+    target_atom_ids : list of str, optional
+        Target L3 theory atom identifiers exhibiting the deficit.
+    target_relation_ids : list of str, optional
+        Target L3 theory relation identifiers implicated by the deficit.
+    theory_id : str or None, optional
+        Conditioning Theory-Element identifier, if available.
+    theory_lens : dict of str to Any, optional
+        Induced macro-theory schema context conditioning recovery.
+    rationale : str, default ""
+        Diagnostic explanation of the deficit.
+    metrics : dict of str to float, optional
+        Diagnostic numeric measurements recorded at detection time.
+    detected_in_phase : str, default ""
+        Machine key or display name of the detecting phase.
+    refinement_pass : int, default 0
+        Refinement cycle index during which this deficit was detected.
+    """
+
+    deficit_id: str
+    deficit_kind: EpistemicDeficitKind
+    severity: float = Field(default=0.5, ge=0.0, le=1.0)
+    target_chunk_ids: list[str] = Field(default_factory=list)
+    target_entity_ids: list[str] = Field(default_factory=list)
+    target_atom_ids: list[str] = Field(default_factory=list)
+    target_relation_ids: list[str] = Field(default_factory=list)
+    theory_id: str | None = None
+    theory_lens: dict[str, Any] = Field(default_factory=dict)
+    rationale: str = ""
+    metrics: dict[str, float] = Field(default_factory=dict)
+    detected_in_phase: str = ""
+    refinement_pass: int = Field(default=0, ge=0)
+
+    def to_domain(self) -> EpistemicDeficit:
+        """Hydrate into an :class:`EpistemicDeficit` via :class:`EpistemicDeficitCodec`.
+
+        Returns
+        -------
+        EpistemicDeficit
+            Reconstructed epistemic deficit domain contract.
+        """
+        from episteme_pipeline.artifacts.codecs import EpistemicDeficitCodec
+
+        return EpistemicDeficitCodec.to_domain(self)
+
+    async def project_to_graph(self, graph_store: ProjectionGraph) -> None:
+        """No-op direct projection for epistemic deficit audit payloads."""
+        return None
+
+    def collect_for_projection(self, batch: ProjectionBatchAccumulator) -> None:
+        """No-op batch projection for epistemic deficit audit payloads."""
+        return None
+
+
 ArtifactPayload = (
     DocumentArtifact
     | ChunkArtifact
@@ -584,6 +686,7 @@ ArtifactPayload = (
     | FusionDecisionArtifact
     | CanonicalizationArtifact
     | TheoreticalEnrichmentArtifact
+    | EpistemicDeficitArtifact
 )
 
 ArtifactPayloadT = TypeVar("ArtifactPayloadT", bound=ArtifactPayload)

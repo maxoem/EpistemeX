@@ -127,3 +127,49 @@ Fine-grained cross-run staleness detection over persisted artifacts, located in
     options:
       show_root_heading: false
       show_root_toc_entry: false
+
+---
+
+## Closed-Loop Refinement Protocols
+
+Hexagonal ports governing top-down deficit detection and localized recovery (`episteme_pipeline/protocols/refinement.py`).
+
+### EpistemicDeficitDetector
+
+::: episteme_pipeline.protocols.refinement.EpistemicDeficitDetector
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+### TheoryGuidedPremiseRecoverer
+
+::: episteme_pipeline.protocols.refinement.TheoryGuidedPremiseRecoverer
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+### TargetedConceptSplitter
+
+::: episteme_pipeline.protocols.refinement.TargetedConceptSplitter
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+### LocalizedAxiomGrounder
+
+::: episteme_pipeline.protocols.refinement.LocalizedAxiomGrounder
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+### TargetedRefinementPort & Coordinator
+
+::: episteme_pipeline.protocols.refinement.TargetedRefinementPort
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+::: episteme_pipeline.protocols.refinement.HermeneuticRefinementCoordinator
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false

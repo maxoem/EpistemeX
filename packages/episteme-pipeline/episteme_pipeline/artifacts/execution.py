@@ -28,6 +28,7 @@ from episteme_pipeline.artifacts.models import (
     ChunkArtifact,
     DocumentArtifact,
     EntityMentionArtifact,
+    EpistemicDeficitArtifact,
     FusionDecisionArtifact,
     GlobalRelationArtifact,
     LinkedEntityArtifact,
@@ -40,6 +41,7 @@ from episteme_pipeline.artifacts.subgraph_reader import ArtifactSubgraphReader
 from episteme_pipeline.contracts.domain import (
     CandidatePair,
     EntityConception,
+    EpistemicDeficit,
     L1Chunk,
     L1Document,
     L2Entity,
@@ -224,6 +226,22 @@ def _extract_l1_state(
     return documents, chunks, consumed_ids
 
 
+def _collect_retired_entity_ids(
+    envelopes: Iterable[ArtifactEnvelope[ArtifactPayload]],
+    alias_map: dict[str, str],
+) -> set[str]:
+    """Return canonical and raw entity IDs marked retired in ``envelopes``."""
+    retired: set[str] = set()
+    for artifact in envelopes:
+        if artifact.kind == ArtifactKind.LINKED_ENTITY and isinstance(
+            artifact.payload, LinkedEntityArtifact
+        ):
+            if artifact.payload.is_retired:
+                retired.add(artifact.payload.entity_id)
+                retired.add(_resolve_alias_chain(artifact.payload.entity_id, alias_map))
+    return retired
+
+
 def _extract_l2_state(
     collection: ArtifactCollection,
 ) -> tuple[
@@ -261,6 +279,7 @@ def _extract_l2_state(
         ArtifactKind.LOCAL_RELATION,
         latest_only=True,
     )
+    retired_entity_ids = _collect_retired_entity_ids(l2_envelopes, alias_map)
 
     for artifact in l2_envelopes:
         if artifact.kind == ArtifactKind.ENTITY_MENTION and isinstance(
@@ -268,10 +287,14 @@ def _extract_l2_state(
         ):
             consumed_ids.append(artifact.artifact_id)
             payload = artifact.payload
+            if payload.is_retired:
+                continue
             raw_eid, parsed_cid = parse_mention_id(payload.mention_id)
             eid = payload.entity_id or raw_eid
             cid = payload.chunk_id or parsed_cid
             canon_eid = _resolve_alias_chain(eid, alias_map)
+            if eid in retired_entity_ids or canon_eid in retired_entity_ids:
+                continue
 
             if cid:
                 cids = mention_chunk_ids_by_entity.setdefault(canon_eid, [])
@@ -300,7 +323,8 @@ def _extract_l2_state(
             payload, LinkedEntityArtifact
         ):
             consumed_ids.append(artifact.artifact_id)
-            raw_entities.append(payload.to_domain())
+            if not payload.is_retired:
+                raw_entities.append(payload.to_domain())
         elif artifact.kind == ArtifactKind.LOCAL_RELATION and isinstance(
             payload, LocalRelationArtifact
         ):
@@ -378,7 +402,11 @@ def _extract_l2_state(
             entity_count_by_type.get(canon_entity.label, 0) + 1
         )
 
-    canonical_local_triples = _canonicalize_triples(raw_local_triples, alias_map)
+    canonical_local_triples = _canonicalize_triples(
+        raw_local_triples,
+        alias_map,
+        retired_entity_ids=retired_entity_ids,
+    )
     return (
         canonical_entities,
         canonical_local_triples,
@@ -391,16 +419,21 @@ def _extract_l2_state(
 
 
 def _canonicalize_triples(
-    triples: list[L2Triple], alias_map: dict[str, str]
+    triples: list[L2Triple],
+    alias_map: dict[str, str],
+    *,
+    retired_entity_ids: set[str] | frozenset[str] = frozenset(),
 ) -> list[L2Triple]:
-    """Rewrite triple endpoints via ``alias_map`` and deduplicate parallel edges."""
-    if not alias_map:
+    """Rewrite triple endpoints via ``alias_map``, drop retired endpoints, and deduplicate."""
+    if not alias_map and not retired_entity_ids:
         return list(triples)
 
     deduped: dict[tuple[str, str, str, str, str | None], L2Triple] = {}
     for triple in triples:
         new_subj = _resolve_alias_chain(triple.subject_id, alias_map)
         new_obj = _resolve_alias_chain(triple.object_id, alias_map)
+        if new_subj in retired_entity_ids or new_obj in retired_entity_ids:
+            continue
         # Drop self-loops induced by merging two distinct alias entities
         if triple.subject_id != triple.object_id and new_subj == new_obj:
             continue
@@ -660,6 +693,63 @@ def _resolve_l3_atoms_and_relations(
     return canonical_atoms, list(deduped_relations.values())
 
 
+def _extract_epistemic_deficits(
+    collection: ArtifactCollection,
+) -> tuple[list[EpistemicDeficitArtifact], list[str]]:
+    """Hydrate latest-by-identity epistemic deficit payloads and artifact IDs."""
+    deficits: list[EpistemicDeficitArtifact] = []
+    consumed_ids: list[str] = []
+    for artifact in collection.of_kind(
+        ArtifactKind.EPISTEMIC_DEFICIT, latest_only=True
+    ):
+        payload = artifact.payload
+        if isinstance(payload, EpistemicDeficitArtifact):
+            consumed_ids.append(artifact.artifact_id)
+            deficits.append(payload)
+    return deficits, consumed_ids
+
+
+def _populate_canonical_l3(view: EpistemicStateView) -> None:
+    """Resolve canonical L3 atoms and relations if not already populated."""
+    if not view.canonical_theory_atoms and view.theory_atoms:
+        canon_atoms, canon_rels = _resolve_l3_atoms_and_relations(
+            view.theory_atoms, view.theory_relations, view.fusion_decisions
+        )
+        view.canonical_theory_atoms = canon_atoms
+        if not view.canonical_theory_relations:
+            view.canonical_theory_relations = canon_rels
+    elif not view.canonical_theory_relations and view.theory_relations:
+        _, canon_rels = _resolve_l3_atoms_and_relations(
+            view.theory_atoms, view.theory_relations, view.fusion_decisions
+        )
+        view.canonical_theory_relations = canon_rels
+
+
+def _full_state_kwargs(collection: ArtifactCollection) -> dict[str, Any]:
+    """Assemble full cumulative L1–L4 state plus hydrated epistemic deficits."""
+    p4 = Phase4ArtifactsView.from_collection(collection)
+    deficits, deficit_ids = _extract_epistemic_deficits(collection)
+    return {
+        "documents": p4.documents,
+        "chunks": p4.chunks,
+        "entities": p4.entities,
+        "local_triples": p4.local_triples,
+        "entity_count_by_type": p4.entity_count_by_type,
+        "global_triples": p4.global_triples,
+        "relation_type_distribution": p4.relation_type_distribution,
+        "theory_atoms": p4.theory_atoms,
+        "theory_relations": p4.theory_relations,
+        "fusion_decisions": p4.fusion_decisions,
+        "canonical_theory_atoms": p4.canonical_theory_atoms,
+        "canonical_theory_relations": p4.canonical_theory_relations,
+        "entity_envelopes_by_id": p4.entity_envelopes_by_id,
+        "entity_mentions_by_id": p4.entity_mentions_by_id,
+        "theoretical_enrichments": p4.theoretical_enrichments,
+        "epistemic_deficits": deficits,
+        "consumed_artifact_ids": [*p4.consumed_artifact_ids, *deficit_ids],
+    }
+
+
 @dataclass(slots=True)
 class EpistemicStateView:
     """Base contract for cumulative inter-phase artifact views."""
@@ -683,7 +773,37 @@ class EpistemicStateView:
     entity_mentions_by_id: dict[str, list[dict[str, str]]] = field(
         default_factory=dict
     )
+    theoretical_enrichments: list[TheoreticalEnrichmentArtifact] = field(
+        default_factory=list
+    )
+    epistemic_deficits: list[EpistemicDeficitArtifact] = field(default_factory=list)
     consumed_artifact_ids: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_collection(cls, collection: ArtifactCollection) -> EpistemicStateView:
+        """Hydrate a full cumulative :class:`EpistemicStateView` including deficits.
+
+        Parameters
+        ----------
+        collection : ArtifactCollection
+            Run artifact collection to hydrate from.
+
+        Returns
+        -------
+        EpistemicStateView
+            Hydrated cumulative state view with canonical L2/L3 state and deficits.
+        """
+        return cls(**_full_state_kwargs(collection))
+
+    def to_domain_deficits(self) -> list[EpistemicDeficit]:
+        """Convert hydrated deficit payloads into domain :class:`EpistemicDeficit` models.
+
+        Returns
+        -------
+        list of EpistemicDeficit
+            Hydrated epistemic deficit domain contracts.
+        """
+        return [deficit.to_domain() for deficit in self.epistemic_deficits]
 
     def to_graph_reader(self) -> ArtifactSubgraphReader:
         """Build an in-memory :class:`ArtifactSubgraphReader` from this view.
@@ -792,7 +912,15 @@ class Phase3ArtifactsView(EpistemicStateView):
                 l3_ids.append(artifact.artifact_id)
                 raw_global_triples.append(payload.to_domain())
 
-        global_triples = _canonicalize_triples(raw_global_triples, alias_map)
+        retired_entity_ids = _collect_retired_entity_ids(
+            collection.of_kind(ArtifactKind.LINKED_ENTITY, latest_only=True),
+            alias_map,
+        )
+        global_triples = _canonicalize_triples(
+            raw_global_triples,
+            alias_map,
+            retired_entity_ids=retired_entity_ids,
+        )
         distribution: dict[str, int] = {}
         for triple in global_triples:
             distribution[triple.predicate] = (
@@ -833,18 +961,7 @@ class Phase4ArtifactsView(EpistemicStateView):
     allowed_kinds = _allowed_kinds
 
     def __post_init__(self) -> None:
-        if not self.canonical_theory_atoms and self.theory_atoms:
-            canon_atoms, canon_rels = _resolve_l3_atoms_and_relations(
-                self.theory_atoms, self.theory_relations, self.fusion_decisions
-            )
-            self.canonical_theory_atoms = canon_atoms
-            if not self.canonical_theory_relations:
-                self.canonical_theory_relations = canon_rels
-        elif not self.canonical_theory_relations and self.theory_relations:
-            _, canon_rels = _resolve_l3_atoms_and_relations(
-                self.theory_atoms, self.theory_relations, self.fusion_decisions
-            )
-            self.canonical_theory_relations = canon_rels
+        _populate_canonical_l3(self)
 
     @classmethod
     def from_collection(cls, collection: ArtifactCollection) -> Phase4ArtifactsView:
@@ -965,6 +1082,7 @@ class Phase4ArtifactsView(EpistemicStateView):
             relation_type_distribution=p3.relation_type_distribution,
             entity_envelopes_by_id=p3.entity_envelopes_by_id,
             entity_mentions_by_id=p3.entity_mentions_by_id,
+            theoretical_enrichments=enrichments,
             consumed_artifact_ids=[*p3.consumed_artifact_ids, *p4_ids],
         )
 
@@ -1000,6 +1118,44 @@ class TheoreticalEnrichmentArtifactsView:
                 consumed_ids.append(artifact.artifact_id)
                 enrichments.append(payload)
         return cls(enrichments=enrichments, consumed_artifact_ids=consumed_ids)
+
+
+@dataclass(slots=True)
+class EpistemicDeficitArtifactsView(EpistemicStateView):
+    """Cumulative view including L1–L4 artifacts and top-down epistemic deficits.
+
+    Kept separate from forward :class:`Phase1ArtifactsView` through
+    :class:`Phase4ArtifactsView` so :class:`WorkflowDAG` preserves strict forward
+    acyclicity while top-down refinement coordinators receive complete state
+    and active :class:`EpistemicDeficitArtifact` payloads.
+    """
+
+    _allowed_kinds = (
+        *Phase4ArtifactsView._allowed_kinds,
+        ArtifactKind.EPISTEMIC_DEFICIT,
+    )
+    allowed_kinds = _allowed_kinds
+
+    def __post_init__(self) -> None:
+        _populate_canonical_l3(self)
+
+    @classmethod
+    def from_collection(
+        cls, collection: ArtifactCollection
+    ) -> EpistemicDeficitArtifactsView:
+        """Hydrate an :class:`EpistemicDeficitArtifactsView` from ``collection``.
+
+        Parameters
+        ----------
+        collection : ArtifactCollection
+            Run artifact collection containing L1–L4 and epistemic deficit artifacts.
+
+        Returns
+        -------
+        EpistemicDeficitArtifactsView
+            Hydrated refinement view.
+        """
+        return cls(**_full_state_kwargs(collection))
 
 
 @dataclass(slots=True)

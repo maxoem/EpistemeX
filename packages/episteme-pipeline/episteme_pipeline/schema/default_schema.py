@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 L2_NODE_TYPES: list[str] = [
@@ -111,6 +113,22 @@ COMPONENT_PARTITIONS: dict[str, str] = {
     "CoreExpansion": "A"
 }
 
+# Explicit aliases for external argument-mining schemas and custom extensions.
+COMPONENT_PARTITION_ALIASES: dict[str, str] = {
+    "Claim": "A",
+    "MajorClaim": "A",
+    "Premise": "A",
+    "TheoreticalClaim": "A",
+    "Hypothesis": "A",
+    "Principle": "A",
+    "Axiom": "A",
+    "Law": "A",
+    "Theorem": "A",
+    "Observation": "B",
+    "EmpiricalEvidence": "B",
+    "Datum": "B",
+}
+
 SCOPE_TYPES: list[str] = [
     "Essentieller Allsatz",
     "Lokalisierter Allsatz",
@@ -145,6 +163,9 @@ class SchemaConfig(BaseModel):
     argument_relation_definitions: dict[str, str] = Field(default_factory=lambda: dict(L3_RELATION_DEFINITIONS))
     relation_polarities: dict[str, int] = Field(default_factory=lambda: dict(RELATION_POLARITIES))
     component_partitions: dict[str, str] = Field(default_factory=lambda: dict(COMPONENT_PARTITIONS))
+    component_partition_aliases: dict[str, str] = Field(
+        default_factory=lambda: dict(COMPONENT_PARTITION_ALIASES)
+    )
     scope_types: list[str] = Field(default_factory=lambda: list(SCOPE_TYPES))
     epistemic_statuses: list[str] = Field(default_factory=lambda: list(EPISTEMIC_STATUSES))
 
@@ -245,9 +266,192 @@ class SchemaConfig(BaseModel):
         bool
             True if relation has non-zero polarity.
         """
-        return self.relation_polarities.get(
-            relation_type, self.relation_polarities.get(relation_type.upper(), 0)
-        ) != 0
+        return self.get_relation_polarity(relation_type) != 0
+
+    def get_relation_polarity(self, relation_type: str) -> int:
+        """Resolve signed epistemic polarity (``+1``, ``-1``, or ``0``) for a relation.
+
+        Parameters
+        ----------
+        relation_type : str
+            Relation or triple predicate label.
+
+        Returns
+        -------
+        int
+            ``+1`` for support, ``-1`` for attack, or ``0`` for neutral/unknown.
+        """
+        if not relation_type:
+            return 0
+        if relation_type in self.relation_polarities:
+            return self.relation_polarities[relation_type]
+        return self.relation_polarities.get(relation_type.upper(), 0)
+
+    def resolve_edge_polarity(
+        self,
+        relation_type: str,
+        *,
+        weight_support: float | None = None,
+        weight_attack: float | None = None,
+        weight: float | None = None,
+    ) -> int:
+        """Resolve signed polarity of an edge from directional weights and schema polarity.
+
+        Parameters
+        ----------
+        relation_type : str
+            Relation label.
+        weight_support : float or None, optional
+            Positive support weight on the edge.
+        weight_attack : float or None, optional
+            Negative attack weight on the edge.
+        weight : float or None, optional
+            Signed or magnitude weight fallback.
+
+        Returns
+        -------
+        int
+            ``+1`` for support, ``-1`` for attack, or ``0`` when neutral.
+        """
+        has_support = weight_support is not None and weight_support > 0.0
+        has_attack = weight_attack is not None and weight_attack > 0.0
+        if has_support and not has_attack:
+            return 1
+        if has_attack and not has_support:
+            return -1
+
+        schema_pol = self.get_relation_polarity(relation_type)
+        if schema_pol != 0:
+            return schema_pol
+
+        if weight is not None:
+            if weight > 0.0:
+                return 1
+            if weight < 0.0:
+                return -1
+        return 0
+
+    def resolve_component_partition(
+        self,
+        component_type: str,
+        *,
+        atom_type: str | None = None,
+    ) -> Literal["A", "B"] | None:
+        """Resolve epistemic partition (``"A"`` theoretical or ``"B"`` empirical).
+
+        Resolves strictly via canonical ``component_partitions``, declared
+        ``component_partition_aliases`` (case-insensitive), and optional
+        ``atom_type`` (``"law"`` -> ``"A"``, ``"fact"`` -> ``"B"``).
+
+        Parameters
+        ----------
+        component_type : str
+            Component type label on an atom or extracted argument unit.
+        atom_type : str or None, optional
+            Logical form role (e.g., ``"law"`` or ``"fact"``).
+
+        Returns
+        -------
+        {"A", "B"} or None
+            Resolved partition identifier, or ``None`` if unknown.
+        """
+        if component_type:
+            direct = self.component_partitions.get(component_type)
+            if direct in {"A", "B"}:
+                return direct  # type: ignore[return-value]
+            lowered = component_type.strip().lower()
+            for table in (self.component_partitions, self.component_partition_aliases):
+                for key, part in table.items():
+                    if key.lower() == lowered and part in {"A", "B"}:
+                        return part  # type: ignore[return-value]
+        if atom_type == "law":
+            return "A"
+        if atom_type == "fact":
+            return "B"
+        return None
+
+    def get_partition_components(self, partition: Literal["A", "B"]) -> list[str]:
+        """Return canonical schema component types assigned to a partition.
+
+        Parameters
+        ----------
+        partition : {"A", "B"}
+            Target Schurz/Lakatos epistemic partition.
+
+        Returns
+        -------
+        list of str
+            Ordered list of configured ``component_types`` belonging to ``partition``.
+        """
+        return [
+            comp
+            for comp in self.component_types
+            if self.component_partitions.get(comp) == partition
+        ]
+
+    def default_observation_component_type(self) -> str:
+        """Return the primary empirical observation component type from this schema.
+
+        Returns
+        -------
+        str
+            Canonical empirical component type name.
+        """
+        b_types = self.get_partition_components("B")
+        if b_types:
+            return b_types[0]
+        for key, part in self.component_partitions.items():
+            if part == "B":
+                return key
+        return self.component_types[0] if self.component_types else "ObservationUnit"
+
+    def default_hypothesis_component_type(self) -> str:
+        """Return the primary theoretical hypothesis component type from this schema.
+
+        Returns
+        -------
+        str
+            Canonical theoretical component type name.
+        """
+        a_types = self.get_partition_components("A")
+        if a_types:
+            return a_types[0]
+        for key, part in self.component_partitions.items():
+            if part == "A":
+                return key
+        return self.component_types[-1] if self.component_types else "TheoreticalHypothesis"
+
+    def default_support_relation(self) -> str:
+        """Return the canonical dialectical support relation label for this schema.
+
+        Returns
+        -------
+        str
+            Schema-registered positive-polarity argument relation type.
+        """
+        for rel in self.argument_relation_types:
+            if self.get_relation_polarity(rel) > 0 and rel == "SUPPORTS_ARG":
+                return rel
+        for rel in self.argument_relation_types:
+            if self.get_relation_polarity(rel) > 0:
+                return rel
+        return self.argument_relation_types[0] if self.argument_relation_types else "SUPPORTS_ARG"
+
+    def default_attack_relation(self) -> str:
+        """Return the canonical dialectical attack relation label for this schema.
+
+        Returns
+        -------
+        str
+            Schema-registered negative-polarity argument relation type.
+        """
+        for rel in self.argument_relation_types:
+            if self.get_relation_polarity(rel) < 0 and rel == "ATTACKS":
+                return rel
+        for rel in self.argument_relation_types:
+            if self.get_relation_polarity(rel) < 0:
+                return rel
+        return self.argument_relation_types[0] if self.argument_relation_types else "ATTACKS"
 
     def resolve_relation_type(self, candidate: str) -> str | None:
         """Resolve a candidate relation name or dialectical stance to a configured argument relation.
@@ -274,7 +478,7 @@ class SchemaConfig(BaseModel):
         if cand_upper in self.argument_relation_types:
             return cand_upper
 
-        cand_pol = self.relation_polarities.get(cand_upper, self.relation_polarities.get(candidate, 0))
+        cand_pol = self.get_relation_polarity(cand_upper)
         if cand_pol != 0:
             for r in self.argument_relation_types:
                 if self.relation_polarities.get(r) == cand_pol:

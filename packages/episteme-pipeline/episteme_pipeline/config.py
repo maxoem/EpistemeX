@@ -14,11 +14,17 @@ from episteme_pipeline.prompts.default_prompts import (
     ARC_DIRECT_PROMPT,
     ARC_FORMAT_PROMPT,
     ARC_REASONING_PROMPT,
+    AXIOM_GROUNDING_PROMPT,
+    CONCEPT_SPLIT_PROMPT,
     DECISION_ACC_CRITERIA,
     DECISION_ACC_QUESTION,
     DECISION_ARC_CRITERIA,
     DECISION_ARC_QUESTION,
+    DECISION_ENTHYMEME_RECOVERABILITY_QUESTION,
     DECISION_GLEANING_QUESTION,
+    DECISION_OBSERVATION_GROUNDING_QUESTION,
+    DECISION_POLYSEMY_DISAMBIGUATION_CRITERIA,
+    DECISION_POLYSEMY_DISAMBIGUATION_QUESTION,
     ENTITY_LINKING_PROMPT,
     ENTITY_SYNTHESIS_PROMPT,
     GLOBAL_RELATION_DIRECT_PROMPT,
@@ -29,6 +35,7 @@ from episteme_pipeline.prompts.default_prompts import (
     NER_GLEANING_PROMPT,
     NER_REASONING_PROMPT,
     PAIR_GATING_DECISION_PROMPT,
+    PREMISE_RECOVERY_PROMPT,
 )
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
@@ -546,6 +553,120 @@ class TheoreticalEnrichmentConfig(BaseModel):
     projection_prompts: StructuredPromptBundle | None = None
 
 
+class HermeneuticRefinementConfig(BaseModel):
+    """Configuration for bounded closed-loop hermeneutic refinement (ISSUE-053).
+
+    Controls top-down epistemic deficit detection (L4/L3 -> L2/L1), System 1
+    ``DecisionEngine`` triage gating, managed prompt bundles, and localized
+    re-extraction, concept splitting, and premise recovery cycles.
+
+    Parameters
+    ----------
+    max_refinement_cycles : int, default 0
+        Maximum top-down refinement cycles executed after the forward pass
+        (``0`` preserves strictly feed-forward execution).
+    enthymeme_min_centrality : float, default 0.0
+        Minimum graph centrality required for an unwarranted claim or hypothesis
+        to trigger an ``ENTHYMEME_GAP`` deficit.
+    polysemy_edge_tenability_threshold : float, default 0.5
+        Edge tenability floor ``TS_edge`` below which bridging concepts are
+        candidates for ``POLYSEMY_COLLISION`` detection.
+    polysemy_volatility_threshold : float, default 0.25
+        Controversy volatility threshold ``V(a)`` above which bridging entities
+        or atoms trigger ``POLYSEMY_COLLISION`` detection.
+    polysemy_ambiguity_similarity_threshold : float, default 0.82
+        Upper semantic cosine similarity threshold across contextual usages;
+        pairs below this floor indicate true semantic divergence rather than
+        univocal disagreement.
+    ungrounded_local_tenability_threshold : float, default 0.5
+        Local tenability floor ``TS_local`` below which empirical clusters or
+        axioms trigger ``UNGROUNDED_AXIOM`` detection.
+    max_deficits_per_cycle : int, default 20
+        Maximum number of prioritized deficits processed in each refinement cycle.
+    enable_theory_guided_premise_recovery : bool, default True
+        Whether ``ENTHYMEME_GAP`` signals dispatch theory-guided premise recovery.
+    enable_targeted_concept_split : bool, default True
+        Whether ``POLYSEMY_COLLISION`` signals dispatch targeted L2 concept splitting.
+    enable_localized_axiom_grounding : bool, default True
+        Whether ``UNGROUNDED_AXIOM`` signals dispatch localized parameter and
+        observation re-extraction.
+    use_decision_engine_gating : bool, default True
+        When True and a ``DecisionEngine`` is provided, applies System 1 triage
+        gates (conformal/calibratable Noul & Choice checks with deterministic
+        auditing) before invoking System 2 structured LLM handlers.
+    decision_confidence_threshold : float, default 0.70
+        Minimum System 1 confidence / positive likelihood required to accept
+        or escalate a gated candidate without full bypass.
+    conformal_alpha : float, default 0.10
+        Significance level ``alpha`` for System 1 conformal prediction sets on
+        polysemy disambiguation triage.
+    stochastic_audit_rate : float, default 0.05
+        Deterministic hash-based audit rate applied when System 1 recommends
+        skipping a deficit handler, preventing silent false-negative suppression.
+    concept_split_prompts : StructuredPromptBundle
+        Managed prompt bundle for ``ConceptionConceptSplitter`` and System 1
+        polysemy disambiguation.
+    premise_recovery_prompts : StructuredPromptBundle
+        Managed prompt bundle for ``LLMTheoryGuidedPremiseRecoverer`` and System 1
+        enthymeme recoverability gating.
+    axiom_grounding_prompts : StructuredPromptBundle
+        Managed prompt bundle for ``TheoryGuidedAxiomGrounder`` and System 1
+        observation grounding gating.
+    concept_split_decoding_strategy : StructuredDecodingStrategy, default DIRECT
+        Structured decoding strategy used for concept split extraction.
+    premise_recovery_decoding_strategy : StructuredDecodingStrategy, default DIRECT
+        Structured decoding strategy used for implicit premise recovery.
+    axiom_grounding_decoding_strategy : StructuredDecodingStrategy, default DIRECT
+        Structured decoding strategy used for observation and parameter grounding.
+    """
+
+    max_refinement_cycles: int = Field(default=0, ge=0, le=5)
+    enthymeme_min_centrality: float = Field(default=0.0, ge=0.0)
+    polysemy_edge_tenability_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    polysemy_volatility_threshold: float = Field(default=0.25, ge=0.0)
+    polysemy_ambiguity_similarity_threshold: float = Field(default=0.82, ge=0.0, le=1.0)
+    ungrounded_local_tenability_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    max_deficits_per_cycle: int = Field(default=20, ge=1)
+    enable_theory_guided_premise_recovery: bool = True
+    enable_targeted_concept_split: bool = True
+    enable_localized_axiom_grounding: bool = True
+    use_decision_engine_gating: bool = True
+    decision_confidence_threshold: float = Field(default=0.70, ge=0.0, le=1.0)
+    conformal_alpha: float = Field(default=0.10, gt=0.0, lt=1.0)
+    stochastic_audit_rate: float = Field(default=0.05, ge=0.0, le=1.0)
+    concept_split_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=CONCEPT_SPLIT_PROMPT,
+            decision_template=DECISION_POLYSEMY_DISAMBIGUATION_QUESTION,
+            decision_criteria=DECISION_POLYSEMY_DISAMBIGUATION_CRITERIA,
+            name="concept_split",
+        )
+    )
+    premise_recovery_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=PREMISE_RECOVERY_PROMPT,
+            decision_template=DECISION_ENTHYMEME_RECOVERABILITY_QUESTION,
+            name="premise_recovery",
+        )
+    )
+    axiom_grounding_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=AXIOM_GROUNDING_PROMPT,
+            decision_template=DECISION_OBSERVATION_GROUNDING_QUESTION,
+            name="axiom_grounding",
+        )
+    )
+    concept_split_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.DIRECT
+    )
+    premise_recovery_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.DIRECT
+    )
+    axiom_grounding_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.DIRECT
+    )
+
+
 class QualityGatesConfig(BaseModel):
     """Configuration for inter-phase epistemic quality gates (ISSUE-058).
 
@@ -606,6 +727,7 @@ class ExecutionConfig(BaseModel):
     persist_phase5_artifacts: bool = True
     persist_phase6_artifacts: bool = True
     persist_theoretical_enrichment_artifacts: bool = True
+    persist_refinement_artifacts: bool = True
     project_artifacts_to_graph: bool = False
     allow_phase_reuse: bool = Field(
         default=True,
@@ -655,6 +777,7 @@ class ExecutionConfig(BaseModel):
             "phase5": self.persist_phase5_artifacts,
             "phase6": self.persist_phase6_artifacts,
             "theoretical_enrichment": self.persist_theoretical_enrichment_artifacts,
+            "refinement": self.persist_refinement_artifacts,
         }
         return mapping.get(phase_key, True)
 
@@ -790,6 +913,7 @@ class PipelineConfig(BaseModel):
     phase5: Phase5Config = Field(default_factory=Phase5Config)
     phase6: Phase6Config = Field(default_factory=Phase6Config)
     theoretical_enrichment: TheoreticalEnrichmentConfig = Field(default_factory=TheoreticalEnrichmentConfig)
+    refinement: HermeneuticRefinementConfig = Field(default_factory=HermeneuticRefinementConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     quality_gates: QualityGatesConfig = Field(default_factory=QualityGatesConfig)
     decision_engine: DecisionEngineConfig | None = Field(default=None)
@@ -838,6 +962,7 @@ class PipelineConfig(BaseModel):
             "phase5": self.phase5,
             "phase6": self.phase6,
             "theoretical_enrichment": self.theoretical_enrichment,
+            "refinement": self.refinement,
         }
         return mapping.get(phase_key)
 

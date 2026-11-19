@@ -54,6 +54,10 @@ from episteme_pipeline.post_processing.theoretical_enrichment.solvers import (
 )
 from episteme_pipeline.protocols.graph_store import PhaseCheckpointStore, ProjectionGraph
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
+from episteme_pipeline.protocols.refinement import (
+    EpistemicDeficitDetector,
+    ensure_deficit_detector,
+)
 from episteme_pipeline.runtime.batch_executor import CheckpointedBatchExecutor
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
@@ -105,6 +109,11 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         Dynamic Theory-Element induction engine, by default None.
     llm : Any | None, optional
         Underlying LLM facade for induction and projection, by default None.
+    theorynet_projector : Any | None, optional
+        TheoryNet projector used for Step 4.5 D-QBAF reconvergence, by default None.
+    deficit_detector : EpistemicDeficitDetector | None, optional
+        Optional top-down epistemic deficit detector invoked after Step 4.5
+        reconvergence to emit :class:`EpistemicDeficitArtifact` signals.
     """
 
     name = "Theoretical Enrichment & Tenability Evaluation"
@@ -117,6 +126,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             ArtifactKind.THEORETICAL_ENRICHMENT,
             ArtifactKind.THEORY_ATOM,
             ArtifactKind.THEORY_RELATION,
+            ArtifactKind.EPISTEMIC_DEFICIT,
         }
     )
 
@@ -131,6 +141,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         inducer: TheoryInducer | None = None,
         llm: Any | None = None,
         theorynet_projector: Any | None = None,
+        deficit_detector: EpistemicDeficitDetector | None = None,
     ) -> None:
         from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
 
@@ -141,6 +152,9 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         self.llm: StructuredLLM | None = ensure_structured_llm(llm) if llm is not None else None
         self.theorynet_projector: TheoryNetProjector = (
             theorynet_projector or TheoryNetProjector(schema=self.schema)
+        )
+        self.deficit_detector: EpistemicDeficitDetector | None = ensure_deficit_detector(
+            deficit_detector
         )
 
         if inducer is not None:
@@ -386,6 +400,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         # -------------------------------------------------------------
         from episteme_pipeline.artifacts.builders import (
             build_argument_relation_artifact,
+            build_epistemic_deficit_artifact,
             build_theory_atom_artifact,
         )
         from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
@@ -488,8 +503,8 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                     candidate_atoms = [
                         obs
                         for obs in cluster.observations
-                        if self.schema.component_partitions.get(obs.component_type) == "A"
-                        or obs.component_type != "ObservationUnit"
+                        if self.schema.resolve_component_partition(obs.component_type)
+                        == "A"
                     ]
                 if not candidate_atoms:
                     candidate_atoms = list(cluster.observations)
@@ -570,6 +585,12 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             for rkey, rel_obj in updated_rels_by_key.items()
         ]
 
+        refinement_pass = (
+            context.manifest.refinement_pass
+            if context is not None and context.manifest is not None
+            else 0
+        )
+
         for enrichment_payload, cluster in enrichment_payloads:
             enrichment_payload.equilibrium_strengths = dict(equilibrium_map)
             envelope = ArtifactEnvelope[TheoreticalEnrichmentArtifact](
@@ -582,7 +603,8 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                 provenance=ArtifactProvenance(
                     source_chunk_id=cluster.observations[0].source_chunk_id
                     if cluster.observations
-                    else None
+                    else None,
+                    refinement_pass=refinement_pass,
                 ),
             )
             enrichment_artifacts.append(envelope)
@@ -594,6 +616,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                     run_id=context.run_id,
                     phase_name=self.name,
                     method="theoretical_enrichment.dqbaf_reconvergence",
+                    refinement_pass=refinement_pass,
                 )
             )
         for rel_upd in relations_to_update:
@@ -603,8 +626,76 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                     run_id=context.run_id,
                     phase_name=self.name,
                     method="theoretical_enrichment.dqbaf_reconvergence",
+                    refinement_pass=refinement_pass,
                 )
             )
+
+        if self.deficit_detector is not None:
+            reconverged_atoms_map = {a.id: a for a in atoms_to_update}
+            state_atoms = [
+                reconverged_atoms_map.get(
+                    a.id,
+                    reconverged_atoms_by_id.get(
+                        a.id, updated_atoms_by_id.get(a.id, a)
+                    ),
+                )
+                for a in atoms
+            ]
+            reconverged_rels_map = {_enrichment_rel_key(r): r for r in relations_to_update}
+            state_relations = [
+                reconverged_rels_map.get(
+                    _enrichment_rel_key(r),
+                    reconverged_rels_by_key.get(
+                        _enrichment_rel_key(r),
+                        updated_rels_by_key.get(_enrichment_rel_key(r), r),
+                    ),
+                )
+                for r in relations
+            ]
+            updated_enrichments = [payload for payload, _ in enrichment_payloads]
+            updated_state = Phase4ArtifactsView(
+                documents=input.documents,
+                chunks=input.chunks,
+                entities=input.entities,
+                local_triples=input.local_triples,
+                entity_count_by_type=input.entity_count_by_type,
+                global_triples=input.global_triples,
+                relation_type_distribution=input.relation_type_distribution,
+                theory_atoms=state_atoms,
+                theory_relations=state_relations,
+                fusion_decisions=input.fusion_decisions,
+                canonical_theory_atoms=state_atoms,
+                canonical_theory_relations=state_relations,
+                entity_envelopes_by_id=input.entity_envelopes_by_id,
+                entity_mentions_by_id=input.entity_mentions_by_id,
+                theoretical_enrichments=(
+                    updated_enrichments
+                    if updated_enrichments
+                    else input.theoretical_enrichments
+                ),
+                epistemic_deficits=input.epistemic_deficits,
+                consumed_artifact_ids=input.consumed_artifact_ids,
+            )
+            deficits = self.deficit_detector.detect_deficits(
+                updated_state,
+                refinement_pass=refinement_pass,
+                context=context,
+            )
+            for deficit in deficits:
+                stamped = (
+                    deficit
+                    if deficit.detected_in_phase
+                    else deficit.model_copy(update={"detected_in_phase": self.phase_key})
+                )
+                enrichment_artifacts.append(
+                    build_epistemic_deficit_artifact(
+                        stamped,
+                        run_id=context.run_id,
+                        phase_name=self.name,
+                        method=type(self.deficit_detector).__name__,
+                        refinement_pass=refinement_pass,
+                    )
+                )
 
         # -------------------------------------------------------------
         # Step 5: Graph Persistence
