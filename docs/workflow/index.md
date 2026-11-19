@@ -94,6 +94,12 @@ Neo4j), event telemetry.
 **Key Concepts**: Bourbaki uniformities, admissible blurs ($\mathcal{A}$), AST-based safe core laws ($M$), dynamic
 theory induction, anomaly detection.
 
+### [Deficit Graph Analysis & Hermeneutic Refinement](post_processing/hermeneutic_refinement.md)
+
+**Purpose**: Bounded top-down refinement ($\text{L4/L3} \to \text{L2/L1}$) when `max_refinement_cycles > 0`.  
+**Theoretical Basis**: Synergized Bidirectional Reasoning ([Pan et al., 2024]), Schurz-Lakatos $Z_1$ grounding ([ADR 0024](../adr/0024-closed-loop-hermeneutic-refinement.md)).  
+**Key Concepts**: Deterministic graph diagnosis (`_detector_analysis.py`, `_sub_detectors.py`), System 1 `DecisionEngine` triage gates, localized L1/L2/L3 repairs, pass-aware identity overlays.
+
 ---
 
 ## Architecture Overview
@@ -111,6 +117,7 @@ flowchart TD
     G --> H["Post-Processing Suite (Phi_spec)"]
     H --> H1["Theoretical Enrichment & Tenability"]
     H --> H2["Analytical Solvers & Epistemetrics"]
+    H1 --> R["Optional Closed-Loop Refinement<br>(TheoryNetDeficitDetector -> Localized Deltas)"]
 ```
 
 ---
@@ -131,6 +138,7 @@ To keep the pipeline extensible for rapid research iteration while serving as a 
 | **Phase 5: Theory Fusion** | **Strategy Pattern** (`ArgumentClustering`, `TheoryFusion`), **Conformal Triage Gate** (`InterDocumentClusterVerifier`) | `ArgumentClustering`, `TheoryFusion`, `DecisionEngine` |
 | **Phase 6: TheoryNet** | **Projector / Builder Pattern** (`TheoryNetProjector`), **Topology-Adaptive Solver Strategy** (DAG closed-form vs. cyclic ODE QBAF) | `TheoryNetProjector`, `ModalStrengthResolver` |
 | **Post-Processing ($\Phi_{\text{spec}}$)** | **Open/Closed Plugin Runner** (`PhaseRunner[ViewT]`), **Strategy Pattern** (`TheoryInducer`, `TheoryProjector`, `TenabilitySolver`) | `PhaseRunner`, `TheoryProjector`, `TenabilitySolver` |
+| **Hermeneutic Refinement (`L4->L1`)** | **Deterministic Graph Diagnosis**, **Conformal / Binary System 1 Gate**, **Pass-Aware Identity Overlay** | `EpistemicDeficitDetector`, `HermeneuticRefinementCoordinator`, `TargetedRefinementPort` |
 
 ---
 

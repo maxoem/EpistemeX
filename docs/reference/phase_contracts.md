@@ -157,3 +157,31 @@ Standardized views of phase outputs for downstream consumption.
       show_root_heading: false
       show_root_toc_entry: false
 
+### Epistemic Deficit & Refinement View
+
+::: episteme_pipeline.artifacts.execution.EpistemicDeficitArtifactsView
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+---
+
+## Closed-Loop Refinement Contracts
+
+Domain objects emitted by `TheoryNetDeficitDetector` and refinement handlers (`episteme_pipeline/contracts/domain.py`).
+
+::: episteme_pipeline.contracts.domain.EpistemicDeficitKind
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+::: episteme_pipeline.contracts.domain.EpistemicDeficit
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+::: episteme_pipeline.contracts.domain.RefinementDelta
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+

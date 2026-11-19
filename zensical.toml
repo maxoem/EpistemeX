@@ -48,7 +48,8 @@ nav = [
             { "Inspecting Outputs" = "how_to/inspect_outputs.md" },
             { "Customizing Configuration" = "how_to/customize_config.md" },
             { "LLM Caching Strategies" = "how_to/use_llm_cache.md" },
-            { "Entity Gleanings" = "how_to/configure_entity_gleanings.md" }
+            { "Entity Gleanings" = "how_to/configure_entity_gleanings.md" },
+            { "Hermeneutic Refinement" = "how_to/configure_hermeneutic_refinement.md" }
         ] }
     ] },
 
@@ -67,7 +68,8 @@ nav = [
         ] },
         { "Post-Processing Engine" = [
             { "Post-Processing Architecture" = "workflow/post_processing/index.md" },
-            { "Theoretical Enrichment & Tenability" = "workflow/post_processing/theoretical_enrichment.md" }
+            { "Theoretical Enrichment & Tenability" = "workflow/post_processing/theoretical_enrichment.md" },
+            { "Deficit Graph Analysis & Refinement" = "workflow/post_processing/hermeneutic_refinement.md" }
         ] },
         { "Observability & Telemetry" = [
             { "Telemetry Architecture" = "observability/events.md" },
@@ -215,7 +217,8 @@ nav = [
             { "Schema Taxonomies" = "reference/schema.md" },
             { "Core Protocols & Fingerprinting" = "reference/protocols.md" },
             { "Decision Engines" = "reference/decision.md" },
-            { "Phase Components" = "reference/phase-components.md" }
+            { "Phase Components" = "reference/phase-components.md" },
+            { "Refinement & Deficit Detection" = "reference/refinement.md" }
         ] },
         { "Domain Glossaries" = [
             { "Glossary" = "concepts/glossary.md" }

@@ -16,6 +16,7 @@ Practical guides for common tasks and workflows with Episteme.
 - [Configuration Guide](../getting_started/configuration.md) - Basic setup and configuration
 - [LLM Caching](use_llm_cache.md) - Configuring and clearing the LLM structured cache
 - [Entity Gleanings](configure_entity_gleanings.md) - Setting up multi-pass entity extraction
+- [Hermeneutic Refinement](configure_hermeneutic_refinement.md) - Enabling closed-loop deficit detection and refinement cycles
 
 ## Examples
 

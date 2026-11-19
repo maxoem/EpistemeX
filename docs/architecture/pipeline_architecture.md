@@ -240,14 +240,14 @@ When `HermeneuticRefinementConfig.max_refinement_cycles > 0` (`PipelineConfig.re
 
 ```mermaid
 flowchart LR
-    FWD["Forward DAG Complete<br/>(Phases 1–6 + TheoreticalEnrichment)"] --> DETECT["TheoryNetDeficitDetector<br/>(epistemetrics.page_rank, Z_1, TS_local, TS_edge, V)"]
+    FWD["Forward DAG Complete<br/>(Phases 1–6 + TheoreticalEnrichment)"] --> DETECT["TheoryNetDeficitDetector<br/>(_detector_analysis.py + _sub_detectors.py:<br/>Z_1 BFS, PageRank, Louvain, TS_local, TS_edge, V)"]
     DETECT -->|No deficits or pass >= max_refinement_cycles| DONE["Persist & Project Final Artifacts"]
     DETECT -->|EpistemicDeficitArtifact| LOOP{"Dispatch by EpistemicDeficitKind"}
-    LOOP -->|ENTHYMEME_GAP| G1["LLMTheoryGuidedPremiseRecoverer<br/>(Target chunks + theory_lens -> L3 + ARC classify_pairs)"]
-    LOOP -->|POLYSEMY_COLLISION| G2["ConceptionConceptSplitter<br/>(EntityConception / ConceptionClusterer -> L2 split + cannot_link)"]
-    LOOP -->|UNGROUNDED_AXIOM| G3["TheoryGuidedAxiomGrounder<br/>(Neighbor chunks + vector_search -> NER + M_pp observations)"]
-    G1 & G2 & G3 --> DELTA["RefinementDelta -> ArtifactCollection.latest_by_identity<br/>(refinement_pass = r, deficit_id stamped; unaffected subgraphs untouched)"]
-    DELTA --> RECONV["Tail TheoryNet Re-Convergence<br/>(TheoryNetProjector updates tau* & V)"]
+    LOOP -->|ENTHYMEME_GAP| G1["LLMTheoryGuidedPremiseRecoverer<br/>(DecisionEngine.evaluate_noul -> chunks + ARC classify_pairs)"]
+    LOOP -->|POLYSEMY_COLLISION| G2["ConceptionConceptSplitter<br/>(DecisionEngine.evaluate_choice -> centroid divergence + L2 split + is_retired)"]
+    LOOP -->|UNGROUNDED_AXIOM| G3["TheoryGuidedAxiomGrounder<br/>(DecisionEngine.evaluate_noul -> vector_search + NER + TheoryProjector)"]
+    G1 & G2 & G3 --> DELTA["RefinementDelta -> refinement_overlay.py<br/>(refinement_pass = r, deficit_id stamped; intra-pass refresh)"]
+    DELTA --> RECONV["Connected-Component Re-Convergence<br/>(slice_phase4_component_view -> TheoryNetProjector)"]
     RECONV --> DETECT
 ```
 
@@ -265,9 +265,10 @@ Configured on `PipelineConfig.refinement` (`HermeneuticRefinementConfig` in `epi
 
 - `max_refinement_cycles: int = 0` (`0..5`; `0` preserves strictly feed-forward runs with unchanged manifest & prompt fingerprints)
 - Central prompt bundles & strategies: `concept_split_prompts`, `premise_recovery_prompts`, `axiom_grounding_prompts` (registered in `DefaultPromptProvider`, `LangfusePromptProvider`, `FilePromptProvider`)
-- System 1 gating & triage: `use_decision_engine_gating: bool = True`, `decision_confidence_threshold: float = 0.85`, `conformal_alpha: float = 0.05`, `stochastic_audit_rate: float = 0.05`, `polysemy_ambiguity_similarity_threshold: float = 0.88`
+- System 1 gating & triage: `use_decision_engine_gating: bool = True`, `decision_confidence_threshold: float = 0.70`, `conformal_alpha: float = 0.10`, `stochastic_audit_rate: float = 0.05`, `polysemy_ambiguity_similarity_threshold: float = 0.82`
 - Detection thresholds & caps: `enthymeme_min_centrality: float = 0.0`, `polysemy_edge_tenability_threshold: float = 0.5`, `polysemy_volatility_threshold: float = 0.25`, `ungrounded_local_tenability_threshold: float = 0.5`, `max_deficits_per_cycle: int = 20`
 - Enable flags: `enable_theory_guided_premise_recovery`, `enable_targeted_concept_split`, `enable_localized_axiom_grounding` (plus `ExecutionConfig.persist_refinement_artifacts = True`).
+- Detailed specification & scoring formulas: [Deficit Graph Analysis & Hermeneutic Refinement](../workflow/post_processing/hermeneutic_refinement.md) and [Refinement API Reference](../reference/refinement.md).
 
 ---
 
