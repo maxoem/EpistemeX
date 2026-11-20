@@ -61,6 +61,7 @@ from episteme_pipeline.protocols.quality_gate import (
     ensure_quality_gates,
 )
 from episteme_pipeline.protocols.refinement import (
+    ConditionalRefinementHandler,
     EpistemicDeficitDetector,
     HermeneuticRefinementCoordinator,
     LocalizedAxiomGrounder,
@@ -78,6 +79,7 @@ __all__ = [
     "ARIIdentifier",
     "ArgumentClustering",
     "ConceptionClustererProtocol",
+    "ConditionalRefinementHandler",
     "CrossEncoder",
     "DataSourceAdapter",
     "DecisionEngine",

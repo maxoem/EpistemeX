@@ -227,21 +227,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             else None
         )
         if curation_ledger is not None:
-            updated_curated_atoms: list[TheoryAtom] = []
-            for atom in atoms:
-                override_val = curation_ledger.get_modality_override(atom.id)
-                if override_val is not None:
-                    updated_curated_atoms.append(
-                        atom.model_copy(
-                            update={
-                                "modal_prior": override_val,
-                                "resolver_type": "curation_ledger_override",
-                            }
-                        )
-                    )
-                else:
-                    updated_curated_atoms.append(atom)
-            atoms = updated_curated_atoms
+            atoms = curation_ledger.apply_to_theory_atoms(atoms)
             relations = curation_ledger.apply_to_theory_relations(
                 relations, {a.id for a in atoms}, schema=self.schema
             )
@@ -442,9 +428,8 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         # Pass 2: Evaluate inter-cluster / intertheoretical edge tenability with complete parameter map
         # -------------------------------------------------------------
         from episteme_pipeline.artifacts.builders import (
-            build_argument_relation_artifact,
             build_epistemic_deficit_artifact,
-            build_theory_atom_artifact,
+            build_theory_graph_update_artifacts,
         )
         from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
 
@@ -653,89 +638,19 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             enrichment_artifacts.append(envelope)
 
         prev_collection = context.previous if context is not None else None
-        emitted_atom_ids: dict[str, str] = {}
-        for atom_upd in atoms_to_update:
-            atom_upstreams: list[str] = []
-            if prev_collection is not None:
-                prev_atom_env = prev_collection.latest_by_identity.get(
-                    f"argument_component::{atom_upd.id}"
-                )
-                if prev_atom_env is not None:
-                    atom_upstreams.append(prev_atom_env.artifact_id)
-            if not atom_upstreams:
-                atom_upstreams.append(f"artifact::{atom_upd.id}")
-            if atom_upd.source_chunk_id:
-                atom_upstreams.append(f"artifact::{atom_upd.source_chunk_id}")
-            atom_env = build_theory_atom_artifact(
-                atom_upd,
+        enrichment_artifacts.extend(
+            build_theory_graph_update_artifacts(
+                atoms_to_update,
+                relations_to_update,
+                previous_collection=prev_collection,
                 run_id=context.run_id,
                 phase_name=self.name,
                 method="theoretical_enrichment.dqbaf_reconvergence",
-                upstream_artifact_ids=atom_upstreams,
                 refinement_pass=refinement_pass,
                 phase_tag=self.phase_key,
+                include_fusion_decisions=False,
             )
-            emitted_atom_ids[atom_upd.id] = atom_env.artifact_id
-            enrichment_artifacts.append(atom_env)
-        for rel_upd in relations_to_update:
-            rel_upstreams: list[str] = []
-            if prev_collection is not None:
-                prev_rel_env = prev_collection.latest_by_identity.get(
-                    f"argument_relation::{rel_upd.relation_id}"
-                )
-                if prev_rel_env is not None:
-                    rel_upstreams.append(prev_rel_env.artifact_id)
-            for pid in rel_upd.effective_premise_ids:
-                if pid in emitted_atom_ids:
-                    rel_upstreams.append(emitted_atom_ids[pid])
-                elif (
-                    prev_collection is not None
-                    and f"argument_component::{pid}" in prev_collection.latest_by_identity
-                ):
-                    rel_upstreams.append(
-                        prev_collection.latest_by_identity[
-                            f"argument_component::{pid}"
-                        ].artifact_id
-                    )
-                else:
-                    rel_upstreams.append(f"artifact::{pid}")
-            target_ref = rel_upd.undercuts_relation_id or rel_upd.target_id
-            if rel_upd.undercuts_relation_id is not None:
-                if (
-                    prev_collection is not None
-                    and f"argument_relation::{target_ref}" in prev_collection.latest_by_identity
-                ):
-                    rel_upstreams.append(
-                        prev_collection.latest_by_identity[
-                            f"argument_relation::{target_ref}"
-                        ].artifact_id
-                    )
-                else:
-                    rel_upstreams.append(f"artifact::{target_ref}")
-            elif target_ref in emitted_atom_ids:
-                rel_upstreams.append(emitted_atom_ids[target_ref])
-            elif (
-                prev_collection is not None
-                and f"argument_component::{target_ref}" in prev_collection.latest_by_identity
-            ):
-                rel_upstreams.append(
-                    prev_collection.latest_by_identity[
-                        f"argument_component::{target_ref}"
-                    ].artifact_id
-                )
-            else:
-                rel_upstreams.append(f"artifact::{target_ref}")
-            enrichment_artifacts.append(
-                build_argument_relation_artifact(
-                    rel_upd,
-                    run_id=context.run_id,
-                    phase_name=self.name,
-                    method="theoretical_enrichment.dqbaf_reconvergence",
-                    upstream_artifact_ids=rel_upstreams,
-                    refinement_pass=refinement_pass,
-                    phase_tag=self.phase_key,
-                )
-            )
+        )
 
         if self.deficit_detector is not None:
             reconverged_atoms_map = {a.id: a for a in atoms_to_update}

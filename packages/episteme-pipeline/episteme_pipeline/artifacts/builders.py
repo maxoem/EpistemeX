@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from episteme_pipeline.artifacts.execution import ArtifactCollection
 
 from episteme_pipeline.artifacts.codecs import (
     ChunkCodec,
@@ -645,6 +650,148 @@ def build_theory_relation_artifact(
 
 
 build_argument_relation_artifact = build_theory_relation_artifact
+
+
+def build_theory_graph_update_artifacts(
+    atoms: Sequence[TheoryAtom],
+    relations: Sequence[TheoryRelation],
+    *,
+    previous_collection: ArtifactCollection | None,
+    run_id: str,
+    phase_name: str,
+    method: str,
+    refinement_pass: int = 0,
+    phase_tag: str | None = None,
+    include_fusion_decisions: bool = False,
+) -> list[ArtifactEnvelope]:
+    """Build phase-scoped L3 atom and relation update artifacts with provenance lineage.
+
+    Parameters
+    ----------
+    atoms : Sequence of TheoryAtom
+        Updated theory atoms to serialize as versioned artifact envelopes.
+    relations : Sequence of TheoryRelation
+        Updated theory relations to serialize as versioned artifact envelopes.
+    previous_collection : ArtifactCollection or None
+        Cumulative upstream artifact collection used to link prior versions and
+        optional Phase 5 fusion decision provenance.
+    run_id : str
+        Active run identifier.
+    phase_name : str
+        Display name of the emitting phase.
+    method : str
+        Method or strategy identifier recorded on emitted envelopes.
+    refinement_pass : int, default 0
+        Hermeneutic refinement iteration index.
+    phase_tag : str or None, optional
+        Semantic producer phase tag disambiguating forward-pass artifacts on disk.
+    include_fusion_decisions : bool, default False
+        When True, attaches upstream Phase 5 ``FusionDecisionArtifact`` IDs to
+        member ``TheoryAtom`` provenance.
+
+    Returns
+    -------
+    list of ArtifactEnvelope
+        Ordered envelopes for ``atoms`` followed by ``relations``.
+    """
+    fusion_upstreams_by_atom: dict[str, list[str]] = {}
+    if include_fusion_decisions and previous_collection is not None:
+        for f_env in previous_collection.of_kind(
+            ArtifactKind.FUSION_DECISION, latest_only=True
+        ):
+            if isinstance(f_env.payload, FusionDecisionArtifact):
+                f_ids = [
+                    aid.removeprefix("artifact::")
+                    for aid in f_env.payload.artifact_ids
+                ]
+                if f_env.payload.canonical_artifact_id:
+                    f_ids.append(
+                        f_env.payload.canonical_artifact_id.removeprefix(
+                            "artifact::"
+                        )
+                    )
+                for member_id in f_ids:
+                    fusion_upstreams_by_atom.setdefault(
+                        member_id, []
+                    ).append(f_env.artifact_id)
+
+    envelopes: list[ArtifactEnvelope] = []
+    emitted_atom_ids: dict[str, str] = {}
+    for atom in atoms:
+        atom_upstreams: list[str] = []
+        if previous_collection is not None:
+            prev_atom_env = previous_collection.latest_by_identity.get(
+                f"argument_component::{atom.id}"
+            )
+            if prev_atom_env is not None:
+                atom_upstreams.append(prev_atom_env.artifact_id)
+        if not atom_upstreams:
+            atom_upstreams.append(f"artifact::{atom.id}")
+        atom_upstreams.extend(fusion_upstreams_by_atom.get(atom.id, ()))
+        if atom.source_chunk_id:
+            atom_upstreams.append(f"artifact::{atom.source_chunk_id}")
+        atom_env = build_theory_atom_artifact(
+            atom,
+            run_id=run_id,
+            phase_name=phase_name,
+            method=method,
+            upstream_artifact_ids=atom_upstreams,
+            refinement_pass=refinement_pass,
+            phase_tag=phase_tag,
+        )
+        emitted_atom_ids[atom.id] = atom_env.artifact_id
+        envelopes.append(atom_env)
+
+    def _resolve_atom_upstream(atom_id: str) -> str:
+        if atom_id in emitted_atom_ids:
+            return emitted_atom_ids[atom_id]
+        if previous_collection is not None:
+            prev_env = previous_collection.latest_by_identity.get(
+                f"argument_component::{atom_id}"
+            )
+            if prev_env is not None:
+                return prev_env.artifact_id
+        return f"artifact::{atom_id}"
+
+    for rel in relations:
+        rel_upstreams: list[str] = []
+        if previous_collection is not None:
+            prev_rel_env = previous_collection.latest_by_identity.get(
+                f"argument_relation::{rel.relation_id}"
+            )
+            if prev_rel_env is not None:
+                rel_upstreams.append(prev_rel_env.artifact_id)
+        for pid in rel.effective_premise_ids:
+            rel_upstreams.append(_resolve_atom_upstream(pid))
+        target_ref = rel.undercuts_relation_id or rel.target_id
+        if rel.undercuts_relation_id is not None:
+            prev_target_env = (
+                previous_collection.latest_by_identity.get(
+                    f"argument_relation::{target_ref}"
+                )
+                if previous_collection is not None
+                else None
+            )
+            rel_upstreams.append(
+                prev_target_env.artifact_id
+                if prev_target_env is not None
+                else f"artifact::{target_ref}"
+            )
+        else:
+            rel_upstreams.append(_resolve_atom_upstream(target_ref))
+        envelopes.append(
+            build_theory_relation_artifact(
+                rel,
+                run_id=run_id,
+                phase_name=phase_name,
+                method=method,
+                upstream_artifact_ids=rel_upstreams,
+                refinement_pass=refinement_pass,
+                phase_tag=phase_tag,
+            )
+        )
+
+    return envelopes
 
 
 def build_canonicalization_artifact(

@@ -59,6 +59,16 @@ class EpistemicDeficitDetector(Fingerprintable, Protocol):
 
 
 @runtime_checkable
+class ConditionalRefinementHandler(Protocol):
+    """Capability protocol for refinement handlers whose availability depends on runtime ports."""
+
+    @property
+    def is_available(self) -> bool:
+        """Return True when required runtime ports are wired and ready."""
+        ...
+
+
+@runtime_checkable
 class TheoryGuidedPremiseRecoverer(Fingerprintable, Protocol):
     """Port for recovering implicit premises (enthymemes) under a theory lens."""
 

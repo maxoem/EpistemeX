@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Sequence
+from typing import TYPE_CHECKING, Any, Final, Literal, Sequence
 
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,8 @@ from episteme_pipeline.contracts.domain import (
     TheoryNet,
     TheoryRelation,
 )
+
+CURATION_LEDGER_RESOLVER_TYPE: Final[str] = "curation_ledger_override"
 
 
 class RelationOverride(BaseModel):
@@ -243,6 +245,40 @@ class EpistemicCurationLedger(BaseModel):
             Locked modal strength prior tau_0(a), or None if not overridden.
         """
         return self.modality_overrides.get(atom_id)
+
+    def apply_to_theory_atoms(
+        self,
+        atoms: Sequence[TheoryAtom],
+    ) -> list[TheoryAtom]:
+        """Apply locked HITL modal strength overrides to a sequence of theory atoms.
+
+        Parameters
+        ----------
+        atoms : Sequence[TheoryAtom]
+            Input theory atoms to inspect against ``modality_overrides``.
+
+        Returns
+        -------
+        list[TheoryAtom]
+            Theory atoms with curated ``modal_prior`` and ``resolver_type`` applied.
+        """
+        if not self.modality_overrides:
+            return list(atoms)
+        updated: list[TheoryAtom] = []
+        for atom in atoms:
+            override_val = self.get_modality_override(atom.id)
+            if override_val is not None:
+                updated.append(
+                    atom.model_copy(
+                        update={
+                            "modal_prior": override_val,
+                            "resolver_type": CURATION_LEDGER_RESOLVER_TYPE,
+                        }
+                    )
+                )
+            else:
+                updated.append(atom)
+        return updated
 
     @staticmethod
     def _polarity_weight_kwargs(
@@ -554,6 +590,7 @@ class PipelineResult(BaseModel):
 
 
 __all__ = [
+    "CURATION_LEDGER_RESOLVER_TYPE",
     "CandidatePair",
     "EpistemicCurationLedger",
     "GlobalStructuralAnchor",

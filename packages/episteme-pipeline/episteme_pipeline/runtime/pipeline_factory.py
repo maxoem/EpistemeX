@@ -21,7 +21,7 @@ from episteme_pipeline.decision.modal_resolver import HybridModalResolver
 from episteme_pipeline.decision.observable import ObservableDecisionEngine
 from episteme_pipeline.events import EventEmitter, NoOpEventEmitter
 from episteme_pipeline.llm.cache import DiskCachedStructuredLLM, default_cache_dir
-from episteme_pipeline.llm.structured import ensure_structured_llm
+from episteme_pipeline.llm.structured import StructuredPredictable, ensure_structured_llm
 from episteme_pipeline.protocols.decision import DecisionEngine, ensure_decision_engine
 from episteme_pipeline.protocols.extractors import (
     CrossEncoder,
@@ -343,17 +343,6 @@ class PipelineFactory(Fingerprintable):
                 and resolved_enrichment is None
             ):
                 resolved_enrichment = phase
-            try:
-                phase_attrs = vars(phase)
-            except TypeError:
-                phase_attrs = {}
-            if resolved_llm is None and phase_attrs.get("llm") is not None:
-                resolved_llm = phase_attrs.get("llm")
-            if (
-                resolved_embedding is None
-                and phase_attrs.get("embedding_model") is not None
-            ):
-                resolved_embedding = phase_attrs.get("embedding_model")
             comps = (
                 phase.components()
                 if isinstance(phase, PhaseRunner)
@@ -363,7 +352,8 @@ class PipelineFactory(Fingerprintable):
                 if comp is None:
                     continue
                 if resolved_llm is None and (
-                    comp_key == "llm" or comp_key.endswith(".llm")
+                    isinstance(comp, StructuredPredictable)
+                    or comp_key.split(".")[-1] == "llm"
                 ):
                     resolved_llm = comp
                 if resolved_arc is None and isinstance(comp, ARCClassifier):

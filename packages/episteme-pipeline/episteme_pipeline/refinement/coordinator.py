@@ -75,6 +75,7 @@ from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.modality import ModalStrengthResolver
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.protocols.refinement import (
+    ConditionalRefinementHandler,
     EpistemicDeficitDetector,
     LocalizedAxiomGrounder,
     TargetedConceptSplitter,
@@ -255,15 +256,8 @@ class ClosedLoopRefinementCoordinator:
         if deficit_kind == EpistemicDeficitKind.ENTHYMEME_GAP:
             if not config.enable_theory_guided_premise_recovery or self.premise_recoverer is None:
                 return False
-            from episteme_pipeline.refinement.premise_recovery import (
-                LLMTheoryGuidedPremiseRecoverer,
-            )
-
-            if (
-                isinstance(self.premise_recoverer, LLMTheoryGuidedPremiseRecoverer)
-                and self.premise_recoverer.llm is None
-            ):
-                return False
+            if isinstance(self.premise_recoverer, ConditionalRefinementHandler):
+                return self.premise_recoverer.is_available
             return True
         if deficit_kind == EpistemicDeficitKind.POLYSEMY_COLLISION:
             return (

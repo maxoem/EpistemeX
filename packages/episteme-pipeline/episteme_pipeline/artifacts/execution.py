@@ -49,7 +49,10 @@ from episteme_pipeline.contracts.domain import (
     TheoryAtom,
     TheoryRelation,
 )
-from episteme_pipeline.contracts.phase_contracts import PipelineInput
+from episteme_pipeline.contracts.phase_contracts import (
+    CURATION_LEDGER_RESOLVER_TYPE,
+    PipelineInput,
+)
 from episteme_pipeline.runs.fingerprints import is_phase_unchanged
 from episteme_pipeline.runs.models import RunManifest
 
@@ -570,7 +573,7 @@ def _resolve_l3_atoms_and_relations(
             curated_modals = [
                 m.modal_prior
                 for m in subgroup
-                if m.resolver_type == "curation_ledger_override"
+                if m.resolver_type == CURATION_LEDGER_RESOLVER_TYPE
                 and m.modal_prior is not None
             ]
             resolved_members = [
@@ -581,7 +584,7 @@ def _resolve_l3_atoms_and_relations(
             ]
             if curated_modals:
                 max_modal = curated_modals[0]
-                resolved_resolver_type = "curation_ledger_override"
+                resolved_resolver_type = CURATION_LEDGER_RESOLVER_TYPE
             elif resolved_members:
                 chosen = rep if rep in resolved_members else resolved_members[0]
                 max_modal = chosen.modal_prior

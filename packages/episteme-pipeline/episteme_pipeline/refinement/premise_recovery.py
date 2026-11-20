@@ -269,6 +269,17 @@ class LLMTheoryGuidedPremiseRecoverer:
             ),
         }
 
+    @property
+    def is_available(self) -> bool:
+        """Return True when an LLM adapter is wired for System 2 premise recovery.
+
+        Returns
+        -------
+        bool
+            True if ``self.llm`` is not None, False otherwise.
+        """
+        return self.llm is not None
+
     async def recover_premises(
         self,
         deficit: EpistemicDeficit,
