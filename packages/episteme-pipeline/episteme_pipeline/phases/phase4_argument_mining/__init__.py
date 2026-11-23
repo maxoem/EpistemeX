@@ -159,6 +159,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         }
     )
     writes_kinds = frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION})
+    conformal_tasks = frozenset({"phase4_argument_mining", "p4_acc", "p4_arc"})
 
     def __init__(
         self,
@@ -242,6 +243,8 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                     decision_engine=self.decision_engine,
                     prompts=self.config.acc_prompts,
                     modal_resolver=self.modal_resolver,
+                    infer_intensional_mode=self.config.acc_infer_intensional_mode,
+                    conformal_alpha=self.config.conformal_alpha,
                 ),
                 llm_classifier=default_llm_acc,
                 config=self.config,
@@ -274,6 +277,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                     embedding_model=embedding_model,
                     confidence_threshold=config.arc_confidence_threshold,
                     max_candidates_per_component=config.arc_max_candidates_per_component,
+                    conformal_alpha=config.conformal_alpha,
                 ),
                 llm_classifier=default_tag_arc,
                 config=self.config,

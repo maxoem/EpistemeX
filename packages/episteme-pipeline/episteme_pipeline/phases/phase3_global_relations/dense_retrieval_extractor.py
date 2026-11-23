@@ -511,28 +511,36 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
             )
         template = template.strip()
 
-        import random
+        from episteme_pipeline.decision.cascade import should_audit_deterministically
+
         gated_pairs = []
-        
+
         for pair in pairs:
             entity_a = pair.entity_a
             entity_b = pair.entity_b
-            
+
             question = template.format(entity_a=entity_a.name, entity_b=entity_b.name)
             context = f"Entity A: {entity_a.description or entity_a.name}\nEntity B: {entity_b.description or entity_b.name}"
-            
+
             decision = await self.decision_engine.evaluate_noul(
                 state=context,
                 question=question,
             )
-            
+
             is_related = decision.passed
             threshold = self.config.pair_gating_threshold
             p_has_relation = decision.probability if is_related else (1.0 - decision.probability)
-            
-            if p_has_relation >= threshold or (not is_related and random.random() < self.config.pair_gating_audit_rate):
+
+            pair_key = f"{entity_a.id}:{entity_b.id}"
+            is_audit = should_audit_deterministically(
+                pair_key,
+                "phase3_pair_gating",
+                pair_key,
+                self.config.pair_gating_audit_rate,
+            )
+            if p_has_relation >= threshold or (not is_related and is_audit):
                 gated_pairs.append(pair)
-            
+
         return gated_pairs
 
     async def _extract_pair(

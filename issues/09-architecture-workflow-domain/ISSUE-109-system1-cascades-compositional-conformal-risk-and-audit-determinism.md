@@ -7,7 +7,7 @@
 | **Originating Issues** | [`ISSUE-049`](resolved/ISSUE-049-reproducibility-hazards-stochastic-auditing-prompt-fingerprints-and-conformal-drift.md), [`ISSUE-054`](resolved/ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md), [`ISSUE-056`](resolved/ISSUE-056-non-transitive-consolidation-and-compositional-conformal-risk.md), [`ISSUE-060`](resolved/ISSUE-060-broken-system1-system2-cascades-and-flawed-audit-semantics.md) |
 | **Target Package(s)** | `packages/episteme-pipeline` (`decision/`, `config.py`, `runtime/`, `phases/phase3_global_relations/`, `phases/phase3b_consolidation/`, `phases/phase4_argument_mining/`, `phases/phase5_fusion/`, `llm/`, `runs/`, `tests/`) |
 | **Priority** | **High** |
-| **Status** | `Open` |
+| **Status** | `Resolved` |
 | **Evaluated Docs & ADRs** | [`docs/architecture/conformal_prediction.md`](../../docs/architecture/conformal_prediction.md), [`ADR-0018`](../../docs/adr/0018-decision-engine-architecture-and-contracts.md), [`ADR-0019`](../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md), [`ADR-0023`](../../docs/adr/0023-intensional-perspectival-scoping-and-conception-stratification.md) |
 
 ---
@@ -74,8 +74,8 @@ Auditing the System 1/2 cascade classifiers, compositional conformal risk pipeli
 
 ## 4. Acceptance Criteria
 
-- [ ] `CascadingACCClassifier` no longer runs `JevACCClassifier` only to discard and re-escalate 100% of multi-ADU and entity-bearing chunks; `JevACCClassifier`/`CascadingACCClassifier` expose `fingerprint()`, `infer_intensional_mode` escalation policy is consistent, and `InterDocumentClusterVerifier.verify()` does not confirm ambiguous `len(pred_set) > 1` clusters.
-- [ ] `config.phase4.conformal_alpha` and `refinement.conformal_alpha` are synced from `DecisionEngineConfig` and passed to `evaluate_choice(..., alpha=...)` / `predict_set(...)`, `ConformalCalibrator` honors `get_allocated_alpha(task_id)`, and `risk_budget_weights` allocate budget strictly across active conformal stages.
-- [ ] `LatentGraphConsolidation.fuse()` separates CSLS candidate ranking from raw cosine `min_internal_similarity` / `max_diameter` checks, stamps `sim_matrix[i, j] = -1.0` on rejected borderline pairs, and is verified by discriminating Phase 3b/5 tests that fail under Union-Find.
-- [ ] `JevGleaningGate.should_continue()` and `DenseRetrievalGlobalRelationExtractor.filter_candidate_pairs()` use deterministic HMAC-SHA256 auditing (`should_audit_deterministically`) with zero unseeded `random.random()` calls.
-- [ ] `ConformalCalibrator.calibrate()` preserves global `self.alpha` on stratum-scoped calibration, `ObservableDecisionEngine` propagates `task_id`/`language`, `ObservableDecisionEngine._compute_state_hash` uses canonical JSON, `DiskCachedStructuredLLM.predict_text` hashes `prompt_bundle_hash`, `fingerprint_method()` reads `.seed`, and `docs/architecture/conformal_prediction.md` links are current.
+- [x] `CascadingACCClassifier` no longer runs `JevACCClassifier` only to discard and re-escalate 100% of multi-ADU and entity-bearing chunks; `JevACCClassifier`/`CascadingACCClassifier` expose `fingerprint()`, `infer_intensional_mode` escalation policy is consistent, and `InterDocumentClusterVerifier.verify()` does not confirm ambiguous `len(pred_set) > 1` clusters.
+- [x] `config.phase4.conformal_alpha` and `refinement.conformal_alpha` are synced from `DecisionEngineConfig` and passed to `evaluate_choice(..., alpha=...)` / `predict_set(...)`, `ConformalCalibrator` honors `get_allocated_alpha(task_id)`, and `risk_budget_weights` allocate budget strictly across active conformal stages.
+- [x] `LatentGraphConsolidation.fuse()` separates CSLS candidate ranking from raw cosine `min_internal_similarity` / `max_diameter` checks, stamps `sim_matrix[i, j] = -1.0` on rejected borderline pairs, and is verified by discriminating Phase 3b/5 tests that fail under Union-Find.
+- [x] `JevGleaningGate.should_continue()` and `DenseRetrievalGlobalRelationExtractor.filter_candidate_pairs()` use deterministic HMAC-SHA256 auditing (`should_audit_deterministically`) with zero unseeded `random.random()` calls.
+- [x] `ConformalCalibrator.calibrate()` preserves global `self.alpha` on stratum-scoped calibration, `ObservableDecisionEngine` propagates `task_id`/`language`, `ObservableDecisionEngine._compute_state_hash` uses canonical JSON, `DiskCachedStructuredLLM.predict_text` hashes `prompt_bundle_hash`, `fingerprint_method()` reads `.seed`, and `docs/architecture/conformal_prediction.md` links are current.

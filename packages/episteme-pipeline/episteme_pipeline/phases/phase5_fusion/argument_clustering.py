@@ -256,6 +256,7 @@ class InterDocumentClusterVerifier:
         prompt_bundle: StructuredPromptBundle | None = None,
         calibrator: ConformalCalibrator | None = None,
         language: str | None = None,
+        require_singleton_prediction_set: bool = True,
     ) -> None:
         self.decision_engine = decision_engine
         self.confidence_threshold = confidence_threshold
@@ -267,8 +268,27 @@ class InterDocumentClusterVerifier:
             decision_criteria=DECISION_THEORY_FUSION_CRITERIA,
             name="theory_fusion",
         )
-        self.calibrator = calibrator
-        self.language = language
+        from episteme_pipeline.decision.observable import ObservableDecisionEngine
+
+        self.calibrator = (
+            calibrator
+            if calibrator is not None
+            else (
+                decision_engine.calibrator
+                if isinstance(decision_engine, ObservableDecisionEngine)
+                else None
+            )
+        )
+        self.language = (
+            language
+            if language is not None
+            else (
+                decision_engine.language
+                if isinstance(decision_engine, ObservableDecisionEngine)
+                else None
+            )
+        )
+        self.require_singleton_prediction_set = require_singleton_prediction_set
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic cluster verifier configuration.
@@ -287,6 +307,7 @@ class InterDocumentClusterVerifier:
             "conformal_alpha": self.conformal_alpha,
             "audit_rate": self.audit_rate,
             "language": self.language,
+            "require_singleton_prediction_set": self.require_singleton_prediction_set,
             "prompt_bundle": (
                 self.prompt_bundle.fingerprint()
                 if isinstance(self.prompt_bundle, Fingerprintable)
@@ -397,10 +418,18 @@ class InterDocumentClusterVerifier:
         selected = str(score.selected_option) if score.selected_option is not None else ""
         emp_acc = score.empirical_accuracy
 
-        has_equivalent = ("EQUIVALENT_FUSION" in pred_set or selected == "EQUIVALENT_FUSION")
-        is_confirmed = has_equivalent and (len(pred_set) == 1 or emp_acc >= self.confidence_threshold)
+        if self.require_singleton_prediction_set:
+            is_confirmed = (
+                pred_set == ["EQUIVALENT_FUSION"]
+                and emp_acc >= self.confidence_threshold
+            )
+        else:
+            has_equivalent = (
+                "EQUIVALENT_FUSION" in pred_set or selected == "EQUIVALENT_FUSION"
+            )
+            is_confirmed = has_equivalent and emp_acc >= self.confidence_threshold
 
-        if len(pred_set) > 1:
+        if len(pred_set) > 1 and not is_confirmed:
             action_taken = "active_learning"
         elif is_confirmed:
             action_taken = "fast_exit"

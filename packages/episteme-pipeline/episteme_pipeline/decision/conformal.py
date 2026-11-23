@@ -15,6 +15,7 @@ import numpy as np
 
 from episteme_pipeline.protocols.decision import DecisionScore
 from episteme_pipeline.protocols.fingerprint import Fingerprintable
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 
 
 class ConformalCalibrator(Fingerprintable):
@@ -109,13 +110,16 @@ class ConformalCalibrator(Fingerprintable):
             for stage, weight in weights.items()
         }
 
-    def get_allocated_alpha(self, stage: str) -> float:
-        """Return the allocated significance level for a given pipeline stage or task.
+    def get_allocated_alpha(
+        self,
+        stage: type[PhaseRunner[Any]] | PhaseRunner[Any] | str,
+    ) -> float:
+        """Return the allocated significance level for a given pipeline stage, runner class, or task.
 
         Parameters
         ----------
-        stage : str
-            Stage or task identifier.
+        stage : type of PhaseRunner, PhaseRunner, or str
+            PhaseRunner subclass, instance, class name, ``phase_key``, or task identifier.
 
         Returns
         -------
@@ -125,10 +129,23 @@ class ConformalCalibrator(Fingerprintable):
         if self.global_alpha is not None and self.risk_budget_weights:
             try:
                 allocated = self.allocate_risk_budget(self.global_alpha, self.risk_budget_weights)
-                if stage in allocated:
-                    return allocated[stage]
+                for candidate in PhaseRunner.related_identifiers(stage):
+                    if candidate in allocated:
+                        return allocated[candidate]
             except ValueError:
                 return self.alpha
+        return self.alpha
+
+    def _resolve_effective_alpha(
+        self,
+        alpha: float | None = None,
+        task_id: type[PhaseRunner[Any]] | PhaseRunner[Any] | str | None = None,
+    ) -> float:
+        """Resolve effective significance level from override, risk budget, or instance alpha."""
+        if alpha is not None:
+            return alpha
+        if task_id is not None:
+            return self.get_allocated_alpha(task_id)
         return self.alpha
 
     def fingerprint(self) -> dict[str, Any]:
@@ -147,11 +164,14 @@ class ConformalCalibrator(Fingerprintable):
         ):
             meta = self._stratified_meta.get((task, lang), {})
             key = f"{task}_{lang}" if (task and lang) else (task or lang or "global")
-            calibration_state[key] = {
+            entry: dict[str, Any] = {
                 "q_hat": q,
                 "n_cal": meta.get("n_cal", 0),
                 "dataset_sha256": meta.get("dataset_sha256", ""),
             }
+            if "alpha" in meta:
+                entry["alpha"] = meta["alpha"]
+            calibration_state[key] = entry
         if self.q_hat is not None and "global" not in calibration_state:
             calibration_state["global"] = {
                 "q_hat": self.q_hat,
@@ -206,7 +226,7 @@ class ConformalCalibrator(Fingerprintable):
         if len(calibration_scores) == 0:
             raise ValueError("calibration_scores cannot be empty for conformal calibration.")
 
-        effective_alpha = alpha if alpha is not None else self.alpha
+        effective_alpha = self._resolve_effective_alpha(alpha, task_id)
         scores = np.sort(np.asarray(calibration_scores, dtype=np.float64))
         n = len(scores)
 
@@ -220,6 +240,7 @@ class ConformalCalibrator(Fingerprintable):
             norm_lang = language.lower() if language else None
             self._stratified_q_hat[(task_id, norm_lang)] = q_val
             self._stratified_meta[(task_id, norm_lang)] = {
+                "alpha": effective_alpha,
                 "n_cal": n,
                 "dataset_sha256": dataset_sha256 or "",
             }
@@ -227,27 +248,27 @@ class ConformalCalibrator(Fingerprintable):
             self.q_hat = q_val
             self._global_n_cal = n
             self._global_dataset_sha256 = dataset_sha256 or ""
+            self.alpha = effective_alpha
 
-        self.alpha = effective_alpha
         return q_val
 
     def get_q_hat(
         self,
-        task_id: str | None = None,
+        task_id: type[PhaseRunner[Any]] | PhaseRunner[Any] | str | None = None,
         language: str | None = None,
     ) -> float | None:
-        """Lookup the calibrated non-conformity cutoff for a task and language.
+        """Lookup the calibrated non-conformity cutoff for a task/phase and language.
 
         Resolution order:
-        1. Exact (task_id, language)
-        2. Task-only (task_id, None)
+        1. Exact (task_id, language) or related PhaseRunner identifier with language
+        2. Task-only (task_id, None) or related PhaseRunner identifier
         3. Language-only (None, language)
         4. Global self.q_hat
 
         Parameters
         ----------
-        task_id : str or None, optional
-            Task identifier.
+        task_id : type of PhaseRunner, PhaseRunner, str, or None, optional
+            Task identifier, PhaseRunner class, class name, or ``phase_key``.
         language : str or None, optional
             Language code ('de', 'en').
 
@@ -257,14 +278,22 @@ class ConformalCalibrator(Fingerprintable):
             Calibrated quantile cutoff q_hat, or None if uncalibrated.
         """
         norm_lang = language.lower() if language else None
+        candidates = (
+            PhaseRunner.related_identifiers(task_id)
+            if task_id is not None
+            else (None,)
+        )
 
-        # 1. Exact match
-        if (task_id, norm_lang) in self._stratified_q_hat:
-            return self._stratified_q_hat[(task_id, norm_lang)]
+        # 1. Exact match (or related PhaseRunner identifier with language)
+        for cand in candidates:
+            if (cand, norm_lang) in self._stratified_q_hat:
+                return self._stratified_q_hat[(cand, norm_lang)]
 
-        # 2. Task only
-        if task_id is not None and (task_id, None) in self._stratified_q_hat:
-            return self._stratified_q_hat[(task_id, None)]
+        # 2. Task only (or related PhaseRunner identifier)
+        if task_id is not None:
+            for cand in candidates:
+                if (cand, None) in self._stratified_q_hat:
+                    return self._stratified_q_hat[(cand, None)]
 
         # 3. Language only
         if norm_lang is not None and (None, norm_lang) in self._stratified_q_hat:
@@ -298,15 +327,23 @@ class ConformalCalibrator(Fingerprintable):
         list of str
             Subset of candidate labels included in the conformal prediction set C(X).
         """
-        effective_alpha = alpha if alpha is not None else self.alpha
+        effective_alpha = self._resolve_effective_alpha(alpha, task_id)
         effective_q_hat = self.get_q_hat(task_id, language)
 
-        # If the engine already computed a prediction set under matching alpha, we can use it
-        if score.prediction_set is not None and effective_q_hat is None:
+        # If the engine already computed a prediction set under matching default alpha
+        # and no calibrated quantile or custom/allocated alpha is active, reuse it.
+        if (
+            score.prediction_set is not None
+            and effective_q_hat is None
+            and alpha is None
+            and (task_id is None or effective_alpha == self.alpha)
+        ):
             return score.prediction_set
 
         probabilities = score.probabilities
         if not probabilities:
+            if score.prediction_set is not None:
+                return score.prediction_set
             if score.selected_option is not None:
                 return [str(score.selected_option)]
             return []

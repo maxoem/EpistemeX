@@ -105,8 +105,26 @@ class BorderlinePairVerifier:
             decision_criteria=DECISION_BORDERLINE_MERGE_CRITERIA,
             name="borderline_merge",
         )
-        self.calibrator = calibrator
-        self.language = language
+        from episteme_pipeline.decision.observable import ObservableDecisionEngine
+
+        self.calibrator = (
+            calibrator
+            if calibrator is not None
+            else (
+                decision_engine.calibrator
+                if isinstance(decision_engine, ObservableDecisionEngine)
+                else None
+            )
+        )
+        self.language = (
+            language
+            if language is not None
+            else (
+                decision_engine.language
+                if isinstance(decision_engine, ObservableDecisionEngine)
+                else None
+            )
+        )
 
     @classmethod
     def from_config(

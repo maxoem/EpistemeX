@@ -76,7 +76,7 @@ $$s_i = 1 - \hat{P} (y_i \mid x_i)$$
 ### Step 2: Compute the Empirical Quantile Cutoff ($\hat{q}$)
 
 Given a target error rate $\alpha \in (0, 1)$ (default $\alpha = 0.05$ for $95\%$ coverage), [
-`ConformalCalibrator.calibrate()`](../../packages/episteme-pipeline/episteme_pipeline/decision/conformal.py#L92-L155)
+`ConformalCalibrator.calibrate()`](../../packages/episteme-pipeline/episteme_pipeline/decision/conformal.py#L204-L269)
 sorts the $n$ non-conformity scores in ascending order $s_{ (1)} \le s_{ (2)} \le \dots \le s_{ (n)}$ and selects the
 finite-sample corrected quantile $\hat{q}$:
 
@@ -88,7 +88,7 @@ less—which is equivalent to saying the true answer had a predicted probability
 ### Step 3: Form the Prediction Set $C (X)$ at Runtime
 
 When a new input $X_{n+1}$ arrives at runtime, [
-`ConformalCalibrator.predict_set()`](../../packages/episteme-pipeline/episteme_pipeline/decision/conformal.py#L199-L260)
+`ConformalCalibrator.predict_set()`](../../packages/episteme-pipeline/episteme_pipeline/decision/conformal.py#L319-L390)
 includes every candidate option $y \in \mathcal{Y}$ whose predicted probability is at least $1 - \hat{q}$:
 
 $$C (X_{n+1}) = \left\{ y \in \mathcal{Y} \;\middle|\; 1 - \hat{P} (y \mid X_{n+1}) \le \hat{q} \right\} = \left\{ y \in \mathcal{Y} \;\middle|\; \hat{P} (y \mid X_{n+1}) \ge 1 - \hat{q} \right\}$$
@@ -130,7 +130,7 @@ subset $\mathcal{D}_{\text{cal}}^{ (t, \ell)}$.
 ### Hierarchical Lookup Order (`get_q_hat`)
 
 When [
-`ConformalCalibrator.get_q_hat(task_id, language)`](../../packages/episteme-pipeline/episteme_pipeline/decision/conformal.py#L157-L197)
+`ConformalCalibrator.get_q_hat(task_id, language)`](../../packages/episteme-pipeline/episteme_pipeline/decision/conformal.py#L270-L317)
 is called at runtime, it resolves the cutoff from most specific to most general:
 
 1. **Exact `(task_id, language)`** — e.g., `("p3b_merge", "de")`
@@ -144,7 +144,7 @@ is called at runtime, it resolves the cutoff from most specific to most general:
 `Fingerprintable`](../../packages/episteme-pipeline/episteme_pipeline/protocols/fingerprint.py#L25-L43) protocol. Its
 `fingerprint()` method exports the full calibration state—including `alpha`, every stratum's `q_hat`, calibration sample
 count `n_cal`, and `dataset_sha256`—into `RunManifest.method_fingerprints`. Whenever calibration quantiles are
-updated, [`Pipeline._choose_reuse_source()`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py#L879-L891)
+updated, [`PipelineExecutionEngine.choose_reuse_source()`](../../packages/episteme-pipeline/episteme_pipeline/runtime/execution_engine.py#L573-L598)
 detects the fingerprint change (`method-changed:decision_engine`) and invalidates stale cached phases.
 
 ---
@@ -170,7 +170,7 @@ flowchart TD
 
 1. **Unambiguous Singleton ($|C (X)| = 1$) $\implies$ `fast_exit`**:
     - [
-      `ConformalCalibrator.triage()`](../../packages/episteme-pipeline/episteme_pipeline/decision/conformal.py#L278-L293)
+      `ConformalCalibrator.triage()`](../../packages/episteme-pipeline/episteme_pipeline/decision/conformal.py#L406-L423)
       returns `"fast_exit"` when `len(prediction_set) == 1`.
     - Only a single option is plausible at the $1 - \alpha$ level, allowing System 1 to commit the decision without
       invoking a generative LLM.
@@ -183,7 +183,7 @@ flowchart TD
 ### Counter-Free Stateless Stochastic Auditing (`_should_audit`)
 
 Even when System 1 is confident, [
-`ObservableDecisionEngine`](../../packages/episteme-pipeline/episteme_pipeline/decision/observable.py#L126-L157) samples
+`ObservableDecisionEngine`](../../packages/episteme-pipeline/episteme_pipeline/decision/observable.py#L209-L242) samples
 a small fraction of evaluations (`stochastic_audit_rate`, default $p_{\text{audit}} = 0.02$) and marks their telemetry
 events with `audited=True` to monitor long-term calibration drift.
 
@@ -206,33 +206,31 @@ sequentially or in shuffled `asyncio` tasks, every item receives the exact same 
 ### Phase 3b: Borderline Entity Pair Verification
 
 In [
-`Phase3bLatentConsolidationRunner`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase3b_consolidation/runner.py),
+`Phase3bLatentConsolidationRunner`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase3b_consolidation/__init__.py),
 entity pairs with cosine similarity in the borderline band $[0.75, 0.88)$ are passed to [
-`BorderlinePairVerifier.verify()`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase3b_consolidation/clustering.py#L183-L276):
+`BorderlinePairVerifier.verify()`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase3b_consolidation/clustering.py#L201-L294):
 
 - **Candidate Options**: `["IDENTICAL_MERGE", "HIERARCHICAL_SUBSUMPTION", "DISTINCT_SEPARATE"]`
 - **Mondrian Stratum**: `task_id="p3b_merge"`, `language=language or self.language`
 - **Decision Rule**:
   A borderline pair is approved as a candidate merge edge for clique-constrained clustering (`action_taken="merge_approved"`) if and only if:
     1. The conformal prediction set is the unambiguous singleton $C (X) = \{\text{"IDENTICAL\_MERGE"}\}$, **or**
-    2. The top-1 choice is `"IDENTICAL_MERGE"` and its calibrated empirical accuracy meets `confidence_threshold`
-       (default $0.80$). Otherwise, the merge is aborted (`action_taken="merge_aborted"`) so hierarchical or distinct
-       concepts are never conflated.
-  Subsequently, `clique_constrained_components` enforces minimum internal similarity and maximum diameter bounds, preventing transitive bridge chaining.
+    2. The top-1 choice is `"IDENTICAL_MERGE"`, $|C(X)| \le 1$, and its calibrated empirical accuracy meets `confidence_threshold`
+       (default $0.80$). Otherwise, the merge is aborted (`action_taken="merge_aborted"`) and the pair's similarity in the constraint matrix is stamped with `-1.0` so hierarchical or distinct concepts are never conflated directly or transitively.
+  Subsequently, `clique_constrained_components` enforces minimum internal similarity and maximum diameter bounds on the raw cosine matrix, preventing transitive bridge chaining.
 
 ### Phase 5: Inter-Document Theory Cluster Verification
 
-In [`Phase5bTheoryFusionRunner`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase5_fusion/runner.py),
+In [`Phase5ArgumentWebRunner`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase5_fusion/argument_web.py),
 cross-document candidate clusters are verified by [
-`InterDocumentClusterVerifier.verify()`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase5_fusion/argument_clustering.py#L302-L390):
+`InterDocumentClusterVerifier.verify()`](../../packages/episteme-pipeline/episteme_pipeline/phases/phase5_fusion/argument_clustering.py#L367-L459):
 
 - **Candidate Options**: `["EQUIVALENT_FUSION", "COMPETING_THEORIES", "DISTINCT_APPLICATIONS"]`
 - **Mondrian Stratum**: `task_id="p5_fusion"`, `language=language or self.language`
 - **Decision Rule & Telemetry**:
-    - **Confirmed (`is_confirmed=True`)**: `"EQUIVALENT_FUSION"` is selected/present in $C (X)$ **and**
-      either $|C (X)| = 1$ or `empirical_accuracy >= confidence_threshold` (default $0.85$).
+    - **Confirmed (`is_confirmed=True`)**: By default (`require_singleton_prediction_set=True`), $C(X) = \{\text{"EQUIVALENT\_FUSION"}\}$ ($|C(X)| = 1$) **and** `empirical_accuracy >= confidence_threshold` (default $0.85$), ensuring ambiguous multi-label prediction sets ($|C(X)| > 1$) are never confirmed while routing to active learning.
     - **Gating Event (`DecisionGatingTriggered`)**:
-        - If $|C (X)| > 1$: emits `action_taken="active_learning"` (and logs `active_learning_candidate=True` when
+        - If $|C (X)| > 1$ (and not confirmed): emits `action_taken="active_learning"` (and logs `active_learning_candidate=True` when
           `"EQUIVALENT_FUSION"` is competing with another label in $C (X)$).
         - Else if `is_confirmed`: emits `action_taken="fast_exit"`.
         - Otherwise: emits `action_taken="rejected"`.

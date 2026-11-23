@@ -142,6 +142,9 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             ArtifactKind.LOCAL_RELATION,
         }
     )
+    conformal_tasks = frozenset(
+        {"phase2_entity_discovery", "p2_linking", "phase2_linking"}
+    )
 
     def __init__(
         self,

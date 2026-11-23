@@ -398,6 +398,9 @@ class Phase4Config(BaseModel):
     triage_confidence_threshold: float = 0.85
     conformal_alpha: float = 0.05
     stochastic_audit_rate: float = 0.02
+    acc_infer_intensional_mode: bool = True
+    require_multi_adu_relations: bool = False
+    require_entity_binding: bool = False
     pass_priors_to_llm: bool = True
     gleaning: GleaningConfig = Field(default_factory=GleaningConfig)
 
@@ -829,14 +832,15 @@ class DecisionEngineConfig(BaseModel):
     fast_exit_threshold: float = 0.92
     uncertainty_threshold: float = 0.55
     global_alpha: float = 0.05
+    default_task_id: str | None = None
+    language: str | None = None
     risk_budget_weights: dict[str, float] = Field(
         default_factory=lambda: {
-            "phase2_entity_discovery": 0.20,
-            "phase3_global_relations": 0.20,
+            "phase2_entity_discovery": 0.25,
             "phase3b_consolidation": 0.10,
             "phase4_argument_mining": 0.25,
-            "phase4_entity_maturation": 0.10,
-            "phase5_fusion": 0.15,
+            "phase5_fusion": 0.25,
+            "refinement": 0.15,
         }
     )
     phase_gates: dict[str, bool] = Field(
@@ -874,22 +878,25 @@ class DecisionEngineConfig(BaseModel):
         except ValueError:
             return {k: self.conformal_alpha for k in self.risk_budget_weights}
 
-    def get_allocated_alpha(self, phase_or_task: str) -> float:
-        """Return the allocated alpha for a given phase or task.
+    def get_allocated_alpha(self, phase_or_task: Any) -> float:
+        """Return the allocated alpha for a given PhaseRunner class, phase_key, or task.
 
         Parameters
         ----------
-        phase_or_task : str
-            Identifier for the phase or decision task.
+        phase_or_task : type of PhaseRunner, PhaseRunner, or str
+            PhaseRunner subclass, instance, class name, ``phase_key``, or decision task.
 
         Returns
         -------
         float
             Allocated significance level, or default conformal_alpha if unweighted.
         """
+        from episteme_pipeline.protocols.phase_runner import PhaseRunner
+
         allocated = self.allocate_phase_alphas()
-        if phase_or_task in allocated:
-            return allocated[phase_or_task]
+        for candidate in PhaseRunner.related_identifiers(phase_or_task):
+            if candidate in allocated:
+                return allocated[candidate]
         return self.conformal_alpha
 
 
@@ -976,6 +983,7 @@ class PipelineConfig(BaseModel):
         - ``phase3b.verification.conformal_alpha``
         - ``phase4.conformal_alpha``
         - ``phase5.gating.conformal_alpha``
+        - ``refinement.conformal_alpha``
         """
         if self.decision_engine is None:
             return
@@ -991,5 +999,8 @@ class PipelineConfig(BaseModel):
         )
         self.phase5.gating.conformal_alpha = self.decision_engine.get_allocated_alpha(
             "phase5_fusion"
+        )
+        self.refinement.conformal_alpha = self.decision_engine.get_allocated_alpha(
+            "refinement"
         )
 

@@ -292,9 +292,14 @@ async def execute_nl_to_format[ModelT: BaseModel](
         )
         return await _direct(direct_target)
 
+    reasoning_target = (
+        prompt_bundle.model_copy(update={"direct_template": reasoning_prompt})
+        if isinstance(prompt_bundle, StructuredPromptBundle)
+        else reasoning_prompt
+    )
     try:
         reasoning_text = await llm.predict_text(
-            reasoning_prompt, llm_kwargs, **prompt_args
+            reasoning_target, llm_kwargs, **prompt_args
         )
     except Exception as exc:
         logger.warning(
@@ -341,8 +346,19 @@ class LlamaIndexStructuredLLMAdapter:
         **prompt_args: Any,
     ) -> str:
         """Predict raw text."""
+        from episteme_pipeline.prompts.models import StructuredPromptBundle
+
         start_time = time.time()
-        rendered_prompt = prompt.format(llm=self.base_llm, **prompt_args) if hasattr(prompt, "format") else str(prompt).format(**prompt_args)
+        template_obj = (
+            prompt.direct_template
+            if isinstance(prompt, StructuredPromptBundle)
+            else prompt
+        )
+        rendered_prompt = (
+            template_obj.format(llm=self.base_llm, **prompt_args)
+            if hasattr(template_obj, "format")
+            else str(template_obj).format(**prompt_args)
+        )
         response = await self.base_llm.acomplete(
             rendered_prompt,
             **(llm_kwargs or {}),

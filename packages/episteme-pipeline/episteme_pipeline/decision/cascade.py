@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import hashlib
+import hmac
 from typing import TYPE_CHECKING, Any, Generic, Iterator, TypeVar
 
 if TYPE_CHECKING:
@@ -23,7 +24,7 @@ def should_audit_deterministically(
     item_id: str,
     audit_rate: float,
 ) -> bool:
-    """Compute a reproducible Bernoulli audit decision in [0, 1) via SHA-256.
+    """Compute a reproducible Bernoulli audit decision in [0, 1) via HMAC-SHA256.
 
     Parameters
     ----------
@@ -45,7 +46,9 @@ def should_audit_deterministically(
         return False
     if audit_rate >= 1.0:
         return True
-    digest = hashlib.sha256(f"{run_seed}:{phase_key}:{item_id}".encode("utf-8")).digest()
+    key_bytes = str(run_seed).encode("utf-8")
+    msg_bytes = f"{phase_key}:{item_id}".encode("utf-8")
+    digest = hmac.new(key_bytes, msg_bytes, hashlib.sha256).digest()
     uniform_val = int.from_bytes(digest[:8], "big") / float(1 << 64)
     return uniform_val < audit_rate
 

@@ -385,7 +385,7 @@ async def test_jev_arc_dynamic_schema() -> None:
     mock_engine = MagicMock()
     captured_options = {}
 
-    async def fake_evaluate_choice(state, question, options):
+    async def fake_evaluate_choice(state, question, options, alpha=None):
         nonlocal captured_options
         captured_options = options
         return DecisionScore(
@@ -474,7 +474,12 @@ async def test_jev_acc_intensional_mode_and_cascading_escalation_on_attributed()
 
     captured_questions: list[str] = []
 
-    async def fake_eval_suppositional(state: str, question: str, options: dict[str, str]) -> DecisionScore:
+    async def fake_eval_suppositional(
+        state: str,
+        question: str,
+        options: dict[str, str],
+        alpha: float | None = None,
+    ) -> DecisionScore:
         captured_questions.append(question)
         if len(captured_questions) == 1:
             return DecisionScore(

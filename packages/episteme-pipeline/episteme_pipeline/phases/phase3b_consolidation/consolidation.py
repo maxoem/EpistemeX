@@ -289,10 +289,14 @@ class LatentGraphConsolidation(InstanceFusion):
         embeddings_list = await self.embedding_model.aget_text_embedding_batch(texts)
         embeddings = np.array(embeddings_list)
 
+        cosine_matrix = cosine_similarity_matrix(embeddings)
         if self.use_csls:
-            sim_matrix = csls_similarity_matrix(embeddings, k_nearest=self.csls_k_nearest)
+            candidate_sim_matrix = csls_similarity_matrix(
+                embeddings, k_nearest=self.csls_k_nearest
+            )
         else:
-            sim_matrix = cosine_similarity_matrix(embeddings)
+            candidate_sim_matrix = cosine_matrix.copy()
+        constraint_sim_matrix = cosine_matrix.copy()
 
         n = len(entities)
         edges = []
@@ -310,16 +314,20 @@ class LatentGraphConsolidation(InstanceFusion):
                 if curation_ledger is not None and curation_ledger.is_cannot_link(
                     entities[i].id, entities[j].id, entities[i].name, entities[j].name
                 ):
-                    sim_matrix[i, j] = -1.0
-                    sim_matrix[j, i] = -1.0
+                    constraint_sim_matrix[i, j] = -1.0
+                    constraint_sim_matrix[j, i] = -1.0
+                    candidate_sim_matrix[i, j] = -1.0
+                    candidate_sim_matrix[j, i] = -1.0
                     continue
 
                 # EpistemicCurationLedger: Hard must-link constraint
                 if curation_ledger is not None and curation_ledger.is_must_link(
                     entities[i].id, entities[j].id, entities[i].name, entities[j].name
                 ):
-                    sim_matrix[i, j] = 1.0
-                    sim_matrix[j, i] = 1.0
+                    constraint_sim_matrix[i, j] = 1.0
+                    constraint_sim_matrix[j, i] = 1.0
+                    candidate_sim_matrix[i, j] = 1.0
+                    candidate_sim_matrix[j, i] = 1.0
                     edges.append((i, j))
                     continue
 
@@ -327,7 +335,7 @@ class LatentGraphConsolidation(InstanceFusion):
                 if entities[i].label != entities[j].label:
                     continue
 
-                sim = float(sim_matrix[i, j])
+                sim = float(candidate_sim_matrix[i, j])
 
                 if sim >= definite_threshold:
                     rel_i = await self._get_relations_for_entity(entities[i].id, graph_store)
@@ -347,15 +355,22 @@ class LatentGraphConsolidation(InstanceFusion):
                     is_high_conf = (
                         selected == "IDENTICAL_MERGE"
                         and emp_acc >= self.verifier.confidence_threshold
+                        and len(pred_set) <= 1
                     )
                     if is_singleton or is_high_conf:
                         edges.append((i, j))
+                    else:
+                        constraint_sim_matrix[i, j] = -1.0
+                        constraint_sim_matrix[j, i] = -1.0
+                        candidate_sim_matrix[i, j] = -1.0
+                        candidate_sim_matrix[j, i] = -1.0
 
-        # 4. Cluster connected components with clique constraints to prevent single-linkage chaining
+        # 4. Cluster connected components with clique constraints on raw cosine matrix
+        #    to prevent single-linkage chaining and enforce rejected pair prohibitions
         clusters = clique_constrained_components(
             n,
             edges,
-            sim_matrix,
+            constraint_sim_matrix,
             min_internal_similarity=self.min_internal_similarity,
             max_diameter=self.max_diameter,
         )

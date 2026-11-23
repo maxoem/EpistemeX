@@ -267,6 +267,7 @@ class PipelineFactory(Fingerprintable):
                     embedding_model=embedding_model,
                     confidence_threshold=p4_cfg.arc_confidence_threshold,
                     max_candidates_per_component=p4_cfg.arc_max_candidates_per_component,
+                    conformal_alpha=p4_cfg.conformal_alpha,
                 ),
                 llm_classifier=default_tag_arc,
                 config=p4_cfg,
@@ -523,6 +524,9 @@ class PipelineFactory(Fingerprintable):
             )
         )
 
+        if config.decision_engine is not None:
+            config.sync_allocated_risk_budgets()
+
         if decision_engine is None and config.decision_engine is not None:
             from episteme_pipeline.decision.jev_client import resolve_decision_engine
 
@@ -564,12 +568,19 @@ class PipelineFactory(Fingerprintable):
                 inner=decision_engine,
                 stochastic_audit_rate=stochastic_rate,
                 seed=seed,
+                task_id=(
+                    config.decision_engine.default_task_id
+                    if config.decision_engine
+                    else None
+                ),
+                language=(
+                    config.decision_engine.language
+                    if config.decision_engine
+                    else None
+                ),
+                calibrator=calibrator,
             )
-            observable_engine.calibrator = calibrator
             decision_engine = observable_engine
-
-        if config.decision_engine is not None:
-            config.sync_allocated_risk_budgets()
 
         resolved_modal_resolver = ensure_modal_strength_resolver(
             modal_resolver

@@ -31,6 +31,7 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
     input_view = Phase4ArtifactsView
     reads_kinds = frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION})
     writes_kinds = frozenset({ArtifactKind.FUSION_DECISION})
+    conformal_tasks = frozenset({"phase5_fusion", "p5_fusion"})
 
     def __init__(
         self,

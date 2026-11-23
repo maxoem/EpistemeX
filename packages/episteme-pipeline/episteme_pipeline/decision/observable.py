@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import time
 from typing import Any
 
@@ -67,6 +68,7 @@ class ObservableDecisionEngine:
         seed: int | str | None = None,
         task_id: str | None = None,
         calibrator: Any = None,
+        language: str | None = None,
     ) -> None:
         self.inner = inner
         self.engine_name = engine_name or inner.name
@@ -74,10 +76,19 @@ class ObservableDecisionEngine:
         self.stochastic_audit_rate = stochastic_audit_rate
         self.seed = seed
         self.task_id = task_id
+        self.language = language
         self.calibrator = calibrator
         self.active_phase_key: str | None = None
         self.recorded_prediction_sets: list[list[str]] = []
         self.prediction_sets_by_phase: dict[str, list[list[str]]] = {}
+
+    def _resolve_task_id(self, task_id: str | None = None) -> str | None:
+        """Resolve effective Mondrian task/stage identifier."""
+        if task_id is not None:
+            return task_id
+        if self.task_id is not None:
+            return self.task_id
+        return self.active_phase_key
 
     def start_phase(self, phase_key: str) -> None:
         """Scope conformal prediction set recording to ``phase_key`` and reset its buffer.
@@ -180,7 +191,19 @@ class ObservableDecisionEngine:
         tuple of (str, int)
             Hex-encoded SHA-256 digest and character length.
         """
-        state_str = str(state)
+        if isinstance(state, str):
+            state_str = state
+        else:
+            try:
+                state_str = json.dumps(
+                    state,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                    default=str,
+                )
+            except (TypeError, ValueError):
+                state_str = str(state)
         state_hash = hashlib.sha256(state_str.encode("utf-8")).hexdigest()
         return state_hash, len(state_str)
 
@@ -297,6 +320,9 @@ class ObservableDecisionEngine:
         question: str,
         options: list[str] | dict[str, str],
         alpha: float | None = None,
+        *,
+        task_id: str | None = None,
+        language: str | None = None,
     ) -> DecisionScore:
         """Evaluate a categorical choice with latency and event tracking.
 
@@ -310,6 +336,10 @@ class ObservableDecisionEngine:
             Allowed options or dictionary mapping option labels to rubric definitions.
         alpha : float or None, default None
             Optional significance level for conformal prediction set (1 - alpha coverage).
+        task_id : str or None, optional
+            Optional Mondrian task identifier override.
+        language : str or None, optional
+            Optional Mondrian language code override ('de', 'en').
 
         Returns
         -------
@@ -333,18 +363,33 @@ class ObservableDecisionEngine:
         except Exception:
             pass
 
+        effective_task_id = self._resolve_task_id(task_id)
+        effective_language = language if language is not None else self.language
+        effective_alpha = alpha
+        if (
+            effective_alpha is None
+            and self.calibrator is not None
+            and effective_task_id is not None
+        ):
+            effective_alpha = self.calibrator.get_allocated_alpha(effective_task_id)
+
         t0 = time.perf_counter()
-        result = await self.inner.evaluate_choice(state, question, options, alpha=alpha)
+        result = await self.inner.evaluate_choice(
+            state, question, options, alpha=effective_alpha
+        )
         duration = time.perf_counter() - t0
         if result.prediction_set is None and self.calibrator is not None:
             computed_set = self.calibrator.predict_set(
-                result, alpha=alpha, task_id=self.task_id
+                result,
+                alpha=effective_alpha,
+                task_id=effective_task_id,
+                language=effective_language,
             )
             result = result.model_copy(update={"prediction_set": computed_set})
         if result.prediction_set is not None:
             self._record_prediction_set(result.prediction_set)
 
-        is_audit = self._should_audit(state_hash, "choice")
+        is_audit = self._should_audit(state_hash, effective_task_id or "choice")
         tokens_saved = result.tokens_saved_estimate or (
             (char_count // 4) + (len(question) // 4) + (len(options) * 8) + 50
         )
@@ -378,6 +423,10 @@ class ObservableDecisionEngine:
         state: str | dict[str, Any] | list[Any],
         question: str,
         levels: list[int | str],
+        alpha: float | None = None,
+        *,
+        task_id: str | None = None,
+        language: str | None = None,
     ) -> DecisionScore:
         """Evaluate an ordered scale or score with latency and event tracking.
 
@@ -389,6 +438,12 @@ class ObservableDecisionEngine:
             Scoring question or grading rubric.
         levels : list of int or list of str
             Ordered scale levels.
+        alpha : float or None, default None
+            Optional significance level for conformal prediction set.
+        task_id : str or None, optional
+            Optional Mondrian task identifier override.
+        language : str or None, optional
+            Optional Mondrian language code override ('de', 'en').
 
         Returns
         -------
@@ -411,18 +466,31 @@ class ObservableDecisionEngine:
         except Exception:
             pass
 
+        effective_task_id = self._resolve_task_id(task_id)
+        effective_language = language if language is not None else self.language
+        effective_alpha = alpha
+        if (
+            effective_alpha is None
+            and self.calibrator is not None
+            and effective_task_id is not None
+        ):
+            effective_alpha = self.calibrator.get_allocated_alpha(effective_task_id)
+
         t0 = time.perf_counter()
         result = await self.inner.evaluate_score(state, question, levels)
         duration = time.perf_counter() - t0
         if result.prediction_set is None and self.calibrator is not None:
             computed_set = self.calibrator.predict_set(
-                result, task_id=self.task_id
+                result,
+                alpha=effective_alpha,
+                task_id=effective_task_id,
+                language=effective_language,
             )
             result = result.model_copy(update={"prediction_set": computed_set})
         if result.prediction_set is not None:
             self._record_prediction_set(result.prediction_set)
 
-        is_audit = self._should_audit(state_hash, "score")
+        is_audit = self._should_audit(state_hash, effective_task_id or "score")
         tokens_saved = result.tokens_saved_estimate or (
             (char_count // 4) + (len(question) // 4) + (len(levels) * 4) + 40
         )
@@ -504,6 +572,7 @@ def ensure_observable_decision_engine(
     seed: int | str | None = None,
     task_id: str | None = None,
     calibrator: Any = None,
+    language: str | None = None,
 ) -> ObservableDecisionEngine | None:
     """Ensure a DecisionEngine is decorated with ObservableDecisionEngine idempotently.
 
@@ -523,6 +592,8 @@ def ensure_observable_decision_engine(
         Decision task identifier.
     calibrator : Any or None, optional
         Conformal calibrator instance.
+    language : str or None, optional
+        Mondrian language stratum code ('de', 'en').
 
     Returns
     -------
@@ -541,4 +612,5 @@ def ensure_observable_decision_engine(
         seed=seed,
         task_id=task_id,
         calibrator=calibrator,
+        language=language,
     )

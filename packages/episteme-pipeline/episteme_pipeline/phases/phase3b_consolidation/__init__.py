@@ -36,6 +36,7 @@ class Phase3bLatentConsolidationRunner(PhaseRunner[Phase3ArtifactsView]):
     input_view = Phase3ArtifactsView
     reads_kinds = frozenset({ArtifactKind.LINKED_ENTITY, ArtifactKind.GLOBAL_RELATION})
     writes_kinds = frozenset({ArtifactKind.CANONICALIZATION})
+    conformal_tasks = frozenset({"phase3b_consolidation", "p3b_merge"})
 
     def __init__(
         self,

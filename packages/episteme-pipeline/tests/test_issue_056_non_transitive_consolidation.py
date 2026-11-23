@@ -79,13 +79,27 @@ async def test_phase3b_consolidation_enforces_clique_constraints():
     store.get_neighborhood.return_value = neighborhood
 
     embedding_model = AsyncMock()
-    # Mock embeddings such that sim(0, 1) = 0.90, sim(1, 2) = 0.89, sim(0, 2) = 0.20
-    # Provide explicit custom 3-vector embedding batch:
-    embedding_model.aget_text_embedding_batch.return_value = [
-        [1.0, 0.0, 0.0],
-        [0.86, 0.51, 0.0],  # dot(v0, v1) = 0.86
-        [0.30, 0.85, 0.43],  # dot(v0, v2) = 0.30, dot(v1, v2) ~ 0.86*0.3 + 0.51*0.85 = 0.258 + 0.4335 = 0.69
+    # Provide unit vectors where BOTH bridge edges (0, 1) and (1, 2) exceed threshold 0.85:
+    # cos(v0, v1) = 0.88 >= 0.85 (edge (0, 1) formed)
+    # cos(v1, v2) = 0.88 >= 0.85 (edge (1, 2) formed)
+    # cos(v0, v2) = 0.88^2 - 0.47497368^2 = 0.5488 < 0.75 (violates min_internal_similarity)
+    v0 = [0.88, 0.47497368, 0.0]
+    v1 = [1.0, 0.0, 0.0]
+    v2 = [0.88, -0.47497368, 0.0]
+    embedding_model.aget_text_embedding_batch.return_value = [v0, v1, v2]
+
+    # Prove that both bridge edges exceed 0.85 so unconstrained Union-Find WOULD collapse all 3:
+    from episteme_pipeline.utils.similarity import cosine_similarity_matrix
+
+    raw_sim = cosine_similarity_matrix(np.array([v0, v1, v2]))
+    threshold_edges = [
+        (i, j)
+        for i in range(3)
+        for j in range(i + 1, 3)
+        if raw_sim[i, j] >= 0.85
     ]
+    assert threshold_edges == [(0, 1), (1, 2)]
+    assert union_find_components(3, threshold_edges) == [[0, 1, 2]]
 
     consolidation = LatentGraphConsolidation(
         embedding_model=embedding_model,
@@ -97,9 +111,12 @@ async def test_phase3b_consolidation_enforces_clique_constraints():
 
     fused_map = await consolidation.fuse(store)
 
-    # e0 and e2 must NEVER be mapped to the same canonical entity
+    # e0 and e1 merge, while e0 and e2 must NEVER be mapped to the same canonical entity
+    assert len(fused_map) == 1
     canon_e0 = fused_map.get("e0", "e0")
+    canon_e1 = fused_map.get("e1", "e1")
     canon_e2 = fused_map.get("e2", "e2")
+    assert canon_e0 == canon_e1
     assert canon_e0 != canon_e2
 
 
@@ -114,14 +131,12 @@ async def test_phase5_argument_clustering_enforces_clique_constraints():
     store = AsyncMock()
     store.get_theory_atoms.return_value = [a0, a1, a2]
 
-    # Craft pairwise similarities: sim(0, 1) = 0.90, sim(1, 2) = 0.88, sim(0, 2) = 0.20
-    # Vector embeddings:
+    # Craft pairwise similarities where BOTH (0, 1) and (1, 2) exceed threshold 0.85:
+    # sim(0, 1) = 0.88 >= 0.85, sim(1, 2) = 0.88 >= 0.85, sim(0, 2) = 0.5488 < 0.75
     embedding_model = AsyncMock()
-    # Normalize:
-    v0 = [1.0, 0.0, 0.0]
-    v1 = [0.9, 0.43588989, 0.0]  # dot with v0 = 0.90
-    # Let's provide vectors with known cosines:
-    v2 = [0.2, 0.7, 0.68556]  # dot with v0 = 0.20, dot with v1 = 0.9*0.2 + 0.43588989*0.7 = 0.18 + 0.305 = 0.485
+    v0 = [0.88, 0.47497368, 0.0]
+    v1 = [1.0, 0.0, 0.0]
+    v2 = [0.88, -0.47497368, 0.0]
     embedding_model.aget_text_embedding_batch.return_value = [v0, v1, v2]
 
     clustering = EmbeddingArgumentClustering(
@@ -132,7 +147,7 @@ async def test_phase5_argument_clustering_enforces_clique_constraints():
 
     clusters = await clustering.cluster(store)
 
-    # Only a0 and a1 should be clustered together; a2 must not be merged
+    # Only a0 and a1 should be clustered together; a2 must not be merged despite sim(1, 2) = 0.88 >= 0.85
     assert len(clusters) == 1
     assert set(clusters[0]) == {"a0", "a1"}
     assert "a2" not in clusters[0]

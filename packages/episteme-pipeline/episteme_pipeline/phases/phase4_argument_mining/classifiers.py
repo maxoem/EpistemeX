@@ -143,10 +143,13 @@ class JevACCClassifier(ACCClassifier):
         modal_resolver: ModalStrengthResolver | None = None,
         infer_intensional_mode: bool = False,
         intensional_prompts: StructuredPromptBundle | None = None,
+        conformal_alpha: float = 0.05,
     ) -> None:
         self.decision_engine = decision_engine
         self.prompts = prompts
         self.modal_resolver = modal_resolver
+        self.conformal_alpha = conformal_alpha
+        self.intensional_prompts = intensional_prompts
         if prompts is not None:
             question = prompts.decision_template
             criteria = prompts.decision_criteria
@@ -178,6 +181,69 @@ class JevACCClassifier(ACCClassifier):
             if isinstance(raw_int_criteria, dict)
             else dict(DECISION_INTENSIONAL_MODE_CRITERIA)
         )
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic Jev ACC classifier configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing prompt template, intensional mode flags,
+            conformal alpha, and sub-component fingerprints.
+        """
+        de_fp = (
+            self.decision_engine.fingerprint()
+            if isinstance(self.decision_engine, Fingerprintable)
+            else fingerprint_method(self.decision_engine)
+        )
+        modal_fp = (
+            self.modal_resolver.fingerprint()
+            if self.modal_resolver is not None
+            and isinstance(self.modal_resolver, Fingerprintable)
+            else fingerprint_method(self.modal_resolver)
+        )
+        prompts_fp = (
+            self.prompts.fingerprint()
+            if self.prompts is not None and isinstance(self.prompts, Fingerprintable)
+            else None
+        )
+        int_prompts_fp = (
+            self.intensional_prompts.fingerprint()
+            if self.intensional_prompts is not None
+            and isinstance(self.intensional_prompts, Fingerprintable)
+            else None
+        )
+        return {
+            "class": self.__class__.__name__,
+            "decision_template": self.decision_template,
+            "infer_intensional_mode": self.infer_intensional_mode,
+            "intensional_question": (
+                self.intensional_question if self.infer_intensional_mode else None
+            ),
+            "conformal_alpha": self.conformal_alpha,
+            "decision_engine": de_fp,
+            "modal_resolver": modal_fp,
+            "prompts": prompts_fp,
+            "intensional_prompts": int_prompts_fp,
+        }
+
+    @staticmethod
+    def _bind_chunk_entities(
+        adu_text: str,
+        chunk_entities: list[L2Entity] | None,
+    ) -> list[str]:
+        """Bind chunk entities whose surface name appears in the ADU text."""
+        if not chunk_entities:
+            return []
+        adu_lower = adu_text.lower()
+        bound_ids: list[str] = []
+        seen: set[str] = set()
+        for entity in chunk_entities:
+            name_clean = (entity.name or "").strip().lower()
+            if name_clean and name_clean in adu_lower and entity.id not in seen:
+                bound_ids.append(entity.id)
+                seen.add(entity.id)
+        return bound_ids
 
     async def classify(
         self,
@@ -225,10 +291,13 @@ class JevACCClassifier(ACCClassifier):
                 state=state,
                 question=f"{self.decision_template} Unit ID: {adu_id}",
                 options=options,
+                alpha=self.conformal_alpha,
             )
 
             selected_type = str(decision.selected_option) if decision.selected_option in options else schema.component_types[0]
             confidence = decision.class_probability
+            if decision.prediction_set is not None and len(decision.prediction_set) != 1:
+                confidence = 0.0
             empirical_accuracy = decision.empirical_accuracy
             intensional_mode: Literal[
                 "asserted", "attributed", "suppositional", "historical"
@@ -239,6 +308,7 @@ class JevACCClassifier(ACCClassifier):
                         state=state,
                         question=f"{self.intensional_question} Unit ID: {adu_id}",
                         options=self.intensional_criteria,
+                        alpha=self.conformal_alpha,
                     )
                 )
                 candidate_mode = str(mode_decision.selected_option).strip().lower()
@@ -248,11 +318,19 @@ class JevACCClassifier(ACCClassifier):
                         "('attributed_to') for attributed claims; use LLMACCClassifier or "
                         "CascadingACCClassifier with an LLM fallback."
                     )
+                if (
+                    mode_decision.prediction_set is not None
+                    and len(mode_decision.prediction_set) != 1
+                ):
+                    confidence = 0.0
+                elif mode_decision.class_probability is not None:
+                    confidence = min(confidence, mode_decision.class_probability)
                 if candidate_mode == "suppositional":
                     intensional_mode = "suppositional"
                 elif candidate_mode == "historical":
                     intensional_mode = "historical"
 
+            bound_entity_ids = self._bind_chunk_entities(adu_text, chunk_entities)
             stable_id = stable_component_id(chunk_id, adu_id)
             atom = TheoryAtom(
                 id=stable_id,
@@ -260,6 +338,7 @@ class JevACCClassifier(ACCClassifier):
                 component_type=selected_type,
                 source_chunk_id=chunk_id,
                 confidence=confidence,
+                entity_ids=bound_entity_ids,
                 **(
                     {"modal_prior": empirical_accuracy}
                     if empirical_accuracy is not None
@@ -294,6 +373,14 @@ class CascadingACCClassifier(ACCClassifier):
         Minimum confidence required to accept fast triage results.
     stochastic_audit_rate : float, default 0.02
         Rate at which fast triage results are audited by the LLM classifier.
+    require_multi_adu_relations : bool or None, default None
+        When True, multi-ADU chunks short-circuit directly to ``llm_classifier``
+        before calling ``fast_classifier`` if intra-chunk relations are required.
+        Defaults to ``config.require_multi_adu_relations`` (False).
+    require_entity_binding : bool or None, default None
+        When True, chunks carrying ``chunk_entities`` short-circuit directly to
+        ``llm_classifier`` before calling ``fast_classifier``. Defaults to
+        ``config.require_entity_binding`` (False).
     """
 
     def __init__(
@@ -303,6 +390,8 @@ class CascadingACCClassifier(ACCClassifier):
         config: Phase4Config | None = None,
         triage_confidence_threshold: float = 0.85,
         stochastic_audit_rate: float = 0.02,
+        require_multi_adu_relations: bool | None = None,
+        require_entity_binding: bool | None = None,
     ) -> None:
         self.fast_classifier = fast_classifier
         self.llm_classifier = llm_classifier
@@ -317,6 +406,53 @@ class CascadingACCClassifier(ACCClassifier):
             if config is not None
             else stochastic_audit_rate
         )
+        self.require_multi_adu_relations = (
+            require_multi_adu_relations
+            if require_multi_adu_relations is not None
+            else (
+                config.require_multi_adu_relations
+                if config is not None
+                else False
+            )
+        )
+        self.require_entity_binding = (
+            require_entity_binding
+            if require_entity_binding is not None
+            else (
+                config.require_entity_binding
+                if config is not None
+                else False
+            )
+        )
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic cascading ACC classifier configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing triage confidence threshold, audit rate,
+            escalation flags, and fingerprints of fast and LLM classifiers.
+        """
+        fast_fp = (
+            self.fast_classifier.fingerprint()
+            if isinstance(self.fast_classifier, Fingerprintable)
+            else fingerprint_method(self.fast_classifier)
+        )
+        llm_fp = (
+            self.llm_classifier.fingerprint()
+            if isinstance(self.llm_classifier, Fingerprintable)
+            else fingerprint_method(self.llm_classifier)
+        )
+        return {
+            "class": self.__class__.__name__,
+            "triage_confidence_threshold": self.triage_confidence_threshold,
+            "stochastic_audit_rate": self.stochastic_audit_rate,
+            "require_multi_adu_relations": self.require_multi_adu_relations,
+            "require_entity_binding": self.require_entity_binding,
+            "fast_classifier": fast_fp,
+            "llm_classifier": llm_fp,
+        }
 
     async def classify(
         self,
@@ -346,6 +482,15 @@ class CascadingACCClassifier(ACCClassifier):
         tuple of (list of TheoryAtom, list of TheoryRelation)
             Extracted theory atoms and relations.
         """
+        # Short-circuit before System 1 evaluation if policy mandates System 2
+        # for multi-ADU relational extraction or LLM entity binding.
+        if (self.require_multi_adu_relations and len(adu_ids) > 1) or (
+            self.require_entity_binding and bool(chunk_entities)
+        ):
+            return await self.llm_classifier.classify(
+                chunk_id, tagged_text, adu_ids, schema, chunk_entities
+            )
+
         try:
             atoms, relations = await self.fast_classifier.classify(
                 chunk_id, tagged_text, adu_ids, schema, chunk_entities
@@ -369,28 +514,17 @@ class CascadingACCClassifier(ACCClassifier):
         audit_rate = self.stochastic_audit_rate
 
         is_uncertain = any(a.confidence is None or a.confidence < threshold for a in atoms)
-        has_non_asserted = any(
-            a.intensional_mode != "asserted" or a.attributed_to is not None
+        missing_attribution = any(
+            a.intensional_mode == "attributed" and not a.attributed_to
             for a in atoms
         )
-        missing_multi_adu_relations = len(adu_ids) > 1 and not relations
-        has_entity_context = bool(chunk_entities)
         is_audit = (
             should_audit_deterministically(chunk_id, "phase4_acc", chunk_id, audit_rate)
             if audit_rate > 0.0
             else False
         )
 
-        # Escalate to LLM on low confidence, deterministic audit, non-asserted
-        # intensional scope, multi-ADU chunks lacking System 1 relations, or
-        # chunk entity mention context requiring semantic binding.
-        if (
-            is_uncertain
-            or is_audit
-            or has_non_asserted
-            or missing_multi_adu_relations
-            or has_entity_context
-        ):
+        if is_uncertain or is_audit or missing_attribution:
             return await self.llm_classifier.classify(
                 chunk_id, tagged_text, adu_ids, schema, chunk_entities
             )
@@ -428,6 +562,7 @@ class JevARCClassifier(ARCClassifier):
         confidence_threshold: float = 0.65,
         max_candidates_per_component: int = 10,
         default_inferential_warrant: float = 1.0,
+        conformal_alpha: float = 0.05,
     ) -> None:
         self.decision_engine = decision_engine
         self.prompts = prompts
@@ -436,6 +571,7 @@ class JevARCClassifier(ARCClassifier):
         self.confidence_threshold = confidence_threshold
         self.max_candidates_per_component = max_candidates_per_component
         self.default_inferential_warrant = default_inferential_warrant
+        self.conformal_alpha = conformal_alpha
 
         if prompts is not None:
             question = prompts.decision_template
@@ -474,6 +610,7 @@ class JevARCClassifier(ARCClassifier):
             "confidence_threshold": self.confidence_threshold,
             "max_candidates_per_component": self.max_candidates_per_component,
             "default_inferential_warrant": self.default_inferential_warrant,
+            "conformal_alpha": self.conformal_alpha,
             "decision_template": self.decision_template,
             "decision_engine": de_fp,
             "embedding_model": emb_fp,
@@ -659,6 +796,7 @@ class JevARCClassifier(ARCClassifier):
             state=state,
             question=self.decision_template,
             options=options,
+            alpha=self.conformal_alpha,
         )
 
         pred_set = decision.prediction_set

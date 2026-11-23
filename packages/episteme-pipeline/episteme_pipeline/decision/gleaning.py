@@ -7,19 +7,21 @@ This eliminates introspective LLM confirmation bias and spurious over-extraction
 
 from __future__ import annotations
 
+import hashlib
 import logging
-import random
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from episteme_pipeline.config import GleaningConfig
 
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom
+from episteme_pipeline.decision.cascade import should_audit_deterministically
 from episteme_pipeline.events.context import get_event_emitter
 from episteme_pipeline.events.models import DecisionGatingTriggered
 from episteme_pipeline.prompts.default_prompts import DECISION_GLEANING_QUESTION
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.protocols.decision import DecisionEngine, GleaningStoppingOracle
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +49,23 @@ class FixedPassGleaningOracle:
         """Evaluate if extraction should continue up to fixed pass limits."""
         effective_max = max_passes if max_passes is not None else self.max_passes
         return pass_count < effective_max, 1.0
+
+    async def should_continue(
+        self,
+        chunk_text: str,
+        current_extractions: list[Any],
+        pass_count: int,
+        max_passes: int | None = None,
+        **kwargs: Any,
+    ) -> tuple[bool, float]:
+        """Evaluate if extraction should continue up to fixed pass limits."""
+        return await self.should_glean(
+            chunk_text=chunk_text,
+            current_extractions=current_extractions,
+            pass_count=pass_count,
+            max_passes=max_passes,
+            **kwargs,
+        )
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic fixed-pass gleaning oracle configuration.
@@ -92,9 +111,11 @@ class JevGleaningGate:
         default_threshold: float | None = None,
         default_audit_rate: float | None = None,
         max_passes: int | None = None,
+        seed: int | str | None = None,
     ) -> None:
         self.decision_engine = decision_engine
         self.prompts = prompts
+        self.seed = seed
 
         if config is None:
             from episteme_pipeline.config import GleaningConfig
@@ -124,14 +145,17 @@ class JevGleaningGate:
 
         de_fp = (
             self.decision_engine.fingerprint()
-            if self.decision_engine and hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
-            else fingerprint_method(self.decision_engine) if self.decision_engine else None
+            if isinstance(self.decision_engine, Fingerprintable)
+            else fingerprint_method(self.decision_engine)
+            if self.decision_engine is not None
+            else None
         )
         return {
             "class": self.__class__.__name__,
             "confidence_threshold": self.config.confidence_threshold,
             "audit_rate": self.config.audit_rate,
             "max_passes": self.config.max_passes,
+            "seed": str(self.seed) if self.seed is not None else None,
             "decision_engine": de_fp,
         }
 
@@ -284,8 +308,16 @@ class JevGleaningGate:
             action_taken = "escalated_to_llm"
             should_run = True
         else:
-            # Stochastic audit check: 2% random sample to catch false negatives
-            is_audit = (random.random() < effective_audit_rate)
+            # Deterministic HMAC-SHA256 stochastic audit check to catch false negatives
+            chunk_digest = hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()
+            seed_str = str(self.seed) if self.seed is not None else chunk_digest
+            item_key = f"{chunk_digest}:{len(current_extractions)}:{pass_count}"
+            is_audit = should_audit_deterministically(
+                seed_str,
+                "gleaning_gate",
+                item_key,
+                effective_audit_rate,
+            )
             if is_audit:
                 action_taken = "stochastic_audit"
                 should_run = True
@@ -313,3 +345,22 @@ class JevGleaningGate:
         )
 
         return should_run, emp_accuracy
+
+    async def should_continue(
+        self,
+        chunk_text: str,
+        current_extractions: list[Any],
+        pass_count: int,
+        max_passes: int | None = None,
+        threshold: float | None = None,
+        audit_rate: float | None = None,
+    ) -> tuple[bool, float]:
+        """Alias for :meth:`should_glean` evaluating whether gleaning should continue."""
+        return await self.should_glean(
+            chunk_text=chunk_text,
+            current_extractions=current_extractions,
+            pass_count=pass_count,
+            max_passes=max_passes,
+            threshold=threshold,
+            audit_rate=audit_rate,
+        )

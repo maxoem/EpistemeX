@@ -115,8 +115,19 @@ class DiskCachedStructuredLLM(StructuredLLM):
         llm_kwargs: dict[str, Any] | None = None,
         **prompt_args: Any,
     ) -> str:
+        prompt_bundle_hash = (
+            stable_fingerprint(prompt.fingerprint())
+            if isinstance(prompt, Fingerprintable)
+            else None
+        )
         cache_path = self._get_cache_path(
-            "text", "str", prompt, prompt_args, strategy="text", llm_kwargs=llm_kwargs
+            "text",
+            "str",
+            prompt,
+            prompt_args,
+            strategy="text",
+            llm_kwargs=llm_kwargs,
+            prompt_bundle_hash=prompt_bundle_hash,
         )
 
         if cache_path.exists():

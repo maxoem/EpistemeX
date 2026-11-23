@@ -171,6 +171,10 @@ def fingerprint_method(method_obj: Any) -> str | None:
     if n is not None and _is_fully_serializable(n):
         fingerprint_data["n"] = n
 
+    seed = getattr(method_obj, "seed", None)
+    if seed is not None and _is_fully_serializable(seed):
+        fingerprint_data["seed"] = seed
+
     # Embedding-specific parameters
     dimensions = getattr(method_obj, "dimensions", None)
     if dimensions is not None and _is_fully_serializable(dimensions):

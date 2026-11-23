@@ -206,21 +206,44 @@ class WorkflowDAG(Fingerprintable):
         """
         return [(node.index, node.runner.name) for node in self._nodes]
 
-    def get_node(self, phase_key: str) -> WorkflowNode | None:
-        """Look up a workflow node by its semantic ``phase_key``.
+    def get_node(
+        self,
+        phase_or_key: type[PhaseRunner[Any]] | PhaseRunner[Any] | str,
+    ) -> WorkflowNode | None:
+        """Look up a workflow node by its PhaseRunner class, instance, class name, or ``phase_key``.
 
         Parameters
         ----------
-        phase_key : str
-            Machine key of the target phase.
+        phase_or_key : type of PhaseRunner, PhaseRunner, or str
+            PhaseRunner subclass (e.g. ``Phase4Runner``), runner instance,
+            class name (``"Phase4Runner"``), or machine key (``"phase4"``).
 
         Returns
         -------
         WorkflowNode or None
             Matching workflow node, or ``None`` if not present.
         """
+        if isinstance(phase_or_key, PhaseRunner):
+            for node in self._nodes:
+                if node.runner is phase_or_key or node.phase_key == phase_or_key.phase_key:
+                    return node
+            return None
+
+        if isinstance(phase_or_key, type) and issubclass(phase_or_key, PhaseRunner):
+            for node in self._nodes:
+                if isinstance(node.runner, phase_or_key) or (
+                    phase_or_key.phase_key and node.phase_key == phase_or_key.phase_key
+                ):
+                    return node
+            return None
+
+        resolved_key = PhaseRunner.resolve_phase_key(phase_or_key)
         for node in self._nodes:
-            if node.phase_key == phase_key:
+            if (
+                node.phase_key == phase_or_key
+                or node.phase_key == resolved_key
+                or node.runner.__class__.__name__ == phase_or_key
+            ):
                 return node
         return None
 
@@ -242,26 +265,30 @@ class WorkflowDAG(Fingerprintable):
                 return node
         return None
 
-    def gates_for_phase(self, phase_key: str) -> tuple[EpistemicQualityGate, ...]:
-        """Return the quality gates bound to ``phase_key``.
+    def gates_for_phase(
+        self,
+        phase_or_key: type[PhaseRunner[Any]] | PhaseRunner[Any] | str,
+    ) -> tuple[EpistemicQualityGate, ...]:
+        """Return the quality gates bound to ``phase_or_key``.
 
         Parameters
         ----------
-        phase_key : str
-            Machine key of the phase.
+        phase_or_key : type of PhaseRunner, PhaseRunner, or str
+            PhaseRunner subclass, instance, class name, or machine key of the phase.
 
         Returns
         -------
         tuple of EpistemicQualityGate
-            Gates configured to run after ``phase_key``.
+            Gates configured to run after ``phase_or_key``.
         """
-        node = self.get_node(phase_key)
+        node = self.get_node(phase_or_key)
         if node is not None:
             return node.quality_gates
+        resolved_key = PhaseRunner.resolve_phase_key(phase_or_key)
         return tuple(
             gate
             for gate in self._quality_gates
-            if phase_key in gate.target_phases or "*" in gate.target_phases
+            if resolved_key in gate.target_phases or "*" in gate.target_phases
         )
 
     def with_gates(
@@ -289,8 +316,16 @@ class WorkflowDAG(Fingerprintable):
     def dependencies(self) -> dict[str, set[str]]:
         """Compute direct upstream ``phase_key`` dependencies for each node in the DAG.
 
-        Resolves dependencies from explicit ``runner.dependencies`` when declared,
-        or from ``node.reads_kinds & prev.writes_kinds`` producer-consumer edges.
+        Uses a two-pass order-independent dataflow resolution algorithm over
+        ``reads_kinds`` and ``writes_kinds``:
+        1. **Pass 1 (Origin Producers)**: Connects every origin producer ``p`` of
+           an artifact kind ``k`` (where ``k in p.writes_kinds - p.reads_kinds``)
+           to every consumer ``c`` with ``k in c.reads_kinds``.
+        2. **Pass 2 (Transform / Enrichment Producers)**: Connects every
+           transform producer ``t`` of ``k`` (where ``k in t.writes_kinds & t.reads_kinds``)
+           to every consumer ``c`` of ``k`` that is not an upstream ancestor of ``t``
+           (and if two transform producers share the same level, orders them by
+           registration index).
 
         Returns
         -------
@@ -298,20 +333,69 @@ class WorkflowDAG(Fingerprintable):
             Mapping from ``phase_key`` to its set of direct upstream ``phase_key``s.
         """
         deps: dict[str, set[str]] = {node.phase_key: set() for node in self._nodes}
+        explicit_by_key: dict[str, tuple[str, ...] | None] = {}
+
         for i, node in enumerate(self._nodes):
             explicit_deps = node.explicit_dependencies
             if explicit_deps is None and isinstance(node.runner, PhaseRunner):
                 raw_deps = node.runner.dependencies
                 explicit_deps = tuple(raw_deps) if raw_deps is not None else None
+            explicit_by_key[node.phase_key] = explicit_deps
 
             if explicit_deps is not None:
-                deps[node.phase_key].update(explicit_deps)
+                deps[node.phase_key].update(
+                    PhaseRunner.resolve_phase_key(d) for d in explicit_deps
+                )
             elif node.reads_kinds:
-                for prev in self._nodes[:i]:
-                    if node.reads_kinds & prev.writes_kinds:
-                        deps[node.phase_key].add(prev.phase_key)
+                # Pass 1: Connect origin producers (k in writes_kinds - reads_kinds) across all nodes
+                for candidate in self._nodes:
+                    if candidate.phase_key == node.phase_key:
+                        continue
+                    origin_writes = candidate.writes_kinds - candidate.reads_kinds
+                    if node.reads_kinds & origin_writes:
+                        deps[node.phase_key].add(candidate.phase_key)
             elif not node.writes_kinds and i > 0 and node.input_view is None:
                 deps[node.phase_key].add(self._nodes[i - 1].phase_key)
+
+        def _ancestors_of(start_key: str) -> set[str]:
+            visited: set[str] = set()
+            stack = list(deps.get(start_key, ()))
+            while stack:
+                curr = stack.pop()
+                if curr in visited or curr == start_key:
+                    continue
+                visited.add(curr)
+                stack.extend(deps.get(curr, ()))
+            return visited
+
+        # Pass 2: Connect transform/enrichment producers (k in writes_kinds & reads_kinds)
+        # to consumers that are not upstream ancestors of the transform producer.
+        for producer in self._nodes:
+            transform_writes = producer.writes_kinds & producer.reads_kinds
+            if not transform_writes:
+                continue
+            producer_ancestors = _ancestors_of(producer.phase_key)
+            for consumer in self._nodes:
+                if consumer.phase_key == producer.phase_key:
+                    continue
+                if explicit_by_key.get(consumer.phase_key) is not None:
+                    continue
+                if not (consumer.reads_kinds & transform_writes):
+                    continue
+                if consumer.phase_key in producer_ancestors:
+                    continue
+                consumer_ancestors = _ancestors_of(consumer.phase_key)
+                # If consumer is also a transform producer of the same kind and neither
+                # is an ancestor of the other, break symmetry by registration index.
+                consumer_transforms = consumer.writes_kinds & consumer.reads_kinds
+                if (
+                    (consumer_transforms & transform_writes)
+                    and producer.phase_key not in consumer_ancestors
+                    and producer.index > consumer.index
+                ):
+                    continue
+                deps[consumer.phase_key].add(producer.phase_key)
+
         return deps
 
     def transitive_dependencies(self) -> dict[str, set[str]]:
