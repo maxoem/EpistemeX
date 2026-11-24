@@ -35,7 +35,11 @@ def test_progress_observer_events() -> None:
         emitter.register_observer(observer)
 
         task_name = "test_phase_1"
-        emitter.emit(ProgressStarted(task_name=task_name, total_items=10, description="Testing Phase 1"))
+        emitter.emit(
+            ProgressStarted(
+                task_name=task_name, total_items=10, description="Testing Phase 1"
+            )
+        )
 
         task_id = observer._tasks.get(task_name)
         assert task_id is not None

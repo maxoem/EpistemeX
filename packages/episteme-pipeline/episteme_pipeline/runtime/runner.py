@@ -116,8 +116,10 @@ async def run_pipeline(
         prompt_provider = LangfusePromptProvider()
         try:
             cfg = prompt_provider.populate_config(cfg, label_or_version="production")
-        except Exception as exc:
-            logger.warning("Could not populate config from Langfuse prompt provider: %s", exc)
+        except Exception as exc:  # noqa: BLE001 baseline
+            logger.warning(
+                "Could not populate config from Langfuse prompt provider: %s", exc
+            )
 
     # 2. OpenAILike / LiteLLM Generation Model
     model_name = cfg.models.llm_model or os.getenv("LLM_MODEL", "openai/gpt-4o-mini")
@@ -135,7 +137,9 @@ async def run_pipeline(
     llm = LiteLLM(**llm_kwargs)
 
     # 3. OpenAILike / LiteLLM Embedding Model
-    embed_name = cfg.models.embedding_model or os.getenv("EMBED_MODEL", "openai/text-embedding-3-small")
+    embed_name = cfg.models.embedding_model or os.getenv(
+        "EMBED_MODEL", "openai/text-embedding-3-small"
+    )
     embed_kwargs: dict[str, Any] = {
         "model_name": embed_name,
         "api_key": os.getenv("LITELLM_API_KEY") or os.getenv("OPENAI_API_KEY"),
@@ -146,7 +150,9 @@ async def run_pipeline(
     embed_model = LiteLLMEmbedding(**embed_kwargs)
 
     # 4. HuggingFace CrossEncoder Reranker Model
-    reranker_name = cfg.models.reranker_model or os.getenv("RERANKER_MODEL", "Qwen/Qwen3-Reranker-0.6B")
+    reranker_name = cfg.models.reranker_model or os.getenv(
+        "RERANKER_MODEL", "Qwen/Qwen3-Reranker-0.6B"
+    )
     reranker = SentenceTransformerCrossEncoderReranker(
         model_name=reranker_name,
         cache_model=True,
@@ -206,11 +212,13 @@ async def run_pipeline(
             parent_run_id,
             len(pipeline_input.source_paths),
         )
-        result = await pipeline.run(pipeline_input, run_id=run_id, parent_run_id=parent_run_id)
+        result = await pipeline.run(
+            pipeline_input, run_id=run_id, parent_run_id=parent_run_id
+        )
         return result
     finally:
         for handle in (graph_reader, projection_graph, checkpoint_store):
             try:
                 await handle.close()
-            except Exception as close_exc:
+            except Exception as close_exc:  # noqa: BLE001 baseline
                 logger.debug("Error closing graph handle %s: %s", handle, close_exc)

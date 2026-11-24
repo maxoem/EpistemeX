@@ -19,35 +19,38 @@ from pathlib import Path
 from episteme_pipeline.protocols.data_source import DataSourceAdapter
 
 _LATEX_ARTIFACT_RE = re.compile(
-    r'\\(?:label|ref|eqref|vspace|hspace|noindent|newpage|clearpage|'
-    r'centering|begin|end|includegraphics|caption|footnote)\{[^}]*\}',
+    r"\\(?:label|ref|eqref|vspace|hspace|noindent|newpage|clearpage|"
+    r"centering|begin|end|includegraphics|caption|footnote)\{[^}]*\}",
     re.IGNORECASE,
 )
-_BLANK_LINES_RE = re.compile(r'\n{3,}')
+_BLANK_LINES_RE = re.compile(r"\n{3,}")
 
 
 _BIBLIOGRAPHY_RE = re.compile(
-    r'\\(?:bibliography|addbibresource)\{([^}]+)\}',
+    r"\\(?:bibliography|addbibresource)\{([^}]+)\}",
     re.IGNORECASE,
 )
 
 
 class TexAdapter(DataSourceAdapter):
     def can_handle(self, path: Path) -> bool:
-        return path.suffix.lower() == '.tex'
+        return path.suffix.lower() == ".tex"
 
     def convert(self, path: Path, bib_paths: list[Path] | None = None) -> str:
         source_path = path.expanduser().resolve()
         cmd = [
-            'pandoc',
+            "pandoc",
             source_path.name,
-            '--to', 'markdown',
-            '--wrap=none',
-            '--strip-comments',
+            "--to",
+            "markdown",
+            "--wrap=none",
+            "--strip-comments",
         ]
-        resolved_bibs = list(bib_paths) if bib_paths else self._discover_bib_paths(source_path)
+        resolved_bibs = (
+            list(bib_paths) if bib_paths else self._discover_bib_paths(source_path)
+        )
         for bib in resolved_bibs:
-            cmd.extend(['--bibliography', str(bib.expanduser().resolve())])
+            cmd.extend(["--bibliography", str(bib.expanduser().resolve())])
 
         try:
             result = subprocess.run(
@@ -59,9 +62,7 @@ class TexAdapter(DataSourceAdapter):
                 timeout=120,
             )
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(
-                f"Pandoc failed on {path}: {e.stderr[:500]}"
-            ) from e
+            raise RuntimeError(f"Pandoc failed on {path}: {e.stderr[:500]}") from e
         except FileNotFoundError:
             raise RuntimeError(
                 "Pandoc not found. Install it: https://pandoc.org/installing.html"
@@ -71,9 +72,9 @@ class TexAdapter(DataSourceAdapter):
 
     def _clean(self, text: str) -> str:
         # Remove residual LaTeX artifacts Pandoc doesn't fully convert
-        text = _LATEX_ARTIFACT_RE.sub('', text)
+        text = _LATEX_ARTIFACT_RE.sub("", text)
         # Collapse excess blank lines
-        text = _BLANK_LINES_RE.sub('\n\n', text)
+        text = _BLANK_LINES_RE.sub("\n\n", text)
         return text.strip()
 
     def _discover_bib_paths(self, source_path: Path) -> list[Path]:
@@ -93,11 +94,13 @@ class TexAdapter(DataSourceAdapter):
                         item = item.strip()
                         if not item:
                             continue
-                        bib_file = item if item.lower().endswith(".bib") else f"{item}.bib"
+                        bib_file = (
+                            item if item.lower().endswith(".bib") else f"{item}.bib"
+                        )
                         candidate = (source_path.parent / bib_file).resolve()
                         if candidate.exists() and candidate not in discovered:
                             discovered.append(candidate)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
         if not discovered and source_path.parent.exists():
@@ -107,4 +110,3 @@ class TexAdapter(DataSourceAdapter):
                     discovered.append(resolved)
 
         return discovered
-

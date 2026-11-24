@@ -72,7 +72,7 @@ async def export_neo4j_to_theory_graph(
                     confidence=tr.confidence or 1.0,
                     attributes={"scope": tr.scope, "layer": "L2"},
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.warning("Failed to extract L2 components from Neo4j: %s", exc)
 
     if include_l3:
@@ -118,7 +118,7 @@ async def export_neo4j_to_theory_graph(
                     inferential_force=rel.inferential_warrant,
                     attributes={"scope": rel.scope, "layer": "L3"},
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.warning("Failed to extract L3 components from Neo4j: %s", exc)
 
     return tg

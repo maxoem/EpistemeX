@@ -93,7 +93,11 @@ def _format_yield_summary(counts: dict[str, int], phase_name: str = "") -> str |
 
     # Phase 2: Entities and Local Relations
     mentions = counts.get("entity_mention", 0)
-    entities = counts.get("linked_entity", 0) or counts.get("entity", 0) or counts.get("mature_entity", 0)
+    entities = (
+        counts.get("linked_entity", 0)
+        or counts.get("entity", 0)
+        or counts.get("mature_entity", 0)
+    )
     local_rels = counts.get("local_relation", 0)
     if entities > 0:
         parts.append(f"{entities} Entities")
@@ -128,10 +132,14 @@ def _format_yield_summary(counts: dict[str, int], phase_name: str = "") -> str |
     # Post-processors: Theoretical Enrichment & Tenability
     theories = counts.get("theoretical_enrichment", 0)
     if theories > 0:
-        parts.append(f"{theories} {'Theory Model' if theories == 1 else 'Theory Models'}")
+        parts.append(
+            f"{theories} {'Theory Model' if theories == 1 else 'Theory Models'}"
+        )
 
     if not parts:
-        formatted = [f"{v} {k.replace('_', ' ').title()}" for k, v in counts.items() if v > 0]
+        formatted = [
+            f"{v} {k.replace('_', ' ').title()}" for k, v in counts.items() if v > 0
+        ]
         return " • ".join(formatted) if formatted else None
 
     return " • ".join(parts)
@@ -166,12 +174,16 @@ class ArtifactReader:
                     _resolve_default_runs_dir,
                     _resolve_extra_dirs,
                 )
+
                 default_runs = _resolve_default_runs_dir().resolve()
-                if self.runs_dir.resolve() == default_runs or self.runs_dir.name == ".pipeline_runs":
+                if (
+                    self.runs_dir.resolve() == default_runs
+                    or self.runs_dir.name == ".pipeline_runs"
+                ):
                     e_runs = _resolve_extra_dirs(".pipeline_runs")
                 else:
                     e_runs = []
-            except Exception:
+            except Exception:  # noqa: BLE001 baseline
                 e_runs = []
         else:
             e_runs = [Path(d) for d in extra_runs_dirs]
@@ -182,12 +194,16 @@ class ArtifactReader:
                     _resolve_default_artifacts_dir,
                     _resolve_extra_dirs,
                 )
+
                 default_arts = _resolve_default_artifacts_dir().resolve()
-                if self.artifacts_dir.resolve() == default_arts or self.artifacts_dir.name == ".pipeline_artifacts":
+                if (
+                    self.artifacts_dir.resolve() == default_arts
+                    or self.artifacts_dir.name == ".pipeline_artifacts"
+                ):
                     e_arts = _resolve_extra_dirs(".pipeline_artifacts")
                 else:
                     e_arts = []
-            except Exception:
+            except Exception:  # noqa: BLE001 baseline
                 e_arts = []
         else:
             e_arts = [Path(d) for d in extra_artifacts_dirs]
@@ -195,17 +211,25 @@ class ArtifactReader:
         self.extra_runs_dirs: list[Path] = []
         for d in e_runs:
             try:
-                if d.is_dir() and d.resolve() != self.runs_dir.resolve() and d not in self.extra_runs_dirs:
+                if (
+                    d.is_dir()
+                    and d.resolve() != self.runs_dir.resolve()
+                    and d not in self.extra_runs_dirs
+                ):
                     self.extra_runs_dirs.append(d)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
         self.extra_artifacts_dirs: list[Path] = []
         for d in e_arts:
             try:
-                if d.is_dir() and d.resolve() != self.artifacts_dir.resolve() and d not in self.extra_artifacts_dirs:
+                if (
+                    d.is_dir()
+                    and d.resolve() != self.artifacts_dir.resolve()
+                    and d not in self.extra_artifacts_dirs
+                ):
                     self.extra_artifacts_dirs.append(d)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
     def _find_manifest_path(self, run_id: str) -> Path | None:
@@ -251,7 +275,7 @@ class ArtifactReader:
             return None
         try:
             return json.loads(manifest_path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             return None
 
     def _get_run_artifacts_dir(self, run_id: str) -> Path:
@@ -286,7 +310,7 @@ class ArtifactReader:
                 break
             try:
                 data = json.loads(manifest_path.read_text(encoding="utf-8"))
-            except Exception:
+            except Exception:  # noqa: BLE001 baseline
                 break
             parent = data.get("parent_run_id")
             if not parent or parent in visited:
@@ -317,7 +341,10 @@ class ArtifactReader:
         envelopes: list[tuple[dict[str, Any], Path]] = []
 
         for rid in lineage:
-            run_art_dirs = [self.artifacts_dir / rid, *[d / rid for d in self.extra_artifacts_dirs]]
+            run_art_dirs = [
+                self.artifacts_dir / rid,
+                *[d / rid for d in self.extra_artifacts_dirs],
+            ]
             found = False
             for run_art_dir in run_art_dirs:
                 if not run_art_dir.is_dir():
@@ -326,7 +353,7 @@ class ArtifactReader:
                 for p in sorted(run_art_dir.glob("*.json")):
                     try:
                         data = json.loads(p.read_text(encoding="utf-8"))
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S112 baseline
                         continue
                     if not isinstance(data, dict):
                         continue
@@ -340,7 +367,9 @@ class ArtifactReader:
 
         return envelopes
 
-    def _calculate_run_size_bytes(self, run_id: str, manifest_path: Path | None = None) -> int:
+    def _calculate_run_size_bytes(
+        self, run_id: str, manifest_path: Path | None = None
+    ) -> int:
         total = 0
         if manifest_path and manifest_path.is_file():
             total += manifest_path.stat().st_size
@@ -358,7 +387,7 @@ class ArtifactReader:
             if not kind:
                 name = p.name
                 if name.startswith("artifact::"):
-                    part = name[len("artifact::"):]
+                    part = name[len("artifact::") :]
                     kind = part.split("-")[0].split("::")[0].split(".")[0]
                 else:
                     kind = "unknown"
@@ -414,7 +443,7 @@ class ArtifactReader:
                                 "detail": "Execution process terminated before completion.",
                             }
                         p.write_text(json.dumps(data, indent=2), encoding="utf-8")
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S110 baseline
                         pass
 
                 pipeline_version = data.get("pipeline_version", "0.1.0")
@@ -422,7 +451,11 @@ class ArtifactReader:
                 input_fp_inputs = data.get("input_fingerprint_inputs", {})
                 input_sources = (
                     data.get("input_sources")
-                    or (input_fp_inputs.get("source_paths") if isinstance(input_fp_inputs, dict) else None)
+                    or (
+                        input_fp_inputs.get("source_paths")
+                        if isinstance(input_fp_inputs, dict)
+                        else None
+                    )
                     or data.get("source_paths")
                     or []
                 )
@@ -435,21 +468,33 @@ class ArtifactReader:
                 if isinstance(cfg_snapshot, dict):
                     raw_models = cfg_snapshot.get("models")
                     if isinstance(raw_models, dict):
-                        models = {str(k): str(v) for k, v in raw_models.items() if v is not None}
+                        models = {
+                            str(k): str(v)
+                            for k, v in raw_models.items()
+                            if v is not None
+                        }
                     else:
                         if "default_embedding_model" in cfg_snapshot:
-                            models["embedding_model"] = str(cfg_snapshot["default_embedding_model"])
+                            models["embedding_model"] = str(
+                                cfg_snapshot["default_embedding_model"]
+                            )
                         if "default_reranker_model" in cfg_snapshot:
-                            models["reranker_model"] = str(cfg_snapshot["default_reranker_model"])
+                            models["reranker_model"] = str(
+                                cfg_snapshot["default_reranker_model"]
+                            )
                     if "llm_model" not in models:
-                        models["llm_model"] = str(cfg_snapshot.get("llm_model") or "openai/gpt-4o-mini")
+                        models["llm_model"] = str(
+                            cfg_snapshot.get("llm_model") or "openai/gpt-4o-mini"
+                        )
 
                 # Artifact count
                 phase_records = data.get("phase_records", [])
                 artifact_count = 0
                 for pr in phase_records:
                     if isinstance(pr, dict):
-                        artifact_count += pr.get("artifact_count", len(pr.get("artifact_ids", [])))
+                        artifact_count += pr.get(
+                            "artifact_count", len(pr.get("artifact_ids", []))
+                        )
 
                 # If phase records had 0, count on disk
                 if artifact_count == 0:
@@ -462,9 +507,13 @@ class ArtifactReader:
                 primary_input = None
                 if input_sources:
                     first_src = str(input_sources[0])
-                    base = Path(first_src).name if ("/" in first_src or "\\" in first_src) else first_src
+                    base = (
+                        Path(first_src).name
+                        if ("/" in first_src or "\\" in first_src)
+                        else first_src
+                    )
                     if len(input_sources) > 1:
-                        primary_input = f"{base} (+{len(input_sources)-1})"
+                        primary_input = f"{base} (+{len(input_sources) - 1})"
                     else:
                         primary_input = base
 
@@ -474,20 +523,44 @@ class ArtifactReader:
                         c_dt = datetime.fromisoformat(str(created_at))
                         e_dt = datetime.fromisoformat(str(completed_at))
                         duration_s = max(0.0, (e_dt - c_dt).total_seconds())
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S110 baseline
                         pass
 
-                reused_phase_count = sum(1 for pr in phase_records if isinstance(pr, dict) and pr.get("reused"))
+                reused_phase_count = sum(
+                    1
+                    for pr in phase_records
+                    if isinstance(pr, dict) and pr.get("reused")
+                )
                 total_phase_count = len(phase_records)
 
-                bib_sources = data.get("bib_sources") or (input_fp_inputs.get("bib_paths") if isinstance(input_fp_inputs, dict) else None) or []
-                run_meta = data.get("metadata") or (input_fp_inputs.get("metadata") if isinstance(input_fp_inputs, dict) else None) or {}
-                anchor_raw = data.get("structural_anchor") or (input_fp_inputs.get("structural_anchor") if isinstance(input_fp_inputs, dict) else None)
+                bib_sources = (
+                    data.get("bib_sources")
+                    or (
+                        input_fp_inputs.get("bib_paths")
+                        if isinstance(input_fp_inputs, dict)
+                        else None
+                    )
+                    or []
+                )
+                run_meta = (
+                    data.get("metadata")
+                    or (
+                        input_fp_inputs.get("metadata")
+                        if isinstance(input_fp_inputs, dict)
+                        else None
+                    )
+                    or {}
+                )
+                anchor_raw = data.get("structural_anchor") or (
+                    input_fp_inputs.get("structural_anchor")
+                    if isinstance(input_fp_inputs, dict)
+                    else None
+                )
                 anchor_obj = None
                 if anchor_raw and isinstance(anchor_raw, dict):
                     try:
                         anchor_obj = GlobalStructuralAnchor(**anchor_raw)
-                    except Exception:
+                    except Exception:  # noqa: BLE001 baseline
                         anchor_obj = None
                 elif isinstance(anchor_raw, GlobalStructuralAnchor):
                     anchor_obj = anchor_raw
@@ -496,8 +569,10 @@ class ArtifactReader:
                 decision_metrics_obj = None
                 if decision_metrics_raw and isinstance(decision_metrics_raw, dict):
                     try:
-                        decision_metrics_obj = DecisionRunMetrics(**decision_metrics_raw)
-                    except Exception:
+                        decision_metrics_obj = DecisionRunMetrics(
+                            **decision_metrics_raw
+                        )
+                    except Exception:  # noqa: BLE001 baseline
                         decision_metrics_obj = None
 
                 summary = RunSummary(
@@ -547,7 +622,9 @@ class ArtifactReader:
         try:
             data = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as err:
-            raise ArtifactStoreError(f"Corrupted run manifest for '{run_id}': {err}") from err
+            raise ArtifactStoreError(
+                f"Corrupted run manifest for '{run_id}': {err}"
+            ) from err
 
         status = RunStatus(data.get("status", "planned"))
         created_at = data.get("created_at")
@@ -561,7 +638,7 @@ class ArtifactReader:
                 data["status"] = "failed"
                 data["completed_at"] = completed_at
                 manifest_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
         # Group envelopes by phase_name and collect artifact_id kinds
@@ -597,7 +674,7 @@ class ArtifactReader:
                     s_dt = datetime.fromisoformat(str(started_at_str))
                     c_dt = datetime.fromisoformat(str(completed_at_str))
                     phase_duration_s = max(0.0, (c_dt - s_dt).total_seconds())
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 baseline
                     pass
 
             # Per-phase counts by kind
@@ -625,7 +702,11 @@ class ArtifactReader:
             )
 
         config_snapshot = data.get("config_snapshot", {})
-        graph_schema = config_snapshot.get("graph_schema", {}) if isinstance(config_snapshot, dict) else {}
+        graph_schema = (
+            config_snapshot.get("graph_schema", {})
+            if isinstance(config_snapshot, dict)
+            else {}
+        )
         sanitized_config = redact_secrets(config_snapshot)
 
         artifact_counts_by_kind = self._count_artifacts_by_kind(run_id)
@@ -640,21 +721,32 @@ class ArtifactReader:
         if isinstance(config_snapshot, dict):
             raw_models = config_snapshot.get("models")
             if isinstance(raw_models, dict):
-                models = {str(k): str(v) for k, v in raw_models.items() if v is not None}
+                models = {
+                    str(k): str(v) for k, v in raw_models.items() if v is not None
+                }
             else:
                 if "default_embedding_model" in config_snapshot:
-                    models["embedding_model"] = str(config_snapshot["default_embedding_model"])
+                    models["embedding_model"] = str(
+                        config_snapshot["default_embedding_model"]
+                    )
                 if "default_reranker_model" in config_snapshot:
-                    models["reranker_model"] = str(config_snapshot["default_reranker_model"])
+                    models["reranker_model"] = str(
+                        config_snapshot["default_reranker_model"]
+                    )
             if "llm_model" not in models:
-                models["llm_model"] = str(config_snapshot.get("llm_model") or "openai/gpt-4o-mini")
+                models["llm_model"] = str(
+                    config_snapshot.get("llm_model") or "openai/gpt-4o-mini"
+                )
             if "temperature" not in models:
                 models["temperature"] = "0.0"
             p4_cfg = config_snapshot.get("phase4")
             if isinstance(p4_cfg, dict) and p4_cfg.get("acc_decoding_strategy"):
                 models["decoding_strategy"] = str(p4_cfg["acc_decoding_strategy"])
             p3_cfg = config_snapshot.get("phase3")
-            if isinstance(p3_cfg, dict) and p3_cfg.get("reranker_threshold") is not None:
+            if (
+                isinstance(p3_cfg, dict)
+                and p3_cfg.get("reranker_threshold") is not None
+            ):
                 models["reranker_threshold"] = str(p3_cfg["reranker_threshold"])
 
         run_duration_s = None
@@ -663,22 +755,30 @@ class ArtifactReader:
                 c_dt = datetime.fromisoformat(str(created_at))
                 e_dt = datetime.fromisoformat(str(completed_at))
                 run_duration_s = max(0.0, (e_dt - c_dt).total_seconds())
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
         input_fp_inputs = data.get("input_fingerprint_inputs", {})
         input_sources = (
             data.get("input_sources")
-            or (input_fp_inputs.get("source_paths") if isinstance(input_fp_inputs, dict) else None)
+            or (
+                input_fp_inputs.get("source_paths")
+                if isinstance(input_fp_inputs, dict)
+                else None
+            )
             or data.get("source_paths")
             or []
         )
         primary_input = None
         if input_sources:
             first_src = str(input_sources[0])
-            base = Path(first_src).name if ("/" in first_src or "\\" in first_src) else first_src
+            base = (
+                Path(first_src).name
+                if ("/" in first_src or "\\" in first_src)
+                else first_src
+            )
             if len(input_sources) > 1:
-                primary_input = f"{base} (+{len(input_sources)-1})"
+                primary_input = f"{base} (+{len(input_sources) - 1})"
             else:
                 primary_input = base
 
@@ -687,14 +787,34 @@ class ArtifactReader:
 
         langfuse_url = f"{self.langfuse_host}/traces?search={run_id}"
 
-        bib_sources = data.get("bib_sources") or (input_fp_inputs.get("bib_paths") if isinstance(input_fp_inputs, dict) else None) or []
-        run_meta = data.get("metadata") or (input_fp_inputs.get("metadata") if isinstance(input_fp_inputs, dict) else None) or {}
-        anchor_raw = data.get("structural_anchor") or (input_fp_inputs.get("structural_anchor") if isinstance(input_fp_inputs, dict) else None)
+        bib_sources = (
+            data.get("bib_sources")
+            or (
+                input_fp_inputs.get("bib_paths")
+                if isinstance(input_fp_inputs, dict)
+                else None
+            )
+            or []
+        )
+        run_meta = (
+            data.get("metadata")
+            or (
+                input_fp_inputs.get("metadata")
+                if isinstance(input_fp_inputs, dict)
+                else None
+            )
+            or {}
+        )
+        anchor_raw = data.get("structural_anchor") or (
+            input_fp_inputs.get("structural_anchor")
+            if isinstance(input_fp_inputs, dict)
+            else None
+        )
         anchor_obj = None
         if anchor_raw and isinstance(anchor_raw, dict):
             try:
                 anchor_obj = GlobalStructuralAnchor(**anchor_raw)
-            except Exception:
+            except Exception:  # noqa: BLE001 baseline
                 anchor_obj = None
         elif isinstance(anchor_raw, GlobalStructuralAnchor):
             anchor_obj = anchor_raw
@@ -704,7 +824,7 @@ class ArtifactReader:
         if decision_metrics_raw and isinstance(decision_metrics_raw, dict):
             try:
                 decision_metrics_obj = DecisionRunMetrics(**decision_metrics_raw)
-            except Exception:
+            except Exception:  # noqa: BLE001 baseline
                 decision_metrics_obj = None
 
         phase_config_fps = data.get("phase_config_fingerprints") or {}
@@ -721,9 +841,7 @@ class ArtifactReader:
         )
         raw_fps = data.get("fingerprints") or {}
         norm_fps = (
-            {str(k): v for k, v in raw_fps.items()}
-            if isinstance(raw_fps, dict)
-            else {}
+            {str(k): v for k, v in raw_fps.items()} if isinstance(raw_fps, dict) else {}
         )
         combined_fps = {
             **norm_phase_config_fps,
@@ -792,7 +910,9 @@ class ArtifactReader:
             try:
                 data = json.loads(manifest_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as err:
-                raise ArtifactStoreError(f"Corrupted run manifest for '{run_id}': {err}") from err
+                raise ArtifactStoreError(
+                    f"Corrupted run manifest for '{run_id}': {err}"
+                ) from err
 
             data["status"] = "aborted"
             data["completed_at"] = now_iso
@@ -800,7 +920,7 @@ class ArtifactReader:
 
             phase_records = data.get("phase_records", [])
             for pr in phase_records:
-                if isinstance(pr, dict):
+                if isinstance(pr, dict):  # noqa: SIM102 baseline
                     if pr.get("status") in ("running", "planned"):
                         if pr.get("status") == "running":
                             pr["status"] = "aborted"
@@ -837,11 +957,15 @@ class ArtifactReader:
                 }
                 manifest_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
             else:
-                raise ArtifactStoreError(f"Run manifest for '{run_id}' not found on disk.")
+                raise ArtifactStoreError(
+                    f"Run manifest for '{run_id}' not found on disk."
+                )
 
         updated = self.get_run(run_id)
         if not updated:
-            raise ArtifactStoreError(f"Failed to reload aborted manifest for '{run_id}'.")
+            raise ArtifactStoreError(
+                f"Failed to reload aborted manifest for '{run_id}'."
+            )
         return updated
 
     def list_artifacts(self, run_id: str, kind: str | None = None) -> list[ArtifactRef]:
@@ -906,8 +1030,9 @@ class ArtifactReader:
         if schema_dict:
             try:
                 from episteme_pipeline.schema.default_schema import SchemaConfig
+
                 mapper = SchemaMapper(SchemaConfig.model_validate(schema_dict))
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
         nodes_by_id: dict[str, StudioNode] = {}
@@ -945,9 +1070,22 @@ class ArtifactReader:
             # L2: Entities
             elif kind in ("linked_entity", "entity", "mature_entity"):
                 entity_id = payload.get("entity_id") or art_id
-                node_type = payload.get("entity_type") or payload.get("label") or "Concept"
-                label = payload.get("canonical_name") or payload.get("name") or entity_id
-                tier = "system_1" if payload.get("decision_tier") == "system_1" or payload.get("is_fast_exit") else ("system_2" if payload.get("decision_tier") == "system_2" else "legacy")
+                node_type = (
+                    payload.get("entity_type") or payload.get("label") or "Concept"
+                )
+                label = (
+                    payload.get("canonical_name") or payload.get("name") or entity_id
+                )
+                tier = (
+                    "system_1"
+                    if payload.get("decision_tier") == "system_1"
+                    or payload.get("is_fast_exit")
+                    else (
+                        "system_2"
+                        if payload.get("decision_tier") == "system_2"
+                        else "legacy"
+                    )
+                )
                 nodes_by_id[entity_id] = StudioNode(
                     id=entity_id,
                     layer=Layer.L2,
@@ -976,14 +1114,27 @@ class ArtifactReader:
                     if polarity is None:
                         unmapped_predicates[pred] = unmapped_predicates.get(pred, 0) + 1
                     edge_props: dict[str, Any] = {
-                        "scope": payload.get("scope", "global" if kind == "global_relation" else "local"),
+                        "scope": payload.get(
+                            "scope", "global" if kind == "global_relation" else "local"
+                        ),
                     }
                     if payload.get("source_chunk_id"):
                         edge_props["source_chunk_id"] = payload.get("source_chunk_id")
                     if payload.get("supporting_chunk_ids"):
-                        edge_props["supporting_chunk_ids"] = payload.get("supporting_chunk_ids")
+                        edge_props["supporting_chunk_ids"] = payload.get(
+                            "supporting_chunk_ids"
+                        )
 
-                    tier = "system_1" if payload.get("decision_tier") == "system_1" or payload.get("is_fast_exit") else ("system_2" if payload.get("decision_tier") == "system_2" else "legacy")
+                    tier = (
+                        "system_1"
+                        if payload.get("decision_tier") == "system_1"
+                        or payload.get("is_fast_exit")
+                        else (
+                            "system_2"
+                            if payload.get("decision_tier") == "system_2"
+                            else "legacy"
+                        )
+                    )
                     edges.append(
                         StudioEdge(
                             id=rel_id,
@@ -994,9 +1145,15 @@ class ArtifactReader:
                             polarity=polarity,
                             confidence=payload.get("confidence"),
                             empirical_accuracy=payload.get("empirical_accuracy"),
-                            model_confidence=payload.get("model_confidence", payload.get("calibrated_confidence")),
-                            stance_probability=payload.get("stance_probability", payload.get("class_probability")),
-                            inferential_force=payload.get("inferential_warrant", payload.get("inferential_force")),
+                            model_confidence=payload.get(
+                                "model_confidence", payload.get("calibrated_confidence")
+                            ),
+                            stance_probability=payload.get(
+                                "stance_probability", payload.get("class_probability")
+                            ),
+                            inferential_force=payload.get(
+                                "inferential_warrant", payload.get("inferential_force")
+                            ),
                             active_weight=payload.get("active_weight"),
                             is_admissible=bool(payload.get("is_admissible", True)),
                             decision_tier=tier,
@@ -1016,13 +1173,28 @@ class ArtifactReader:
                     "modal_prior",
                     payload.get("base_score", payload.get("plausibility")),
                 )
-                mod_str = payload.get("modal_prior", payload.get("modal_strength", base_sc))
-                eq_str = payload.get("equilibrium_strength", payload.get("plausibility", base_sc))
-                tier = "system_1" if payload.get("decision_tier") == "system_1" or payload.get("is_fast_exit") else ("system_2" if payload.get("decision_tier") == "system_2" else "legacy")
+                mod_str = payload.get(
+                    "modal_prior", payload.get("modal_strength", base_sc)
+                )
+                eq_str = payload.get(
+                    "equilibrium_strength", payload.get("plausibility", base_sc)
+                )
+                tier = (
+                    "system_1"
+                    if payload.get("decision_tier") == "system_1"
+                    or payload.get("is_fast_exit")
+                    else (
+                        "system_2"
+                        if payload.get("decision_tier") == "system_2"
+                        else "legacy"
+                    )
+                )
                 scope_t = payload.get("scope_type")
                 epist_s = payload.get("epistemic_status")
                 res_type = payload.get("modal_resolver") or payload.get("resolver_type")
-                raw_m = payload.get("raw_modal_score") or payload.get("raw_engine_score")
+                raw_m = payload.get("raw_modal_score") or payload.get(
+                    "raw_engine_score"
+                )
                 clamped_m = payload.get("is_modal_clamped") or payload.get("clamped")
                 nodes_by_id[comp_id] = StudioNode(
                     id=comp_id,
@@ -1042,14 +1214,17 @@ class ArtifactReader:
                     is_modal_clamped=clamped_m,
                     qbaf_tau=payload.get("qbaf_tau", eq_str),
                     total_weight_of_evidence=payload.get("total_weight_of_evidence"),
-                    volatility_index=payload.get("volatility_index", payload.get("controversy_volatility")),
+                    volatility_index=payload.get(
+                        "volatility_index", payload.get("controversy_volatility")
+                    ),
                     decision_tier=tier,
                     conformal_set_size=payload.get("conformal_set_size"),
                     decision_id=payload.get("decision_id"),
                     props={
                         **payload,
                         "text": text,
-                        "source_chunk_id": payload.get("source_chunk_id") or payload.get("chunk_id"),
+                        "source_chunk_id": payload.get("source_chunk_id")
+                        or payload.get("chunk_id"),
                         "scope_type": scope_t,
                         "epistemic_status": epist_s,
                         "modal_strength": mod_str,
@@ -1066,10 +1241,25 @@ class ArtifactReader:
                 if src and tgt:
                     polarity = mapper.resolve_polarity(rel_type)
                     if polarity is None:
-                        unmapped_predicates[rel_type] = unmapped_predicates.get(rel_type, 0) + 1
-                    tier = "system_1" if payload.get("decision_tier") == "system_1" or payload.get("is_fast_exit") else ("system_2" if payload.get("decision_tier") == "system_2" else "legacy")
-                    inf_force = payload.get("inferential_warrant", payload.get("inferential_force", 0.75))
-                    act_weight = payload.get("active_weight", payload.get("weight", inf_force))
+                        unmapped_predicates[rel_type] = (
+                            unmapped_predicates.get(rel_type, 0) + 1
+                        )
+                    tier = (
+                        "system_1"
+                        if payload.get("decision_tier") == "system_1"
+                        or payload.get("is_fast_exit")
+                        else (
+                            "system_2"
+                            if payload.get("decision_tier") == "system_2"
+                            else "legacy"
+                        )
+                    )
+                    inf_force = payload.get(
+                        "inferential_warrant", payload.get("inferential_force", 0.75)
+                    )
+                    act_weight = payload.get(
+                        "active_weight", payload.get("weight", inf_force)
+                    )
                     edges.append(
                         StudioEdge(
                             id=rel_id,
@@ -1080,10 +1270,23 @@ class ArtifactReader:
                             polarity=polarity,
                             weight=payload.get("weight", act_weight),
                             confidence=payload.get("confidence"),
-                            tenability=payload.get("edge_tenability", payload.get("tenability")),
-                            empirical_accuracy=payload.get("perception_empirical_acc", payload.get("empirical_accuracy")),
-                            model_confidence=payload.get("model_confidence", payload.get("calibrated_confidence")),
-                            stance_probability=payload.get("perception_stance_prob", payload.get("stance_probability", payload.get("class_probability"))),
+                            tenability=payload.get(
+                                "edge_tenability", payload.get("tenability")
+                            ),
+                            empirical_accuracy=payload.get(
+                                "perception_empirical_acc",
+                                payload.get("empirical_accuracy"),
+                            ),
+                            model_confidence=payload.get(
+                                "model_confidence", payload.get("calibrated_confidence")
+                            ),
+                            stance_probability=payload.get(
+                                "perception_stance_prob",
+                                payload.get(
+                                    "stance_probability",
+                                    payload.get("class_probability"),
+                                ),
+                            ),
                             inferential_force=inf_force,
                             active_weight=act_weight,
                             is_admissible=bool(payload.get("is_admissible", True)),
@@ -1093,7 +1296,8 @@ class ArtifactReader:
                             decision_id=payload.get("decision_id"),
                             props={
                                 "scope": payload.get("scope", "local"),
-                                "source_chunk_id": payload.get("source_chunk_id") or payload.get("chunk_id"),
+                                "source_chunk_id": payload.get("source_chunk_id")
+                                or payload.get("chunk_id"),
                             },
                         )
                     )
@@ -1106,7 +1310,11 @@ class ArtifactReader:
         if enrichments:
             for enr in enrichments:
                 cid = enr.get("cluster_id")
-                chunk_id = cid[len("cluster-"):] if cid and cid.startswith("cluster-") else cid
+                chunk_id = (
+                    cid[len("cluster-") :]
+                    if cid and cid.startswith("cluster-")
+                    else cid
+                )
                 theory_id = enr.get("theory_id")
                 proj_params = enr.get("projected_parameters") or {}
                 local_ts = enr.get("local_tenability")
@@ -1128,7 +1336,9 @@ class ArtifactReader:
 
                 # Attach to matching nodes in that cluster/chunk
                 for node in nodes_by_id.values():
-                    node_chunk = node.props.get("source_chunk_id") or node.props.get("chunk_id")
+                    node_chunk = node.props.get("source_chunk_id") or node.props.get(
+                        "chunk_id"
+                    )
                     if chunk_id and (node_chunk == chunk_id or node.id == chunk_id):
                         if node.parameters is None:
                             node.parameters = {}
@@ -1200,16 +1410,22 @@ class ArtifactReader:
         if total_nodes > budget:
             truncated = True
             dropped_count = total_nodes - budget
-            sorted_nodes = sorted(nodes_by_id.values(), key=lambda n: n.degree, reverse=True)
+            sorted_nodes = sorted(
+                nodes_by_id.values(), key=lambda n: n.degree, reverse=True
+            )
             active_nodes = sorted_nodes[:budget]
             active_ids = {n.id for n in active_nodes}
             nodes = active_nodes
-            edges = [e for e in edges if e.source in active_ids and e.target in active_ids]
+            edges = [
+                e for e in edges if e.source in active_ids and e.target in active_ids
+            ]
         else:
             nodes = list(nodes_by_id.values())
 
         graph_version = f"{run_id}:{len(nodes)}:{len(edges)}"
-        schema_version = schema_dict.get("version", "v1") if isinstance(schema_dict, dict) else "v1"
+        schema_version = (
+            schema_dict.get("version", "v1") if isinstance(schema_dict, dict) else "v1"
+        )
 
         return GraphView(
             nodes=nodes,
@@ -1272,11 +1488,13 @@ class ArtifactReader:
             layer = 2
             entity_name = target_env.get("payload", {}).get("canonical_name", node_id)
             mentions = [
-                e for e in all_envelopes
+                e
+                for e in all_envelopes
                 if e.get("kind") == "entity_mention"
                 and (
                     e.get("payload", {}).get("surface_form") == entity_name
-                    or node_id in e.get("provenance", {}).get("upstream_artifact_ids", [])
+                    or node_id
+                    in e.get("provenance", {}).get("upstream_artifact_ids", [])
                 )
             ]
 
@@ -1284,7 +1502,9 @@ class ArtifactReader:
             chunk_spans: dict[str, list[EvidenceSpan]] = {}
             for m in mentions:
                 mpay = m.get("payload", {})
-                cid = mpay.get("chunk_id") or m.get("provenance", {}).get("source_chunk_id")
+                cid = mpay.get("chunk_id") or m.get("provenance", {}).get(
+                    "source_chunk_id"
+                )
                 if not cid:
                     continue
                 start = mpay.get("start_char")
@@ -1305,7 +1525,9 @@ class ArtifactReader:
                         end = len(chunk_text)
                         mode = "whole_chunk"
 
-                span = EvidenceSpan(start_char=start, end_char=end, text=text, mode=mode)
+                span = EvidenceSpan(
+                    start_char=start, end_char=end, text=text, mode=mode
+                )
                 chunk_spans.setdefault(cid, []).append(span)
 
             for cid, spans in chunk_spans.items():
@@ -1321,7 +1543,9 @@ class ArtifactReader:
         elif kind in ("theory_atom", "argument_component"):
             layer = 3
             atom_text = target_env.get("payload", {}).get("text", "")
-            cid = target_env.get("payload", {}).get("chunk_id") or target_env.get("provenance", {}).get("source_chunk_id")
+            cid = target_env.get("payload", {}).get("chunk_id") or target_env.get(
+                "provenance", {}
+            ).get("source_chunk_id")
 
             if cid and cid in chunks_map:
                 chunk_text = chunks_map[cid]
@@ -1335,7 +1559,9 @@ class ArtifactReader:
                     end = len(chunk_text)
                     mode = "whole_chunk"
 
-                span = EvidenceSpan(start_char=start, end_char=end, text=atom_text, mode=mode)
+                span = EvidenceSpan(
+                    start_char=start, end_char=end, text=atom_text, mode=mode
+                )
                 evidence_chunks.append(
                     EvidenceChunk(
                         chunk_id=cid,

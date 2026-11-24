@@ -33,13 +33,21 @@ class _FakeCompletionResponse:
 
 
 class _FakeLLMWithUsage:
-    def __init__(self, model_name: str = "mock-gpt-4o", usage: dict[str, int] | None = None) -> None:
+    def __init__(
+        self, model_name: str = "mock-gpt-4o", usage: dict[str, int] | None = None
+    ) -> None:
         self.model_name = model_name
         self.temperature = 0.2
         self.max_tokens = 1000
-        self.usage = usage or {"prompt_tokens": 15, "completion_tokens": 25, "total_tokens": 40}
+        self.usage = usage or {
+            "prompt_tokens": 15,
+            "completion_tokens": 25,
+            "total_tokens": 40,
+        }
 
-    async def astructured_predict(self, output_cls: type[Any], prompt: Any, **kwargs: Any) -> Any:
+    async def astructured_predict(
+        self, output_cls: type[Any], prompt: Any, **kwargs: Any
+    ) -> Any:
         res = output_cls(name="test_entity", value=42)
         # Mock usage attached to object
         res.__dict__["usage"] = self.usage
@@ -61,8 +69,12 @@ class _MockLangfuseClient:
     def get_current_trace_id(self) -> str:
         return self._current_trace_id
 
-    def create_score(self, *, trace_id: str, name: str, value: float, comment: str | None = None) -> None:
-        self.scores.append({"trace_id": trace_id, "name": name, "value": value, "comment": comment})
+    def create_score(
+        self, *, trace_id: str, name: str, value: float, comment: str | None = None
+    ) -> None:
+        self.scores.append(
+            {"trace_id": trace_id, "name": name, "value": value, "comment": comment}
+        )
 
     def start_observation(
         self,
@@ -117,14 +129,18 @@ def test_token_usage_extractor_from_dict_and_objects() -> None:
     assert u1.total_tokens == 30
 
     # From completion response with additional_kwargs
-    resp = _FakeCompletionResponse("hello world", usage={"prompt_tokens": 5, "completion_tokens": 15})
+    resp = _FakeCompletionResponse(
+        "hello world", usage={"prompt_tokens": 5, "completion_tokens": 15}
+    )
     u2 = LLMResponseMetadataExtractor.extract_usage(resp)
     assert u2.prompt_tokens == 5
     assert u2.completion_tokens == 15
     assert u2.total_tokens == 20
 
     # From fallback estimation
-    u3 = LLMResponseMetadataExtractor.extract_usage(None, prompt_text="A short prompt", output_text="A short response")
+    u3 = LLMResponseMetadataExtractor.extract_usage(
+        None, prompt_text="A short prompt", output_text="A short response"
+    )
     assert u3.prompt_tokens > 0
     assert u3.completion_tokens > 0
     assert u3.total_tokens == u3.prompt_tokens + u3.completion_tokens
@@ -143,7 +159,10 @@ async def test_structured_llm_adapter_emits_generation_event() -> None:
     emitter.register_observer(_Capture())
 
     with use_event_emitter(emitter):
-        llm = _FakeLLMWithUsage(model_name="gpt-4o-mini", usage={"prompt_tokens": 50, "completion_tokens": 75})
+        llm = _FakeLLMWithUsage(
+            model_name="gpt-4o-mini",
+            usage={"prompt_tokens": 50, "completion_tokens": 75},
+        )
         adapter = LlamaIndexStructuredLLMAdapter(llm)
 
         # 1. Structured prediction
@@ -226,7 +245,9 @@ async def test_disk_cache_emits_cached_generation_event(tmp_path: Path) -> None:
 
 def test_langfuse_observer_maps_generation_and_scores(monkeypatch: Any) -> None:
     """LangfuseObserver maps LLMGenerationCompleted to 'generation' observation and publishes scores."""
-    monkeypatch.setattr("episteme_pipeline.events.langfuse_observer.LANGFUSE_AVAILABLE", True)
+    monkeypatch.setattr(
+        "episteme_pipeline.events.langfuse_observer.LANGFUSE_AVAILABLE", True
+    )
     client = _MockLangfuseClient()
     obs = LangfuseObserver(client=client)
 
@@ -312,7 +333,9 @@ async def test_observable_embedding_model_emits_events() -> None:
     emitter.register_observer(_Capture())
 
     with use_event_emitter(emitter):
-        raw_encoder = _MockRawEmbeddingEncoder(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        raw_encoder = _MockRawEmbeddingEncoder(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
         model = ensure_embedding_model(raw_encoder)
         assert model is not None
 
@@ -344,7 +367,9 @@ def test_langfuse_observer_maps_embedding_generation(monkeypatch: Any) -> None:
     """LangfuseObserver maps EmbeddingGenerationCompleted to 'generation' observation with token usage."""
     from episteme_pipeline.events.models import EmbeddingGenerationCompleted
 
-    monkeypatch.setattr("episteme_pipeline.events.langfuse_observer.LANGFUSE_AVAILABLE", True)
+    monkeypatch.setattr(
+        "episteme_pipeline.events.langfuse_observer.LANGFUSE_AVAILABLE", True
+    )
     client = _MockLangfuseClient()
     obs = LangfuseObserver(client=client)
 
@@ -382,12 +407,18 @@ def test_langfuse_observer_maps_domain_and_lifecycle_events(monkeypatch: Any) ->
         RerankerScoreAssigned,
     )
 
-    monkeypatch.setattr("episteme_pipeline.events.langfuse_observer.LANGFUSE_AVAILABLE", True)
+    monkeypatch.setattr(
+        "episteme_pipeline.events.langfuse_observer.LANGFUSE_AVAILABLE", True
+    )
     client = _MockLangfuseClient()
     obs = LangfuseObserver(client=client)
 
     # 1. Component lifecycle
-    obs.on_event(ComponentStarted(component_name="ner_extractor", input_description="Extracting from chunk_1"))
+    obs.on_event(
+        ComponentStarted(
+            component_name="ner_extractor", input_description="Extracting from chunk_1"
+        )
+    )
     assert len(client.spans) == 1
     assert client.spans[0]["name"] == "component.ner_extractor"
     assert client.spans[0]["ended"] is False
@@ -448,4 +479,3 @@ def test_langfuse_observer_maps_domain_and_lifecycle_events(monkeypatch: Any) ->
         )
     )
     assert len([s for s in client.spans if s["name"] == "llm.structured_predict"]) == 0
-

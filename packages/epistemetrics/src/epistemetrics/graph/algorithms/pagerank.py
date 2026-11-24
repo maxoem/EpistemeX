@@ -160,8 +160,14 @@ def gds_pagerank(
             "score ORDER BY score DESC"
         )
         rows = client.execute_query(query, {"graph_name": graph_name, "config": config})
-        scores = {str(row["node_id"]): float(row["score"]) for row in rows if row.get("node_id") is not None}
-        return CentralityResult(scores=scores, algorithm="pagerank", backend="neo4j_gds")
+        scores = {
+            str(row["node_id"]): float(row["score"])
+            for row in rows
+            if row.get("node_id") is not None
+        }
+        return CentralityResult(
+            scores=scores, algorithm="pagerank", backend="neo4j_gds"
+        )
 
     if exec_mode == AlgorithmExecutionMode.WRITE:
         config["writeProperty"] = write_property or "pagerank"
@@ -247,7 +253,9 @@ def page_rank(
         except Exception as exc:
             if not fallback_to_networkx:
                 raise
-            logger.warning("GDS PageRank execution failed (%s); falling back to NetworkX.", exc)
+            logger.warning(
+                "GDS PageRank execution failed (%s); falling back to NetworkX.", exc
+            )
 
     logger.debug("Executing PageRank via NetworkX.")
     return networkx_pagerank(

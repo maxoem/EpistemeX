@@ -83,7 +83,7 @@ class StreamTee:
         try:
             self._orig.write(data)
             self._orig.flush()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         self._buffer += str(data)
@@ -134,14 +134,14 @@ class StreamTee:
                     "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
     def flush(self) -> None:
         """Flush original stream and any remaining buffered line content."""
         try:
             self._orig.flush()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
         if self._buffer.strip():
             self._send_lines([self._buffer.strip()])
@@ -211,12 +211,20 @@ def _run_demo_pipeline(
     start_time = datetime.now(UTC)
     all_decisions: list[dict[str, Any]] = []
 
-    with log_file.open("w", encoding="utf-8") as lf, decisions_file.open("w", encoding="utf-8") as df:
+    with (
+        log_file.open("w", encoding="utf-8") as lf,
+        decisions_file.open("w", encoding="utf-8") as df,
+    ):
         import json
-        lf.write(f"[{start_time.isoformat()}] [INFO] pipeline: Starting pipeline run {run_id} (Simulation)\n")
+
+        lf.write(
+            f"[{start_time.isoformat()}] [INFO] pipeline: Starting pipeline run {run_id} (Simulation)\n"
+        )
         for phase_name, ordinal in phases:
             phase_start = datetime.now(UTC)
-            lf.write(f"[{phase_start.isoformat()}] [INFO] pipeline.{phase_name}: Starting runner\n")
+            lf.write(
+                f"[{phase_start.isoformat()}] [INFO] pipeline.{phase_name}: Starting runner\n"
+            )
             print(f"[{phase_name}] Runner started")
             context_emitter.defaults["phase"] = phase_name
             context_emitter.emit(
@@ -247,23 +255,39 @@ def _run_demo_pipeline(
                 )
 
                 # Simulate System 1 Decision
-                is_audit = (step % 20 == 0)
+                is_audit = step % 20 == 0
                 is_escalated = (step % 6 == 0) and not is_audit
                 is_fast_exit = not is_escalated
-                action = "stochastic_audit" if is_audit else ("escalated_to_llm" if is_escalated else "fast_exit")
+                action = (
+                    "stochastic_audit"
+                    if is_audit
+                    else ("escalated_to_llm" if is_escalated else "fast_exit")
+                )
                 acc = round(0.95 if is_fast_exit else 0.72, 3)
                 dur = 0.013 if is_fast_exit else 2.15
                 tok_saved = 480 if is_fast_exit else 0
                 prim = "choice" if ordinal in (3, 4) else "noul"
-                val = "SUPPORTS" if step % 2 == 0 else "ATTACKS" if prim == "choice" else "true"
-                pred_set = [val] if is_fast_exit else [val, "ATTACKS" if val == "SUPPORTS" else "false"]
+                val = (
+                    "SUPPORTS"
+                    if step % 2 == 0
+                    else "ATTACKS"
+                    if prim == "choice"
+                    else "true"
+                )
+                pred_set = (
+                    [val]
+                    if is_fast_exit
+                    else [val, "ATTACKS" if val == "SUPPORTS" else "false"]
+                )
 
                 context_emitter.emit(
                     DecisionEvaluationCompleted(
                         engine_name="LayaDecisionEngine",
                         primitive=prim,
                         question=f"Evaluate dialectical relation for concept {step} in {phase_name}",
-                        prompt_name="decision_pair_gating" if ordinal == 3 else "acc_arc_triage",
+                        prompt_name="decision_pair_gating"
+                        if ordinal == 3
+                        else "acc_arc_triage",
                         selected_value=val,
                         class_probability=round(acc - 0.03, 3),
                         empirical_accuracy=acc,
@@ -293,8 +317,12 @@ def _run_demo_pipeline(
                     "state_snippet": f"State context for concept {step} in {phase_name}",
                     "selected_value": val,
                     "system_1_choice": val,
-                    "system_2_choice": val if is_audit else ("ATTACKS" if is_escalated else None),
-                    "options": ["SUPPORTS", "ATTACKS"] if prim == "choice" else ["true", "false"],
+                    "system_2_choice": val
+                    if is_audit
+                    else ("ATTACKS" if is_escalated else None),
+                    "options": ["SUPPORTS", "ATTACKS"]
+                    if prim == "choice"
+                    else ["true", "false"],
                     "prediction_set": pred_set,
                     "class_probability": round(acc - 0.03, 3),
                     "empirical_accuracy": acc,
@@ -335,7 +363,9 @@ def _run_demo_pipeline(
                         advance=1,
                     )
                 )
-                lf.write(f"[{datetime.now(UTC).isoformat()}] [INFO] {phase_name}: Processed concept {step}\n")
+                lf.write(
+                    f"[{datetime.now(UTC).isoformat()}] [INFO] {phase_name}: Processed concept {step}\n"
+                )
 
             context_emitter.emit(
                 ProgressCompleted(
@@ -358,7 +388,9 @@ def _run_demo_pipeline(
                     success=True,
                 )
             )
-            lf.write(f"[{phase_end.isoformat()}] [INFO] pipeline.{phase_name}: Completed successfully ({step_count} artifacts)\n")
+            lf.write(
+                f"[{phase_end.isoformat()}] [INFO] pipeline.{phase_name}: Completed successfully ({step_count} artifacts)\n"
+            )
             print(f"[{phase_name}] Completed successfully")
 
             phase_records.append(
@@ -373,17 +405,27 @@ def _run_demo_pipeline(
             )
 
         end_time = datetime.now(UTC)
-        lf.write(f"[{end_time.isoformat()}] [INFO] pipeline: Pipeline run {run_id} completed\n")
+        lf.write(
+            f"[{end_time.isoformat()}] [INFO] pipeline: Pipeline run {run_id} completed\n"
+        )
         print(f"=== Pipeline run {run_id} completed successfully ===")
 
     # Aggregate DecisionRunMetrics
     tot_dec = len(all_decisions)
-    fe_cnt = sum(1 for d in all_decisions if d["action_taken"] in ("fast_exit", "stochastic_audit"))
+    fe_cnt = sum(
+        1
+        for d in all_decisions
+        if d["action_taken"] in ("fast_exit", "stochastic_audit")
+    )
     esc_cnt = tot_dec - fe_cnt
     aud_cnt = sum(1 for d in all_decisions if d["is_stochastic_audit"])
     tok_saved = sum(d["tokens_saved_estimate"] for d in all_decisions)
     cost_saved = round(tok_saved * 0.000008, 4)
-    lats = [d["duration_seconds"] * 1000 for d in all_decisions if d["action_taken"] == "fast_exit"]
+    lats = [
+        d["duration_seconds"] * 1000
+        for d in all_decisions
+        if d["action_taken"] == "fast_exit"
+    ]
     lats.sort()
     p50 = round(lats[len(lats) // 2], 2) if lats else 12.8
     p95 = round(lats[int(len(lats) * 0.95)], 2) if lats else 15.4
@@ -461,7 +503,7 @@ def _run_demo_pipeline(
         )
         store = JsonRunManifestStore(".pipeline_runs")
         store.write_manifest(manifest)
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001 baseline
         print(f"Warning: Failed to persist simulation manifest: {err}", file=sys.stderr)
 
 
@@ -510,7 +552,7 @@ def run_pipeline_worker(
     try:
         pid_file.parent.mkdir(parents=True, exist_ok=True)
         pid_file.write_text(str(os.getpid()), encoding="utf-8")
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 baseline
         pass
 
     try:
@@ -556,8 +598,11 @@ def run_pipeline_worker(
                         )
 
                         emitter.register_observer(LangfuseObserver())
-                    except Exception as err:
-                        print(f"Warning: Could not register LangfuseObserver: {err}", file=sys.stderr)
+                    except Exception as err:  # noqa: BLE001 baseline
+                        print(
+                            f"Warning: Could not register LangfuseObserver: {err}",
+                            file=sys.stderr,
+                        )
 
                 print(f"=== Starting real pipeline run {session_id} ===")
                 print(f"Input source paths: {source_paths}")
@@ -588,7 +633,7 @@ def run_pipeline_worker(
         # Notify parent process that the run has completed successfully
         event_queue.put({"_type": "RUN_COMPLETED", "run_id": session_id})
         time.sleep(0.1)
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001 baseline
         tb = traceback.format_exc()
         print(tb, file=sys.stderr)
         try:
@@ -601,18 +646,18 @@ def run_pipeline_worker(
                 }
             )
             time.sleep(0.2)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
         sys.exit(1)
     finally:
         try:
             pid_file.unlink(missing_ok=True)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
         try:
             sys.stdout.flush()
             sys.stderr.flush()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
         sys.stdout = orig_stdout
         sys.stderr = orig_stderr

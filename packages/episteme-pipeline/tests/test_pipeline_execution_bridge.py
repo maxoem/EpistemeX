@@ -26,7 +26,9 @@ class StubPhase1(PhaseRunner[PipelineInput]):
     name = "Phase 1: Data Foundation"
     phase_key = "phase1"
 
-    async def run(self, input: PipelineInput, context: ArtifactExecutionContext) -> ArtifactCollection:
+    async def run(
+        self, input: PipelineInput, context: ArtifactExecutionContext
+    ) -> ArtifactCollection:
         document = L1Document(
             id="doc-1",
             title="Doc",
@@ -42,10 +44,22 @@ class StubPhase1(PhaseRunner[PipelineInput]):
             sequence_index=0,
             token_count=2,
         )
-        return ArtifactCollection([
-            build_document_artifact(document, run_id=context.run_id, phase_name=self.name, method="test.phase1"),
-            build_chunk_artifact(chunk, run_id=context.run_id, phase_name=self.name, method="test.phase1"),
-        ])
+        return ArtifactCollection(
+            [
+                build_document_artifact(
+                    document,
+                    run_id=context.run_id,
+                    phase_name=self.name,
+                    method="test.phase1",
+                ),
+                build_chunk_artifact(
+                    chunk,
+                    run_id=context.run_id,
+                    phase_name=self.name,
+                    method="test.phase1",
+                ),
+            ]
+        )
 
 
 class StubPhase2(PhaseRunner[Phase1ArtifactsView]):
@@ -53,12 +67,37 @@ class StubPhase2(PhaseRunner[Phase1ArtifactsView]):
     phase_key = "phase2"
     input_view = Phase1ArtifactsView
 
-    async def run(self, input: Phase1ArtifactsView, context: ArtifactExecutionContext) -> ArtifactCollection:
-        entity = L2Entity(id="entity-1", label="PERSON", name="Kant", source_chunk_ids=["chunk-1"])
-        triple = L2Triple(subject_id="entity-1", predicate="MENTIONS", object_id="entity-1", confidence=1.0, scope="local", source_chunk_id="chunk-1")
-        mention = build_entity_mention_artifact(entity, "chunk-1", run_id=context.run_id, phase_name=self.name, method="test.phase2")
-        linked = build_linked_entity_artifact(entity, [mention.artifact_id], run_id=context.run_id, phase_name=self.name, method="test.phase2")
-        relation = build_local_relation_artifact(triple, run_id=context.run_id, phase_name=self.name, method="test.phase2")
+    async def run(
+        self, input: Phase1ArtifactsView, context: ArtifactExecutionContext
+    ) -> ArtifactCollection:
+        entity = L2Entity(
+            id="entity-1", label="PERSON", name="Kant", source_chunk_ids=["chunk-1"]
+        )
+        triple = L2Triple(
+            subject_id="entity-1",
+            predicate="MENTIONS",
+            object_id="entity-1",
+            confidence=1.0,
+            scope="local",
+            source_chunk_id="chunk-1",
+        )
+        mention = build_entity_mention_artifact(
+            entity,
+            "chunk-1",
+            run_id=context.run_id,
+            phase_name=self.name,
+            method="test.phase2",
+        )
+        linked = build_linked_entity_artifact(
+            entity,
+            [mention.artifact_id],
+            run_id=context.run_id,
+            phase_name=self.name,
+            method="test.phase2",
+        )
+        relation = build_local_relation_artifact(
+            triple, run_id=context.run_id, phase_name=self.name, method="test.phase2"
+        )
         return ArtifactCollection([mention, linked, relation])
 
 
@@ -86,7 +125,9 @@ class StubPhase3First(PhaseRunner[Phase2ArtifactsView]):
 
 
 @pytest.mark.asyncio
-async def test_pipeline_persists_manifest_and_phase1_phase2_artifacts(tmp_path: Path, graph_store):
+async def test_pipeline_persists_manifest_and_phase1_phase2_artifacts(
+    tmp_path: Path, graph_store
+):
     config = PipelineConfig()
     config.execution.persist_run_manifests = True
     config.execution.persist_phase1_artifacts = True

@@ -197,7 +197,9 @@ async def test_observable_explicit_inner_access() -> None:
     )
     assert len(mock_inner._choice_rules) == 1
 
-    res = await observable.evaluate_choice("state", "test_pattern", ["CUSTOM_OPTION", "OTHER"])
+    res = await observable.evaluate_choice(
+        "state", "test_pattern", ["CUSTOM_OPTION", "OTHER"]
+    )
     assert res.selected_option == "CUSTOM_OPTION"
 
     assert len(mock_inner.calls) == 1
@@ -284,7 +286,6 @@ def test_langfuse_observer_active_learning_queue_hook() -> None:
 
     call_kwargs = mock_client.start_observation.call_args[1]
     assert call_kwargs["metadata"]["active_learning_candidate"] is True
-
 
 
 def test_langfuse_observer_decision_gating_triggered() -> None:

@@ -24,7 +24,6 @@ from episteme_pipeline.artifacts.models import (
     EntityMentionArtifact,
     FusionDecisionArtifact,
     GlobalRelationArtifact,
-    LocalRelationArtifact,
     MentionId,
 )
 from episteme_pipeline.contracts.domain import (
@@ -159,7 +158,9 @@ def build_document_artifact(
             deficit_id=deficit_id,
         ),
         payload=DocumentCodec.to_payload(document),
-        dependency_fingerprint=stable_fingerprint({"document_id": document.id, "source_path": document.source_path}),
+        dependency_fingerprint=stable_fingerprint(
+            {"document_id": document.id, "source_path": document.source_path}
+        ),
     )
 
 
@@ -212,7 +213,13 @@ def build_chunk_artifact(
             deficit_id=deficit_id,
         ),
         payload=ChunkCodec.to_payload(chunk),
-        dependency_fingerprint=stable_fingerprint({"chunk_id": chunk.id, "document_id": chunk.source_doc_id, "text": chunk.text}),
+        dependency_fingerprint=stable_fingerprint(
+            {
+                "chunk_id": chunk.id,
+                "document_id": chunk.source_doc_id,
+                "text": chunk.text,
+            }
+        ),
     )
 
 
@@ -343,11 +350,11 @@ def build_linked_entity_artifact(
         Constructed linked entity artifact envelope.
     """
     payload = LinkedEntityCodec.to_payload(entity)
-    payload.mention_ids = [artifact_id.removeprefix("artifact::") for artifact_id in mention_artifact_ids]
+    payload.mention_ids = [
+        artifact_id.removeprefix("artifact::") for artifact_id in mention_artifact_ids
+    ]
     payload.is_retired = is_retired
-    artifact_id = _scoped_artifact_id(
-        entity.id, refinement_pass, phase_tag=phase_tag
-    )
+    artifact_id = _scoped_artifact_id(entity.id, refinement_pass, phase_tag=phase_tag)
     resolved_upstream = (
         list(dict.fromkeys(upstream_artifact_ids))
         if upstream_artifact_ids is not None
@@ -362,7 +369,9 @@ def build_linked_entity_artifact(
         phase_name=phase_name,
         method=method,
         provenance=_build_provenance(
-            source_chunk_id=entity.source_chunk_ids[0] if entity.source_chunk_ids else None,
+            source_chunk_id=entity.source_chunk_ids[0]
+            if entity.source_chunk_ids
+            else None,
             upstream_artifact_ids=resolved_upstream,
             refinement_pass=refinement_pass,
             deficit_id=deficit_id,
@@ -436,7 +445,13 @@ def build_local_relation_artifact(
             deficit_id=deficit_id,
         ),
         payload=payload,
-        dependency_fingerprint=stable_fingerprint({"relation_id": relation_id, "predicate": triple.predicate, "scope": triple.scope}),
+        dependency_fingerprint=stable_fingerprint(
+            {
+                "relation_id": relation_id,
+                "predicate": triple.predicate,
+                "scope": triple.scope,
+            }
+        ),
     )
 
 
@@ -478,7 +493,9 @@ def build_global_relation_artifact(
         Constructed global relation artifact envelope.
     """
     # A global relation spans chunks, so it is identified by the triple alone.
-    relation_id = f"global-relation::{triple.subject_id}::{triple.predicate}::{triple.object_id}"
+    relation_id = (
+        f"global-relation::{triple.subject_id}::{triple.predicate}::{triple.object_id}"
+    )
     resolved_upstream = (
         upstream_artifact_ids
         if upstream_artifact_ids is not None
@@ -497,9 +514,27 @@ def build_global_relation_artifact(
             refinement_pass=refinement_pass,
             deficit_id=deficit_id,
         ),
-        payload=GlobalRelationArtifact(relation_id=relation_id, subject_entity_id=triple.subject_id, predicate=triple.predicate, object_entity_id=triple.object_id, supporting_chunk_ids=[triple.source_chunk_id] if triple.source_chunk_id else [], confidence=triple.confidence, rerank_score=triple.rerank_score),
-        dependency_fingerprint=stable_fingerprint({"relation_id": relation_id, "predicate": triple.predicate, "source_chunk_id": triple.source_chunk_id}),
-        metadata={"relation_type_distribution": str(relation_dist.get(triple.predicate, 0))},
+        payload=GlobalRelationArtifact(
+            relation_id=relation_id,
+            subject_entity_id=triple.subject_id,
+            predicate=triple.predicate,
+            object_entity_id=triple.object_id,
+            supporting_chunk_ids=[triple.source_chunk_id]
+            if triple.source_chunk_id
+            else [],
+            confidence=triple.confidence,
+            rerank_score=triple.rerank_score,
+        ),
+        dependency_fingerprint=stable_fingerprint(
+            {
+                "relation_id": relation_id,
+                "predicate": triple.predicate,
+                "source_chunk_id": triple.source_chunk_id,
+            }
+        ),
+        metadata={
+            "relation_type_distribution": str(relation_dist.get(triple.predicate, 0))
+        },
     )
 
 
@@ -563,15 +598,17 @@ def build_theory_atom_artifact(
             deficit_id=deficit_id,
         ),
         payload=TheoryAtomCodec.to_payload(component),
-        dependency_fingerprint=stable_fingerprint({
-            "component_id": component.id,
-            "component_type": component.component_type,
-            "text": component.text,
-            "epistemic_status": component.epistemic_status,
-            "scope_type": component.scope_type,
-            "intensional_mode": component.intensional_mode,
-            "attributed_to": component.attributed_to,
-        }),
+        dependency_fingerprint=stable_fingerprint(
+            {
+                "component_id": component.id,
+                "component_type": component.component_type,
+                "text": component.text,
+                "epistemic_status": component.epistemic_status,
+                "scope_type": component.scope_type,
+                "intensional_mode": component.intensional_mode,
+                "attributed_to": component.attributed_to,
+            }
+        ),
     )
 
 
@@ -616,9 +653,7 @@ def build_theory_relation_artifact(
         Constructed theory relation artifact envelope.
     """
     relation_id = relation.relation_id
-    artifact_id = _scoped_artifact_id(
-        relation_id, refinement_pass, phase_tag=phase_tag
-    )
+    artifact_id = _scoped_artifact_id(relation_id, refinement_pass, phase_tag=phase_tag)
     default_upstream = [f"artifact::{pid}" for pid in relation.effective_premise_ids]
     target_ref = relation.undercuts_relation_id or relation.target_id
     default_upstream.append(f"artifact::{target_ref}")
@@ -639,13 +674,15 @@ def build_theory_relation_artifact(
             deficit_id=deficit_id,
         ),
         payload=TheoryRelationCodec.to_payload(relation),
-        dependency_fingerprint=stable_fingerprint({
-            "relation_id": relation_id,
-            "relation_type": relation.relation_type,
-            "scope": relation.scope,
-            "premise_ids": list(relation.effective_premise_ids),
-            "undercuts_relation_id": relation.undercuts_relation_id,
-        }),
+        dependency_fingerprint=stable_fingerprint(
+            {
+                "relation_id": relation_id,
+                "relation_type": relation.relation_type,
+                "scope": relation.scope,
+                "premise_ids": list(relation.effective_premise_ids),
+                "undercuts_relation_id": relation.undercuts_relation_id,
+            }
+        ),
     )
 
 
@@ -701,19 +738,16 @@ def build_theory_graph_update_artifacts(
         ):
             if isinstance(f_env.payload, FusionDecisionArtifact):
                 f_ids = [
-                    aid.removeprefix("artifact::")
-                    for aid in f_env.payload.artifact_ids
+                    aid.removeprefix("artifact::") for aid in f_env.payload.artifact_ids
                 ]
                 if f_env.payload.canonical_artifact_id:
                     f_ids.append(
-                        f_env.payload.canonical_artifact_id.removeprefix(
-                            "artifact::"
-                        )
+                        f_env.payload.canonical_artifact_id.removeprefix("artifact::")
                     )
                 for member_id in f_ids:
-                    fusion_upstreams_by_atom.setdefault(
-                        member_id, []
-                    ).append(f_env.artifact_id)
+                    fusion_upstreams_by_atom.setdefault(member_id, []).append(
+                        f_env.artifact_id
+                    )
 
     envelopes: list[ArtifactEnvelope] = []
     emitted_atom_ids: dict[str, str] = {}
@@ -837,12 +871,22 @@ def build_canonicalization_artifact(
         phase_name=phase_name,
         method=method,
         provenance=_build_provenance(
-            upstream_artifact_ids=[f"artifact::{original_id}", f"artifact::{canonical_id}"],
+            upstream_artifact_ids=[
+                f"artifact::{original_id}",
+                f"artifact::{canonical_id}",
+            ],
             refinement_pass=refinement_pass,
             deficit_id=deficit_id,
         ),
-        payload=CanonicalizationArtifact(canonical_id=canonical_id, original_artifact_ids=[original_id], canonical_label=canonical_id, canonical_type="entity"),
-        dependency_fingerprint=stable_fingerprint({"original_id": original_id, "canonical_id": canonical_id}),
+        payload=CanonicalizationArtifact(
+            canonical_id=canonical_id,
+            original_artifact_ids=[original_id],
+            canonical_label=canonical_id,
+            canonical_type="entity",
+        ),
+        dependency_fingerprint=stable_fingerprint(
+            {"original_id": original_id, "canonical_id": canonical_id}
+        ),
     )
 
 
@@ -892,7 +936,9 @@ def build_fusion_cluster_artifact(
         phase_name=phase_name,
         method=method,
         provenance=_build_provenance(
-            upstream_artifact_ids=[f"artifact::{component_id}" for component_id in cluster],
+            upstream_artifact_ids=[
+                f"artifact::{component_id}" for component_id in cluster
+            ],
             refinement_pass=refinement_pass,
             deficit_id=deficit_id,
         ),
@@ -904,7 +950,9 @@ def build_fusion_cluster_artifact(
             rationale="semantic argument clustering",
             confidence=None,
         ),
-        dependency_fingerprint=stable_fingerprint({"cluster": cluster, "theory_fusion_applied": theory_fusion_applied}),
+        dependency_fingerprint=stable_fingerprint(
+            {"cluster": cluster, "theory_fusion_applied": theory_fusion_applied}
+        ),
     )
 
 

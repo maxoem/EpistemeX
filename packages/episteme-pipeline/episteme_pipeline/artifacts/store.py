@@ -79,7 +79,7 @@ class JsonArtifactStore(ArtifactStoreProtocol):
                     path.read_text(encoding="utf-8")
                 )
                 artifacts.append(artifact)
-            except Exception:
+            except Exception:  # noqa: BLE001, S112 baseline
                 # Skip corrupted files
                 continue
         return artifacts

@@ -9,13 +9,14 @@ from episteme_pipeline.artifacts.invalidate import (
     build_prior_fingerprints,
     find_stale_nodes,
 )
-from tests.helpers.artifact_mappers import map_phase1_output_to_artifacts
 from episteme_pipeline.artifacts.models import ArtifactEnvelope, ArtifactKind
 from episteme_pipeline.contracts.phase_contracts import (
     L1Chunk,
     L1Document,
     Phase1Output,
 )
+
+from tests.helpers.artifact_mappers import map_phase1_output_to_artifacts
 
 
 class StubPhase:
@@ -55,7 +56,7 @@ def _create_phase1_artifacts(run_id: str) -> list[ArtifactEnvelope]:
         ),
         run_id=run_id,
     ):
-        artifacts.append(artifact)
+        artifacts.append(artifact)  # noqa: PERF402 baseline
     return artifacts
 
 

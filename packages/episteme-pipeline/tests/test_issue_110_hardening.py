@@ -62,7 +62,10 @@ from episteme_pipeline.events import (
 )
 from episteme_pipeline.events.langfuse_observer import LangfuseObserver
 from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
-from episteme_pipeline.graph.neo4j_store import Neo4jCheckpointStore, _normalize_phase_key
+from episteme_pipeline.graph.neo4j_store import (
+    Neo4jCheckpointStore,
+    _normalize_phase_key,
+)
 from episteme_pipeline.phases.phase3_global_relations.dense_retrieval_extractor import (
     DenseRetrievalGlobalRelationExtractor,
 )
@@ -76,7 +79,6 @@ from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import RunStatus
 from episteme_pipeline.runtime import ArtifactExecutionEngine, WorkflowDAG
 from episteme_pipeline.schema.default_schema import SchemaConfig
-
 
 # ---------------------------------------------------------------------------
 # 1. Neo4j Lineage-Scoped Phase Key Checkpointing & Bulk UNWIND Projection
@@ -114,10 +116,10 @@ class _FakeNeo4jSession:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.next_records: list[dict[str, Any]] = []
 
-    async def __aenter__(self) -> _FakeNeo4jSession:
+    async def __aenter__(self) -> _FakeNeo4jSession:  # noqa: PYI034 baseline
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         return None
 
     async def run(self, query: str, **params: Any) -> _FakeNeo4jResult:
@@ -136,10 +138,10 @@ class _FakeNeo4jTx:
     def __init__(self, session: _FakeNeo4jSession) -> None:
         self._session = session
 
-    async def __aenter__(self) -> _FakeNeo4jTx:
+    async def __aenter__(self) -> _FakeNeo4jTx:  # noqa: PYI034 baseline
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         return None
 
     async def run(self, query: str, **params: Any) -> _FakeNeo4jResult:
@@ -218,7 +220,9 @@ async def test_neo4j_checkpoint_store_supports_lineage_scoped_phase_keys() -> No
     await store.save_checkpoint_payloads(scoped_phase, {"c1": {"entities": []}})
     assert driver.session_obj.calls[-1][1]["phase"] == scoped_phase
 
-    driver.session_obj.next_records = [{"key": "c1", "payload_json": '{"entities": []}'}]
+    driver.session_obj.next_records = [
+        {"key": "c1", "payload_json": '{"entities": []}'}
+    ]
     payloads = await store.get_checkpoint_payloads(scoped_phase)
     assert payloads == {"c1": {"entities": []}}
 
@@ -277,7 +281,9 @@ async def test_execution_engine_clears_lineage_scoped_checkpoints_on_forced_reru
     assert res1.manifest.status == RunStatus.COMPLETED
     fp = runner.seen_lineage_fps[0]
     assert await chk_store.get_unprocessed_chunks(["c1"], f"phase4:{fp}") == []
-    assert await chk_store.filter_unprocessed_items(["a1::a2"], f"phase4_arc:{fp}") == []
+    assert (
+        await chk_store.filter_unprocessed_items(["a1::a2"], f"phase4_arc:{fp}") == []
+    )
 
     # Wrap clear_phase_checkpoints to record cleared tags during forced re-run
     cleared_tags: list[str] = []
@@ -296,13 +302,17 @@ async def test_execution_engine_clears_lineage_scoped_checkpoints_on_forced_reru
 
 
 @pytest.mark.asyncio
-async def test_artifact_graph_projector_batches_documents_and_theory_inferences() -> None:
+async def test_artifact_graph_projector_batches_documents_and_theory_inferences() -> (
+    None
+):
     """Verify ArtifactGraphProjector batches Document and TheoryInference nodes via upsert_nodes."""
     upsert_nodes_calls: list[tuple[str, list[dict[str, Any]]]] = []
     upsert_node_calls: list[str] = []
 
     class _RecordingGraphWriter:
-        async def upsert_node(self, label: str, properties: dict[str, Any], **kwargs: Any) -> None:
+        async def upsert_node(
+            self, label: str, properties: dict[str, Any], **kwargs: Any
+        ) -> None:
             upsert_node_calls.append(label)
 
         async def upsert_nodes(
@@ -329,10 +339,14 @@ async def test_artifact_graph_projector_batches_documents_and_theory_inferences(
         async def upsert_argument_components(self, atoms: list[TheoryAtom]) -> None:
             return None
 
-        async def upsert_argument_relations(self, relations: list[TheoryRelation]) -> None:
+        async def upsert_argument_relations(
+            self, relations: list[TheoryRelation]
+        ) -> None:
             return None
 
-        async def upsert_theory_relations(self, relations: list[TheoryRelation]) -> None:
+        async def upsert_theory_relations(
+            self, relations: list[TheoryRelation]
+        ) -> None:
             return None
 
         async def upsert_chunks(self, chunks: list[Any]) -> None:
@@ -402,7 +416,9 @@ async def test_artifact_graph_projector_batches_documents_and_theory_inferences(
     )
 
     projector = ArtifactGraphProjector(_RecordingGraphWriter())  # type: ignore[arg-type]
-    await projector.project_collection(ArtifactCollection([doc1, doc2, a1, a2, a3, reified_rel]))
+    await projector.project_collection(
+        ArtifactCollection([doc1, doc2, a1, a2, a3, reified_rel])
+    )
 
     assert upsert_node_calls == []
     batched_by_label = {label: nodes for label, nodes in upsert_nodes_calls}
@@ -682,7 +698,9 @@ async def test_batch_executor_noop_store_and_pydantic_codec_crash_recovery(
         phase_tag="phase4_maturation",
         batch_size=2,
         item_key_fn=lambda e: e.id,
-        process_item_fn=lambda e: asyncio.sleep(0, result=e.model_copy(update={"is_mature": True})),
+        process_item_fn=lambda e: asyncio.sleep(
+            0, result=e.model_copy(update={"is_mature": True})
+        ),
         output_codec=PydanticOutputCodec(L2Entity),
     )
     assert isinstance(noop_exec.checkpoint_store, NoOpCheckpointStore)
@@ -698,7 +716,9 @@ async def test_batch_executor_noop_store_and_pydantic_codec_crash_recovery(
         if entity.id == "e2":
             raise asyncio.CancelledError("Simulated crash on batch 2")
         processed_run1.append(entity.id)
-        return entity.model_copy(update={"is_mature": True, "description": f"desc_{entity.id}"})
+        return entity.model_copy(
+            update={"is_mature": True, "description": f"desc_{entity.id}"}
+        )
 
     exec1 = CheckpointedBatchExecutor[L2Entity, L2Entity](
         checkpoint_store=chk_store,
@@ -717,7 +737,9 @@ async def test_batch_executor_noop_store_and_pydantic_codec_crash_recovery(
 
     async def process_run2(entity: L2Entity) -> L2Entity:
         processed_run2.append(entity.id)
-        return entity.model_copy(update={"is_mature": True, "description": f"desc_{entity.id}"})
+        return entity.model_copy(
+            update={"is_mature": True, "description": f"desc_{entity.id}"}
+        )
 
     exec2 = CheckpointedBatchExecutor[L2Entity, L2Entity](
         checkpoint_store=chk_store,

@@ -124,9 +124,7 @@ class TAGRelationExtractor(GlobalRelationExtractor):
         )
         return triples
 
-    async def candidate_pairs(
-        self, entities: list[L2Entity]
-    ) -> list[CandidatePair]:
+    async def candidate_pairs(self, entities: list[L2Entity]) -> list[CandidatePair]:
         """Generate candidate entity pairs via shared chunk blocking.
 
         Parameters
@@ -163,15 +161,15 @@ class TAGRelationExtractor(GlobalRelationExtractor):
         L2Triple | None
             Extracted triple if validated, otherwise None.
         """
-        return await self._extract_pair(pair.entity_a, pair.entity_b, graph_store, schema)
+        return await self._extract_pair(
+            pair.entity_a, pair.entity_b, graph_store, schema
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _candidate_pairs(
-        self, entities: list[L2Entity]
-    ) -> list[CandidatePair]:
+    def _candidate_pairs(self, entities: list[L2Entity]) -> list[CandidatePair]:
         """
         Block on shared source_chunk_ids. For each entity, cap the number of
         candidate partners to `max_candidates_per_entity_pair` to prevent hub
@@ -245,7 +243,7 @@ class TAGRelationExtractor(GlobalRelationExtractor):
                 relation_types=schema.relation_types_str(),
                 subgraph_envelope=envelope_text,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.warning(
                 "Phase 3 LLM call failed for pair (%s, %s): %s",
                 entity_a.name,

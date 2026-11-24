@@ -23,7 +23,9 @@ from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 
-def l2_triples_to_digraph(entities: list[L2Entity], triples: list[L2Triple]) -> nx.DiGraph:
+def l2_triples_to_digraph(
+    entities: list[L2Entity], triples: list[L2Triple]
+) -> nx.DiGraph:
     """Convert L2 entities and triples to a NetworkX DiGraph.
 
     Parameters
@@ -73,7 +75,9 @@ def l2_triples_to_digraph(entities: list[L2Entity], triples: list[L2Triple]) -> 
     return graph
 
 
-def theory_net_to_digraph(atoms: list[TheoryAtom], relations: list[TheoryRelation]) -> nx.DiGraph:
+def theory_net_to_digraph(
+    atoms: list[TheoryAtom], relations: list[TheoryRelation]
+) -> nx.DiGraph:
     """Convert L3 TheoryAtoms and TheoryRelations to a NetworkX DiGraph.
 
     Parameters

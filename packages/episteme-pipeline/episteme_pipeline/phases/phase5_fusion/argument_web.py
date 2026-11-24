@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from episteme_pipeline.artifacts.builders import build_fusion_cluster_artifact
-from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
     Phase4ArtifactsView,
 )
+from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.config import Phase5Config
 from episteme_pipeline.phases.phase5_fusion.argument_clustering import (
     EmbeddingArgumentClustering,
@@ -144,4 +144,3 @@ class Phase5ArgumentWebRunner(PhaseRunner[Phase4ArtifactsView]):
             for cluster in cluster_ids
         ]
         return ArtifactCollection(artifacts)
-

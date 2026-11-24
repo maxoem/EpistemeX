@@ -81,7 +81,7 @@ class AdaptiveAlgorithmsEngine:
                 return self.neo4j_engine.has_projection(graph.projection_name)
 
             return False
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.debug("Error checking Neo4j GDS capability: %s", exc)
             return False
 
@@ -112,7 +112,10 @@ class AdaptiveAlgorithmsEngine:
             except Exception as exc:
                 if not self.fallback_to_networkx:
                     raise
-                logger.warning("Neo4j GDS PageRank execution failed (%s); falling back to NetworkX.", exc)
+                logger.warning(
+                    "Neo4j GDS PageRank execution failed (%s); falling back to NetworkX.",
+                    exc,
+                )
 
         logger.debug("Executing PageRank via NetworkX engine.")
         return self.networkx_engine.page_rank(
@@ -211,7 +214,10 @@ class AdaptiveAlgorithmsEngine:
             except Exception as exc:
                 if not self.fallback_to_networkx:
                     raise
-                logger.warning("Neo4j GDS WCC execution failed (%s); falling back to NetworkX.", exc)
+                logger.warning(
+                    "Neo4j GDS WCC execution failed (%s); falling back to NetworkX.",
+                    exc,
+                )
 
         logger.debug("Executing WCC via NetworkX engine.")
         return self.networkx_engine.weakly_connected_components(graph)
@@ -228,7 +234,9 @@ class AdaptiveAlgorithmsEngine:
         """Detect Louvain communities, routing to Neo4j GDS if available, otherwise NetworkX."""
         if self.can_use_neo4j(graph) and self.neo4j_engine is not None:
             try:
-                logger.debug("Executing Louvain Community Detection via Neo4j GDS engine.")
+                logger.debug(
+                    "Executing Louvain Community Detection via Neo4j GDS engine."
+                )
                 res = self.neo4j_engine.louvain_communities(
                     graph,
                     resolution=resolution,
@@ -241,7 +249,10 @@ class AdaptiveAlgorithmsEngine:
             except Exception as exc:
                 if not self.fallback_to_networkx:
                     raise
-                logger.warning("Neo4j GDS Louvain execution failed (%s); falling back to NetworkX.", exc)
+                logger.warning(
+                    "Neo4j GDS Louvain execution failed (%s); falling back to NetworkX.",
+                    exc,
+                )
 
         logger.debug("Executing Louvain Community Detection via NetworkX engine.")
         return self.networkx_engine.louvain_communities(

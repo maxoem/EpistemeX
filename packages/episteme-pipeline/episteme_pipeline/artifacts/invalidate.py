@@ -67,9 +67,7 @@ class ArtifactDependencyGraph:
         versions.append(artifact)
 
         max_pass = max(v.provenance.refinement_pass for v in versions)
-        top_versions = [
-            v for v in versions if v.provenance.refinement_pass == max_pass
-        ]
+        top_versions = [v for v in versions if v.provenance.refinement_pass == max_pass]
         referenced_ids: set[str] = set()
         for v in versions:
             referenced_ids.update(v.provenance.upstream_artifact_ids)
@@ -107,7 +105,8 @@ class ArtifactDependencyGraph:
                     up_node is not None
                     and up_source is not None
                     and up_node.artifact_id != up_source.artifact_id
-                    and up_node.provenance.refinement_pass > node.provenance.refinement_pass
+                    and up_node.provenance.refinement_pass
+                    > node.provenance.refinement_pass
                 ):
                     # ``up_source`` was superseded by a later refinement pass on ``up_key``.
                     # A later-pass version cannot be a topological prerequisite of an earlier pass.

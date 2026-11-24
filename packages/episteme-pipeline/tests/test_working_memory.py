@@ -38,11 +38,13 @@ def test_json_patch_working_memory_state() -> None:
     assert "Initial Episode State" in state.to_prompt_context()
 
     # Apply state delta
-    state.update({
-        "active_entities": ["Categorical Imperative", "Utilitarianism"],
-        "unresolved_references": ["this assumption"],
-        "current_argument_branch": "Deontological premise",
-    })
+    state.update(
+        {
+            "active_entities": ["Categorical Imperative", "Utilitarianism"],
+            "unresolved_references": ["this assumption"],
+            "current_argument_branch": "Deontological premise",
+        }
+    )
 
     raw = state.get_raw_state()
     assert "Categorical Imperative" in raw["active_entities"]
@@ -64,10 +66,12 @@ def test_pydantic_working_memory_state() -> None:
     """Test PydanticWorkingMemoryState updates and resets."""
     state = PydanticWorkingMemoryState()
 
-    state.update({
-        "active_entities": ["Synthetic A Priori"],
-        "unresolved_references": ["the former claim"],
-    })
+    state.update(
+        {
+            "active_entities": ["Synthetic A Priori"],
+            "unresolved_references": ["the former claim"],
+        }
+    )
 
     raw = state.get_raw_state()
     assert "Synthetic A Priori" in raw["active_entities"]
@@ -130,7 +134,9 @@ def test_episodic_eviction_handler() -> None:
     assert not sig2.boundary_detected
 
     # Semantic boundary trigger
-    sig2_sem = handler.evaluate(chunk2, semantic_boundary_detected=True, transitional_summary="Ending argument.")
+    sig2_sem = handler.evaluate(
+        chunk2, semantic_boundary_detected=True, transitional_summary="Ending argument."
+    )
     assert sig2_sem.boundary_detected
     assert sig2_sem.boundary_type == "semantic"
     assert sig2_sem.transitional_summary == "Ending argument."

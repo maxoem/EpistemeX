@@ -46,8 +46,23 @@ class StubPhase1(PhaseRunner[PipelineInput]):
                 build_chunk_artifact,
                 build_document_artifact,
             )
-            artifacts.append(build_document_artifact(document, run_id=context.run_id, phase_name=self.name, method="test.phase1"))
-            artifacts.append(build_chunk_artifact(chunk, run_id=context.run_id, phase_name=self.name, method="test.phase1"))
+
+            artifacts.append(
+                build_document_artifact(
+                    document,
+                    run_id=context.run_id,
+                    phase_name=self.name,
+                    method="test.phase1",
+                )
+            )
+            artifacts.append(
+                build_chunk_artifact(
+                    chunk,
+                    run_id=context.run_id,
+                    phase_name=self.name,
+                    method="test.phase1",
+                )
+            )
         return ArtifactCollection(artifacts)
 
 
@@ -57,16 +72,40 @@ class StubPhase2(PhaseRunner[Phase1ArtifactsView]):
     input_view = Phase1ArtifactsView
 
     async def run(self, input: Phase1ArtifactsView, context: ArtifactExecutionContext):
-        entity = L2Entity(id="entity-1", label="PERSON", name="Kant", source_chunk_ids=["chunk-1"])
-        triple = L2Triple(subject_id="entity-1", predicate="MENTIONS", object_id="entity-1", confidence=1.0, scope="local", source_chunk_id="chunk-1")
+        entity = L2Entity(
+            id="entity-1", label="PERSON", name="Kant", source_chunk_ids=["chunk-1"]
+        )
+        triple = L2Triple(
+            subject_id="entity-1",
+            predicate="MENTIONS",
+            object_id="entity-1",
+            confidence=1.0,
+            scope="local",
+            source_chunk_id="chunk-1",
+        )
         from episteme_pipeline.artifacts.builders import (
             build_entity_mention_artifact,
             build_linked_entity_artifact,
             build_local_relation_artifact,
         )
-        mention = build_entity_mention_artifact(entity, "chunk-1", run_id=context.run_id, phase_name=self.name, method="test.phase2")
-        linked = build_linked_entity_artifact(entity, [mention.artifact_id], run_id=context.run_id, phase_name=self.name, method="test.phase2")
-        relation = build_local_relation_artifact(triple, run_id=context.run_id, phase_name=self.name, method="test.phase2")
+
+        mention = build_entity_mention_artifact(
+            entity,
+            "chunk-1",
+            run_id=context.run_id,
+            phase_name=self.name,
+            method="test.phase2",
+        )
+        linked = build_linked_entity_artifact(
+            entity,
+            [mention.artifact_id],
+            run_id=context.run_id,
+            phase_name=self.name,
+            method="test.phase2",
+        )
+        relation = build_local_relation_artifact(
+            triple, run_id=context.run_id, phase_name=self.name, method="test.phase2"
+        )
         return ArtifactCollection([mention, linked, relation])
 
 
@@ -80,7 +119,9 @@ class StubPhase3(PhaseRunner[Phase2ArtifactsView]):
 
 
 @pytest.mark.asyncio
-async def test_run_returns_execution_result_with_artifact_report(tmp_path: Path, graph_store):
+async def test_run_returns_execution_result_with_artifact_report(
+    tmp_path: Path, graph_store
+):
     config = PipelineConfig()
     config.execution.persist_run_manifests = True
     config.execution.runs_dir = str(tmp_path / "runs")
@@ -122,8 +163,18 @@ async def test_resume_from_run_returns_execution_result(tmp_path: Path, graph_st
         run_id="run-old",
         status=RunStatus.COMPLETED,
         input_fingerprint="same-input",
-        phase_config_fingerprints={"phase1": "same-phase", "phase2": "same-phase", "phase3": "same-phase"},
-        phase_records=[RunPhaseRecord(phase_name="Phase 1: Data Foundation", ordinal=1, status=RunStatus.COMPLETED)],
+        phase_config_fingerprints={
+            "phase1": "same-phase",
+            "phase2": "same-phase",
+            "phase3": "same-phase",
+        },
+        phase_records=[
+            RunPhaseRecord(
+                phase_name="Phase 1: Data Foundation",
+                ordinal=1,
+                status=RunStatus.COMPLETED,
+            )
+        ],
     )
     pipeline.manifest_store.write_manifest(prior)
 

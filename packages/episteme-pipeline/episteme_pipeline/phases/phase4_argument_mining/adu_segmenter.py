@@ -12,7 +12,6 @@ failure detection.
 from __future__ import annotations
 
 import logging
-
 from typing import Any
 
 from episteme_pipeline.llm import ensure_structured_llm
@@ -89,7 +88,6 @@ class LLMADUSegmenter(ADUSegmenter):
         dict of str to Any
             Dictionary containing class identifier, prompt template, and LLM fingerprint.
         """
-        from typing import Any
 
         from episteme_pipeline.protocols.fingerprint import Fingerprintable
         from episteme_pipeline.runs.fingerprints import fingerprint_method
@@ -103,4 +101,3 @@ class LLMADUSegmenter(ADUSegmenter):
                 else fingerprint_method(self.llm)
             ),
         }
-

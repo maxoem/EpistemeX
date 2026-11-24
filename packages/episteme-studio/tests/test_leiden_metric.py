@@ -86,15 +86,64 @@ def _make_clustered_graph() -> GraphView:
     ]
     edges = [
         # Cluster A internal edges
-        StudioEdge(id="e_a1_a2", source="a1", target="a2", type="RELATED", layer=Layer.L2, weight=1.0),
-        StudioEdge(id="e_a2_a3", source="a2", target="a3", type="RELATED", layer=Layer.L2, weight=1.0),
-        StudioEdge(id="e_a3_a1", source="a3", target="a1", type="RELATED", layer=Layer.L2, weight=1.0),
+        StudioEdge(
+            id="e_a1_a2",
+            source="a1",
+            target="a2",
+            type="RELATED",
+            layer=Layer.L2,
+            weight=1.0,
+        ),
+        StudioEdge(
+            id="e_a2_a3",
+            source="a2",
+            target="a3",
+            type="RELATED",
+            layer=Layer.L2,
+            weight=1.0,
+        ),
+        StudioEdge(
+            id="e_a3_a1",
+            source="a3",
+            target="a1",
+            type="RELATED",
+            layer=Layer.L2,
+            weight=1.0,
+        ),
         # Cluster B internal edges
-        StudioEdge(id="e_b1_b2", source="b1", target="b2", type="RELATED", layer=Layer.L2, weight=1.0),
-        StudioEdge(id="e_b2_b3", source="b2", target="b3", type="RELATED", layer=Layer.L2, weight=1.0),
-        StudioEdge(id="e_b3_b1", source="b3", target="b1", type="RELATED", layer=Layer.L2, weight=1.0),
+        StudioEdge(
+            id="e_b1_b2",
+            source="b1",
+            target="b2",
+            type="RELATED",
+            layer=Layer.L2,
+            weight=1.0,
+        ),
+        StudioEdge(
+            id="e_b2_b3",
+            source="b2",
+            target="b3",
+            type="RELATED",
+            layer=Layer.L2,
+            weight=1.0,
+        ),
+        StudioEdge(
+            id="e_b3_b1",
+            source="b3",
+            target="b1",
+            type="RELATED",
+            layer=Layer.L2,
+            weight=1.0,
+        ),
         # Inter-cluster bridge edge
-        StudioEdge(id="e_bridge", source="a3", target="b1", type="RELATED", layer=Layer.L2, weight=0.1),
+        StudioEdge(
+            id="e_bridge",
+            source="a3",
+            target="b1",
+            type="RELATED",
+            layer=Layer.L2,
+            weight=0.1,
+        ),
     ]
     return GraphView(
         nodes=nodes,
@@ -121,9 +170,17 @@ async def test_compute_leiden_igraph_clusters() -> None:
         assert overlay.node_values[nid] is not None
 
     # Nodes in cluster A should share the same community
-    assert overlay.node_values["a1"] == overlay.node_values["a2"] == overlay.node_values["a3"]
+    assert (
+        overlay.node_values["a1"]
+        == overlay.node_values["a2"]
+        == overlay.node_values["a3"]
+    )
     # Nodes in cluster B should share the same community
-    assert overlay.node_values["b1"] == overlay.node_values["b2"] == overlay.node_values["b3"]
+    assert (
+        overlay.node_values["b1"]
+        == overlay.node_values["b2"]
+        == overlay.node_values["b3"]
+    )
     # Cluster A and Cluster B communities should be distinct
     assert overlay.node_values["a1"] != overlay.node_values["b1"]
 
@@ -249,13 +306,18 @@ async def test_metric_api_execute_leiden() -> None:
                 def list_runs(self, limit: int = 1):
                     class _MockSummary:
                         run_id = "test-run"
+
                     return [_MockSummary()]
+
             return _MockReader()
 
     from episteme_studio.api.deps import get_graph_service
+
     app.dependency_overrides[get_graph_service] = lambda: _MockGraphService()
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         resp = await client.post(
             "/api/metric-executions",
             json={

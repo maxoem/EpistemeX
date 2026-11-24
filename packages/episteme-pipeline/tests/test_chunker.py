@@ -33,6 +33,7 @@ def mock_offline_encoder(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda: None,
     )
 
+
 MARKDOWN_DOC = """\
 # Introduction
 

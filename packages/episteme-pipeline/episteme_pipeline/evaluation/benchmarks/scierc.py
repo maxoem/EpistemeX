@@ -37,7 +37,11 @@ def load_scierc_subset(
 
     if not file_path.exists():
         return {
-            "metadata": {"dataset_type": "scierc", "limit": limit, "error": f"File not found: {path}"},
+            "metadata": {
+                "dataset_type": "scierc",
+                "limit": limit,
+                "error": f"File not found: {path}",
+            },
             "l2_entities": [],
             "l2_triples": [],
             "l3_atoms": [],
@@ -94,7 +98,7 @@ def load_scierc_subset(
                         )
                         triples.append(triple)
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 baseline
         return {
             "metadata": {"dataset_type": "scierc", "limit": limit, "error": str(e)},
             "l2_entities": [],

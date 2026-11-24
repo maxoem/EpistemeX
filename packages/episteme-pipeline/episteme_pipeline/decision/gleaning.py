@@ -203,10 +203,14 @@ class JevGleaningGate:
                 config=config,
                 prompts=prompts,
             )
-        return FixedPassGleaningOracle(max_passes=config.max_passes if config.enabled else 0)
+        return FixedPassGleaningOracle(
+            max_passes=config.max_passes if config.enabled else 0
+        )
 
     @staticmethod
-    def _format_context(chunk_text: str, current_extractions: list[Any]) -> dict[str, Any]:
+    def _format_context(
+        chunk_text: str, current_extractions: list[Any]
+    ) -> dict[str, Any]:
         """Format input chunk text and current extractions into structured state.
 
         Parameters
@@ -268,8 +272,12 @@ class JevGleaningGate:
             Tuple of (should_continue_gleaning, empirical_accuracy).
         """
         effective_max_passes = max_passes if max_passes is not None else self.max_passes
-        effective_threshold = threshold if threshold is not None else self.default_threshold
-        effective_audit_rate = audit_rate if audit_rate is not None else self.default_audit_rate
+        effective_threshold = (
+            threshold if threshold is not None else self.default_threshold
+        )
+        effective_audit_rate = (
+            audit_rate if audit_rate is not None else self.default_audit_rate
+        )
         emitter = get_event_emitter()
 
         # Hard boundary: if pass_count reached or exceeded max_passes, stop unconditionally.

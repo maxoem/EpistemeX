@@ -14,8 +14,8 @@ if TYPE_CHECKING:
 
 
 def format_envelope(
-    env_a: SubGraph, 
-    env_b: SubGraph, 
+    env_a: SubGraph,
+    env_b: SubGraph,
     include_description: bool = True,
     strategy: InputFormatStrategy = InputFormatStrategy.JSON,
 ) -> str:

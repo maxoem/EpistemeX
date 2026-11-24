@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from episteme_pipeline.artifacts.builders import build_canonicalization_artifact
-from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
     Phase2ArtifactsView,
     Phase3ArtifactsView,
 )
+from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.config import Phase3bConfig
 from episteme_pipeline.phases.phase3b_consolidation.clustering import (
     elect_canonical_representative,
@@ -138,4 +138,3 @@ __all__ = [
     "elect_canonical_representative",
     "verify_borderline_pair",
 ]
-

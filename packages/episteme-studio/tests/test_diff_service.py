@@ -18,12 +18,32 @@ def _make_sample_graph_a() -> GraphView:
     nodes = [
         StudioNode(id="entity_1", layer=Layer.L2, type="Concept", label="Concept 1"),
         StudioNode(id="entity_2", layer=Layer.L2, type="Concept", label="Concept 2"),
-        StudioNode(id="entity_shared", layer=Layer.L2, type="Concept", label="Shared Concept"),
-        StudioNode(id="atom_1", layer=Layer.L3, type="Claim", label="Claim 1", plausibility=0.4),
+        StudioNode(
+            id="entity_shared", layer=Layer.L2, type="Concept", label="Shared Concept"
+        ),
+        StudioNode(
+            id="atom_1", layer=Layer.L3, type="Claim", label="Claim 1", plausibility=0.4
+        ),
     ]
     edges = [
-        StudioEdge(id="e1", source="entity_1", target="entity_shared", type="SUPPORTS", layer=Layer.L2, polarity=1, weight=0.8),
-        StudioEdge(id="e2", source="entity_shared", target="entity_2", type="BESTAETIGT", layer=Layer.L2, polarity=1, weight=0.6),
+        StudioEdge(
+            id="e1",
+            source="entity_1",
+            target="entity_shared",
+            type="SUPPORTS",
+            layer=Layer.L2,
+            polarity=1,
+            weight=0.8,
+        ),
+        StudioEdge(
+            id="e2",
+            source="entity_shared",
+            target="entity_2",
+            type="BESTAETIGT",
+            layer=Layer.L2,
+            polarity=1,
+            weight=0.6,
+        ),
     ]
     return GraphView(
         nodes=nodes,
@@ -42,16 +62,45 @@ def _make_sample_graph_a() -> GraphView:
 
 def _make_sample_graph_b() -> GraphView:
     nodes = [
-        StudioNode(id="entity_shared", layer=Layer.L2, type="Concept", label="Shared Concept (Updated)"),
+        StudioNode(
+            id="entity_shared",
+            layer=Layer.L2,
+            type="Concept",
+            label="Shared Concept (Updated)",
+        ),
         StudioNode(id="entity_2", layer=Layer.L2, type="Concept", label="Concept 2"),
-        StudioNode(id="entity_3", layer=Layer.L2, type="Concept", label="Concept 3 New"),
-        StudioNode(id="atom_1", layer=Layer.L3, type="Claim", label="Claim 1", plausibility=0.85),
+        StudioNode(
+            id="entity_3", layer=Layer.L2, type="Concept", label="Concept 3 New"
+        ),
+        StudioNode(
+            id="atom_1",
+            layer=Layer.L3,
+            type="Claim",
+            label="Claim 1",
+            plausibility=0.85,
+        ),
     ]
     edges = [
         # Inverted polarity on same endpoints: (entity_shared, entity_2) was SUPPORTS (+1), now REFUTES (-1)
-        StudioEdge(id="e2_prime", source="entity_shared", target="entity_2", type="WIDERSPRICHT", layer=Layer.L2, polarity=-1, weight=0.9),
+        StudioEdge(
+            id="e2_prime",
+            source="entity_shared",
+            target="entity_2",
+            type="WIDERSPRICHT",
+            layer=Layer.L2,
+            polarity=-1,
+            weight=0.9,
+        ),
         # New edge in B
-        StudioEdge(id="e3", source="entity_shared", target="entity_3", type="RELATED_TO", layer=Layer.L2, polarity=0, weight=0.7),
+        StudioEdge(
+            id="e3",
+            source="entity_shared",
+            target="entity_3",
+            type="RELATED_TO",
+            layer=Layer.L2,
+            polarity=0,
+            weight=0.7,
+        ),
     ]
     return GraphView(
         nodes=nodes,
@@ -82,7 +131,10 @@ def _make_sample_detail_a() -> RunDetail:
         phase_records=[],
         artifact_counts_by_kind={},
         graph_schema={},
-        config_snapshot={"phase3": {"reranker_threshold": 0.65}, "phase4": {"acc_decoding_strategy": "beam"}},
+        config_snapshot={
+            "phase3": {"reranker_threshold": 0.65},
+            "phase4": {"acc_decoding_strategy": "beam"},
+        },
         fingerprints={},
         unresolved_count=0,
     )
@@ -102,7 +154,10 @@ def _make_sample_detail_b() -> RunDetail:
         phase_records=[],
         artifact_counts_by_kind={},
         graph_schema={},
-        config_snapshot={"phase3": {"reranker_threshold": 0.80}, "phase4": {"acc_decoding_strategy": "beam"}},
+        config_snapshot={
+            "phase3": {"reranker_threshold": 0.80},
+            "phase4": {"acc_decoding_strategy": "beam"},
+        },
         fingerprints={},
         unresolved_count=0,
     )
@@ -111,8 +166,12 @@ def _make_sample_detail_b() -> RunDetail:
 def test_diff_service_node_and_edge_classification() -> None:
     """Verify node and edge classification into gained, lost, retained, and polarity_inverted."""
     mock_reader = MagicMock()
-    mock_reader.get_graph.side_effect = lambda run_id: _make_sample_graph_a() if run_id == "run-a" else _make_sample_graph_b()
-    mock_reader.get_run.side_effect = lambda run_id: _make_sample_detail_a() if run_id == "run-a" else _make_sample_detail_b()
+    mock_reader.get_graph.side_effect = lambda run_id: (
+        _make_sample_graph_a() if run_id == "run-a" else _make_sample_graph_b()
+    )
+    mock_reader.get_run.side_effect = lambda run_id: (
+        _make_sample_detail_a() if run_id == "run-a" else _make_sample_detail_b()
+    )
 
     service = DiffService(reader=mock_reader)
     diff = service.compute_run_diff("run-a", "run-b")
@@ -163,7 +222,9 @@ async def test_api_diff_runs_endpoint() -> None:
     run_a = "run-96c2cc30-f109-44b7-b9bb-dca728e2b0e4"
     run_b = "run-dd36e818-be22-4373-a83d-99a5a653521d"
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         response = await client.get(f"/api/diff/runs?base_id={run_a}&target_id={run_b}")
         if response.status_code == 404:
             pytest.skip("Test runs not present on disk")

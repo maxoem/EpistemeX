@@ -121,9 +121,7 @@ def test_domain_never_imports_pipeline_or_epistemetrics() -> None:
                         f"{file_path.name}:{node.lineno} imports from '{node.module}'"
                     )
 
-    assert not violations, "Domain isolation violated (D-01):\n" + "\n".join(
-        violations
-    )
+    assert not violations, "Domain isolation violated (D-01):\n" + "\n".join(violations)
 
 
 def test_settings_is_only_file_touching_environ() -> None:

@@ -94,4 +94,3 @@ class PromptContextual(Protocol):
             Formatted prompt context representation.
         """
         ...
-

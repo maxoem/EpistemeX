@@ -123,7 +123,11 @@ class ModelScorer:
             min_pfs=self.min_pfs,
             sim_threshold=self.sim_threshold,
         )
-        outcome = EvaluationOutcome.PASS if eval_result.is_subsumed else EvaluationOutcome.FAIL
+        outcome = (
+            EvaluationOutcome.PASS
+            if eval_result.is_subsumed
+            else EvaluationOutcome.FAIL
+        )
 
         metrics = [
             EvaluationMetric(
@@ -164,12 +168,19 @@ class ModelScorer:
         ]
 
         from episteme_pipeline.evaluation.scorers.calibration import CalibrationScorer
+
         cal_scorer = CalibrationScorer()
         cal_res = cal_scorer.evaluate(pred_graph.edges, gold_graph.edges)
-        metrics.extend([
-            EvaluationMetric(name="ece", value=round(cal_res.ece, 4), unit="ratio"),
-            EvaluationMetric(name="brier_score", value=round(cal_res.brier_score, 4), unit="score"),
-        ])
+        metrics.extend(
+            [
+                EvaluationMetric(name="ece", value=round(cal_res.ece, 4), unit="ratio"),
+                EvaluationMetric(
+                    name="brier_score",
+                    value=round(cal_res.brier_score, 4),
+                    unit="score",
+                ),
+            ]
+        )
 
         notes = {
             "markdown_report": eval_result.to_markdown(),
@@ -178,40 +189,45 @@ class ModelScorer:
 
         try:
             poset_result = em.evaluate_specialization_poset(pred_graph, gold_graph)
-            if poset_result and (poset_result.num_reference_edges > 0 or poset_result.num_predicted_edges > 0):
-                metrics.extend([
-                    EvaluationMetric(
-                        name="poset_f1",
-                        value=poset_result.f1,
-                        unit="ratio",
-                        threshold=0.8,
-                        passes_threshold=poset_result.f1 >= 0.8,
-                    ),
-                    EvaluationMetric(
-                        name="poset_reachability_f1",
-                        value=poset_result.reachability_f1,
-                        unit="ratio",
-                        threshold=0.8,
-                        passes_threshold=poset_result.reachability_f1 >= 0.8,
-                    ),
-                    EvaluationMetric(
-                        name="root_conformity",
-                        value=1.0 if poset_result.root_conformity else 0.0,
-                        unit="bool",
-                        threshold=1.0,
-                        passes_threshold=poset_result.root_conformity,
-                    ),
-                    EvaluationMetric(
-                        name="is_dag",
-                        value=1.0 if poset_result.is_dag else 0.0,
-                        unit="bool",
-                        threshold=1.0,
-                        passes_threshold=poset_result.is_dag,
-                    ),
-                ])
+            if poset_result and (
+                poset_result.num_reference_edges > 0
+                or poset_result.num_predicted_edges > 0
+            ):
+                metrics.extend(
+                    [
+                        EvaluationMetric(
+                            name="poset_f1",
+                            value=poset_result.f1,
+                            unit="ratio",
+                            threshold=0.8,
+                            passes_threshold=poset_result.f1 >= 0.8,
+                        ),
+                        EvaluationMetric(
+                            name="poset_reachability_f1",
+                            value=poset_result.reachability_f1,
+                            unit="ratio",
+                            threshold=0.8,
+                            passes_threshold=poset_result.reachability_f1 >= 0.8,
+                        ),
+                        EvaluationMetric(
+                            name="root_conformity",
+                            value=1.0 if poset_result.root_conformity else 0.0,
+                            unit="bool",
+                            threshold=1.0,
+                            passes_threshold=poset_result.root_conformity,
+                        ),
+                        EvaluationMetric(
+                            name="is_dag",
+                            value=1.0 if poset_result.is_dag else 0.0,
+                            unit="bool",
+                            threshold=1.0,
+                            passes_threshold=poset_result.is_dag,
+                        ),
+                    ]
+                )
                 notes["poset_markdown"] = poset_result.to_markdown()
                 notes["markdown_report"] += "\n\n" + poset_result.to_markdown()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         error_buckets = []
@@ -228,7 +244,8 @@ class ModelScorer:
             run_id=run_id,
             evaluation_level=EvaluationLevel.STAGE,
             phase_name=phase_name,
-            dataset_ref=dataset_ref or (str(gold) if isinstance(gold, (str, Path)) else "in_memory_gold"),
+            dataset_ref=dataset_ref
+            or (str(gold) if isinstance(gold, (str, Path)) else "in_memory_gold"),
             metrics=metrics,
             error_buckets=error_buckets,
             notes=notes,
@@ -240,13 +257,17 @@ class ModelScorer:
         predicted: ArtifactCollection | TheoryNet | em.TheoryGraph | nx.DiGraph,
         name: str = "TheoryGraph",
     ) -> em.TheoryGraph | nx.DiGraph:
-        if isinstance(predicted, (em.TheoryGraph, nx.DiGraph, nx.MultiDiGraph, nx.Graph)):
+        if isinstance(
+            predicted, (em.TheoryGraph, nx.DiGraph, nx.MultiDiGraph, nx.Graph)
+        ):
             return predicted
         if isinstance(predicted, TheoryNet):
             return theory_net_to_theory_graph(predicted, name=name)
         if isinstance(predicted, ArtifactCollection):
             return artifact_collection_to_theory_graph(predicted, name=name)
-        raise TypeError(f"Cannot convert {type(predicted).__name__} to an evaluation graph.")
+        raise TypeError(
+            f"Cannot convert {type(predicted).__name__} to an evaluation graph."
+        )
 
     def _ensure_gold_theory_graph(
         self,
@@ -258,4 +279,6 @@ class ModelScorer:
             return structuralist_digraph_to_theory_graph(nx_gold, name=name)
         if isinstance(gold, (em.TheoryGraph, nx.DiGraph, nx.MultiDiGraph, nx.Graph)):
             return gold
-        raise TypeError(f"Cannot convert gold reference {type(gold).__name__} to an evaluation graph.")
+        raise TypeError(
+            f"Cannot convert gold reference {type(gold).__name__} to an evaluation graph."
+        )

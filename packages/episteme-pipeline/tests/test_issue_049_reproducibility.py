@@ -154,7 +154,9 @@ async def test_hmac_prf_concurrency_invariance():
 
     # Verify that every question has the exact same audit decision in concurrent execution
     for q, audit in sequential_results:
-        assert concurrent_results[q] == audit, f"Audit decision diverged under concurrency for {q}"
+        assert concurrent_results[q] == audit, (
+            f"Audit decision diverged under concurrency for {q}"
+        )
 
 
 # ============================================================================
@@ -267,7 +269,9 @@ def test_mondrian_conformal_calibrator_stratification_and_fingerprint():
     q_en = calibrator.get_q_hat(task_id="p4_acc", language="en")
     q_de = calibrator.get_q_hat(task_id="p4_acc", language="de")
 
-    assert q_en < q_de, f"Expected English quantile {q_en} to be lower than German quantile {q_de}"
+    assert q_en < q_de, (
+        f"Expected English quantile {q_en} to be lower than German quantile {q_de}"
+    )
 
     # Prediction set stratified by language
     score_obj = DecisionScore(
@@ -473,7 +477,9 @@ async def test_nl_to_format_preserves_prompt_bundle_hash_in_pass_2(tmp_path):
     call_count = {"structured": 0, "text": 0}
 
     class StubStructuredLLM:
-        async def predict_text(self, prompt: Any, llm_kwargs: Any = None, **kwargs: Any) -> str:
+        async def predict_text(
+            self, prompt: Any, llm_kwargs: Any = None, **kwargs: Any
+        ) -> str:
             call_count["text"] += 1
             return "stub reasoning text"
 
@@ -519,4 +525,3 @@ async def test_nl_to_format_preserves_prompt_bundle_hash_in_pass_2(tmp_path):
         text="sample",
     )
     assert call_count["structured"] == 2
-

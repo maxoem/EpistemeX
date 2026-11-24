@@ -29,15 +29,14 @@ from collections import defaultdict
 from itertools import batched
 
 from episteme_pipeline.artifacts.builders import build_global_relation_artifact
-from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
     Phase2ArtifactsView,
 )
+from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.config import Phase3Config
 from episteme_pipeline.contracts.domain import CandidatePair, L2Triple, PhaseItemRecord
-
 from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
     TAGRelationExtractor,
 )
@@ -129,7 +128,11 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
             If every pair in the first evaluated batch failed.
         """
         failed_records = [r for r in item_records if r.status == "failed"]
-        if succeeded_total == 0 and len(failed_records) == len(batch) and len(batch) > 0:
+        if (
+            succeeded_total == 0
+            and len(failed_records) == len(batch)
+            and len(batch) > 0
+        ):
             sample_error = failed_records[0].error or "Unknown error"
             raise SystematicPairFailure(
                 f"All {len(batch)} candidate pairs of the first batch failed in Phase 3. "
@@ -159,9 +162,8 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
             else _PHASE_TAG
         )
 
-        if (
-            isinstance(self.graph_store, GraphReader)
-            and not (context and context.lineage_fingerprint)
+        if isinstance(self.graph_store, GraphReader) and not (
+            context and context.lineage_fingerprint
         ):
             entities = await self.graph_store.get_entities()
             if not entities:
@@ -178,7 +180,9 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
 
         candidates = await self.global_extractor.candidate_pairs(entities)
         if isinstance(context, ArtifactExecutionContext):
-            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase3(candidates, entities, input.chunks)
+            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase3(
+                candidates, entities, input.chunks
+            )
             candidates = hydration.delta_candidates
             hydrated_triples = list(hydration.hydrated_triples)
         else:
@@ -206,7 +210,7 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
             else []
         )
         all_triples: list[L2Triple] = list(hydrated_triples) + list(prior_triples)
-        succeeded_total = len(prior_triples)
+        succeeded_total = len(prior_triples)  # noqa: F841 baseline
 
         if candidates:
             with self.progress_scope(
@@ -214,6 +218,7 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
                 total_items=len(candidates),
                 description="Global Relations",
             ) as advance:
+
                 async def _custom_commit(
                     phase: str,
                     batch_triples: list[L2Triple],
@@ -239,7 +244,9 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
                     guard_systematic_failure=True,
                 )
                 try:
-                    result = await executor.execute(candidates, on_batch_advance=advance)
+                    result = await executor.execute(
+                        candidates, on_batch_advance=advance
+                    )
                     all_triples.extend(result.outputs)
                 except SystematicBatchFailureError as exc:
                     msg = str(exc).replace("items", "candidate pairs")

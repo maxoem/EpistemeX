@@ -22,27 +22,44 @@ from episteme_pipeline.runs.models import (
 
 
 class StubPhase(PhaseRunner[object]):
-    def __init__(self, name: str = "Phase 1: Data Foundation", phase_key: str = "phase1") -> None:
+    def __init__(
+        self, name: str = "Phase 1: Data Foundation", phase_key: str = "phase1"
+    ) -> None:
         self.name = name
         self.phase_key = phase_key
 
     async def run(self, input, context):
         from episteme_pipeline.artifacts.execution import ArtifactCollection
+
         return ArtifactCollection([])
 
 
 @pytest.mark.asyncio
-async def test_get_run_report_returns_manifest_and_artifact_summary(tmp_path: Path, graph_store):
+async def test_get_run_report_returns_manifest_and_artifact_summary(
+    tmp_path: Path, graph_store
+):
     config = PipelineConfig()
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
 
-    pipeline = Pipeline(phases=[StubPhase()], config=config, graph_reader=graph_store, projection_graph=graph_store, checkpoint_store=graph_store)
+    pipeline = Pipeline(
+        phases=[StubPhase()],
+        config=config,
+        graph_reader=graph_store,
+        projection_graph=graph_store,
+        checkpoint_store=graph_store,
+    )
 
     manifest = RunManifest(
         run_id="run-1",
         status=RunStatus.COMPLETED,
-        phase_records=[RunPhaseRecord(phase_name="Phase 1: Data Foundation", ordinal=1, status=RunStatus.COMPLETED)],
+        phase_records=[
+            RunPhaseRecord(
+                phase_name="Phase 1: Data Foundation",
+                ordinal=1,
+                status=RunStatus.COMPLETED,
+            )
+        ],
     )
     pipeline.manifest_store.write_manifest(manifest)
 
@@ -79,12 +96,20 @@ async def test_get_run_report_returns_manifest_and_artifact_summary(tmp_path: Pa
 
 
 @pytest.mark.asyncio
-async def test_reused_run_copies_reused_artifact_entries_and_counts(tmp_path: Path, graph_store):
+async def test_reused_run_copies_reused_artifact_entries_and_counts(
+    tmp_path: Path, graph_store
+):
     config = PipelineConfig()
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
 
-    pipeline = Pipeline(phases=[StubPhase()], config=config, graph_reader=graph_store, projection_graph=graph_store, checkpoint_store=graph_store)
+    pipeline = Pipeline(
+        phases=[StubPhase()],
+        config=config,
+        graph_reader=graph_store,
+        projection_graph=graph_store,
+        checkpoint_store=graph_store,
+    )
 
     manifest = RunManifest(
         run_id="run-1",
@@ -129,7 +154,10 @@ async def test_reused_run_copies_reused_artifact_entries_and_counts(tmp_path: Pa
         status=RunStatus.RUNNING,
         input_fingerprint="same-input",
         phase_config_fingerprints={"phase1": "same-phase"},
-        input_fingerprint_inputs={"source_paths": list(pipeline_input.source_paths), "metadata": pipeline_input.metadata},
+        input_fingerprint_inputs={
+            "source_paths": list(pipeline_input.source_paths),
+            "metadata": pipeline_input.metadata,
+        },
     )
 
     result = await pipeline.run(PipelineInput(source_paths=[]))
@@ -151,12 +179,24 @@ async def test_get_run_artifacts_supports_filters(tmp_path: Path, graph_store):
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
 
-    pipeline = Pipeline(phases=[StubPhase()], config=config, graph_reader=graph_store, projection_graph=graph_store, checkpoint_store=graph_store)
+    pipeline = Pipeline(
+        phases=[StubPhase()],
+        config=config,
+        graph_reader=graph_store,
+        projection_graph=graph_store,
+        checkpoint_store=graph_store,
+    )
 
     manifest = RunManifest(
         run_id="run-1",
         status=RunStatus.COMPLETED,
-        phase_records=[RunPhaseRecord(phase_name="Phase 1: Data Foundation", ordinal=1, status=RunStatus.COMPLETED)],
+        phase_records=[
+            RunPhaseRecord(
+                phase_name="Phase 1: Data Foundation",
+                ordinal=1,
+                status=RunStatus.COMPLETED,
+            )
+        ],
     )
     pipeline.manifest_store.write_manifest(manifest)
 
@@ -182,14 +222,18 @@ async def test_get_run_artifacts_supports_filters(tmp_path: Path, graph_store):
     )
     pipeline.artifact_store = artifact_store
 
-    artifacts = await pipeline.get_run_artifacts("run-1", phase_name="Phase 1: Data Foundation", kind="chunk")
+    artifacts = await pipeline.get_run_artifacts(
+        "run-1", phase_name="Phase 1: Data Foundation", kind="chunk"
+    )
 
     assert len(artifacts) == 1
     assert isinstance(artifacts[0], ArtifactReportEntry)
 
 
 @pytest.mark.asyncio
-async def test_get_run_report_reconstructs_new_vs_reused_breakdown_from_manifest(tmp_path: Path, graph_store):
+async def test_get_run_report_reconstructs_new_vs_reused_breakdown_from_manifest(
+    tmp_path: Path, graph_store
+):
     config = PipelineConfig()
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
@@ -206,8 +250,18 @@ async def test_get_run_report_reconstructs_new_vs_reused_breakdown_from_manifest
         run_id="run-2",
         status=RunStatus.COMPLETED,
         phase_records=[
-            RunPhaseRecord(phase_name="Phase 1: Data Foundation", ordinal=1, status=RunStatus.COMPLETED, reused=True),
-            RunPhaseRecord(phase_name="Phase 1: Data Foundation", ordinal=2, status=RunStatus.COMPLETED, reused=False),
+            RunPhaseRecord(
+                phase_name="Phase 1: Data Foundation",
+                ordinal=1,
+                status=RunStatus.COMPLETED,
+                reused=True,
+            ),
+            RunPhaseRecord(
+                phase_name="Phase 1: Data Foundation",
+                ordinal=2,
+                status=RunStatus.COMPLETED,
+                reused=False,
+            ),
         ],
     )
     pipeline.manifest_store.write_manifest(manifest)

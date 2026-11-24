@@ -110,7 +110,7 @@ class EvaluationService:
         try:
             target_file = self._jobs_dir / f"{desc.job_id}.json"
             target_file.write_text(desc.model_dump_json(indent=2), encoding="utf-8")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 baseline
             logger.warning("Failed to persist evaluation job %s: %s", desc.job_id, e)
 
     @classmethod
@@ -391,7 +391,7 @@ class EvaluationService:
                 )
                 self._jobs[job_id] = desc
                 return desc
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 baseline
                 logger.warning("Failed to read job file for %s: %s", job_id, e)
         return None
 
@@ -589,7 +589,7 @@ class EvaluationService:
                 level="warning",
             )
         except Exception as e:
-            logger.error("Evaluation job %s failed: %s", job_id, e, exc_info=True)
+            logger.error("Evaluation job %s failed: %s", job_id, e, exc_info=True)  # noqa: G201 baseline
             desc = self._jobs.get(job_id)
             if desc:
                 desc.status = EvaluationJobStatus.FAILED
@@ -989,7 +989,7 @@ class EvaluationService:
                 adjudications = json.loads(
                     adjudications_file.read_text(encoding="utf-8")
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
         items: list[BorderlineDecisionItem] = []
@@ -1041,7 +1041,7 @@ class EvaluationService:
                                 curator_notes=adj_info.get("curator_notes"),
                             )
                         )
-            except Exception as err:
+            except Exception as err:  # noqa: BLE001 baseline
                 logger.warning("Error reading decisions.jsonl for %s: %s", run_id, err)
 
         # Fallback simulated borderline items if none on disk (e.g. for demo runs or tests)
@@ -1147,7 +1147,7 @@ class EvaluationService:
                 adjudications = json.loads(
                     adjudications_file.read_text(encoding="utf-8")
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
         adjudications[decision_id] = {
@@ -1162,7 +1162,7 @@ class EvaluationService:
             adjudications_file.write_text(
                 json.dumps(adjudications, indent=2), encoding="utf-8"
             )
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 baseline
             logger.warning(
                 "Could not persist adjudication to %s: %s", adjudications_file, err
             )

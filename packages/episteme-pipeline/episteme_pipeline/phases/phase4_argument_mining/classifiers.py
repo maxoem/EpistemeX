@@ -299,9 +299,16 @@ class JevACCClassifier(ACCClassifier):
                 alpha=self.conformal_alpha,
             )
 
-            selected_type = str(decision.selected_option) if decision.selected_option in options else schema.component_types[0]
+            selected_type = (
+                str(decision.selected_option)
+                if decision.selected_option in options
+                else schema.component_types[0]
+            )
             confidence = decision.class_probability
-            if decision.prediction_set is not None and len(decision.prediction_set) != 1:
+            if (
+                decision.prediction_set is not None
+                and len(decision.prediction_set) != 1
+            ):
                 confidence = 0.0
             empirical_accuracy = decision.empirical_accuracy
             intensional_mode: Literal[
@@ -352,7 +359,9 @@ class JevACCClassifier(ACCClassifier):
                 intensional_mode=intensional_mode,
             )
             if self.modal_resolver:
-                resolved_mod = await self.modal_resolver.resolve_modality(atom, context=state)
+                resolved_mod = await self.modal_resolver.resolve_modality(
+                    atom, context=state
+                )
                 atom.modal_prior = resolved_mod
             atoms.append(atom)
 
@@ -414,20 +423,12 @@ class CascadingACCClassifier(ACCClassifier):
         self.require_multi_adu_relations = (
             require_multi_adu_relations
             if require_multi_adu_relations is not None
-            else (
-                config.require_multi_adu_relations
-                if config is not None
-                else False
-            )
+            else (config.require_multi_adu_relations if config is not None else False)
         )
         self.require_entity_binding = (
             require_entity_binding
             if require_entity_binding is not None
-            else (
-                config.require_entity_binding
-                if config is not None
-                else False
-            )
+            else (config.require_entity_binding if config is not None else False)
         )
 
     def fingerprint(self) -> dict[str, Any]:
@@ -518,10 +519,11 @@ class CascadingACCClassifier(ACCClassifier):
         threshold = self.triage_confidence_threshold
         audit_rate = self.stochastic_audit_rate
 
-        is_uncertain = any(a.confidence is None or a.confidence < threshold for a in atoms)
+        is_uncertain = any(
+            a.confidence is None or a.confidence < threshold for a in atoms
+        )
         missing_attribution = any(
-            a.intensional_mode == "attributed" and not a.attributed_to
-            for a in atoms
+            a.intensional_mode == "attributed" and not a.attributed_to for a in atoms
         )
         is_audit = (
             should_audit_deterministically(chunk_id, "phase4_acc", chunk_id, audit_rate)
@@ -620,7 +622,8 @@ class JevARCClassifier(ARCClassifier):
         )
         emb_fp = (
             self.embedding_model.fingerprint()
-            if self.embedding_model is not None and isinstance(self.embedding_model, Fingerprintable)
+            if self.embedding_model is not None
+            and isinstance(self.embedding_model, Fingerprintable)
             else fingerprint_method(self.embedding_model)
         )
         return {
@@ -773,16 +776,20 @@ class JevARCClassifier(ARCClassifier):
                     r_type, f"relation {r_type.lower()}"
                 )
                 if "{relation_type}" in self.decision_template:
-                    question = self.decision_template.format(relation_type=r_type.lower())
+                    question = self.decision_template.format(
+                        relation_type=r_type.lower()
+                    )
                 else:
                     question = (
                         f"Does the source statement have the following relation to the "
                         f"target statement: '{r_type}' ({rel_def})?"
                     )
 
-                noul_decision: DecisionNoulResult = await self.decision_engine.evaluate_noul(
-                    state=state,
-                    question=question,
+                noul_decision: DecisionNoulResult = (
+                    await self.decision_engine.evaluate_noul(
+                        state=state,
+                        question=question,
+                    )
                 )
                 acc_vals.append(float(noul_decision.empirical_accuracy))
                 if (
@@ -790,8 +797,13 @@ class JevARCClassifier(ARCClassifier):
                     and noul_decision.probability > (1.0 - self.confidence_threshold)
                 ):
                     is_ambiguous = True
-                elif noul_decision.passed and noul_decision.probability >= self.confidence_threshold:
-                    warrant = self._resolve_inferential_warrant(source_atom, target_atom)
+                elif (
+                    noul_decision.passed
+                    and noul_decision.probability >= self.confidence_threshold
+                ):
+                    warrant = self._resolve_inferential_warrant(
+                        source_atom, target_atom
+                    )
                     eff_w = float(warrant * noul_decision.probability)
                     rels.append(
                         TheoryRelation(
@@ -827,7 +839,10 @@ class JevARCClassifier(ARCClassifier):
 
         pred_set = decision.prediction_set
         is_ambiguous = (
-            (len(pred_set) != 1 or decision.class_probability < self.confidence_threshold)
+            (
+                len(pred_set) != 1
+                or decision.class_probability < self.confidence_threshold
+            )
             if pred_set is not None
             else decision.class_probability < self.confidence_threshold
         )
@@ -842,7 +857,9 @@ class JevARCClassifier(ARCClassifier):
                 is_audit=is_audit,
             )
 
-        selected = str(decision.selected_option) if decision.selected_option else "NEUTRAL"
+        selected = (
+            str(decision.selected_option) if decision.selected_option else "NEUTRAL"
+        )
         resolved_type = schema.resolve_relation_type(selected)
 
         if resolved_type and decision.class_probability >= self.confidence_threshold:
@@ -861,7 +878,8 @@ class JevARCClassifier(ARCClassifier):
                     inferential_warrant=warrant,
                     effective_weight=eff_w,
                     decision_engine_provider="jev",
-                    calibrated_confidence=decision.empirical_accuracy or decision.class_probability,
+                    calibrated_confidence=decision.empirical_accuracy
+                    or decision.class_probability,
                 )
             ]
             return TriageDecision(
@@ -999,7 +1017,10 @@ class JevARCClassifier(ARCClassifier):
         for (a, b), res in zip(pairs, results):
             if isinstance(res, Exception):
                 logger.warning(
-                    "JevARC pair classification failed for (%s, %s): %s", a.id, b.id, res
+                    "JevARC pair classification failed for (%s, %s): %s",
+                    a.id,
+                    b.id,
+                    res,
                 )
                 escalated_pairs.append((a, b))
             elif isinstance(res, TriageDecision):
@@ -1154,9 +1175,7 @@ class JevARCClassifier(ARCClassifier):
             if self.use_adaptive_k and len(components) >= 2
             else self.max_candidates_per_component
         )
-        return build_cross_chunk_candidate_pairs(
-            components, schema, k_eff
-        )
+        return build_cross_chunk_candidate_pairs(components, schema, k_eff)
 
     async def _cross_chunk_pairs(
         self, components: list[TheoryAtom], schema: SchemaConfig
@@ -1276,14 +1295,15 @@ class CascadingARCClassifier(ARCClassifier):
         effective_schema = schema or SchemaConfig()
 
         if isinstance(self.fast_classifier, PairTriageARCClassifier):
-            fast_relations, escalated_pairs = (
-                await self.fast_classifier.classify_pairs_with_triage(
-                    pairs=pairs,
-                    graph_store=graph_store,
-                    global_extractor=global_extractor,
-                    schema=effective_schema,
-                    audit_rate=self.stochastic_audit_rate,
-                )
+            (
+                fast_relations,
+                escalated_pairs,
+            ) = await self.fast_classifier.classify_pairs_with_triage(
+                pairs=pairs,
+                graph_store=graph_store,
+                global_extractor=global_extractor,
+                schema=effective_schema,
+                audit_rate=self.stochastic_audit_rate,
             )
         else:
             raw_fast = await self.fast_classifier.classify_pairs(
@@ -1295,7 +1315,10 @@ class CascadingARCClassifier(ARCClassifier):
             )
             rels_by_pair: dict[tuple[str, str], list[TheoryRelation]] = {}
             for rel in raw_fast:
-                ukey = (min(rel.source_id, rel.target_id), max(rel.source_id, rel.target_id))
+                ukey = (
+                    min(rel.source_id, rel.target_id),
+                    max(rel.source_id, rel.target_id),
+                )
                 rels_by_pair.setdefault(ukey, []).append(rel)
 
             fast_relations = []
@@ -1367,7 +1390,10 @@ class CascadingARCClassifier(ARCClassifier):
             Extracted global argument relations.
         """
         effective_schema = schema or SchemaConfig()
-        fast_relations, escalated_pairs = await self.fast_classifier.classify_global_with_triage(
+        (
+            fast_relations,
+            escalated_pairs,
+        ) = await self.fast_classifier.classify_global_with_triage(
             local_components=local_components,
             local_relations=local_relations,
             graph_store=graph_store,

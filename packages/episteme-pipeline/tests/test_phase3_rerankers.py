@@ -159,14 +159,20 @@ def test_cross_encoder_reranker_forwards_huggingface_configs_to_loader() -> None
     CaptureLoadReranker(
         device="cuda",
         trust_remote_code=True,
-        model_kwargs={"torch_dtype": "auto", "attn_implementation": "flash_attention_2"},
+        model_kwargs={
+            "torch_dtype": "auto",
+            "attn_implementation": "flash_attention_2",
+        },
         tokenizer_args={"use_fast": True},
         config_args={"output_hidden_states": True},
     )
 
     assert captured["device"] == "cuda"
     assert captured["trust_remote_code"] is True
-    assert captured["automodel_args"] == {"torch_dtype": "auto", "attn_implementation": "flash_attention_2"}
+    assert captured["automodel_args"] == {
+        "torch_dtype": "auto",
+        "attn_implementation": "flash_attention_2",
+    }
     assert captured["tokenizer_args"] == {"use_fast": True}
     assert captured["config_args"] == {"output_hidden_states": True}
 
@@ -212,7 +218,9 @@ async def test_jev_relation_reranker_default_prompt() -> None:
 
     mock_engine = MagicMock()
     mock_engine.evaluate_noul = AsyncMock(
-        return_value=DecisionNoulResult(probability=0.85, passed=True, empirical_accuracy=0.80)
+        return_value=DecisionNoulResult(
+            probability=0.85, passed=True, empirical_accuracy=0.80
+        )
     )
 
     reranker = JevRelationReranker(mock_engine)
@@ -244,7 +252,9 @@ async def test_jev_relation_reranker_custom_prompt() -> None:
 
     mock_engine = MagicMock()
     mock_engine.evaluate_noul = AsyncMock(
-        return_value=DecisionNoulResult(probability=0.90, passed=True, empirical_accuracy=0.88)
+        return_value=DecisionNoulResult(
+            probability=0.90, passed=True, empirical_accuracy=0.88
+        )
     )
 
     bundle = StructuredPromptBundle(
@@ -259,7 +269,10 @@ async def test_jev_relation_reranker_custom_prompt() -> None:
     env = SubGraph(center_id="x", nodes=[], triples=[], depth=0)
 
     await reranker.score_relation(entity_a, env, entity_b, env)
-    assert mock_engine.evaluate_noul.call_args.kwargs["question"] == "Are Kant and Hume connected?"
+    assert (
+        mock_engine.evaluate_noul.call_args.kwargs["question"]
+        == "Are Kant and Hume connected?"
+    )
 
 
 def test_jev_relation_reranker_missing_prompt_fails() -> None:
@@ -273,7 +286,7 @@ def test_jev_relation_reranker_missing_prompt_fails() -> None:
     from episteme_pipeline.prompts.models import StructuredPromptBundle
 
     bundle = StructuredPromptBundle(direct_template="Direct", decision_template="")
-    with pytest.raises(ValueError, match="No decision prompt configured for JevRelationReranker"):
+    with pytest.raises(
+        ValueError, match="No decision prompt configured for JevRelationReranker"
+    ):
         JevRelationReranker(MagicMock(), prompts=bundle)
-
-

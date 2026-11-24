@@ -249,11 +249,32 @@ class TestTheoryNetProjectorCalibrated:
 
     def test_upstream_heuristic_mappings(self) -> None:
         """Verify Phase 6 heuristic mappings assign expected modal strength and warrant validity."""
-        axiom = TheoryAtom(id="a1", text="Axiom", component_type="CoreAxiom", source_chunk_id="c1")
-        obs = TheoryAtom(id="a2", text="Obs", component_type="ObservationUnit", source_chunk_id="c1")
-        hyp_ana = TheoryAtom(id="a3", text="Hyp", component_type="TheoreticalHypothesis", epistemic_status="Analytisch", source_chunk_id="c1")
-        hyp_syn = TheoryAtom(id="a4", text="Hyp", component_type="TheoreticalHypothesis", epistemic_status="Synthetisch", source_chunk_id="c1")
-        conj = TheoryAtom(id="a5", text="Conjecture", component_type="TentativeConjecture", source_chunk_id="c1")
+        axiom = TheoryAtom(
+            id="a1", text="Axiom", component_type="CoreAxiom", source_chunk_id="c1"
+        )
+        obs = TheoryAtom(
+            id="a2", text="Obs", component_type="ObservationUnit", source_chunk_id="c1"
+        )
+        hyp_ana = TheoryAtom(
+            id="a3",
+            text="Hyp",
+            component_type="TheoreticalHypothesis",
+            epistemic_status="Analytisch",
+            source_chunk_id="c1",
+        )
+        hyp_syn = TheoryAtom(
+            id="a4",
+            text="Hyp",
+            component_type="TheoreticalHypothesis",
+            epistemic_status="Synthetisch",
+            source_chunk_id="c1",
+        )
+        conj = TheoryAtom(
+            id="a5",
+            text="Conjecture",
+            component_type="TentativeConjecture",
+            source_chunk_id="c1",
+        )
 
         assert derive_atom_modality(axiom) == 1.0
         assert derive_atom_modality(obs) == 0.85
@@ -261,10 +282,34 @@ class TestTheoryNetProjectorCalibrated:
         assert derive_atom_modality(hyp_syn) == 0.60
         assert derive_atom_modality(conj) == 0.35
 
-        rel_ded = TheoryRelation(source_id="1", target_id="2", relation_type="DEDUCES", confidence=1.0, scope="global")
-        rel_sup = TheoryRelation(source_id="1", target_id="2", relation_type="SUPPORTS", confidence=1.0, scope="global")
-        rel_und = TheoryRelation(source_id="1", target_id="2", relation_type="UNDERCUTS", confidence=1.0, scope="global")
-        rel_ana = TheoryRelation(source_id="1", target_id="2", relation_type="ANALOGY", confidence=1.0, scope="global")
+        rel_ded = TheoryRelation(
+            source_id="1",
+            target_id="2",
+            relation_type="DEDUCES",
+            confidence=1.0,
+            scope="global",
+        )
+        rel_sup = TheoryRelation(
+            source_id="1",
+            target_id="2",
+            relation_type="SUPPORTS",
+            confidence=1.0,
+            scope="global",
+        )
+        rel_und = TheoryRelation(
+            source_id="1",
+            target_id="2",
+            relation_type="UNDERCUTS",
+            confidence=1.0,
+            scope="global",
+        )
+        rel_ana = TheoryRelation(
+            source_id="1",
+            target_id="2",
+            relation_type="ANALOGY",
+            confidence=1.0,
+            scope="global",
+        )
 
         assert derive_relation_warrant(rel_ded) == 1.0
         assert derive_relation_warrant(rel_sup) == 0.75
@@ -273,11 +318,24 @@ class TestTheoryNetProjectorCalibrated:
 
     def test_cypher_projection_query_modes(self) -> None:
         """Verify Cypher projection query generation differentiates hard database pruning vs soft passthrough."""
-        q_hard = get_cypher_projection_query(graph_name="test_hard", admissibility_mode="hard", tau_p="$tau_p", tau_c="$tau_c")
-        assert "WHERE r.perception_stance_prob >= $tau_p AND r.calibrated_confidence >= $tau_c" in q_hard
+        q_hard = get_cypher_projection_query(
+            graph_name="test_hard",
+            admissibility_mode="hard",
+            tau_p="$tau_p",
+            tau_c="$tau_c",
+        )
+        assert (
+            "WHERE r.perception_stance_prob >= $tau_p AND r.calibrated_confidence >= $tau_c"
+            in q_hard
+        )
         assert "r.inferential_warrant AS weight" in q_hard
 
-        q_soft = get_cypher_projection_query(graph_name="test_soft", admissibility_mode="soft", tau_p="$tau_p", tau_c="$tau_c")
+        q_soft = get_cypher_projection_query(
+            graph_name="test_soft",
+            admissibility_mode="soft",
+            tau_p="$tau_p",
+            tau_c="$tau_c",
+        )
         assert "WHERE r.perception_stance_prob" not in q_soft
         assert "r.inferential_warrant AS inferential_warrant" in q_soft
         assert "r.perception_stance_prob AS perception_stance_prob" in q_soft
@@ -402,11 +460,28 @@ class TestEvaluationCalibrationMetrics:
             scope="global",
         )
 
-        atom1 = TheoryAtom(id="c1", text="text 1", component_type="ObservationUnit", source_chunk_id="1")
-        atom2 = TheoryAtom(id="c2", text="text 2", component_type="ObservationUnit", source_chunk_id="1")
-        atom3 = TheoryAtom(id="c3", text="text 3", component_type="ObservationUnit", source_chunk_id="1")
+        atom1 = TheoryAtom(
+            id="c1",
+            text="text 1",
+            component_type="ObservationUnit",
+            source_chunk_id="1",
+        )
+        atom2 = TheoryAtom(
+            id="c2",
+            text="text 2",
+            component_type="ObservationUnit",
+            source_chunk_id="1",
+        )
+        atom3 = TheoryAtom(
+            id="c3",
+            text="text 3",
+            component_type="ObservationUnit",
+            source_chunk_id="1",
+        )
 
-        pred_net = TheoryNet(atoms=[atom1, atom2, atom3], relations=[pred_rel1, pred_rel2])
+        pred_net = TheoryNet(
+            atoms=[atom1, atom2, atom3], relations=[pred_rel1, pred_rel2]
+        )
         gold_net = TheoryNet(atoms=[atom1, atom2], relations=[gold_rel])
 
         strategy = ArgumentationStrategy()

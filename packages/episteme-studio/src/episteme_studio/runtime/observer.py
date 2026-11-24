@@ -50,7 +50,7 @@ class StudioEventObserver:
             raw["_dropped_before"] = self._dropped_count
             self._queue.put_nowait(raw)
             self._dropped_count = 0
-        except (queue.Full, Exception) as err:
+        except (queue.Full, Exception) as err:  # noqa: BLE001 baseline
             # Check if this is a Full queue exception from queue.Queue or multiprocessing.Queue
             if type(err).__name__ == "Full" or isinstance(err, queue.Full):
                 self._dropped_count += 1

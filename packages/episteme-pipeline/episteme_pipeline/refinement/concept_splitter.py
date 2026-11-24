@@ -24,7 +24,6 @@ bridging incompatible theoretical clusters, ``ConceptionConceptSplitter``:
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import dataclass
@@ -40,7 +39,6 @@ from episteme_pipeline.artifacts.execution import (
 )
 from episteme_pipeline.config import (
     HermeneuticRefinementConfig,
-    StructuredDecodingStrategy,
 )
 from episteme_pipeline.contracts.domain import (
     EntityConception,
@@ -213,7 +211,9 @@ class ConceptionConceptSplitter:
             self.prompts = self.config.concept_split_prompts
 
         self.strategy = (
-            strategy if strategy is not None else self.config.concept_split_decoding_strategy
+            strategy
+            if strategy is not None
+            else self.config.concept_split_decoding_strategy
         )
 
     def fingerprint(self) -> dict[str, Any]:
@@ -225,7 +225,9 @@ class ConceptionConceptSplitter:
             JSON-serializable configuration snapshot across dependencies.
         """
         strategy_str = (
-            self.strategy.value if isinstance(self.strategy, Enum) else str(self.strategy)
+            self.strategy.value
+            if isinstance(self.strategy, Enum)
+            else str(self.strategy)
         )
         return {
             "class": self.__class__.__name__,
@@ -367,11 +369,18 @@ class ConceptionConceptSplitter:
             options=self.prompts.decision_criteria,
             alpha=self.config.conformal_alpha,
         )
-        pred_set = list(score.prediction_set or ([] if score.selected_option is None else [score.selected_option]))
+        pred_set = list(
+            score.prediction_set
+            or ([] if score.selected_option is None else [score.selected_option])
+        )
         probs = score.probabilities or {}
-        top_prob = float(probs.get(score.selected_option or "", score.class_probability))
+        top_prob = float(
+            probs.get(score.selected_option or "", score.class_probability)
+        )
         is_singleton = len(pred_set) == 1
-        is_ambiguous = (not is_singleton) or top_prob < self.config.decision_confidence_threshold
+        is_ambiguous = (
+            not is_singleton
+        ) or top_prob < self.config.decision_confidence_threshold
 
         if score.selected_option == "TRUE_POLYSEMY_SPLIT" or is_ambiguous:
             return TriageDecision(
@@ -425,12 +434,15 @@ class ConceptionConceptSplitter:
             specs.append(
                 _SenseSpec(
                     perspective=conc.perspective,
-                    description=conc.description or f"{entity.name} ({conc.perspective})",
+                    description=conc.description
+                    or f"{entity.name} ({conc.perspective})",
                     chunk_ids=dedup_preserve_order(cids),
                     atom_ids=atom_ids,
                     envelopes=envelopes,
                     dispersion=float(conc.centroid_dispersion or 0.0),
-                    confidence=float(conc.confidence if conc.confidence is not None else 0.9),
+                    confidence=float(
+                        conc.confidence if conc.confidence is not None else 0.9
+                    ),
                 )
             )
         return specs if len(specs) >= 2 else []
@@ -627,7 +639,9 @@ class ConceptionConceptSplitter:
             assigned: set[str] = set()
             for cand in raw_split.senses:
                 valid_cids = [
-                    cid for cid in cand.chunk_ids if cid in chunk_set and cid not in assigned
+                    cid
+                    for cid in cand.chunk_ids
+                    if cid in chunk_set and cid not in assigned
                 ]
                 if not valid_cids:
                     continue
@@ -635,11 +649,19 @@ class ConceptionConceptSplitter:
                 cid_set = set(valid_cids)
                 llm_specs.append(
                     _SenseSpec(
-                        perspective=cand.perspective.strip() or f"sense_{len(llm_specs) + 1}",
-                        description=cand.description.strip() or f"{entity.name} ({cand.perspective})",
+                        perspective=cand.perspective.strip()
+                        or f"sense_{len(llm_specs) + 1}",
+                        description=cand.description.strip()
+                        or f"{entity.name} ({cand.perspective})",
                         chunk_ids=dedup_preserve_order(valid_cids),
-                        atom_ids=[a.id for a in entity_atoms if a.source_chunk_id in cid_set],
-                        envelopes=[chunks_by_id[cid].text for cid in valid_cids if cid in chunks_by_id],
+                        atom_ids=[
+                            a.id for a in entity_atoms if a.source_chunk_id in cid_set
+                        ],
+                        envelopes=[
+                            chunks_by_id[cid].text
+                            for cid in valid_cids
+                            if cid in chunks_by_id
+                        ],
                         confidence=float(cand.confidence),
                     )
                 )
@@ -678,7 +700,9 @@ class ConceptionConceptSplitter:
                 min_sim = 1.0
                 for i in range(len(centroids)):
                     for j in range(i + 1, len(centroids)):
-                        min_sim = min(min_sim, cosine_similarity(centroids[i], centroids[j]))
+                        min_sim = min(
+                            min_sim, cosine_similarity(centroids[i], centroids[j])
+                        )
                 if min_sim < self.config.polysemy_ambiguity_similarity_threshold:
                     return cluster_specs
 
@@ -703,9 +727,15 @@ class ConceptionConceptSplitter:
 
         neighbor_ids: set[str] = set()
         for triple in [*state.local_triples, *state.global_triples]:
-            if triple.subject_id in split_orig_ids and triple.object_id not in split_orig_ids:
+            if (
+                triple.subject_id in split_orig_ids
+                and triple.object_id not in split_orig_ids
+            ):
                 neighbor_ids.add(triple.object_id)
-            elif triple.object_id in split_orig_ids and triple.subject_id not in split_orig_ids:
+            elif (
+                triple.object_id in split_orig_ids
+                and triple.subject_id not in split_orig_ids
+            ):
                 neighbor_ids.add(triple.subject_id)
 
         sense_chunk_set = {cid for s in split_senses for cid in s.source_chunk_ids}
@@ -729,9 +759,10 @@ class ConceptionConceptSplitter:
                 for p in raw_pairs
                 if p.entity_a.id in sense_id_set or p.entity_b.id in sense_id_set
             ]
-            if isinstance(
-                self.global_extractor, DenseRetrievalGlobalRelationExtractor
-            ) and candidate_pairs:
+            if (
+                isinstance(self.global_extractor, DenseRetrievalGlobalRelationExtractor)
+                and candidate_pairs
+            ):
                 candidate_pairs = await self.global_extractor.filter_candidate_pairs(
                     candidate_pairs
                 )
@@ -904,7 +935,9 @@ class ConceptionConceptSplitter:
                 ]
                 if unassigned_chunks:
                     new_entities.append(
-                        entity.model_copy(update={"source_chunk_ids": unassigned_chunks})
+                        entity.model_copy(
+                            update={"source_chunk_ids": unassigned_chunks}
+                        )
                     )
                 else:
                     retired_entity_ids.append(entity.id)
@@ -958,14 +991,18 @@ class ConceptionConceptSplitter:
                 for eid in atom.entity_ids:
                     replacement = atom_to_sense_map.get((eid, atom.id))
                     if replacement is None and atom.source_chunk_id:
-                        replacement = chunk_to_sense_map.get((eid, atom.source_chunk_id))
+                        replacement = chunk_to_sense_map.get(
+                            (eid, atom.source_chunk_id)
+                        )
                     target_eid = replacement if replacement is not None else eid
                     if target_eid != eid:
                         changed = True
                     if target_eid not in new_eids:
                         new_eids.append(target_eid)
                 if changed:
-                    rewritten_atoms.append(atom.model_copy(update={"entity_ids": new_eids}))
+                    rewritten_atoms.append(
+                        atom.model_copy(update={"entity_ids": new_eids})
+                    )
 
             await self._reextract_global_relations(
                 split_senses=split_senses_only,

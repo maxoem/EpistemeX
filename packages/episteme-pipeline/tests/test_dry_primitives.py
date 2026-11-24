@@ -15,12 +15,11 @@ import ast
 import hashlib
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
-
-from episteme_pipeline.contracts.domain import L1Chunk, L2Entity, TheoryAtom
+from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.events.context import get_event_emitter
 from episteme_pipeline.phases.phase2_entity_discovery.candidate_cache import (
@@ -51,11 +50,13 @@ def test_l2_normalize_clamping_and_zero_vectors() -> None:
     assert np.allclose(norm_zero, [0.0, 0.0, 0.0])
 
     # 3. 2D matrix with mixed zero and non-zero rows
-    mat = np.array([
-        [1.0, 0.0, 0.0],
-        [0.0, 0.0, 0.0],
-        [0.0, 2.0, 2.0],
-    ])
+    mat = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 2.0, 2.0],
+        ]
+    )
     norm_mat = l2_normalize(mat)
     assert norm_mat.shape == (3, 3)
     assert not np.isnan(norm_mat).any()
@@ -67,11 +68,13 @@ def test_l2_normalize_clamping_and_zero_vectors() -> None:
 def test_cosine_similarity_matrix_pairwise_and_asymmetric() -> None:
     """Verify cosine_similarity_matrix handles 1D/2D shapes and zero-norm vectors."""
     # 1. Single matrix: pairwise self-similarity
-    mat = np.array([
-        [1.0, 0.0],
-        [0.0, 1.0],
-        [1.0, 1.0],
-    ])
+    mat = np.array(
+        [
+            [1.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 1.0],
+        ]
+    )
     sim = cosine_similarity_matrix(mat)
     assert sim.shape == (3, 3)
     assert np.allclose(np.diag(sim), 1.0)
@@ -173,7 +176,7 @@ def test_stable_component_id() -> None:
     chunk_id = "chunk_42"
     ac_tag = "claim_1"
     cid = stable_component_id(chunk_id, ac_tag)
-    expected_hash = hashlib.sha256(f"{chunk_id}:{ac_tag}".encode("utf-8")).hexdigest()[:14]
+    expected_hash = hashlib.sha256(f"{chunk_id}:{ac_tag}".encode()).hexdigest()[:14]
     assert cid == f"ac_{expected_hash}"
 
     # Determinism
@@ -187,12 +190,20 @@ def test_build_cross_chunk_candidate_pairs() -> None:
     from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
     # Atoms in chunk A
-    a1 = TheoryAtom(id="a1", text="Atom 1", component_type="CLAIM", source_chunk_id="chunk_A")
-    a2 = TheoryAtom(id="a2", text="Atom 2", component_type="EVIDENCE", source_chunk_id="chunk_A")
+    a1 = TheoryAtom(
+        id="a1", text="Atom 1", component_type="CLAIM", source_chunk_id="chunk_A"
+    )
+    a2 = TheoryAtom(
+        id="a2", text="Atom 2", component_type="EVIDENCE", source_chunk_id="chunk_A"
+    )
 
     # Atoms in chunk B
-    b1 = TheoryAtom(id="b1", text="Atom 3", component_type="CLAIM", source_chunk_id="chunk_B")
-    b2 = TheoryAtom(id="b2", text="Atom 4", component_type="EVIDENCE", source_chunk_id="chunk_B")
+    b1 = TheoryAtom(
+        id="b1", text="Atom 3", component_type="CLAIM", source_chunk_id="chunk_B"
+    )
+    b2 = TheoryAtom(
+        id="b2", text="Atom 4", component_type="EVIDENCE", source_chunk_id="chunk_B"
+    )
 
     components = [a1, a2, b1, b2]
 
@@ -241,7 +252,9 @@ async def test_pipeline_resume_from_run_observability_context() -> None:
     pipeline.engine.hydrate_previous_collection = AsyncMock(return_value=None)  # type: ignore[assignment]
 
     p_input = PipelineInput(source_paths=[], documents=[])
-    await pipeline.resume_from_run(run_id="run-original-123", input=p_input, from_phase=2)
+    await pipeline.resume_from_run(
+        run_id="run-original-123", input=p_input, from_phase=2
+    )
 
     # During resume_from_run, get_event_emitter() must have been active and scoped to the target run ID
     assert observed_emitter is not None
@@ -265,8 +278,12 @@ def test_zero_reflection_in_orchestration_and_phases() -> None:
     for py_file in target_paths:
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):  # noqa: SIM102 baseline
                 if node.func.id in {"getattr", "hasattr"}:
-                    violations.append(f"{py_file.relative_to(root_dir)}:{node.lineno} calls {node.func.id}")
+                    violations.append(
+                        f"{py_file.relative_to(root_dir)}:{node.lineno} calls {node.func.id}"
+                    )
 
-    assert not violations, f"Forbidden reflection anti-patterns detected:\n" + "\n".join(violations)
+    assert not violations, "Forbidden reflection anti-patterns detected:\n" + "\n".join(
+        violations
+    )

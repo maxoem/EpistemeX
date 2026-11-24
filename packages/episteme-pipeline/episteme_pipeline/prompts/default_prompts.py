@@ -777,4 +777,3 @@ Does the provided source context contain an implicit premise, unstated theoretic
 DECISION_OBSERVATION_GROUNDING_QUESTION = """\
 Does the provided source passage contain an empirical observation, measurement, or experimental finding relevant to grounding the target theoretical hypothesis?
 """
-

@@ -27,7 +27,7 @@ NEG_TYPES = [
 
 class GraphValidator:
     """Executes structural integrity queries against the Neo4j property graph.
-    
+
     Parameters
     ----------
     store : Any

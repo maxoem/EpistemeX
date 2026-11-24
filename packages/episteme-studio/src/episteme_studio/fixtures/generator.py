@@ -78,11 +78,26 @@ def _generate_physics_run(runs_dir: Path, artifacts_dir: Path) -> None:
     )
 
     chunks = [
-        ("chunk_phys_1", "Empirical power & T-theoreticity: Inertial mass, spatial distance, and astrometric measurements."),
-        ("chunk_phys_2", "Newtonian mechanics (v1): Gravitational law F=G(m1m2)/r^2, motion F=ma, and Keplerian orbital derivations."),
-        ("chunk_phys_3", "Theory dynamics & anomaly: Mercury perihelion 43 arcsec/century anomaly and Le Verrier's Vulcan hypothesis."),
-        ("chunk_phys_4", "General relativity (v1): Equivalence principle, curved spacetime manifold, and geodesic orbital explanations."),
-        ("chunk_phys_5", "Metatheoretical reduction and electrostatics: Coulomb inverse-square law isomorphism and Newtonian reduction."),
+        (
+            "chunk_phys_1",
+            "Empirical power & T-theoreticity: Inertial mass, spatial distance, and astrometric measurements.",
+        ),
+        (
+            "chunk_phys_2",
+            "Newtonian mechanics (v1): Gravitational law F=G(m1m2)/r^2, motion F=ma, and Keplerian orbital derivations.",
+        ),
+        (
+            "chunk_phys_3",
+            "Theory dynamics & anomaly: Mercury perihelion 43 arcsec/century anomaly and Le Verrier's Vulcan hypothesis.",
+        ),
+        (
+            "chunk_phys_4",
+            "General relativity (v1): Equivalence principle, curved spacetime manifold, and geodesic orbital explanations.",
+        ),
+        (
+            "chunk_phys_5",
+            "Metatheoretical reduction and electrostatics: Coulomb inverse-square law isomorphism and Newtonian reduction.",
+        ),
     ]
     for cid, text in chunks:
         _write_envelope(
@@ -101,21 +116,96 @@ def _generate_physics_run(runs_dir: Path, artifacts_dir: Path) -> None:
 
     # 2. Entities (L2)
     entities = [
-        ("PT_MASS", "PrimitiveTerm", "Inertial Mass", "Fundamental physical quantity describing inertial resistance."),
-        ("PT_DIST", "PrimitiveTerm", "Spatial Distance", "Geometric interval between spatial coordinates."),
-        ("EI_TELE", "EmpiricalIndicator", "Telescope Astrometry", "High-precision telescopic tracking of planetary positions."),
-        ("TC_ORBIT", "TheoreticalConstruct", "Planetary Orbital Path", "Theoretical construct modeling planetary trajectories."),
-        ("TC_ABS_SPACE", "TheoreticalConstruct", "Absolute Space and Time", "Newtonian Euclidean absolute coordinate framework."),
-        ("TC_SPACETIME", "TheoreticalConstruct", "Curved Spacetime Manifold", "4-dimensional pseudo-Riemannian metric manifold."),
-        ("TN_NEWTON_V1", "TheoryNet", "Classical Mechanics (v1)", "Unifying framework of Newton's laws and universal gravitation."),
-        ("CORE_N_V1", "TheoryCore", "Newtonian Core", "Hard core of classical mechanics: laws of motion and gravitation."),
-        ("TN_NEWTON_V2", "TheoryNet", "Classical Mechanics (v2)", "Revised Newtonian framework incorporating Vulcan perturbation."),
-        ("CORE_N_V2", "TheoryCore", "Newtonian Core (Revised)", "Revised hard core of Newtonian mechanics."),
-        ("TN_RELATIVITY_V1", "TheoryNet", "General Relativity (v1)", "Einsteinian geometric theory of gravitation."),
-        ("CORE_REL_V1", "TheoryCore", "Einsteinian Core", "Hard core of General Relativity: Equivalence Principle & field equations."),
-        ("TN_ELECTRO", "TheoryNet", "Classical Electromagnetism", "Maxwellian electromagnetic field theory."),
-        ("APP_JUP_V1", "EmpiricalApplication", "Jupiter Orbit Application", "Application predicting Jupiter's orbital kinematics."),
-        ("APP_MERC_REL", "EmpiricalApplication", "Mercury Precession Application", "Application explaining Mercury's 43 arcsec precession."),
+        (
+            "PT_MASS",
+            "PrimitiveTerm",
+            "Inertial Mass",
+            "Fundamental physical quantity describing inertial resistance.",
+        ),
+        (
+            "PT_DIST",
+            "PrimitiveTerm",
+            "Spatial Distance",
+            "Geometric interval between spatial coordinates.",
+        ),
+        (
+            "EI_TELE",
+            "EmpiricalIndicator",
+            "Telescope Astrometry",
+            "High-precision telescopic tracking of planetary positions.",
+        ),
+        (
+            "TC_ORBIT",
+            "TheoreticalConstruct",
+            "Planetary Orbital Path",
+            "Theoretical construct modeling planetary trajectories.",
+        ),
+        (
+            "TC_ABS_SPACE",
+            "TheoreticalConstruct",
+            "Absolute Space and Time",
+            "Newtonian Euclidean absolute coordinate framework.",
+        ),
+        (
+            "TC_SPACETIME",
+            "TheoreticalConstruct",
+            "Curved Spacetime Manifold",
+            "4-dimensional pseudo-Riemannian metric manifold.",
+        ),
+        (
+            "TN_NEWTON_V1",
+            "TheoryNet",
+            "Classical Mechanics (v1)",
+            "Unifying framework of Newton's laws and universal gravitation.",
+        ),
+        (
+            "CORE_N_V1",
+            "TheoryCore",
+            "Newtonian Core",
+            "Hard core of classical mechanics: laws of motion and gravitation.",
+        ),
+        (
+            "TN_NEWTON_V2",
+            "TheoryNet",
+            "Classical Mechanics (v2)",
+            "Revised Newtonian framework incorporating Vulcan perturbation.",
+        ),
+        (
+            "CORE_N_V2",
+            "TheoryCore",
+            "Newtonian Core (Revised)",
+            "Revised hard core of Newtonian mechanics.",
+        ),
+        (
+            "TN_RELATIVITY_V1",
+            "TheoryNet",
+            "General Relativity (v1)",
+            "Einsteinian geometric theory of gravitation.",
+        ),
+        (
+            "CORE_REL_V1",
+            "TheoryCore",
+            "Einsteinian Core",
+            "Hard core of General Relativity: Equivalence Principle & field equations.",
+        ),
+        (
+            "TN_ELECTRO",
+            "TheoryNet",
+            "Classical Electromagnetism",
+            "Maxwellian electromagnetic field theory.",
+        ),
+        (
+            "APP_JUP_V1",
+            "EmpiricalApplication",
+            "Jupiter Orbit Application",
+            "Application predicting Jupiter's orbital kinematics.",
+        ),
+        (
+            "APP_MERC_REL",
+            "EmpiricalApplication",
+            "Mercury Precession Application",
+            "Application explaining Mercury's 43 arcsec precession.",
+        ),
     ]
     for eid, etype, name, desc in entities:
         _write_envelope(
@@ -167,15 +257,64 @@ def _generate_physics_run(runs_dir: Path, artifacts_dir: Path) -> None:
 
     # 4. Theory Atoms (L3)
     atoms = [
-        ("EV_JUPITER", "Evidence", "Jupiter's orbit follows predicted elliptical path.", "Success", 1.0, 1.0),
-        ("EV_MERCURY", "Evidence", "Mercury's perihelion precesses by 43 arcseconds/century more than predicted.", "Anomaly", 1.0, 1.0),
-        ("EV_NO_VULCAN", "Evidence", "Telescopic searches reveal no intramercurial planet.", "Failure", 1.0, 1.0),
+        (
+            "EV_JUPITER",
+            "Evidence",
+            "Jupiter's orbit follows predicted elliptical path.",
+            "Success",
+            1.0,
+            1.0,
+        ),
+        (
+            "EV_MERCURY",
+            "Evidence",
+            "Mercury's perihelion precesses by 43 arcseconds/century more than predicted.",
+            "Anomaly",
+            1.0,
+            1.0,
+        ),
+        (
+            "EV_NO_VULCAN",
+            "Evidence",
+            "Telescopic searches reveal no intramercurial planet.",
+            "Failure",
+            1.0,
+            1.0,
+        ),
         ("AX_GRAVITY", "BasicAxiom", "F = G(m1m2)/r^2", "A", 0.98, 1.0),
         ("AX_MOTION", "BasicAxiom", "F = ma", "A", 0.98, 1.0),
-        ("DL_KEPLER", "DerivedEmpiricalLaw", "Planets orbit in ellipses.", "B", 0.95, 0.95),
-        ("HYP_VULCAN", "Claim", "An unseen planet 'Vulcan' exerts gravitational pull on Mercury.", "A", 0.4, 0.3),
-        ("AX_EQUIV", "BasicAxiom", "Equivalence Principle (Inertial mass = Gravitational mass)", "A", 0.99, 1.0),
-        ("DL_GEODESIC", "DerivedEmpiricalLaw", "Objects follow geodesics in curved spacetime.", "B", 0.98, 0.99),
+        (
+            "DL_KEPLER",
+            "DerivedEmpiricalLaw",
+            "Planets orbit in ellipses.",
+            "B",
+            0.95,
+            0.95,
+        ),
+        (
+            "HYP_VULCAN",
+            "Claim",
+            "An unseen planet 'Vulcan' exerts gravitational pull on Mercury.",
+            "A",
+            0.4,
+            0.3,
+        ),
+        (
+            "AX_EQUIV",
+            "BasicAxiom",
+            "Equivalence Principle (Inertial mass = Gravitational mass)",
+            "A",
+            0.99,
+            1.0,
+        ),
+        (
+            "DL_GEODESIC",
+            "DerivedEmpiricalLaw",
+            "Objects follow geodesics in curved spacetime.",
+            "B",
+            0.98,
+            0.99,
+        ),
         ("AX_COULOMB", "BasicAxiom", "F = k(q1q2)/r^2", "A", 0.95, 1.0),
     ]
     for aid, atype, text, part, conf, plaus in atoms:
@@ -249,14 +388,62 @@ def _generate_physics_run(runs_dir: Path, artifacts_dir: Path) -> None:
             "thinking_level": "high",
         },
         "phase_records": [
-            {"ordinal": 1, "phase_name": "Phase 1: Data Foundation", "status": "completed", "reused": False, "artifact_count": 6},
-            {"ordinal": 2, "phase_name": "Phase 2: Entity & Local Relation Discovery", "status": "completed", "reused": False, "artifact_count": 15},
-            {"ordinal": 3, "phase_name": "Phase 3: Global Relation Extraction", "status": "completed", "reused": False, "artifact_count": 11},
-            {"ordinal": 4, "phase_name": "Phase 3b: Latent Graph Consolidation", "status": "completed", "reused": False, "artifact_count": 5},
-            {"ordinal": 5, "phase_name": "Phase 4: Entity Maturation", "status": "completed", "reused": False, "artifact_count": 15},
-            {"ordinal": 6, "phase_name": "Phase 4: Argument Mining", "status": "completed", "reused": False, "artifact_count": 10},
-            {"ordinal": 7, "phase_name": "Phase 5: Inter-Document Argument Web", "status": "completed", "reused": False, "artifact_count": 12},
-            {"ordinal": 8, "phase_name": "Phase 6: TheoryNet Projection", "status": "completed", "reused": False, "artifact_count": 8},
+            {
+                "ordinal": 1,
+                "phase_name": "Phase 1: Data Foundation",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 6,
+            },
+            {
+                "ordinal": 2,
+                "phase_name": "Phase 2: Entity & Local Relation Discovery",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 15,
+            },
+            {
+                "ordinal": 3,
+                "phase_name": "Phase 3: Global Relation Extraction",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 11,
+            },
+            {
+                "ordinal": 4,
+                "phase_name": "Phase 3b: Latent Graph Consolidation",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 5,
+            },
+            {
+                "ordinal": 5,
+                "phase_name": "Phase 4: Entity Maturation",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 15,
+            },
+            {
+                "ordinal": 6,
+                "phase_name": "Phase 4: Argument Mining",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 10,
+            },
+            {
+                "ordinal": 7,
+                "phase_name": "Phase 5: Inter-Document Argument Web",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 12,
+            },
+            {
+                "ordinal": 8,
+                "phase_name": "Phase 6: TheoryNet Projection",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 8,
+            },
         ],
         "artifact_counts_by_kind": {
             "document": 1,
@@ -275,10 +462,36 @@ def _generate_physics_run(runs_dir: Path, artifacts_dir: Path) -> None:
             },
             "graph_schema": {
                 "version": "v1",
-                "node_types": ["PrimitiveTerm", "EmpiricalIndicator", "TheoreticalConstruct", "TheoryNet", "TheoryCore", "EmpiricalApplication"],
-                "relation_types": ["MEASURES", "DETERMINED_BY", "BELONGS_TO", "EVOLVES_TO", "SUBSUMES", "REDUCES_TO"],
-                "component_types": ["BasicAxiom", "DerivedEmpiricalLaw", "Evidence", "Claim"],
-                "argument_relation_types": ["SUPPORTS", "EXPLAINS", "MATCHES_EVIDENCE", "RESOLVES_ANOMALY", "ATTACKS", "ANALOGOUS_TO"],
+                "node_types": [
+                    "PrimitiveTerm",
+                    "EmpiricalIndicator",
+                    "TheoreticalConstruct",
+                    "TheoryNet",
+                    "TheoryCore",
+                    "EmpiricalApplication",
+                ],
+                "relation_types": [
+                    "MEASURES",
+                    "DETERMINED_BY",
+                    "BELONGS_TO",
+                    "EVOLVES_TO",
+                    "SUBSUMES",
+                    "REDUCES_TO",
+                ],
+                "component_types": [
+                    "BasicAxiom",
+                    "DerivedEmpiricalLaw",
+                    "Evidence",
+                    "Claim",
+                ],
+                "argument_relation_types": [
+                    "SUPPORTS",
+                    "EXPLAINS",
+                    "MATCHES_EVIDENCE",
+                    "RESOLVES_ANOMALY",
+                    "ATTACKS",
+                    "ANALOGOUS_TO",
+                ],
                 "relation_polarities": {
                     "SUPPORTS": 1,
                     "EXPLAINS": 1,
@@ -297,7 +510,9 @@ def _generate_physics_run(runs_dir: Path, artifacts_dir: Path) -> None:
         },
         "fingerprints": {},
     }
-    (runs_dir / f"{run_id}.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    (runs_dir / f"{run_id}.json").write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8"
+    )
 
 
 def _generate_psychology_run(runs_dir: Path, artifacts_dir: Path) -> None:
@@ -321,11 +536,26 @@ def _generate_psychology_run(runs_dir: Path, artifacts_dir: Path) -> None:
     )
 
     chunks = [
-        ("chunk_psych_1", "Shared empirical grounding: Elevated heart rate, fMRI amygdala hyperactivation, and ancestral venomous threats."),
-        ("chunk_psych_2", "Freudian psychoanalysis: Phobia as symbolic displacement of repressed psychosexual trauma."),
-        ("chunk_psych_3", "Classical behaviorism: Phobia as direct conditioned reflex from painful traumatic events."),
-        ("chunk_psych_4", "Evolutionary neuroscience: Phobia as hyper-sensitized evolutionary threat-detection circuit in the amygdala."),
-        ("chunk_psych_5", "Paradigm conflict: Epistemic safety, conservatism, and mutual attacks between neuroscientific and clinical models."),
+        (
+            "chunk_psych_1",
+            "Shared empirical grounding: Elevated heart rate, fMRI amygdala hyperactivation, and ancestral venomous threats.",
+        ),
+        (
+            "chunk_psych_2",
+            "Freudian psychoanalysis: Phobia as symbolic displacement of repressed psychosexual trauma.",
+        ),
+        (
+            "chunk_psych_3",
+            "Classical behaviorism: Phobia as direct conditioned reflex from painful traumatic events.",
+        ),
+        (
+            "chunk_psych_4",
+            "Evolutionary neuroscience: Phobia as hyper-sensitized evolutionary threat-detection circuit in the amygdala.",
+        ),
+        (
+            "chunk_psych_5",
+            "Paradigm conflict: Epistemic safety, conservatism, and mutual attacks between neuroscientific and clinical models.",
+        ),
     ]
     for cid, text in chunks:
         _write_envelope(
@@ -344,9 +574,24 @@ def _generate_psychology_run(runs_dir: Path, artifacts_dir: Path) -> None:
 
     # 2. Entities (L2)
     entities = [
-        ("T_FREUD", "Theory", "Freudian Psychoanalysis", "Spider phobia as displaced psychosexual conflict."),
-        ("T_BEHAVIOR", "Theory", "Classical Behaviorism", "Spider phobia as a purely conditioned associative reflex."),
-        ("T_NEURO", "Theory", "Evolutionary Neuroscience", "Spider phobia as hyper-sensitized, evolutionary threat-detection."),
+        (
+            "T_FREUD",
+            "Theory",
+            "Freudian Psychoanalysis",
+            "Spider phobia as displaced psychosexual conflict.",
+        ),
+        (
+            "T_BEHAVIOR",
+            "Theory",
+            "Classical Behaviorism",
+            "Spider phobia as a purely conditioned associative reflex.",
+        ),
+        (
+            "T_NEURO",
+            "Theory",
+            "Evolutionary Neuroscience",
+            "Spider phobia as hyper-sensitized, evolutionary threat-detection.",
+        ),
     ]
     for eid, etype, name, desc in entities:
         _write_envelope(
@@ -367,17 +612,94 @@ def _generate_psychology_run(runs_dir: Path, artifacts_dir: Path) -> None:
 
     # 3. Theory Atoms (L3)
     atoms = [
-        ("E1", "EmpiricalSentence", "Subject exhibits elevated heart rate and avoidance behavior when exposed to spiders.", "B", 1.0, 1.0),
-        ("E2", "EmpiricalSentence", "fMRI scans show severe hyperactivation in the amygdala during spider exposure.", "B", 1.0, 1.0),
-        ("E3", "EmpiricalSentence", "Venomous spiders posed a lethal threat to early hominid ancestors.", "B", 1.0, 1.0),
-        ("PB1", "Premise", "The spider is a symbolic displacement of a phallic threat or repressed psychosexual childhood trauma.", "A", 0.5, 0.3),
-        ("PB2", "Premise", "The Ego represses trauma into the unconscious to prevent psychological fragmentation.", "A", 0.6, 0.4),
-        ("CB", "Claim", "The phobia is a neurotic defense mechanism to avoid confronting repressed childhood conflicts.", "A", 0.4, 0.35),
-        ("PC1", "Premise", "The subject experienced a direct, painful conditioning event involving a spider in the past.", "A", 0.7, 0.6),
-        ("CC", "Claim", "Phobias are strictly learned associative reflexes (Pavlovian conditioning).", "A", 0.65, 0.6),
-        ("PA1", "Premise", "The amygdala is the brain's primary threat-detection and fear-processing center.", "A", 0.95, 0.95),
-        ("PA2", "Premise", "Innate fear of historic evolutionary threats provides a survival advantage.", "A", 0.9, 0.9),
-        ("CA", "Claim", "Phobias are hyper-sensitized, evolutionary threat-detection circuits localized in the amygdala.", "A", 0.95, 0.95),
+        (
+            "E1",
+            "EmpiricalSentence",
+            "Subject exhibits elevated heart rate and avoidance behavior when exposed to spiders.",
+            "B",
+            1.0,
+            1.0,
+        ),
+        (
+            "E2",
+            "EmpiricalSentence",
+            "fMRI scans show severe hyperactivation in the amygdala during spider exposure.",
+            "B",
+            1.0,
+            1.0,
+        ),
+        (
+            "E3",
+            "EmpiricalSentence",
+            "Venomous spiders posed a lethal threat to early hominid ancestors.",
+            "B",
+            1.0,
+            1.0,
+        ),
+        (
+            "PB1",
+            "Premise",
+            "The spider is a symbolic displacement of a phallic threat or repressed psychosexual childhood trauma.",
+            "A",
+            0.5,
+            0.3,
+        ),
+        (
+            "PB2",
+            "Premise",
+            "The Ego represses trauma into the unconscious to prevent psychological fragmentation.",
+            "A",
+            0.6,
+            0.4,
+        ),
+        (
+            "CB",
+            "Claim",
+            "The phobia is a neurotic defense mechanism to avoid confronting repressed childhood conflicts.",
+            "A",
+            0.4,
+            0.35,
+        ),
+        (
+            "PC1",
+            "Premise",
+            "The subject experienced a direct, painful conditioning event involving a spider in the past.",
+            "A",
+            0.7,
+            0.6,
+        ),
+        (
+            "CC",
+            "Claim",
+            "Phobias are strictly learned associative reflexes (Pavlovian conditioning).",
+            "A",
+            0.65,
+            0.6,
+        ),
+        (
+            "PA1",
+            "Premise",
+            "The amygdala is the brain's primary threat-detection and fear-processing center.",
+            "A",
+            0.95,
+            0.95,
+        ),
+        (
+            "PA2",
+            "Premise",
+            "Innate fear of historic evolutionary threats provides a survival advantage.",
+            "A",
+            0.9,
+            0.9,
+        ),
+        (
+            "CA",
+            "Claim",
+            "Phobias are hyper-sensitized, evolutionary threat-detection circuits localized in the amygdala.",
+            "A",
+            0.95,
+            0.95,
+        ),
     ]
     for aid, atype, text, part, conf, plaus in atoms:
         _write_envelope(
@@ -464,14 +786,62 @@ def _generate_psychology_run(runs_dir: Path, artifacts_dir: Path) -> None:
             "thinking_level": "medium",
         },
         "phase_records": [
-            {"ordinal": 1, "phase_name": "Phase 1: Data Foundation", "status": "completed", "reused": False, "artifact_count": 6},
-            {"ordinal": 2, "phase_name": "Phase 2: Entity & Local Relation Discovery", "status": "completed", "reused": False, "artifact_count": 3},
-            {"ordinal": 3, "phase_name": "Phase 3: Global Relation Extraction", "status": "completed", "reused": False, "artifact_count": 0},
-            {"ordinal": 4, "phase_name": "Phase 3b: Latent Graph Consolidation", "status": "completed", "reused": False, "artifact_count": 2},
-            {"ordinal": 5, "phase_name": "Phase 4: Entity Maturation", "status": "completed", "reused": False, "artifact_count": 3},
-            {"ordinal": 6, "phase_name": "Phase 4: Argument Mining", "status": "completed", "reused": False, "artifact_count": 11},
-            {"ordinal": 7, "phase_name": "Phase 5: Inter-Document Argument Web", "status": "completed", "reused": False, "artifact_count": 22},
-            {"ordinal": 8, "phase_name": "Phase 6: TheoryNet Projection", "status": "completed", "reused": False, "artifact_count": 5},
+            {
+                "ordinal": 1,
+                "phase_name": "Phase 1: Data Foundation",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 6,
+            },
+            {
+                "ordinal": 2,
+                "phase_name": "Phase 2: Entity & Local Relation Discovery",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 3,
+            },
+            {
+                "ordinal": 3,
+                "phase_name": "Phase 3: Global Relation Extraction",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 0,
+            },
+            {
+                "ordinal": 4,
+                "phase_name": "Phase 3b: Latent Graph Consolidation",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 2,
+            },
+            {
+                "ordinal": 5,
+                "phase_name": "Phase 4: Entity Maturation",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 3,
+            },
+            {
+                "ordinal": 6,
+                "phase_name": "Phase 4: Argument Mining",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 11,
+            },
+            {
+                "ordinal": 7,
+                "phase_name": "Phase 5: Inter-Document Argument Web",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 22,
+            },
+            {
+                "ordinal": 8,
+                "phase_name": "Phase 6: TheoryNet Projection",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 5,
+            },
         ],
         "artifact_counts_by_kind": {
             "document": 1,
@@ -507,7 +877,9 @@ def _generate_psychology_run(runs_dir: Path, artifacts_dir: Path) -> None:
         },
         "fingerprints": {},
     }
-    (runs_dir / f"{run_id}.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    (runs_dir / f"{run_id}.json").write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8"
+    )
 
 
 def _generate_festinger1959_run(runs_dir: Path, artifacts_dir: Path) -> None:
@@ -613,15 +985,60 @@ def _generate_festinger1959_run(runs_dir: Path, artifacts_dir: Path) -> None:
 
     # 3. Entities (L2)
     entities = [
-        ("str:TE_DissF", "TheoryElement", "T(DissF) - Forced Compliance Domain Core", "Structuralist theory-element core for forced compliance cognitive dissonance."),
-        ("str:TE_DissF6", "TheoryElement", "T(DissF6) - Festinger-Carlsmith Forced Compliance Reward Model", "Specialized theory-element model predicting magnitude of opinion change under varied incentive rewards."),
-        ("str:MP_DissF6", "PotentialModel", "M_p(DissF6) - Potential Models of Forced Compliance", "Potential models structure M_p = <S, X, notX, Reward, Dissonance, Consonance, OpinionChange>."),
-        ("str:M_DissF6_RatioLaw", "ActualModel", "M(DissF6) - Dissonance Magnitude Ratio Law", "Actual model axiom defining dissonance magnitude as ratio D / (D + C)."),
-        ("str:M_DissF6_InverseRewardLaw", "ActualModel", "M(DissF6) - Inverse Reward Prediction Law", "Axiom stating negative partial derivative of opinion change with respect to magnitude of reward."),
-        ("str:M_DissF6_Corroboration", "ActualModel", "M(DissF6) - Experimental Corroboration Law", "Observed empirical model: opinion change in $1 condition exceeds $20 condition."),
-        ("str:I0_Carlsmith1959", "Paradigm", "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm", "Paradigm intended application using peg-turning spools and confederate interview."),
-        ("str:TE_Alternative_Rehearsal", "Hypothesis", "Hypothesis: Janis-King Mental Rehearsal Alternative Explanation", "Alternative incentive/rehearsal explanation positing greater cognitive rehearsal in $1 subjects."),
-        ("str:EV_Rehearsal_Defeated", "Evidence", "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal", "Empirical observer ratings demonstrating no difference in persuasiveness or rehearsal."),
+        (
+            "str:TE_DissF",
+            "TheoryElement",
+            "T(DissF) - Forced Compliance Domain Core",
+            "Structuralist theory-element core for forced compliance cognitive dissonance.",
+        ),
+        (
+            "str:TE_DissF6",
+            "TheoryElement",
+            "T(DissF6) - Festinger-Carlsmith Forced Compliance Reward Model",
+            "Specialized theory-element model predicting magnitude of opinion change under varied incentive rewards.",
+        ),
+        (
+            "str:MP_DissF6",
+            "PotentialModel",
+            "M_p(DissF6) - Potential Models of Forced Compliance",
+            "Potential models structure M_p = <S, X, notX, Reward, Dissonance, Consonance, OpinionChange>.",
+        ),
+        (
+            "str:M_DissF6_RatioLaw",
+            "ActualModel",
+            "M(DissF6) - Dissonance Magnitude Ratio Law",
+            "Actual model axiom defining dissonance magnitude as ratio D / (D + C).",
+        ),
+        (
+            "str:M_DissF6_InverseRewardLaw",
+            "ActualModel",
+            "M(DissF6) - Inverse Reward Prediction Law",
+            "Axiom stating negative partial derivative of opinion change with respect to magnitude of reward.",
+        ),
+        (
+            "str:M_DissF6_Corroboration",
+            "ActualModel",
+            "M(DissF6) - Experimental Corroboration Law",
+            "Observed empirical model: opinion change in $1 condition exceeds $20 condition.",
+        ),
+        (
+            "str:I0_Carlsmith1959",
+            "Paradigm",
+            "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm",
+            "Paradigm intended application using peg-turning spools and confederate interview.",
+        ),
+        (
+            "str:TE_Alternative_Rehearsal",
+            "Hypothesis",
+            "Hypothesis: Janis-King Mental Rehearsal Alternative Explanation",
+            "Alternative incentive/rehearsal explanation positing greater cognitive rehearsal in $1 subjects.",
+        ),
+        (
+            "str:EV_Rehearsal_Defeated",
+            "Evidence",
+            "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal",
+            "Empirical observer ratings demonstrating no difference in persuasiveness or rehearsal.",
+        ),
     ]
     for eid, etype, name, desc in entities:
         clean_eid = eid.replace("str:", "")
@@ -643,7 +1060,13 @@ def _generate_festinger1959_run(runs_dir: Path, artifacts_dir: Path) -> None:
 
     # 4. Theory Atoms (L3) with grounded TextAnchors
     atoms = [
-        ("str:TE_DissF", "TheoryElement", "T(DissF) - Forced Compliance Domain Core", "chunk_fc1959_ratio_law", None),
+        (
+            "str:TE_DissF",
+            "TheoryElement",
+            "T(DissF) - Forced Compliance Domain Core",
+            "chunk_fc1959_ratio_law",
+            None,
+        ),
         (
             "str:TE_DissF6",
             "TheoryElement",
@@ -774,11 +1197,35 @@ def _generate_festinger1959_run(runs_dir: Path, artifacts_dir: Path) -> None:
         ("trel_fc_spec", "str:TE_DissF", "specializes", "str:TE_DissF6", 1.0),
         ("trel_fc_mp", "str:TE_DissF6", "hasPotentialModel", "str:MP_DissF6", 1.0),
         ("trel_fc_m1", "str:TE_DissF6", "hasActualModel", "str:M_DissF6_RatioLaw", 1.0),
-        ("trel_fc_m2", "str:TE_DissF6", "hasActualModel", "str:M_DissF6_InverseRewardLaw", 1.0),
-        ("trel_fc_m3", "str:TE_DissF6", "hasActualModel", "str:M_DissF6_Corroboration", 1.0),
+        (
+            "trel_fc_m2",
+            "str:TE_DissF6",
+            "hasActualModel",
+            "str:M_DissF6_InverseRewardLaw",
+            1.0,
+        ),
+        (
+            "trel_fc_m3",
+            "str:TE_DissF6",
+            "hasActualModel",
+            "str:M_DissF6_Corroboration",
+            1.0,
+        ),
         ("trel_fc_i0", "str:TE_DissF6", "hasParadigm", "str:I0_Carlsmith1959", 1.0),
-        ("trel_fc_alt_att", "str:TE_Alternative_Rehearsal", "attacks", "str:TE_DissF6", -1.0),
-        ("trel_fc_ev_att", "str:EV_Rehearsal_Defeated", "attacks", "str:TE_Alternative_Rehearsal", -1.0),
+        (
+            "trel_fc_alt_att",
+            "str:TE_Alternative_Rehearsal",
+            "attacks",
+            "str:TE_DissF6",
+            -1.0,
+        ),
+        (
+            "trel_fc_ev_att",
+            "str:EV_Rehearsal_Defeated",
+            "attacks",
+            "str:TE_Alternative_Rehearsal",
+            -1.0,
+        ),
     ]
     for trid, src, rtype, tgt, weight in theory_relations:
         _write_envelope(
@@ -810,7 +1257,13 @@ def _generate_festinger1959_run(runs_dir: Path, artifacts_dir: Path) -> None:
         "duration_seconds": 220.0,
         "primary_input": "festinger_carlsmith_1959.md",
         "input_sources": ["datasets/festinger_carlsmith_1959.md"],
-        "tags": ["demo", "psychology", "cognitive-dissonance", "festinger-carlsmith", "structuralism"],
+        "tags": [
+            "demo",
+            "psychology",
+            "cognitive-dissonance",
+            "festinger-carlsmith",
+            "structuralism",
+        ],
         "models": {
             "llm_model": "anthropic/claude-3-5-sonnet",
             "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
@@ -818,14 +1271,62 @@ def _generate_festinger1959_run(runs_dir: Path, artifacts_dir: Path) -> None:
             "thinking_level": "high",
         },
         "phase_records": [
-            {"ordinal": 1, "phase_name": "Phase 1: Data Foundation", "status": "completed", "reused": False, "artifact_count": 7},
-            {"ordinal": 2, "phase_name": "Phase 2: Entity & Local Relation Discovery", "status": "completed", "reused": False, "artifact_count": 9},
-            {"ordinal": 3, "phase_name": "Phase 3: Global Relation Extraction", "status": "completed", "reused": False, "artifact_count": 0},
-            {"ordinal": 4, "phase_name": "Phase 3b: Latent Graph Consolidation", "status": "completed", "reused": False, "artifact_count": 3},
-            {"ordinal": 5, "phase_name": "Phase 4: Entity Maturation", "status": "completed", "reused": False, "artifact_count": 9},
-            {"ordinal": 6, "phase_name": "Phase 4: Argument Mining", "status": "completed", "reused": False, "artifact_count": 9},
-            {"ordinal": 7, "phase_name": "Phase 5: Inter-Document Argument Web", "status": "completed", "reused": False, "artifact_count": 8},
-            {"ordinal": 8, "phase_name": "Phase 6: TheoryNet Projection", "status": "completed", "reused": False, "artifact_count": 9},
+            {
+                "ordinal": 1,
+                "phase_name": "Phase 1: Data Foundation",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 7,
+            },
+            {
+                "ordinal": 2,
+                "phase_name": "Phase 2: Entity & Local Relation Discovery",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 9,
+            },
+            {
+                "ordinal": 3,
+                "phase_name": "Phase 3: Global Relation Extraction",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 0,
+            },
+            {
+                "ordinal": 4,
+                "phase_name": "Phase 3b: Latent Graph Consolidation",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 3,
+            },
+            {
+                "ordinal": 5,
+                "phase_name": "Phase 4: Entity Maturation",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 9,
+            },
+            {
+                "ordinal": 6,
+                "phase_name": "Phase 4: Argument Mining",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 9,
+            },
+            {
+                "ordinal": 7,
+                "phase_name": "Phase 5: Inter-Document Argument Web",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 8,
+            },
+            {
+                "ordinal": 8,
+                "phase_name": "Phase 6: TheoryNet Projection",
+                "status": "completed",
+                "reused": False,
+                "artifact_count": 9,
+            },
         ],
         "artifact_counts_by_kind": {
             "document": 1,
@@ -843,10 +1344,36 @@ def _generate_festinger1959_run(runs_dir: Path, artifacts_dir: Path) -> None:
             },
             "graph_schema": {
                 "version": "v1",
-                "node_types": ["TheoryElement", "PotentialModel", "ActualModel", "Paradigm", "Hypothesis", "Evidence"],
-                "relation_types": ["specializes", "hasPotentialModel", "hasActualModel", "hasParadigm", "attacks"],
-                "component_types": ["TheoryElement", "PotentialModel", "ActualModel", "Paradigm", "Hypothesis", "Evidence"],
-                "argument_relation_types": ["specializes", "hasPotentialModel", "hasActualModel", "hasParadigm", "attacks"],
+                "node_types": [
+                    "TheoryElement",
+                    "PotentialModel",
+                    "ActualModel",
+                    "Paradigm",
+                    "Hypothesis",
+                    "Evidence",
+                ],
+                "relation_types": [
+                    "specializes",
+                    "hasPotentialModel",
+                    "hasActualModel",
+                    "hasParadigm",
+                    "attacks",
+                ],
+                "component_types": [
+                    "TheoryElement",
+                    "PotentialModel",
+                    "ActualModel",
+                    "Paradigm",
+                    "Hypothesis",
+                    "Evidence",
+                ],
+                "argument_relation_types": [
+                    "specializes",
+                    "hasPotentialModel",
+                    "hasActualModel",
+                    "hasParadigm",
+                    "attacks",
+                ],
                 "relation_polarities": {
                     "specializes": 1,
                     "hasPotentialModel": 1,
@@ -866,7 +1393,9 @@ def _generate_festinger1959_run(runs_dir: Path, artifacts_dir: Path) -> None:
         },
         "fingerprints": {},
     }
-    (runs_dir / f"{run_id}.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    (runs_dir / f"{run_id}.json").write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8"
+    )
 
 
 if __name__ == "__main__":

@@ -38,7 +38,9 @@ def _validate_t_norm(t_norm: str) -> Literal["product", "godel"]:
     )
 
 
-def _conjunctive_t_norm(values: Sequence[float], t_norm: Literal["product", "godel"]) -> float:
+def _conjunctive_t_norm(
+    values: Sequence[float], t_norm: Literal["product", "godel"]
+) -> float:
     """Aggregate conjunctive premise activations using the configured t-norm."""
     if not values:
         return 0.0
@@ -387,7 +389,7 @@ class WeightedQuadraticEnergySolver:
     def _impact(x: np.ndarray | float) -> np.ndarray | float:
         """Quadratic impact attenuation function h(x) = (max(x, 0)^2) / (1 + max(x, 0)^2)."""
         pos = np.maximum(x, 0.0)
-        pos_sq = pos ** 2
+        pos_sq = pos**2
         return pos_sq / (1.0 + pos_sq)
 
     def _conjunctive_activation(
@@ -473,7 +475,11 @@ class WeightedQuadraticEnergySolver:
                     warrant_mods=warrant_mods.get(k, ()),
                 )
                 w0 = float(np.clip(spec.base_warrant, 0.0, 1.0))
-                val = w0 + (1.0 - w0) * float(self._impact(e_w)) - w0 * float(self._impact(-e_w))
+                val = (
+                    w0
+                    + (1.0 - w0) * float(self._impact(e_w))
+                    - w0 * float(self._impact(-e_w))
+                )
                 s_w_next[k] = float(np.clip(val, 0.0, 1.0))
             max_delta = float(np.max(np.abs(s_w_next - s_w)))
             s_w = s_w_next
@@ -522,12 +528,17 @@ class WeightedQuadraticEnergySolver:
             w0 = float(np.clip(spec.base_warrant, 0.0, 1.0))
             sw_k = float(s_warrants[k])
             ds_warrants[k] = (
-                w0 - sw_k + (1.0 - w0) * float(self._impact(e_w)) - w0 * float(self._impact(-e_w))
+                w0
+                - sw_k
+                + (1.0 - w0) * float(self._impact(e_w))
+                - w0 * float(self._impact(-e_w))
             )
             if spec.target_warrant_idx is not None or spec.target_idx < 0:
                 continue
-            contrib = sw_k * spec.gate_factor * self._conjunctive_activation(
-                s_atoms, spec.premise_indices
+            contrib = (
+                sw_k
+                * spec.gate_factor
+                * self._conjunctive_activation(s_atoms, spec.premise_indices)
             )
             if spec.polarity > 0:
                 e_supp[spec.target_idx] += contrib
@@ -535,7 +546,9 @@ class WeightedQuadraticEnergySolver:
                 e_att[spec.target_idx] += contrib
 
         e_atoms = e_supp - e_att
-        ds_atoms = w - s_atoms + (1.0 - w) * self._impact(e_atoms) - w * self._impact(-e_atoms)
+        ds_atoms = (
+            w - s_atoms + (1.0 - w) * self._impact(e_atoms) - w * self._impact(-e_atoms)
+        )
         if has_warrant_state:
             return np.concatenate([ds_atoms, ds_warrants])
         return ds_atoms
@@ -561,7 +574,9 @@ class WeightedQuadraticEnergySolver:
 
         n = len(base_scores)
         m = len(hyperedges)
-        s_w = np.array([np.clip(h.base_warrant, 0.0, 1.0) for h in hyperedges], dtype=np.float64)
+        s_w = np.array(
+            [np.clip(h.base_warrant, 0.0, 1.0) for h in hyperedges], dtype=np.float64
+        )
         warrant_done = [False] * m
         warrant_mods = self._group_warrant_modifiers(hyperedges)
         incoming_hyper: dict[int, list[int]] = {}
@@ -583,7 +598,11 @@ class WeightedQuadraticEnergySolver:
                 warrant_mods=warrant_mods.get(k_idx, ()),
             )
             w0 = float(np.clip(spec.base_warrant, 0.0, 1.0))
-            val = w0 + (1.0 - w0) * float(self._impact(e_w)) - w0 * float(self._impact(-e_w))
+            val = (
+                w0
+                + (1.0 - w0) * float(self._impact(e_w))
+                - w0 * float(self._impact(-e_w))
+            )
             s_w[k_idx] = float(np.clip(val, 0.0, 1.0))
             warrant_done[k_idx] = True
 
@@ -648,13 +667,17 @@ class WeightedQuadraticEnergySolver:
         hyper_list: tuple[HyperedgeSpec, ...] = tuple(hyperedges) if hyperedges else ()
         if n == 0:
             empty = np.array([], dtype=np.float64)
-            return empty, True, {
-                "support_energy": empty,
-                "attack_energy": empty,
-                "total_weight_of_evidence": empty,
-                "volatility_index": empty,
-                "warrant_states": empty,
-            }
+            return (
+                empty,
+                True,
+                {
+                    "support_energy": empty,
+                    "attack_energy": empty,
+                    "total_weight_of_evidence": empty,
+                    "volatility_index": empty,
+                    "warrant_states": empty,
+                },
+            )
 
         w = np.clip(base_scores, 0.0, 1.0)
         g_supp_t = g_supp.T
@@ -692,7 +715,10 @@ class WeightedQuadraticEnergySolver:
         else:
             # Cyclic topology: Adaptive continuous ODE integration over [atoms, warrants]
             w_warrants = (
-                np.array([np.clip(h.base_warrant, 0.0, 1.0) for h in hyper_list], dtype=np.float64)
+                np.array(
+                    [np.clip(h.base_warrant, 0.0, 1.0) for h in hyper_list],
+                    dtype=np.float64,
+                )
                 if m > 0
                 else np.array([], dtype=np.float64)
             )
@@ -903,9 +929,7 @@ class QBAFGradualSemanticsSolver:
         """Partition admissible edges into pairwise edges and reified hyperedges."""
         explicit_edge_ids = {e.id for e in admissible_edges if e.id}
         explicit_warrant_ids = explicit_edge_ids | {
-            e.undercuts_relation_id
-            for e in admissible_edges
-            if e.undercuts_relation_id
+            e.undercuts_relation_id for e in admissible_edges if e.undercuts_relation_id
         }
 
         modifiers_by_target: dict[str, list[_AdmissibleEdge]] = {}
@@ -973,7 +997,11 @@ class QBAFGradualSemanticsSolver:
                 )
                 if len(mod_idxs) != len(mod_raw_prems) or not mod_idxs:
                     continue
-                if mod.id is not None and mod.id in targeted_warrant_ids and mod.id != warrant_id:
+                if (
+                    mod.id is not None
+                    and mod.id in targeted_warrant_ids
+                    and mod.id != warrant_id
+                ):
                     has_child_targeted = True
                 elif mod.polarity > 0:
                     backing_list.append((mod_idxs, mod.weight))
@@ -1126,7 +1154,9 @@ class QBAFGradualSemanticsSolver:
         active_adm_mode = admissibility_mode or self.admissibility_mode
         active_tau_p = tau_p if tau_p is not None else self.tau_p
         active_tau_c = tau_c if tau_c is not None else self.tau_c
-        active_perspective = perspective if perspective is not None else self.perspective
+        active_perspective = (
+            perspective if perspective is not None else self.perspective
+        )
 
         (
             base_tau,
@@ -1272,7 +1302,11 @@ class QBAFGradualSemanticsSolver:
         for nid in base_tau:
             e_tot = support_energy[nid] + attack_energy[nid]
             deg = tau_current[nid]
-            vol = (e_tot / (1.0 + e_tot)) * (1.0 - 2.0 * abs(deg - 0.5)) if e_tot > 0 else 0.0
+            vol = (
+                (e_tot / (1.0 + e_tot)) * (1.0 - 2.0 * abs(deg - 0.5))
+                if e_tot > 0
+                else 0.0
+            )
             total_evidence[nid] = round(e_tot, 6)
             volatility[nid] = round(vol, 6)
 
@@ -1345,7 +1379,9 @@ class QBAFGradualSemanticsSolver:
         active_adm_mode = admissibility_mode or self.admissibility_mode
         active_tau_p = tau_p if tau_p is not None else self.tau_p
         active_tau_c = tau_c if tau_c is not None else self.tau_c
-        active_perspective = perspective if perspective is not None else self.perspective
+        active_perspective = (
+            perspective if perspective is not None else self.perspective
+        )
 
         (
             base_tau,
@@ -1405,17 +1441,30 @@ class QBAFGradualSemanticsSolver:
         )
 
         degrees = {nid: round(float(s_final[i]), 6) for i, nid in enumerate(node_list)}
-        support_sums = {nid: round(float(telemetry["support_energy"][i]), 6) for i, nid in enumerate(node_list)}
-        attack_sums = {nid: round(float(telemetry["attack_energy"][i]), 6) for i, nid in enumerate(node_list)}
-        total_evidence = {nid: round(float(telemetry["total_weight_of_evidence"][i]), 6) for i, nid in enumerate(node_list)}
-        volatility = {nid: round(float(telemetry["volatility_index"][i]), 6) for i, nid in enumerate(node_list)}
+        support_sums = {
+            nid: round(float(telemetry["support_energy"][i]), 6)
+            for i, nid in enumerate(node_list)
+        }
+        attack_sums = {
+            nid: round(float(telemetry["attack_energy"][i]), 6)
+            for i, nid in enumerate(node_list)
+        }
+        total_evidence = {
+            nid: round(float(telemetry["total_weight_of_evidence"][i]), 6)
+            for i, nid in enumerate(node_list)
+        }
+        volatility = {
+            nid: round(float(telemetry["volatility_index"][i]), 6)
+            for i, nid in enumerate(node_list)
+        }
         warrant_states_arr = telemetry.get("warrant_states")
         warrant_states = (
             {
                 spec.warrant_id: round(float(warrant_states_arr[k]), 6)
                 for k, spec in enumerate(hyperedges)
             }
-            if warrant_states_arr is not None and len(warrant_states_arr) == len(hyperedges)
+            if warrant_states_arr is not None
+            and len(warrant_states_arr) == len(hyperedges)
             else {}
         )
 
@@ -1498,7 +1547,9 @@ class QBAFGradualSemanticsSolver:
                 c_diff = cal_res.degrees[u] - cal_res.degrees[v]
                 u_diff = unw_res.degrees[u] - unw_res.degrees[v]
                 # Reversal if relative order strictly changes sign
-                if (c_diff > 1e-4 and u_diff < -1e-4) or (c_diff < -1e-4 and u_diff > 1e-4):
+                if (c_diff > 1e-4 and u_diff < -1e-4) or (
+                    c_diff < -1e-4 and u_diff > 1e-4
+                ):
                     rank_reversals += 1
 
         summary = {
@@ -1586,7 +1637,11 @@ class QBAFGradualSemanticsSolver:
                 is_inadmissible = True
             if active_tau_p > 0.0 and p_stance is not None and p_stance < active_tau_p:
                 is_inadmissible = True
-            if active_tau_c > 0.0 and model_conf is not None and model_conf < active_tau_c:
+            if (
+                active_tau_c > 0.0
+                and model_conf is not None
+                and model_conf < active_tau_c
+            ):
                 is_inadmissible = True
 
             if is_inadmissible:
@@ -1636,6 +1691,7 @@ class QBAFGradualSemanticsSolver:
         tollens* and discharges the drop :math:`\\Delta_{\\text{ref}}(S) = \\tau_0(S) - \\tau^*(S)`
         onto linked asserted theses without polluting unrefuted claims.
         """
+
         def _edge_premises(edge: _AdmissibleEdge) -> tuple[str, ...]:
             return (
                 edge.premise_ids
@@ -1668,7 +1724,9 @@ class QBAFGradualSemanticsSolver:
             if any(raw_base_tau.get(p, 0.0) <= 0.0 for p in non_sup_prems):
                 continue
             non_sup_scale = (
-                _conjunctive_t_norm([raw_base_tau[p] for p in non_sup_prems], self.t_norm)
+                _conjunctive_t_norm(
+                    [raw_base_tau[p] for p in non_sup_prems], self.t_norm
+                )
                 if non_sup_prems
                 else 1.0
             )
@@ -1948,7 +2006,10 @@ class QBAFGradualSemanticsSolver:
             if not pe.id:
                 continue
             direct_tgt = pe.undercuts_relation_id or pe.target
-            if pe.undercuts_relation_id is None and pe.target not in explicit_warrant_ids:
+            if (
+                pe.undercuts_relation_id is None
+                and pe.target not in explicit_warrant_ids
+            ):
                 target_atom_by_warrant[pe.id] = pe.target
             elif direct_tgt:
                 warrant_parent_map[pe.id] = direct_tgt
@@ -1981,8 +2042,10 @@ class QBAFGradualSemanticsSolver:
             else 0.5
         )
         for pe in parsed_edges:
-            atom_endpoints = list(pe.premise_ids) if pe.premise_ids else (
-                [pe.source] if pe.source else []
+            atom_endpoints = (
+                list(pe.premise_ids)
+                if pe.premise_ids
+                else ([pe.source] if pe.source else [])
             )
             if (
                 pe.target
@@ -2018,12 +2081,8 @@ class QBAFGradualSemanticsSolver:
                 return True
             return mode == "historical" and _is_unattributed(nid)
 
-        sup_nodes = {
-            nid for nid, mode in node_modes.items() if mode == "suppositional"
-        }
-        sup_isolation_active = (
-            eff_isolate_sup and active_perspective != "suppositional"
-        )
+        sup_nodes = {nid for nid, mode in node_modes.items() if mode == "suppositional"}
+        sup_isolation_active = eff_isolate_sup and active_perspective != "suppositional"
         suppositional_isolated = len(sup_nodes) if sup_isolation_active else 0
 
         in_persp: dict[str, bool] = {}
@@ -2099,8 +2158,7 @@ class QBAFGradualSemanticsSolver:
             src, tgt = pe.source, pe.target
             premises = pe.premise_ids if pe.premise_ids else ((src,) if src else ())
             is_warrant_mod = (
-                pe.undercuts_relation_id is not None
-                or tgt in explicit_warrant_ids
+                pe.undercuts_relation_id is not None or tgt in explicit_warrant_ids
             )
             eff_tgt = (
                 target_atom_by_warrant.get(pe.undercuts_relation_id or tgt, tgt)
@@ -2167,10 +2225,9 @@ class QBAFGradualSemanticsSolver:
                 ):
                     continue
             else:
-                both_in_persp = (
-                    all(in_persp.get(p, False) for p in premises)
-                    and in_persp.get(eff_tgt, False)
-                )
+                both_in_persp = all(
+                    in_persp.get(p, False) for p in premises
+                ) and in_persp.get(eff_tgt, False)
                 is_external_attack = (
                     not eff_isolate_attr
                     and src in external_challengers
@@ -2184,7 +2241,9 @@ class QBAFGradualSemanticsSolver:
                     and (node_attributions.get(src) or "").strip().lower()
                     == (node_attributions.get(eff_tgt) or "").strip().lower()
                 )
-                if not (both_in_persp or is_external_attack or is_same_challenger_support):
+                if not (
+                    both_in_persp or is_external_attack or is_same_challenger_support
+                ):
                     continue
 
             keep, final_w, pruned = self._evaluate_admissibility_gate(
@@ -2289,7 +2348,9 @@ class QBAFGradualSemanticsSolver:
                 modal_prior = node.get("modal_prior")
                 if modal_prior is not None:
                     local_ten = node.get("local_tenability")
-                    if local_ten is None and isinstance(node.get("tenability"), Mapping):
+                    if local_ten is None and isinstance(
+                        node.get("tenability"), Mapping
+                    ):
                         local_ten = node["tenability"].get("local_score")
                     raw_tau = float(modal_prior) * float(
                         local_ten if local_ten is not None else 1.0
@@ -2387,9 +2448,8 @@ class QBAFGradualSemanticsSolver:
             norm_premises = tuple(str(p) for p in raw_premises if p)
             edge_id_val = edge.get("id") or props.get("id")
             edge_id = str(edge_id_val) if edge_id_val else None
-            undercut_val = (
-                edge.get("undercuts_relation_id")
-                or props.get("undercuts_relation_id")
+            undercut_val = edge.get("undercuts_relation_id") or props.get(
+                "undercuts_relation_id"
             )
             undercut_id = str(undercut_val) if undercut_val else None
 
@@ -2523,7 +2583,9 @@ class QBAFGradualSemanticsSolver:
 
         if edge.effective_weight is not None:
             w = float(edge.effective_weight)
-        elif "active_weight" in edge.model_fields_set and edge.active_weight is not None:
+        elif (
+            "active_weight" in edge.model_fields_set and edge.active_weight is not None
+        ):
             w = float(edge.active_weight)
         elif p_stance is not None:
             force = inferential if inferential is not None else modal

@@ -138,7 +138,9 @@ class TestEvaluationPipelineExample:
 
     def test_cli_argument_parsing(self, monkeypatch):
         """Verify CLI argument parser handles all supported scenario flags."""
-        monkeypatch.setattr("sys.argv", ["pipeline_evaluation_run.py", "--mode", "structuralist", "-v"])
+        monkeypatch.setattr(
+            "sys.argv", ["pipeline_evaluation_run.py", "--mode", "structuralist", "-v"]
+        )
         args = parse_args()
         assert args.mode == "structuralist"
         assert args.verbose is True

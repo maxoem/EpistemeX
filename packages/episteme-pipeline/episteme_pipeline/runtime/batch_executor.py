@@ -8,10 +8,10 @@ and first-batch systematic failure guards across all pipeline phases.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Sequence
 from itertools import batched
-import logging
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel
@@ -292,7 +292,9 @@ class CheckpointedBatchExecutor[ItemT, OutT]:
                 raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
                 for res in raw_results:
-                    if isinstance(res, BaseException) and not isinstance(res, Exception):
+                    if isinstance(res, BaseException) and not isinstance(
+                        res, Exception
+                    ):
                         raise res
 
                 batch_outputs = []
@@ -582,7 +584,7 @@ class CheckpointedStreamExecutor[StreamKeyT, ItemT, StateT, OutT]:
                     key = self.item_key_fn(item)
                     try:
                         output = await self.process_item_fn(item, state)
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001 baseline
                         logger.error(
                             "Item %s processing failed (will retry on re-run): %s",
                             key,
@@ -622,9 +624,7 @@ class CheckpointedStreamExecutor[StreamKeyT, ItemT, StateT, OutT]:
 
                     succeeded_total += 1
                     stream_outputs.append(output)
-                    stream_records.append(
-                        PhaseItemRecord(key=key, status="completed")
-                    )
+                    stream_records.append(PhaseItemRecord(key=key, status="completed"))
                     if on_item_advance is not None:
                         on_item_advance(1)
 
@@ -650,4 +650,3 @@ class CheckpointedStreamExecutor[StreamKeyT, ItemT, StateT, OutT]:
 
 # Alias for alternative terminology
 BatchCheckpointExecutor = CheckpointedBatchExecutor
-

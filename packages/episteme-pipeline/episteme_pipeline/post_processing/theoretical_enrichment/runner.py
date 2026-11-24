@@ -28,8 +28,6 @@ from episteme_pipeline.contracts.domain import (
     TheoryAtom,
     TheoryRelation,
 )
-from episteme_pipeline.events.bus import EventEmitter
-from episteme_pipeline.events.context import get_event_emitter
 from episteme_pipeline.llm.structured import StructuredLLM, ensure_structured_llm
 from episteme_pipeline.post_processing.theoretical_enrichment.enrichment_models import (
     EmpiricalCluster,
@@ -174,12 +172,14 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             )
         )
         self.registry = registry or TheoryRegistry()
-        self.llm: StructuredLLM | None = ensure_structured_llm(llm) if llm is not None else None
+        self.llm: StructuredLLM | None = (
+            ensure_structured_llm(llm) if llm is not None else None
+        )
         self.theorynet_projector: TheoryNetProjector = (
             theorynet_projector or TheoryNetProjector(schema=self.schema)
         )
-        self.deficit_detector: EpistemicDeficitDetector | None = ensure_deficit_detector(
-            deficit_detector
+        self.deficit_detector: EpistemicDeficitDetector | None = (
+            ensure_deficit_detector(deficit_detector)
         )
 
         if inducer is not None:
@@ -214,7 +214,6 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
     def checkpoint_store(self) -> PhaseCheckpointStore:
         """Return the active checkpoint store for within-phase batch checkpointing."""
         return self._checkpoint_store
-
 
     def _resolve_curated_inputs(
         self,
@@ -316,8 +315,14 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         # -------------------------------------------------------------
         # Stage 0: Dynamic Theory-Element Induction (Macro Scope)
         # -------------------------------------------------------------
-        if not self.registry.all_theories() and self.config.induce_theories and self.inducer:
-            logger.info("Theoretical Enrichment: Registry is unseeded. Running LLM Theory-Element induction...")
+        if (
+            not self.registry.all_theories()
+            and self.config.induce_theories
+            and self.inducer
+        ):
+            logger.info(
+                "Theoretical Enrichment: Registry is unseeded. Running LLM Theory-Element induction..."
+            )
             induced = await self.inducer.induce_theories(
                 atoms=atoms,
                 relations=relations,
@@ -471,10 +476,11 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             build_epistemic_deficit_artifact,
             build_theory_graph_update_artifacts,
         )
-        from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
 
         enrichment_artifacts: list[ArtifactEnvelope[Any]] = []
-        enrichment_payloads: list[tuple[TheoreticalEnrichmentArtifact, EmpiricalCluster]] = []
+        enrichment_payloads: list[
+            tuple[TheoreticalEnrichmentArtifact, EmpiricalCluster]
+        ] = []
         updated_atoms_by_id: dict[str, TheoryAtom] = {}
         updated_rels_by_key: dict[str, TheoryRelation] = {}
         atoms_by_id: dict[str, TheoryAtom] = {a.id: a for a in atoms}
@@ -482,10 +488,15 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         for cluster in clusters:
             for theory_id in cluster.claimant_theory_ids:
                 theory = self.registry.get(theory_id)
-                if not theory or (cluster.cluster_id, theory_id) not in cluster_theory_params:
+                if (
+                    not theory
+                    or (cluster.cluster_id, theory_id) not in cluster_theory_params
+                ):
                     continue
 
-                projected_params = cluster_theory_params[(cluster.cluster_id, theory_id)]
+                projected_params = cluster_theory_params[
+                    (cluster.cluster_id, theory_id)
+                ]
                 ts_local, delta_star, local_anomalies = cluster_local_results[
                     (cluster.cluster_id, theory_id)
                 ]
@@ -611,8 +622,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         # -------------------------------------------------------------
         merged_atoms = [updated_atoms_by_id.get(a.id, a) for a in atoms]
         merged_relations = [
-            updated_rels_by_key.get(_enrichment_rel_key(r), r)
-            for r in relations
+            updated_rels_by_key.get(_enrichment_rel_key(r), r) for r in relations
         ]
         reconverged_net = self.theorynet_projector.project(
             Phase4ArtifactsView(
@@ -622,8 +632,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         )
         reconverged_atoms_by_id = {a.id: a for a in reconverged_net.atoms}
         reconverged_rels_by_key = {
-            _enrichment_rel_key(r): r
-            for r in reconverged_net.relations
+            _enrichment_rel_key(r): r for r in reconverged_net.relations
         }
         equilibrium_map = {
             a.id: float(a.equilibrium_strength)
@@ -697,13 +706,13 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             state_atoms = [
                 reconverged_atoms_map.get(
                     a.id,
-                    reconverged_atoms_by_id.get(
-                        a.id, updated_atoms_by_id.get(a.id, a)
-                    ),
+                    reconverged_atoms_by_id.get(a.id, updated_atoms_by_id.get(a.id, a)),
                 )
                 for a in atoms
             ]
-            reconverged_rels_map = {_enrichment_rel_key(r): r for r in relations_to_update}
+            reconverged_rels_map = {
+                _enrichment_rel_key(r): r for r in relations_to_update
+            }
             state_relations = [
                 reconverged_rels_map.get(
                     _enrichment_rel_key(r),
@@ -747,7 +756,9 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                 stamped = (
                     deficit
                     if deficit.detected_in_phase
-                    else deficit.model_copy(update={"detected_in_phase": self.phase_key})
+                    else deficit.model_copy(
+                        update={"detected_in_phase": self.phase_key}
+                    )
                 )
                 enrichment_artifacts.append(
                     build_epistemic_deficit_artifact(
@@ -782,7 +793,9 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                 len(relations_to_update),
             )
 
-        return ArtifactCollection(enrichment_artifacts), len(atoms_to_update) + len(relations_to_update)
+        return ArtifactCollection(enrichment_artifacts), len(atoms_to_update) + len(
+            relations_to_update
+        )
 
     def _identify_empirical_clusters(
         self, atoms: list[TheoryAtom], relations: list[TheoryRelation]
@@ -858,7 +871,9 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                 if obs.id == target_id:
                     # Prefer matching current_theory_id first if present
                     if (cluster.cluster_id, current_theory_id) in cluster_theory_params:
-                        return cluster_theory_params[(cluster.cluster_id, current_theory_id)]
+                        return cluster_theory_params[
+                            (cluster.cluster_id, current_theory_id)
+                        ]
                     for (c_id, t_id), params in cluster_theory_params.items():
                         if c_id == cluster.cluster_id:
                             return params

@@ -350,12 +350,18 @@ class TestSolverEquivalenceAndDynamics:
 
         assert conv_pw and conv_hy
         assert np.allclose(s_pw, s_hy, atol=1e-10)
-        assert np.allclose(tel_pw["support_energy"], tel_hy["support_energy"], atol=1e-10)
+        assert np.allclose(
+            tel_pw["support_energy"], tel_hy["support_energy"], atol=1e-10
+        )
         assert np.allclose(tel_pw["attack_energy"], tel_hy["attack_energy"], atol=1e-10)
-        assert np.allclose(tel_pw["volatility_index"], tel_hy["volatility_index"], atol=1e-10)
+        assert np.allclose(
+            tel_pw["volatility_index"], tel_hy["volatility_index"], atol=1e-10
+        )
         assert float(tel_hy["warrant_states"][0]) == pytest.approx(0.6, abs=1e-10)
 
-    def test_cyclic_bipartite_hypergraph_ode_converges_to_stationary_point(self) -> None:
+    def test_cyclic_bipartite_hypergraph_ode_converges_to_stationary_point(
+        self,
+    ) -> None:
         """Feedback cycle (A & B) -> C -> U -| inf_1 converges in augmented ODE integration."""
         w = np.array([0.8, 0.9, 0.25, 0.3], dtype=np.float64)  # A=0, B=1, C=2, U=3
         g_supp = np.zeros((4, 4), dtype=np.float64)
@@ -425,7 +431,12 @@ class TestSolverEquivalenceAndDynamics:
     def test_theory_graph_integration_and_insertion_order_invariance(self) -> None:
         """TheoryGraph.add_edge registers premises but never materializes warrant IDs as atoms."""
         tg = TheoryGraph("HyperTest")
-        tg.add_node("A", node_type=NodeType.CLAIM, base_score=0.9, epistemic_status=EpistemicStatus.NEUTRAL)
+        tg.add_node(
+            "A",
+            node_type=NodeType.CLAIM,
+            base_score=0.9,
+            epistemic_status=EpistemicStatus.NEUTRAL,
+        )
         tg.add_node("B", node_type=NodeType.CLAIM, base_score=0.9)
         tg.add_node("C", node_type=NodeType.CLAIM, base_score=0.1)
         tg.add_node("U", node_type=NodeType.CLAIM, base_score=0.9)
@@ -471,7 +482,10 @@ class TestSolverEquivalenceAndDynamics:
         fp_godel = QBAFGradualSemanticsSolver(t_norm="godel").fingerprint()
         assert fp_prod != fp_godel
         assert fp_godel["t_norm"] == "godel"
-        assert WeightedQuadraticEnergySolver(t_norm="godel").fingerprint()["t_norm"] == "godel"
+        assert (
+            WeightedQuadraticEnergySolver(t_norm="godel").fingerprint()["t_norm"]
+            == "godel"
+        )
 
         # Dangling undercutter target does not crash solver or leak into degrees
         dangling_res = solve_qbaf_gradual_semantics(
@@ -500,14 +514,18 @@ class TestSolverEquivalenceAndDynamics:
                 calls.append(len(hyperedges or ()))
                 return super().solve(base_scores, g_supp, g_att, hyperedges=hyperedges)
 
-        inj = _RecordingContinuousSolver(rtol=1e-5, atol=1e-7, t_max=20.0, t_norm="product")
+        inj = _RecordingContinuousSolver(
+            rtol=1e-5, atol=1e-7, t_max=20.0, t_norm="product"
+        )
         solver_a = QBAFGradualSemanticsSolver(
             use_continuous=True, t_norm="product", continuous_solver=inj
         )
         solver_b = QBAFGradualSemanticsSolver(
             use_continuous=True,
             t_norm="product",
-            continuous_solver=WeightedQuadraticEnergySolver(t_max=10.0, t_norm="product"),
+            continuous_solver=WeightedQuadraticEnergySolver(
+                t_max=10.0, t_norm="product"
+            ),
         )
         assert solver_a.fingerprint() != solver_b.fingerprint()
         assert solver_a.fingerprint()["continuous_solver"]["t_max"] == 20.0
@@ -528,7 +546,9 @@ class TestSolverEquivalenceAndDynamics:
         assert res.degrees["C"] > 0.2
 
     @pytest.mark.parametrize("continuous", [False, True])
-    def test_unweighted_binary_hyperedges_do_not_inflate_warrant(self, continuous: bool) -> None:
+    def test_unweighted_binary_hyperedges_do_not_inflate_warrant(
+        self, continuous: bool
+    ) -> None:
         """UNWEIGHTED_BINARY forces w0=1.0 and gate_factor=1.0 on admissible hyperedges."""
         nodes = {"P1": 0.8, "P2": 0.5, "C": 0.1}
         edges = [
@@ -546,7 +566,9 @@ class TestSolverEquivalenceAndDynamics:
 
         solver = QBAFGradualSemanticsSolver(use_continuous=continuous, t_norm="product")
         res = solver.solve(
-            nodes, edges=edges, normalization_mode=WeightNormalizationMode.UNWEIGHTED_BINARY
+            nodes,
+            edges=edges,
+            normalization_mode=WeightNormalizationMode.UNWEIGHTED_BINARY,
         )
         assert res.warrant_states["inf_bin"] == pytest.approx(1.0, abs=1e-6)
         # Expected energy onto C under UNWEIGHTED_BINARY is 1.0 * (0.8 * 0.5) = 0.4
@@ -614,18 +636,50 @@ class TestSolverEquivalenceAndDynamics:
         assert "w_u1" in res_reinstated.warrant_states
         assert res_undercut.warrant_states["w_u1"] == pytest.approx(0.9, abs=1e-5)
         # Active second-order undercutter weakens w_u1, raising w1 and reinstating C
-        assert res_reinstated.warrant_states["w_u1"] < res_undercut.warrant_states["w_u1"]
+        assert (
+            res_reinstated.warrant_states["w_u1"] < res_undercut.warrant_states["w_u1"]
+        )
         assert res_reinstated.warrant_states["w1"] > res_undercut.warrant_states["w1"]
         assert res_reinstated.degrees["C"] > res_undercut.degrees["C"]
 
     def test_conjunctive_reductio_discharge_and_perspective_isolation(self) -> None:
         """Conjunctive (asserted + suppositional) Reductio premises propagate refutation and discharge."""
         nodes = [
-            TheoryNode(id="A", name="A", node_type=NodeType.CLAIM, base_score=0.9, intensional_mode="asserted"),
-            TheoryNode(id="S", name="S", node_type=NodeType.CLAIM, base_score=0.85, intensional_mode="suppositional"),
-            TheoryNode(id="Q", name="Q", node_type=NodeType.CLAIM, base_score=0.5, intensional_mode="suppositional"),
-            TheoryNode(id="R", name="R", node_type=NodeType.CLAIM, base_score=0.95, intensional_mode="asserted"),
-            TheoryNode(id="T", name="T", node_type=NodeType.CLAIM, base_score=0.3, intensional_mode="asserted"),
+            TheoryNode(
+                id="A",
+                name="A",
+                node_type=NodeType.CLAIM,
+                base_score=0.9,
+                intensional_mode="asserted",
+            ),
+            TheoryNode(
+                id="S",
+                name="S",
+                node_type=NodeType.CLAIM,
+                base_score=0.85,
+                intensional_mode="suppositional",
+            ),
+            TheoryNode(
+                id="Q",
+                name="Q",
+                node_type=NodeType.CLAIM,
+                base_score=0.5,
+                intensional_mode="suppositional",
+            ),
+            TheoryNode(
+                id="R",
+                name="R",
+                node_type=NodeType.CLAIM,
+                base_score=0.95,
+                intensional_mode="asserted",
+            ),
+            TheoryNode(
+                id="T",
+                name="T",
+                node_type=NodeType.CLAIM,
+                base_score=0.3,
+                intensional_mode="asserted",
+            ),
             TheoryNode(
                 id="Opp",
                 name="Opp",
@@ -634,9 +688,27 @@ class TestSolverEquivalenceAndDynamics:
                 intensional_mode="attributed",
                 attributed_to="Opponent",
             ),
-            TheoryNode(id="S2", name="S2", node_type=NodeType.CLAIM, base_score=0.85, intensional_mode="suppositional"),
-            TheoryNode(id="Q_opp", name="Q_opp", node_type=NodeType.CLAIM, base_score=0.5, intensional_mode="suppositional"),
-            TheoryNode(id="T_opp", name="T_opp", node_type=NodeType.CLAIM, base_score=0.25, intensional_mode="asserted"),
+            TheoryNode(
+                id="S2",
+                name="S2",
+                node_type=NodeType.CLAIM,
+                base_score=0.85,
+                intensional_mode="suppositional",
+            ),
+            TheoryNode(
+                id="Q_opp",
+                name="Q_opp",
+                node_type=NodeType.CLAIM,
+                base_score=0.5,
+                intensional_mode="suppositional",
+            ),
+            TheoryNode(
+                id="T_opp",
+                name="T_opp",
+                node_type=NodeType.CLAIM,
+                base_score=0.25,
+                intensional_mode="asserted",
+            ),
         ]
         edges = [
             # Valid conjunctive reductio: (A & S) -> Q; R -| Q; S -| T

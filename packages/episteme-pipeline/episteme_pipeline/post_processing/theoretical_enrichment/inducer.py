@@ -148,7 +148,9 @@ class LLMTheoryInducer:
                 observations.append(atom)
 
         if not hypotheses:
-            logger.info("LLMTheoryInducer: No TheoreticalHypothesis nodes found to induce theories from.")
+            logger.info(
+                "LLMTheoryInducer: No TheoreticalHypothesis nodes found to induce theories from."
+            )
             return []
 
         # Format prompt context
@@ -184,7 +186,7 @@ class LLMTheoryInducer:
                 structural_relations=rel_str,
                 max_theories=max_theories,
             )
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 baseline
             logger.error("LLMTheoryInducer failed structured induction: %s", err)
             return []
 

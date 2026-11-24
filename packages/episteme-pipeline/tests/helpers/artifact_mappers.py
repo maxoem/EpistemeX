@@ -58,13 +58,21 @@ def map_phase2_output_to_artifacts(
         mention_artifact_ids: list[str] = []
         for chunk_id in entity.source_chunk_ids:
             mention = build_entity_mention_artifact(
-                entity, chunk_id, run_id=run_id, phase_name=phase_name, method="phase2.mapper"
+                entity,
+                chunk_id,
+                run_id=run_id,
+                phase_name=phase_name,
+                method="phase2.mapper",
             )
             mention_artifact_ids.append(mention.artifact_id)
             artifacts.append(mention)
         artifacts.append(
             build_linked_entity_artifact(
-                entity, mention_artifact_ids, run_id=run_id, phase_name=phase_name, method="phase2.mapper"
+                entity,
+                mention_artifact_ids,
+                run_id=run_id,
+                phase_name=phase_name,
+                method="phase2.mapper",
             )
         )
     for triple in output.local_triples:
@@ -88,7 +96,11 @@ def map_phase3_output_to_artifacts(
         relation_dist[triple.predicate] += 1
     return [
         build_global_relation_artifact(
-            triple, relation_dist, run_id=run_id, phase_name=phase_name, method="phase3.mapper"
+            triple,
+            relation_dist,
+            run_id=run_id,
+            phase_name=phase_name,
+            method="phase3.mapper",
         )
         for triple in output.global_triples
     ]

@@ -148,7 +148,11 @@ def to_studio_event(
         level = event_data["level"]
     elif raw_type in _ERROR_EVENTS or "error" in raw_type.lower():
         level = "error"
-    elif raw_type in _WARNING_EVENTS or "warning" in raw_type.lower() or "rejected" in raw_type.lower():
+    elif (
+        raw_type in _WARNING_EVENTS
+        or "warning" in raw_type.lower()
+        or "rejected" in raw_type.lower()
+    ):
         level = "warning"
     elif "duration" in raw_type.lower() or "debug" in raw_type.lower():
         level = "debug"
@@ -159,7 +163,7 @@ def to_studio_event(
     elif isinstance(ts_val, str):
         try:
             ts = datetime.fromisoformat(ts_val)
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             ts = datetime.now(UTC)
     else:
         ts = datetime.now(UTC)
@@ -187,7 +191,7 @@ def to_studio_event(
             sel = event_data.get("selected_value")
             acc = float(event_data.get("empirical_accuracy", 0.0) or 0.0)
             dur = float(event_data.get("duration_seconds", 0.0) or 0.0)
-            message = f"Decision {prim}: {sel} (acc={acc:.1%}, {dur*1000:.1f}ms)"
+            message = f"Decision {prim}: {sel} (acc={acc:.1%}, {dur * 1000:.1f}ms)"
         elif raw_type == "DecisionGatingTriggered":
             gate = event_data.get("gate_name", "gate")
             act = event_data.get("action_taken", "action")
@@ -212,7 +216,15 @@ def to_studio_event(
     payload = {
         k: v
         for k, v in event_data.items()
-        if k not in {"timestamp", "run_id", "phase", "_raw_type", "_dropped_before", "message"}
+        if k
+        not in {
+            "timestamp",
+            "run_id",
+            "phase",
+            "_raw_type",
+            "_dropped_before",
+            "message",
+        }
     }
 
     effective_dropped = event_data.get("_dropped_before", dropped_before)

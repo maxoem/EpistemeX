@@ -75,13 +75,21 @@ class EnthymemeGapSubDetector:
         list of EpistemicDeficit
             Detected enthymeme gap signals.
         """
-        max_pr = max((analysis.pr_scores.get(aid, 0.0) for aid in analysis.a_atoms), default=0.0)
-        max_btw = max((analysis.btw_scores.get(aid, 0.0) for aid in analysis.a_atoms), default=0.0)
+        max_pr = max(
+            (analysis.pr_scores.get(aid, 0.0) for aid in analysis.a_atoms), default=0.0
+        )
+        max_btw = max(
+            (analysis.btw_scores.get(aid, 0.0) for aid in analysis.a_atoms), default=0.0
+        )
         core_claims = [
             analysis.atoms_by_id[aid].text
             for aid in sorted(
                 analysis.a_atoms,
-                key=lambda x: (-analysis.pr_scores.get(x, 0.0), -analysis.btw_scores.get(x, 0.0), x),
+                key=lambda x: (
+                    -analysis.pr_scores.get(x, 0.0),
+                    -analysis.btw_scores.get(x, 0.0),
+                    x,
+                ),
             )[:5]
         ]
         macro_dims = sorted(
@@ -90,7 +98,10 @@ class EnthymemeGapSubDetector:
 
         deficits: list[EpistemicDeficit] = []
         for atom in sorted(analysis.atoms, key=lambda a: a.id):
-            if atom.id not in analysis.a_atoms or atom.intensional_mode == "suppositional":
+            if (
+                atom.id not in analysis.a_atoms
+                or atom.intensional_mode == "suppositional"
+            ):
                 continue
 
             centrality = float(analysis.pr_scores.get(atom.id, 0.0))
@@ -270,9 +281,7 @@ class PolysemyCollisionSubDetector:
         covered_relations: set[str] = set()
 
         split_parent_ids: set[str] = {
-            e.id.split("__sense_", 1)[0]
-            for e in state.entities
-            if "__sense_" in e.id
+            e.id.split("__sense_", 1)[0] for e in state.entities if "__sense_" in e.id
         }
         cannot_link_ids: set[str] = set()
         if curation_ledger is not None:
@@ -310,7 +319,9 @@ class PolysemyCollisionSubDetector:
                 and ent.source_chunk_ids
             ):
                 ent_chunks = set(ent.source_chunk_ids)
-                linked_atoms = [a for a in analysis.atoms if a.source_chunk_id in ent_chunks]
+                linked_atoms = [
+                    a for a in analysis.atoms if a.source_chunk_id in ent_chunks
+                ]
 
             linked_ids = {a.id for a in linked_atoms}
             touching_rels = dedup_relations(
@@ -362,10 +373,15 @@ class PolysemyCollisionSubDetector:
             ts_values = [
                 ts
                 for rel in (implicated_rels or touching_rels)
-                if (ts := lookup_edge_tenability(rel, analysis.edge_tenability_map)) is not None
+                if (ts := lookup_edge_tenability(rel, analysis.edge_tenability_map))
+                is not None
             ]
             min_ts_edge = min(ts_values) if ts_values else 1.0
-            polysemy_var = float(ent.polysemy_variance) if ent.polysemy_variance is not None else 0.0
+            polysemy_var = (
+                float(ent.polysemy_variance)
+                if ent.polysemy_variance is not None
+                else 0.0
+            )
 
             if not (
                 max_vol >= cfg.polysemy_volatility_threshold
@@ -391,7 +407,9 @@ class PolysemyCollisionSubDetector:
                 for aid in target_atoms
                 for enr in analysis.atom_to_enrichments.get(aid, [])
             ]
-            theory_ids = dedup_preserve_order([e.theory_id for e in enrs if e.theory_id])
+            theory_ids = dedup_preserve_order(
+                [e.theory_id for e in enrs if e.theory_id]
+            )
 
             deficits.append(
                 EpistemicDeficit(
@@ -406,7 +424,9 @@ class PolysemyCollisionSubDetector:
                     theory_lens={
                         "entity_name": ent.name,
                         "entity_label": ent.label,
-                        "conception_perspectives": [c.perspective for c in ent.conceptions],
+                        "conception_perspectives": [
+                            c.perspective for c in ent.conceptions
+                        ],
                         "conflicting_theories": theory_ids,
                         "conflicting_clusters": dedup_preserve_order(
                             [e.cluster_id for e in enrs]
@@ -447,7 +467,8 @@ class PolysemyCollisionSubDetector:
             ts_values = [
                 ts
                 for rel in touching_rels
-                if (ts := lookup_edge_tenability(rel, analysis.edge_tenability_map)) is not None
+                if (ts := lookup_edge_tenability(rel, analysis.edge_tenability_map))
+                is not None
             ]
             min_ts_edge = min(ts_values) if ts_values else 1.0
             if not (
@@ -507,7 +528,9 @@ class PolysemyCollisionSubDetector:
                 for aid in target_atoms
                 for enr in analysis.atom_to_enrichments.get(aid, [])
             ]
-            theory_ids = dedup_preserve_order([e.theory_id for e in enrs if e.theory_id])
+            theory_ids = dedup_preserve_order(
+                [e.theory_id for e in enrs if e.theory_id]
+            )
 
             severity = self._polysemy_severity(
                 max_vol=vol,
@@ -581,7 +604,10 @@ class PolysemyCollisionSubDetector:
                     for eb in eids_b:
                         if ea == eb:
                             continue
-                        if curation_ledger is not None and curation_ledger.is_cannot_link(ea, eb):
+                        if (
+                            curation_ledger is not None
+                            and curation_ledger.is_cannot_link(ea, eb)
+                        ):
                             return True
                         if (
                             "__sense_" in ea
@@ -747,10 +773,14 @@ class PolysemyCollisionSubDetector:
         edge_part = 0.0
         if min_ts_edge < cfg.polysemy_edge_tenability_threshold:
             denom = max(cfg.polysemy_edge_tenability_threshold, 1e-6)
-            deficit_ratio = (cfg.polysemy_edge_tenability_threshold - min_ts_edge) / denom
+            deficit_ratio = (
+                cfg.polysemy_edge_tenability_threshold - min_ts_edge
+            ) / denom
             edge_part = 0.55 + 0.40 * min(1.0, max(0.0, deficit_ratio))
 
-        bonus = 0.05 if (vol_part > 0.0 and edge_part > 0.0) or polysemy_var > 0.0 else 0.0
+        bonus = (
+            0.05 if (vol_part > 0.0 and edge_part > 0.0) or polysemy_var > 0.0 else 0.0
+        )
         return min(1.0, round(max(vol_part, edge_part) + bonus, 4))
 
 
@@ -849,7 +879,10 @@ class UngroundedAxiomSubDetector:
             )
             severity = min(
                 1.0,
-                max(0.55 if not (low_local or untenable) else 0.60, round(0.60 + 0.35 * gap, 4)),
+                max(
+                    0.55 if not (low_local or untenable) else 0.60,
+                    round(0.60 + 0.35 * gap, 4),
+                ),
             )
 
             param_names = sorted(
@@ -901,7 +934,9 @@ class UngroundedAxiomSubDetector:
                     ),
                     metrics={
                         "ts_local": round(ts_local, 6),
-                        "aggregated_tenability": round(float(enr.aggregated_tenability), 6),
+                        "aggregated_tenability": round(
+                            float(enr.aggregated_tenability), 6
+                        ),
                         "tau_star": round(min_tau_star, 6),
                     },
                     detected_in_phase=phase_label,
@@ -936,7 +971,9 @@ class UngroundedAxiomSubDetector:
                 and ts_local < cfg.ungrounded_local_tenability_threshold
             )
             untenable = atom.tenability is not None and not atom.tenability.is_tenable
-            no_obs_in_cluster = analysis.cluster_b_counts.get(atom.source_chunk_id, 0) == 0
+            no_obs_in_cluster = (
+                analysis.cluster_b_counts.get(atom.source_chunk_id, 0) == 0
+            )
             # Trigger missing-B-base UNGROUNDED_AXIOM when atom is empirically isolated
             # (0 incident argument edges) or explicitly requires dimensions.
             enrs = analysis.atom_to_enrichments.get(atom.id, [])
@@ -962,9 +999,9 @@ class UngroundedAxiomSubDetector:
             )
 
             if low_ts or untenable:
-                gap = max(0.0, cfg.ungrounded_local_tenability_threshold - eff_ts_local) / max(
-                    cfg.ungrounded_local_tenability_threshold, 1e-6
-                )
+                gap = max(
+                    0.0, cfg.ungrounded_local_tenability_threshold - eff_ts_local
+                ) / max(cfg.ungrounded_local_tenability_threshold, 1e-6)
                 severity = min(1.0, max(0.55, round(0.55 + 0.45 * gap, 4)))
             elif isolated_no_obs:
                 prior = atom.modal_prior if atom.modal_prior is not None else 0.6

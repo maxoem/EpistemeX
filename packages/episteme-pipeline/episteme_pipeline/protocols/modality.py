@@ -66,7 +66,9 @@ class ModalStrengthResolver(Fingerprintable, Protocol):
         ...
 
 
-def ensure_modal_strength_resolver(resolver: Any | None) -> ModalStrengthResolver | None:
+def ensure_modal_strength_resolver(
+    resolver: Any | None,
+) -> ModalStrengthResolver | None:
     """Normalize an optional user-supplied object into a ModalStrengthResolver.
 
     Parameters

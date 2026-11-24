@@ -97,7 +97,9 @@ def _cypher_identifier(value: str, *, kind: str) -> str:
     return normalised
 
 
-def _normalize_phase_key(phase: str, *, kind: str = "phase identifier") -> tuple[str, str]:
+def _normalize_phase_key(
+    phase: str, *, kind: str = "phase identifier"
+) -> tuple[str, str]:
     """Validate a phase identifier (including lineage-scoped ``phase:fp``) and return ``(phase_value, safe_prop_prefix)``.
 
     Parameters
@@ -243,7 +245,9 @@ class _Neo4jConnection:
                     try:
                         from neo4j import AsyncGraphDatabase
                     except ImportError:
-                        raise RuntimeError("neo4j package is required: pip install neo4j")
+                        raise RuntimeError(
+                            "neo4j package is required: pip install neo4j"
+                        )
                     self._driver = AsyncGraphDatabase.driver(
                         self.url, auth=(self.username, self.password)
                     )
@@ -312,11 +316,9 @@ class _Neo4jWriteMixin:
             query += "SET n" + "".join(f":`{extra}`" for extra in extras) + " "
         query += "SET n += $props"
         props = _writable_props({**properties, "id": node_id})
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
-                await tx.run(
-                    query, id=node_id, props=props, create_props=create_props
-                )
+                await tx.run(query, id=node_id, props=props, create_props=create_props)
                 await tx.commit()
 
     async def upsert_nodes(
@@ -353,11 +355,13 @@ class _Neo4jWriteMixin:
             node_id = str(n["id"])
             raw_props = dict(n.get("props") or n.get("properties") or {})
             raw_create = dict(n.get("create_props") or {})
-            batch_data.append({
-                "id": node_id,
-                "props": _writable_props({**raw_props, "id": node_id}),
-                "create_props": _writable_props(raw_create),
-            })
+            batch_data.append(
+                {
+                    "id": node_id,
+                    "props": _writable_props({**raw_props, "id": node_id}),
+                    "create_props": _writable_props(raw_create),
+                }
+            )
 
         query = f"UNWIND $batch AS item MERGE (n:`{primary}` {{id: item.id}}) "
         query += "ON CREATE SET n += item.create_props "
@@ -365,26 +369,26 @@ class _Neo4jWriteMixin:
             query += "SET n" + "".join(f":`{extra}`" for extra in extras) + " "
         query += "SET n += item.props"
 
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 await tx.run(query, batch=batch_data)
                 await tx.commit()
 
-    async def upsert_relations(
-        self, relations: list[dict]
-    ) -> None:
+    async def upsert_relations(self, relations: list[dict]) -> None:
         if not relations:
             return
         rels_by_type: dict[str, list[dict]] = {}
         for r in relations:
             rel_safe = _cypher_identifier(r["relation_type"], kind="relationship type")
-            rels_by_type.setdefault(rel_safe, []).append({
-                "from_id": r["from_id"],
-                "to_id": r["to_id"],
-                "props": _writable_props(r.get("properties") or {})
-            })
-            
-        async with self._session() as session:
+            rels_by_type.setdefault(rel_safe, []).append(
+                {
+                    "from_id": r["from_id"],
+                    "to_id": r["to_id"],
+                    "props": _writable_props(r.get("properties") or {}),
+                }
+            )
+
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 for rel_type, batch_data in rels_by_type.items():
                     query = f"""
@@ -404,12 +408,16 @@ class _Neo4jWriteMixin:
         to_id: str,
         properties: dict | None = None,
     ) -> None:
-        await self.upsert_relations([{
-            "from_id": from_id, 
-            "relation_type": relation_type, 
-            "to_id": to_id, 
-            "properties": properties
-        }])
+        await self.upsert_relations(
+            [
+                {
+                    "from_id": from_id,
+                    "relation_type": relation_type,
+                    "to_id": to_id,
+                    "properties": properties,
+                }
+            ]
+        )
 
     async def upsert_chunks(self, chunks: list[L1Chunk]) -> None:
         if not chunks:
@@ -426,13 +434,15 @@ class _Neo4jWriteMixin:
             if c.metadata:
                 props.update(c.metadata)
             create_props = props.pop("_create_props", {})
-            batch_data.append({
-                "id": c.id,
-                "props": _writable_props(props),
-                "create_props": _writable_props(create_props)
-            })
+            batch_data.append(
+                {
+                    "id": c.id,
+                    "props": _writable_props(props),
+                    "create_props": _writable_props(create_props),
+                }
+            )
 
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 await tx.run(query, batch=batch_data)
                 await tx.commit()
@@ -476,7 +486,7 @@ class _Neo4jWriteMixin:
             "FOREACH (n IN dead_chapters | DETACH DELETE n) "
             "RETURN chunks_deleted, size(dead_chapters) AS chapters_deleted"
         )
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 result = await tx.run(
                     query,
@@ -522,16 +532,14 @@ class _Neo4jWriteMixin:
             "FOREACH (x IN dead | DETACH DELETE x) "
             "RETURN size(dead) AS deleted_count"
         )
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 result = await tx.run(query, entity_ids=cleaned)
                 row = await result.single()
                 await tx.commit()
         return int(row["deleted_count"]) if row else 0
 
-    async def prune_retired_mentions(
-        self, mentions: list[tuple[str, str]]
-    ) -> int:
+    async def prune_retired_mentions(self, mentions: list[tuple[str, str]]) -> int:
         """Delete retired ``EXTRACTED_FROM`` edges between entities and chunks in Neo4j.
 
         Parameters
@@ -558,7 +566,7 @@ class _Neo4jWriteMixin:
             "FOREACH (rel IN dead_rels | DELETE rel) "
             "RETURN size(dead_rels) AS deleted_count"
         )
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 result = await tx.run(query, mentions=payload)
                 row = await result.single()
@@ -568,7 +576,7 @@ class _Neo4jWriteMixin:
     async def upsert_entities(self, entities: list[L2Entity]) -> None:
         if not entities:
             return
-        
+
         # In Cypher, we cannot set dynamic labels cleanly from a parameter in SET.
         # But we can group entities by label, and do one UNWIND per label.
         entities_by_label: dict[str, list[dict]] = {}
@@ -578,13 +586,13 @@ class _Neo4jWriteMixin:
                 props.pop("is_mature", None)
             if not e.conceptions:
                 props.pop("conceptions", None)
-            
+
             label_safe = _cypher_identifier(e.label, kind="label")
             entities_by_label.setdefault(label_safe, []).append(
                 {"id": e.id, "props": _writable_props(props)}
             )
-        
-        async with self._session() as session:
+
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 for label, batch_data in entities_by_label.items():
                     query = f"""
@@ -619,26 +627,26 @@ class _Neo4jWriteMixin:
         labelled = int(row["labelled"]) if row else 0
         logger.info("Backfilled :%s onto %d nodes.", ENTITY_LABEL, labelled)
         return labelled
-        
+
     async def upsert_triples(self, triples: list[L2Triple]) -> None:
         if not triples:
             return
-        
+
         triples_by_rel: dict[str, list[dict]] = {}
         for t in triples:
             rel_safe = _cypher_identifier(t.predicate, kind="relationship type")
-            props = _writable_props({
-                "confidence": t.confidence,
-                "scope": t.scope,
-                "source_chunk_id": t.source_chunk_id,
-            })
-            triples_by_rel.setdefault(rel_safe, []).append({
-                "from_id": t.subject_id,
-                "to_id": t.object_id,
-                "props": props
-            })
-            
-        async with self._session() as session:
+            props = _writable_props(
+                {
+                    "confidence": t.confidence,
+                    "scope": t.scope,
+                    "source_chunk_id": t.source_chunk_id,
+                }
+            )
+            triples_by_rel.setdefault(rel_safe, []).append(
+                {"from_id": t.subject_id, "to_id": t.object_id, "props": props}
+            )
+
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 for rel_type, batch_data in triples_by_rel.items():
                     query = f"""
@@ -684,7 +692,7 @@ class _Neo4jWriteMixin:
                 props.pop("entity_ids", None)
             batch_data.append({"id": c.id, "props": _writable_props(props)})
 
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 await tx.run(query, batch=batch_data)
                 await tx.commit()
@@ -713,13 +721,15 @@ class _Neo4jWriteMixin:
         for rel in relations:
             rel_safe = _cypher_identifier(rel.relation_type, kind="relationship type")
             props = theory_relation_to_graph_properties(rel)
-            rels_by_type.setdefault(rel_safe, []).append({
-                "from_id": rel.source_id,
-                "to_id": rel.target_id,
-                "props": _writable_props(props),
-            })
+            rels_by_type.setdefault(rel_safe, []).append(
+                {
+                    "from_id": rel.source_id,
+                    "to_id": rel.target_id,
+                    "props": _writable_props(props),
+                }
+            )
 
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 for rel_type, batch_data in rels_by_type.items():
                     query = f"""
@@ -754,13 +764,17 @@ class _Neo4jWriteMixin:
         MATCH (e {id: entity_id})
         MERGE (e)-[:IN_COMMUNITY]->(c)
         """
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 await tx.run(query_node, batch=communities)
                 await tx.commit()
 
-    async def upsert_community(self, community_id: str, level: int, entity_ids: list[str]) -> None:
-        await self.upsert_communities([{"community_id": community_id, "level": level, "entity_ids": entity_ids}])
+    async def upsert_community(
+        self, community_id: str, level: int, entity_ids: list[str]
+    ) -> None:
+        await self.upsert_communities(
+            [{"community_id": community_id, "level": level, "entity_ids": entity_ids}]
+        )
 
 
 #: Projects an entity row. ``labels(n)[0]`` is arbitrary for a multi-labelled
@@ -782,7 +796,9 @@ def _entity_from_row(row: dict) -> L2Entity:
             loaded_c = json.loads(raw_conceptions)
             if isinstance(loaded_c, list):
                 conceptions = [
-                    c if isinstance(c, EntityConception) else EntityConception.model_validate(c)
+                    c
+                    if isinstance(c, EntityConception)
+                    else EntityConception.model_validate(c)
                     for c in loaded_c
                 ]
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
@@ -933,7 +949,7 @@ class _Neo4jReadMixin:
                             row.get("id"),
                             type(loaded).__name__,
                         )
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 baseline
                     logger.warning(
                         "Failed to parse parameters JSON for TheoryAtom %s: %s",
                         row.get("id"),
@@ -949,10 +965,12 @@ class _Neo4jReadMixin:
                     data = json.loads(raw_meas)
                     if isinstance(data, list):
                         meas_list = [
-                            m if isinstance(m, Measurement) else Measurement.model_validate(m)
+                            m
+                            if isinstance(m, Measurement)
+                            else Measurement.model_validate(m)
                             for m in data
                         ]
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 baseline
                     logger.warning(
                         "Failed to parse measurements JSON for TheoryAtom %s: %s",
                         row.get("id"),
@@ -961,10 +979,12 @@ class _Neo4jReadMixin:
             elif isinstance(raw_meas, list):
                 try:
                     meas_list = [
-                        m if isinstance(m, Measurement) else Measurement.model_validate(m)
+                        m
+                        if isinstance(m, Measurement)
+                        else Measurement.model_validate(m)
                         for m in raw_meas
                     ]
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 baseline
                     logger.warning(
                         "Failed to validate measurements list for TheoryAtom %s: %s",
                         row.get("id"),
@@ -976,7 +996,7 @@ class _Neo4jReadMixin:
             if isinstance(raw_tenab, str):
                 try:
                     tenability_res = TenabilityResult.model_validate_json(raw_tenab)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 baseline
                     logger.warning(
                         "Failed to parse tenability JSON for TheoryAtom %s: %s",
                         row.get("id"),
@@ -985,7 +1005,7 @@ class _Neo4jReadMixin:
             elif isinstance(raw_tenab, dict):
                 try:
                     tenability_res = TenabilityResult.model_validate(raw_tenab)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 baseline
                     logger.warning(
                         "Failed to validate tenability dict for TheoryAtom %s: %s",
                         row.get("id"),
@@ -1069,7 +1089,9 @@ class _Neo4jReadMixin:
             by_id[rel.relation_id] = rel
         return list(by_id.values())
 
-    async def find_entities_by_name(self, name: str, label: str | None = None) -> list[L2Entity]:
+    async def find_entities_by_name(
+        self, name: str, label: str | None = None
+    ) -> list[L2Entity]:
         label_filter = (
             f"AND n:`{_cypher_identifier(label, kind='label')}` " if label else ""
         )
@@ -1087,7 +1109,9 @@ class _Neo4jReadMixin:
             rows = await result.data()
         return [_entity_from_row(row) for row in rows]
 
-    async def get_chunks(self, filters: dict | None = None, limit: int | None = None) -> list[L1Chunk]:
+    async def get_chunks(
+        self, filters: dict | None = None, limit: int | None = None
+    ) -> list[L1Chunk]:
         clause, params = _property_filter("c", filters)
         where = f"WHERE {clause}" if clause else ""
         limit_clause = f"LIMIT {int(limit)}" if limit else ""
@@ -1112,7 +1136,9 @@ class _Neo4jReadMixin:
             for row in rows
         ]
 
-    async def get_entities(self, labels: list[str] | None = None, filters: dict | None = None) -> list[L2Entity]:
+    async def get_entities(
+        self, labels: list[str] | None = None, filters: dict | None = None
+    ) -> list[L2Entity]:
         conditions: list[str] = []
         if labels:
             safe = [_cypher_identifier(label, kind="label") for label in labels]
@@ -1136,7 +1162,7 @@ class _Neo4jReadMixin:
         async with self._session() as session:
             result = await session.run(query)
             rows = await result.data()
-        
+
         return [
             L2Triple(
                 subject_id=row["subj"],
@@ -1183,7 +1209,9 @@ class _Neo4jReadMixin:
         hops = max(1, int(depth))
         if getattr(self, "_apoc_available", True):
             try:
-                rows = await self._run_neighborhood(_apoc_neighborhood_query(), node_id, hops)
+                rows = await self._run_neighborhood(
+                    _apoc_neighborhood_query(), node_id, hops
+                )
             except Exception as exc:
                 if not _is_missing_procedure(exc):
                     raise
@@ -1198,7 +1226,9 @@ class _Neo4jReadMixin:
                     _plain_neighborhood_query(hops), node_id, hops
                 )
         else:
-            rows = await self._run_neighborhood(_plain_neighborhood_query(hops), node_id, hops)
+            rows = await self._run_neighborhood(
+                _plain_neighborhood_query(hops), node_id, hops
+            )
 
         nodes: list[L2Entity] = []
         triples: list[L2Triple] = []
@@ -1232,7 +1262,9 @@ class _Neo4jReadMixin:
 
         return SubGraph(center_id=node_id, nodes=nodes, triples=triples, depth=depth)
 
-    async def _run_neighborhood(self, query: str, node_id: str, depth: int) -> list[dict]:
+    async def _run_neighborhood(
+        self, query: str, node_id: str, depth: int
+    ) -> list[dict]:
         async with self._session() as session:
             result = await session.run(query, node_id=node_id, depth=depth)
             return await result.data()
@@ -1245,7 +1277,11 @@ class _Neo4jReadMixin:
         run_id: str | None = None,
     ) -> list[SearchResult]:
         where_conditions: list[str] = []
-        params: dict[str, Any] = {"index": "chunk_embedding", "k": top_k, "embedding": embedding}
+        params: dict[str, Any] = {
+            "index": "chunk_embedding",
+            "k": top_k,
+            "embedding": embedding,
+        }
         if node_label:
             safe_label = _cypher_identifier(node_label, kind="label")
             where_conditions.append(f"node:`{safe_label}`")
@@ -1269,7 +1305,12 @@ class _Neo4jReadMixin:
             result = await session.run(query, **params)
             rows = await result.data()
         return [
-            SearchResult(node_id=row["node_id"], score=row["score"], node_label=row["node_label"], node_name=row["node_name"])
+            SearchResult(
+                node_id=row["node_id"],
+                score=row["score"],
+                node_label=row["node_label"],
+                node_name=row["node_name"],
+            )
             for row in rows
         ]
 
@@ -1287,7 +1328,9 @@ class _Neo4jCheckpointMixin:
     async def mark_chunk_processed(self, chunk_id: str, phase: str) -> None:
         await self.mark_chunks_processed([chunk_id], phase)
 
-    async def get_unprocessed_chunks(self, phase: str, limit: int | None = None) -> list[L1Chunk]:
+    async def get_unprocessed_chunks(
+        self, phase: str, limit: int | None = None
+    ) -> list[L1Chunk]:
         _, safe_prefix = _normalize_phase_key(phase, kind="property name")
         limit_clause = f"LIMIT {limit}" if limit else ""
         query = (
@@ -1341,23 +1384,27 @@ class _Neo4jCheckpointMixin:
         triples_by_rel: dict[str, list[dict]] = {}
         for t in triples:
             rel_safe = _cypher_identifier(t.predicate, kind="relationship type")
-            props = _writable_props({
-                "confidence": t.confidence,
-                "scope": t.scope,
-                "source_chunk_id": t.source_chunk_id,
-            })
-            triples_by_rel.setdefault(rel_safe, []).append({
-                "from_id": t.subject_id,
-                "to_id": t.object_id,
-                "props": props,
-            })
+            props = _writable_props(
+                {
+                    "confidence": t.confidence,
+                    "scope": t.scope,
+                    "source_chunk_id": t.source_chunk_id,
+                }
+            )
+            triples_by_rel.setdefault(rel_safe, []).append(
+                {
+                    "from_id": t.subject_id,
+                    "to_id": t.object_id,
+                    "props": props,
+                }
+            )
 
         items_payload = [
             {"key": item.key, "status": item.status, "error": item.error}
             for item in items
         ]
 
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 for rel_type, batch_data in triples_by_rel.items():
                     query = f"""
@@ -1377,7 +1424,9 @@ class _Neo4jCheckpointMixin:
                         "    p.error = item.error, "
                         "    p.updated_at = datetime() "
                     )
-                    await tx.run(checkpoint_query, phase=phase_safe, items=items_payload)
+                    await tx.run(
+                        checkpoint_query, phase=phase_safe, items=items_payload
+                    )
                 await tx.commit()
 
     async def commit_phase_items(
@@ -1453,7 +1502,9 @@ class _Neo4jCheckpointMixin:
         prop_snapshot = f"{safe_prefix}_state_snapshot"
         prop_processed = f"{safe_prefix}_processed"
         query = "MATCH (p:PhaseItem {phase: $phase}) DELETE p"
-        query_chunk = f"MATCH (c:Chunk) REMOVE c.`{prop_snapshot}`, c.`{prop_processed}`"
+        query_chunk = (
+            f"MATCH (c:Chunk) REMOVE c.`{prop_snapshot}`, c.`{prop_processed}`"
+        )
         async with self._session() as session:
             await session.run(query, phase=phase_safe)
             await session.run(query_chunk)
@@ -1468,8 +1519,7 @@ class _Neo4jCheckpointMixin:
 
         phase_safe, _ = _normalize_phase_key(phase, kind="phase identifier")
         items_payload = [
-            {"key": k, "payload_json": json.dumps(v)}
-            for k, v in payloads.items()
+            {"key": k, "payload_json": json.dumps(v)} for k, v in payloads.items()
         ]
         query = (
             "UNWIND $items AS item "
@@ -1480,9 +1530,7 @@ class _Neo4jCheckpointMixin:
         async with self._session() as session:
             await session.run(query, phase=phase_safe, items=items_payload)
 
-    async def get_checkpoint_payloads(
-        self, phase: str
-    ) -> dict[str, dict[str, Any]]:
+    async def get_checkpoint_payloads(self, phase: str) -> dict[str, dict[str, Any]]:
         """Retrieve persisted intermediate item outputs from ``:PhaseItem`` nodes."""
         import json
 
@@ -1512,7 +1560,6 @@ class _Neo4jCheckpointMixin:
         return out
 
 
-
 class Neo4jGraphWriter(_Neo4jConnection, _Neo4jWriteMixin, ProjectionGraph):
     pass
 
@@ -1525,7 +1572,9 @@ class Neo4jGraphReader(
     pass
 
 
-class Neo4jCheckpointStore(_Neo4jConnection, _Neo4jCheckpointMixin, PhaseCheckpointStore):
+class Neo4jCheckpointStore(
+    _Neo4jConnection, _Neo4jCheckpointMixin, PhaseCheckpointStore
+):
     pass
 
 

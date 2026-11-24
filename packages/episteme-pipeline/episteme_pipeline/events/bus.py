@@ -8,6 +8,7 @@ The event system follows the Observer pattern:
 - EventObserver consumes events
 - Observers register with emitters to receive events
 """
+
 from __future__ import annotations
 
 from abc import abstractmethod
@@ -19,36 +20,36 @@ from .models import BaseEvent, PipelineEvent
 @runtime_checkable
 class EventEmitter(Protocol):
     """Protocol for event emitters.
-    
+
     Defines the interface for objects that can emit events to observers.
     """
-    
+
     @abstractmethod
     def emit(self, event: PipelineEvent) -> None:
         """Emit an event to all registered observers.
-        
+
         Parameters
         ----------
         event : PipelineEvent
             The event to emit.
         """
         ...
-        
+
     @abstractmethod
     def register_observer(self, observer: EventObserver) -> None:
         """Register an observer to receive events.
-        
+
         Parameters
         ----------
         observer : EventObserver
             The observer to register.
         """
         ...
-        
+
     @abstractmethod
     def unregister_observer(self, observer: EventObserver) -> None:
         """Unregister an observer.
-        
+
         Parameters
         ----------
         observer : EventObserver
@@ -83,14 +84,14 @@ class ResettableTelemetry(Protocol):
 @runtime_checkable
 class EventObserver(Protocol):
     """Protocol for event observers.
-    
+
     Defines the interface for objects that can consume events from emitters.
     """
-    
+
     @abstractmethod
     def on_event(self, event: PipelineEvent) -> None:
         """Handle an incoming event.
-        
+
         Parameters
         ----------
         event : PipelineEvent
@@ -114,32 +115,32 @@ class TelemetryReportingObserver(Protocol):
 
 class NoOpEventEmitter(EventEmitter):
     """No-op event emitter that discards all events.
-    
+
     This emitter can be used as a placeholder or for testing when event
     emission is not desired.
     """
-    
+
     def emit(self, event: PipelineEvent) -> None:
         """Discard the event.
-        
+
         Parameters
         ----------
         event : PipelineEvent
             The event to discard.
         """
-        
+
     def register_observer(self, observer: EventObserver) -> None:
         """No-op registration.
-        
+
         Parameters
         ----------
         observer : EventObserver
             The observer to register (ignored).
         """
-        
+
     def unregister_observer(self, observer: EventObserver) -> None:
         """No-op unregistration.
-        
+
         Parameters
         ----------
         observer : EventObserver
@@ -165,11 +166,11 @@ class NoOpEventEmitter(EventEmitter):
 
 class SimpleEventEmitter(EventEmitter):
     """Simple event emitter that broadcasts to all registered observers with failure isolation.
-    
+
     This emitter maintains a list of observers and broadcasts each event
     to all of them in sequence, tracking successful deliveries and isolated errors.
     """
-    
+
     def __init__(self, debug: bool = False) -> None:
         import logging
         from collections import defaultdict
@@ -181,10 +182,10 @@ class SimpleEventEmitter(EventEmitter):
         self._logger = logging.getLogger(self.__class__.__name__)
         if debug:
             self._logger.setLevel(logging.DEBUG)
-        
+
     def emit(self, event: PipelineEvent) -> None:
         """Broadcast event to all registered observers with failure isolation.
-        
+
         Parameters
         ----------
         event : PipelineEvent
@@ -192,34 +193,37 @@ class SimpleEventEmitter(EventEmitter):
         """
         if self._debug:
             from .models import get_event_type_name, serialize_event
-            self._logger.debug(f"Event Emitted [{get_event_type_name(event)}]: {serialize_event(event)}")
+
+            self._logger.debug(
+                f"Event Emitted [{get_event_type_name(event)}]: {serialize_event(event)}"
+            )
 
         for observer in list(self._observers):
             obs_name = observer.__class__.__name__
             try:
                 observer.on_event(event)
                 self.events_delivered[obs_name] += 1
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 baseline
                 self.observer_errors[obs_name].append(f"{type(exc).__name__}: {exc}")
                 self._logger.warning(
                     "Observer %s failed to process event: %s",
                     obs_name,
                     exc,
                 )
-            
+
     def register_observer(self, observer: EventObserver) -> None:
         """Register an observer.
-        
+
         Parameters
         ----------
         observer : EventObserver
             The observer to register.
         """
         self._observers.append(observer)
-        
+
     def unregister_observer(self, observer: EventObserver) -> None:
         """Unregister an observer.
-        
+
         Parameters
         ----------
         observer : EventObserver
@@ -234,10 +238,14 @@ class SimpleEventEmitter(EventEmitter):
             if isinstance(observer, EventObserver):
                 try:
                     observer.flush()
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 baseline
                     obs_name = observer.__class__.__name__
-                    self.observer_errors[obs_name].append(f"flush:{type(exc).__name__}: {exc}")
-                    self._logger.warning("Observer %s failed to flush: %s", obs_name, exc)
+                    self.observer_errors[obs_name].append(
+                        f"flush:{type(exc).__name__}: {exc}"
+                    )
+                    self._logger.warning(
+                        "Observer %s failed to flush: %s", obs_name, exc
+                    )
 
     def get_observer_telemetry(self) -> dict[str, Any]:
         """Return observer delivery statistics and recorded errors.
@@ -289,7 +297,9 @@ class ContextualEventEmitter(EventEmitter):
         Default fields to inject (e.g., {"run_id": "...", "phase": "..."}).
     """
 
-    def __init__(self, base: EventEmitter, defaults: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, base: EventEmitter, defaults: dict[str, Any] | None = None
+    ) -> None:
         self.base = base
         self.defaults = defaults or {}
 

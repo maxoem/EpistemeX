@@ -128,17 +128,13 @@ class Pipeline:
         self.modal_resolver = modal_resolver
 
         resolved_detector = ensure_deficit_detector(deficit_detector)
-        resolved_coordinator = ensure_refinement_coordinator(
-            refinement_coordinator
-        )
+        resolved_coordinator = ensure_refinement_coordinator(refinement_coordinator)
         self.deficit_detector = resolved_detector
 
         resolved_gates: Sequence[EpistemicQualityGate] = (
             quality_gates
             if quality_gates is not None
-            else build_default_quality_gates(
-                config, decision_engine=decision_engine
-            )
+            else build_default_quality_gates(config, decision_engine=decision_engine)
         )
 
         if workflow is not None:

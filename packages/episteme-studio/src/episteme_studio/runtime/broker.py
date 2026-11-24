@@ -22,12 +22,16 @@ class EventBroker:
 
     def __init__(self, capacity: int = 10000) -> None:
         self.capacity = capacity
-        self._buffers: dict[str, deque[StudioEvent]] = defaultdict(lambda: deque(maxlen=self.capacity))
+        self._buffers: dict[str, deque[StudioEvent]] = defaultdict(
+            lambda: deque(maxlen=self.capacity)
+        )
         self._seqs: dict[str, int] = defaultdict(int)
         self._notifiers: dict[str, set[asyncio.Event]] = defaultdict(set)
         self._closed_runs: set[str] = set()
 
-    def publish(self, run_id: str, event_data: dict[str, Any] | StudioEvent) -> StudioEvent:
+    def publish(
+        self, run_id: str, event_data: dict[str, Any] | StudioEvent
+    ) -> StudioEvent:
         """Publish a new telemetry event for a run.
 
         Assigns a monotonic sequence number, records the event in the ring buffer,
@@ -61,7 +65,9 @@ class EventBroker:
 
         return event
 
-    def get_history(self, run_id: str, since_seq: int | None = None) -> list[StudioEvent]:
+    def get_history(
+        self, run_id: str, since_seq: int | None = None
+    ) -> list[StudioEvent]:
         """Retrieve buffered event history for a run.
 
         Parameters
@@ -129,7 +135,9 @@ class EventBroker:
 
                 if not events_to_yield:
                     notifier.clear()
-                    if run_id in self._closed_runs and cursor_seq >= self._seqs.get(run_id, 0):
+                    if run_id in self._closed_runs and cursor_seq >= self._seqs.get(
+                        run_id, 0
+                    ):
                         break
                     try:
                         await asyncio.wait_for(notifier.wait(), timeout=15.0)

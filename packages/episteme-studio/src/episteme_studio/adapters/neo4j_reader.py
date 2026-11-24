@@ -63,8 +63,16 @@ def _serialize_neo4j_value(val: Any) -> Any:
 
     # Neo4j Relationship
     if hasattr(val, "type") and hasattr(val, "start_node") and hasattr(val, "end_node"):
-        start_id = getattr(val.start_node, "element_id", None) if hasattr(val, "start_node") else None
-        end_id = getattr(val.end_node, "element_id", None) if hasattr(val, "end_node") else None
+        start_id = (
+            getattr(val.start_node, "element_id", None)
+            if hasattr(val, "start_node")
+            else None
+        )
+        end_id = (
+            getattr(val.end_node, "element_id", None)
+            if hasattr(val, "end_node")
+            else None
+        )
         return {
             "_type": "Relationship",
             "id": getattr(val, "element_id", None),
@@ -157,8 +165,10 @@ class Neo4jReader:
             async with asyncio.timeout(timeout_seconds):
                 await driver.verify_connectivity()
             return driver
-        except Exception as err:
-            raise Neo4jUnavailableError(f"Could not establish connection to Neo4j at {url}: {err}")
+        except Exception as err:  # noqa: BLE001 baseline
+            raise Neo4jUnavailableError(
+                f"Could not establish connection to Neo4j at {url}: {err}"
+            )
 
     async def check_connectivity(self, timeout: float = 2.0) -> bool:
         """Verify driver connectivity to the Neo4j cluster or instance.
@@ -179,7 +189,7 @@ class Neo4jReader:
             async with asyncio.timeout(timeout):
                 await self._driver.verify_connectivity()
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             return False
 
     async def check_gds_availability(self, timeout: float = 2.0) -> bool:
@@ -198,9 +208,11 @@ class Neo4jReader:
         if self._driver is None:
             return False
         try:
-            res = await self.execute_cypher("RETURN gds.version() AS version", timeout=timeout)
+            res = await self.execute_cypher(
+                "RETURN gds.version() AS version", timeout=timeout
+            )
             return len(res.rows) > 0 and res.rows[0].get("version") is not None
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             return False
 
     async def execute_cypher(
@@ -257,7 +269,9 @@ class Neo4jReader:
                     default_access_mode=RoutingControl.READ,
                 ) as session:
                     # Execute in read mode to enforce server-side read-only semantics (D-23, D-26)
-                    async def _run_tx(tx: Any) -> tuple[list[str], list[dict[str, Any]]]:
+                    async def _run_tx(
+                        tx: Any,
+                    ) -> tuple[list[str], list[dict[str, Any]]]:
                         result = await tx.run(query, **(params or {}))
                         raw_keys = result.keys()
                         if inspect.isawaitable(raw_keys):
@@ -293,7 +307,11 @@ class Neo4jReader:
         except ClientError as e:
             code = getattr(e, "code", "")
             msg = str(e)
-            if "AccessMode" in code or "read access mode" in msg.lower() or "writing in read" in msg.lower():
+            if (
+                "AccessMode" in code
+                or "read access mode" in msg.lower()
+                or "writing in read" in msg.lower()
+            ):
                 raise Neo4jReadOnlyViolationError(
                     f"Write statement rejected by read access mode: {msg}"
                 )
@@ -441,12 +459,12 @@ class Neo4jReader:
             if isinstance(tenability_prop, str):
                 try:
                     tenability_prop = json.loads(tenability_prop)
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 baseline
                     pass
             if isinstance(parameters_prop, str):
                 try:
                     parameters_prop = json.loads(parameters_prop)
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 baseline
                     pass
 
             clean_props = {k: v for k, v in props.items() if k not in ("embedding",)}
@@ -456,7 +474,9 @@ class Neo4jReader:
                 clean_props["parameters"] = parameters_prop
 
             base_sc = props.get("base_score", props.get("plausibility"))
-            tier_node = props.get("decision_tier", "system_1" if props.get("is_fast_exit") else "legacy")
+            tier_node = props.get(
+                "decision_tier", "system_1" if props.get("is_fast_exit") else "legacy"
+            )
             nodes.append(
                 StudioNode(
                     id=node_id,
@@ -471,9 +491,12 @@ class Neo4jReader:
                     base_score=base_sc,
                     scope_type=props.get("scope_type"),
                     epistemic_status=props.get("epistemic_status"),
-                    modal_resolver=props.get("modal_resolver") or props.get("resolver_type"),
-                    raw_modal_score=props.get("raw_modal_score") or props.get("raw_engine_score"),
-                    is_modal_clamped=props.get("is_modal_clamped") or props.get("clamped"),
+                    modal_resolver=props.get("modal_resolver")
+                    or props.get("resolver_type"),
+                    raw_modal_score=props.get("raw_modal_score")
+                    or props.get("raw_engine_score"),
+                    is_modal_clamped=props.get("is_modal_clamped")
+                    or props.get("clamped"),
                     qbaf_tau=props.get("qbaf_tau"),
                     total_weight_of_evidence=props.get("total_weight_of_evidence"),
                     volatility_index=props.get("volatility_index"),
@@ -481,8 +504,12 @@ class Neo4jReader:
                     conformal_set_size=props.get("conformal_set_size"),
                     is_out_of_ontology=bool(props.get("is_out_of_ontology", False)),
                     decision_id=props.get("decision_id"),
-                    parameters=parameters_prop if isinstance(parameters_prop, dict) else None,
-                    tenability=tenability_prop if isinstance(tenability_prop, dict) else None,
+                    parameters=parameters_prop
+                    if isinstance(parameters_prop, dict)
+                    else None,
+                    tenability=tenability_prop
+                    if isinstance(tenability_prop, dict)
+                    else None,
                     resolved=True,
                     props=clean_props,
                 )
@@ -500,7 +527,14 @@ class Neo4jReader:
                 unmapped_predicates[rel_type] = unmapped_predicates.get(rel_type, 0) + 1
 
             edge_layer = Layer.L2
-            if rel_type in ("SUPPORTS", "ATTACKS", "UNDERCUTS", "PART_OF_ARGUMENT", "CONSTRAINS", "REDUCES_TO"):
+            if rel_type in (
+                "SUPPORTS",
+                "ATTACKS",
+                "UNDERCUTS",
+                "PART_OF_ARGUMENT",
+                "CONSTRAINS",
+                "REDUCES_TO",
+            ):
                 edge_layer = Layer.L3
             elif rel_type in ("CONTAINS", "NEXT_CHUNK", "MENTIONED_IN"):
                 edge_layer = Layer.L1
@@ -512,7 +546,9 @@ class Neo4jReader:
                 except (ValueError, TypeError):
                     edge_tenability = None
 
-            tier_edge = props.get("decision_tier", "system_1" if props.get("is_fast_exit") else "legacy")
+            tier_edge = props.get(
+                "decision_tier", "system_1" if props.get("is_fast_exit") else "legacy"
+            )
             inf_force = props.get("inferential_warrant", props.get("inferential_force"))
             edges.append(
                 StudioEdge(
@@ -525,9 +561,16 @@ class Neo4jReader:
                     weight=props.get("weight"),
                     confidence=props.get("confidence"),
                     tenability=edge_tenability,
-                    empirical_accuracy=props.get("perception_empirical_acc", props.get("empirical_accuracy")),
-                    model_confidence=props.get("model_confidence", props.get("calibrated_confidence")),
-                    stance_probability=props.get("perception_stance_prob", props.get("stance_probability", props.get("class_probability"))),
+                    empirical_accuracy=props.get(
+                        "perception_empirical_acc", props.get("empirical_accuracy")
+                    ),
+                    model_confidence=props.get(
+                        "model_confidence", props.get("calibrated_confidence")
+                    ),
+                    stance_probability=props.get(
+                        "perception_stance_prob",
+                        props.get("stance_probability", props.get("class_probability")),
+                    ),
                     inferential_force=inf_force,
                     active_weight=props.get("active_weight", props.get("weight")),
                     is_admissible=bool(props.get("is_admissible", True)),
@@ -564,11 +607,15 @@ class Neo4jReader:
         if total_nodes > budget:
             truncated = True
             dropped_count = total_nodes - budget
-            sorted_nodes = sorted(nodes_by_id.values(), key=lambda n: n.degree, reverse=True)
+            sorted_nodes = sorted(
+                nodes_by_id.values(), key=lambda n: n.degree, reverse=True
+            )
             active_nodes = sorted_nodes[:budget]
             active_ids = {n.id for n in active_nodes}
             nodes = active_nodes
-            edges = [e for e in edges if e.source in active_ids and e.target in active_ids]
+            edges = [
+                e for e in edges if e.source in active_ids and e.target in active_ids
+            ]
         else:
             nodes = list(nodes_by_id.values())
 
@@ -696,12 +743,12 @@ class Neo4jReader:
             if isinstance(tenability_prop, str):
                 try:
                     tenability_prop = json.loads(tenability_prop)
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 baseline
                     pass
             if isinstance(parameters_prop, str):
                 try:
                     parameters_prop = json.loads(parameters_prop)
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 baseline
                     pass
 
             clean_props = {k: v for k, v in props.items() if k not in ("embedding",)}
@@ -711,7 +758,9 @@ class Neo4jReader:
                 clean_props["parameters"] = parameters_prop
 
             base_sc = props.get("base_score", props.get("plausibility"))
-            tier_node = props.get("decision_tier", "system_1" if props.get("is_fast_exit") else "legacy")
+            tier_node = props.get(
+                "decision_tier", "system_1" if props.get("is_fast_exit") else "legacy"
+            )
             nodes.append(
                 StudioNode(
                     id=node_id,
@@ -726,9 +775,12 @@ class Neo4jReader:
                     base_score=base_sc,
                     scope_type=props.get("scope_type"),
                     epistemic_status=props.get("epistemic_status"),
-                    modal_resolver=props.get("modal_resolver") or props.get("resolver_type"),
-                    raw_modal_score=props.get("raw_modal_score") or props.get("raw_engine_score"),
-                    is_modal_clamped=props.get("is_modal_clamped") or props.get("clamped"),
+                    modal_resolver=props.get("modal_resolver")
+                    or props.get("resolver_type"),
+                    raw_modal_score=props.get("raw_modal_score")
+                    or props.get("raw_engine_score"),
+                    is_modal_clamped=props.get("is_modal_clamped")
+                    or props.get("clamped"),
                     qbaf_tau=props.get("qbaf_tau"),
                     total_weight_of_evidence=props.get("total_weight_of_evidence"),
                     volatility_index=props.get("volatility_index"),
@@ -736,8 +788,12 @@ class Neo4jReader:
                     conformal_set_size=props.get("conformal_set_size"),
                     is_out_of_ontology=bool(props.get("is_out_of_ontology", False)),
                     decision_id=props.get("decision_id"),
-                    parameters=parameters_prop if isinstance(parameters_prop, dict) else None,
-                    tenability=tenability_prop if isinstance(tenability_prop, dict) else None,
+                    parameters=parameters_prop
+                    if isinstance(parameters_prop, dict)
+                    else None,
+                    tenability=tenability_prop
+                    if isinstance(tenability_prop, dict)
+                    else None,
                     resolved=True,
                     props=clean_props,
                 )
@@ -755,7 +811,14 @@ class Neo4jReader:
                 unmapped_predicates[rel_type] = unmapped_predicates.get(rel_type, 0) + 1
 
             edge_layer = Layer.L2
-            if rel_type in ("SUPPORTS", "ATTACKS", "UNDERCUTS", "PART_OF_ARGUMENT", "CONSTRAINS", "REDUCES_TO"):
+            if rel_type in (
+                "SUPPORTS",
+                "ATTACKS",
+                "UNDERCUTS",
+                "PART_OF_ARGUMENT",
+                "CONSTRAINS",
+                "REDUCES_TO",
+            ):
                 edge_layer = Layer.L3
             elif rel_type in ("CONTAINS", "NEXT_CHUNK", "MENTIONED_IN"):
                 edge_layer = Layer.L1
@@ -767,7 +830,9 @@ class Neo4jReader:
                 except (ValueError, TypeError):
                     edge_tenability = None
 
-            tier_edge = props.get("decision_tier", "system_1" if props.get("is_fast_exit") else "legacy")
+            tier_edge = props.get(
+                "decision_tier", "system_1" if props.get("is_fast_exit") else "legacy"
+            )
             inf_force = props.get("inferential_warrant", props.get("inferential_force"))
             edges.append(
                 StudioEdge(
@@ -780,9 +845,16 @@ class Neo4jReader:
                     weight=props.get("weight"),
                     confidence=props.get("confidence"),
                     tenability=edge_tenability,
-                    empirical_accuracy=props.get("perception_empirical_acc", props.get("empirical_accuracy")),
-                    model_confidence=props.get("model_confidence", props.get("calibrated_confidence")),
-                    stance_probability=props.get("perception_stance_prob", props.get("stance_probability", props.get("class_probability"))),
+                    empirical_accuracy=props.get(
+                        "perception_empirical_acc", props.get("empirical_accuracy")
+                    ),
+                    model_confidence=props.get(
+                        "model_confidence", props.get("calibrated_confidence")
+                    ),
+                    stance_probability=props.get(
+                        "perception_stance_prob",
+                        props.get("stance_probability", props.get("class_probability")),
+                    ),
                     inferential_force=inf_force,
                     active_weight=props.get("active_weight", props.get("weight")),
                     is_admissible=bool(props.get("is_admissible", True)),
@@ -817,11 +889,15 @@ class Neo4jReader:
         if total_nodes > budget:
             truncated = True
             dropped_count = total_nodes - budget
-            sorted_nodes = sorted(nodes_by_id.values(), key=lambda n: n.degree, reverse=True)
+            sorted_nodes = sorted(
+                nodes_by_id.values(), key=lambda n: n.degree, reverse=True
+            )
             active_nodes = sorted_nodes[:budget]
             active_ids = {n.id for n in active_nodes}
             nodes = active_nodes
-            edges = [e for e in edges if e.source in active_ids and e.target in active_ids]
+            edges = [
+                e for e in edges if e.source in active_ids and e.target in active_ids
+            ]
         else:
             nodes = list(nodes_by_id.values())
 
@@ -881,7 +957,9 @@ class Neo4jReader:
 
         has_gds = await self.check_gds_availability()
         if not has_gds:
-            raise Neo4jUnavailableError("Neo4j GDS library is not installed or available.")
+            raise Neo4jUnavailableError(
+                "Neo4j GDS library is not installed or available."
+            )
 
         proj_name = f"pr-proj-{uuid4().hex[:8]}"
 
@@ -930,8 +1008,12 @@ class Neo4jReader:
             try:
                 drop_cypher = f"CALL gds.graph.drop('{proj_name}', false)"
                 await self.execute_cypher(drop_cypher, timeout=10.0)
-            except Exception as drop_err:
-                logger.warning("Failed to drop GDS ephemeral projection %s: %s", proj_name, drop_err)
+            except Exception as drop_err:  # noqa: BLE001 baseline
+                logger.warning(
+                    "Failed to drop GDS ephemeral projection %s: %s",
+                    proj_name,
+                    drop_err,
+                )
 
     async def run_gds_leiden(
         self,
@@ -976,7 +1058,9 @@ class Neo4jReader:
 
         has_gds = await self.check_gds_availability()
         if not has_gds:
-            raise Neo4jUnavailableError("Neo4j GDS library is not installed or available.")
+            raise Neo4jUnavailableError(
+                "Neo4j GDS library is not installed or available."
+            )
 
         proj_name = f"leiden-proj-{uuid4().hex[:8]}"
 
@@ -1027,5 +1111,9 @@ class Neo4jReader:
             try:
                 drop_cypher = f"CALL gds.graph.drop('{proj_name}', false)"
                 await self.execute_cypher(drop_cypher, timeout=10.0)
-            except Exception as drop_err:
-                logger.warning("Failed to drop GDS ephemeral projection %s: %s", proj_name, drop_err)
+            except Exception as drop_err:  # noqa: BLE001 baseline
+                logger.warning(
+                    "Failed to drop GDS ephemeral projection %s: %s",
+                    proj_name,
+                    drop_err,
+                )

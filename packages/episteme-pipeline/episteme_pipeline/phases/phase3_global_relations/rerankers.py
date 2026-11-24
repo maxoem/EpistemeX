@@ -50,10 +50,18 @@ def build_relation_reranker_inputs(
         T_A and T_B passed to the cross-encoder.
     """
     # Use Textual Envelopes if available; fallback to legacy format otherwise.
-    query = entity_a.textual_envelope if entity_a.textual_envelope else f"Entity: {entity_a.name}\nContext: {format_envelope(env_a, SubGraph(center_id='', nodes=[], triples=[], depth=0))}"
-    
-    doc_text = entity_b.textual_envelope if entity_b.textual_envelope else f"Entity: {entity_b.name}\nContext: {format_envelope(SubGraph(center_id='', nodes=[], triples=[], depth=0), env_b)}"
-    
+    query = (
+        entity_a.textual_envelope
+        if entity_a.textual_envelope
+        else f"Entity: {entity_a.name}\nContext: {format_envelope(env_a, SubGraph(center_id='', nodes=[], triples=[], depth=0))}"
+    )
+
+    doc_text = (
+        entity_b.textual_envelope
+        if entity_b.textual_envelope
+        else f"Entity: {entity_b.name}\nContext: {format_envelope(SubGraph(center_id='', nodes=[], triples=[], depth=0), env_b)}"
+    )
+
     return query, doc_text
 
 
@@ -141,7 +149,9 @@ class CrossEncoderRelationReranker(RelationReranker):
         Any object satisfying the ``CrossEncoder`` protocol.
     """
 
-    def __init__(self, cross_encoder: CrossEncoder, max_length: int | None = None) -> None:
+    def __init__(
+        self, cross_encoder: CrossEncoder, max_length: int | None = None
+    ) -> None:
         if not isinstance(cross_encoder, CrossEncoder):
             raise TypeError(
                 f"{type(cross_encoder).__name__} does not satisfy the CrossEncoder protocol."
@@ -175,7 +185,9 @@ class CrossEncoderRelationReranker(RelationReranker):
         entity_b: L2Entity,
         env_b: SubGraph,
     ) -> float:
-        query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
+        query, doc_text = build_relation_reranker_inputs(
+            entity_a, env_a, entity_b, env_b
+        )
         return normalize_scores(self.cross_encoder.predict([(query, doc_text)]))[0]
 
     def describe_relation_input(
@@ -203,13 +215,14 @@ class CrossEncoderRelationReranker(RelationReranker):
         dict[str, object]
             Size metadata for the reranker query/document pair.
         """
-        query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
+        query, doc_text = build_relation_reranker_inputs(
+            entity_a, env_a, entity_b, env_b
+        )
         return summarize_reranker_text_pair(
             query,
             doc_text,
             max_length=self.max_length,
         )
-
 
 
 class SentenceTransformerCrossEncoderReranker(RelationReranker):
@@ -385,13 +398,14 @@ class SentenceTransformerCrossEncoderReranker(RelationReranker):
             pairs,
             batch_size=batch_size,
             show_progress_bar=show_progress_bar,
-            activation_fn=activation_fn or self.activation_fn or self._default_activation_fn(),
+            activation_fn=activation_fn
+            or self.activation_fn
+            or self._default_activation_fn(),
             apply_softmax=apply_softmax,
             convert_to_numpy=convert_to_numpy,
             convert_to_tensor=convert_to_tensor,
             prompt_name=self.prompt_name,
         )
-
 
     def describe_relation_input(
         self,
@@ -518,6 +532,7 @@ def _qwen_reranker_prompts() -> dict[str, str]:
         )
     }
 
+
 class JevRelationReranker(RelationReranker):
     """Relation reranker backed by the TypeSafe Jev Decision Engine.
 
@@ -574,7 +589,9 @@ class JevRelationReranker(RelationReranker):
         env_b: SubGraph,
     ) -> dict[str, object]:
         """Summarize the current reranker input without executing inference."""
-        query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
+        query, doc_text = build_relation_reranker_inputs(
+            entity_a, env_a, entity_b, env_b
+        )
         return summarize_reranker_text_pair(
             query,
             doc_text,
@@ -590,8 +607,10 @@ class JevRelationReranker(RelationReranker):
     ) -> float:
         # Context window guard - limit tokens to < 800 (or characters approx 3200)
         # Using a simple character truncation for envelope
-        query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
-        
+        query, doc_text = build_relation_reranker_inputs(
+            entity_a, env_a, entity_b, env_b
+        )
+
         # Simple truncation to stay within budget
         if len(query) > 1600:
             query = query[:1600] + "..."
@@ -599,13 +618,18 @@ class JevRelationReranker(RelationReranker):
             doc_text = doc_text[:1600] + "..."
 
         context = f"Entity A:\n{query}\n\nEntity B:\n{doc_text}"
-        question = self.decision_template.format(entity_a=entity_a.name, entity_b=entity_b.name)
+        question = self.decision_template.format(
+            entity_a=entity_a.name, entity_b=entity_b.name
+        )
 
         decision = await self.decision_engine.evaluate_noul(
             state=context,
             question=question,
         )
-        
-        # return calibrated probability or empirical accuracy
-        return decision.probability if decision.passed else (1.0 - decision.probability) * 0.1
 
+        # return calibrated probability or empirical accuracy
+        return (
+            decision.probability
+            if decision.passed
+            else (1.0 - decision.probability) * 0.1
+        )

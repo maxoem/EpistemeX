@@ -29,10 +29,20 @@ class UnseenCustomEvent(BaseEvent):
     notes: str = "Test unmapped event pass-through"
 
 
-def _crashing_worker(run_id: str, config_dict: dict, source_paths: list, event_queue: Any, demo_mode: bool) -> None:
+def _crashing_worker(
+    run_id: str,
+    config_dict: dict,
+    source_paths: list,
+    event_queue: Any,
+    demo_mode: bool,
+) -> None:
     """Worker that simulates an unexpected exception during execution."""
     observer = StudioEventObserver(event_queue)
-    observer.on_event(ComponentStarted(component_name="CrashPhase", phase_name="CrashPhase", phase_ordinal=1))
+    observer.on_event(
+        ComponentStarted(
+            component_name="CrashPhase", phase_name="CrashPhase", phase_ordinal=1
+        )
+    )
     # Signal failure with traceback
     event_queue.put_nowait(
         {
@@ -113,7 +123,9 @@ async def test_active_run_rejects_concurrent_run_with_409() -> None:
     settings = StudioSettings(demo_mode=True)
     app = create_app(settings)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # 1. Start first run
         resp1 = await client.post("/api/runs", json={"demo_mode": True})
         assert resp1.status_code == 201
@@ -136,7 +148,9 @@ async def test_run_cancellation_terminates_subprocess_and_lands_in_aborted() -> 
     settings = StudioSettings(demo_mode=True)
     app = create_app(settings)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         resp = await client.post("/api/runs", json={"demo_mode": True})
         assert resp.status_code == 201
         run_id = resp.json()["run_id"]
@@ -154,7 +168,9 @@ async def test_run_cancellation_terminates_subprocess_and_lands_in_aborted() -> 
 
 
 @pytest.mark.asyncio
-async def test_run_cancellation_after_restart_aborts_on_disk_run(tmp_path: Path) -> None:
+async def test_run_cancellation_after_restart_aborts_on_disk_run(
+    tmp_path: Path,
+) -> None:
     """Verify that a run marked running on disk can be cancelled after server restart.
 
     Parameters
@@ -198,7 +214,9 @@ async def test_run_cancellation_after_restart_aborts_on_disk_run(tmp_path: Path)
     settings = StudioSettings(runs_dir=runs_dir, artifacts_dir=artifacts_dir)
     app = create_app(settings)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # Cancel the on-disk run whose memory handle does not exist
         cancel_resp = await client.post(f"/api/runs/{run_id}/cancel")
         assert cancel_resp.status_code == 200
@@ -244,7 +262,9 @@ async def test_crashing_run_lands_in_failed_with_traceback() -> None:
     assert "ValueError" in handle.failure.extra.get("traceback", "")
 
     # Check that API returns this detail
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         resp = await client.get("/api/runs/run-crash-test")
         assert resp.status_code == 200
         data = resp.json()
@@ -342,7 +362,9 @@ async def test_run_starts_in_subprocess_and_server_remains_responsive() -> None:
     settings = StudioSettings(demo_mode=True)
     app = create_app(settings)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         start_time = time.perf_counter()
         resp = await client.post("/api/runs", json={"demo_mode": True})
         launch_duration = time.perf_counter() - start_time
@@ -408,17 +430,32 @@ async def test_run_starts_with_bib_paths_metadata_and_structural_anchor() -> Non
         },
     }
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         resp = await client.post("/api/runs", json=payload)
         assert resp.status_code == 201
         run_data = resp.json()
         assert run_data["status"] == "running"
         assert run_data["bib_sources"] == ["examples/bib/references.bib"]
-        assert run_data["metadata"] == {"domain": "philosophy", "experiment_id": "exp-42"}
+        assert run_data["metadata"] == {
+            "domain": "philosophy",
+            "experiment_id": "exp-42",
+        }
         assert run_data["structural_anchor"] is not None
-        assert run_data["structural_anchor"]["global_thesis"] == "Teacher expectations act as self-fulfilling prophecies."
-        assert run_data["structural_anchor"]["document_summary"] == "A comprehensive study on teacher expectancies and student performance."
-        assert run_data["structural_anchor"]["toc_structure"] == ["1. Introduction", "2. Methodology", "3. Discussion"]
+        assert (
+            run_data["structural_anchor"]["global_thesis"]
+            == "Teacher expectations act as self-fulfilling prophecies."
+        )
+        assert (
+            run_data["structural_anchor"]["document_summary"]
+            == "A comprehensive study on teacher expectancies and student performance."
+        )
+        assert run_data["structural_anchor"]["toc_structure"] == [
+            "1. Introduction",
+            "2. Methodology",
+            "3. Discussion",
+        ]
         run_id = run_data["run_id"]
 
         # Verify get detail endpoint returns the coordinates
@@ -426,8 +463,14 @@ async def test_run_starts_with_bib_paths_metadata_and_structural_anchor() -> Non
         assert detail_resp.status_code == 200
         detail_data = detail_resp.json()
         assert detail_data["bib_sources"] == ["examples/bib/references.bib"]
-        assert detail_data["metadata"] == {"domain": "philosophy", "experiment_id": "exp-42"}
-        assert detail_data["structural_anchor"]["global_thesis"] == "Teacher expectations act as self-fulfilling prophecies."
+        assert detail_data["metadata"] == {
+            "domain": "philosophy",
+            "experiment_id": "exp-42",
+        }
+        assert (
+            detail_data["structural_anchor"]["global_thesis"]
+            == "Teacher expectations act as self-fulfilling prophecies."
+        )
 
         # Cancel/cleanup run
         await client.post(f"/api/runs/{run_id}/cancel")
@@ -510,6 +553,7 @@ async def test_executor_matches_phase_isolates_maturation_and_argument_mining() 
     None
     """
     from episteme_studio.runtime.executor import PipelineExecutor
+
     registry = RunRegistry()
     broker = EventBroker()
     executor = PipelineExecutor(registry, broker)

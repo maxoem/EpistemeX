@@ -521,7 +521,9 @@ def extract_chunk_lookup(
     return chunks_by_id, entities_by_id
 
 
-def compact_theory_lens(theory_lens: Mapping[str, Any], *, max_chars: int = 1200) -> str:
+def compact_theory_lens(
+    theory_lens: Mapping[str, Any], *, max_chars: int = 1200
+) -> str:
     """Format a compact deterministic summary of ``deficit.theory_lens`` for prompts.
 
     Parameters
@@ -540,7 +542,9 @@ def compact_theory_lens(theory_lens: Mapping[str, Any], *, max_chars: int = 1200
 
     if not theory_lens:
         return "{}"
-    rendered = json.dumps(dict(theory_lens), indent=2, ensure_ascii=False, sort_keys=True)
+    rendered = json.dumps(
+        dict(theory_lens), indent=2, ensure_ascii=False, sort_keys=True
+    )
     if len(rendered) <= max_chars:
         return rendered
     return rendered[: max_chars - 3] + "..."

@@ -37,7 +37,9 @@ from episteme_pipeline.schema.default_schema import SchemaConfig
 class StubNERExtractor(NERExtractor):
     """Returns a fixed extraction result for every chunk."""
 
-    def __init__(self, entities: list[ExtractedEntity], triples: list[ExtractedTriple]) -> None:
+    def __init__(
+        self, entities: list[ExtractedEntity], triples: list[ExtractedTriple]
+    ) -> None:
         self._result = NERExtractionOutput(entities=entities, triples=triples)
 
     async def extract(
@@ -57,7 +59,12 @@ class StubNERExtractor(NERExtractor):
             stable_id = _stable_entity_id(ext.label, ext.name)
             id_map[ext.id] = stable_id
             entities.append(
-                L2Entity(id=stable_id, label=ext.label, name=ext.name, source_chunk_ids=[chunk_id])
+                L2Entity(
+                    id=stable_id,
+                    label=ext.label,
+                    name=ext.name,
+                    source_chunk_ids=[chunk_id],
+                )
             )
 
         triples: list[L2Triple] = []
@@ -70,8 +77,12 @@ class StubNERExtractor(NERExtractor):
             if subj and obj:
                 triples.append(
                     L2Triple(
-                        subject_id=subj, predicate=t.predicate, object_id=obj,
-                        confidence=t.confidence, scope="local", source_chunk_id=chunk_id,
+                        subject_id=subj,
+                        predicate=t.predicate,
+                        object_id=obj,
+                        confidence=t.confidence,
+                        scope="local",
+                        source_chunk_id=chunk_id,
                     )
                 )
 
@@ -85,7 +96,9 @@ class StubNERExtractor(NERExtractor):
 class StubEntityLinker(EntityLinker):
     """Never links — always mints new entities."""
 
-    async def link(self, mention, graph_store, top_k=10, threshold=0.85) -> L2Entity | None:
+    async def link(
+        self, mention, graph_store, top_k=10, threshold=0.85
+    ) -> L2Entity | None:
         return None
 
 
@@ -95,7 +108,9 @@ class StubLinkingEntityLinker(EntityLinker):
     def __init__(self, canonical: L2Entity) -> None:
         self.canonical = canonical
 
-    async def link(self, mention, graph_store, top_k=10, threshold=0.85) -> L2Entity | None:
+    async def link(
+        self, mention, graph_store, top_k=10, threshold=0.85
+    ) -> L2Entity | None:
         return self.canonical
 
 
@@ -115,8 +130,20 @@ def schema() -> SchemaConfig:
 @pytest.fixture
 def two_chunks() -> list[L1Chunk]:
     return [
-        L1Chunk(id="chunk_0001", text="Kant discussed space.", source_doc_id="doc1", sequence_index=0, token_count=4),
-        L1Chunk(id="chunk_0002", text="Hegel followed Kant.", source_doc_id="doc1", sequence_index=1, token_count=4),
+        L1Chunk(
+            id="chunk_0001",
+            text="Kant discussed space.",
+            source_doc_id="doc1",
+            sequence_index=0,
+            token_count=4,
+        ),
+        L1Chunk(
+            id="chunk_0002",
+            text="Hegel followed Kant.",
+            source_doc_id="doc1",
+            sequence_index=1,
+            token_count=4,
+        ),
     ]
 
 
@@ -175,11 +202,15 @@ async def test_run_returns_phase2_artifact_collection(graph_store, phase1_view):
 
 
 @pytest.mark.asyncio
-async def test_run_extracts_entities_and_commits_to_graph(graph_store, phase1_view, schema):
+async def test_run_extracts_entities_and_commits_to_graph(
+    graph_store, phase1_view, schema
+):
     extracted = [
         ExtractedEntity(id="e1", label="PERSON", name="Kant", mention_quote="Kant"),
     ]
-    runner = make_runner(graph_store, ner_extractor=StubNERExtractor(extracted, []), schema=schema)
+    runner = make_runner(
+        graph_store, ner_extractor=StubNERExtractor(extracted, []), schema=schema
+    )
     result = await runner.run(phase1_view, make_context())
     view = Phase2ArtifactsView.from_collection(result)
 
@@ -190,12 +221,18 @@ async def test_run_extracts_entities_and_commits_to_graph(graph_store, phase1_vi
 
 
 @pytest.mark.asyncio
-async def test_run_marks_chunks_as_processed(graph_store, phase1_view, two_chunks, schema):
+async def test_run_marks_chunks_as_processed(
+    graph_store, phase1_view, two_chunks, schema
+):
     # With non-empty extraction, chunks are marked processed
     for chunk in two_chunks:
         await graph_store.upsert_chunk(chunk)
-    extracted = [ExtractedEntity(id="e1", label="PERSON", name="Kant", mention_quote="Kant")]
-    runner = make_runner(graph_store, ner_extractor=StubNERExtractor(extracted, []), schema=schema)
+    extracted = [
+        ExtractedEntity(id="e1", label="PERSON", name="Kant", mention_quote="Kant")
+    ]
+    runner = make_runner(
+        graph_store, ner_extractor=StubNERExtractor(extracted, []), schema=schema
+    )
     await runner.run(phase1_view, make_context())
 
     for chunk in two_chunks:
@@ -204,13 +241,19 @@ async def test_run_marks_chunks_as_processed(graph_store, phase1_view, two_chunk
 
 
 @pytest.mark.asyncio
-async def test_run_resumes_from_graph_unprocessed_chunks(graph_store, phase1_view, two_chunks):
+async def test_run_resumes_from_graph_unprocessed_chunks(
+    graph_store, phase1_view, two_chunks
+):
     # Pre-populate graph with chunks; mark first as already processed
     for chunk in two_chunks:
         await graph_store.upsert_chunk(chunk)
     await graph_store.mark_chunk_processed(two_chunks[0].id, "phase2")
 
-    extracted = [ExtractedEntity(id="e1", label="PERSON", name="ResumedEntity", mention_quote="X")]
+    extracted = [
+        ExtractedEntity(
+            id="e1", label="PERSON", name="ResumedEntity", mention_quote="X"
+        )
+    ]
     runner = make_runner(graph_store, ner_extractor=StubNERExtractor(extracted, []))
     result = await runner.run(phase1_view, make_context())
     view = Phase2ArtifactsView.from_collection(result)
@@ -244,7 +287,12 @@ async def test_run_fallback_does_not_treat_all_graph_chunks_as_processed(
     graph_store.get_chunks = return_processed  # type: ignore[method-assign]
     try:
         extracted = [
-            ExtractedEntity(id="e1", label="PERSON", name="RecoveredEntity", mention_quote="RecoveredEntity")
+            ExtractedEntity(
+                id="e1",
+                label="PERSON",
+                name="RecoveredEntity",
+                mention_quote="RecoveredEntity",
+            )
         ]
         runner = make_runner(graph_store, ner_extractor=StubNERExtractor(extracted, []))
         result = await runner.run(phase1_view, make_context())
@@ -266,7 +314,9 @@ async def test_entity_linking_redirects_id_in_triples(graph_store, phase1_view, 
         ExtractedEntity(id="e2", label="KONZEPT", name="space", mention_quote="space"),
     ]
     extracted_triples = [
-        ExtractedTriple(subject_id="e1", predicate="IMPLIZIERT", object_id="e2", confidence=0.9),
+        ExtractedTriple(
+            subject_id="e1", predicate="IMPLIZIERT", object_id="e2", confidence=0.9
+        ),
     ]
 
     linker = StubLinkingEntityLinker(canonical)
@@ -292,7 +342,9 @@ async def test_entity_count_by_type_is_correct(graph_store, phase1_view, schema)
         ExtractedEntity(id="e2", label="PERSON", name="Hegel", mention_quote="Hegel"),
         ExtractedEntity(id="e3", label="KONZEPT", name="space", mention_quote="space"),
     ]
-    runner = make_runner(graph_store, ner_extractor=StubNERExtractor(extracted, []), schema=schema)
+    runner = make_runner(
+        graph_store, ner_extractor=StubNERExtractor(extracted, []), schema=schema
+    )
     result = await runner.run(phase1_view, make_context())
     view = Phase2ArtifactsView.from_collection(result)
 
@@ -304,16 +356,22 @@ async def test_entity_count_by_type_is_correct(graph_store, phase1_view, schema)
 @pytest.mark.asyncio
 async def test_unknown_entity_labels_are_dropped(graph_store, phase1_view, schema):
     extracted = [
-        ExtractedEntity(id="e1", label="UNKNOWN_TYPE", name="Thing", mention_quote="Thing"),
+        ExtractedEntity(
+            id="e1", label="UNKNOWN_TYPE", name="Thing", mention_quote="Thing"
+        ),
     ]
-    runner = make_runner(graph_store, ner_extractor=StubNERExtractor(extracted, []), schema=schema)
+    runner = make_runner(
+        graph_store, ner_extractor=StubNERExtractor(extracted, []), schema=schema
+    )
     result = await runner.run(phase1_view, make_context())
     view = Phase2ArtifactsView.from_collection(result)
     assert view.entities == []
 
 
 @pytest.mark.asyncio
-async def test_empty_extraction_marks_chunks_processed(graph_store, phase1_view, two_chunks):
+async def test_empty_extraction_marks_chunks_processed(
+    graph_store, phase1_view, two_chunks
+):
     # Legitimate empty extraction marks chunks processed (ISSUE-059)
     runner = make_runner(graph_store, ner_extractor=StubNERExtractor([], []))
     for chunk in two_chunks:
@@ -324,7 +382,9 @@ async def test_empty_extraction_marks_chunks_processed(graph_store, phase1_view,
 
 
 @pytest.mark.asyncio
-async def test_failed_extraction_leaves_chunks_unprocessed(graph_store, phase1_view, two_chunks):
+async def test_failed_extraction_leaves_chunks_unprocessed(
+    graph_store, phase1_view, two_chunks
+):
     # When extraction fails with an exception, the failed chunk remains unprocessed for retry
     class SelectiveFailingNERExtractor(StubNERExtractor):
         async def extract(self, chunk_id, *args, **kwargs):
@@ -332,7 +392,9 @@ async def test_failed_extraction_leaves_chunks_unprocessed(graph_store, phase1_v
                 raise RuntimeError("Extraction failed for chunk 2")
             return [], [], None, False, None
 
-    runner = make_runner(graph_store, ner_extractor=SelectiveFailingNERExtractor([], []))
+    runner = make_runner(
+        graph_store, ner_extractor=SelectiveFailingNERExtractor([], [])
+    )
     for chunk in two_chunks:
         await graph_store.upsert_chunk(chunk)
     await runner.run(phase1_view, make_context())

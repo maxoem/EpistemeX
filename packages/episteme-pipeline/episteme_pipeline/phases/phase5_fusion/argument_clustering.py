@@ -118,7 +118,11 @@ class EmbeddingArgumentClustering(ArgumentClustering):
             "embedding_model": (
                 self.embedding_model.fingerprint()
                 if isinstance(self.embedding_model, Fingerprintable)
-                else (fingerprint_method(self.embedding_model) if self.embedding_model is not None else None)
+                else (
+                    fingerprint_method(self.embedding_model)
+                    if self.embedding_model is not None
+                    else None
+                )
             ),
         }
 
@@ -187,7 +191,9 @@ class EmbeddingArgumentClustering(ArgumentClustering):
         return clusters
 
 
-def _format_cluster_summary(cluster_nodes: list[TheoryAtom | L2Entity]) -> dict[str, Any]:
+def _format_cluster_summary(
+    cluster_nodes: list[TheoryAtom | L2Entity],
+) -> dict[str, Any]:
     """Format cluster members into a structured state block for decision evaluation.
 
     Parameters
@@ -204,22 +210,26 @@ def _format_cluster_summary(cluster_nodes: list[TheoryAtom | L2Entity]) -> dict[
     for node in cluster_nodes[:10]:
         match node:
             case TheoryAtom():
-                items.append({
-                    "id": node.id,
-                    "type": node.component_type,
-                    "text": node.text,
-                    "epistemic_status": node.epistemic_status,
-                    "scope_type": node.scope_type,
-                    "intensional_mode": node.intensional_mode,
-                    "attributed_to": node.attributed_to,
-                })
+                items.append(
+                    {
+                        "id": node.id,
+                        "type": node.component_type,
+                        "text": node.text,
+                        "epistemic_status": node.epistemic_status,
+                        "scope_type": node.scope_type,
+                        "intensional_mode": node.intensional_mode,
+                        "attributed_to": node.attributed_to,
+                    }
+                )
             case L2Entity():
-                items.append({
-                    "id": node.id,
-                    "type": node.label,
-                    "name": node.name,
-                    "envelope": node.textual_envelope or "",
-                })
+                items.append(
+                    {
+                        "id": node.id,
+                        "type": node.label,
+                        "name": node.name,
+                        "envelope": node.textual_envelope or "",
+                    }
+                )
             case _:
                 items.append({"id": str(node), "summary": str(node)})
     return {
@@ -413,9 +423,15 @@ class InterDocumentClusterVerifier:
                 language=language or self.language,
             )
         else:
-            pred_set = score.prediction_set or ([str(score.selected_option)] if score.selected_option is not None else [])
+            pred_set = score.prediction_set or (
+                [str(score.selected_option)]
+                if score.selected_option is not None
+                else []
+            )
 
-        selected = str(score.selected_option) if score.selected_option is not None else ""
+        selected = (
+            str(score.selected_option) if score.selected_option is not None else ""
+        )
         emp_acc = score.empirical_accuracy
 
         if self.require_singleton_prediction_set:

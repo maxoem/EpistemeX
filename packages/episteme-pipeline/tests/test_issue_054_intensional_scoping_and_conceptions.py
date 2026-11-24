@@ -227,15 +227,21 @@ def test_theory_atom_effective_base_prior_intensional_scoping() -> None:
 
     # Suppositional claims contribute 0.0 unless explicitly enabled
     assert suppositional.effective_base_prior() == pytest.approx(0.0)
-    assert suppositional.effective_base_prior(perspective="author") == pytest.approx(0.0)
-    assert suppositional.effective_base_prior(include_suppositional=True) == pytest.approx(0.90)
+    assert suppositional.effective_base_prior(perspective="author") == pytest.approx(
+        0.0
+    )
+    assert suppositional.effective_base_prior(
+        include_suppositional=True
+    ) == pytest.approx(0.90)
     assert suppositional.effective_base_prior(
         include_suppositional=True, perspective="author"
     ) == pytest.approx(0.90)
 
     # Attributed claims are excluded for author, enabled for matching agent or 'all'
     assert attributed.effective_base_prior(perspective="author") == pytest.approx(0.0)
-    assert attributed.effective_base_prior(perspective="david hume") == pytest.approx(0.85)
+    assert attributed.effective_base_prior(perspective="david hume") == pytest.approx(
+        0.85
+    )
     assert attributed.effective_base_prior(perspective="all") == pytest.approx(0.85)
 
 
@@ -464,7 +470,9 @@ def test_theorynet_projector_isolates_reductio_and_attributed_subgraphs() -> Non
 
 
 @pytest.mark.asyncio
-async def test_phase6_runner_wires_perspective_and_isolates_reductio_artifacts() -> None:
+async def test_phase6_runner_wires_perspective_and_isolates_reductio_artifacts() -> (
+    None
+):
     """Verify Phase6Runner propagates Phase6Config perspective/isolation settings."""
     ctx = ArtifactExecutionContext(
         run_id="r_p6_054",
@@ -562,7 +570,10 @@ def test_conception_clusterer_unimodal_vs_multimodal_and_edge_cases() -> None:
     var_two, clusters_two = clusterer.stratify(["ctx A", "ctx B"], two_orth)
     assert var_two > 0.25
     assert len(clusters_two) == 2
-    assert [c.perspective for c in clusters_two] == ["concept_cluster_1", "concept_cluster_2"]
+    assert [c.perspective for c in clusters_two] == [
+        "concept_cluster_1",
+        "concept_cluster_2",
+    ]
 
     # Case 4: Unlabeled N=4 multi-modal vectors stratify via spherical k-means + silhouette
     unlabeled_vecs = np.array(
@@ -670,7 +681,9 @@ async def test_phase4_maturation_runner_stratifies_polysemous_entities(
 
     envelopes = [
         build_document_artifact(doc_kant, run_id="r054", phase_name="P1", method="m"),
-        build_document_artifact(doc_leibniz, run_id="r054", phase_name="P1", method="m"),
+        build_document_artifact(
+            doc_leibniz, run_id="r054", phase_name="P1", method="m"
+        ),
         *(
             build_chunk_artifact(c, run_id="r054", phase_name="P1", method="m")
             for c in chunks
@@ -773,7 +786,10 @@ async def test_phase4_maturation_runner_stratifies_polysemous_entities(
     components = runner.components()
     assert "conception_clusterer" in components
     assert isinstance(components["conception_clusterer"], ConceptionClusterer)
-    assert components["conception_clusterer"].fingerprint()["component"] == "ConceptionClusterer"
+    assert (
+        components["conception_clusterer"].fingerprint()["component"]
+        == "ConceptionClusterer"
+    )
 
     recorder = _RecordingEmitter()
     with use_event_emitter(recorder):
@@ -860,10 +876,16 @@ def test_issue_054_documentation_and_adr_sync() -> None:
         text = (repo_root / rel_path).read_text(encoding="utf-8")
         assert "0023" in text
 
-    issue_filename = "ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md"
+    issue_filename = (
+        "ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md"
+    )
     issue_candidates = [
         repo_root / "issues" / "09-architecture-workflow-domain" / issue_filename,
-        repo_root / "issues" / "09-architecture-workflow-domain" / "resolved" / issue_filename,
+        repo_root
+        / "issues"
+        / "09-architecture-workflow-domain"
+        / "resolved"
+        / issue_filename,
         repo_root / "issues" / "archived" / issue_filename,
         *sorted((repo_root / "issues").rglob("*ISSUE-054*.md")),
     ]
@@ -1091,7 +1113,9 @@ async def test_phase5_fusion_preserves_distinct_intensional_scopes() -> None:
     )
 
     class _IdenticalEmbedder:
-        async def aget_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:
+        async def aget_text_embedding_batch(
+            self, texts: list[str]
+        ) -> list[list[float]]:
             return [[1.0, 0.0, 0.0] for _ in texts]
 
     class _FakeGraphReader:
@@ -1143,7 +1167,9 @@ async def test_entity_maturation_protocol_injection_and_duplicate_envelopes(
         ConceptionCluster,
         Phase4EntityMaturationRunner,
     )
-    from episteme_pipeline.protocols.entity_maturation import ConceptionClustererProtocol
+    from episteme_pipeline.protocols.entity_maturation import (
+        ConceptionClustererProtocol,
+    )
 
     seen_envelopes: list[str] = []
 

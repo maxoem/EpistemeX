@@ -9,7 +9,9 @@ from episteme_pipeline.refinement.axiom_grounder import TheoryGuidedAxiomGrounde
 from episteme_pipeline.refinement.concept_splitter import ConceptionConceptSplitter
 from episteme_pipeline.refinement.coordinator import ClosedLoopRefinementCoordinator
 from episteme_pipeline.refinement.detector import TheoryNetDeficitDetector
-from episteme_pipeline.refinement.premise_recovery import LLMTheoryGuidedPremiseRecoverer
+from episteme_pipeline.refinement.premise_recovery import (
+    LLMTheoryGuidedPremiseRecoverer,
+)
 
 __all__ = [
     "ClosedLoopRefinementCoordinator",

@@ -316,7 +316,7 @@ class CompositeObserver(EventObserver):
             try:
                 observer.on_event(event)
                 self.events_delivered[obs_name] += 1
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 baseline
                 self.observer_errors[obs_name].append(f"{type(e).__name__}: {e}")
                 logging.getLogger(__name__).warning(
                     f"Observer {obs_name} failed to process event: {e}"
@@ -328,9 +328,11 @@ class CompositeObserver(EventObserver):
             if isinstance(observer, EventObserver):
                 try:
                     observer.flush()
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 baseline
                     obs_name = observer.__class__.__name__
-                    self.observer_errors[obs_name].append(f"flush:{type(exc).__name__}: {exc}")
+                    self.observer_errors[obs_name].append(
+                        f"flush:{type(exc).__name__}: {exc}"
+                    )
                     logging.getLogger(__name__).warning(
                         "Observer %s failed to flush: %s",
                         obs_name,

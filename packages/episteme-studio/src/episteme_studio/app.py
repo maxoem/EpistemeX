@@ -60,7 +60,7 @@ def resolve_static_dir(settings: StudioSettings) -> Path:
     try:
         ref = importlib.resources.files("episteme_studio") / "static"
         return Path(str(ref))
-    except Exception:
+    except Exception:  # noqa: BLE001 baseline
         return Path(__file__).parent / "static"
 
 

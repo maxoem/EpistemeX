@@ -27,7 +27,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from episteme_pipeline.artifacts.builders import (
     build_argument_component_artifact,
     build_argument_relation_artifact,
@@ -81,9 +80,7 @@ from episteme_pipeline.post_processing.theoretical_enrichment.projectors import 
     GenericTheoryProjector,
 )
 from episteme_pipeline.protocols.argument_mining import ARCClassifier
-from episteme_pipeline.protocols.decision import DecisionScore
 from episteme_pipeline.protocols.extractors import (
-    GlobalRelationExtractor,
     NERExtractor,
 )
 from episteme_pipeline.protocols.fingerprint import Fingerprintable, find_components
@@ -139,7 +136,9 @@ class _StubStructuredLLM:
     """Deterministic StructuredLLM stub recording prompt arguments and returning scripted payloads."""
 
     def __init__(self, responses: list[Any] | Any) -> None:
-        self._responses = list(responses) if isinstance(responses, list) else [responses]
+        self._responses = (
+            list(responses) if isinstance(responses, list) else [responses]
+        )
         self.calls: list[dict[str, Any]] = []
 
     def fingerprint(self) -> dict[str, Any]:
@@ -219,7 +218,9 @@ async def test_tag_arc_classifier_classify_pairs_with_artifact_subgraph_reader(
             reasoning="Empirical observation supports the theoretical hypothesis.",
         )
     )
-    classifier = TAGARCClassifier(llm=stub_llm, subgraph_depth=1, confidence_threshold=0.65)
+    classifier = TAGARCClassifier(
+        llm=stub_llm, subgraph_depth=1, confidence_threshold=0.65
+    )
 
     ent_a = L2Entity(
         id="ent_obs",
@@ -399,10 +400,18 @@ async def test_jev_and_cascading_arc_classify_pairs_per_item_escalation(
 @pytest.mark.asyncio
 async def test_cascading_arc_classify_pairs_generic_arc_fallback_and_audit() -> None:
     """Verify CascadingARCClassifier handles non-triage ARCClassifier fast stubs cleanly."""
-    a1 = TheoryAtom(id="a1", text="P1", component_type="EmpiricalStatement", source_chunk_id="c1")
-    a2 = TheoryAtom(id="a2", text="C1", component_type="TheoreticalHypothesis", source_chunk_id="c2")
-    b1 = TheoryAtom(id="b1", text="P2", component_type="EmpiricalStatement", source_chunk_id="c3")
-    b2 = TheoryAtom(id="b2", text="C2", component_type="TheoreticalHypothesis", source_chunk_id="c4")
+    a1 = TheoryAtom(
+        id="a1", text="P1", component_type="EmpiricalStatement", source_chunk_id="c1"
+    )
+    a2 = TheoryAtom(
+        id="a2", text="C1", component_type="TheoreticalHypothesis", source_chunk_id="c2"
+    )
+    b1 = TheoryAtom(
+        id="b1", text="P2", component_type="EmpiricalStatement", source_chunk_id="c3"
+    )
+    b2 = TheoryAtom(
+        id="b2", text="C2", component_type="TheoreticalHypothesis", source_chunk_id="c4"
+    )
 
     fast_rel = TheoryRelation(
         source_id="a1",
@@ -446,7 +455,9 @@ async def test_cascading_arc_classify_pairs_generic_arc_fallback_and_audit() -> 
 
 
 @pytest.mark.asyncio
-async def test_premise_recoverer_scoped_to_target_chunks_with_theory_lens_and_arc() -> None:
+async def test_premise_recoverer_scoped_to_target_chunks_with_theory_lens_and_arc() -> (
+    None
+):
     """Verify LLMTheoryGuidedPremiseRecoverer recovers implicit premises strictly in target chunks."""
     chunk_target = L1Chunk(
         id="chunk_target",
@@ -500,15 +511,31 @@ async def test_premise_recoverer_scoped_to_target_chunks_with_theory_lens_and_ar
 
     collection = ArtifactCollection(
         [
-            build_chunk_artifact(chunk_target, run_id="r1", phase_name="P1", method="m"),
-            build_chunk_artifact(chunk_unrelated, run_id="r1", phase_name="P1", method="m"),
-            build_linked_entity_artifact(
-                ent_space, ["artifact::mention::ent_space::chunk_target"], run_id="r1", phase_name="P2", method="m"
+            build_chunk_artifact(
+                chunk_target, run_id="r1", phase_name="P1", method="m"
             ),
-            build_argument_component_artifact(target_claim, run_id="r1", phase_name="P4", method="m"),
-            build_argument_component_artifact(neighbor_atom, run_id="r1", phase_name="P4", method="m"),
-            build_argument_component_artifact(unrelated_atom, run_id="r1", phase_name="P4", method="m"),
-            build_argument_relation_artifact(rel_neighbor, run_id="r1", phase_name="P4", method="m"),
+            build_chunk_artifact(
+                chunk_unrelated, run_id="r1", phase_name="P1", method="m"
+            ),
+            build_linked_entity_artifact(
+                ent_space,
+                ["artifact::mention::ent_space::chunk_target"],
+                run_id="r1",
+                phase_name="P2",
+                method="m",
+            ),
+            build_argument_component_artifact(
+                target_claim, run_id="r1", phase_name="P4", method="m"
+            ),
+            build_argument_component_artifact(
+                neighbor_atom, run_id="r1", phase_name="P4", method="m"
+            ),
+            build_argument_component_artifact(
+                unrelated_atom, run_id="r1", phase_name="P4", method="m"
+            ),
+            build_argument_relation_artifact(
+                rel_neighbor, run_id="r1", phase_name="P4", method="m"
+            ),
         ]
     )
     state = EpistemicDeficitArtifactsView.from_collection(collection)
@@ -547,14 +574,19 @@ async def test_premise_recoverer_scoped_to_target_chunks_with_theory_lens_and_ar
         target_chunk_ids=["chunk_target"],
         target_atom_ids=["atom_claim"],
         theory_id="transcendental_aesthetic",
-        theory_lens={"M_p": ["a_priori_intuition"], "required_dimensions": ["apodictic_necessity"]},
+        theory_lens={
+            "M_p": ["a_priori_intuition"],
+            "required_dimensions": ["apodictic_necessity"],
+        },
         rationale="Major claim has high PageRank centrality and zero incoming supports.",
         refinement_pass=0,
     )
 
     emitter = _RecordingEmitter()
     with use_event_emitter(emitter):
-        delta = await recoverer.recover_premises(deficit, state, context=_make_context())
+        delta = await recoverer.recover_premises(
+            deficit, state, context=_make_context()
+        )
 
     assert isinstance(delta, RefinementDelta)
     assert delta.refinement_pass == 1
@@ -582,7 +614,9 @@ async def test_premise_recoverer_scoped_to_target_chunks_with_theory_lens_and_ar
     assert "atom_unrelated" not in pair_target_ids
 
     assert any(isinstance(ev, ComponentStarted) for ev in emitter.events)
-    assert any(isinstance(ev, ComponentCompleted) and ev.success for ev in emitter.events)
+    assert any(
+        isinstance(ev, ComponentCompleted) and ev.success for ev in emitter.events
+    )
 
 
 @pytest.mark.asyncio
@@ -611,7 +645,9 @@ async def test_premise_recoverer_validation_guards() -> None:
 
 
 @pytest.mark.asyncio
-async def test_concept_splitter_conceptions_rewires_only_affected_chunks_and_emits_cannot_link() -> None:
+async def test_concept_splitter_conceptions_rewires_only_affected_chunks_and_emits_cannot_link() -> (
+    None
+):
     """Verify ConceptionConceptSplitter splits hub conceptions and leaves unaffected subgraphs untouched."""
     doc_kant = L1Document(
         id="doc_kant",
@@ -663,7 +699,9 @@ async def test_concept_splitter_conceptions_rewires_only_affected_chunks_and_emi
                 entity_id="ent_space",
                 perspective="transcendental_idealism",
                 description="Pure a priori form of outer sensible intuition.",
-                representative_envelopes=["Space is a pure form of sensible intuition a priori."],
+                representative_envelopes=[
+                    "Space is a pure form of sensible intuition a priori."
+                ],
                 source_chunk_ids=["ck_1"],
                 centroid_dispersion=0.05,
                 confidence=0.95,
@@ -673,7 +711,9 @@ async def test_concept_splitter_conceptions_rewires_only_affected_chunks_and_emi
                 entity_id="ent_space",
                 perspective="relationalism",
                 description="Relational order of coexistences among monads.",
-                representative_envelopes=["Space is a relational order of coexistences among monads."],
+                representative_envelopes=[
+                    "Space is a relational order of coexistences among monads."
+                ],
                 source_chunk_ids=["cl_1"],
                 centroid_dispersion=0.04,
                 confidence=0.96,
@@ -749,20 +789,44 @@ async def test_concept_splitter_conceptions_rewires_only_affected_chunks_and_emi
     collection = ArtifactCollection(
         [
             build_document_artifact(doc_kant, run_id="r1", phase_name="P1", method="m"),
-            build_document_artifact(doc_leibniz, run_id="r1", phase_name="P1", method="m"),
+            build_document_artifact(
+                doc_leibniz, run_id="r1", phase_name="P1", method="m"
+            ),
             build_chunk_artifact(c_kant, run_id="r1", phase_name="P1", method="m"),
             build_chunk_artifact(c_leibniz, run_id="r1", phase_name="P1", method="m"),
-            build_chunk_artifact(c_unaffected, run_id="r1", phase_name="P1", method="m"),
-            build_linked_entity_artifact(hub_space, [], run_id="r1", phase_name="P4m", method="m"),
-            build_linked_entity_artifact(ent_intuition, [], run_id="r1", phase_name="P2", method="m"),
-            build_linked_entity_artifact(ent_monads, [], run_id="r1", phase_name="P2", method="m"),
-            build_linked_entity_artifact(ent_geometry, [], run_id="r1", phase_name="P2", method="m"),
-            build_local_relation_artifact(triple_kant, run_id="r1", phase_name="P2", method="m"),
-            build_local_relation_artifact(triple_leibniz, run_id="r1", phase_name="P2", method="m"),
-            build_local_relation_artifact(triple_unaffected, run_id="r1", phase_name="P2", method="m"),
-            build_argument_component_artifact(atom_kant, run_id="r1", phase_name="P4", method="m"),
-            build_argument_component_artifact(atom_leibniz, run_id="r1", phase_name="P4", method="m"),
-            build_argument_component_artifact(atom_unaffected, run_id="r1", phase_name="P4", method="m"),
+            build_chunk_artifact(
+                c_unaffected, run_id="r1", phase_name="P1", method="m"
+            ),
+            build_linked_entity_artifact(
+                hub_space, [], run_id="r1", phase_name="P4m", method="m"
+            ),
+            build_linked_entity_artifact(
+                ent_intuition, [], run_id="r1", phase_name="P2", method="m"
+            ),
+            build_linked_entity_artifact(
+                ent_monads, [], run_id="r1", phase_name="P2", method="m"
+            ),
+            build_linked_entity_artifact(
+                ent_geometry, [], run_id="r1", phase_name="P2", method="m"
+            ),
+            build_local_relation_artifact(
+                triple_kant, run_id="r1", phase_name="P2", method="m"
+            ),
+            build_local_relation_artifact(
+                triple_leibniz, run_id="r1", phase_name="P2", method="m"
+            ),
+            build_local_relation_artifact(
+                triple_unaffected, run_id="r1", phase_name="P2", method="m"
+            ),
+            build_argument_component_artifact(
+                atom_kant, run_id="r1", phase_name="P4", method="m"
+            ),
+            build_argument_component_artifact(
+                atom_leibniz, run_id="r1", phase_name="P4", method="m"
+            ),
+            build_argument_component_artifact(
+                atom_unaffected, run_id="r1", phase_name="P4", method="m"
+            ),
         ]
     )
     state = EpistemicDeficitArtifactsView.from_collection(collection)
@@ -812,7 +876,9 @@ async def test_concept_splitter_conceptions_rewires_only_affected_chunks_and_emi
     assert set(split_by_id.keys()) == {"ent_space__sense_1", "ent_space__sense_2"}
     assert split_by_id["ent_space__sense_1"].source_chunk_ids == ["ck_1"]
     assert split_by_id["ent_space__sense_2"].source_chunk_ids == ["cl_1"]
-    assert split_by_id["ent_space__sense_1"].name != split_by_id["ent_space__sense_2"].name
+    assert (
+        split_by_id["ent_space__sense_1"].name != split_by_id["ent_space__sense_2"].name
+    )
 
     # Cannot-link pairs block re-merging in EpistemicCurationLedger
     ledger = EpistemicCurationLedger(cannot_link_entities=set(delta.cannot_link_pairs))
@@ -830,7 +896,10 @@ async def test_concept_splitter_conceptions_rewires_only_affected_chunks_and_emi
     # Only TheoryAtoms in ck_1 and cl_1 were rewritten; atom_u was untouched!
     rewritten_atoms = {a.id: a for a in delta.theory_atoms}
     assert set(rewritten_atoms.keys()) == {"atom_k", "atom_l"}
-    assert rewritten_atoms["atom_k"].entity_ids == ["ent_space__sense_1", "ent_intuition"]
+    assert rewritten_atoms["atom_k"].entity_ids == [
+        "ent_space__sense_1",
+        "ent_intuition",
+    ]
     assert rewritten_atoms["atom_l"].entity_ids == ["ent_space__sense_2", "ent_monads"]
 
     # GlobalRelationExtractor ran strictly on pairs involving split senses (not ent_geometry!)
@@ -845,11 +914,15 @@ async def test_concept_splitter_conceptions_rewires_only_affected_chunks_and_emi
     assert delta.global_triples[0].predicate == "CONTRADICTS"
 
     assert any(isinstance(ev, EntityProcessed) for ev in emitter.events)
-    assert any(isinstance(ev, ComponentCompleted) and ev.success for ev in emitter.events)
+    assert any(
+        isinstance(ev, ComponentCompleted) and ev.success for ev in emitter.events
+    )
 
 
 @pytest.mark.asyncio
-async def test_concept_splitter_deterministic_partition_without_preexisting_conceptions() -> None:
+async def test_concept_splitter_deterministic_partition_without_preexisting_conceptions() -> (
+    None
+):
     """Verify ConceptionConceptSplitter splits entities lacking pre-stratified conceptions."""
     c1 = L1Chunk(
         id="c1",
@@ -919,7 +992,9 @@ async def test_concept_splitter_deterministic_partition_without_preexisting_conc
 
 
 @pytest.mark.asyncio
-async def test_axiom_grounder_expands_neighbor_window_and_vector_hits_strictly() -> None:
+async def test_axiom_grounder_expands_neighbor_window_and_vector_hits_strictly() -> (
+    None
+):
     """Verify TheoryGuidedAxiomGrounder grounds via local neighbors + vector hits without touching unrelated docs."""
     # Same document chunks: seq 0 (neighbor), seq 1 (target), seq 3 (outside window=1)
     chunk_neighbor = L1Chunk(
@@ -1138,7 +1213,9 @@ async def test_axiom_grounder_expands_neighbor_window_and_vector_hits_strictly()
 
     # Target axiom updated with projected parameters without altering unrelated atoms
     assert "atom_axiom" in atoms_by_id
-    assert atoms_by_id["atom_axiom"].parameters["DopamineDepletion"] == pytest.approx(0.78)
+    assert atoms_by_id["atom_axiom"].parameters["DopamineDepletion"] == pytest.approx(
+        0.78
+    )
 
     assert len(delta.theory_relations) == 1
     assert delta.theory_relations[0].source_id == obs.id
@@ -1147,7 +1224,9 @@ async def test_axiom_grounder_expands_neighbor_window_and_vector_hits_strictly()
     assert delta.theory_relations[0].scope == "global"
 
     assert any(isinstance(ev, ComponentStarted) for ev in emitter.events)
-    assert any(isinstance(ev, ComponentCompleted) and ev.success for ev in emitter.events)
+    assert any(
+        isinstance(ev, ComponentCompleted) and ev.success for ev in emitter.events
+    )
 
 
 @pytest.mark.asyncio
@@ -1194,7 +1273,10 @@ async def test_axiom_grounder_deterministic_fallback_without_llm() -> None:
 
     delta = await grounder.ground_axiom(deficit, state)
     assert delta.resolved_deficit_ids == ["def-det-1"]
-    assert any(a.component_type == "ObservationUnit" and a.measurements for a in delta.theory_atoms)
+    assert any(
+        a.component_type == "ObservationUnit" and a.measurements
+        for a in delta.theory_atoms
+    )
     assert len(delta.theory_relations) == 1
     assert delta.theory_relations[0].target_id == "ax_1"
 
@@ -1222,11 +1304,15 @@ def test_zero_reflection_and_docstrings_in_step3a_files() -> None:
     for py_file in audited_files:
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):  # noqa: SIM102 baseline
                 if node.func.id in {"getattr", "hasattr"}:
-                    violations.append(f"{py_file.name}:{node.lineno} calls {node.func.id}")
+                    violations.append(
+                        f"{py_file.name}:{node.lineno} calls {node.func.id}"
+                    )
 
-    assert not violations, "Forbidden getattr/hasattr detected:\n" + "\n".join(violations)
+    assert not violations, "Forbidden getattr/hasattr detected:\n" + "\n".join(
+        violations
+    )
 
     documented_symbols = [
         LLMTheoryGuidedPremiseRecoverer,

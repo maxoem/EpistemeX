@@ -31,14 +31,18 @@ def extract_nx_graph(graph: Any) -> nx.Graph:
         return graph
     if hasattr(graph, "nx_graph"):
         return graph.nx_graph
-    if hasattr(graph, "graph") and isinstance(graph.graph, (nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph)):
+    if hasattr(graph, "graph") and isinstance(
+        graph.graph, (nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph)
+    ):
         return graph.graph
     raise TypeError(
         f"Expected a NetworkX graph or TheoryGraph containing 'nx_graph', got {type(graph).__name__}"
     )
 
 
-def resolve_gds_graph_name(graph: Any, default_name: str = "theory_graph_projection") -> str:
+def resolve_gds_graph_name(
+    graph: Any, default_name: str = "theory_graph_projection"
+) -> str:
     """Resolve the target GDS projection name from a graph argument.
 
     Parameters

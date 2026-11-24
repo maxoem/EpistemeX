@@ -41,13 +41,7 @@ POLARITY_OVERRIDE_TOKENS: dict[str, int] = {
     "NEUTRAL": 0,
 }
 
-L2_NODE_TYPES: list[str] = [
-    "Concept",
-    "Person",
-    "Work",
-    "Theory",
-    "Institution"
-]
+L2_NODE_TYPES: list[str] = ["Concept", "Person", "Work", "Theory", "Institution"]
 
 L2_RELATION_TYPES: list[str] = [
     "RELATED_TO",
@@ -57,7 +51,7 @@ L2_RELATION_TYPES: list[str] = [
     "SUPPORTS",
     "REFUTES",
     "IMPLIES",
-    "CONTRADICTS"
+    "CONTRADICTS",
 ]
 
 L2_NODE_DEFINITIONS: dict[str, str] = {
@@ -83,7 +77,7 @@ L3_COMPONENT_TYPES: list[str] = [
     "ObservationUnit",
     "EmpiricalStatement",
     "TheoreticalHypothesis",
-    "CoreExpansion"
+    "CoreExpansion",
 ]
 L3_RELATION_TYPES: list[str] = [
     "ATTACKS",
@@ -96,14 +90,14 @@ L3_RELATION_TYPES: list[str] = [
     "ENTAILS",
     "DEDUCES",
     "COHERES_WITH",
-    "INHIBITS"
+    "INHIBITS",
 ]
 
 L3_COMPONENT_DEFINITIONS: dict[str, str] = {
     "ObservationUnit": "Singular or localized statements containing exclusively observational terms. Act as raw data nodes.",
     "EmpiricalStatement": "Statements containing only logical and empirical concepts.",
     "TheoreticalHypothesis": "Statements containing theoretical concepts or whose quantifiers have theoretical scope. These represent core laws or abstract hypotheses.",
-    "CoreExpansion": "Special auxiliary laws and constraints that form a shifting superstructure around the stable theory core."
+    "CoreExpansion": "Special auxiliary laws and constraints that form a shifting superstructure around the stable theory core.",
 }
 
 L3_RELATION_DEFINITIONS: dict[str, str] = {
@@ -117,7 +111,7 @@ L3_RELATION_DEFINITIONS: dict[str, str] = {
     "ENTAILS": "Intertheoretical links connecting entirely separate theories, including strict reduction from older to newer theories.",
     "DEDUCES": "Logical entailments between nodes such as Explanation Patterns (Erklärungsschema) and Falsification Patterns (Falsifikationsschema).",
     "COHERES_WITH": "Positive (excitatory) connections between hypotheses that explain evidence, or co-hypotheses that jointly explain a fact.",
-    "INHIBITS": "Negative (inhibitory) weights representing incoherence between logically contradictory or competing hypotheses."
+    "INHIBITS": "Negative (inhibitory) weights representing incoherence between logically contradictory or competing hypotheses.",
 }
 
 RELATION_POLARITIES: dict[str, int] = {
@@ -139,7 +133,7 @@ RELATION_POLARITIES: dict[str, int] = {
     "ENTAILS": 1,
     "DEDUCES": 1,
     "COHERES_WITH": 1,
-    "INHIBITS": -1
+    "INHIBITS": -1,
 }
 
 
@@ -147,7 +141,7 @@ COMPONENT_PARTITIONS: dict[str, str] = {
     "ObservationUnit": "B",
     "EmpiricalStatement": "B",
     "TheoreticalHypothesis": "A",
-    "CoreExpansion": "A"
+    "CoreExpansion": "A",
 }
 
 # Explicit aliases for external argument-mining schemas and custom extensions.
@@ -192,19 +186,35 @@ class SchemaConfig(BaseModel):
     version: str = "v1"
     node_types: list[str] = Field(default_factory=lambda: list(L2_NODE_TYPES))
     relation_types: list[str] = Field(default_factory=lambda: list(L2_RELATION_TYPES))
-    node_definitions: dict[str, str] = Field(default_factory=lambda: dict(L2_NODE_DEFINITIONS))
-    relation_definitions: dict[str, str] = Field(default_factory=lambda: dict(L2_RELATION_DEFINITIONS))
+    node_definitions: dict[str, str] = Field(
+        default_factory=lambda: dict(L2_NODE_DEFINITIONS)
+    )
+    relation_definitions: dict[str, str] = Field(
+        default_factory=lambda: dict(L2_RELATION_DEFINITIONS)
+    )
     component_types: list[str] = Field(default_factory=lambda: list(L3_COMPONENT_TYPES))
-    argument_relation_types: list[str] = Field(default_factory=lambda: list(L3_RELATION_TYPES))
-    component_definitions: dict[str, str] = Field(default_factory=lambda: dict(L3_COMPONENT_DEFINITIONS))
-    argument_relation_definitions: dict[str, str] = Field(default_factory=lambda: dict(L3_RELATION_DEFINITIONS))
-    relation_polarities: dict[str, int] = Field(default_factory=lambda: dict(RELATION_POLARITIES))
-    component_partitions: dict[str, str] = Field(default_factory=lambda: dict(COMPONENT_PARTITIONS))
+    argument_relation_types: list[str] = Field(
+        default_factory=lambda: list(L3_RELATION_TYPES)
+    )
+    component_definitions: dict[str, str] = Field(
+        default_factory=lambda: dict(L3_COMPONENT_DEFINITIONS)
+    )
+    argument_relation_definitions: dict[str, str] = Field(
+        default_factory=lambda: dict(L3_RELATION_DEFINITIONS)
+    )
+    relation_polarities: dict[str, int] = Field(
+        default_factory=lambda: dict(RELATION_POLARITIES)
+    )
+    component_partitions: dict[str, str] = Field(
+        default_factory=lambda: dict(COMPONENT_PARTITIONS)
+    )
     component_partition_aliases: dict[str, str] = Field(
         default_factory=lambda: dict(COMPONENT_PARTITION_ALIASES)
     )
     scope_types: list[str] = Field(default_factory=lambda: list(SCOPE_TYPES))
-    epistemic_statuses: list[str] = Field(default_factory=lambda: list(EPISTEMIC_STATUSES))
+    epistemic_statuses: list[str] = Field(
+        default_factory=lambda: list(EPISTEMIC_STATUSES)
+    )
 
     def node_types_str(self) -> str:
         return ", ".join(self.node_types)
@@ -214,12 +224,20 @@ class SchemaConfig(BaseModel):
 
     def component_types_str(self) -> str:
         import json
-        payload = {k: self.component_definitions.get(k, "No description provided.") for k in self.component_types}
+
+        payload = {
+            k: self.component_definitions.get(k, "No description provided.")
+            for k in self.component_types
+        }
         return json.dumps(payload, indent=2, ensure_ascii=False)
 
     def argument_relation_types_str(self) -> str:
         import json
-        payload = {k: self.argument_relation_definitions.get(k, "No description provided.") for k in self.argument_relation_types}
+
+        payload = {
+            k: self.argument_relation_definitions.get(k, "No description provided.")
+            for k in self.argument_relation_types
+        }
         return json.dumps(payload, indent=2, ensure_ascii=False)
 
     def get_relations_with_polarity(self, polarity: int | None = None) -> list[str]:
@@ -273,7 +291,12 @@ class SchemaConfig(BaseModel):
         bool
             True if relation has polarity +1.
         """
-        return self.relation_polarities.get(relation_type, self.relation_polarities.get(relation_type.upper(), 0)) > 0
+        return (
+            self.relation_polarities.get(
+                relation_type, self.relation_polarities.get(relation_type.upper(), 0)
+            )
+            > 0
+        )
 
     def is_attack_relation(self, relation_type: str) -> bool:
         """Check whether a relation type has negative attack polarity (-1).
@@ -288,7 +311,12 @@ class SchemaConfig(BaseModel):
         bool
             True if relation has polarity -1.
         """
-        return self.relation_polarities.get(relation_type, self.relation_polarities.get(relation_type.upper(), 0)) < 0
+        return (
+            self.relation_polarities.get(
+                relation_type, self.relation_polarities.get(relation_type.upper(), 0)
+            )
+            < 0
+        )
 
     def is_dialectical_relation(self, relation_type: str) -> bool:
         """Check whether a relation type has non-zero dialectical polarity (+1 or -1).
@@ -456,7 +484,11 @@ class SchemaConfig(BaseModel):
         for key, part in self.component_partitions.items():
             if part == "A":
                 return key
-        return self.component_types[-1] if self.component_types else "TheoreticalHypothesis"
+        return (
+            self.component_types[-1]
+            if self.component_types
+            else "TheoreticalHypothesis"
+        )
 
     def default_support_relation(self) -> str:
         """Return the canonical dialectical support relation label for this schema.
@@ -472,7 +504,11 @@ class SchemaConfig(BaseModel):
         for rel in self.argument_relation_types:
             if self.get_relation_polarity(rel) > 0:
                 return rel
-        return self.argument_relation_types[0] if self.argument_relation_types else "SUPPORTS_ARG"
+        return (
+            self.argument_relation_types[0]
+            if self.argument_relation_types
+            else "SUPPORTS_ARG"
+        )
 
     def default_attack_relation(self) -> str:
         """Return the canonical dialectical attack relation label for this schema.
@@ -488,7 +524,11 @@ class SchemaConfig(BaseModel):
         for rel in self.argument_relation_types:
             if self.get_relation_polarity(rel) < 0:
                 return rel
-        return self.argument_relation_types[0] if self.argument_relation_types else "ATTACKS"
+        return (
+            self.argument_relation_types[0]
+            if self.argument_relation_types
+            else "ATTACKS"
+        )
 
     def resolve_relation_type(self, candidate: str) -> str | None:
         """Resolve a candidate relation name or dialectical stance to a configured argument relation.
@@ -581,14 +621,20 @@ class SchemaConfig(BaseModel):
             Schema-registered L2 predicate label for the requested polarity.
         """
         if polarity > 0:
-            if "SUPPORTS" in self.relation_types and self.get_relation_polarity("SUPPORTS") > 0:
+            if (
+                "SUPPORTS" in self.relation_types
+                and self.get_relation_polarity("SUPPORTS") > 0
+            ):
                 return "SUPPORTS"
             for rel in self.relation_types:
                 if self.get_relation_polarity(rel) > 0:
                     return rel
             return self.default_support_relation()
         if polarity < 0:
-            if "REFUTES" in self.relation_types and self.get_relation_polarity("REFUTES") < 0:
+            if (
+                "REFUTES" in self.relation_types
+                and self.get_relation_polarity("REFUTES") < 0
+            ):
                 return "REFUTES"
             for rel in self.relation_types:
                 if self.get_relation_polarity(rel) < 0:

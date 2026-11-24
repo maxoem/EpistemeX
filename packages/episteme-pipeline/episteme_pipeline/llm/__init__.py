@@ -20,4 +20,3 @@ __all__ = [
     "ensure_structured_llm",
     "normalize_structured_llm",
 ]
-

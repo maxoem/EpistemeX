@@ -214,7 +214,9 @@ class ArtifactExecutionEngine:
             payload["max_refinement_cycles"] = (
                 self.config.refinement.max_refinement_cycles
             )
-            payload["refinement_coordinator"] = self.refinement_coordinator.fingerprint()
+            payload["refinement_coordinator"] = (
+                self.refinement_coordinator.fingerprint()
+            )
         return payload
 
     @contextmanager
@@ -268,7 +270,9 @@ class ArtifactExecutionEngine:
             prompts: dict[str, str] = {}
             for comp_name, comp_obj in find_components(cfg).items():
                 if isinstance(comp_obj, StructuredPromptBundle):
-                    pname = comp_obj.name or comp_name.split(".")[-1].removesuffix("_prompts")
+                    pname = comp_obj.name or comp_name.split(".")[-1].removesuffix(
+                        "_prompts"
+                    )
                     prompts[pname] = stable_fingerprint(comp_obj.fingerprint())
             if prompts:
                 fps[phase_key] = prompts
@@ -283,7 +287,9 @@ class ArtifactExecutionEngine:
             runner_prompts: dict[str, str] = {}
             for comp_name, comp_obj in comps.items():
                 if isinstance(comp_obj, StructuredPromptBundle):
-                    pname = comp_obj.name or comp_name.split(".")[-1].removesuffix("_prompts")
+                    pname = comp_obj.name or comp_name.split(".")[-1].removesuffix(
+                        "_prompts"
+                    )
                     runner_prompts[pname] = stable_fingerprint(comp_obj.fingerprint())
             if runner_prompts:
                 fps.setdefault(entry.phase_key, {}).update(runner_prompts)
@@ -313,12 +319,18 @@ class ArtifactExecutionEngine:
         active_nodes = self.workflow.nodes if nodes is None else nodes
         fps: dict[str, str] = {}
         resolved_prompt_fps = (
-            prompt_fps if prompt_fps is not None else self.prompt_fingerprints(active_nodes)
+            prompt_fps
+            if prompt_fps is not None
+            else self.prompt_fingerprints(active_nodes)
         )
 
         for entry in active_nodes:
             runner = entry.runner
-            prefix = str(runner.name) if isinstance(runner, PhaseRunner) and runner.name else f"phase{entry.index}"
+            prefix = (
+                str(runner.name)
+                if isinstance(runner, PhaseRunner) and runner.name
+                else f"phase{entry.index}"
+            )
 
             comps = (
                 runner.components()
@@ -466,9 +478,7 @@ class ArtifactExecutionEngine:
             fp_payload["anchor"] = anchor_fp
         if ledger_fp is not None:
             fp_payload["ledger"] = ledger_fp
-        input_fp = (
-            stable_fingerprint(fp_payload) if len(fp_payload) > 1 else source_fp
-        )
+        input_fp = stable_fingerprint(fp_payload) if len(fp_payload) > 1 else source_fp
         cfg_snapshot = self.config.model_dump(mode="json")
         anchor_dump = (
             pipeline_input.structural_anchor.model_dump(mode="json")
@@ -508,9 +518,7 @@ class ArtifactExecutionEngine:
             ],
         )
 
-    async def choose_reuse_source(
-        self, current: RunManifest
-    ) -> InvalidationDecision:
+    async def choose_reuse_source(self, current: RunManifest) -> InvalidationDecision:
         """Decide which phases can be reused from the most recent completed run.
 
         Evaluates reuse along the :class:`WorkflowDAG` dependency graph: a phase
@@ -552,9 +560,7 @@ class ArtifactExecutionEngine:
 
         de_keys = {
             k
-            for k in (
-                set(current.method_fingerprints) | set(prior.method_fingerprints)
-            )
+            for k in (set(current.method_fingerprints) | set(prior.method_fingerprints))
             if k == "decision_engine" or k.startswith("decision_engine.")
         }
         pipeline_wide_invalidation: str | None = None
@@ -568,8 +574,7 @@ class ArtifactExecutionEngine:
         input_reason: str | None = None
         if input_changed:
             if (
-                prior.curation_ledger_fingerprint
-                != current.curation_ledger_fingerprint
+                prior.curation_ledger_fingerprint != current.curation_ledger_fingerprint
                 and prior.source_fingerprint == current.source_fingerprint
             ):
                 input_reason = "curation-ledger-changed"
@@ -641,8 +646,7 @@ class ArtifactExecutionEngine:
                 if k.startswith((f"{entry.name}.", f"{key}."))
             ]
             if any(
-                prior.method_fingerprints.get(k)
-                != current.method_fingerprints.get(k)
+                prior.method_fingerprints.get(k) != current.method_fingerprints.get(k)
                 for k in method_keys
             ):
                 invalidated_keys.add(key)
@@ -651,9 +655,7 @@ class ArtifactExecutionEngine:
 
             reused_keys.add(key)
 
-        reused = [
-            e.index for e in self.workflow.nodes if e.phase_key in reused_keys
-        ]
+        reused = [e.index for e in self.workflow.nodes if e.phase_key in reused_keys]
         invalidated = [
             e.index for e in self.workflow.nodes if e.phase_key in invalidated_keys
         ]
@@ -881,9 +883,7 @@ class ArtifactExecutionEngine:
             RunStarted(
                 run_id=run_id,
                 parent_run_id=invalidation_decision.resume_point.run_id,
-                reused_phase_ordinals=list(
-                    invalidation_decision.reused_phase_ordinals
-                ),
+                reused_phase_ordinals=list(invalidation_decision.reused_phase_ordinals),
                 invalidated_phase_ordinals=list(
                     invalidation_decision.invalidated_phase_ordinals
                 ),
@@ -913,8 +913,7 @@ class ArtifactExecutionEngine:
                 self.event_emitter.emit(
                     PhaseReused(
                         phase_name=rec.phase_name,
-                        source_run_id=invalidation_decision.resume_point.run_id
-                        or "",
+                        source_run_id=invalidation_decision.resume_point.run_id or "",
                         artifact_count=len(prior_rec.artifact_ids or []),
                         run_id=run_id,
                         phase=rec.phase_name,
@@ -925,9 +924,7 @@ class ArtifactExecutionEngine:
         report.artifact_entries.extend(reused_entries)
         for entry in reused_entries:
             self._increment_count(report.artifact_counts_by_kind, entry.kind)
-            self._increment_count(
-                report.artifact_counts_by_phase, entry.phase_name
-            )
+            self._increment_count(report.artifact_counts_by_phase, entry.phase_name)
             self._increment_count(report.reused_artifact_counts_by_kind, entry.kind)
             self._increment_count(
                 report.reused_artifact_counts_by_phase, entry.phase_name
@@ -943,9 +940,7 @@ class ArtifactExecutionEngine:
                 initial_previous_collection, batch_size=500
             )
 
-        records_by_ordinal = {
-            rec.phase_ordinal: rec for rec in manifest.phase_records
-        }
+        records_by_ordinal = {rec.phase_ordinal: rec for rec in manifest.phase_records}
 
         can_load_prior = self.config.execution.allow_artifact_hydration and (
             self.config.execution.allow_phase_reuse
@@ -993,17 +988,11 @@ class ArtifactExecutionEngine:
                         topo_node.phase_key in upstream_keys
                         and topo_node.phase_key in artifacts_by_key
                     ):
-                        scoped_artifacts.extend(
-                            artifacts_by_key[topo_node.phase_key]
-                        )
+                        scoped_artifacts.extend(artifacts_by_key[topo_node.phase_key])
                 branch_previous: ArtifactCollection | None = (
                     ArtifactCollection(scoped_artifacts)
                     if scoped_artifacts
-                    else (
-                        initial_previous_collection
-                        if not artifacts_by_key
-                        else None
-                    )
+                    else (initial_previous_collection if not artifacts_by_key else None)
                 )
             else:
                 branch_previous = (
@@ -1060,14 +1049,9 @@ class ArtifactExecutionEngine:
                 prior_manifest=prior_manifest,
             )
 
-            if (
-                ordinal in invalidation_decision.invalidated_phase_ordinals
-                and not (
-                    invalidation_decision.reason
-                    and invalidation_decision.reason.startswith(
-                        "prior-phase-incomplete"
-                    )
-                )
+            if ordinal in invalidation_decision.invalidated_phase_ordinals and not (
+                invalidation_decision.reason
+                and invalidation_decision.reason.startswith("prior-phase-incomplete")
             ):
                 chk_store = (
                     entry.runner.checkpoint_store
@@ -1135,9 +1119,7 @@ class ArtifactExecutionEngine:
                         record=record,
                         phase_emitter=phase_emitter,
                     )
-                    if self.config.execution.should_persist_artifacts(
-                        entry.phase_key
-                    ):
+                    if self.config.execution.should_persist_artifacts(entry.phase_key):
                         for art in collection.artifacts:
                             await self.artifact_store.write_artifact(art)
 
@@ -1208,9 +1190,7 @@ class ArtifactExecutionEngine:
                     )
                 )
                 self.event_emitter.flush()
-                report.observer_telemetry = (
-                    self.event_emitter.get_observer_telemetry()
-                )
+                report.observer_telemetry = self.event_emitter.get_observer_telemetry()
                 manifest.observer_telemetry = report.observer_telemetry
                 if self.config.execution.persist_run_manifests:
                     self.manifest_store.write_manifest(manifest)
@@ -1264,7 +1244,7 @@ class ArtifactExecutionEngine:
             )
 
             artifacts_by_key[entry.phase_key] = list(collection.artifacts)
-            previous = cumulative_collection
+            previous = cumulative_collection  # noqa: F841 baseline
 
         if self._is_refinement_active() and self.refinement_coordinator is not None:
             forward_artifacts: list[Any] = list(untagged_initial_artifacts)
@@ -1398,9 +1378,7 @@ class ArtifactExecutionEngine:
                     or k.startswith(("refinement.", "decision_engine."))
                     or k == "decision_engine"
                 },
-                "upstream_fingerprint": self.fingerprint_collection(
-                    forward_collection
-                ),
+                "upstream_fingerprint": self.fingerprint_collection(forward_collection),
             }
         )
 
@@ -1437,12 +1415,8 @@ class ArtifactExecutionEngine:
                         for rec in prior_ref_records
                         for aid in (rec.output_artifact_ids or rec.artifact_ids or [])
                     }
-                    loaded_ref_ids = {
-                        art.artifact_id for art in reused_ref_artifacts
-                    }
-                    ref_artifacts_complete = expected_ref_ids.issubset(
-                        loaded_ref_ids
-                    )
+                    loaded_ref_ids = {art.artifact_id for art in reused_ref_artifacts}
+                    ref_artifacts_complete = expected_ref_ids.issubset(loaded_ref_ids)
 
                 if ref_artifacts_complete:
                     for rec in prior_ref_records:
@@ -1464,9 +1438,7 @@ class ArtifactExecutionEngine:
 
                     for art in reused_ref_artifacts:
                         kind_str = _artifact_kind_str(art.kind)
-                        self._increment_count(
-                            report.artifact_counts_by_kind, kind_str
-                        )
+                        self._increment_count(report.artifact_counts_by_kind, kind_str)
                         self._increment_count(
                             report.artifact_counts_by_phase, art.phase_name
                         )
@@ -1525,9 +1497,7 @@ class ArtifactExecutionEngine:
                     refine_context,
                     config=self.config.refinement,
                 )
-                forward_ids = {
-                    art.artifact_id for art in forward_collection.history
-                }
+                forward_ids = {art.artifact_id for art in forward_collection.history}
                 new_refinement_artifacts = [
                     art
                     for art in refined_collection.history
@@ -1572,9 +1542,7 @@ class ArtifactExecutionEngine:
                 )
             )
             self.event_emitter.flush()
-            report.observer_telemetry = (
-                self.event_emitter.get_observer_telemetry()
-            )
+            report.observer_telemetry = self.event_emitter.get_observer_telemetry()
             manifest.observer_telemetry = report.observer_telemetry
             if self.config.execution.persist_run_manifests:
                 self.manifest_store.write_manifest(manifest)
@@ -1614,9 +1582,7 @@ class ArtifactExecutionEngine:
         """
         resolved_run_id = run_id or f"run-{uuid4()}"
         with self.run_observability_scope(resolved_run_id):
-            manifest = self.build_manifest(
-                run_id=resolved_run_id, pipeline_input=input
-            )
+            manifest = self.build_manifest(run_id=resolved_run_id, pipeline_input=input)
             if parent_run_id:
                 manifest.parent_run_id = parent_run_id
             decision = await self.choose_reuse_source(manifest)
@@ -1633,9 +1599,7 @@ class ArtifactExecutionEngine:
                     source_run_id=decision.resume_point.run_id,
                     wanted_phase_names=wanted_phases,
                 )
-                if allow_hydration
-                and decision.resume_point.run_id
-                and wanted_phases
+                if allow_hydration and decision.resume_point.run_id and wanted_phases
                 else None
             )
             if decision.reused_phase_ordinals:
@@ -1697,16 +1661,12 @@ class ArtifactExecutionEngine:
                 source_paths=list(
                     latest.input_fingerprint_inputs.get("source_paths", [])
                 ),
-                bib_paths=list(
-                    latest.input_fingerprint_inputs.get("bib_paths", [])
-                ),
+                bib_paths=list(latest.input_fingerprint_inputs.get("bib_paths", [])),
             )
         resolved_run_id = run_id or f"run-{uuid4()}"
 
         with self.run_observability_scope(resolved_run_id):
-            manifest = self.build_manifest(
-                run_id=resolved_run_id, pipeline_input=input
-            )
+            manifest = self.build_manifest(run_id=resolved_run_id, pipeline_input=input)
             if parent_run_id:
                 manifest.parent_run_id = parent_run_id
             decision = await self.choose_reuse_source(manifest)
@@ -1744,9 +1704,7 @@ class ArtifactExecutionEngine:
                     source_run_id=decision.resume_point.run_id,
                     wanted_phase_names=wanted_phases,
                 )
-                if allow_hydration
-                and decision.resume_point.run_id
-                and wanted_phases
+                if allow_hydration and decision.resume_point.run_id and wanted_phases
                 else None
             )
             if decision.reused_phase_ordinals:
@@ -1784,9 +1742,7 @@ class ArtifactExecutionEngine:
         """
         target_run_id = f"run-resume-{run_id}"
         with self.run_observability_scope(target_run_id):
-            manifest = self.build_manifest(
-                run_id=target_run_id, pipeline_input=input
-            )
+            manifest = self.build_manifest(run_id=target_run_id, pipeline_input=input)
             if from_phase is None:
                 from_phase = 1
             decision = InvalidationDecision(
@@ -1876,9 +1832,7 @@ class ArtifactExecutionEngine:
             Set of reused phase display names.
         """
         reused = set(decision.reused_phase_ordinals)
-        return {
-            entry.name for entry in self.workflow.nodes if entry.index in reused
-        }
+        return {entry.name for entry in self.workflow.nodes if entry.index in reused}
 
     def reused_phase_records(
         self, decision: InvalidationDecision
@@ -1910,9 +1864,7 @@ class ArtifactExecutionEngine:
         ]
 
     @staticmethod
-    def _increment_count(
-        bucket: dict[str, int], key: str, amount: int = 1
-    ) -> None:
+    def _increment_count(bucket: dict[str, int], key: str, amount: int = 1) -> None:
         """Increment a count in ``bucket`` by ``amount``."""
         bucket[key] = bucket.get(key, 0) + amount
 
@@ -1943,9 +1895,7 @@ class ArtifactExecutionEngine:
         source_phase_names = {
             record.phase_name for record in source_manifest.phase_records
         }
-        reused_phase_names = (
-            self.reused_phase_names(decision) & source_phase_names
-        )
+        reused_phase_names = self.reused_phase_names(decision) & source_phase_names
         if not reused_phase_names:
             return []
 
@@ -1993,17 +1943,13 @@ class ArtifactExecutionEngine:
                 all_artifacts.extend(
                     await self.artifact_store.list_run_artifacts(current_parent)
                 )
-                parent_manifest = self.manifest_store.read_manifest(
-                    current_parent
-                )
+                parent_manifest = self.manifest_store.read_manifest(current_parent)
                 if parent_manifest is None:
                     break
                 current_parent = parent_manifest.parent_run_id
         return all_artifacts
 
-    def _phase_order_map(
-        self, manifest: RunManifest | None = None
-    ) -> dict[str, int]:
+    def _phase_order_map(self, manifest: RunManifest | None = None) -> dict[str, int]:
         """Build a mapping from phase display name to workflow execution ordinal.
 
         Parameters
@@ -2016,9 +1962,7 @@ class ArtifactExecutionEngine:
         dict of str to int
             Mapping from ``phase_name`` to 1-based execution ordinal.
         """
-        order: dict[str, int] = {
-            node.name: node.index for node in self.workflow.nodes
-        }
+        order: dict[str, int] = {node.name: node.index for node in self.workflow.nodes}
         if manifest is not None:
             for rec in manifest.phase_records:
                 order.setdefault(rec.phase_name, rec.phase_ordinal)
@@ -2104,9 +2048,7 @@ class ArtifactExecutionEngine:
                 unique_artifacts[key] = art
                 continue
             art_phase_rank = (
-                phase_order.get(art.phase_name, -1)
-                if phase_order is not None
-                else 0
+                phase_order.get(art.phase_name, -1) if phase_order is not None else 0
             )
             existing_phase_rank = (
                 phase_order.get(existing.phase_name, -1)
@@ -2197,9 +2139,7 @@ class ArtifactExecutionEngine:
             raise ValueError(f"No manifest found for run_id={run_id}")
 
         chain_artifacts = await self._collect_parent_chain_artifacts(run_id)
-        active_phase_names = {
-            rec.phase_name for rec in manifest.phase_records
-        }
+        active_phase_names = {rec.phase_name for rec in manifest.phase_records}
         artifacts = self._dedup_chain_artifacts(
             chain_artifacts,
             allowed_phase_names=active_phase_names,
@@ -2217,9 +2157,7 @@ class ArtifactExecutionEngine:
             rec.phase_ordinal for rec in manifest.phase_records if rec.reused
         ]
         invalidated_phase_ordinals = [
-            rec.phase_ordinal
-            for rec in manifest.phase_records
-            if not rec.reused
+            rec.phase_ordinal for rec in manifest.phase_records if not rec.reused
         ]
 
         entries = self.collect_run_artifact_entries(artifacts, manifest, run_id)

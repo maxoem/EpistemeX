@@ -102,8 +102,12 @@ class TheoryNetDeficitDetector:
             "ungrounded_local_tenability_threshold": self.config.ungrounded_local_tenability_threshold,
             "max_deficits_per_cycle": self.config.max_deficits_per_cycle,
             "detected_in_phase": self.detected_in_phase,
-            "component_partitions": dict(sorted(self.schema.component_partitions.items())),
-            "relation_polarities": dict(sorted(self.schema.relation_polarities.items())),
+            "component_partitions": dict(
+                sorted(self.schema.component_partitions.items())
+            ),
+            "relation_polarities": dict(
+                sorted(self.schema.relation_polarities.items())
+            ),
         }
 
     def detect_deficits(
@@ -138,9 +142,7 @@ class TheoryNetDeficitDetector:
             self.detected_in_phase
             if self.detected_in_phase is not None
             else (
-                "theoretical_enrichment"
-                if state.theoretical_enrichments
-                else "phase6"
+                "theoretical_enrichment" if state.theoretical_enrichments else "phase6"
             )
         )
         curation_ledger: EpistemicCurationLedger | None = resolve_curation_ledger(

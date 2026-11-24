@@ -13,7 +13,9 @@ from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 
 
 class StubPhase(PhaseRunner[object]):
-    def __init__(self, name: str, a: int = 1, b: str = "hello", phase_key: str | None = None) -> None:
+    def __init__(
+        self, name: str, a: int = 1, b: str = "hello", phase_key: str | None = None
+    ) -> None:
         self.name = name
         self.phase_key = phase_key or name.lower().split(":")[0].replace(" ", "")
         self.a = a

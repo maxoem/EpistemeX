@@ -57,8 +57,12 @@ def mixed_empirical_atoms() -> list[TheoryAtom]:
             source_chunk_id="chunk_patient_001",
             confidence=0.95,
             measurements=[
-                Measurement(dimension="amygdala_hyperactivity", value=0.75, unit="index"),
-                Measurement(dimension="dopamine_level", value=0.70, unit="depletion_ratio"),
+                Measurement(
+                    dimension="amygdala_hyperactivity", value=0.75, unit="index"
+                ),
+                Measurement(
+                    dimension="dopamine_level", value=0.70, unit="depletion_ratio"
+                ),
             ],
         ),
         TheoryAtom(
@@ -68,7 +72,9 @@ def mixed_empirical_atoms() -> list[TheoryAtom]:
             source_chunk_id="chunk_patient_001",
             confidence=0.92,
             measurements=[
-                Measurement(dimension="verbal_repetitions", value=0.80, unit="frequency"),
+                Measurement(
+                    dimension="verbal_repetitions", value=0.80, unit="frequency"
+                ),
                 Measurement(dimension="affect_intensity", value=0.85, unit="scale"),
             ],
         ),
@@ -146,20 +152,32 @@ def seeded_theories() -> list[TheoryElementDefinition]:
 def test_safe_formula_evaluator():
     """Verify safe AST formula evaluation on diverse mathematical expressions."""
     # 1. Linear law
-    assert SafeFormulaEvaluator.evaluate("abs(a - b) * 0.5", {"a": 0.70, "b": 0.72}) == pytest.approx(0.01)
+    assert SafeFormulaEvaluator.evaluate(
+        "abs(a - b) * 0.5", {"a": 0.70, "b": 0.72}
+    ) == pytest.approx(0.01)
 
     # 2. Equality constraint
-    assert SafeFormulaEvaluator.evaluate("abs(Force - Mass * Acceleration)", {"Force": 10.0, "Mass": 2.0, "Acceleration": 5.0}) == 0.0
+    assert (
+        SafeFormulaEvaluator.evaluate(
+            "abs(Force - Mass * Acceleration)",
+            {"Force": 10.0, "Mass": 2.0, "Acceleration": 5.0},
+        )
+        == 0.0
+    )
 
     # 3. Minimum / maximum bounding
-    assert SafeFormulaEvaluator.evaluate("max(0.0, a - b)", {"a": 0.8, "b": 0.5}) == pytest.approx(0.3)
+    assert SafeFormulaEvaluator.evaluate(
+        "max(0.0, a - b)", {"a": 0.8, "b": 0.5}
+    ) == pytest.approx(0.3)
     assert SafeFormulaEvaluator.evaluate("max(0.0, a - b)", {"a": 0.3, "b": 0.5}) == 0.0
 
     # 4. Zero division protection
     assert SafeFormulaEvaluator.evaluate("a / b", {"a": 1.0, "b": 0.0}) == 1.0
 
     # 5. Missing parameter fallback
-    assert SafeFormulaEvaluator.evaluate("abs(MissingParam - 0.5)", {}) == pytest.approx(0.5)
+    assert SafeFormulaEvaluator.evaluate(
+        "abs(MissingParam - 0.5)", {}
+    ) == pytest.approx(0.5)
 
     # 6. Syntax error safety
     assert SafeFormulaEvaluator.evaluate("invalid syntax !!!", {}) == 1.0
@@ -176,7 +194,9 @@ def test_theory_law_with_formula_expression():
     assert dev == pytest.approx(0.02)
 
 
-def test_empirical_cluster_identification(mixed_empirical_atoms, mixed_theory_relations):
+def test_empirical_cluster_identification(
+    mixed_empirical_atoms, mixed_theory_relations
+):
     """Test Step 1: Identifying empirical clusters as Intended Applications (I)."""
     runner = TheoreticalEnrichmentRunner()
     clusters = runner._identify_empirical_clusters(
@@ -288,7 +308,9 @@ def test_local_tenability_solver(seeded_theories):
 
     # Coherent parameters (Dopamine and Amygdala align within blur)
     coherent_params = {"DopamineDepletion": 0.70, "AmygdalaHyperactivity": 0.72}
-    ts_local, delta_star, anomalies = solver.solve_local_tenability(coherent_params, neuro_def)
+    ts_local, delta_star, anomalies = solver.solve_local_tenability(
+        coherent_params, neuro_def
+    )
 
     assert ts_local > 0.90
     assert delta_star < 0.10
@@ -358,17 +380,24 @@ async def test_llm_theory_inducer(mixed_empirical_atoms, mixed_theory_relations)
     mock_llm.predict_structured = AsyncMock(return_value=mock_output)
 
     inducer = LLMTheoryInducer(llm=mock_llm)
-    induced = await inducer.induce_theories(mixed_empirical_atoms, mixed_theory_relations)
+    induced = await inducer.induce_theories(
+        mixed_empirical_atoms, mixed_theory_relations
+    )
 
     assert len(induced) == 1
     theory = induced[0]
     assert theory.theory_id == "induced_neuropsychoanalysis"
     assert theory.parameter_names == ["AffectDissonance", "NeuralDisinhibition"]
     assert len(theory.laws) == 1
-    assert theory.laws[0].formula_expression == "abs(AffectDissonance - NeuralDisinhibition) * 0.5"
+    assert (
+        theory.laws[0].formula_expression
+        == "abs(AffectDissonance - NeuralDisinhibition) * 0.5"
+    )
 
     # Verify law evaluation on induced theory
-    dev = theory.laws[0].compute_deviation({"AffectDissonance": 0.6, "NeuralDisinhibition": 0.64})
+    dev = theory.laws[0].compute_deviation(
+        {"AffectDissonance": 0.6, "NeuralDisinhibition": 0.64}
+    )
     assert dev == pytest.approx(0.02)
 
 
@@ -405,9 +434,11 @@ async def test_theoretical_enrichment_runner_end_to_end_with_dynamic_induction(
     mixed_empirical_atoms, mixed_theory_relations
 ):
     """End-to-end execution of runner with ZERO hardcoded theories, using LLM induction."""
+
     class _TestObserver:
         def __init__(self):
             self.events = []
+
         def on_event(self, e):
             self.events.append(e)
 
@@ -432,7 +463,10 @@ async def test_theoretical_enrichment_runner_end_to_end_with_dynamic_induction(
                         law_id="autonomous_law",
                         description="Coupling law",
                         formula_expression="abs(DopamineDepletion - AmygdalaHyperactivity) * 0.5",
-                        involved_parameters=["DopamineDepletion", "AmygdalaHyperactivity"],
+                        involved_parameters=[
+                            "DopamineDepletion",
+                            "AmygdalaHyperactivity",
+                        ],
                     )
                 ],
                 max_admissible_blur=1.0,
@@ -458,10 +492,14 @@ async def test_theoretical_enrichment_runner_end_to_end_with_dynamic_induction(
     mock_llm.predict_structured = AsyncMock(side_effect=mock_predict_structured)
 
     with use_event_emitter(emitter):
-        config = TheoreticalEnrichmentConfig(enabled=True, induce_theories=True, tenability_threshold=0.5)
+        config = TheoreticalEnrichmentConfig(
+            enabled=True, induce_theories=True, tenability_threshold=0.5
+        )
         # Registry is completely empty! Zero hardcoded theories!
         empty_registry = TheoryRegistry()
-        runner = TheoreticalEnrichmentRunner(config=config, registry=empty_registry, llm=mock_llm)
+        runner = TheoreticalEnrichmentRunner(
+            config=config, registry=empty_registry, llm=mock_llm
+        )
 
         view = Phase4ArtifactsView(
             theory_atoms=mixed_empirical_atoms,
@@ -548,7 +586,9 @@ def test_pipeline_for_task_with_post_processors():
         phase_key = "custom_post_processor"
         input_view = Phase4ArtifactsView
 
-        async def run(self, input: Phase4ArtifactsView, context: Any) -> ArtifactCollection:
+        async def run(
+            self, input: Phase4ArtifactsView, context: Any
+        ) -> ArtifactCollection:
             return ArtifactCollection([])
 
     mock_post_proc = CustomPostProcessor()

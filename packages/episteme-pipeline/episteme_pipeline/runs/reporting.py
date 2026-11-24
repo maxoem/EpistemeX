@@ -16,7 +16,9 @@ def _outputs(manifest: RunManifest | None) -> dict[str, Any]:
     execution = snapshot.get("execution") or {}
     projected = bool(execution.get("project_artifacts_to_graph", False))
     outputs: dict[str, Any] = {
-        "graph": "projected" if projected else "not projected (project_artifacts_to_graph=False)",
+        "graph": "projected"
+        if projected
+        else "not projected (project_artifacts_to_graph=False)",
     }
     if execution.get("persist_run_manifests", True):
         outputs["runs_dir"] = execution.get("runs_dir")
@@ -40,7 +42,9 @@ def format_text(report: RunReport | None, manifest: RunManifest | None) -> str:
         run_id = getattr(manifest, "run_id", None)
         parent_run_id = getattr(manifest, "parent_run_id", None)
     if run_id is None and report is not None:
-        run_id = getattr(report, "run_id", None) or getattr(getattr(report, "manifest", None), "run_id", None)
+        run_id = getattr(report, "run_id", None) or getattr(
+            getattr(report, "manifest", None), "run_id", None
+        )
 
     lines.append("Run completed")
     lines.append(f"  run_id: {run_id or 'unknown'}")
@@ -53,7 +57,9 @@ def format_text(report: RunReport | None, manifest: RunManifest | None) -> str:
         if report.reused_phase_ordinals:
             lines.append(f"  reused phases: {sorted(report.reused_phase_ordinals)}")
         if report.invalidated_phase_ordinals:
-            lines.append(f"  executed phases: {sorted(report.invalidated_phase_ordinals)}")
+            lines.append(
+                f"  executed phases: {sorted(report.invalidated_phase_ordinals)}"
+            )
     else:
         lines.append("  status: unknown")
 
@@ -83,7 +89,9 @@ def format_markdown(report: RunReport | None, manifest: RunManifest | None) -> s
         run_id = getattr(manifest, "run_id", None)
         parent_run_id = getattr(manifest, "parent_run_id", None)
     if run_id is None and report is not None:
-        run_id = getattr(report, "run_id", None) or getattr(getattr(report, "manifest", None), "run_id", None)
+        run_id = getattr(report, "run_id", None) or getattr(
+            getattr(report, "manifest", None), "run_id", None
+        )
 
     lines.append("# Run Report")
     lines.append("")
@@ -95,9 +103,13 @@ def format_markdown(report: RunReport | None, manifest: RunManifest | None) -> s
         lines.append(f"- **Started**: `{report.started_at}`")
         lines.append(f"- **Completed**: `{report.completed_at}`")
         if report.reused_phase_ordinals:
-            lines.append(f"- **Reused Phases**: `{sorted(report.reused_phase_ordinals)}`")
+            lines.append(
+                f"- **Reused Phases**: `{sorted(report.reused_phase_ordinals)}`"
+            )
         if report.invalidated_phase_ordinals:
-            lines.append(f"- **Executed Phases**: `{sorted(report.invalidated_phase_ordinals)}`")
+            lines.append(
+                f"- **Executed Phases**: `{sorted(report.invalidated_phase_ordinals)}`"
+            )
     else:
         lines.append("- **Status**: `unknown`")
 
@@ -128,7 +140,9 @@ def format_json(report: RunReport | None, manifest: RunManifest | None) -> dict:
         run_id = getattr(manifest, "run_id", None)
         parent_run_id = getattr(manifest, "parent_run_id", None)
     if run_id is None and report is not None:
-        run_id = getattr(report, "run_id", None) or getattr(getattr(report, "manifest", None), "run_id", None)
+        run_id = getattr(report, "run_id", None) or getattr(
+            getattr(report, "manifest", None), "run_id", None
+        )
 
     status = getattr(report, "status", None)
     started_at = getattr(report, "started_at", None)

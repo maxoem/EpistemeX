@@ -51,8 +51,6 @@ class GlobalStructuralAnchor(BaseModel):
         return "\n".join(lines).strip()
 
 
-
-
 class TextAnchor(BaseModel):
     """Multi-modal source evidence anchor supporting text, formulas, tables, and figures.
 
@@ -110,6 +108,7 @@ class L1Document(BaseModel):
     chunk_count: int
     structural_anchor: GlobalStructuralAnchor | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
 
 class EntityConception(BaseModel):
     """Intensional, theory-laden or perspective-specific conception of an L2Entity.
@@ -176,6 +175,7 @@ class L2Entity(BaseModel):
         Spherical dispersion across mention envelopes measuring cross-perspective
         polysemy prior to or after conception stratification.
     """
+
     id: str
     label: str
     name: str
@@ -395,9 +395,15 @@ class IntensionalMode(str, Enum):
         for member in cls:
             if s == member.value or s == member.name.lower():
                 return member
-        if any(k in s for k in ("suppos", "reductio", "counterfactual", "hypothesized", "assum")):
+        if any(
+            k in s
+            for k in ("suppos", "reductio", "counterfactual", "hypothesized", "assum")
+        ):
             return cls.SUPPOSITIONAL
-        if any(k in s for k in ("attrib", "exeget", "opponent", "report", "cited", "interlocutor")):
+        if any(
+            k in s
+            for k in ("attrib", "exeget", "opponent", "report", "cited", "interlocutor")
+        ):
             return cls.ATTRIBUTED
         if any(k in s for k in ("histor", "archiv", "background", "chronolog")):
             return cls.HISTORICAL
@@ -467,11 +473,32 @@ class TheoryAtom(BaseModel):
     component_type: str
     source_chunk_id: str
     confidence: float | None = None
-    modal_prior: float = Field(default=0.6, ge=0.0, le=1.0, description="Node-intrinsic propositional modal prior tau_0(a) = M(phi_a)")
-    local_tenability: float | None = Field(default=None, ge=0.0, le=1.0, description="Empirical local tenability TS_local(a) in [0, 1]")
-    equilibrium_strength: float | None = Field(default=None, ge=0.0, le=1.0, description="Dialectical equilibrium justification degree tau*(a) in [0, 1]")
-    controversy_volatility: float | None = Field(default=None, ge=0.0, description="Keynes-Gardenfors epistemic weight volatility V(a)")
-    intensional_mode: Literal["asserted", "attributed", "suppositional", "historical"] = Field(
+    modal_prior: float = Field(
+        default=0.6,
+        ge=0.0,
+        le=1.0,
+        description="Node-intrinsic propositional modal prior tau_0(a) = M(phi_a)",
+    )
+    local_tenability: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Empirical local tenability TS_local(a) in [0, 1]",
+    )
+    equilibrium_strength: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Dialectical equilibrium justification degree tau*(a) in [0, 1]",
+    )
+    controversy_volatility: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Keynes-Gardenfors epistemic weight volatility V(a)",
+    )
+    intensional_mode: Literal[
+        "asserted", "attributed", "suppositional", "historical"
+    ] = Field(
         default="asserted",
         description="Intensional context scope ('asserted', 'attributed', 'suppositional', or 'historical').",
     )
@@ -584,7 +611,10 @@ class TheoryAtom(BaseModel):
                     if include_suppositional
                     else ("asserted", "historical")
                 )
-                if self.intensional_mode not in allowed_author_modes or not is_unattributed:
+                if (
+                    self.intensional_mode not in allowed_author_modes
+                    or not is_unattributed
+                ):
                     return 0.0
             else:
                 is_shared_historical = (
@@ -725,7 +755,9 @@ class TheoryRelation(BaseModel):
         if not self.source_id and self.premise_ids:
             self.source_id = self.premise_ids[0]
         if not self.source_id:
-            raise ValueError("TheoryRelation requires non-empty 'source_id' or 'premise_ids'.")
+            raise ValueError(
+                "TheoryRelation requires non-empty 'source_id' or 'premise_ids'."
+            )
 
         if not self.target_id and self.undercuts_relation_id:
             self.target_id = self.undercuts_relation_id
@@ -735,7 +767,9 @@ class TheoryRelation(BaseModel):
             )
 
         warrant_explicit = "inferential_warrant" in self.model_fields_set
-        ts_edge = float(self.edge_tenability) if self.edge_tenability is not None else 1.0
+        ts_edge = (
+            float(self.edge_tenability) if self.edge_tenability is not None else 1.0
+        )
 
         # Compute effective_weight strictly without node modality M(phi)
         if self.effective_weight is None:
@@ -804,7 +838,9 @@ class TheoryRelation(BaseModel):
             return f"argument-relation::{self.source_id}::{self.relation_type}::{self.target_id}"
         premises_part = "+".join(self.effective_premise_ids)
         target_part = self.undercuts_relation_id or self.target_id
-        return f"argument-relation::{premises_part}::{self.relation_type}::{target_part}"
+        return (
+            f"argument-relation::{premises_part}::{self.relation_type}::{target_part}"
+        )
 
     def compute_effective_weight(
         self,
@@ -849,7 +885,9 @@ class TheoryRelation(BaseModel):
         if not self.is_admissible or p_val < tau_p or c_val < tau_c:
             return 0.0
         gate = 1.0 if gating_mode == "hard" else (p_val * c_val)
-        ts_edge = float(self.edge_tenability) if self.edge_tenability is not None else 1.0
+        ts_edge = (
+            float(self.edge_tenability) if self.edge_tenability is not None else 1.0
+        )
         return max(0.0, min(1.0, float(warrant) * gate * ts_edge))
 
     @property
@@ -908,6 +946,7 @@ class SubGraph(BaseModel):
         Maximum traversal depth that was requested to construct the
         neighborhood.
     """
+
     center_id: str
     nodes: list[L2Entity]
     triples: list[L2Triple]
@@ -967,7 +1006,7 @@ class CandidatePair(BaseModel):
     dense_score: float | None = None
     score: float | None = None
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, __context: Any) -> None:  # noqa: PYI063 baseline
         if self.score is not None and self.dense_score is None:
             object.__setattr__(self, "dense_score", self.score)
         elif self.dense_score is not None and self.score is None:
@@ -997,8 +1036,12 @@ class CandidatePair(BaseModel):
         """
         from episteme_pipeline.runs.fingerprints import stable_fingerprint
 
-        h_a = stable_fingerprint(self.entity_a.textual_envelope or self.entity_a.name)[:8]
-        h_b = stable_fingerprint(self.entity_b.textual_envelope or self.entity_b.name)[:8]
+        h_a = stable_fingerprint(self.entity_a.textual_envelope or self.entity_a.name)[
+            :8
+        ]
+        h_b = stable_fingerprint(self.entity_b.textual_envelope or self.entity_b.name)[
+            :8
+        ]
         if self.entity_a.id <= self.entity_b.id:
             return f"{self.entity_a.id}::{self.entity_b.id}::{h_a}::{h_b}"
         return f"{self.entity_b.id}::{self.entity_a.id}::{h_b}::{h_a}"

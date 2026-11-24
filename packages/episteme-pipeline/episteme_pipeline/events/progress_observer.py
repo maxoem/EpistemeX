@@ -90,7 +90,9 @@ class RichProgressObserver(EventObserver):
             raise ImportError("rich must be installed to use RichProgressObserver.")
 
         self.progress = progress
-        self._console = console or (progress.console if progress is not None else Console())
+        self._console = console or (
+            progress.console if progress is not None else Console()
+        )
         self.third_party_log_level = third_party_log_level
         self.auto_refresh = auto_refresh
         self.transient = transient
@@ -177,7 +179,10 @@ class RichProgressObserver(EventObserver):
         # Sync existing RichHandlers to share the same console so logs don't tear the progress bar
         if self.sync_root_handlers and RichHandler is not None:
             for handler in logging.getLogger().handlers:
-                if isinstance(handler, RichHandler) and handler.console is not self.console:
+                if (
+                    isinstance(handler, RichHandler)
+                    and handler.console is not self.console
+                ):
                     handler.console = self.console
 
         if self._owns_progress:
@@ -185,7 +190,7 @@ class RichProgressObserver(EventObserver):
 
         return self
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:  # noqa: PYI036 baseline
         """Stop the progress display if owned by this observer.
 
         Parameters
@@ -242,4 +247,3 @@ class RichProgressObserver(EventObserver):
         """Refresh and flush the active Rich progress display."""
         if self.progress is not None:
             self.progress.refresh()
-

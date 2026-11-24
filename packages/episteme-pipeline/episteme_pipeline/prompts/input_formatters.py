@@ -26,19 +26,14 @@ class BaseSubgraphFormatter(ABC):
 
     @abstractmethod
     def format(
-        self, 
-        env_a: SubGraph, 
-        env_b: SubGraph, 
-        include_description: bool = True
+        self, env_a: SubGraph, env_b: SubGraph, include_description: bool = True
     ) -> str:
         """Render two subgraph envelopes as a formatted string."""
         ...
 
     @staticmethod
     def _extract_payload(
-        env_a: SubGraph, 
-        env_b: SubGraph, 
-        include_description: bool = True
+        env_a: SubGraph, env_b: SubGraph, include_description: bool = True
     ) -> dict[str, Any]:
         """Extract merged node and edge dictionaries from subgraph envelopes."""
         all_nodes = {n.id: n for n in env_a.nodes + env_b.nodes}
@@ -53,11 +48,13 @@ class BaseSubgraphFormatter(ABC):
 
         edges_data = []
         for t in all_triples:
-            edges_data.append({
-                "subject": t.subject_id,
-                "predicate": t.predicate,
-                "object": t.object_id,
-            })
+            edges_data.append(
+                {
+                    "subject": t.subject_id,
+                    "predicate": t.predicate,
+                    "object": t.object_id,
+                }
+            )
 
         payload: dict[str, Any] = {"nodes": nodes_data, "edges": edges_data}
         if not payload["nodes"] and not payload["edges"]:
@@ -69,10 +66,7 @@ class JsonSubgraphFormatter(BaseSubgraphFormatter):
     """JSON serialization strategy (Recommended for LLM understanding)."""
 
     def format(
-        self, 
-        env_a: SubGraph, 
-        env_b: SubGraph, 
-        include_description: bool = True
+        self, env_a: SubGraph, env_b: SubGraph, include_description: bool = True
     ) -> str:
         payload = self._extract_payload(env_a, env_b, include_description)
         return json.dumps(payload, indent=2, ensure_ascii=False)
@@ -82,14 +76,12 @@ class YamlSubgraphFormatter(BaseSubgraphFormatter):
     """YAML serialization strategy."""
 
     def format(
-        self, 
-        env_a: SubGraph, 
-        env_b: SubGraph, 
-        include_description: bool = True
+        self, env_a: SubGraph, env_b: SubGraph, include_description: bool = True
     ) -> str:
         payload = self._extract_payload(env_a, env_b, include_description)
         try:
             import yaml
+
             return yaml.dump(payload, default_flow_style=False, allow_unicode=True)
         except ImportError:
             return json.dumps(payload, indent=2, ensure_ascii=False)
@@ -99,10 +91,7 @@ class TextSubgraphFormatter(BaseSubgraphFormatter):
     """Plain-text string rendering strategy."""
 
     def format(
-        self, 
-        env_a: SubGraph, 
-        env_b: SubGraph, 
-        include_description: bool = True
+        self, env_a: SubGraph, env_b: SubGraph, include_description: bool = True
     ) -> str:
         lines: list[str] = []
 
@@ -130,10 +119,10 @@ _FORMATTERS: dict[InputFormatStrategy, BaseSubgraphFormatter] = {
 
 
 def format_subgraph_envelope(
-    env_a: SubGraph, 
-    env_b: SubGraph, 
-    strategy: InputFormatStrategy = InputFormatStrategy.JSON, 
-    include_description: bool = True
+    env_a: SubGraph,
+    env_b: SubGraph,
+    strategy: InputFormatStrategy = InputFormatStrategy.JSON,
+    include_description: bool = True,
 ) -> str:
     """Render subgraph envelopes using the configured strategy."""
     formatter = _FORMATTERS.get(strategy, _FORMATTERS[InputFormatStrategy.JSON])

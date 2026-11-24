@@ -26,13 +26,17 @@ def test_all_episteme_studio_modules_import_without_error():
     adapter that bootstraps the pipeline runtime.
     """
     broken: list[tuple[str, str]] = []
-    for module in pkgutil.walk_packages(episteme_studio.__path__, prefix="episteme_studio."):
+    for module in pkgutil.walk_packages(
+        episteme_studio.__path__, prefix="episteme_studio."
+    ):
         try:
             importlib.import_module(module.name)
         except Exception as exc:  # noqa: BLE001 - any import-time error is a defect
             broken.append((module.name, f"{type(exc).__name__}: {exc}"))
 
-    assert not broken, f"{len(broken)} episteme_studio module(s) failed to import: {broken}"
+    assert not broken, (
+        f"{len(broken)} episteme_studio module(s) failed to import: {broken}"
+    )
 
 
 def test_worker_pipeline_entrypoint_importable():

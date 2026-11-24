@@ -76,7 +76,9 @@ class EmbeddingModel(Protocol):
 
     async def aget_text_embedding(self, text: str) -> list[float]: ...
 
-    async def aget_text_embedding_batch(self, texts: list[str]) -> list[list[float]]: ...
+    async def aget_text_embedding_batch(
+        self, texts: list[str]
+    ) -> list[list[float]]: ...
 
 
 @runtime_checkable
@@ -237,7 +239,11 @@ class HuggingFaceEmbeddingModel:
 
         with torch.no_grad():
             inputs = self.tokenizer(
-                texts, padding=True, truncation=True, max_length=512, return_tensors="pt"
+                texts,
+                padding=True,
+                truncation=True,
+                max_length=512,
+                return_tensors="pt",
             )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             outputs = self.model(**inputs)
@@ -328,8 +334,12 @@ class ObservableEmbeddingModel:
         duration = time.perf_counter() - t0
 
         total_chars = sum(len(t) for t in texts)
-        total_tokens = sum(LLMResponseMetadataExtractor.estimate_tokens(t) for t in texts)
-        vector_dim = len(embeddings[0]) if embeddings and embeddings[0] else self.dimension
+        total_tokens = sum(
+            LLMResponseMetadataExtractor.estimate_tokens(t) for t in texts
+        )
+        vector_dim = (
+            len(embeddings[0]) if embeddings and embeddings[0] else self.dimension
+        )
 
         try:
             get_event_emitter().emit(
@@ -344,7 +354,7 @@ class ObservableEmbeddingModel:
                     operation="embedding",
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         return embeddings
@@ -374,7 +384,9 @@ def ensure_embedding_model(model: Any | None) -> EmbeddingModel | None:
     if isinstance(model, str):
         hf = HuggingFaceEmbeddingModel(model_name=model)
         return ObservableEmbeddingModel(hf, model_name=model)
-    if hasattr(model, "aget_text_embedding") and hasattr(model, "aget_text_embedding_batch"):
+    if hasattr(model, "aget_text_embedding") and hasattr(
+        model, "aget_text_embedding_batch"
+    ):
         return ObservableEmbeddingModel(model)
     if hasattr(model, "encode"):
         sync_model = SyncEncoderEmbeddingModel(model)
@@ -384,7 +396,6 @@ def ensure_embedding_model(model: Any | None) -> EmbeddingModel | None:
         "must provide either async aget_text_embedding/aget_text_embedding_batch "
         "(llama-index style) or a synchronous encode(list[str]) (torch style)."
     )
-
 
 
 # ----------------------------------------------------------------------
@@ -448,7 +459,9 @@ class RelationReranker(Fingerprintable, ABC):
             summarize_reranker_text_pair,
         )
 
-        query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
+        query, doc_text = build_relation_reranker_inputs(
+            entity_a, env_a, entity_b, env_b
+        )
         return summarize_reranker_text_pair(
             query,
             doc_text,
@@ -494,9 +507,7 @@ class GlobalRelationExtractor(Fingerprintable, ABC):
     reranker model before LLM triple decoding.
     """
 
-    async def candidate_pairs(
-        self, entities: list[L2Entity]
-    ) -> list[CandidatePair]:
+    async def candidate_pairs(self, entities: list[L2Entity]) -> list[CandidatePair]:
         """Generate candidate entity pairs for relation extraction.
 
         Parameters
@@ -567,11 +578,13 @@ class GlobalRelationExtractor(Fingerprintable, ABC):
 
         logger = logging.getLogger(__name__)
 
-        async def _eval_one(pair: CandidatePair) -> tuple[L2Triple | None, PhaseItemRecord]:
+        async def _eval_one(
+            pair: CandidatePair,
+        ) -> tuple[L2Triple | None, PhaseItemRecord]:
             try:
                 triple = await self.extract_pair(pair, graph_store, schema)
                 return triple, PhaseItemRecord(key=pair.key, status="completed")
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 baseline
                 logger.error("Phase 3 quarantined failed pair %s: %s", pair.key, exc)
                 return None, PhaseItemRecord(
                     key=pair.key,
@@ -617,7 +630,10 @@ class GlobalRelationExtractor(Fingerprintable, ABC):
         return triples
 
     async def get_structural_neighborhood(
-        self, entity: L2Entity, graph_store: GraphReader, depth: int = 2,
+        self,
+        entity: L2Entity,
+        graph_store: GraphReader,
+        depth: int = 2,
     ) -> SubGraph:
         """Default structural neighborhood retrieval via graph_store."""
         return await graph_store.get_neighborhood(entity.id, depth=depth)
@@ -685,7 +701,9 @@ class EntityLinker(Fingerprintable, ABC):
         TriageDecision of L2Entity or None
             Triage decision containing matched entity and ambiguity status.
         """
-        matched = await self.link(mention, graph_store, top_k=top_k, threshold=threshold)
+        matched = await self.link(
+            mention, graph_store, top_k=top_k, threshold=threshold
+        )
         return TriageDecision(value=matched, is_ambiguous=False)
 
 

@@ -25,12 +25,6 @@ from itertools import batched
 from pathlib import Path
 from typing import Any
 
-from episteme_pipeline.artifacts.models import (
-    ArtifactEnvelope,
-    ArtifactKind,
-    ChunkArtifact,
-    DocumentArtifact,
-)
 from episteme_pipeline.artifacts.builders import (
     build_chunk_artifact,
     build_document_artifact,
@@ -39,7 +33,12 @@ from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
 )
-from episteme_pipeline.artifacts.models import ArtifactKind
+from episteme_pipeline.artifacts.models import (
+    ArtifactEnvelope,  # noqa: F401 baseline
+    ArtifactKind,
+    ChunkArtifact,  # noqa: F401 baseline
+    DocumentArtifact,  # noqa: F401 baseline
+)
 from episteme_pipeline.config import Phase1Config
 from episteme_pipeline.contracts.domain import L1Chunk, L1Document
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
@@ -111,7 +110,9 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
         bib_paths = [Path(p) for p in input.bib_paths]
 
         if isinstance(context, ArtifactExecutionContext):
-            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase1(input.source_paths)
+            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase1(
+                input.source_paths
+            )
             delta_paths = hydration.delta_source_paths
             retained_artifacts = list(hydration.retained_artifacts)
         else:
@@ -128,6 +129,7 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
                 total_items=len(delta_paths),
                 description="Data Foundation",
             ) as advance:
+
                 async def _process_with_progress(path):
                     res = await self._process_document(
                         Path(path),
@@ -192,10 +194,14 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
             Constructed L1Document and list of extracted, embedded L1Chunks.
         """
         adapter = find_adapter(path, self.adapters)
-        markdown = await asyncio.to_thread(adapter.convert, path, bib_paths=bib_paths or None)
+        markdown = await asyncio.to_thread(
+            adapter.convert, path, bib_paths=bib_paths or None
+        )
 
         # Extract document structural anchor via ToC Parser on converted markdown
-        toc_anchor = self.toc_parser.parse(text=markdown, document_title=path.stem, path=None)
+        toc_anchor = self.toc_parser.parse(
+            text=markdown, document_title=path.stem, path=None
+        )
 
         raw_chunks = chunk_document(
             markdown,
@@ -325,7 +331,7 @@ class Phase1Runner(PhaseRunner[PipelineInput]):
                     phase=self.name,
                 )
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 baseline
             logger.error("Failed to emit ChunksGenerated event: %s", e)
 
         return doc, chunks

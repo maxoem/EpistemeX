@@ -25,7 +25,6 @@ from episteme_pipeline.contracts.domain import TheoryAtom, TheoryNet
 from episteme_pipeline.contracts.phase_contracts import CURATION_LEDGER_RESOLVER_TYPE
 from episteme_pipeline.decision.modal_resolver import HybridModalResolver
 from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
-from episteme_pipeline.utils.graph_algorithms import compute_z1_grounding
 from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.graph_store import ProjectionGraph
 from episteme_pipeline.protocols.modality import (
@@ -38,6 +37,7 @@ from episteme_pipeline.protocols.refinement import (
     ensure_deficit_detector,
 )
 from episteme_pipeline.schema.default_schema import SchemaConfig
+from episteme_pipeline.utils.graph_algorithms import compute_z1_grounding
 
 logger = logging.getLogger(__name__)
 
@@ -112,12 +112,14 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
         self.tau_c = config.tau_c
 
         # Resolve ModalStrengthResolver
-        self.modal_resolver = ensure_modal_strength_resolver(modal_resolver) or HybridModalResolver.create(
+        self.modal_resolver = ensure_modal_strength_resolver(
+            modal_resolver
+        ) or HybridModalResolver.create(
             config=config.modal_resolver,
             decision_engine=self.decision_engine,
         )
-        self.deficit_detector: EpistemicDeficitDetector | None = ensure_deficit_detector(
-            deficit_detector
+        self.deficit_detector: EpistemicDeficitDetector | None = (
+            ensure_deficit_detector(deficit_detector)
         )
 
         self.projector = projector or TheoryNetProjector(
@@ -305,7 +307,9 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
                 stamped = (
                     deficit
                     if deficit.detected_in_phase
-                    else deficit.model_copy(update={"detected_in_phase": self.phase_key})
+                    else deficit.model_copy(
+                        update={"detected_in_phase": self.phase_key}
+                    )
                 )
                 artifacts.append(
                     build_epistemic_deficit_artifact(

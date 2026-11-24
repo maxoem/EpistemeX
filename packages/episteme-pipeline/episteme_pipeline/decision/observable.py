@@ -107,13 +107,11 @@ class ObservableDecisionEngine:
         copied = list(prediction_set)
         self.recorded_prediction_sets.append(copied)
         if self.active_phase_key is not None:
-            self.prediction_sets_by_phase.setdefault(
-                self.active_phase_key, []
-            ).append(copied)
+            self.prediction_sets_by_phase.setdefault(self.active_phase_key, []).append(
+                copied
+            )
 
-    def consume_prediction_sets(
-        self, phase_key: str | None = None
-    ) -> list[list[str]]:
+    def consume_prediction_sets(self, phase_key: str | None = None) -> list[list[str]]:
         """Return and clear conformal prediction sets recorded for ``phase_key``.
 
         Parameters
@@ -235,7 +233,9 @@ class ObservableDecisionEngine:
         if self.task_id and task_id and task_id != self.task_id:
             effective_task = f"{self.task_id}:{task_id}"
         else:
-            effective_task = str(task_id or self.task_id or self.engine_name or "decision")
+            effective_task = str(
+                task_id or self.task_id or self.engine_name or "decision"
+            )
         effective_hash = state_hash or hashlib.sha256(b"").hexdigest()
         msg = f"{effective_task}:{effective_hash}".encode()
         digest = hmac.new(effective_seed.encode("utf-8"), msg, hashlib.sha256).digest()
@@ -275,7 +275,7 @@ class ObservableDecisionEngine:
                     state_character_count=char_count,
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         t0 = time.perf_counter()
@@ -283,7 +283,9 @@ class ObservableDecisionEngine:
         duration = time.perf_counter() - t0
 
         is_audit = self._should_audit(state_hash, "noul")
-        tokens_saved = result.tokens_saved_estimate if isinstance(result, DecisionScore) else 0
+        tokens_saved = (
+            result.tokens_saved_estimate if isinstance(result, DecisionScore) else 0
+        )
         if not tokens_saved:
             tokens_saved = (char_count // 4) + (len(question) // 4) + 30
 
@@ -294,8 +296,12 @@ class ObservableDecisionEngine:
                     primitive="noul",
                     question=question,
                     prompt_name=self.prompt_bundle.name if self.prompt_bundle else None,
-                    prompt_version=self.prompt_bundle.version if self.prompt_bundle else None,
-                    prompt_label=self.prompt_bundle.label if self.prompt_bundle else None,
+                    prompt_version=self.prompt_bundle.version
+                    if self.prompt_bundle
+                    else None,
+                    prompt_label=self.prompt_bundle.label
+                    if self.prompt_bundle
+                    else None,
                     selected_value=result.passed,
                     class_probability=result.probability,
                     empirical_accuracy=result.empirical_accuracy,
@@ -309,7 +315,7 @@ class ObservableDecisionEngine:
                     tokens_saved_estimate=tokens_saved,
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         return result
@@ -360,7 +366,7 @@ class ObservableDecisionEngine:
                     state_character_count=char_count,
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         effective_task_id = self._resolve_task_id(task_id)
@@ -401,8 +407,12 @@ class ObservableDecisionEngine:
                     primitive="choice",
                     question=question,
                     prompt_name=self.prompt_bundle.name if self.prompt_bundle else None,
-                    prompt_version=self.prompt_bundle.version if self.prompt_bundle else None,
-                    prompt_label=self.prompt_bundle.label if self.prompt_bundle else None,
+                    prompt_version=self.prompt_bundle.version
+                    if self.prompt_bundle
+                    else None,
+                    prompt_label=self.prompt_bundle.label
+                    if self.prompt_bundle
+                    else None,
                     selected_value=str(result.selected_option),
                     class_probability=result.class_probability,
                     empirical_accuracy=result.empirical_accuracy,
@@ -413,7 +423,7 @@ class ObservableDecisionEngine:
                     tokens_saved_estimate=tokens_saved,
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         return result
@@ -463,7 +473,7 @@ class ObservableDecisionEngine:
                     state_character_count=char_count,
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         effective_task_id = self._resolve_task_id(task_id)
@@ -502,8 +512,12 @@ class ObservableDecisionEngine:
                     primitive="score",
                     question=question,
                     prompt_name=self.prompt_bundle.name if self.prompt_bundle else None,
-                    prompt_version=self.prompt_bundle.version if self.prompt_bundle else None,
-                    prompt_label=self.prompt_bundle.label if self.prompt_bundle else None,
+                    prompt_version=self.prompt_bundle.version
+                    if self.prompt_bundle
+                    else None,
+                    prompt_label=self.prompt_bundle.label
+                    if self.prompt_bundle
+                    else None,
                     selected_value=result.selected_option,
                     class_probability=result.class_probability,
                     empirical_accuracy=result.empirical_accuracy,
@@ -514,7 +528,7 @@ class ObservableDecisionEngine:
                     tokens_saved_estimate=tokens_saved,
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         return result

@@ -36,11 +36,25 @@ class ExtractedComponent(BaseModel):
     )
     text: str = Field(description="Original span text of this ADU.")
     confidence: float = Field(ge=0.0, le=1.0, default=0.8)
-    plausibility: float | None = Field(default=None, ge=0.0, le=1.0, description="Prior plausibility tau of the component.")
-    entity_ids: list[str] = Field(default_factory=list, description="List of entity IDs mentioned or discussed in this component.")
-    epistemic_status: str | None = Field(default=None, description="Epistemic Status: Synthetisch or Analytisch.")
-    scope_type: str | None = Field(default=None, description="Scope / Type of the proposition.")
-    intensional_mode: Literal["asserted", "attributed", "suppositional", "historical"] = Field(
+    plausibility: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Prior plausibility tau of the component.",
+    )
+    entity_ids: list[str] = Field(
+        default_factory=list,
+        description="List of entity IDs mentioned or discussed in this component.",
+    )
+    epistemic_status: str | None = Field(
+        default=None, description="Epistemic Status: Synthetisch or Analytisch."
+    )
+    scope_type: str | None = Field(
+        default=None, description="Scope / Type of the proposition."
+    )
+    intensional_mode: Literal[
+        "asserted", "attributed", "suppositional", "historical"
+    ] = Field(
         default="asserted",
         description="Intensional context mode: 'asserted', 'attributed', 'suppositional', or 'historical'.",
     )
@@ -86,6 +100,7 @@ class ExtractedComponent(BaseModel):
     @classmethod
     def normalize_scope_type(cls, v: Any) -> str | None:
         from episteme_pipeline.contracts.domain import ScopeType
+
         st = ScopeType.from_str(v)
         return st.value if st is not None else (str(v).strip() if v else None)
 
@@ -93,6 +108,7 @@ class ExtractedComponent(BaseModel):
     @classmethod
     def normalize_epistemic_status(cls, v: Any) -> str | None:
         from episteme_pipeline.contracts.domain import EpistemicStatus
+
         es = EpistemicStatus.from_str(v)
         return es.value if es is not None else (str(v).strip() if v else None)
 
@@ -124,7 +140,9 @@ class ExtractedTheoryRelation(BaseModel):
         description="Optional target local relation ID (e.g. 'R1') when acting as an undercutting defeater.",
     )
     confidence: float = Field(ge=0.0, le=1.0, default=0.8)
-    weight: float | None = Field(default=None, ge=0.0, le=1.0, description="Strength weight phi of the relation.")
+    weight: float | None = Field(
+        default=None, ge=0.0, le=1.0, description="Strength weight phi of the relation."
+    )
 
     @model_validator(mode="after")
     def normalize_hyperedge_refs(self) -> ExtractedTheoryRelation:
@@ -165,7 +183,11 @@ class ACCOutput(BaseModel):
         valid_atom_ids = {c.id for c in self.components}
         prelim: list[ExtractedTheoryRelation] = []
         for r in self.relations:
-            eff_premises = r.premise_ids if r.premise_ids else ([r.source_id] if r.source_id else [])
+            eff_premises = (
+                r.premise_ids
+                if r.premise_ids
+                else ([r.source_id] if r.source_id else [])
+            )
             if eff_premises and all(pid in valid_atom_ids for pid in eff_premises):
                 prelim.append(r)
 
@@ -206,7 +228,12 @@ class ARCRelationOutput(BaseModel):
         description="Argument relation type label, or null. Validated against schema.argument_relation_types at runtime.",
     )
     confidence: float = Field(ge=0.0, le=1.0, default=0.5)
-    weight: float | None = Field(default=None, ge=0.0, le=1.0, description="Strength weight phi of the global relation.")
+    weight: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Strength weight phi of the global relation.",
+    )
     direction: Literal["A_to_B", "B_to_A"] = "A_to_B"
     reasoning: str = ""
 

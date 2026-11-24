@@ -116,10 +116,16 @@ def _build_gold_cpm_theory_graph() -> em.TheoryGraph:
 
     # Structural decomposition edges
     tg.add_edge("T_CPM", "Mp_CPM", relation_type=em.RelationType.HAS_POTENTIAL_MODEL)
-    tg.add_edge("T_CPM", "M_CPM_Newton2", relation_type=em.RelationType.HAS_ACTUAL_MODEL)
-    tg.add_edge("T_CPM", "Mpp_CPM", relation_type=em.RelationType.HAS_PARTIAL_POTENTIAL_MODEL)
+    tg.add_edge(
+        "T_CPM", "M_CPM_Newton2", relation_type=em.RelationType.HAS_ACTUAL_MODEL
+    )
+    tg.add_edge(
+        "T_CPM", "Mpp_CPM", relation_type=em.RelationType.HAS_PARTIAL_POTENTIAL_MODEL
+    )
     tg.add_edge("T_CPM", "GC_Mass", relation_type=em.RelationType.HAS_CONSTRAINT)
-    tg.add_edge("T_CPM", "I0_HarmonicOscillator", relation_type=em.RelationType.HAS_PARADIGM)
+    tg.add_edge(
+        "T_CPM", "I0_HarmonicOscillator", relation_type=em.RelationType.HAS_PARADIGM
+    )
 
     return tg
 
@@ -160,7 +166,11 @@ class TestModelComponentEvaluation:
 
         # Remove the actual model (law) from predicted graph
         del pred_tg._nodes["M_CPM_Newton2"]
-        pred_tg._edges = [e for e in pred_tg._edges if e.target != "M_CPM_Newton2" and e.source != "M_CPM_Newton2"]
+        pred_tg._edges = [
+            e
+            for e in pred_tg._edges
+            if e.target != "M_CPM_Newton2" and e.source != "M_CPM_Newton2"
+        ]
         pred_tg.nx_graph.remove_node("M_CPM_Newton2")
 
         res = evaluate_model_components(pred_tg, gold_tg)
@@ -177,7 +187,9 @@ class TestModelComponentEvaluation:
 
         # Omit paradigm
         del pred_tg._nodes["I0_HarmonicOscillator"]
-        pred_tg._edges = [e for e in pred_tg._edges if e.target != "I0_HarmonicOscillator"]
+        pred_tg._edges = [
+            e for e in pred_tg._edges if e.target != "I0_HarmonicOscillator"
+        ]
         pred_tg.nx_graph.remove_node("I0_HarmonicOscillator")
 
         res = evaluate_model_components(pred_tg, gold_tg, min_mcc=1.0)

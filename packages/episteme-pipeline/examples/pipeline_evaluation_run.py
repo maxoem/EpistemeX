@@ -83,8 +83,15 @@ from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
 logger = logging.getLogger("episteme.examples.evaluation")
 
-_EVAL_DATA_DIR = Path(__file__).resolve().parents[1] / "episteme_pipeline" / "evaluation" / "data"
-_EVAL_MANIFESTS_DIR = Path(__file__).resolve().parents[1] / "episteme_pipeline" / "evaluation" / "manifests"
+_EVAL_DATA_DIR = (
+    Path(__file__).resolve().parents[1] / "episteme_pipeline" / "evaluation" / "data"
+)
+_EVAL_MANIFESTS_DIR = (
+    Path(__file__).resolve().parents[1]
+    / "episteme_pipeline"
+    / "evaluation"
+    / "manifests"
+)
 
 
 def _format_header(title: str) -> str:
@@ -337,7 +344,9 @@ async def run_structuralist_demo(
 
     # Build predicted TheoryNet representing Newton's Mechanics
     predicted_net = create_sample_cpm_theory_net()
-    print(f"[*] Ingested Predicted TheoryNet: {len(predicted_net.atoms)} atoms, {len(predicted_net.relations)} relations")
+    print(
+        f"[*] Ingested Predicted TheoryNet: {len(predicted_net.atoms)} atoms, {len(predicted_net.relations)} relations"
+    )
     print(f"[*] Reference Benchmark: {gold_path.name}")
 
     # Evaluate in-memory using StructuralistStrategy
@@ -358,13 +367,25 @@ async def run_structuralist_demo(
     pfs = metrics.get("pfs", 0.0)
     is_dag = metrics.get("is_dag", 0.0)
 
-    print(f"  • Model Component Completeness (MCC): {mcc:.4f} [{'PASS' if mcc >= 1.0 else 'FAIL'}]")
-    print(f"  • Axiomatic Omission Rate (AOR):      {aor:.4f} [{'PASS' if aor == 0.0 else 'FAIL'}]")
-    print(f"  • Property Fidelity Score (PFS):       {pfs:.4f} [{'PASS' if pfs >= 0.4 else 'FAIL'}]")
-    print(f"  • Poset Strict Partial Order (DAG):    {'YES (Acyclic)' if is_dag == 1.0 else 'NO (Cycle detected)'}")
+    print(
+        f"  • Model Component Completeness (MCC): {mcc:.4f} [{'PASS' if mcc >= 1.0 else 'FAIL'}]"
+    )
+    print(
+        f"  • Axiomatic Omission Rate (AOR):      {aor:.4f} [{'PASS' if aor == 0.0 else 'FAIL'}]"
+    )
+    print(
+        f"  • Property Fidelity Score (PFS):       {pfs:.4f} [{'PASS' if pfs >= 0.4 else 'FAIL'}]"
+    )
+    print(
+        f"  • Poset Strict Partial Order (DAG):    {'YES (Acyclic)' if is_dag == 1.0 else 'NO (Cycle detected)'}"
+    )
 
     overall_pass = all(res.outcome == EvaluationOutcome.PASS for res in stage_results)
-    status_label = "PASS (Capability Subsumption Satisfied)" if overall_pass else "⚠ WARNING / DEFICIT"
+    status_label = (
+        "PASS (Capability Subsumption Satisfied)"
+        if overall_pass
+        else "⚠ WARNING / DEFICIT"
+    )
     print(f"\n  Final Outcome: {status_label}")
 
     if verbose:
@@ -397,29 +418,85 @@ async def run_polarity_alignment_demo(
     print(_format_header("Scenario 2: Polarity Concordance & Semantic Alignment"))
 
     schema = DEFAULT_SCHEMA
-    print(f"[*] Loaded Schema: {len(schema.relation_types)} relation types, {len(schema.relation_polarities)} polarities declared.")
+    print(
+        f"[*] Loaded Schema: {len(schema.relation_types)} relation types, {len(schema.relation_polarities)} polarities declared."
+    )
 
     # 1. Test Schema-Driven Polarity Concordance
     # Predicted arguments and relations
     pred_atoms = [
-        TheoryAtom(id="claim_01", text="Central forces cause planetary acceleration.", component_type="CLAIM", source_chunk_id="chunk_principia_prop_1"),
-        TheoryAtom(id="claim_02", text="Planetary orbits conform to Kepler's ellipse law.", component_type="CLAIM", source_chunk_id="chunk_principia_prop_13"),
-        TheoryAtom(id="claim_03", text="Vortex ether theories adequately explain celestial mechanics.", component_type="CLAIM", source_chunk_id="chunk_principia_book2_scholium"),
+        TheoryAtom(
+            id="claim_01",
+            text="Central forces cause planetary acceleration.",
+            component_type="CLAIM",
+            source_chunk_id="chunk_principia_prop_1",
+        ),
+        TheoryAtom(
+            id="claim_02",
+            text="Planetary orbits conform to Kepler's ellipse law.",
+            component_type="CLAIM",
+            source_chunk_id="chunk_principia_prop_13",
+        ),
+        TheoryAtom(
+            id="claim_03",
+            text="Vortex ether theories adequately explain celestial mechanics.",
+            component_type="CLAIM",
+            source_chunk_id="chunk_principia_book2_scholium",
+        ),
     ]
     # Prediction has one correct support and one epistemic conflict (contradiction)
     pred_relations = [
-        TheoryRelation(source_id="claim_01", target_id="claim_02", relation_type="SUPPORTS", confidence=0.95, scope="global"),
-        TheoryRelation(source_id="claim_01", target_id="claim_03", relation_type="SUPPORTS", confidence=0.90, scope="global"),  # Conflict!
+        TheoryRelation(
+            source_id="claim_01",
+            target_id="claim_02",
+            relation_type="SUPPORTS",
+            confidence=0.95,
+            scope="global",
+        ),
+        TheoryRelation(
+            source_id="claim_01",
+            target_id="claim_03",
+            relation_type="SUPPORTS",
+            confidence=0.90,
+            scope="global",
+        ),  # Conflict!
     ]
 
     gold_atoms = [
-        TheoryAtom(id="gold_01", text="Central forces cause planetary acceleration.", component_type="CLAIM", source_chunk_id="chunk_principia_prop_1"),
-        TheoryAtom(id="gold_02", text="Planetary orbits conform to Kepler's ellipse law.", component_type="CLAIM", source_chunk_id="chunk_principia_prop_13"),
-        TheoryAtom(id="gold_03", text="Vortex ether theories adequately explain celestial mechanics.", component_type="CLAIM", source_chunk_id="chunk_principia_book2_scholium"),
+        TheoryAtom(
+            id="gold_01",
+            text="Central forces cause planetary acceleration.",
+            component_type="CLAIM",
+            source_chunk_id="chunk_principia_prop_1",
+        ),
+        TheoryAtom(
+            id="gold_02",
+            text="Planetary orbits conform to Kepler's ellipse law.",
+            component_type="CLAIM",
+            source_chunk_id="chunk_principia_prop_13",
+        ),
+        TheoryAtom(
+            id="gold_03",
+            text="Vortex ether theories adequately explain celestial mechanics.",
+            component_type="CLAIM",
+            source_chunk_id="chunk_principia_book2_scholium",
+        ),
     ]
     gold_relations = [
-        TheoryRelation(source_id="gold_01", target_id="gold_02", relation_type="SUPPORTS", confidence=1.0, scope="global"),
-        TheoryRelation(source_id="gold_01", target_id="gold_03", relation_type="REFUTES", confidence=1.0, scope="global"),
+        TheoryRelation(
+            source_id="gold_01",
+            target_id="gold_02",
+            relation_type="SUPPORTS",
+            confidence=1.0,
+            scope="global",
+        ),
+        TheoryRelation(
+            source_id="gold_01",
+            target_id="gold_03",
+            relation_type="REFUTES",
+            confidence=1.0,
+            scope="global",
+        ),
     ]
 
     strat = ArgumentationStrategy(schema=schema)
@@ -435,8 +512,12 @@ async def run_polarity_alignment_demo(
     pol_conflict = metrics.get("polarity_conflict_rate", 0.0)
 
     print(_format_subheader("Schema-Driven Polarity Concordance"))
-    print(f"  • Polarity Accuracy:      {pol_acc * 100:.1f}% (Correct matching polarities)")
-    print(f"  • Polarity Conflict Rate: {pol_conflict * 100:.1f}% (Epistemic inversions detected: SUPPORTS vs REFUTES)")
+    print(
+        f"  • Polarity Accuracy:      {pol_acc * 100:.1f}% (Correct matching polarities)"
+    )
+    print(
+        f"  • Polarity Conflict Rate: {pol_conflict * 100:.1f}% (Epistemic inversions detected: SUPPORTS vs REFUTES)"
+    )
 
     # 2. Test Soft Semantic Alignment (GM-GBS) & Topological Error Tracking (OEP)
     g_pred = nx.DiGraph()
@@ -450,6 +531,7 @@ async def run_polarity_alignment_demo(
     # Injected deterministic offline embedding function
     def offline_embed_fn(labels: list[str]) -> Any:
         import numpy as np
+
         vecs = default_deterministic_embedder(labels, dim=64)
         return np.array(vecs)
 
@@ -463,7 +545,9 @@ async def run_polarity_alignment_demo(
         matched_gold_edges=matched_gold,
     )
 
-    print(_format_subheader("Topological Error Tracking (OEP) & Soft Alignment (GM-GBS)"))
+    print(
+        _format_subheader("Topological Error Tracking (OEP) & Soft Alignment (GM-GBS)")
+    )
     print(f"  • Soft Alignment Score: {score:.4f}")
     print(f"  • Hallucination Rate (HR): {hr * 100:.1f}% (Extraneous predicted edges)")
     print(f"  • Omission Rate (OR):      {orr * 100:.1f}% (Omitted gold edges)")
@@ -508,11 +592,13 @@ async def run_retrieval_demo(
     queries_file = _EVAL_DATA_DIR / "stnb_cpm_queries.yaml"
     gold_jsonld = _EVAL_DATA_DIR / "stnb_cpm_pilot.jsonld"
 
-    with open(queries_file, "r", encoding="utf-8") as f:
+    with open(queries_file, "r", encoding="utf-8") as f:  # noqa: ASYNC230 baseline
         query_data = yaml.safe_load(f)
     queries = query_data.get("queries", [])
 
-    print(f"[*] Loaded Competency Queries: {len(queries)} questions from {queries_file.name}")
+    print(
+        f"[*] Loaded Competency Queries: {len(queries)} questions from {queries_file.name}"
+    )
 
     # Set up in-memory store and index benchmark nodes
     store = InMemoryGraphStore()
@@ -524,7 +610,9 @@ async def run_retrieval_demo(
         embed_fn=embed_fn or default_deterministic_embedder,
     )
 
-    metrics = await evaluator.evaluate_batch(queries, top_k=10, run_id="retrieval_demo_run")
+    metrics = await evaluator.evaluate_batch(
+        queries, top_k=10, run_id="retrieval_demo_run"
+    )
 
     print(_format_subheader("Downstream Retrieval Effectiveness (IR)"))
     print(f"  • Mean Reciprocal Rank (MRR): {metrics.get('MRR', 0.0):.4f}")
@@ -541,7 +629,9 @@ async def run_retrieval_demo(
                 top_k=3,
                 run_id="retrieval_demo_run",
             )
-            print(f"  [Q: {q['id']}] '{q['query'][:50]}...' -> RR: {res.get('reciprocal_rank', 0.0):.2f}, Hits@3: {res.get('hits@3', 0.0)}")
+            print(
+                f"  [Q: {q['id']}] '{q['query'][:50]}...' -> RR: {res.get('reciprocal_rank', 0.0):.2f}, Hits@3: {res.get('hits@3', 0.0)}"
+            )
 
     return metrics
 
@@ -565,14 +655,20 @@ async def run_baseline_comparison_demo(
     EvaluationComparison
         Comparison container with pairwise deltas and markdown summary.
     """
-    print(_format_header("Scenario 4: Comparative Baseline Benchmarking (Pipeline vs NaiveKG)"))
+    print(
+        _format_header(
+            "Scenario 4: Comparative Baseline Benchmarking (Pipeline vs NaiveKG)"
+        )
+    )
 
     gold_path = _EVAL_DATA_DIR / "stnb_cpm_pilot.jsonld"
     corpus_path = _EVAL_DATA_DIR / "newton_principia_1687.txt"
 
     # 1. Run Baseline NaiveKG
     baseline_runner = BaselineNaiveKG(schema=DEFAULT_SCHEMA)
-    print(f"[*] Running Baseline: {baseline_runner.__class__.__name__} against corpus: {corpus_path.name}")
+    print(
+        f"[*] Running Baseline: {baseline_runner.__class__.__name__} against corpus: {corpus_path.name}"
+    )
     baseline_results, _ = await baseline_runner.run_and_evaluate(
         corpus=str(corpus_path),
         gold=str(gold_path),
@@ -614,9 +710,15 @@ async def run_baseline_comparison_demo(
     delta_mrr = pipeline_metrics["mrr"] - baseline_metrics.get("mrr", 0.0)
 
     print(_format_subheader("Comparative Delta Summary"))
-    print(f"  • ΔF1 Score:     {delta_f1:+.4f} (Pipeline: {pipeline_metrics['f1']:.4f} vs Baseline: {baseline_metrics.get('f1', 0.0):.4f})")
-    print(f"  • ΔMRR:          {delta_mrr:+.4f} (Pipeline: {pipeline_metrics['mrr']:.4f} vs Baseline: {baseline_metrics.get('mrr', 0.0):.4f})")
-    print(f"  • Latency Delta: {pipeline_metrics['latency'] - baseline_metrics['latency']:+.4f}s")
+    print(
+        f"  • ΔF1 Score:     {delta_f1:+.4f} (Pipeline: {pipeline_metrics['f1']:.4f} vs Baseline: {baseline_metrics.get('f1', 0.0):.4f})"
+    )
+    print(
+        f"  • ΔMRR:          {delta_mrr:+.4f} (Pipeline: {pipeline_metrics['mrr']:.4f} vs Baseline: {baseline_metrics.get('mrr', 0.0):.4f})"
+    )
+    print(
+        f"  • Latency Delta: {pipeline_metrics['latency'] - baseline_metrics['latency']:+.4f}s"
+    )
 
     md_table = format_comparison_markdown(
         comparisons,
@@ -688,7 +790,9 @@ async def run_manifest_demo(
         def on_event(self, event: Any) -> None:
             self.target_list.append(event)
             if isinstance(event, EvaluationCompleted):
-                print(f"  [EventBus] 📡 Captured EvaluationCompleted event: {event.evaluation_id} (Outcome: {event.outcome})")
+                print(
+                    f"  [EventBus] 📡 Captured EvaluationCompleted event: {event.evaluation_id} (Outcome: {event.outcome})"
+                )
 
     event_bus = SimpleEventEmitter()
     emitted_events: list[Any] = []
@@ -713,8 +817,12 @@ async def run_manifest_demo(
 
     json_report_file = Path(reports_dir) / f"report_{report.run_ids[0]}.json"
     md_report_file = Path(reports_dir) / f"report_{report.run_ids[0]}.md"
-    print(f"  • Persisted JSON: {json_report_file} [{'EXISTS' if json_report_file.is_file() else 'MISSING'}]")
-    print(f"  • Persisted MD:   {md_report_file} [{'EXISTS' if md_report_file.is_file() else 'MISSING'}]")
+    print(
+        f"  • Persisted JSON: {json_report_file} [{'EXISTS' if json_report_file.is_file() else 'MISSING'}]"
+    )
+    print(
+        f"  • Persisted MD:   {md_report_file} [{'EXISTS' if md_report_file.is_file() else 'MISSING'}]"
+    )
 
     if verbose:
         print("\n--- Persisted Summary Preview ---")
@@ -757,7 +865,9 @@ async def run_all_scenarios(
     )
 
     print(_format_header("All Evaluation Scenarios Completed Successfully"))
-    print("The evaluation pipeline is ready for downstream Episteme Studio integration.\n")
+    print(
+        "The evaluation pipeline is ready for downstream Episteme Studio integration.\n"
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -774,7 +884,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mode",
-        choices=["all", "structuralist", "polarity", "retrieval", "baseline", "manifest"],
+        choices=[
+            "all",
+            "structuralist",
+            "polarity",
+            "retrieval",
+            "baseline",
+            "manifest",
+        ],
         default="all",
         help="Evaluation scenario to execute (default: all).",
     )

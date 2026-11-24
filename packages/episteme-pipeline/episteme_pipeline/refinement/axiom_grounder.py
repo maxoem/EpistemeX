@@ -332,7 +332,9 @@ class TheoryGuidedAxiomGrounder:
                 f"{type(theory_projector).__name__} does not inherit from TheoryProjector"
             )
         self.theory_projector: TheoryProjector = (
-            theory_projector if theory_projector is not None else GenericTheoryProjector()
+            theory_projector
+            if theory_projector is not None
+            else GenericTheoryProjector()
         )
         self.embedding_model: EmbeddingModel | None = (
             ensure_embedding_model(embedding_model)
@@ -372,7 +374,9 @@ class TheoryGuidedAxiomGrounder:
             JSON-serializable configuration snapshot across sub-components.
         """
         strategy_str = (
-            self.strategy.value if isinstance(self.strategy, Enum) else str(self.strategy)
+            self.strategy.value
+            if isinstance(self.strategy, Enum)
+            else str(self.strategy)
         )
         return {
             "class": self.__class__.__name__,
@@ -533,14 +537,14 @@ class TheoryGuidedAxiomGrounder:
                             description=str(item.get("description", "")),
                             formula_expression=str(item.get("formula_expression", "")),
                             involved_parameters=[
-                                str(p)
-                                for p in item.get("involved_parameters", [])
-                                if p
+                                str(p) for p in item.get("involved_parameters", []) if p
                             ],
                         )
                     )
                 elif isinstance(item, str) and item.strip():
-                    laws.append(TheoryLaw(law_id=f"law_{idx}", description=item.strip()))
+                    laws.append(
+                        TheoryLaw(law_id=f"law_{idx}", description=item.strip())
+                    )
 
         raw_blur = lens.get("max_admissible_blur", 1.0)
         try:
@@ -555,7 +559,10 @@ class TheoryGuidedAxiomGrounder:
                     if str(dim) not in required_dimensions:
                         required_dimensions.append(str(dim))
             for k in atom.parameters:
-                if k not in {"required_dimensions", "theory_id"} and k not in parameter_names:
+                if (
+                    k not in {"required_dimensions", "theory_id"}
+                    and k not in parameter_names
+                ):
                     parameter_names.append(k)
 
         return TheoryElementDefinition(
@@ -635,7 +642,10 @@ class TheoryGuidedAxiomGrounder:
             existing_obs_texts.add(norm_text)
 
             obs_id = _stable_grounding_atom_id(
-                deficit.deficit_id, chunk.id, f"DET_{len(recovered_atoms) + 1}", obs_text
+                deficit.deficit_id,
+                chunk.id,
+                f"DET_{len(recovered_atoms) + 1}",
+                obs_text,
             )
             linked_eids = entity_ids_matching_text(obs_text, scoped_entities)
             obs_atom = TheoryAtom(
@@ -652,7 +662,9 @@ class TheoryGuidedAxiomGrounder:
 
             if primary_target is not None and primary_target.id != obs_atom.id:
                 rel_scope = (
-                    "local" if obs_atom.source_chunk_id == primary_target.source_chunk_id else "global"
+                    "local"
+                    if obs_atom.source_chunk_id == primary_target.source_chunk_id
+                    else "global"
                 )
                 recovered_relations.append(
                     TheoryRelation(
@@ -717,7 +729,9 @@ class TheoryGuidedAxiomGrounder:
             input_description=f"deficit={deficit.deficit_id}",
         ) as outcome:
             target_atoms = [
-                atoms_by_id[aid] for aid in deficit.target_atom_ids if aid in atoms_by_id
+                atoms_by_id[aid]
+                for aid in deficit.target_atom_ids
+                if aid in atoms_by_id
             ]
             if not target_atoms and deficit.target_chunk_ids:
                 seed_set = set(deficit.target_chunk_ids)
@@ -728,7 +742,9 @@ class TheoryGuidedAxiomGrounder:
                     and self.schema.resolve_component_partition(a.component_type) == "A"
                 ]
 
-            expanded_chunks = await self._expand_local_chunks(deficit, state, target_atoms)
+            expanded_chunks = await self._expand_local_chunks(
+                deficit, state, target_atoms
+            )
             if not expanded_chunks:
                 outcome.output_description = "no_target_chunks"
                 return RefinementDelta(refinement_pass=next_pass)
@@ -779,7 +795,10 @@ class TheoryGuidedAxiomGrounder:
                 """Merge or register an extracted entity in local state."""
                 if ent.id in recovered_entities_by_id:
                     merged_chunks = dedup_preserve_order(
-                        [*recovered_entities_by_id[ent.id].source_chunk_ids, *ent.source_chunk_ids]
+                        [
+                            *recovered_entities_by_id[ent.id].source_chunk_ids,
+                            *ent.source_chunk_ids,
+                        ]
                     )
                     updated = recovered_entities_by_id[ent.id].model_copy(
                         update={
@@ -823,7 +842,9 @@ class TheoryGuidedAxiomGrounder:
                     ner_id_remap: dict[str, str] = {}
                     for ent in ents:
                         scoped_cids = [
-                            cid for cid in ent.source_chunk_ids if cid in expanded_chunk_ids
+                            cid
+                            for cid in ent.source_chunk_ids
+                            if cid in expanded_chunk_ids
                         ] or [chunk.id]
                         resolved_ent, should_emit = await resolve_grounding_entity(
                             name=ent.name,
@@ -851,7 +872,11 @@ class TheoryGuidedAxiomGrounder:
                             else chunk.id
                         )
                         scoped_triple = triple.model_copy(
-                            update={"subject_id": subj, "object_id": obj, "source_chunk_id": cid}
+                            update={
+                                "subject_id": subj,
+                                "object_id": obj,
+                                "source_chunk_id": cid,
+                            }
                         )
                         tkey = (
                             scoped_triple.subject_id,
@@ -910,14 +935,18 @@ class TheoryGuidedAxiomGrounder:
 
                 for raw_ent in raw_grounding.entities:
                     ent_label = (
-                        raw_ent.label if raw_ent.label in valid_node_types else fallback_label
+                        raw_ent.label
+                        if raw_ent.label in valid_node_types
+                        else fallback_label
                     )
                     ent_cid = (
                         raw_ent.source_chunk_id
                         if raw_ent.source_chunk_id in expanded_chunk_ids
                         else default_chunk_id
                     )
-                    c_text = chunks_by_id[ent_cid].text if ent_cid in chunks_by_id else ""
+                    c_text = (
+                        chunks_by_id[ent_cid].text if ent_cid in chunks_by_id else ""
+                    )
                     linked_ent, should_emit = await resolve_grounding_entity(
                         name=raw_ent.name,
                         label=ent_label,
@@ -974,7 +1003,9 @@ class TheoryGuidedAxiomGrounder:
                         entity_ids=valid_eids,
                         measurements=measurements,
                     )
-                    c_text = chunks_by_id[obs_cid].text if obs_cid in chunks_by_id else ""
+                    c_text = (
+                        chunks_by_id[obs_cid].text if obs_cid in chunks_by_id else ""
+                    )
                     obs_atom = await resolve_atom_modal_prior(
                         obs_atom,
                         self.modal_resolver,
@@ -987,13 +1018,17 @@ class TheoryGuidedAxiomGrounder:
                         if obs.target_atom_id and obs.target_atom_id in atoms_by_id
                         else (target_atoms[0] if target_atoms else None)
                     )
-                    if resolved_target is not None and resolved_target.id != obs_atom.id:
+                    if (
+                        resolved_target is not None
+                        and resolved_target.id != obs_atom.id
+                    ):
                         rel_type = resolve_schema_relation_type(
                             obs.relation_type, self.schema
                         )
                         rel_scope = (
                             "local"
-                            if obs_atom.source_chunk_id == resolved_target.source_chunk_id
+                            if obs_atom.source_chunk_id
+                            == resolved_target.source_chunk_id
                             else "global"
                         )
                         rel = TheoryRelation(
@@ -1067,13 +1102,17 @@ class TheoryGuidedAxiomGrounder:
                     for atom in emitted_atoms:
                         merged_p = dict(atom.parameters)
                         merged_p.update(projected_params)
-                        updated_obs.append(atom.model_copy(update={"parameters": merged_p}))
+                        updated_obs.append(
+                            atom.model_copy(update={"parameters": merged_p})
+                        )
                     emitted_atoms = updated_obs
 
                     for tgt in target_atoms:
                         merged_tgt_p = dict(tgt.parameters)
                         merged_tgt_p.update(projected_params)
-                        emitted_atoms.append(tgt.model_copy(update={"parameters": merged_tgt_p}))
+                        emitted_atoms.append(
+                            tgt.model_copy(update={"parameters": merged_tgt_p})
+                        )
 
             resolved_ids = (
                 [deficit.deficit_id]

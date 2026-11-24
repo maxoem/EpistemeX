@@ -61,7 +61,9 @@ class CandidateEmbeddingCache:
         if not stale_candidates:
             return
 
-        fresh_vectors = await self.embedding_model.aget_text_embedding_batch(stale_basic_texts)
+        fresh_vectors = await self.embedding_model.aget_text_embedding_batch(
+            stale_basic_texts
+        )
         for c, b_text, vec in zip(stale_candidates, stale_basic_texts, fresh_vectors):
             self._cache[c.id] = (b_text, vec)
 
@@ -140,4 +142,3 @@ class CandidateEmbeddingCache:
             Cached text and embedding vector, or None if not cached.
         """
         return self._cache.get(entity_id)
-

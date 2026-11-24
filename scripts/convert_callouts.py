@@ -66,7 +66,7 @@ class CalloutParser:
     """
 
     # From https://help.obsidian.md/How+to/Use+callouts#Types
-    aliases = {
+    aliases = {  # noqa: RUF012 baseline
         "abstract": ["summary", "tldr"],
         "tip": ["hint", "important"],
         "success": ["check", "done"],
@@ -76,7 +76,7 @@ class CalloutParser:
         "danger": ["error"],
         "quote": ["cite"],
     }
-    alias_tuples = [
+    alias_tuples = [  # noqa: RUF012 baseline
         (alias, c_type) for c_type, aliases in aliases.items() for alias in aliases
     ]
 
@@ -237,7 +237,12 @@ class CalloutParser:
 
             if self.breakless_lists:
                 line = self._breakless_list_handler(line)
-        elif self.indent_levels and self.handle_lazy_continuation and line.strip() and not line.strip().startswith(("#", "```", "---")):
+        elif (
+            self.indent_levels
+            and self.handle_lazy_continuation
+            and line.strip()
+            and not line.strip().startswith(("#", "```", "---"))
+        ):
             # Lazy continuation line inside a callout block
             indent = self._get_indent(indent_level=max(self.indent_levels))
             line = f"{indent}{line}"

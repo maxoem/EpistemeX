@@ -285,8 +285,12 @@ def test_modal_resolver_fingerprint_sensitivity() -> None:
 
     assert fingerprint_method(dec_res1) != fingerprint_method(dec_res2)
 
-    hybrid1 = HybridModalResolver(structural_resolver=struct1, decision_resolver=dec_res1, mode="guardrail")
-    hybrid2 = HybridModalResolver(structural_resolver=struct1, decision_resolver=dec_res1, mode="convex")
+    hybrid1 = HybridModalResolver(
+        structural_resolver=struct1, decision_resolver=dec_res1, mode="guardrail"
+    )
+    hybrid2 = HybridModalResolver(
+        structural_resolver=struct1, decision_resolver=dec_res1, mode="convex"
+    )
 
     assert fingerprint_method(hybrid1) != fingerprint_method(hybrid2)
 
@@ -308,7 +312,9 @@ async def test_pipeline_invalidates_when_decision_engine_changes(tmp_path, graph
         def __init__(self, engine: Any) -> None:
             self.decision_engine = engine
 
-        async def run(self, input: Any, context: ArtifactExecutionContext) -> ArtifactCollection:
+        async def run(
+            self, input: Any, context: ArtifactExecutionContext
+        ) -> ArtifactCollection:
             return ArtifactCollection([])
 
     pipeline = Pipeline(
@@ -320,7 +326,9 @@ async def test_pipeline_invalidates_when_decision_engine_changes(tmp_path, graph
     )
 
     old_manifest_fps = {
-        "Phase 2: Entity & Local Relation Discovery.decision_engine": fingerprint_method(eng_old)
+        "Phase 2: Entity & Local Relation Discovery.decision_engine": fingerprint_method(
+            eng_old
+        )
     }
 
     prior = RunManifest(
@@ -341,18 +349,24 @@ async def test_pipeline_invalidates_when_decision_engine_changes(tmp_path, graph
 
     current_manifest = pipeline.engine.build_manifest(
         run_id="run-new",
-        pipeline_input=MagicMock(source_paths=[], bib_paths=[], metadata={}, structural_anchor=None),
+        pipeline_input=MagicMock(
+            source_paths=[], bib_paths=[], metadata={}, structural_anchor=None
+        ),
     )
     current_manifest.input_fingerprint = "same-input"
     current_manifest.phase_config_fingerprints = {"phase2": "same"}
 
     decision = await pipeline.engine.choose_reuse_source(current_manifest)
 
-    assert 1 in decision.invalidated_phase_ordinals, "Phase 2 must be invalidated due to decision engine change"
+    assert 1 in decision.invalidated_phase_ordinals, (
+        "Phase 2 must be invalidated due to decision engine change"
+    )
     assert "method-changed" in decision.reason
 
 
-def test_pipeline_manifest_captures_nested_component_hierarchy(tmp_path, graph_store) -> None:
+def test_pipeline_manifest_captures_nested_component_hierarchy(
+    tmp_path, graph_store
+) -> None:
     """Verify that Pipeline manifest captures dotted paths for nested components."""
     config = PipelineConfig()
     config.execution.runs_dir = str(tmp_path / "runs")
@@ -372,10 +386,11 @@ def test_pipeline_manifest_captures_nested_component_hierarchy(tmp_path, graph_s
 
     manifest = pipeline.engine.build_manifest(
         run_id="run-hierarchy",
-        pipeline_input=MagicMock(source_paths=[], bib_paths=[], metadata={}, structural_anchor=None),
+        pipeline_input=MagicMock(
+            source_paths=[], bib_paths=[], metadata={}, structural_anchor=None
+        ),
     )
 
     expected_key = "Phase: Custom Verification.component_a.sub_component"
     assert expected_key in manifest.method_fingerprints
     assert manifest.method_fingerprints[expected_key] == fingerprint_method(leaf)
-

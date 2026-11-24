@@ -16,16 +16,15 @@ Validates:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import ClassVar
 
 import pytest
-
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
-    Phase4ArtifactsView,
 )
-from episteme_pipeline.artifacts.models import ArtifactEnvelope, ArtifactKind, ArtifactProvenance
+from episteme_pipeline.artifacts.models import (
+    ArtifactKind,
+)
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.pipeline import Pipeline
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
@@ -71,7 +70,9 @@ class StubValidPhase(PhaseRunner[object]):
         return ArtifactCollection([])
 
 
-def test_pipeline_init_validates_phase_key_presence(tmp_path: Path, graph_store) -> None:
+def test_pipeline_init_validates_phase_key_presence(
+    tmp_path: Path, graph_store
+) -> None:
     """Verify Pipeline.__init__ raises TypeError/ValueError on missing or duplicate phase_key."""
     cfg = PipelineConfig()
     cfg.execution.runs_dir = str(tmp_path / "runs")
@@ -110,13 +111,17 @@ def test_pipeline_init_validates_phase_key_presence(tmp_path: Path, graph_store)
         )
 
 
-def test_manifest_phase_config_fingerprints_semantic_keying(tmp_path: Path, graph_store) -> None:
+def test_manifest_phase_config_fingerprints_semantic_keying(
+    tmp_path: Path, graph_store
+) -> None:
     """Verify phase_config_fingerprints keys by semantic phase_key and supports custom runner fingerprints."""
     cfg = PipelineConfig()
     cfg.execution.runs_dir = str(tmp_path / "runs")
     cfg.execution.artifacts_dir = str(tmp_path / "artifacts")
 
-    p1 = StubValidPhase("Phase 1", "phase1", writes_kinds=frozenset({ArtifactKind.DOCUMENT}))
+    p1 = StubValidPhase(
+        "Phase 1", "phase1", writes_kinds=frozenset({ArtifactKind.DOCUMENT})
+    )
     p_custom = StubValidPhase(
         "Custom Post-Processor",
         "custom_eval",
@@ -138,11 +143,13 @@ def test_manifest_phase_config_fingerprints_semantic_keying(tmp_path: Path, grap
 
     manifest = pipeline.engine.build_manifest(
         run_id="run-test",
-        pipeline_input=pytest.importorskip("episteme_pipeline.contracts.phase_contracts").PipelineInput(
-            source_paths=[], bib_paths=[]
-        ),
+        pipeline_input=pytest.importorskip(
+            "episteme_pipeline.contracts.phase_contracts"
+        ).PipelineInput(source_paths=[], bib_paths=[]),
     )
-    assert manifest.phase_config_fingerprints["custom_eval"] == "sha256-custom-config-v1"
+    assert (
+        manifest.phase_config_fingerprints["custom_eval"] == "sha256-custom-config-v1"
+    )
     assert "phase1" in manifest.phase_config_fingerprints
     assert set(manifest.phase_config_fingerprints.keys()) == {"phase1", "custom_eval"}
 
@@ -156,24 +163,34 @@ async def test_appending_post_processor_reuses_all_upstream_phases(
     cfg.execution.runs_dir = str(tmp_path / "runs")
     cfg.execution.artifacts_dir = str(tmp_path / "artifacts")
 
-    p1 = StubValidPhase("Phase 1", "phase1", writes_kinds=frozenset({ArtifactKind.DOCUMENT, ArtifactKind.CHUNK}))
+    p1 = StubValidPhase(
+        "Phase 1",
+        "phase1",
+        writes_kinds=frozenset({ArtifactKind.DOCUMENT, ArtifactKind.CHUNK}),
+    )
     p2 = StubValidPhase(
-        "Phase 2", "phase2",
+        "Phase 2",
+        "phase2",
         reads_kinds=frozenset({ArtifactKind.DOCUMENT, ArtifactKind.CHUNK}),
         writes_kinds=frozenset({ArtifactKind.LINKED_ENTITY}),
     )
     p3 = StubValidPhase(
-        "Phase 3", "phase3",
+        "Phase 3",
+        "phase3",
         reads_kinds=frozenset({ArtifactKind.LINKED_ENTITY}),
         writes_kinds=frozenset({ArtifactKind.GLOBAL_RELATION}),
     )
     p4 = StubValidPhase(
-        "Phase 4", "phase4",
+        "Phase 4",
+        "phase4",
         reads_kinds=frozenset({ArtifactKind.CHUNK, ArtifactKind.GLOBAL_RELATION}),
-        writes_kinds=frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}),
+        writes_kinds=frozenset(
+            {ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}
+        ),
     )
     p_enrichment = StubValidPhase(
-        "Theoretical Enrichment", "theoretical_enrichment",
+        "Theoretical Enrichment",
+        "theoretical_enrichment",
         reads_kinds=frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}),
         writes_kinds=frozenset({ArtifactKind.THEORETICAL_ENRICHMENT}),
     )
@@ -198,10 +215,30 @@ async def test_appending_post_processor_reuses_all_upstream_phases(
             "phase4": "fp_p4",
         },
         phase_records=[
-            RunPhaseRecord(phase_name="Phase 1", ordinal=1, phase_key="phase1", status=RunStatus.COMPLETED),
-            RunPhaseRecord(phase_name="Phase 2", ordinal=2, phase_key="phase2", status=RunStatus.COMPLETED),
-            RunPhaseRecord(phase_name="Phase 3", ordinal=3, phase_key="phase3", status=RunStatus.COMPLETED),
-            RunPhaseRecord(phase_name="Phase 4", ordinal=4, phase_key="phase4", status=RunStatus.COMPLETED),
+            RunPhaseRecord(
+                phase_name="Phase 1",
+                ordinal=1,
+                phase_key="phase1",
+                status=RunStatus.COMPLETED,
+            ),
+            RunPhaseRecord(
+                phase_name="Phase 2",
+                ordinal=2,
+                phase_key="phase2",
+                status=RunStatus.COMPLETED,
+            ),
+            RunPhaseRecord(
+                phase_name="Phase 3",
+                ordinal=3,
+                phase_key="phase3",
+                status=RunStatus.COMPLETED,
+            ),
+            RunPhaseRecord(
+                phase_name="Phase 4",
+                ordinal=4,
+                phase_key="phase4",
+                status=RunStatus.COMPLETED,
+            ),
         ],
     )
     pipeline_initial.manifest_store.write_manifest(prior)
@@ -235,7 +272,9 @@ async def test_appending_post_processor_reuses_all_upstream_phases(
         },
     )
 
-    decision = await pipeline_with_enrichment.engine.choose_reuse_source(current_manifest)
+    decision = await pipeline_with_enrichment.engine.choose_reuse_source(
+        current_manifest
+    )
 
     # Phases 1-4 MUST be reused; only Theoretical Enrichment (ordinal 5) executes!
     assert decision.reused_phase_ordinals == [1, 2, 3, 4]
@@ -256,23 +295,35 @@ async def test_independent_dag_branches_do_not_transitively_invalidate(
 
     # Common trunk
     p4 = StubValidPhase(
-        "Phase 4", "phase4",
-        writes_kinds=frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}),
+        "Phase 4",
+        "phase4",
+        writes_kinds=frozenset(
+            {ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}
+        ),
     )
     # Branch A: Phase 5 (Fusion) -> Phase 6 (TheoryNet)
     p5 = StubValidPhase(
-        "Phase 5", "phase5",
+        "Phase 5",
+        "phase5",
         reads_kinds=frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}),
         writes_kinds=frozenset({ArtifactKind.FUSION_DECISION}),
     )
     p6 = StubValidPhase(
-        "Phase 6", "phase6",
-        reads_kinds=frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION, ArtifactKind.FUSION_DECISION}),
+        "Phase 6",
+        "phase6",
+        reads_kinds=frozenset(
+            {
+                ArtifactKind.THEORY_ATOM,
+                ArtifactKind.THEORY_RELATION,
+                ArtifactKind.FUSION_DECISION,
+            }
+        ),
         writes_kinds=frozenset({ArtifactKind.THEORY_ATOM}),
     )
     # Branch B: Theoretical Enrichment (orthogonal to Branch A)
     p_te = StubValidPhase(
-        "Theoretical Enrichment", "theoretical_enrichment",
+        "Theoretical Enrichment",
+        "theoretical_enrichment",
         reads_kinds=frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}),
         writes_kinds=frozenset({ArtifactKind.THEORETICAL_ENRICHMENT}),
         dependencies=("phase4",),
@@ -298,10 +349,30 @@ async def test_independent_dag_branches_do_not_transitively_invalidate(
             "theoretical_enrichment": "same",
         },
         phase_records=[
-            RunPhaseRecord(phase_name="Phase 4", ordinal=1, phase_key="phase4", status=RunStatus.COMPLETED),
-            RunPhaseRecord(phase_name="Phase 5", ordinal=2, phase_key="phase5", status=RunStatus.COMPLETED),
-            RunPhaseRecord(phase_name="Phase 6", ordinal=3, phase_key="phase6", status=RunStatus.COMPLETED),
-            RunPhaseRecord(phase_name="Theoretical Enrichment", ordinal=4, phase_key="theoretical_enrichment", status=RunStatus.COMPLETED),
+            RunPhaseRecord(
+                phase_name="Phase 4",
+                ordinal=1,
+                phase_key="phase4",
+                status=RunStatus.COMPLETED,
+            ),
+            RunPhaseRecord(
+                phase_name="Phase 5",
+                ordinal=2,
+                phase_key="phase5",
+                status=RunStatus.COMPLETED,
+            ),
+            RunPhaseRecord(
+                phase_name="Phase 6",
+                ordinal=3,
+                phase_key="phase6",
+                status=RunStatus.COMPLETED,
+            ),
+            RunPhaseRecord(
+                phase_name="Theoretical Enrichment",
+                ordinal=4,
+                phase_key="theoretical_enrichment",
+                status=RunStatus.COMPLETED,
+            ),
         ],
     )
     pipeline.manifest_store.write_manifest(prior)
@@ -340,11 +411,34 @@ async def test_modifying_branch_b_does_not_invalidate_branch_a(
     cfg.execution.runs_dir = str(tmp_path / "runs")
     cfg.execution.artifacts_dir = str(tmp_path / "artifacts")
 
-    p4 = StubValidPhase("Phase 4", "phase4", writes_kinds=frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}))
-    p5 = StubValidPhase("Phase 5", "phase5", reads_kinds=frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}), writes_kinds=frozenset({ArtifactKind.FUSION_DECISION}))
-    p6 = StubValidPhase("Phase 6", "phase6", reads_kinds=frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION, ArtifactKind.FUSION_DECISION}), writes_kinds=frozenset({ArtifactKind.THEORY_ATOM}))
+    p4 = StubValidPhase(
+        "Phase 4",
+        "phase4",
+        writes_kinds=frozenset(
+            {ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}
+        ),
+    )
+    p5 = StubValidPhase(
+        "Phase 5",
+        "phase5",
+        reads_kinds=frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}),
+        writes_kinds=frozenset({ArtifactKind.FUSION_DECISION}),
+    )
+    p6 = StubValidPhase(
+        "Phase 6",
+        "phase6",
+        reads_kinds=frozenset(
+            {
+                ArtifactKind.THEORY_ATOM,
+                ArtifactKind.THEORY_RELATION,
+                ArtifactKind.FUSION_DECISION,
+            }
+        ),
+        writes_kinds=frozenset({ArtifactKind.THEORY_ATOM}),
+    )
     p_te = StubValidPhase(
-        "Theoretical Enrichment", "theoretical_enrichment",
+        "Theoretical Enrichment",
+        "theoretical_enrichment",
         reads_kinds=frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}),
         writes_kinds=frozenset({ArtifactKind.THEORETICAL_ENRICHMENT}),
         dependencies=("phase4",),
@@ -362,12 +456,37 @@ async def test_modifying_branch_b_does_not_invalidate_branch_a(
         run_id="run-prior",
         status=RunStatus.COMPLETED,
         input_fingerprint="same-input-fp",
-        phase_config_fingerprints={"phase4": "same", "phase5": "same", "phase6": "same", "theoretical_enrichment": "old-te-config"},
+        phase_config_fingerprints={
+            "phase4": "same",
+            "phase5": "same",
+            "phase6": "same",
+            "theoretical_enrichment": "old-te-config",
+        },
         phase_records=[
-            RunPhaseRecord(phase_name="Phase 4", ordinal=1, phase_key="phase4", status=RunStatus.COMPLETED),
-            RunPhaseRecord(phase_name="Phase 5", ordinal=2, phase_key="phase5", status=RunStatus.COMPLETED),
-            RunPhaseRecord(phase_name="Phase 6", ordinal=3, phase_key="phase6", status=RunStatus.COMPLETED),
-            RunPhaseRecord(phase_name="Theoretical Enrichment", ordinal=4, phase_key="theoretical_enrichment", status=RunStatus.COMPLETED),
+            RunPhaseRecord(
+                phase_name="Phase 4",
+                ordinal=1,
+                phase_key="phase4",
+                status=RunStatus.COMPLETED,
+            ),
+            RunPhaseRecord(
+                phase_name="Phase 5",
+                ordinal=2,
+                phase_key="phase5",
+                status=RunStatus.COMPLETED,
+            ),
+            RunPhaseRecord(
+                phase_name="Phase 6",
+                ordinal=3,
+                phase_key="phase6",
+                status=RunStatus.COMPLETED,
+            ),
+            RunPhaseRecord(
+                phase_name="Theoretical Enrichment",
+                ordinal=4,
+                phase_key="theoretical_enrichment",
+                status=RunStatus.COMPLETED,
+            ),
         ],
     )
     pipeline.manifest_store.write_manifest(prior)
@@ -376,7 +495,12 @@ async def test_modifying_branch_b_does_not_invalidate_branch_a(
         run_id="run-te-changed",
         status=RunStatus.RUNNING,
         input_fingerprint="same-input-fp",
-        phase_config_fingerprints={"phase4": "same", "phase5": "same", "phase6": "same", "theoretical_enrichment": "new-te-config"},
+        phase_config_fingerprints={
+            "phase4": "same",
+            "phase5": "same",
+            "phase6": "same",
+            "theoretical_enrichment": "new-te-config",
+        },
     )
 
     decision = await pipeline.engine.choose_reuse_source(current)
@@ -390,20 +514,31 @@ async def test_modifying_branch_b_does_not_invalidate_branch_a(
 
 def test_artifact_hydrator_uses_semantic_phase_key_over_hardcoded_ordinal() -> None:
     """Verify ArtifactHydrator checks semantic phase_key ('phase4') instead of ordinal ('phase_4' = phase3b)."""
-    from episteme_pipeline.contracts.domain import L1Chunk, TheoryAtom
     from episteme_pipeline.artifacts.builders import build_theory_atom_artifact
+    from episteme_pipeline.contracts.domain import L1Chunk, TheoryAtom
     from episteme_pipeline.contracts.phase_contracts import PipelineInput
 
     chunk_unchanged = L1Chunk(
-        id="chunk-1", text="Unchanged chunk", source_doc_id="doc-1", sequence_index=0, token_count=3
+        id="chunk-1",
+        text="Unchanged chunk",
+        source_doc_id="doc-1",
+        sequence_index=0,
+        token_count=3,
     )
     prior_atom = TheoryAtom(
-        id="atom-1", text="Prior claim", component_type="claim", source_chunk_id="chunk-1", confidence=0.9
+        id="atom-1",
+        text="Prior claim",
+        component_type="claim",
+        source_chunk_id="chunk-1",
+        confidence=0.9,
     )
     prior_collection = ArtifactCollection(
         [
             build_theory_atom_artifact(
-                prior_atom, run_id="run-prior", phase_name="Phase 4: Argument Mining", method="test"
+                prior_atom,
+                run_id="run-prior",
+                phase_name="Phase 4: Argument Mining",
+                method="test",
             )
         ]
     )
@@ -471,4 +606,3 @@ def test_artifact_hydrator_uses_semantic_phase_key_over_hardcoded_ordinal() -> N
     res_b = hydrator_b.hydrate_phase4([chunk_unchanged])
     assert len(res_b.delta_chunks) == 1
     assert res_b.components == []
-

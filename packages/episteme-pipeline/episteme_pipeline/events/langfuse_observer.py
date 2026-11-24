@@ -90,7 +90,9 @@ class LangfuseObserver(EventObserver):
             The event to convert to a Langfuse observation.
         """
         try:
-            trace_id, _parent_observation_id, trace_context_arg = self._resolve_trace_context(event)
+            trace_id, _parent_observation_id, trace_context_arg = (
+                self._resolve_trace_context(event)
+            )
 
             if isinstance(
                 event,
@@ -108,9 +110,13 @@ class LangfuseObserver(EventObserver):
                 ),
             ):
                 self._handle_lifecycle_event(event, trace_context_arg)
-            elif isinstance(event, (LLMGenerationCompleted, EmbeddingGenerationCompleted)):
+            elif isinstance(
+                event, (LLMGenerationCompleted, EmbeddingGenerationCompleted)
+            ):
                 self._handle_generation_event(event, trace_context_arg)
-            elif isinstance(event, (DecisionEvaluationCompleted, DecisionGatingTriggered)):
+            elif isinstance(
+                event, (DecisionEvaluationCompleted, DecisionGatingTriggered)
+            ):
                 self._handle_decision_event(event, trace_context_arg)
             elif isinstance(event, (EvaluationCompleted, EvaluationScoreLogged)):
                 self._handle_evaluation_event(event, trace_id, trace_context_arg)
@@ -147,6 +153,7 @@ class LangfuseObserver(EventObserver):
 
         if not trace_id and event.run_id:
             import hashlib
+
             trace_id = hashlib.md5(event.run_id.encode("utf-8")).hexdigest()
 
         trace_context: dict[str, str] = {}
@@ -155,7 +162,11 @@ class LangfuseObserver(EventObserver):
         if parent_observation_id:
             trace_context["parent_span_id"] = parent_observation_id
 
-        return trace_id, parent_observation_id, (trace_context if trace_context else None)
+        return (
+            trace_id,
+            parent_observation_id,
+            (trace_context if trace_context else None),
+        )
 
     def _handle_lifecycle_event(
         self,
@@ -179,7 +190,9 @@ class LangfuseObserver(EventObserver):
                 as_type="span",
                 name=f"component.{event.component_name}",
                 trace_context=trace_context,
-                input={"description": event.input_description} if event.input_description else None,
+                input={"description": event.input_description}
+                if event.input_description
+                else None,
             )
             self.active_spans[event.component_name] = observation
 
@@ -322,7 +335,9 @@ class LangfuseObserver(EventObserver):
     ) -> None:
         """Handle LLM and embedding generation events."""
         if isinstance(event, LLMGenerationCompleted):
-            total_tokens = event.total_tokens or (event.prompt_tokens + event.completion_tokens)
+            total_tokens = event.total_tokens or (
+                event.prompt_tokens + event.completion_tokens
+            )
             observation = self.client.start_observation(
                 as_type="generation",
                 name=f"llm.{event.operation}",
@@ -330,7 +345,9 @@ class LangfuseObserver(EventObserver):
                 model=event.model_name,
                 model_parameters=event.model_parameters or {},
                 input=event.prompt,
-                output=event.output_json if event.output_json is not None else event.output_text,
+                output=event.output_json
+                if event.output_json is not None
+                else event.output_text,
                 usage_details={
                     "input": event.prompt_tokens,
                     "output": event.completion_tokens,
@@ -390,9 +407,8 @@ class LangfuseObserver(EventObserver):
         """
         if isinstance(event, DecisionEvaluationCompleted):
             is_active_learning = (
-                (event.prediction_set is not None and len(event.prediction_set) > 1)
-                or (0.40 <= event.class_probability <= 0.60)
-            )
+                event.prediction_set is not None and len(event.prediction_set) > 1
+            ) or (0.40 <= event.class_probability <= 0.60)
 
             observation = self.client.start_observation(
                 as_type="generation",
@@ -430,7 +446,6 @@ class LangfuseObserver(EventObserver):
                 ),
             )
             observation.end()
-
 
         elif isinstance(event, DecisionGatingTriggered):
             observation = self.client.start_observation(
@@ -574,7 +589,10 @@ class LangfuseObserver(EventObserver):
                 as_type="span",
                 name="phase2.linking.candidates",
                 trace_context=trace_context,
-                input={"mention_id": event.mention_id, "mention_name": event.mention_name},
+                input={
+                    "mention_id": event.mention_id,
+                    "mention_name": event.mention_name,
+                },
                 output={
                     "candidate_count": event.candidate_count,
                     "candidates": event.candidates[:10],

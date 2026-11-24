@@ -115,7 +115,9 @@ class BaselineTextRAG:
         node_to_chunk: dict[str, str] = {}
         if chunks:
             for c in chunks:
-                anchored_node = c.metadata.get("anchored_node_id") if c.metadata else None
+                anchored_node = (
+                    c.metadata.get("anchored_node_id") if c.metadata else None
+                )
                 if anchored_node:
                     chunk_to_node[c.id] = str(anchored_node)
                     node_to_chunk[str(anchored_node)] = c.id
@@ -130,11 +132,13 @@ class BaselineTextRAG:
                 if target in chunk_to_node:
                     expanded_targets.add(chunk_to_node[target])
 
-            adapted_queries.append({
-                "query": q["query"],
-                "gold_target_ids": list(expanded_targets),
-                "id": q.get("id"),
-            })
+            adapted_queries.append(
+                {
+                    "query": q["query"],
+                    "gold_target_ids": list(expanded_targets),
+                    "id": q.get("id"),
+                }
+            )
 
         return await self.retrieval_evaluator.evaluate_batch(
             adapted_queries,
@@ -178,7 +182,7 @@ class BaselineTextRAG:
             if str(corpus).endswith(".jsonld") or str(corpus).endswith(".json"):
                 chunks, _ = load_structuralist_benchmark(corpus)
             else:
-                with open(corpus, "r", encoding="utf-8") as f:
+                with open(corpus, "r", encoding="utf-8") as f:  # noqa: ASYNC230 baseline
                     text = f.read()
                 chunks = [
                     L1Chunk(
@@ -197,7 +201,7 @@ class BaselineTextRAG:
         queries_ref = "in_memory_queries"
         if isinstance(queries, (str, Path)) and Path(queries).is_file():
             queries_ref = str(queries)
-            with open(queries, "r", encoding="utf-8") as qf:
+            with open(queries, "r", encoding="utf-8") as qf:  # noqa: ASYNC230 baseline
                 qdata = yaml.safe_load(qf)
             query_list = qdata.get("queries", [])
         elif isinstance(queries, list):
@@ -230,9 +234,13 @@ class BaselineTextRAG:
                 EvaluationMetric(name="mrr", value=mrr_val),
                 EvaluationMetric(name="hits@1", value=metrics_dict.get("Hits@1", 0.0)),
                 EvaluationMetric(name="hits@3", value=metrics_dict.get("Hits@3", 0.0)),
-                EvaluationMetric(name="hits@10", value=metrics_dict.get("Hits@10", 0.0)),
+                EvaluationMetric(
+                    name="hits@10", value=metrics_dict.get("Hits@10", 0.0)
+                ),
                 EvaluationMetric(name="ndcg", value=metrics_dict.get("nDCG", 0.0)),
-                EvaluationMetric(name="latency", value=round(latency, 4), unit="seconds"),
+                EvaluationMetric(
+                    name="latency", value=round(latency, 4), unit="seconds"
+                ),
                 EvaluationMetric(name="token_cost", value=token_cost, unit="USD"),
             ],
             outcome=outcome,

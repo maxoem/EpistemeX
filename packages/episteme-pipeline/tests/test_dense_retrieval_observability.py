@@ -265,7 +265,9 @@ async def test_dense_extractor_emits_optional_observability_spans(
     assert rerank_input["env_b"]["char_count"] > 0
     assert rerank_input["reranker_input"]["pair_char_count"] > 0
     assert rerank_input["reranker_payload"]["query"].startswith("Entity: Theory")
-    assert rerank_input["reranker_payload"]["document"].startswith("Entity: Observation")
+    assert rerank_input["reranker_payload"]["document"].startswith(
+        "Entity: Observation"
+    )
 
     llm_output = trace_sink.spans[2]["output"]
     assert llm_output["relation"] == "IMPLIES"
@@ -376,4 +378,6 @@ async def test_dense_extractor_recovers_from_reranker_overflow_with_refetch() ->
         "next_depth": 1,
         "depth_step": 1,
     }
-    assert rerank_output["recovery_attempts"][0]["reranker_input"]["pair_byte_count"] > 0
+    assert (
+        rerank_output["recovery_attempts"][0]["reranker_input"]["pair_byte_count"] > 0
+    )

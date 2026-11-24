@@ -15,7 +15,6 @@ os.environ.setdefault("TIKTOKEN_OFFLINE", "1")
 import pytest
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
-from episteme_pipeline.graph.theory_graph_mapper import theory_relation_to_graph_properties
 from episteme_pipeline.contracts.phase_contracts import (
     L1Chunk,
     L2Entity,
@@ -23,6 +22,9 @@ from episteme_pipeline.contracts.phase_contracts import (
     PhaseItemRecord,
     SearchResult,
     SubGraph,
+)
+from episteme_pipeline.graph.theory_graph_mapper import (
+    theory_relation_to_graph_properties,
 )
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
 from episteme_pipeline.schema.default_schema import (
@@ -64,7 +66,9 @@ class InMemoryGraphStore(ProcessingGraph):
     async def get_neighborhood(self, node_id: str, depth: int = 1) -> SubGraph:
         return SubGraph(center_id=node_id, nodes=[], triples=[], depth=depth)
 
-    async def vector_search(self, embedding, top_k, node_label=None, run_id=None) -> list[SearchResult]:
+    async def vector_search(
+        self, embedding, top_k, node_label=None, run_id=None
+    ) -> list[SearchResult]:
         return []
 
     async def upsert_node(
@@ -118,9 +122,7 @@ class InMemoryGraphStore(ProcessingGraph):
         ]
         return removed
 
-    async def prune_retired_mentions(
-        self, mentions: list[tuple[str, str]]
-    ) -> int:
+    async def prune_retired_mentions(self, mentions: list[tuple[str, str]]) -> int:
         """Delete retired ``EXTRACTED_FROM`` edges from the fixture store."""
         target_mentions = {(eid, cid) for eid, cid in mentions if eid and cid}
         if not target_mentions:
@@ -136,12 +138,16 @@ class InMemoryGraphStore(ProcessingGraph):
         ]
         return before - len(self._relations)
 
-    async def upsert_relation(self, from_id, relation_type, to_id, properties=None) -> None:
+    async def upsert_relation(
+        self, from_id, relation_type, to_id, properties=None
+    ) -> None:
         self._relations.append((from_id, relation_type, to_id, properties or {}))
 
     async def upsert_relations(self, relations: list[dict]) -> None:
         for r in relations:
-            await self.upsert_relation(r["from_id"], r["relation_type"], r["to_id"], r.get("properties"))
+            await self.upsert_relation(
+                r["from_id"], r["relation_type"], r["to_id"], r.get("properties")
+            )
 
     async def upsert_chunk(self, chunk: L1Chunk) -> None:
         self._chunks[chunk.id] = chunk
@@ -194,8 +200,15 @@ class InMemoryGraphStore(ProcessingGraph):
     async def get_all_entity_triples(self) -> list[L2Triple]:
         return self._triples
 
-    async def upsert_community(self, community_id: str, level: int, entity_ids: list[str]) -> None:
-        self._relations.extend([(entity_id, "IN_COMMUNITY", community_id, {"level": level}) for entity_id in entity_ids])
+    async def upsert_community(
+        self, community_id: str, level: int, entity_ids: list[str]
+    ) -> None:
+        self._relations.extend(
+            [
+                (entity_id, "IN_COMMUNITY", community_id, {"level": level})
+                for entity_id in entity_ids
+            ]
+        )
 
     async def upsert_communities(self, communities: list[dict]) -> None:
         for c in communities:
@@ -210,7 +223,8 @@ class InMemoryGraphStore(ProcessingGraph):
 
     async def get_unprocessed_chunks(self, phase: str, limit=None) -> list[L1Chunk]:
         unprocessed = [
-            c for c in self._chunks.values()
+            c
+            for c in self._chunks.values()
             if phase not in self._processed.get(c.id, set())
         ]
         if limit:
@@ -246,9 +260,7 @@ class InMemoryGraphStore(ProcessingGraph):
     ) -> None:
         self._chunk_snapshots[(phase, chunk_id)] = dict(snapshot)
 
-    async def get_chunk_state_snapshot(
-        self, phase: str, chunk_id: str
-    ) -> dict | None:
+    async def get_chunk_state_snapshot(self, phase: str, chunk_id: str) -> dict | None:
         snapshot = self._chunk_snapshots.get((phase, chunk_id))
         return dict(snapshot) if snapshot is not None else None
 
@@ -257,7 +269,6 @@ class InMemoryGraphStore(ProcessingGraph):
         keys_to_del = [k for k in self._chunk_snapshots if k[0] == phase]
         for k in keys_to_del:
             del self._chunk_snapshots[k]
-
 
     async def find_entities_by_name(self, name: str, label=None) -> list[L2Entity]:
         name_lower = name.strip().lower()
@@ -277,7 +288,9 @@ class InMemoryGraphStore(ProcessingGraph):
         return [
             rel[3].get("textual_envelope")
             for rel in self._relations
-            if rel[0] == entity_id and rel[1] == "EXTRACTED_FROM" and rel[3].get("textual_envelope")
+            if rel[0] == entity_id
+            and rel[1] == "EXTRACTED_FROM"
+            and rel[3].get("textual_envelope")
         ]
 
     async def get_all_theory_relations(self) -> list[TheoryRelation]:
@@ -286,12 +299,13 @@ class InMemoryGraphStore(ProcessingGraph):
     async def get_chunk_entities(self, chunk_id: str) -> list[L2Entity]:
         return []
 
-    async def upsert_argument_component(self, component: TheoryAtom) -> None:
+    async def upsert_argument_component(self, component: TheoryAtom) -> None:  # noqa: F811 baseline
         await self.upsert_theory_atom(component)
 
-    async def upsert_argument_components(self, components: list[TheoryAtom]) -> None:
+    async def upsert_argument_components(self, components: list[TheoryAtom]) -> None:  # noqa: F811 baseline
         for c in components:
             await self.upsert_argument_component(c)
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -328,8 +342,28 @@ def sample_chunk() -> L1Chunk:
 @pytest.fixture
 def sample_entities() -> list[L2Entity]:
     return [
-        L2Entity(id="entity_kant", label="PERSON", name="Kant", source_chunk_ids=["chunk_0001"]),
-        L2Entity(id="entity_hegel", label="PERSON", name="Hegel", source_chunk_ids=["chunk_0001"]),
-        L2Entity(id="entity_space", label="KONZEPT", name="space", source_chunk_ids=["chunk_0001"]),
-        L2Entity(id="entity_time", label="KONZEPT", name="time", source_chunk_ids=["chunk_0002"]),
+        L2Entity(
+            id="entity_kant",
+            label="PERSON",
+            name="Kant",
+            source_chunk_ids=["chunk_0001"],
+        ),
+        L2Entity(
+            id="entity_hegel",
+            label="PERSON",
+            name="Hegel",
+            source_chunk_ids=["chunk_0001"],
+        ),
+        L2Entity(
+            id="entity_space",
+            label="KONZEPT",
+            name="space",
+            source_chunk_ids=["chunk_0001"],
+        ),
+        L2Entity(
+            id="entity_time",
+            label="KONZEPT",
+            name="time",
+            source_chunk_ids=["chunk_0002"],
+        ),
     ]

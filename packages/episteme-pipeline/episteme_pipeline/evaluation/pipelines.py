@@ -111,15 +111,19 @@ def _init_components(
             if api_base:
                 llm_kwargs["api_base"] = api_base
             llm = LiteLLM(**llm_kwargs)
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
+
             class _DummyLLM:
                 async def acomplete(self, prompt: str) -> str:
                     return ""
+
             llm = _DummyLLM()
 
     if embed_model is None:
         default_embed = (
-            "openai/text-embedding-3-small" if api_key else "sentence-transformers/all-MiniLM-L6-v2"
+            "openai/text-embedding-3-small"
+            if api_key
+            else "sentence-transformers/all-MiniLM-L6-v2"
         )
         embed_model_name = os.getenv("EMBED_MODEL", default_embed)
 
@@ -132,7 +136,9 @@ def _init_components(
             ):
                 from sentence_transformers import SentenceTransformer
 
-                clean_name = embed_model_name.replace("local:", "").replace("huggingface/", "")
+                clean_name = embed_model_name.replace("local:", "").replace(
+                    "huggingface/", ""
+                )
                 if clean_name == "openai/text-embedding-3-small" or not clean_name:
                     clean_name = "sentence-transformers/all-MiniLM-L6-v2"
                 embed_model = ensure_embedding_model(SentenceTransformer(clean_name))
@@ -143,7 +149,7 @@ def _init_components(
                 if api_base:
                     embed_kwargs["api_base"] = api_base
                 embed_model = ensure_embedding_model(LiteLLMEmbedding(**embed_kwargs))
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             embed_model = ensure_embedding_model(_MockOfflineEmbeddingModel())
     else:
         embed_model = ensure_embedding_model(embed_model)
@@ -153,7 +159,7 @@ def _init_components(
             reranker = SentenceTransformerCrossEncoderReranker(
                 model_name=os.getenv("RERANKER_MODEL", "Qwen/Qwen3-Reranker-0.6B")
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             reranker = _MockOfflineCrossEncoder()
 
     if in_memory:
@@ -168,13 +174,22 @@ def _init_components(
         neo4j_db = os.getenv("NEO4J_DATABASE", "neo4j")
 
         graph_reader = Neo4jGraphReader(
-            url=neo4j_url, username=neo4j_user, password=neo4j_password, database=neo4j_db
+            url=neo4j_url,
+            username=neo4j_user,
+            password=neo4j_password,
+            database=neo4j_db,
         )
         projection_graph = Neo4jGraphWriter(
-            url=neo4j_url, username=neo4j_user, password=neo4j_password, database=neo4j_db
+            url=neo4j_url,
+            username=neo4j_user,
+            password=neo4j_password,
+            database=neo4j_db,
         )
         checkpoint_store = Neo4jProcessingGraph(
-            url=neo4j_url, username=neo4j_user, password=neo4j_password, database=neo4j_db
+            url=neo4j_url,
+            username=neo4j_user,
+            password=neo4j_password,
+            database=neo4j_db,
         )
 
     cfg = PipelineConfig(
@@ -192,10 +207,18 @@ def _init_components(
             ensure_structured_llm(llm, use_cache=False, event_emitter=event_emitter),
             cache_dir=default_cache_dir(cfg.execution.runs_dir),
         )
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 baseline
         pass
 
-    return llm, embed_model, reranker, graph_reader, projection_graph, checkpoint_store, cfg
+    return (
+        llm,
+        embed_model,
+        reranker,
+        graph_reader,
+        projection_graph,
+        checkpoint_store,
+        cfg,
+    )
 
 
 def build_l2_eval_pipeline(
@@ -247,7 +270,12 @@ def build_l2_eval_pipeline(
     )
 
     phases = [
-        Phase1Runner(cfg.phase1, llm=llm, embedding_model=embed_model, graph_store=projection_graph),
+        Phase1Runner(
+            cfg.phase1,
+            llm=llm,
+            embedding_model=embed_model,
+            graph_store=projection_graph,
+        ),
         Phase2Runner(
             cfg.phase2,
             cfg.graph_schema,
@@ -325,7 +353,12 @@ def build_l3_eval_pipeline(
     )
 
     phases = [
-        Phase1Runner(cfg.phase1, llm=llm, embedding_model=embed_model, graph_store=projection_graph),
+        Phase1Runner(
+            cfg.phase1,
+            llm=llm,
+            embedding_model=embed_model,
+            graph_store=projection_graph,
+        ),
         Phase2Runner(
             cfg.phase2,
             cfg.graph_schema,
@@ -423,7 +456,12 @@ def build_l4_theorynet_eval_pipeline(
     )
 
     phases = [
-        Phase1Runner(cfg.phase1, llm=llm, embedding_model=embed_model, graph_store=projection_graph),
+        Phase1Runner(
+            cfg.phase1,
+            llm=llm,
+            embedding_model=embed_model,
+            graph_store=projection_graph,
+        ),
         Phase2Runner(
             cfg.phase2,
             cfg.graph_schema,

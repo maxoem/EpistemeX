@@ -90,13 +90,25 @@ def sample_queries() -> list[dict[str, Any]]:
 @pytest.fixture
 def pilot_manifest_path() -> Path:
     """Path to STNB pilot evaluation manifest."""
-    return Path(__file__).parent.parent / "episteme_pipeline" / "evaluation" / "manifests" / "eval_stnb.yaml"
+    return (
+        Path(__file__).parent.parent
+        / "episteme_pipeline"
+        / "evaluation"
+        / "manifests"
+        / "eval_stnb.yaml"
+    )
 
 
 @pytest.fixture
 def pilot_data_path() -> Path:
     """Path to STNB CPM pilot JSON-LD data."""
-    return Path(__file__).parent.parent / "episteme_pipeline" / "evaluation" / "data" / "stnb_cpm_pilot.jsonld"
+    return (
+        Path(__file__).parent.parent
+        / "episteme_pipeline"
+        / "evaluation"
+        / "data"
+        / "stnb_cpm_pilot.jsonld"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +120,9 @@ class TestBaselineTextRAG:
     """Deterministic tests for BaselineTextRAG."""
 
     @pytest.mark.asyncio
-    async def test_indexing_chunks_without_graph_structure(self, sample_chunks: list[L1Chunk]):
+    async def test_indexing_chunks_without_graph_structure(
+        self, sample_chunks: list[L1Chunk]
+    ):
         """Verify chunks are indexed into graph store without creating entities or relations."""
         store = InMemoryGraphStore()
         baseline = BaselineTextRAG(graph_store=store)
@@ -195,7 +209,11 @@ class TestBaselineNaiveKG:
 
         # Check extracted predicates match canonical schema relations
         predicates = {t.predicate for t in triples}
-        assert "SPECIALIZES" in predicates or "IMPLIES" in predicates or "SUPPORTS" in predicates
+        assert (
+            "SPECIALIZES" in predicates
+            or "IMPLIES" in predicates
+            or "SUPPORTS" in predicates
+        )
 
     def test_build_digraph(self):
         """Verify build_graph outputs a valid NetworkX DiGraph with schema polarity."""
@@ -212,12 +230,15 @@ class TestBaselineNaiveKG:
     def test_custom_schema_and_polarity_injection(self):
         """Verify BaselineNaiveKG extracts domain relations and assigns polarity from custom schema."""
         from episteme_pipeline.schema.default_schema import SchemaConfig
+
         custom_schema = SchemaConfig(
             relation_types=["BINDS_TO", "INHIBITS"],
             relation_polarities={"BINDS_TO": 0, "INHIBITS": -1},
         )
         baseline = BaselineNaiveKG(schema=custom_schema)
-        sample_text = "Protein kinase binds to substrate. Drug inhibitor inhibits enzyme."
+        sample_text = (
+            "Protein kinase binds to substrate. Drug inhibitor inhibits enzyme."
+        )
 
         _entities, triples = baseline.extract(sample_text)
         predicates = {t.predicate for t in triples}
@@ -233,13 +254,20 @@ class TestBaselineNaiveKG:
 
     def test_custom_extractor_injection(self):
         """Verify custom extractor_fn overrides heuristic extraction."""
+
         def custom_extractor(text: str):
             ents = [
                 L2Entity(id="custom_a", name="Custom A", label="Concept"),
                 L2Entity(id="custom_b", name="Custom B", label="Concept"),
             ]
             trips = [
-                L2Triple(subject_id="custom_a", predicate="SUPPORTS", object_id="custom_b", confidence=1.0, scope="local")
+                L2Triple(
+                    subject_id="custom_a",
+                    predicate="SUPPORTS",
+                    object_id="custom_b",
+                    confidence=1.0,
+                    scope="local",
+                )
             ]
             return ents, trips
 
@@ -259,7 +287,13 @@ class TestBaselineNaiveKG:
                 L2Entity(id="acceleration", name="acceleration", label="Entity"),
             ],
             "l2_triples": [
-                L2Triple(subject_id="force", predicate="IMPLIES", object_id="acceleration", confidence=1.0, scope="local")
+                L2Triple(
+                    subject_id="force",
+                    predicate="IMPLIES",
+                    object_id="acceleration",
+                    confidence=1.0,
+                    scope="local",
+                )
             ],
         }
 
@@ -269,7 +303,13 @@ class TestBaselineNaiveKG:
                 L2Entity(id="acceleration", name="acceleration", label="Entity"),
             ]
             trips = [
-                L2Triple(subject_id="force", predicate="IMPLIES", object_id="acceleration", confidence=1.0, scope="local")
+                L2Triple(
+                    subject_id="force",
+                    predicate="IMPLIES",
+                    object_id="acceleration",
+                    confidence=1.0,
+                    scope="local",
+                )
             ]
             return ents, trips
 
@@ -324,11 +364,22 @@ class TestBaselineZeroShotLLM:
 
     def test_custom_extract_fn_injection(self):
         """Verify custom extract_fn is honored for deterministic mock testing."""
+
         def custom_fn(text: str):
             return TheoryNet(
                 atoms=[
-                    TheoryAtom(id="str:Mp_CPM", text="Kinematics", component_type="PotentialModel", source_chunk_id="c0"),
-                    TheoryAtom(id="str:M_CPM_Newton2", text="F=ma", component_type="ActualModel", source_chunk_id="c1"),
+                    TheoryAtom(
+                        id="str:Mp_CPM",
+                        text="Kinematics",
+                        component_type="PotentialModel",
+                        source_chunk_id="c0",
+                    ),
+                    TheoryAtom(
+                        id="str:M_CPM_Newton2",
+                        text="F=ma",
+                        component_type="ActualModel",
+                        source_chunk_id="c1",
+                    ),
                 ],
                 relations=[],
             )
@@ -433,7 +484,9 @@ class TestComparativeScoring:
         assert "| `mrr` | 0.3800 | 0.5800 | +0.2000 | Pipeline |" in md
 
     @pytest.mark.asyncio
-    async def test_harness_evaluate_manifest_with_baseline_text_rag(self, pilot_manifest_path: Path):
+    async def test_harness_evaluate_manifest_with_baseline_text_rag(
+        self, pilot_manifest_path: Path
+    ):
         """Verify EvaluationHarness CLI / API integration with --baseline text_rag."""
         harness = EvaluationHarness()
         report = await harness.evaluate_manifest(
@@ -444,11 +497,15 @@ class TestComparativeScoring:
         assert len(report.run_ids) == 2
         assert any(rid.startswith("baseline_text_rag") for rid in report.run_ids)
         assert len(report.pairwise_comparisons) > 0
-        assert "## Comparative Baseline Evaluation: TEXT_RAG vs Pipeline" in report.summary
+        assert (
+            "## Comparative Baseline Evaluation: TEXT_RAG vs Pipeline" in report.summary
+        )
         assert "ΔMRR:" in report.summary
 
     @pytest.mark.asyncio
-    async def test_harness_evaluate_manifest_with_baseline_naive_kg(self, pilot_manifest_path: Path):
+    async def test_harness_evaluate_manifest_with_baseline_naive_kg(
+        self, pilot_manifest_path: Path
+    ):
         """Verify EvaluationHarness CLI / API integration with --baseline naive_kg."""
         harness = EvaluationHarness()
         report = await harness.evaluate_manifest(
@@ -458,11 +515,15 @@ class TestComparativeScoring:
 
         assert any(rid.startswith("baseline_naive_kg") for rid in report.run_ids)
         assert len(report.pairwise_comparisons) > 0
-        assert "## Comparative Baseline Evaluation: NAIVE_KG vs Pipeline" in report.summary
+        assert (
+            "## Comparative Baseline Evaluation: NAIVE_KG vs Pipeline" in report.summary
+        )
         assert "ΔF1:" in report.summary
 
     @pytest.mark.asyncio
-    async def test_harness_evaluate_manifest_with_baseline_zero_shot(self, pilot_manifest_path: Path):
+    async def test_harness_evaluate_manifest_with_baseline_zero_shot(
+        self, pilot_manifest_path: Path
+    ):
         """Verify EvaluationHarness CLI / API integration with --baseline zero_shot."""
         harness = EvaluationHarness()
         report = await harness.evaluate_manifest(
@@ -472,5 +533,8 @@ class TestComparativeScoring:
 
         assert any(rid.startswith("baseline_zero_shot") for rid in report.run_ids)
         assert len(report.pairwise_comparisons) > 0
-        assert "## Comparative Baseline Evaluation: ZERO_SHOT vs Pipeline" in report.summary
+        assert (
+            "## Comparative Baseline Evaluation: ZERO_SHOT vs Pipeline"
+            in report.summary
+        )
         assert "ΔF1:" in report.summary

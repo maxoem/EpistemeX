@@ -60,7 +60,9 @@ def is_table_row(line: str) -> bool:
         True if the line represents a Markdown table row delimited by pipe characters.
     """
     stripped = line.strip()
-    return stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2
+    return (
+        stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2
+    )
 
 
 def check_bracket_math(content: str) -> list[MathIssue]:
@@ -281,14 +283,16 @@ def check_display_math_line_start(content: str) -> list[MathIssue]:
             continue
 
         bq_match = re.match(r"^(\s*(?:>\s*)*)", line)
-        bq_prefix = bq_match.group(1).lstrip() if bq_match and ">" in bq_match.group(1) else ""
+        bq_prefix = (
+            bq_match.group(1).lstrip() if bq_match and ">" in bq_match.group(1) else ""
+        )
 
         if in_math_block:
             in_math_block = False
             m_close = matches[0]
-            prefix = line[:m_close.start()]
+            prefix = line[: m_close.start()]
             clean_prefix = re.sub(r"^(\s*(?:>\s*)*)", "", prefix)
-            trailing = line[m_close.end():]
+            trailing = line[m_close.end() :]
 
             if clean_prefix == "" and (prefix != bq_prefix or trailing.strip()):
                 desc = (
@@ -310,7 +314,7 @@ def check_display_math_line_start(content: str) -> list[MathIssue]:
                 in_math_block = True
         else:
             m0 = matches[0]
-            prefix = line[:m0.start()]
+            prefix = line[: m0.start()]
             clean_prefix = re.sub(r"^(\s*(?:>\s*)*)", "", prefix)
 
             if clean_prefix != "":
@@ -382,14 +386,16 @@ def fix_display_math_line_start(
             continue
 
         bq_match = re.match(r"^(\s*(?:>\s*)*)", line)
-        bq_prefix = bq_match.group(1).lstrip() if bq_match and ">" in bq_match.group(1) else ""
+        bq_prefix = (
+            bq_match.group(1).lstrip() if bq_match and ">" in bq_match.group(1) else ""
+        )
 
         if in_math_block:
             in_math_block = False
             m_close = matches[0]
-            prefix = line[:m_close.start()]
+            prefix = line[: m_close.start()]
             clean_prefix = re.sub(r"^(\s*(?:>\s*)*)", "", prefix)
-            trailing = line[m_close.end():]
+            trailing = line[m_close.end() :]
 
             if clean_prefix == "" and (prefix != bq_prefix or trailing.strip()):
                 fixed_count += 1
@@ -398,7 +404,7 @@ def fix_display_math_line_start(
                     new_lines.append(f"{bq_prefix}{trailing.lstrip()}")
             elif trailing.strip():
                 fixed_count += 1
-                new_lines.append(line[:m_close.end()])
+                new_lines.append(line[: m_close.end()])
                 new_lines.append(f"{bq_prefix}{trailing.lstrip()}")
             else:
                 new_lines.append(line)
@@ -407,7 +413,7 @@ def fix_display_math_line_start(
                 in_math_block = True
         else:
             m0 = matches[0]
-            prefix = line[:m0.start()]
+            prefix = line[: m0.start()]
             clean_prefix = re.sub(r"^(\s*(?:>\s*)*)", "", prefix)
 
             if clean_prefix == "" and prefix == bq_prefix:
@@ -428,7 +434,7 @@ def fix_display_math_line_start(
                 before = prefix.rstrip()
                 new_lines.append(before)
 
-                rest = line[m0.start():]
+                rest = line[m0.start() :]
                 rest_matches = list(re.finditer(r"(?<!\\)(?<!\$)\$\$(?!\$)", rest))
 
                 if len(rest_matches) == 1:
@@ -438,8 +444,8 @@ def fix_display_math_line_start(
                 elif len(rest_matches) >= 2:
                     # Opens and closes on same line -> place at column 0
                     m_close = rest_matches[1]
-                    math_part = rest[:m_close.end()]
-                    trailing = rest[m_close.end():]
+                    math_part = rest[: m_close.end()]
+                    trailing = rest[m_close.end() :]
                     new_lines.append(f"{bq_prefix}{math_part.lstrip()}")
                     if trailing.strip():
                         new_lines.append(trailing.lstrip())
@@ -465,8 +471,16 @@ def fix_display_math_line_start(
             ):
                 formula = new_lines[i + 1].strip()
                 bq_match = re.match(r"^(\s*(?:>\s*)*)", new_lines[i])
-                bq = bq_match.group(1).lstrip() if bq_match and ">" in bq_match.group(1) else ""
-                collapsed_lines.append(f"{bq}$${formula}$$" if formula.startswith(" ") else f"{bq}$$ {formula} $$")
+                bq = (
+                    bq_match.group(1).lstrip()
+                    if bq_match and ">" in bq_match.group(1)
+                    else ""
+                )
+                collapsed_lines.append(
+                    f"{bq}$${formula}$$"
+                    if formula.startswith(" ")
+                    else f"{bq}$$ {formula} $$"
+                )
                 i += 3
             else:
                 collapsed_lines.append(new_lines[i])
@@ -687,12 +701,16 @@ def main() -> None:
             modified_files += 1
 
     if args.check:
-        print(f"\nValidation complete: {total_issues} issues found across {modified_files} files.")
+        print(
+            f"\nValidation complete: {total_issues} issues found across {modified_files} files."
+        )
         if total_issues > 0:
             raise SystemExit(1)
     else:
         mode_str = "would be modified (dry-run)" if args.dry_run else "modified"
-        print(f"\nDone: {modified_files} / {len(matched_files)} files {mode_str} ({total_issues} total issues).")
+        print(
+            f"\nDone: {modified_files} / {len(matched_files)} files {mode_str} ({total_issues} total issues)."
+        )
 
 
 if __name__ == "__main__":

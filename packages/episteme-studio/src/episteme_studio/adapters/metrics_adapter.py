@@ -96,13 +96,13 @@ def compute_gradual_strength(
 
         polarity = edge.polarity
         if weight is not None and polarity in (-1, 1):
-            incoming_edges[edge.target].append((edge.source, float(weight), int(polarity)))
+            incoming_edges[edge.target].append(
+                (edge.source, float(weight), int(polarity))
+            )
 
     # Initialize rho for nodes with known tau
     rho_current: dict[str, float] = {
-        nid: max(0.0, min(1.0, tau))
-        for nid, tau in tau_map.items()
-        if tau is not None
+        nid: max(0.0, min(1.0, tau)) for nid, tau in tau_map.items() if tau is not None
     }
 
     # Iterative gradual semantics propagation
@@ -212,7 +212,9 @@ def compute_modal_strength(
     )
 
 
-def _calculate_internal_correlation(graph: ig.Graph, community_attribute: str = "community") -> float:
+def _calculate_internal_correlation(
+    graph: ig.Graph, community_attribute: str = "community"
+) -> float:
     """Calculate the internal correlation cohesion of communities within a graph.
 
     Parameters
@@ -237,7 +239,7 @@ def _calculate_internal_correlation(graph: ig.Graph, community_attribute: str = 
         if len(unique_comms) <= 1:
             return float(round(max(0.0, min(1.0, graph.density())), 4))
         return float(round(max(0.0, min(1.0, graph.modularity(memberships))), 4))
-    except Exception:
+    except Exception:  # noqa: BLE001 baseline
         return 0.85
 
 
@@ -299,7 +301,9 @@ def compute_internal_correlation(
             edges_to_add.append((src_idx, tgt_idx))
     g.add_edges(edges_to_add)
 
-    score = float(_calculate_internal_correlation(g, community_attribute=community_attr))
+    score = float(
+        _calculate_internal_correlation(g, community_attribute=community_attr)
+    )
 
     node_values: dict[str, float | str | None] = {
         node.id: communities[idx] for idx, node in enumerate(graph.nodes)
@@ -480,8 +484,10 @@ def compute_pagerank(
         g.add_edges(edges_to_add)
 
         try:
-            pr_scores = g.pagerank(directed=True, damping=damping, weights=weights if weights else None)
-        except Exception:
+            pr_scores = g.pagerank(
+                directed=True, damping=damping, weights=weights if weights else None
+            )
+        except Exception:  # noqa: BLE001 baseline
             pr_scores = g.pagerank(directed=True, damping=damping)
 
         node_values: dict[str, float | str | None] = {
@@ -494,9 +500,7 @@ def compute_pagerank(
         backend = "igraph"
     else:
         res = run_epistemetrics_pagerank(graph, params={"damping": damping, **opts})
-        node_values = {
-            nid: round(score, 6) for nid, score in res.scores.items()
-        }
+        node_values = {nid: round(score, 6) for nid, score in res.scores.items()}
         min_val = round(res.min_score, 6)
         max_val = round(res.max_score, 6)
         backend = res.backend
@@ -583,14 +587,15 @@ def compute_leiden(
             n_iterations=n_iterations,
         )
         membership = partition.membership
-    except Exception as exc:
-        logger.warning("igraph community_leiden failed, falling back to components: %s", exc)
+    except Exception as exc:  # noqa: BLE001 baseline
+        logger.warning(
+            "igraph community_leiden failed, falling back to components: %s", exc
+        )
         cl = g.connected_components()
         membership = cl.membership
 
     node_values: dict[str, float | str | None] = {
-        node.id: str(membership[idx])
-        for idx, node in enumerate(graph.nodes)
+        node.id: str(membership[idx]) for idx, node in enumerate(graph.nodes)
     }
     unique_communities = sorted({str(v) for v in node_values.values() if v is not None})
 
@@ -673,7 +678,9 @@ def compute_local_gradual_strength(
             },
             affected_nodes={},
             affected_edges=[],
-            warnings=[f"Focus node '{focus_node_id}' not found in current graph projection."],
+            warnings=[
+                f"Focus node '{focus_node_id}' not found in current graph projection."
+            ],
             computed_at=start_time,
         )
 
@@ -734,8 +741,7 @@ def compute_local_gradual_strength(
 
     # Edge parameters: weights and polarities
     edge_weights: dict[str, float] = {
-        e.id: float(e.weight) if e.weight is not None else 1.0
-        for e in traversed_edges
+        e.id: float(e.weight) if e.weight is not None else 1.0 for e in traversed_edges
     }
 
     # Solves QBAF iterative gradual semantics on induced subgraph
@@ -820,12 +826,22 @@ def compute_local_gradual_strength(
     for edge in traversed_edges:
         pol = edge.polarity
         if pol is None:
-            pol = 1 if edge.type == "SUPPORTS" else (-1 if edge.type in ("ATTACKS", "UNDERCUTS") else 0)
+            pol = (
+                1
+                if edge.type == "SUPPORTS"
+                else (-1 if edge.type in ("ATTACKS", "UNDERCUTS") else 0)
+            )
         forward_adj[edge.source].append((edge.target, pol))
 
     node_roles: dict[str, set[str]] = defaultdict(set)
 
-    def _find_paths(curr: str, target: str, current_sign: int, depth_left: int, visited_path: set[str]) -> None:
+    def _find_paths(
+        curr: str,
+        target: str,
+        current_sign: int,
+        depth_left: int,
+        visited_path: set[str],
+    ) -> None:
         if curr == target:
             if current_sign > 0:
                 node_roles[path_origin].add("support")
@@ -892,9 +908,17 @@ def compute_local_gradual_strength(
     for edge in traversed_edges:
         pol = edge.polarity
         if pol is None:
-            pol = 1 if edge.type == "SUPPORTS" else (-1 if edge.type in ("ATTACKS", "UNDERCUTS") else 0)
+            pol = (
+                1
+                if edge.type == "SUPPORTS"
+                else (-1 if edge.type in ("ATTACKS", "UNDERCUTS") else 0)
+            )
 
-        role = "undercut" if edge.type == "UNDERCUTS" else ("support" if pol > 0 else ("attack" if pol < 0 else "neutral"))
+        role = (
+            "undercut"
+            if edge.type == "UNDERCUTS"
+            else ("support" if pol > 0 else ("attack" if pol < 0 else "neutral"))
+        )
         w = edge_weights.get(edge.id, 1.0)
         if pol > 0:
             sum_support_weight += w
@@ -902,7 +926,9 @@ def compute_local_gradual_strength(
             sum_attack_weight += w
 
         src_score = baseline_rho.get(edge.source, 0.5)
-        signed_contrib = round(src_score * w * (1.0 if pol > 0 else (-1.0 if pol < 0 else 0.0)), 4)
+        signed_contrib = round(
+            src_score * w * (1.0 if pol > 0 else (-1.0 if pol < 0 else 0.0)), 4
+        )
         hop = node_distance.get(edge.source, 1)
 
         affected_edges.append(
@@ -1250,6 +1276,3 @@ def run_epistemetrics_eigenvector(
         tolerance=tolerance,
         weight_property="weight" if has_weights else None,
     )
-
-
-

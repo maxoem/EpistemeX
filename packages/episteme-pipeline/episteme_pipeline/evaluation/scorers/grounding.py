@@ -42,14 +42,28 @@ class GroundingEvaluationResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    overall_iou: float = Field(..., description="Micro-averaged grounding IoU across all modalities.")
-    text_iou: float = Field(default=0.0, description="Average IoU for text character spans.")
-    visual_iou: float = Field(default=0.0, description="Average 2D spatial IoU for visual bounding boxes.")
-    tabular_iou: float = Field(default=0.0, description="Average cell IoU for tabular data.")
-    formula_iou: float = Field(default=0.0, description="Average match score for mathematical formulas.")
+    overall_iou: float = Field(
+        ..., description="Micro-averaged grounding IoU across all modalities."
+    )
+    text_iou: float = Field(
+        default=0.0, description="Average IoU for text character spans."
+    )
+    visual_iou: float = Field(
+        default=0.0, description="Average 2D spatial IoU for visual bounding boxes."
+    )
+    tabular_iou: float = Field(
+        default=0.0, description="Average cell IoU for tabular data."
+    )
+    formula_iou: float = Field(
+        default=0.0, description="Average match score for mathematical formulas."
+    )
     sample_count: int = Field(default=0, description="Total evaluated anchor pairs.")
-    matches: int = Field(default=0, description="Anchor pairs meeting or exceeding the match threshold.")
-    details: list[dict[str, Any]] = Field(default_factory=list, description="Per-anchor alignment breakdown.")
+    matches: int = Field(
+        default=0, description="Anchor pairs meeting or exceeding the match threshold."
+    )
+    details: list[dict[str, Any]] = Field(
+        default_factory=list, description="Per-anchor alignment breakdown."
+    )
 
 
 def calculate_bbox_iou(
@@ -80,7 +94,9 @@ def calculate_bbox_iou(
     if bbox_ref is None or bbox_pred is None:
         return 0.0
 
-    def parse_bbox(b: Sequence[float] | Mapping[str, Any]) -> tuple[float, float, float, float, int | None] | None:
+    def parse_bbox(
+        b: Sequence[float] | Mapping[str, Any],
+    ) -> tuple[float, float, float, float, int | None] | None:
         if isinstance(b, Mapping):
             x0 = b.get("x0", b.get("left"))
             y0 = b.get("y0", b.get("top"))
@@ -89,7 +105,13 @@ def calculate_bbox_iou(
             p = b.get("page")
             if all(v is not None for v in (x0, y0, x1, y1)):
                 try:
-                    return float(x0), float(y0), float(x1), float(y1), (int(p) if p is not None else None)
+                    return (
+                        float(x0),
+                        float(y0),
+                        float(x1),
+                        float(y1),
+                        (int(p) if p is not None else None),
+                    )
                 except (ValueError, TypeError):
                     return None
             return None
@@ -186,7 +208,11 @@ def calculate_tabular_grounding_iou(
 
     if not cells_ref and not cells_pred:
         # If no specific cells are specified, table ID match is sufficient
-        return 1.0 if (t_ref and t_pred and str(t_ref).strip() == str(t_pred).strip()) else 0.0
+        return (
+            1.0
+            if (t_ref and t_pred and str(t_ref).strip() == str(t_pred).strip())
+            else 0.0
+        )
 
     intersection = len(cells_ref & cells_pred)
     union = len(cells_ref | cells_pred)
@@ -293,7 +319,11 @@ def calculate_anchor_iou(
 
     # 5. Character Span Grounding
     def get_span(a: Mapping[str, Any]) -> tuple[int, int] | None:
-        s = a.get("charStart") if a.get("charStart") is not None else a.get("char_start")
+        s = (
+            a.get("charStart")
+            if a.get("charStart") is not None
+            else a.get("char_start")
+        )
         if s is None:
             s = a.get("start_char") or a.get("char_offset")
         e = a.get("charEnd") if a.get("charEnd") is not None else a.get("char_end")
@@ -404,7 +434,12 @@ class GroundingScorer:
                 match_count += 1
 
             modality = "text"
-            if ref and ("bbox" in ref or "boundingBox" in ref or "figure_id" in ref or "figureId" in ref):
+            if ref and (
+                "bbox" in ref
+                or "boundingBox" in ref
+                or "figure_id" in ref
+                or "figureId" in ref
+            ):
                 modality = "visual"
                 visual_ious.append(iou)
             elif ref and ("table_id" in ref or "tableId" in ref):

@@ -9,14 +9,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from episteme_pipeline.artifacts.builders import (
-    build_chunk_artifact,
-    build_document_artifact,
-    build_linked_entity_artifact,
-    build_theory_atom_artifact,
-    build_theory_relation_artifact,
-)
 from episteme_pipeline.artifacts.codecs import (
     ChunkCodec,
     DocumentCodec,
@@ -30,15 +22,12 @@ from episteme_pipeline.artifacts.codecs import (
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
-    Phase1ArtifactsView,
     Phase2ArtifactsView,
     Phase4ArtifactsView,
 )
 from episteme_pipeline.artifacts.models import (
     ArtifactKind,
     LinkedEntityArtifact,
-    TheoryAtomArtifact,
-    TheoryRelationArtifact,
 )
 from episteme_pipeline.contracts.domain import (
     GlobalStructuralAnchor,
@@ -74,9 +63,7 @@ from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
 def test_document_codec_roundtrip() -> None:
     """Verify DocumentCodec is lossless for L1Document."""
-    anchor = GlobalStructuralAnchor(
-        volume=1, book=2, part=3, chapter=4, section=5
-    )
+    anchor = GlobalStructuralAnchor(volume=1, book=2, part=3, chapter=4, section=5)
     doc = L1Document(
         id="doc-1",
         title="Critique of Pure Reason",
@@ -255,9 +242,7 @@ async def test_phase4_entity_maturation_source_chunk_ids_preservation() -> None:
         return_value=["Die reinen Verstandesbegriffe..."]
     )
     mock_embedding = AsyncMock()
-    mock_embedding.aget_text_embedding_batch = AsyncMock(
-        return_value=[[0.1, 0.2, 0.3]]
-    )
+    mock_embedding.aget_text_embedding_batch = AsyncMock(return_value=[[0.1, 0.2, 0.3]])
 
     runner = Phase4EntityMaturationRunner(
         config=Phase4EntityMaturationConfig(batch_size=10),
@@ -276,7 +261,9 @@ async def test_phase4_entity_maturation_source_chunk_ids_preservation() -> None:
 
     # Run maturation
     artifacts = await runner.run(
-        Phase2ArtifactsView(entities=[entity], local_triples=[], entity_count_by_type={}),
+        Phase2ArtifactsView(
+            entities=[entity], local_triples=[], entity_count_by_type={}
+        ),
         context,
     )
 

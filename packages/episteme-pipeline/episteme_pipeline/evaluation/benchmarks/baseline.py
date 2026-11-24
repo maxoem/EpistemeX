@@ -46,7 +46,7 @@ async def export_baseline(graph_reader: GraphReader, output_path: str | Path) ->
 
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    with open(out, "w", encoding="utf-8") as f:
+    with open(out, "w", encoding="utf-8") as f:  # noqa: ASYNC230 baseline
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
@@ -68,8 +68,12 @@ def load_gold_standard(path: str | Path) -> dict[str, Any]:
 
     return {
         "metadata": data.get("metadata", {}),
-        "l2_entities": [L2Entity.model_validate(e) for e in data.get("l2_entities", [])],
+        "l2_entities": [
+            L2Entity.model_validate(e) for e in data.get("l2_entities", [])
+        ],
         "l2_triples": [L2Triple.model_validate(t) for t in data.get("l2_triples", [])],
         "l3_atoms": [TheoryAtom.model_validate(a) for a in data.get("l3_atoms", [])],
-        "l3_relations": [TheoryRelation.model_validate(r) for r in data.get("l3_relations", [])],
+        "l3_relations": [
+            TheoryRelation.model_validate(r) for r in data.get("l3_relations", [])
+        ],
     }

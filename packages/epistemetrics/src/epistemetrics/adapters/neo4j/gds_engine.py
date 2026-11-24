@@ -61,8 +61,12 @@ class Neo4jGDSAlgorithmsEngine:
             query = "CALL gds.graph.exists($name) YIELD exists RETURN exists"
             results = self.client.execute_query(query, {"name": graph_name})
             return bool(results and results[0].get("exists", False))
-        except Exception as exc:
-            logger.debug("Failed to verify GDS projection existence for '%s': %s", graph_name, exc)
+        except Exception as exc:  # noqa: BLE001 baseline
+            logger.debug(
+                "Failed to verify GDS projection existence for '%s': %s",
+                graph_name,
+                exc,
+            )
             return False
 
     def project_graph(
@@ -89,10 +93,14 @@ class Neo4jGDSAlgorithmsEngine:
         try:
             res = self.client.execute_query(query, params)
             if not res:
-                raise GDSProjectionError(f"No result returned when creating projection '{graph_name}'.")
+                raise GDSProjectionError(
+                    f"No result returned when creating projection '{graph_name}'."
+                )
             return res[0]
         except Exception as exc:
-            raise GDSProjectionError(f"Failed to create GDS projection '{graph_name}': {exc}") from exc
+            raise GDSProjectionError(
+                f"Failed to create GDS projection '{graph_name}': {exc}"
+            ) from exc
 
     def drop_projection(self, graph_name: str, fail_if_missing: bool = False) -> bool:
         """Drop an in-memory graph projection from the GDS catalog."""
@@ -106,9 +114,11 @@ class Neo4jGDSAlgorithmsEngine:
             "YIELD graphName RETURN graphName"
         )
         try:
-            self.client.execute_query(query, {"graph_name": graph_name, "fail_if_missing": fail_if_missing})
+            self.client.execute_query(
+                query, {"graph_name": graph_name, "fail_if_missing": fail_if_missing}
+            )
             return True
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.warning("Failed to drop GDS projection '%s': %s", graph_name, exc)
             return False
 
@@ -123,7 +133,9 @@ class Neo4jGDSAlgorithmsEngine:
         """Context manager creating a temporary GDS projection that is automatically dropped on exit."""
         if self.has_projection(graph_name):
             self.drop_projection(graph_name)
-        self.project_graph(graph_name, node_projection, relationship_projection, configuration)
+        self.project_graph(
+            graph_name, node_projection, relationship_projection, configuration
+        )
         try:
             yield graph_name
         finally:

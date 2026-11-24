@@ -143,14 +143,14 @@ def analyze_theory_graph(tg: TheoryGraph) -> EpistemicReport:
     if n > 0:
         try:
             is_dag = nx.is_directed_acyclic_graph(g)
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             is_dag = False
 
     wcc_count = 0
     if n > 0:
         try:
             wcc_count = nx.number_weakly_connected_components(g)
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             wcc_count = 1
 
     node_type_counts: dict[str, int] = {}
@@ -183,7 +183,7 @@ def analyze_theory_graph(tg: TheoryGraph) -> EpistemicReport:
         try:
             pr = networkx_pagerank(tg)
             top_nodes = pr.top_k(5)
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             top_nodes = []
 
     return EpistemicReport(

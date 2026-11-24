@@ -147,8 +147,12 @@ class DiffService:
 
         # 2. Edge Diffing by endpoints and semantic polarities
         # Map (source, target) -> edge
-        endpoints_a: dict[tuple[str, str], StudioEdge] = {(e.source, e.target): e for e in graph_a.edges}
-        endpoints_b: dict[tuple[str, str], StudioEdge] = {(e.source, e.target): e for e in graph_b.edges}
+        endpoints_a: dict[tuple[str, str], StudioEdge] = {
+            (e.source, e.target): e for e in graph_a.edges
+        }
+        endpoints_b: dict[tuple[str, str], StudioEdge] = {
+            (e.source, e.target): e for e in graph_b.edges
+        }
 
         all_pairs = set(endpoints_a.keys()) | set(endpoints_b.keys())
         edge_diff: dict[str, EdgeDiffStatus] = {}
@@ -172,13 +176,23 @@ class DiffService:
                 # Check for Polarity Inversion (e.g. +1 vs -1)
                 pol_a = edge_a.polarity
                 pol_b = edge_b.polarity
-                is_inverted = pol_a is not None and pol_b is not None and (pol_a * pol_b < 0)
+                is_inverted = (
+                    pol_a is not None and pol_b is not None and (pol_a * pol_b < 0)
+                )
 
                 if is_inverted:
                     edge_diff[canon_edge_id] = EdgeDiffStatus.POLARITY_INVERTED
                     edge_diff[edge_a.id] = EdgeDiffStatus.POLARITY_INVERTED
-                    src_label = nodes_b.get(src, nodes_a.get(src)).label if (src in nodes_b or src in nodes_a) else src
-                    tgt_label = nodes_b.get(tgt, nodes_a.get(tgt)).label if (tgt in nodes_b or tgt in nodes_a) else tgt
+                    src_label = (
+                        nodes_b.get(src, nodes_a.get(src)).label
+                        if (src in nodes_b or src in nodes_a)
+                        else src
+                    )
+                    tgt_label = (
+                        nodes_b.get(tgt, nodes_a.get(tgt)).label
+                        if (tgt in nodes_b or tgt in nodes_a)
+                        else tgt
+                    )
 
                     polarity_inversions.append(
                         PolarityInversion(
@@ -201,9 +215,21 @@ class DiffService:
 
                 else:
                     # Check for weight or confidence shift
-                    w_a = edge_a.weight if edge_a.weight is not None else edge_a.confidence
-                    w_b = edge_b.weight if edge_b.weight is not None else edge_b.confidence
-                    if w_a is not None and w_b is not None and abs(w_b - w_a) >= weight_shift_threshold:
+                    w_a = (
+                        edge_a.weight
+                        if edge_a.weight is not None
+                        else edge_a.confidence
+                    )
+                    w_b = (
+                        edge_b.weight
+                        if edge_b.weight is not None
+                        else edge_b.confidence
+                    )
+                    if (
+                        w_a is not None
+                        and w_b is not None
+                        and abs(w_b - w_a) >= weight_shift_threshold
+                    ):
                         edge_diff[canon_edge_id] = EdgeDiffStatus.WEIGHT_SHIFTED
                         edge_diff[edge_a.id] = EdgeDiffStatus.WEIGHT_SHIFTED
                     else:
@@ -234,7 +260,9 @@ class DiffService:
                     # Check for explicit rho or plausibility
                     rho_a = node_a.props.get("rho", node_a.plausibility)
                     rho_b = node_b.props.get("rho", node_b.plausibility)
-                    if isinstance(rho_a, (int, float)) and isinstance(rho_b, (int, float)):
+                    if isinstance(rho_a, (int, float)) and isinstance(
+                        rho_b, (int, float)
+                    ):
                         delta = round(float(rho_b) - float(rho_a), 4)
                         rho_deltas[nid] = delta
                         max_rho_drift = max(max_rho_drift, abs(delta))
@@ -257,7 +285,10 @@ class DiffService:
             val_b = flat_cfg_b.get(key)
             if val_a != val_b:
                 # Ignore dynamic runtime paths or timestamps
-                if any(ignored in key.lower() for ignored in ("run_id", "timestamp", "created_at", "dir")):
+                if any(
+                    ignored in key.lower()
+                    for ignored in ("run_id", "timestamp", "created_at", "dir")
+                ):
                     continue
                 config_diff.append(
                     ConfigDeltaItem(
@@ -270,10 +301,14 @@ class DiffService:
 
         # 5. Summary Key Performance Indicators
         total_unique_nodes = len(all_node_ids)
-        jaccard_nodes = (nodes_retained / total_unique_nodes) if total_unique_nodes > 0 else 1.0
+        jaccard_nodes = (
+            (nodes_retained / total_unique_nodes) if total_unique_nodes > 0 else 1.0
+        )
 
         total_unique_pairs = len(all_pairs)
-        jaccard_edges = (edges_retained / total_unique_pairs) if total_unique_pairs > 0 else 1.0
+        jaccard_edges = (
+            (edges_retained / total_unique_pairs) if total_unique_pairs > 0 else 1.0
+        )
 
         l2_a = sum(1 for n in nodes_a.values() if n.layer == Layer.L2)
         l2_b = sum(1 for n in nodes_b.values() if n.layer == Layer.L2)
@@ -311,7 +346,8 @@ class DiffService:
             schema_version=graph_b.schema_version or graph_a.schema_version,
             truncated=False,
             dropped_count=0,
-            unmapped_predicates=graph_b.unmapped_predicates or graph_a.unmapped_predicates,
+            unmapped_predicates=graph_b.unmapped_predicates
+            or graph_a.unmapped_predicates,
             unresolved_count=graph_b.unresolved_count + graph_a.unresolved_count,
             layer_counts=layer_counts,
         )

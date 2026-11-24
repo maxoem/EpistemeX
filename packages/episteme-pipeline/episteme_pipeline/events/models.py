@@ -7,6 +7,7 @@ scientifically relevant for analysis and reproducibility.
 All events inherit from BaseEvent and include timestamp, run_id, and phase for
 correlation and filtering.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -18,10 +19,11 @@ from pydantic import BaseModel, ConfigDict, Field
 class UnlinkableMentionError(Exception):
     """Raised when a mention cannot be linked to the graph (e.g., missing envelope)."""
 
+
 # Event base class
 class BaseEvent(BaseModel):
     """Base class for all pipeline events.
-    
+
     Attributes
     ----------
     timestamp : datetime
@@ -31,6 +33,7 @@ class BaseEvent(BaseModel):
     phase : str, optional
         Name of the pipeline phase when this event occurred.
     """
+
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     run_id: str | None = None
     phase: str | None = None
@@ -49,6 +52,7 @@ class EntityProcessed(BaseEvent):
     entity_type : str
         Type/label of the entity (schema class).
     """
+
     entity_id: str
     entity_name: str
     entity_type: str
@@ -57,10 +61,10 @@ class EntityProcessed(BaseEvent):
 # Dense retrieval events
 class DenseCandidatesGenerated(BaseEvent):
     """Dense candidate pairs were generated.
-    
+
     This event is emitted when the dense retrieval phase generates candidate
     entity pairs for further processing.
-    
+
     Attributes
     ----------
     candidate_count : int
@@ -70,6 +74,7 @@ class DenseCandidatesGenerated(BaseEvent):
     entities_count : int
         Number of entities used to generate candidates.
     """
+
     candidate_count: int
     candidates: list[dict]  # Simplified representation
     entities_count: int
@@ -77,10 +82,10 @@ class DenseCandidatesGenerated(BaseEvent):
 
 class RerankerScoreAssigned(BaseEvent):
     """A reranker assigned a score to a candidate pair.
-    
+
     This event is emitted when a reranker processes a candidate pair and assigns
     a score, which determines whether the candidate proceeds to the next stage.
-    
+
     Attributes
     ----------
     candidate_pair : tuple of (str, str)
@@ -102,6 +107,7 @@ class RerankerScoreAssigned(BaseEvent):
     recovery_attempts : list of dict, optional
         Recovery metadata when the reranker required retries before scoring.
     """
+
     candidate_pair: tuple[str, str]  # entity IDs
     score: float
     accepted: bool
@@ -115,10 +121,10 @@ class RerankerScoreAssigned(BaseEvent):
 
 class CandidateRejectedByThreshold(BaseEvent):
     """A candidate was rejected due to not meeting threshold.
-    
+
     This event is emitted when a candidate pair is rejected because its score
     falls below the required threshold.
-    
+
     Attributes
     ----------
     candidate_pair : tuple of (str, str)
@@ -130,6 +136,7 @@ class CandidateRejectedByThreshold(BaseEvent):
     reason : str
         Reason for rejection (default: "Below threshold").
     """
+
     candidate_pair: tuple[str, str]  # entity IDs
     score: float
     threshold: float
@@ -139,7 +146,7 @@ class CandidateRejectedByThreshold(BaseEvent):
 # Entity Linking events
 class EntityLinkingCandidatesRetrieved(BaseEvent):
     """Dense candidates retrieved for entity linking.
-    
+
     Attributes
     ----------
     mention_id : str
@@ -151,6 +158,7 @@ class EntityLinkingCandidatesRetrieved(BaseEvent):
     candidates : list of dict
         Retrieved candidates with their scores.
     """
+
     mention_id: str
     mention_name: str
     candidate_count: int
@@ -159,7 +167,7 @@ class EntityLinkingCandidatesRetrieved(BaseEvent):
 
 class EntityLinkingReranked(BaseEvent):
     """A cross-encoder score assigned to a linking candidate.
-    
+
     Attributes
     ----------
     mention_id : str
@@ -177,6 +185,7 @@ class EntityLinkingReranked(BaseEvent):
     threshold : float
         Threshold used.
     """
+
     mention_id: str
     mention_name: str
     candidate_id: str
@@ -189,7 +198,7 @@ class EntityLinkingReranked(BaseEvent):
 # Maturation events
 class EntityMaturationSynthesized(BaseEvent):
     """An entity description was synthesized from its envelopes.
-    
+
     Attributes
     ----------
     entity_id : str
@@ -203,6 +212,7 @@ class EntityMaturationSynthesized(BaseEvent):
     synthesized_description : str
         The final synthesized description.
     """
+
     entity_id: str
     entity_name: str
     envelope_count: int
@@ -236,7 +246,7 @@ class EntityConceptionStratified(BaseEvent):
 
 class EnvelopeInjectionAttempted(BaseEvent):
     """An attempt was made to inject a textual envelope for a mention.
-    
+
     Attributes
     ----------
     mention_name : str
@@ -244,12 +254,14 @@ class EnvelopeInjectionAttempted(BaseEvent):
     chunk_id : str
         ID of the chunk where the mention was found.
     """
+
     mention_name: str
     chunk_id: str
 
+
 class EnvelopeInjectionFailed(BaseEvent):
     """Failed to inject a textual envelope for a mention after all fallbacks.
-    
+
     Attributes
     ----------
     mention_name : str
@@ -261,18 +273,20 @@ class EnvelopeInjectionFailed(BaseEvent):
     reason : str
         Reason for failure.
     """
+
     mention_name: str
     mention_quote: str
     chunk_id: str
     reason: str
 
+
 # LLM processing events
 class LLMRelationDecoded(BaseEvent):
     """An LLM decoded a relation from a candidate pair.
-    
+
     This event is emitted when an LLM extracts a semantic relation between
     a candidate pair of entities.
-    
+
     Attributes
     ----------
     candidate_pair : tuple of (str, str)
@@ -286,6 +300,7 @@ class LLMRelationDecoded(BaseEvent):
     raw_response : Any, optional
         Raw response from the LLM (may contain sensitive data).
     """
+
     candidate_pair: tuple[str, str]  # entity IDs
     relation: str | None
     direction: str | None
@@ -295,9 +310,9 @@ class LLMRelationDecoded(BaseEvent):
 
 class SchemaValidationRejectedRelation(BaseEvent):
     """Schema validation rejected a decoded relation.
-    
+
     This event is emitted when a decoded relation fails schema validation.
-    
+
     Attributes
     ----------
     candidate_pair : tuple of (str, str)
@@ -307,6 +322,7 @@ class SchemaValidationRejectedRelation(BaseEvent):
     reason : str
         Explanation of why the relation was rejected.
     """
+
     candidate_pair: tuple[str, str]  # entity IDs
     relation: str
     reason: str
@@ -315,10 +331,10 @@ class SchemaValidationRejectedRelation(BaseEvent):
 # Triple and artifact events
 class TripleCommitted(BaseEvent):
     """A triple was committed to the graph.
-    
+
     This event is emitted when a validated relation is committed as a triple
     to the knowledge graph.
-    
+
     Attributes
     ----------
     subject_id : str
@@ -334,6 +350,7 @@ class TripleCommitted(BaseEvent):
     source_chunk_id : str
         ID of the source text chunk.
     """
+
     subject_id: str
     predicate: str
     object_id: str
@@ -357,6 +374,7 @@ class FusionDecisionMade(BaseEvent):
     reason : str, optional
         Optional human-readable rationale.
     """
+
     entities_fused: list[str]
     fusion_type: str
     confidence: float
@@ -459,9 +477,9 @@ class RunFailed(BaseEvent):
 
 class PhaseCompleted(BaseEvent):
     """A pipeline phase completed.
-    
+
     This event is emitted when a pipeline phase finishes execution.
-    
+
     Attributes
     ----------
     phase_name : str
@@ -475,6 +493,7 @@ class PhaseCompleted(BaseEvent):
     error_message : str, optional
         Error message if the phase failed.
     """
+
     model_config = ConfigDict(populate_by_name=True)
 
     phase_name: str
@@ -486,9 +505,9 @@ class PhaseCompleted(BaseEvent):
 
 class ComponentStarted(BaseEvent):
     """A component started processing.
-    
+
     This event is emitted when a pipeline component begins processing.
-    
+
     Attributes
     ----------
     component_name : str
@@ -496,15 +515,16 @@ class ComponentStarted(BaseEvent):
     input_description : str, optional
         Description of the input data.
     """
+
     component_name: str
     input_description: str | None = None
 
 
 class ComponentCompleted(BaseEvent):
     """A component completed processing.
-    
+
     This event is emitted when a pipeline component finishes processing.
-    
+
     Attributes
     ----------
     component_name : str
@@ -518,6 +538,7 @@ class ComponentCompleted(BaseEvent):
     error_message : str, optional
         Error message if the component failed.
     """
+
     model_config = ConfigDict(populate_by_name=True)
 
     component_name: str
@@ -543,6 +564,7 @@ class LLMDurationMeasured(BaseEvent):
     operation : str
         Operation kind (e.g., "chat", "embedding").
     """
+
     model_name: str
     prompt_tokens: int
     completion_tokens: int
@@ -582,6 +604,7 @@ class LLMGenerationCompleted(BaseEvent):
     model_parameters : dict, optional
         Hyperparameters used (e.g., temperature, max_tokens).
     """
+
     model_name: str
     prompt: Any
     output_text: str
@@ -625,6 +648,7 @@ class EmbeddingGenerationCompleted(BaseEvent):
     cached : bool
         Whether the embeddings were served from a local cache.
     """
+
     model_name: str
     text_count: int
     total_characters: int
@@ -637,7 +661,6 @@ class EmbeddingGenerationCompleted(BaseEvent):
 
 
 class ArtifactProjected(BaseEvent):
-
     """An artifact was projected to a target system.
 
     Attributes
@@ -649,6 +672,7 @@ class ArtifactProjected(BaseEvent):
     success : bool
         Whether the projection succeeded.
     """
+
     artifact_type: str
     duration_seconds: float
     success: bool
@@ -668,6 +692,7 @@ class ChunksGenerated(BaseEvent):
     token_count : int
         Total token count across all chunks.
     """
+
     document_id: str
     document_title: str
     chunk_count: int
@@ -687,6 +712,7 @@ class ProgressStarted(BaseEvent):
     description : str
         Optional description of the task.
     """
+
     task_name: str
     total_items: int | None = None
     description: str = ""
@@ -702,6 +728,7 @@ class ProgressAdvanced(BaseEvent):
     advance : int
         Number of items processed in this step (default: 1).
     """
+
     task_name: str
     advance: int = 1
 
@@ -714,6 +741,7 @@ class ProgressCompleted(BaseEvent):
     task_name : str
         Name of the task that completed.
     """
+
     task_name: str
 
 
@@ -731,6 +759,7 @@ class EvaluationCompleted(BaseEvent):
     outcome : str
         Overall outcome of the evaluation.
     """
+
     evaluation_id: str
     run_id: str
     metrics: dict[str, float]
@@ -755,6 +784,7 @@ class EvaluationScoreLogged(BaseEvent):
     target_id : str, optional
         Target entity, triple, cluster, or phase identifier.
     """
+
     metric_name: str
     score: float
     comment: str | None = None
@@ -775,6 +805,7 @@ class ValidationViolationDetected(BaseEvent):
     description : str
         Description of the violation.
     """
+
     rule_name: str
     source_id: str
     target_id: str
@@ -1040,31 +1071,57 @@ class RefinementCycleCompleted(BaseEvent):
 
 # Type union for event handling
 PipelineEvent = (
-    EntityProcessed |
-    DenseCandidatesGenerated | RerankerScoreAssigned |
-    CandidateRejectedByThreshold | LLMRelationDecoded | SchemaValidationRejectedRelation |
-    TripleCommitted | FusionDecisionMade | PhaseCompleted | PhaseReused | PhaseFailed |
-    RunStarted | RunCompleted | RunFailed | ComponentStarted |
-    ComponentCompleted | LLMDurationMeasured | LLMGenerationCompleted | EmbeddingGenerationCompleted | ArtifactProjected | ChunksGenerated |
-    EntityLinkingCandidatesRetrieved | EntityLinkingReranked | EntityMaturationSynthesized |
-    EnvelopeInjectionAttempted | EnvelopeInjectionFailed |
-    ProgressStarted | ProgressAdvanced | ProgressCompleted |
-    EvaluationCompleted | EvaluationScoreLogged | ValidationViolationDetected |
-    DecisionEvaluationStarted | DecisionEvaluationCompleted | DecisionGatingTriggered |
-    ModalStrengthResolved | QualityGateEvaluated |
-    EpistemicDeficitDetected | RefinementCycleStarted | RefinementCycleCompleted
+    EntityProcessed
+    | DenseCandidatesGenerated
+    | RerankerScoreAssigned
+    | CandidateRejectedByThreshold
+    | LLMRelationDecoded
+    | SchemaValidationRejectedRelation
+    | TripleCommitted
+    | FusionDecisionMade
+    | PhaseCompleted
+    | PhaseReused
+    | PhaseFailed
+    | RunStarted
+    | RunCompleted
+    | RunFailed
+    | ComponentStarted
+    | ComponentCompleted
+    | LLMDurationMeasured
+    | LLMGenerationCompleted
+    | EmbeddingGenerationCompleted
+    | ArtifactProjected
+    | ChunksGenerated
+    | EntityLinkingCandidatesRetrieved
+    | EntityLinkingReranked
+    | EntityMaturationSynthesized
+    | EnvelopeInjectionAttempted
+    | EnvelopeInjectionFailed
+    | ProgressStarted
+    | ProgressAdvanced
+    | ProgressCompleted
+    | EvaluationCompleted
+    | EvaluationScoreLogged
+    | ValidationViolationDetected
+    | DecisionEvaluationStarted
+    | DecisionEvaluationCompleted
+    | DecisionGatingTriggered
+    | ModalStrengthResolved
+    | QualityGateEvaluated
+    | EpistemicDeficitDetected
+    | RefinementCycleStarted
+    | RefinementCycleCompleted
 )
-
 
 
 def get_event_type_name(event: BaseEvent) -> str:
     """Get the type name of an event for serialization/logging.
-    
+
     Parameters
     ----------
     event : BaseEvent
         The event instance.
-        
+
     Returns
     -------
     str
@@ -1075,12 +1132,12 @@ def get_event_type_name(event: BaseEvent) -> str:
 
 def serialize_event(event: BaseEvent) -> dict:
     """Serialize an event to a dictionary.
-    
+
     Parameters
     ----------
     event : BaseEvent
         The event instance to serialize.
-        
+
     Returns
     -------
     dict

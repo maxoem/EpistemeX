@@ -38,7 +38,9 @@ def get_diff_service(settings: StudioSettings = Depends(get_settings)) -> DiffSe
 async def diff_runs(
     base_id: str = Query(..., description="Baseline Run A identifier"),
     target_id: str = Query(..., description="Candidate Run B identifier"),
-    weight_shift_threshold: float = Query(0.15, ge=0.0, le=1.0, description="Weight shift sensitivity threshold"),
+    weight_shift_threshold: float = Query(
+        0.15, ge=0.0, le=1.0, description="Weight shift sensitivity threshold"
+    ),
     service: DiffService = Depends(get_diff_service),
 ) -> GraphDiffView:
     """Compare baseline Run A against candidate Run B and compute topological and semantic diffs.
@@ -69,4 +71,6 @@ async def diff_runs(
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=f"Run not found: {e}") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to compute run difference: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to compute run difference: {e}"
+        ) from e

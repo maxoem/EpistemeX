@@ -97,7 +97,8 @@ class ModelComponentEvaluationResult(BaseModel):
         default_factory=dict, description="Completeness scores per model class."
     )
     unmatched_ref_nodes: list[str] = Field(
-        default_factory=list, description="IDs of reference nodes missing in predicted graph."
+        default_factory=list,
+        description="IDs of reference nodes missing in predicted graph.",
     )
     matched_node_pairs: list[tuple[str, str]] = Field(
         default_factory=list, description="Matched (reference_id, predicted_id) tuples."
@@ -130,7 +131,11 @@ class ModelComponentEvaluationResult(BaseModel):
         str
             GitHub-flavored Markdown report.
         """
-        status_badge = "☼ PASSED (Subsumes Capabilities)" if self.is_subsumed else "❌ FAILED (Capability Deficit)"
+        status_badge = (
+            "☼ PASSED (Subsumes Capabilities)"
+            if self.is_subsumed
+            else "❌ FAILED (Capability Deficit)"
+        )
         lines = [
             "# Formal Structuralist Model Evaluation Report",
             "",
@@ -162,7 +167,9 @@ class ModelComponentEvaluationResult(BaseModel):
             pred_c = self.component_counts_pred.get(m_class, 0)
             matched_c = self.component_matches.get(m_class, 0)
             score = self.component_scores.get(m_class, 1.0 if ref_c == 0 else 0.0)
-            lines.append(f"| `{m_class}` | {symbol} | {ref_c} | {pred_c} | {matched_c} | {score:.2%} |")
+            lines.append(
+                f"| `{m_class}` | {symbol} | {ref_c} | {pred_c} | {matched_c} | {score:.2%} |"
+            )
 
         if self.unmatched_ref_nodes:
             lines.append("")
@@ -254,7 +261,11 @@ def calculate_anchor_iou(
         return 0.0
 
     def get_span(a: Mapping[str, Any]) -> tuple[int, int] | None:
-        s = a.get("charStart") if a.get("charStart") is not None else a.get("char_start")
+        s = (
+            a.get("charStart")
+            if a.get("charStart") is not None
+            else a.get("char_start")
+        )
         if s is None:
             s = a.get("start_char") or a.get("char_offset")
         e = a.get("charEnd") if a.get("charEnd") is not None else a.get("char_end")
@@ -404,7 +415,10 @@ def _extract_graph_nodes_and_edges(
         if graph.is_multigraph():
             for u, v, _k, data in graph.edges(keys=True, data=True):
                 r_type = RelationType.from_str(
-                    data.get("relation_type", data.get("relation", data.get("type", "explains")))
+                    data.get(
+                        "relation_type",
+                        data.get("relation", data.get("type", "explains")),
+                    )
                 )
                 edges.append(
                     {
@@ -420,7 +434,10 @@ def _extract_graph_nodes_and_edges(
         else:
             for u, v, data in graph.edges(data=True):
                 r_type = RelationType.from_str(
-                    data.get("relation_type", data.get("relation", data.get("type", "explains")))
+                    data.get(
+                        "relation_type",
+                        data.get("relation", data.get("type", "explains")),
+                    )
                 )
                 edges.append(
                     {
@@ -493,7 +510,11 @@ def _classify_model_components(
         else:
             # Fallback by attributes or label clues
             attrs = node.get("attributes", {})
-            if "formalAxiom" in attrs or "formal_axiom" in attrs or node.get("formal_axiom"):
+            if (
+                "formalAxiom" in attrs
+                or "formal_axiom" in attrs
+                or node.get("formal_axiom")
+            ):
                 classes["actual_models"].add(nid)
             elif "base_sets" in attrs or "signatures" in attrs:
                 classes["potential_models"].add(nid)
@@ -517,7 +538,10 @@ def _classify_model_components(
                 classes["partial_potential_models"].add(target)
             elif rel == RelationType.HAS_CONSTRAINT:
                 classes["constraints"].add(target)
-            elif rel in {RelationType.HAS_PARADIGM, RelationType.HAS_INTENDED_APPLICATION}:
+            elif rel in {
+                RelationType.HAS_PARADIGM,
+                RelationType.HAS_INTENDED_APPLICATION,
+            }:
                 classes["paradigms"].add(target)
 
     return classes
@@ -557,7 +581,9 @@ def _compute_node_match_similarity(
         type_sim = 0.0
 
     # 2. Epistemic status match
-    status_sim = 1.0 if ref_node["epistemic_status"] == pred_node["epistemic_status"] else 0.5
+    status_sim = (
+        1.0 if ref_node["epistemic_status"] == pred_node["epistemic_status"] else 0.5
+    )
 
     # 3. Label / Name / ID text similarity
     ref_name = ref_node["name"].lower()
@@ -581,9 +607,7 @@ def _compute_node_match_similarity(
     ref_anchor = ref_node.get("anchor")
     pred_anchor = pred_node.get("anchor")
     has_anchor = bool(ref_anchor)
-    anchor_sim = (
-        calculate_anchor_iou(ref_anchor, pred_anchor) if has_anchor else 1.0
-    )
+    anchor_sim = calculate_anchor_iou(ref_anchor, pred_anchor) if has_anchor else 1.0
 
     # Weighted composite similarity
     if has_axiom and has_anchor:
@@ -596,17 +620,11 @@ def _compute_node_match_similarity(
         )
     elif has_axiom:
         combined = (
-            0.45 * axiom_sim
-            + 0.25 * name_sim
-            + 0.15 * type_sim
-            + 0.15 * status_sim
+            0.45 * axiom_sim + 0.25 * name_sim + 0.15 * type_sim + 0.15 * status_sim
         )
     elif has_anchor:
         combined = (
-            0.35 * anchor_sim
-            + 0.35 * name_sim
-            + 0.15 * type_sim
-            + 0.15 * status_sim
+            0.35 * anchor_sim + 0.35 * name_sim + 0.15 * type_sim + 0.15 * status_sim
         )
     else:
         combined = 0.50 * name_sim + 0.30 * type_sim + 0.20 * status_sim
@@ -807,7 +825,9 @@ def evaluate_model_components(
         mcc = float(total_matched_core_components) / float(total_ref_core_components)
     else:
         # If no decomposition classes are tagged, fall back to general node coverage
-        mcc = float(len(matched_ref_nodes)) / float(len(ref_nodes)) if ref_nodes else 1.0
+        mcc = (
+            float(len(matched_ref_nodes)) / float(len(ref_nodes)) if ref_nodes else 1.0
+        )
 
     # 2. Axiomatic Omission Rate (AOR)
     actual_models_ref_count = len(ref_classes["actual_models"])
@@ -856,13 +876,13 @@ def evaluate_model_components(
                 candidate_edges = pred_edge_map[(s_pred, t_pred)]
                 best_edge_score = 0.0
                 for ce in candidate_edges:
-                    rel_match = 1.0 if ce["relation_type"] == re_edge["relation_type"] else 0.5
+                    rel_match = (
+                        1.0 if ce["relation_type"] == re_edge["relation_type"] else 0.5
+                    )
                     pol_match = 1.0 if ce["polarity"] == re_edge["polarity"] else 0.0
                     w_ref = re_edge.get("weight", 1.0)
                     w_pred = ce.get("weight", 1.0)
-                    weight_fid = max(
-                        0.0, 1.0 - abs(w_ref - w_pred) / max(w_ref, 1.0)
-                    )
+                    weight_fid = max(0.0, 1.0 - abs(w_ref - w_pred) / max(w_ref, 1.0))
                     score = 0.5 * rel_match + 0.3 * pol_match + 0.2 * weight_fid
                     best_edge_score = max(best_edge_score, score)
                 edge_fidelity_scores.append(best_edge_score)
@@ -876,9 +896,14 @@ def evaluate_model_components(
     )
 
     # Macro property fidelity score
-    pfs = 0.5 * (
-        (prop_fidelities.get("type", 1.0) + prop_fidelities.get("status", 1.0)) / 2.0
-    ) + 0.5 * edge_fidelity
+    pfs = (
+        0.5
+        * (
+            (prop_fidelities.get("type", 1.0) + prop_fidelities.get("status", 1.0))
+            / 2.0
+        )
+        + 0.5 * edge_fidelity
+    )
 
     # Capability Subsumption Check: G_pred >=cap G_ref
     # Must have ZERO axiomatic omissions (AOR == 0.0), MCC >= min_mcc, PFS >= min_pfs

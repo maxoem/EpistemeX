@@ -47,7 +47,9 @@ class StubGlobalExtractor(GlobalRelationExtractor):
     async def extract(self, entities, graph_store, schema) -> list[L2Triple]:
         return self._triples
 
-    async def get_structural_neighborhood(self, entity: L2Entity, graph_store: GraphReader, depth: int = 2) -> SubGraph:
+    async def get_structural_neighborhood(
+        self, entity: L2Entity, graph_store: GraphReader, depth: int = 2
+    ) -> SubGraph:
         return SubGraph(center_id=entity.id, nodes=[], triples=[], depth=depth)
 
 
@@ -107,9 +109,7 @@ def make_context() -> ArtifactExecutionContext:
 async def test_run_returns_artifact_collection(graph_store, phase2_view, schema):
     runner = make_runner(graph_store, schema)
     result = await runner.run(phase2_view, make_context())
-    assert isinstance(result, Phase2ArtifactsView) or hasattr(
-        result, "artifacts"
-    )
+    assert isinstance(result, Phase2ArtifactsView) or hasattr(result, "artifacts")
 
 
 @pytest.mark.asyncio
@@ -147,11 +147,15 @@ async def test_run_prefers_graph_entities_over_in_memory(
     captured_entities: list[list[L2Entity]] = []
 
     class CapturingExtractor(GlobalRelationExtractor):
-        async def candidate_pairs(self, entities: list[L2Entity]) -> list[CandidatePair]:
+        async def candidate_pairs(
+            self, entities: list[L2Entity]
+        ) -> list[CandidatePair]:
             captured_entities.append(entities)
             return await super().candidate_pairs(entities)
 
-        async def get_structural_neighborhood(self, entity: L2Entity, graph_store: GraphReader, depth: int = 2) -> SubGraph:
+        async def get_structural_neighborhood(
+            self, entity: L2Entity, graph_store: GraphReader, depth: int = 2
+        ) -> SubGraph:
             return SubGraph(center_id=entity.id, nodes=[], triples=[], depth=depth)
 
     runner = make_runner(graph_store, schema, extractor=CapturingExtractor())
@@ -195,7 +199,9 @@ class TestTAGCandidatePairsWithSchema:
                     relation="MADE_UP_RELATION", confidence=0.99, direction="A_to_B"
                 )
 
-        extractor = TAGRelationExtractor(llm=BadLLM(), embedding_model=None, config=config)
+        extractor = TAGRelationExtractor(
+            llm=BadLLM(), embedding_model=None, config=config
+        )
         runner = Phase3Runner(
             config=config,
             schema=schema,
@@ -237,13 +243,17 @@ async def test_candidate_pair_key_order_invariance_and_content_sensitivity():
     assert p1.key == p2.key
 
     # Changing envelope changes the key
-    e2_mutated = L2Entity(id="e2", label="KONZEPT", name="Space", textual_envelope="Envelope Changed")
+    e2_mutated = L2Entity(
+        id="e2", label="KONZEPT", name="Space", textual_envelope="Envelope Changed"
+    )
     p3 = CandidatePair(entity_a=e1, entity_b=e2_mutated)
     assert p3.key != p1.key
 
 
 @pytest.mark.asyncio
-async def test_phase3_resumes_and_skips_premarked_pairs(graph_store, phase2_view, schema):
+async def test_phase3_resumes_and_skips_premarked_pairs(
+    graph_store, phase2_view, schema
+):
     # Pre-mark the only candidate pair as completed
     e_kant, e_space = phase2_view.entities
     pair = CandidatePair(entity_a=e_kant, entity_b=e_space)
@@ -313,7 +323,9 @@ async def test_phase3_poison_pill_quarantine(graph_store, phase2_view, schema):
     await runner.run(three_view, make_context())
 
     # The poison pill pair was quarantined as failed
-    pair = CandidatePair(entity_a=phase2_view.entities[0], entity_b=phase2_view.entities[1])
+    pair = CandidatePair(
+        entity_a=phase2_view.entities[0], entity_b=phase2_view.entities[1]
+    )
     unprocessed = await graph_store.filter_unprocessed_items([pair.key], "phase3")
     assert len(unprocessed) == 0
 
@@ -331,7 +343,9 @@ async def test_phase3_systematic_failure_guard(graph_store, phase2_view, schema)
             raise RuntimeError("API key invalid")
 
     runner = make_runner(graph_store, schema, extractor=AllFailExtractor())
-    with pytest.raises(SystematicPairFailure, match="All 1 candidate pairs of the first batch failed"):
+    with pytest.raises(
+        SystematicPairFailure, match="All 1 candidate pairs of the first batch failed"
+    ):
         await runner.run(phase2_view, make_context())
 
 

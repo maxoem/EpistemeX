@@ -77,20 +77,24 @@ class LLMNERExtractor(NERExtractor):
     """
 
     def __init__(
-        self, 
-        llm: Any, 
+        self,
+        llm: Any,
         prompts: StructuredPromptBundle | None = None,
-        max_gleanings: int = 0, 
+        max_gleanings: int = 0,
         mention_context_injector: Any = None,
         strategy: Any = "direct_constrained",
         stopping_oracle: GleaningStoppingOracle | None = None,
     ) -> None:
         self.llm = ensure_structured_llm(llm)
         self.max_gleanings = max_gleanings
-        self.mention_context_injector = mention_context_injector or DefaultMentionContextInjector()
+        self.mention_context_injector = (
+            mention_context_injector or DefaultMentionContextInjector()
+        )
         self.prompts = prompts or DEFAULT_NER_PROMPTS
         self.strategy = strategy
-        self.stopping_oracle = stopping_oracle or FixedPassGleaningOracle(max_passes=max_gleanings)
+        self.stopping_oracle = stopping_oracle or FixedPassGleaningOracle(
+            max_passes=max_gleanings
+        )
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic NER extractor configuration.
@@ -108,7 +112,11 @@ class LLMNERExtractor(NERExtractor):
             if isinstance(self.stopping_oracle, Fingerprintable)
             else fingerprint_method(self.stopping_oracle)
         )
-        strategy_str = self.strategy.value if isinstance(self.strategy, Enum) else str(self.strategy)
+        strategy_str = (
+            self.strategy.value
+            if isinstance(self.strategy, Enum)
+            else str(self.strategy)
+        )
         return {
             "class": self.__class__.__name__,
             "max_gleanings": self.max_gleanings,
@@ -168,8 +176,12 @@ class LLMNERExtractor(NERExtractor):
         memory: Any | None = None,
         anchor: Any | None = None,
     ) -> tuple[list[L2Entity], list[L2Triple], dict | None, bool, str | None]:
-        global_structural_anchor_str = anchor.to_prompt_context() if isinstance(anchor, PromptContextual) else ""
-        working_memory_str = memory.to_prompt_context() if isinstance(memory, PromptContextual) else ""
+        global_structural_anchor_str = (
+            anchor.to_prompt_context() if isinstance(anchor, PromptContextual) else ""
+        )
+        working_memory_str = (
+            memory.to_prompt_context() if isinstance(memory, PromptContextual) else ""
+        )
 
         all_raw_entities = []
         all_raw_triples = []
@@ -225,9 +237,7 @@ class LLMNERExtractor(NERExtractor):
         valid_node_types = set(schema.node_types)
         valid_rel_types = set(schema.relation_types)
 
-        valid_entities = [
-            e for e in all_raw_entities if e.label in valid_node_types
-        ]
+        valid_entities = [e for e in all_raw_entities if e.label in valid_node_types]
         if len(valid_entities) < len(all_raw_entities):
             logger.debug(
                 "Dropped %d entities with unknown labels for chunk %s",
@@ -242,21 +252,23 @@ class LLMNERExtractor(NERExtractor):
         for ext in valid_entities:
             stable_id = _stable_entity_id(ext.label, ext.name)
             id_map[ext.id] = stable_id
-            
+
             # Topologically inject the textual envelope bounds
             textual_envelope = self.mention_context_injector.inject(
-                chunk_text=chunk_text, 
-                mention_name=ext.name, 
-                mention_quote=ext.mention_quote, 
-                chunk_id=chunk_id
+                chunk_text=chunk_text,
+                mention_name=ext.name,
+                mention_quote=ext.mention_quote,
+                chunk_id=chunk_id,
             )
-            
+
             entities.append(
                 L2Entity(
                     id=stable_id,
                     label=ext.label,
                     name=ext.name,
-                    description=ext.mention_quote if ext.mention_quote != ext.name else None,
+                    description=ext.mention_quote
+                    if ext.mention_quote != ext.name
+                    else None,
                     textual_envelope=textual_envelope,
                     confidence=ext.confidence,
                     source_chunk_ids=[chunk_id],

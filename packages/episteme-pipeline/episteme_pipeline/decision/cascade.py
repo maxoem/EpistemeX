@@ -7,10 +7,11 @@ Provides shared System 1 to System 2 cascade abstractions, including the typed
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import hashlib
 import hmac
-from typing import TYPE_CHECKING, Any, Generic, Iterator, TypeVar
+from collections.abc import Iterator
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 if TYPE_CHECKING:
     from episteme_pipeline.protocols.decision import DecisionScore
@@ -47,14 +48,14 @@ def should_audit_deterministically(
     if audit_rate >= 1.0:
         return True
     key_bytes = str(run_seed).encode("utf-8")
-    msg_bytes = f"{phase_key}:{item_id}".encode("utf-8")
+    msg_bytes = f"{phase_key}:{item_id}".encode()
     digest = hmac.new(key_bytes, msg_bytes, hashlib.sha256).digest()
     uniform_val = int.from_bytes(digest[:8], "big") / float(1 << 64)
     return uniform_val < audit_rate
 
 
 @dataclass(slots=True)
-class TriageDecision(Generic[T]):
+class TriageDecision(Generic[T]):  # noqa: UP046 baseline
     """Uniform decision envelope for System 1 fast triage.
 
     Conforms to the dual-process cognitive architecture (ADR-0018 / Design Standards §3.4).

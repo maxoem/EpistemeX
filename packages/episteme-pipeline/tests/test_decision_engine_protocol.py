@@ -94,7 +94,9 @@ class ConformingMockDecisionEngine:
         question: DecisionQuestion | dict[str, Any],
     ) -> DecisionScore | DecisionNoulResult:
         """Evaluate a single question."""
-        return DecisionNoulResult(probability=0.95, empirical_accuracy=0.92, passed=True)
+        return DecisionNoulResult(
+            probability=0.95, empirical_accuracy=0.92, passed=True
+        )
 
     async def evaluate_batch(
         self,
@@ -249,7 +251,10 @@ def test_default_prompt_provider_decision_bundles() -> None:
     assert arc_bundle.decision_criteria == DECISION_ARC_CRITERIA
 
     # get_template method returns direct_template cleanly
-    assert provider.get_template("decision_epistemic_relevance") == DECISION_EPISTEMIC_RELEVANCE_QUESTION
+    assert (
+        provider.get_template("decision_epistemic_relevance")
+        == DECISION_EPISTEMIC_RELEVANCE_QUESTION
+    )
     assert provider.get_template("decision_boundary") == DECISION_BOUNDARY_QUESTION
     assert provider.get_template("acc_classification") == ACC_DIRECT_PROMPT
 
@@ -312,13 +317,17 @@ async def test_conforming_mock_decision_engine_execution() -> None:
     assert noul.probability == 0.95
     assert noul.empirical_accuracy == 0.92
 
-    choice = await engine.evaluate_choice("text snippet", "Which type?", ["CLAIM", "PREMISE"])
+    choice = await engine.evaluate_choice(
+        "text snippet", "Which type?", ["CLAIM", "PREMISE"]
+    )
     assert choice.selected_option == "CLAIM"
     assert choice.class_probability == 0.88
     assert choice.empirical_accuracy == 0.85
     assert choice.prediction_set == ["CLAIM"]
 
-    score = await engine.evaluate_score("text snippet", "Rate confidence", [1, 2, 3, 4, 5])
+    score = await engine.evaluate_score(
+        "text snippet", "Rate confidence", [1, 2, 3, 4, 5]
+    )
     assert score.selected_option == 1
     assert score.class_probability == 0.75
 
@@ -350,6 +359,7 @@ def test_pipeline_for_task_decision_engine_injection() -> None:
         decision_engine=engine,
     )
     from episteme_pipeline.decision.observable import ObservableDecisionEngine
+
     assert isinstance(pipeline.decision_engine, ObservableDecisionEngine)
     assert pipeline.decision_engine.inner is engine
 
@@ -526,7 +536,9 @@ def test_question_strategy_registry_and_specs() -> None:
 
     noul_strat = get_question_strategy("noul")
     assert isinstance(noul_strat, NoulQuestionStrategy)
-    noul_spec = noul_strat.to_laya_spec(DecisionQuestion(question="Is true?", type="noul"))
+    noul_spec = noul_strat.to_laya_spec(
+        DecisionQuestion(question="Is true?", type="noul")
+    )
     assert noul_spec["type"] == "noul"
     assert noul_spec["instructions"] == "Is true?"
 
@@ -549,5 +561,3 @@ def test_question_strategy_registry_and_specs() -> None:
     # Unknown modality falls back to ChoiceQuestionStrategy
     unknown_strat = get_question_strategy("custom_unknown")
     assert isinstance(unknown_strat, ChoiceQuestionStrategy)
-
-

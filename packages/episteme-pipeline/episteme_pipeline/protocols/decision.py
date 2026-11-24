@@ -13,10 +13,6 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
-from episteme_pipeline.decision.cascade import (
-    TriageDecision,
-    should_audit_deterministically,
-)
 from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 
@@ -82,7 +78,9 @@ class DecisionQuestion:
         )
 
 
-def ensure_decision_question(spec: DecisionQuestion | dict[str, Any]) -> DecisionQuestion:
+def ensure_decision_question(
+    spec: DecisionQuestion | dict[str, Any],
+) -> DecisionQuestion:
     """Normalize a DecisionQuestion or legacy dictionary specification into a typed DecisionQuestion.
 
     Parameters
@@ -169,9 +167,7 @@ class DecisionNoulResult(BaseModel):
         Boolean evaluation outcome (e.g. probability >= threshold).
     """
 
-    probability: float = Field(
-        description="Calibrated probability P(true) in [0, 1]."
-    )
+    probability: float = Field(description="Calibrated probability P(true) in [0, 1].")
     empirical_accuracy: float = Field(
         description="Calibrated empirical accuracy frequency."
     )

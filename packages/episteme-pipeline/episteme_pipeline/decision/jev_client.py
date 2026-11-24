@@ -355,7 +355,9 @@ class LayaDecisionEngine:
             selected_option = max(probabilities, key=probabilities.get)
             class_probability = probabilities[selected_option]
         else:
-            opt_list = list(options.keys()) if isinstance(options, dict) else list(options)
+            opt_list = (
+                list(options.keys()) if isinstance(options, dict) else list(options)
+            )
             selected_option = opt_list[0] if opt_list else "UNKNOWN"
             class_probability = 0.5
             probabilities = {selected_option: class_probability}
@@ -417,13 +419,19 @@ class LayaDecisionEngine:
             selected_option = levels[idx]
             class_prob = 0.80
             probabilities = {
-                str(lvl): (class_prob if lvl == selected_option else round(0.20 / max(1, len(levels) - 1), 4))
+                str(lvl): (
+                    class_prob
+                    if lvl == selected_option
+                    else round(0.20 / max(1, len(levels) - 1), 4)
+                )
                 for lvl in levels
             }
         else:
             selected_option = levels[0] if levels else 1
             class_prob = 0.70
-            probabilities = {str(lvl): round(1.0 / max(1, len(levels)), 4) for lvl in levels}
+            probabilities = {
+                str(lvl): round(1.0 / max(1, len(levels)), 4) for lvl in levels
+            }
 
         act_p = float(res.get("action", {}).get("act_probability", class_prob))
         prediction_set = [str(selected_option)]
@@ -480,7 +488,9 @@ class LayaDecisionEngine:
         dict of str to (DecisionScore or DecisionNoulResult)
             Mapped results for all evaluated questions.
         """
-        typed_questions = {q_id: ensure_decision_question(q_spec) for q_id, q_spec in questions.items()}
+        typed_questions = {
+            q_id: ensure_decision_question(q_spec) for q_id, q_spec in questions.items()
+        }
         laya_questions = {
             q_id: get_question_strategy(q_item.type).to_laya_spec(q_item)
             for q_id, q_item in typed_questions.items()
@@ -857,6 +867,7 @@ class TransformersDecisionEngine:
         """
         return await evaluate_questions_sequentially(self, state, questions)
 
+
 def _is_mlx_available() -> bool:
     """Check if MLX execution is supported on the current hardware.
 
@@ -957,7 +968,7 @@ def _create_engine_backend(
             timeout_seconds=timeout_seconds,
             default_confidence_threshold=default_confidence_threshold,
             conformal_alpha=conformal_alpha,
-            *args,
+            *args,  # noqa: B026 baseline
             **kwargs,
         )
     else:
@@ -970,7 +981,7 @@ def _create_engine_backend(
             timeout_seconds=timeout_seconds,
             default_confidence_threshold=default_confidence_threshold,
             conformal_alpha=conformal_alpha,
-            *args,
+            *args,  # noqa: B026 baseline
             **kwargs,
         )
 
@@ -1023,7 +1034,7 @@ class AutoDecisionEngine:
             conformal_alpha=conformal_alpha,
             batch_size=batch_size,
             timeout_seconds=timeout_seconds,
-            *args,
+            *args,  # noqa: B026 baseline
             **kwargs,
         )
 
@@ -1172,7 +1183,11 @@ class AutoDecisionEngine:
 
 
 def resolve_decision_engine(
-    config: DecisionEngineConfig | dict[str, Any] | BaseModel | DecisionEngine | None = None,
+    config: DecisionEngineConfig
+    | dict[str, Any]
+    | BaseModel
+    | DecisionEngine
+    | None = None,
     *,
     fallback_to_mock: bool = False,
 ) -> DecisionEngine | None:
@@ -1245,4 +1260,3 @@ def resolve_decision_engine(
                 conformal_alpha=cfg.conformal_alpha,
             )
         raise
-

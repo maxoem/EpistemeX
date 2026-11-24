@@ -17,21 +17,33 @@ def test_poset_evaluation_on_valid_dag():
     """Verify that a valid specialization tree passes DAG, root, and subsumption checks."""
     ref_tg = em.TheoryGraph(name="RefGraph")
     ref_tg.add_node("T_Base", name="Base Theory", node_type=em.NodeType.THEORY_ELEMENT)
-    ref_tg.add_node("T_Grav", name="Gravitational Theory", node_type=em.NodeType.THEORY_ELEMENT)
-    ref_tg.add_node("T_Harmonic", name="Harmonic Theory", node_type=em.NodeType.THEORY_ELEMENT)
+    ref_tg.add_node(
+        "T_Grav", name="Gravitational Theory", node_type=em.NodeType.THEORY_ELEMENT
+    )
+    ref_tg.add_node(
+        "T_Harmonic", name="Harmonic Theory", node_type=em.NodeType.THEORY_ELEMENT
+    )
 
     # Base -> Grav, Base -> Harmonic
     ref_tg.add_edge("T_Base", "T_Grav", relation_type=em.RelationType.SPECIALIZES)
     ref_tg.add_edge("T_Base", "T_Harmonic", relation_type=em.RelationType.SPECIALIZES)
 
     # Add model classes
-    ref_tg.add_node("M_Newton", name="Newton's Laws", node_type=em.NodeType.ACTUAL_MODEL)
-    ref_tg.add_node("M_Grav", name="Gravitation Law", node_type=em.NodeType.ACTUAL_MODEL)
+    ref_tg.add_node(
+        "M_Newton", name="Newton's Laws", node_type=em.NodeType.ACTUAL_MODEL
+    )
+    ref_tg.add_node(
+        "M_Grav", name="Gravitation Law", node_type=em.NodeType.ACTUAL_MODEL
+    )
     ref_tg.add_node("M_Hooke", name="Hooke's Law", node_type=em.NodeType.ACTUAL_MODEL)
 
-    ref_tg.add_edge("T_Base", "M_Newton", relation_type=em.RelationType.HAS_ACTUAL_MODEL)
+    ref_tg.add_edge(
+        "T_Base", "M_Newton", relation_type=em.RelationType.HAS_ACTUAL_MODEL
+    )
     ref_tg.add_edge("T_Grav", "M_Grav", relation_type=em.RelationType.HAS_ACTUAL_MODEL)
-    ref_tg.add_edge("T_Harmonic", "M_Hooke", relation_type=em.RelationType.HAS_ACTUAL_MODEL)
+    ref_tg.add_edge(
+        "T_Harmonic", "M_Hooke", relation_type=em.RelationType.HAS_ACTUAL_MODEL
+    )
 
     result = evaluate_specialization_poset(ref_tg, ref_tg, gold_root_id="T_Base")
 
@@ -86,7 +98,9 @@ def test_poset_detects_self_loops():
 def test_root_conformity_verification():
     """Verify root conformity requires matching reference root element."""
     pred_tg = em.TheoryGraph(name="Pred")
-    pred_tg.add_node("T_WrongRoot", name="Wrong Root", node_type=em.NodeType.THEORY_ELEMENT)
+    pred_tg.add_node(
+        "T_WrongRoot", name="Wrong Root", node_type=em.NodeType.THEORY_ELEMENT
+    )
     pred_tg.add_node("T_Sub", name="Sub Theory", node_type=em.NodeType.THEORY_ELEMENT)
     pred_tg.add_edge("T_WrongRoot", "T_Sub", relation_type=em.RelationType.SPECIALIZES)
 

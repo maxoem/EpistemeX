@@ -15,12 +15,15 @@ def test_model_caching(monkeypatch) -> None:
     monkeypatch : pytest.MonkeyPatch
         Pytest monkeypatch fixture to intercept external model loading.
     """
+
     class DummyModel:
         pass
 
     fake_model = DummyModel()
     mock_load = MagicMock(return_value=fake_model)
-    monkeypatch.setattr(SentenceTransformerCrossEncoderReranker, "_load_model", mock_load)
+    monkeypatch.setattr(
+        SentenceTransformerCrossEncoderReranker, "_load_model", mock_load
+    )
 
     reranker1 = SentenceTransformerCrossEncoderReranker(
         model_name="test-caching-model",
@@ -39,4 +42,5 @@ def test_model_caching(monkeypatch) -> None:
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__])
