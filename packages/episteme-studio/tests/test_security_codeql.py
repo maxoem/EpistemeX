@@ -12,7 +12,6 @@ import pytest
 from episteme_studio.adapters.artifact_reader import ArtifactReader
 from episteme_studio.app import create_app
 from episteme_studio.security import (
-    resolve_path_within_roots,
     resolve_safe_child,
     validate_safe_identifier,
 )
@@ -62,22 +61,6 @@ def test_resolve_safe_child_enforces_containment(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="must be relative"):
         resolve_safe_child(base_dir, str(sibling_dir / "secret.txt"))
-
-
-def test_resolve_path_within_roots_enforces_allowed_roots(tmp_path: Path) -> None:
-    """Verify resolve_path_within_roots accepts paths inside roots and blocks others."""
-    root_a = tmp_path / "root_a"
-    root_a.mkdir()
-    root_b = tmp_path / "root_b"
-    root_b.mkdir()
-    sibling = tmp_path / "root_a_outside"
-    sibling.mkdir()
-
-    inside = root_a / "sub" / "data.json"
-    assert resolve_path_within_roots(inside, [root_a, root_b]) == inside.resolve()
-
-    with pytest.raises(ValueError, match="outside allowed directories"):
-        resolve_path_within_roots(sibling / "secret.json", [root_a, root_b])
 
 
 @pytest.mark.asyncio

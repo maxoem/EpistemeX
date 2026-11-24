@@ -988,8 +988,8 @@ class EvaluationService:
 
         safe_run_id = validate_safe_identifier(run_id, "run_id")
         run_dir = resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
-        decisions_file = resolve_safe_child(run_dir, "decisions.jsonl")
-        adjudications_file = resolve_safe_child(run_dir, "adjudications.json")
+        decisions_file = run_dir / "decisions.jsonl"
+        adjudications_file = run_dir / "adjudications.json"
 
         adjudications: dict[str, dict[str, Any]] = {}
         if adjudications_file.is_file():
@@ -1148,7 +1148,7 @@ class EvaluationService:
 
         safe_run_id = validate_safe_identifier(run_id, "run_id")
         run_dir = resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
-        adjudications_file = resolve_safe_child(run_dir, "adjudications.json")
+        adjudications_file = run_dir / "adjudications.json"
         adjudications_file.parent.mkdir(parents=True, exist_ok=True)
 
         adjudications: dict[str, dict[str, Any]] = {}
@@ -1245,7 +1245,7 @@ class EvaluationService:
         safe_run_id = validate_safe_identifier(run_id, "run_id")
         export_dir = resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
         export_dir.mkdir(parents=True, exist_ok=True)
-        export_path = resolve_safe_child(export_dir, "active_learning_export.jsonl")
+        export_path = export_dir / "active_learning_export.jsonl"
 
         with export_path.open("w", encoding="utf-8") as f:
             for rec in curated_records:

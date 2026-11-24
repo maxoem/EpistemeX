@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from .settings import StudioSettings
 
 _SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -103,49 +100,15 @@ def resolve_safe_child(
         If any path segment is absolute or resolves outside ``base_dir``.
     """
     str_parts = [str(part) for part in parts]
-    if any("\x00" in part or os.path.isabs(part) for part in str_parts):
+    if any("\x00" in part or Path(part).is_absolute() for part in str_parts):
         raise ValueError(f"Path parts {str_parts!r} must be relative to '{base_dir}'.")
 
-    base_real = os.path.realpath(str(base_dir))
-    fullpath = os.path.realpath(os.path.join(base_real, *str_parts))
-    if allow_base and fullpath == base_real:
-        return Path(fullpath)
-    if not fullpath.startswith(base_real + os.sep):
-        raise ValueError(f"Path '{fullpath}' escapes allowed directory '{base_real}'.")
-    return Path(fullpath)
-
-
-def resolve_path_within_roots(
-    path: Path | str,
-    allowed_roots: Sequence[Path | str],
-) -> Path:
-    """Resolve a path and verify it falls inside at least one allowed root.
-
-    Parameters
-    ----------
-    path : Path or str
-        Candidate path to validate.
-    allowed_roots : sequence of Path or str
-        Trusted root directories permitted to contain ``path``.
-
-    Returns
-    -------
-    Path
-        Normalized real path guaranteed to lie inside one of ``allowed_roots``.
-
-    Raises
-    ------
-    ValueError
-        If ``path`` contains null bytes or resolves outside all
-        ``allowed_roots``.
-    """
-    path_str = str(path)
-    if "\x00" in path_str:
-        raise ValueError(f"Path {path_str!r} contains null bytes.")
-
-    fullpath = os.path.realpath(path_str)
-    for root in allowed_roots:
-        root_real = os.path.realpath(str(root))
-        if fullpath == root_real or fullpath.startswith(root_real + os.sep):
-            return Path(fullpath)
-    raise ValueError(f"Path '{path}' is outside allowed directories.")
+    base_resolved = Path(base_dir).resolve()
+    candidate = base_resolved.joinpath(*str_parts).resolve()
+    if allow_base and candidate == base_resolved:
+        return candidate
+    if candidate == base_resolved or not candidate.is_relative_to(base_resolved):
+        raise ValueError(
+            f"Path '{candidate}' escapes allowed directory '{base_resolved}'."
+        )
+    return candidate

@@ -169,9 +169,7 @@ class PipelineExecutor:
             safe_run_id = validate_safe_identifier(target_run_id, "run_id")
             pid_dir = resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
             pid_dir.mkdir(parents=True, exist_ok=True)
-            resolve_safe_child(pid_dir, "process.pid").write_text(
-                str(process.pid), encoding="utf-8"
-            )
+            (pid_dir / "process.pid").write_text(str(process.pid), encoding="utf-8")
         except Exception:  # noqa: BLE001, S110 baseline
             pass
 
@@ -220,8 +218,9 @@ class PipelineExecutor:
 
             try:
                 safe_run_id = validate_safe_identifier(run_id, "run_id")
-                pid_file = resolve_safe_child(
-                    Path(".pipeline_runs"), safe_run_id, "process.pid"
+                pid_file = (
+                    resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
+                    / "process.pid"
                 )
                 pid_file.unlink(missing_ok=True)
             except Exception:  # noqa: BLE001, S110 baseline
