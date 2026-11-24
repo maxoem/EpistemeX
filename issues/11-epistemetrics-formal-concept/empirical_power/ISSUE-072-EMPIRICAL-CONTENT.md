@@ -8,7 +8,7 @@
 | **Target Package(s)** | `epistemetrics`, `episteme-pipeline` |
 | **Priority** | **Critical** (contains non-equivalence relation used for quotient sets, disjoint numerator/denominator in $\Gamma_{\text{relative}}$, and reversed Lakatos Delta under anomaly accommodation) |
 | **Status** | `Open` |
-| **Related Issues** | [`ISSUE-075`](../ISSUE-075-EMPIRICAL-POWER-CROSS-CUTTING.md), [`ISSUE-055`](../../09-architecture-workflow-domain/resolved/ISSUE-055-bipartite-inference-hypergraph-conjunctive-premises-and-undercutters.md), [`ISSUE-067`](../../10-formal-conceptual-docs/ISSUE-067-mathematical-errors-in-formalisms.md) |
+| **Related Issues** | [`ISSUE-075`](../ISSUE-075-EMPIRICAL-POWER-CROSS-CUTTING.md), [`ISSUE-055`](../../archived/09-architecture-workflow-domain/resolved/ISSUE-055-bipartite-inference-hypergraph-conjunctive-premises-and-undercutters.md), [`ISSUE-067`](../../10-formal-conceptual-docs/ISSUE-067-mathematical-errors-in-formalisms.md) |
 
 Severity legend: **Critical** = invalidates the metric's mathematical/conceptual core or makes it uncomputable · **Major** = significant formal flaw, semantic shift, or literature misattribution · **Minor** = notation, alignment, or presentation issue.
 

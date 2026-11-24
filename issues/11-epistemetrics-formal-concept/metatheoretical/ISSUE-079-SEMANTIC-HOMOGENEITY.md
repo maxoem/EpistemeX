@@ -8,7 +8,7 @@
 | **Target Package(s)** | `epistemetrics`, `episteme-pipeline` |
 | **Priority** | **Critical** ($AID$ checks for direct inference edges between independent axioms, yielding $H_{\text{axiomatic}} = 0$ for every non-redundant axiomatization; minimization domain omits $A_1, A_2 \neq \emptyset$ and $A_1 \cap A_2 = \emptyset$, dividing by zero at $A_1 = \emptyset$) |
 | **Status** | `Open` |
-| **Related Issues** | [`ISSUE-082`](../ISSUE-082-METATHEORETICAL-CROSS-CUTTING.md), [`ISSUE-055`](../../09-architecture-workflow-domain/resolved/ISSUE-055-bipartite-inference-hypergraph-conjunctive-premises-and-undercutters.md), [`ISSUE-067`](../../10-formal-conceptual-docs/ISSUE-067-mathematical-errors-in-formalisms.md) |
+| **Related Issues** | [`ISSUE-082`](../ISSUE-082-METATHEORETICAL-CROSS-CUTTING.md), [`ISSUE-055`](../../archived/09-architecture-workflow-domain/resolved/ISSUE-055-bipartite-inference-hypergraph-conjunctive-premises-and-undercutters.md), [`ISSUE-067`](../../10-formal-conceptual-docs/ISSUE-067-mathematical-errors-in-formalisms.md) |
 
 Severity legend: **Critical** = invalidates the metric's mathematical/conceptual core or makes it uncomputable · **Major** = significant formal flaw, semantic shift, or literature misattribution · **Minor** = notation, alignment, or presentation issue.
 

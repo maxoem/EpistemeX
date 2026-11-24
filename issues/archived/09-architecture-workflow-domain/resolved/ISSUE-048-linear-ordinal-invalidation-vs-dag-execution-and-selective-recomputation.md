@@ -4,16 +4,16 @@
 | :--- | :--- |
 | **Issue ID** | `ISSUE-048` |
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Orchestration, DAG Scheduling, Invalidation & Caching) |
-| **Target Package(s)** | `packages/episteme-pipeline` (`pipeline.py`, `artifacts/invalidate.py`, `protocols/phase_runner.py`) |
+| **Target Package(s)** | `../../../../packages/episteme-pipeline` (`pipeline.py`, `artifacts/invalidate.py`, `protocols/phase_runner.py`) |
 | **Priority** | **High** |
 | **Status** | `Resolved` |
-| **Evaluated Docs & ADRs** | [`docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md), [`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0012`](../../docs/adr/0012-phase-config-redesign-and-langfuse-integration.md), [`ADR-0014`](../../docs/adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [`ADR-0015`](../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md) |
+| **Evaluated Docs & ADRs** | [`../../../../docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md), [`../../../../docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md), [`ADR-0012`](../../docs/adr/0012-phase-config-redesign-and-langfuse-integration.md), [`ADR-0014`](../../docs/adr/0014-deterministic-identity-diffing-and-progression-workbench.md), [`ADR-0015`](../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md) |
 
 ---
 
 ## 1. Current State
 
-The pipeline orchestrator ([`packages/episteme-pipeline/episteme_pipeline/pipeline.py`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py)) and [`docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md) currently model pipeline execution and cache invalidation as a **1-based sequential array of ordinals** (`1..N`):
+The pipeline orchestrator ([`../../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py)) and [`../../../../docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md) currently model pipeline execution and cache invalidation as a **1-based sequential array of ordinals** (`1..N`):
 
 1. **All-or-Nothing Phase List Equality (`_phase_lists_match`)**:
    In `pipeline.py#L725-L735` and `invalidation_and_resume.md §Phase Invalidation Logic`:
@@ -117,7 +117,7 @@ flowchart TB
 
 ## 5. Key Target Files
 
-- [`packages/episteme-pipeline/episteme_pipeline/pipeline.py`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py)
-- [`packages/episteme-pipeline/episteme_pipeline/protocols/phase_runner.py`](../../packages/episteme-pipeline/episteme_pipeline/protocols/phase_runner.py)
-- [`packages/episteme-pipeline/episteme_pipeline/artifacts/invalidate.py`](../../packages/episteme-pipeline/episteme_pipeline/artifacts/invalidate.py)
-- [`docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md)
+- [`../../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py)
+- [`../../../../packages/episteme-pipeline/episteme_pipeline/protocols/phase_runner.py`](../../packages/episteme-pipeline/episteme_pipeline/protocols/phase_runner.py)
+- [`../../../../packages/episteme-pipeline/episteme_pipeline/artifacts/invalidate.py`](../../packages/episteme-pipeline/episteme_pipeline/artifacts/invalidate.py)
+- [`../../../../docs/architecture/invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md)

@@ -4,7 +4,7 @@
 | :--- | :--- |
 | **Document Role** | Macro-Architectural & Conceptual Critique (Researcher, Software Architect, and Domain Expert Evaluation) |
 | **Domain / Category** | `09-Architecture, Workflow & Domain` |
-| **Evaluated Scope** | [`docs/architecture/`](../../docs/architecture/overview.md), [`docs/adr/`](../../docs/adr/index.md) (`ADR-0001`–`0020`), [`docs/concepts/`](../../docs/concepts/formal_graph_model.md) |
+| **Evaluated Scope** | [`../../../docs/architecture`](../../../docs/architecture/overview.md), [`../../../docs/adr`](../../../docs/adr/index.md) (`ADR-0001`–`0020`), [`../../../docs/concepts`](../../../docs/concepts/formal_graph_model.md) |
 | **Focus** | Identifying missing, structurally inverted, or flawed **high-level architectural concepts** prior to concrete refactoring design |
 
 ---
@@ -20,13 +20,13 @@ Below are the **seven macro-architectural concepts and paradigms** that are curr
 ## 1. The Feed-Forward "Waterfall" Fallacy vs. Bidirectional Hermeneutic Refinement
 
 ### Current Architectural Concept
-[`docs/architecture/pipeline_architecture.md`](../../docs/architecture/pipeline_architecture.md) defines Episteme as a *"Synergized Bidirectional Reasoning Engine... combining LLMs and Knowledge Graphs in a mutually beneficial feedback loop."* However, the actual macro-topology is a **strictly unidirectional, one-pass feed-forward waterfall**:
+[`../../../docs/architecture/pipeline_architecture.md`](../../../docs/architecture/pipeline_architecture.md) defines Episteme as a *"Synergized Bidirectional Reasoning Engine... combining LLMs and Knowledge Graphs in a mutually beneficial feedback loop."* However, the actual macro-topology is a **strictly unidirectional, one-pass feed-forward waterfall**:
 $$\text{Phase 1 (Chunks)} \to \text{Phase 2 (Entities)} \to \text{Phase 3 (Relations)} \to \text{Phase 3b/4m} \to \text{Phase 4 (Arguments)} \to \text{Phase 5 (Clusters)} \to \text{Phase 6 (QBAF)} \to \text{Post-Processing}$$
 
 ### Why This Is Conceptually Flawed
 - **Violation of the Hermeneutic Circle**: In scientific and philosophical texts, local parts (entity mentions, implicit premises, rhetorical roles) cannot be accurately interpreted without the global whole (the overarching theoretical framework $T = \langle K, I \rangle$), and the global whole is iteratively revised by local evidence.
 - **Zero Top-Down Feedback (L4/L3 $\not\to$ L2/L1)**:
-  - When Phase 6 (`D-QBAF`) or Post-Processing (`TheoreticalEnrichment`, [`ADR-0015`](../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md)) discovers an ungrounded theoretical claim, a disconnected argument chain (missing **enthymeme** / unstated premise), or a tenability anomaly ($TS_{\text{local}} < 0.5$), the architecture has **no feedback path** to query Layer 1/Layer 2 for the missing bridge premise or to re-evaluate an upstream entity disambiguation decision.
+  - When Phase 6 (`D-QBAF`) or Post-Processing (`TheoreticalEnrichment`, [`ADR-0015`](../../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md)) discovers an ungrounded theoretical claim, a disconnected argument chain (missing **enthymeme** / unstated premise), or a tenability anomaly ($TS_{\text{local}} < 0.5$), the architecture has **no feedback path** to query Layer 1/Layer 2 for the missing bridge premise or to re-evaluate an upstream entity disambiguation decision.
   - "Gleaning" is currently conceived only as a *local, intra-chunk* loop during Phase 2/4 extraction, rather than a **graph-driven top-down epistemic search** triggered by structural gaps in the global TheoryNet.
 
 ### Missing Architectural Concept
@@ -60,7 +60,7 @@ Across Phase 2 (`ADR-0009`), Phase 3b (`ADR-0003`), Phase 4 Maturation, and Phas
 ## 3. Pairwise Graph Reductionism vs. Hypergraph / Reified Inference Topology
 
 ### Current Architectural Concept
-The formal graph model ([`docs/concepts/formal_graph_model.md`](../../docs/concepts/formal_graph_model.md), [`ADR-0007`](../../docs/adr/0007-tf-structural-correspondence.md), [`ADR-0011`](../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md)) restricts Layer 3 to a **directed pairwise multigraph** where relations are binary edges $r = (a_j \to a_i) \in \mathcal{A} \times \mathcal{A}$, and gradual semantics sum incoming energies linearly:
+The formal graph model ([`../../../docs/concepts/formal_graph_model.md`](../../../docs/concepts/formal_graph_model.md), [`ADR-0007`](../../../docs/adr/0007-tf-structural-correspondence.md), [`ADR-0011`](../../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md)) restricts Layer 3 to a **directed pairwise multigraph** where relations are binary edges $r = (a_j \to a_i) \in \mathcal{A} \times \mathcal{A}$, and gradual semantics sum incoming energies linearly:
 $$E_i(t) = \sum_{j} W_{ji} s_j(t) - \sum_{k} W_{ki} s_k(t)$$
 
 ### Why This Is Conceptually Flawed
@@ -85,7 +85,7 @@ $$E_i(t) = \sum_{j} W_{ji} s_j(t) - \sum_{k} W_{ki} s_k(t)$$
 ## 4. Point-Estimate Collapse Across Phase Boundaries vs. End-to-End Uncertainty Propagation
 
 ### Current Architectural Concept
-While [`docs/architecture/conformal_prediction.md`](../../docs/architecture/conformal_prediction.md) and [`ADR-0018`](../../docs/adr/0018-decision-engine-architecture-and-contracts.md) critique scalar heuristic cutoffs within individual classification calls, the **macro-pipeline still collapses uncertainty into hard, irreversible point estimates at every phase boundary**:
+While [`../../../docs/architecture/conformal_prediction.md`](../../../docs/architecture/conformal_prediction.md) and [`ADR-0018`](../../../docs/adr/0018-decision-engine-architecture-and-contracts.md) critique scalar heuristic cutoffs within individual classification calls, the **macro-pipeline still collapses uncertainty into hard, irreversible point estimates at every phase boundary**:
 - Phase 1 commits to a single static chunk segmentation.
 - Phase 2 commits to hard entity link decisions.
 - Phase 3b commits to hard transitive equivalence classes via Union-Find (`SAME_AS` with `confidence: 1.0`).
@@ -108,7 +108,7 @@ While [`docs/architecture/conformal_prediction.md`](../../docs/architecture/conf
 ## 5. Conflation of "Execution Run Lineage" with "Epistemic Knowledge Base Evolution"
 
 ### Current Architectural Concept
-[`docs/architecture/artifact_run_model.md`](../../docs/architecture/artifact_run_model.md) and [`invalidation_and_resume.md`](../../docs/architecture/invalidation_and_resume.md) organize all persistence around **Execution Runs (`run_id`)**:
+[`../../../docs/architecture/artifact_run_model.md`](../../../docs/architecture/artifact_run_model.md) and [`invalidation_and_resume.md`](../../../docs/architecture/invalidation_and_resume.md) organize all persistence around **Execution Runs (`run_id`)**:
 - A run takes a static `PipelineInput` (list of files) and produces a run-scoped `.pipeline_artifacts/<run_id>/` snapshot.
 - Resumption (`parent_run_id`) is designed for **cache recovery / hyperparameter tweaking on the same static input corpus** (since any change to `input_fingerprint` invalidates the entire run from Phase 1 onward!).
 
@@ -117,7 +117,7 @@ While [`docs/architecture/conformal_prediction.md`](../../docs/architecture/conf
    - Research projects do not ingest a fixed corpus once. A researcher builds a Theory Graph over 20 works, curates it, and then adds 3 new papers ($\Delta D$).
    - Because `input_fingerprint` hashes the entire corpus file list, adding a single new document invalidates **Phase 1 through Phase 6 across all 20 existing documents**, forcing a full recomputation rather than incrementally ingesting $\Delta D$ and integrating its entities/arguments into the existing Theory Graph!
 2. **One-Way Street for Human-in-the-Loop (HITL) Curation & Active Learning**:
-   - [`ADR-0019`](../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md) routes ambiguous conformal sets ($|C(X)| > 1$) to an Active Learning queue, and Studio issues envision human curation (merging nodes, splitting concepts, flipping edge polarities).
+   - [`ADR-0019`](../../../docs/adr/0019-typesafe-jev-client-and-decision-observability.md) routes ambiguous conformal sets ($|C(X)| > 1$) to an Active Learning queue, and Studio issues envision human curation (merging nodes, splitting concepts, flipping edge polarities).
    - However, the architecture lacks a **Persistent Epistemic Overlay / Constraint Ledger** fed back as *input* into the pipeline. If a human expert curates a run's graph and then re-runs the pipeline with an updated prompt or adds a new document, all human curations are wiped out or orphaned on the old `run_id`.
 
 ### Missing Architectural Concept
@@ -129,7 +129,7 @@ While [`docs/architecture/conformal_prediction.md`](../../docs/architecture/conf
 ## 6. Passive Post-Hoc Evaluation vs. Active Runtime Epistemic Falsification & Self-Regulation
 
 ### Current Architectural Concept
-Across [`docs/architecture/overview.md`](../../docs/architecture/overview.md), [`ADR-0007 §4`](../../docs/adr/0007-tf-structural-correspondence.md), and [`ADR-0011`](../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), **Evaluation & Epistemetrics** (structural topology, coherence, calibration ECE, tenability) are architected as **passive, post-construction analytics** executed *after* the pipeline finishes.
+Across [`../../../docs/architecture/overview.md`](../../../docs/architecture/overview.md), [`ADR-0007 §4`](../../../docs/adr/0007-tf-structural-correspondence.md), and [`ADR-0011`](../../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), **Evaluation & Epistemetrics** (structural topology, coherence, calibration ECE, tenability) are architected as **passive, post-construction analytics** executed *after* the pipeline finishes.
 
 ### Why This Is Conceptually Flawed
 - **Open-Loop Blindness During Construction**:
@@ -145,7 +145,7 @@ Across [`docs/architecture/overview.md`](../../docs/architecture/overview.md), [
 ## 7. Monolithic Orchestrator ("God Object") vs. Declarative Workflow & Dataflow Separation
 
 ### Current Architectural Concept
-[`Pipeline`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py) is architected as a central procedural class that simultaneously owns:
+[`Pipeline`](../../../packages/episteme-pipeline/episteme_pipeline/pipeline.py) is architected as a central procedural class that simultaneously owns:
 1. **Composition Root & Factory Wiring** (`Pipeline.for_task` instantiating LLMs, caches, rerankers, Jev clients, modal resolvers).
 2. **Workflow Topology Definition** (hardcoded sequential phase list for `task="knowledge_graph"`).
 3. **Cache & Invalidation Policy** (manifest diffing, artifact hydration, prompt/method fingerprinting).

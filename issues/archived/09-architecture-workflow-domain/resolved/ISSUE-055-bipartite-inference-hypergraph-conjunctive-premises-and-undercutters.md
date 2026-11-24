@@ -4,16 +4,16 @@
 | :--- | :--- |
 | **Issue ID** | `ISSUE-055` |
 | **Domain / Category** | `09-Architecture, Workflow & Domain` (Formal Graph Model, Argumentation Theory, D-QBAF Semantics) |
-| **Target Package(s)** | `../../../packages/episteme-pipeline`, `packages/epistemetrics` (`contracts/domain.py`, `phases/phase4_argument_mining/`, `phases/phase6_theorynet/`, `epistemetrics/epistemic/qbaf/`) |
+| **Target Package(s)** | `../../../../packages/episteme-pipeline`, `packages/epistemetrics` (`contracts/domain.py`, `phases/phase4_argument_mining/`, `phases/phase6_theorynet/`, `epistemetrics/epistemic/qbaf/`) |
 | **Priority** | **High** |
 | **Status** | `Completed` |
-| **Evaluated Docs & ADRs** | [`../../../docs/concepts/formal_graph_model.md`](../../../docs/concepts/formal_graph_model.md), [`ADR-0004`](../../../docs/adr/0004-acc-outputs-triples-single-pass.md), [`ADR-0011`](../../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), [`ADR-0020`](../../../docs/adr/0020-propositional-modal-strength-resolver.md) |
+| **Evaluated Docs & ADRs** | [`../../../../docs/concepts/formal_graph_model.md`](../../../../docs/concepts/formal_graph_model.md), [`ADR-0004`](../../../../docs/adr/0004-acc-outputs-triples-single-pass.md), [`ADR-0011`](../../../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), [`ADR-0020`](../../../../docs/adr/0020-propositional-modal-strength-resolver.md) |
 
 ---
 
 ## 1. Current State
 
-In [`../../../docs/concepts/formal_graph_model.md`](../../../docs/concepts/formal_graph_model.md), [`ADR-0004`](../../../docs/adr/0004-acc-outputs-triples-single-pass.md), and [`ADR-0011 Addendum 2`](../../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), Layer 3 argumentation is modeled as a **directed pairwise multigraph** $E \subseteq \mathcal{A} \times \mathcal{A}$:
+In [`../../../../docs/concepts/formal_graph_model.md`](../../../../docs/concepts/formal_graph_model.md), [`ADR-0004`](../../../../docs/adr/0004-acc-outputs-triples-single-pass.md), and [`ADR-0011 Addendum 2`](../../../../docs/adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), Layer 3 argumentation is modeled as a **directed pairwise multigraph** $E \subseteq \mathcal{A} \times \mathcal{A}$:
 - Every inferential relation is a binary edge $r = (a_j \to a_i)$ between a single source `TheoryAtom` $a_j$ and a single target `TheoryAtom` $a_i$.
 - In Phase 6 (`WeightedQuadraticEnergySolver`), incoming support and attack energies at claim $a_i$ are aggregated via a **linear independent sum**:
   $$E_i(t) = \sum_{j:(a_j, a_i) \in \mathcal{R}_{sup}} W_{ji} \cdot s_j(t) - \sum_{k:(a_k, a_i) \in \mathcal{R}_{att}} W_{ki} \cdot s_k(t)$$

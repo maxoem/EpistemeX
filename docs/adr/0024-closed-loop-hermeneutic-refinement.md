@@ -90,7 +90,7 @@ Configured via `HermeneuticRefinementConfig` on `PipelineConfig.refinement`:
 
 ## Related
 
-- [ISSUE-053: Closed-Loop Hermeneutic Refinement](../../issues/09-architecture-workflow-domain/resolved/ISSUE-053-closed-loop-hermeneutic-refinement-and-top-down-feedback.md)
+- [ISSUE-053: Closed-Loop Hermeneutic Refinement](../../issues/archived/09-architecture-workflow-domain/resolved/ISSUE-053-closed-loop-hermeneutic-refinement-and-top-down-feedback.md)
 - [Pipeline Architecture](../architecture/pipeline_architecture.md)
 - [Invalidation and Resume](../architecture/invalidation_and_resume.md)
 - [Artifact and Run Model](../architecture/artifact_run_model.md)
