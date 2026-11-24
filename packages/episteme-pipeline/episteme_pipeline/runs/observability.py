@@ -99,7 +99,7 @@ class LangfusePublisher(RunPublisher):
             # Publish quality scores if available
             trace_id = None
             if run_id:
-                trace_id = hashlib.md5(run_id.encode("utf-8")).hexdigest()
+                trace_id = hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:32]
 
             if hasattr(self.client, "create_score") and trace_id:
                 self.client.create_score(
@@ -209,7 +209,9 @@ def run_observability_context(
 
     resolved_session_id = session_id or run_id
     trace_hex = (
-        hashlib.md5(run_id.encode("utf-8")).hexdigest() if run_id else uuid4().hex
+        hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:32]
+        if run_id
+        else uuid4().hex
     )
 
     root_ctx = lf_client.start_as_current_observation(

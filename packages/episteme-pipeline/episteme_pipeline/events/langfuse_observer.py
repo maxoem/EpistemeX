@@ -154,7 +154,7 @@ class LangfuseObserver(EventObserver):
         if not trace_id and event.run_id:
             import hashlib
 
-            trace_id = hashlib.md5(event.run_id.encode("utf-8")).hexdigest()
+            trace_id = hashlib.sha256(event.run_id.encode("utf-8")).hexdigest()[:32]
 
         trace_context: dict[str, str] = {}
         if trace_id:

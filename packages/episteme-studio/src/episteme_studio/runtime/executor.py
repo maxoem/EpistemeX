@@ -14,6 +14,7 @@ from episteme_studio.domain.errors import ProblemDetail
 from episteme_studio.domain.runs import PhaseStatus, RunStatus
 from episteme_studio.runtime.broker import EventBroker
 from episteme_studio.runtime.registry import RunHandle, RunRegistry
+from episteme_studio.security import resolve_safe_child, validate_safe_identifier
 from episteme_studio.settings import get_env_var
 
 _DEFAULT_PHASES = [
@@ -165,7 +166,8 @@ class PipelineExecutor:
         handle.process = process
 
         try:
-            pid_dir = Path(".pipeline_runs") / target_run_id
+            safe_run_id = validate_safe_identifier(target_run_id, "run_id")
+            pid_dir = resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
             pid_dir.mkdir(parents=True, exist_ok=True)
             (pid_dir / "process.pid").write_text(str(process.pid), encoding="utf-8")
         except Exception:  # noqa: BLE001, S110 baseline
@@ -215,9 +217,12 @@ class PipelineExecutor:
                 handle.task.cancel()
 
             try:
-                (Path(".pipeline_runs") / run_id / "process.pid").unlink(
-                    missing_ok=True
+                safe_run_id = validate_safe_identifier(run_id, "run_id")
+                pid_file = (
+                    resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
+                    / "process.pid"
                 )
+                pid_file.unlink(missing_ok=True)
             except Exception:  # noqa: BLE001, S110 baseline
                 pass
 

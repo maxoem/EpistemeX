@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +19,8 @@ from episteme_studio.runtime.registry import RunRegistry
 
 if TYPE_CHECKING:
     from episteme_studio.settings import StudioSettings
+
+logger = logging.getLogger(__name__)
 
 
 class RunService:
@@ -487,7 +490,9 @@ class RunService:
 
         has_pk = bool(active_pk.strip())
         has_sk = bool(active_sk.strip())
-        trace_hex = hashlib.md5(run_id.encode("utf-8")).hexdigest() if run_id else ""
+        trace_hex = (
+            hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:32] if run_id else ""
+        )
 
         if not (has_pk and has_sk):
             return {
@@ -507,6 +512,7 @@ class RunService:
                 public_key=active_pk, secret_key=active_sk, host=active_host
             )
         except Exception as exc:  # noqa: BLE001 baseline
+            logger.warning("Failed to initialize Langfuse client: %s", exc)
             return {
                 "configured": True,
                 "connected": False,
@@ -514,7 +520,7 @@ class RunService:
                 "trace_id": trace_hex,
                 "count": 0,
                 "observations": [],
-                "message": f"Failed to initialize Langfuse client: {exc}",
+                "message": "Failed to initialize Langfuse client. Check server logs and Langfuse configuration.",
             }
 
         candidate_ids = [run_id]
@@ -540,10 +546,11 @@ class RunService:
             except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
-        # 2. Query by trace_id (md5 hashes and raw candidate IDs)
+        # 2. Query by trace_id (sha256 trace hashes and raw candidate IDs)
         if not raw_records:
             trace_candidates = [
-                hashlib.md5(cid.encode("utf-8")).hexdigest() for cid in candidate_ids
+                hashlib.sha256(cid.encode("utf-8")).hexdigest()[:32]
+                for cid in candidate_ids
             ] + candidate_ids
             for tid in trace_candidates:
                 if raw_records:

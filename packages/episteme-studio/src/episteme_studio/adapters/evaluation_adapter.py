@@ -110,6 +110,7 @@ from episteme_studio.domain.evaluation import (
     StressTestRequest,
     StructuralistSpecialization,
 )
+from episteme_studio.security import resolve_safe_child, validate_safe_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -2504,8 +2505,9 @@ class EvaluationAdapter:
         report.key_metrics["pfs"] = new_pfs
 
         # Persist updated report
-        rep_json = self.reports_dir / f"report_{evaluation_id}.json"
-        rep_md = self.reports_dir / f"report_{evaluation_id}.md"
+        safe_eval_id = validate_safe_identifier(evaluation_id, "evaluation_id")
+        rep_json = resolve_safe_child(self.reports_dir, f"report_{safe_eval_id}.json")
+        rep_md = resolve_safe_child(self.reports_dir, f"report_{safe_eval_id}.md")
         with open(rep_json, "w", encoding="utf-8") as f:
             json.dump(report.model_dump(mode="json"), f, indent=2)
 
@@ -3088,7 +3090,10 @@ class EvaluationAdapter:
         )
 
         # Persist report
-        out_path = self.reports_dir / f"robustness_{request.run_id}.json"
+        safe_run_id = validate_safe_identifier(request.run_id, "run_id")
+        out_path = resolve_safe_child(
+            self.reports_dir, f"robustness_{safe_run_id}.json"
+        )
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(result.model_dump(mode="json"), f, indent=2)
 
@@ -3561,7 +3566,8 @@ class EvaluationAdapter:
             Registered benchmark descriptor.
         """
         self.eval_data_dir.mkdir(parents=True, exist_ok=True)
-        gold_file = self.eval_data_dir / f"{request.id}.jsonld"
+        safe_id = validate_safe_identifier(request.id, "benchmark_id")
+        gold_file = resolve_safe_child(self.eval_data_dir, f"{safe_id}.jsonld")
 
         # Determine if string is raw JSON or path
         content = request.gold_standard_jsonld
@@ -3573,7 +3579,9 @@ class EvaluationAdapter:
 
         queries_file: Path | None = None
         if request.queries_yaml:
-            queries_file = self.eval_data_dir / f"{request.id}_queries.yaml"
+            queries_file = resolve_safe_child(
+                self.eval_data_dir, f"{safe_id}_queries.yaml"
+            )
             q_content = request.queries_yaml
             if Path(q_content).is_file():
                 q_content = Path(q_content).read_text(encoding="utf-8")
