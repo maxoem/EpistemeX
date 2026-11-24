@@ -47,7 +47,7 @@ from episteme_pipeline.protocols.extractors import (
     GlobalRelationExtractor,
 )
 from episteme_pipeline.protocols.fingerprint import Fingerprintable
-from episteme_pipeline.protocols.graph_store import GraphReader
+from episteme_pipeline.protocols.graph_store import GraphReader, PhaseCheckpointStore
 from episteme_pipeline.protocols.modality import ModalStrengthResolver
 from episteme_pipeline.runs.fingerprints import fingerprint_method
 from episteme_pipeline.schema.default_schema import SchemaConfig

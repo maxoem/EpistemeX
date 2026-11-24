@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import Depends, Request
 
@@ -11,6 +11,10 @@ from episteme_studio.runtime.executor import PipelineExecutor
 from episteme_studio.runtime.registry import RunRegistry
 from episteme_studio.services.run_service import RunService
 from episteme_studio.settings import StudioSettings
+
+if TYPE_CHECKING:
+    from episteme_studio.adapters.neo4j_reader import Neo4jReader
+    from episteme_studio.services.graph_service import GraphService
 
 
 def get_settings(request: Request) -> StudioSettings:

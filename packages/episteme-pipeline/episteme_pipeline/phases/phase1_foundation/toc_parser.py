@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
 from episteme_pipeline.protocols.fingerprint import Fingerprintable

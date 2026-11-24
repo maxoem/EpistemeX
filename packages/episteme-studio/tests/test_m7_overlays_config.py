@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from episteme_studio.adapters.metrics_adapter import (
     compute_component,

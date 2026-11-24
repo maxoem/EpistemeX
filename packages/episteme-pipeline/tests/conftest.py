@@ -5,6 +5,7 @@ Shared test fixtures and in-memory graph store for pipeline unit tests.
 from __future__ import annotations
 
 import os
+from typing import Any
 
 # Ensure Hugging Face, Transformers, and Tiktoken operate in offline mode during unit tests
 os.environ.setdefault("HF_HUB_OFFLINE", "1")

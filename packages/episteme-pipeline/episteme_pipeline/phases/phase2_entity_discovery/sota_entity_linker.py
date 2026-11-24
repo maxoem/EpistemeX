@@ -14,7 +14,7 @@ Known limitations, tracked separately and deliberately *not* addressed here:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import torch
 

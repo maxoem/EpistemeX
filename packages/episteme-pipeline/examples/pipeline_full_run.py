@@ -75,6 +75,7 @@ from episteme_pipeline.graph import (
 from episteme_pipeline.phases.phase3_global_relations.rerankers import (
     SentenceTransformerCrossEncoderReranker,
 )
+from episteme_pipeline.runs.observability import run_observability_context
 from episteme_pipeline.runs.reporting import format_text
 from llama_index.embeddings.litellm import LiteLLMEmbedding
 from llama_index.llms.litellm import LiteLLM

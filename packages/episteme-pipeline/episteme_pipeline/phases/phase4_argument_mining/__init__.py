@@ -42,6 +42,7 @@ from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.config import Phase4Config
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
+    PhaseItemRecord,
     TheoryAtom,
     TheoryRelation,
 )

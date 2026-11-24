@@ -24,6 +24,7 @@ from episteme_studio.adapters.neo4j_reader import Neo4jReader
 from episteme_studio.domain.errors import ProblemDetail
 from episteme_studio.domain.graph import GraphView
 from episteme_studio.domain.metrics import (
+    AffectedEdgeDetail,
     AffectedNodeDetail,
     MetricDescriptor,
     MetricResult,
