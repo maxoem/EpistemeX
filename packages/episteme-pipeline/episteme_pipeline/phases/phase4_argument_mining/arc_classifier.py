@@ -16,52 +16,41 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections import defaultdict
 from typing import Any
 
-import numpy as np
-
-from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom, TheoryRelation
+from episteme_pipeline.contracts.domain import (
+    TheoryAtom,
+    TheoryRelation,
+)
 from episteme_pipeline.llm import ensure_structured_llm
 from episteme_pipeline.phases.phase4_argument_mining.models import ARCRelationOutput
+from episteme_pipeline.phases.phase4_argument_mining.pairing import (
+    build_cross_chunk_candidate_pairs,
+    build_cross_chunk_embedding_pairs,
+)
+from episteme_pipeline.prompts.default_prompts import ARC_DIRECT_PROMPT
+from episteme_pipeline.prompts.input_formatters import format_component_type_with_scope
 from episteme_pipeline.protocols.argument_mining import ARCClassifier
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
-from episteme_pipeline.protocols.graph_store import GraphReader
+from episteme_pipeline.protocols.graph_store import (
+    GraphReader,
+    NoOpCheckpointStore,
+    PhaseCheckpointStore,
+)
+from episteme_pipeline.runtime.batch_executor import (
+    CheckpointedBatchExecutor,
+    PydanticOutputCodec,
+)
 from episteme_pipeline.schema.default_schema import SchemaConfig
 from episteme_pipeline.utils import format_envelope
 
 logger = logging.getLogger(__name__)
 
 
-def _component_as_entity(component: TheoryAtom) -> L2Entity:
-    """
-    Convert a TheoryAtom into an L2Entity for structural retrieval.
-
-    This acts as a thin adapter so that `TheoryAtom` can be passed to
-    `get_structural_neighborhood`.
-
-    Parameters
-    ----------
-    component : TheoryAtom
-        The theory atom component to convert.
-
-    Returns
-    -------
-    L2Entity
-        The resulting L2 entity.
-    """
-    return L2Entity(
-        id=component.id,
-        label="TheoryAtom",
-        name=component.text[:80],
-        description=component.component_type,
-    )
-
-
 class TAGARCClassifier(ARCClassifier):
     """
     Default ARCClassifier using TAG subgraph retrieval and LLM stance decoding.
-    
+
     This class orchestrates the classification of cross-chunk argument relations
     by pairing theory atoms and predicting relations via an LLM.
     """
@@ -76,6 +65,14 @@ class TAGARCClassifier(ARCClassifier):
         subgraph_depth: int = 2,
         max_candidates_per_component: int = 10,
         use_priority_rank: bool = False,
+        use_csls: bool = True,
+        csls_k_nearest: int = 10,
+        use_adaptive_k: bool = True,
+        adaptive_k_gamma: float = 2.0,
+        adaptive_k_min: int = 2,
+        z_score_threshold: float | None = None,
+        batch_size: int = 20,
+        checkpoint_store: PhaseCheckpointStore | None = None,
     ) -> None:
         """
         Initialize the TAGARCClassifier.
@@ -98,6 +95,18 @@ class TAGARCClassifier(ARCClassifier):
             The max number of cross-chunk partners per component, by default 10.
         use_priority_rank : bool, optional
             If True, falls back to epistemic rank instead of embeddings, by default False.
+        use_csls : bool, default True
+            Whether to use Cross-Domain Similarity Local Scaling.
+        csls_k_nearest : int, default 10
+            Neighborhood size for CSLS local scaling.
+        use_adaptive_k : bool, default True
+            Whether to dynamically scale candidate degree K_eff with sqrt(N).
+        adaptive_k_gamma : float, default 2.0
+            Scaling multiplier for dynamic K_eff.
+        adaptive_k_min : int, default 2
+            Minimum candidate degree cap.
+        z_score_threshold : float | None, optional
+            Optional standardized z-score cutoff for candidate pairs.
         """
         self.llm = ensure_structured_llm(llm)
         self.embedding_model = embedding_model
@@ -107,6 +116,16 @@ class TAGARCClassifier(ARCClassifier):
         self.subgraph_depth = subgraph_depth
         self.max_candidates_per_component = max_candidates_per_component
         self.use_priority_rank = use_priority_rank
+        self.use_csls = use_csls
+        self.csls_k_nearest = csls_k_nearest
+        self.use_adaptive_k = use_adaptive_k
+        self.adaptive_k_gamma = adaptive_k_gamma
+        self.adaptive_k_min = adaptive_k_min
+        self.z_score_threshold = z_score_threshold
+        self.batch_size = max(1, batch_size)
+        self.checkpoint_store: PhaseCheckpointStore = (
+            checkpoint_store if checkpoint_store is not None else NoOpCheckpointStore()
+        )
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic TAG ARC classifier configuration.
@@ -117,15 +136,28 @@ class TAGARCClassifier(ARCClassifier):
             Dictionary containing thresholds, subgraph depth, strategy,
             and fingerprints of LLM and embedding model.
         """
+        from enum import Enum
+
         from episteme_pipeline.runs.fingerprints import fingerprint_method
 
+        strategy_str = (
+            self.strategy.value
+            if isinstance(self.strategy, Enum)
+            else str(self.strategy)
+        )
         return {
             "class": self.__class__.__name__,
-            "strategy": str(getattr(self.strategy, "value", self.strategy)),
+            "strategy": strategy_str,
             "confidence_threshold": self.confidence_threshold,
             "subgraph_depth": self.subgraph_depth,
             "max_candidates_per_component": self.max_candidates_per_component,
             "use_priority_rank": self.use_priority_rank,
+            "use_csls": self.use_csls,
+            "csls_k_nearest": self.csls_k_nearest,
+            "use_adaptive_k": self.use_adaptive_k,
+            "adaptive_k_gamma": self.adaptive_k_gamma,
+            "adaptive_k_min": self.adaptive_k_min,
+            "z_score_threshold": self.z_score_threshold,
             "llm": fingerprint_method(self.llm),
             "embedding_model": fingerprint_method(self.embedding_model),
         }
@@ -135,11 +167,11 @@ class TAGARCClassifier(ARCClassifier):
         local_components: list[TheoryAtom],
         local_relations: list[TheoryRelation],
         graph_store: GraphReader,
-        global_extractor: GlobalRelationExtractor,
-        schema: SchemaConfig,
+        global_extractor: GlobalRelationExtractor | None = None,
+        schema: SchemaConfig | None = None,
+        lineage_fingerprint: str | None = None,
     ) -> list[TheoryRelation]:
-        """
-        Predict cross-chunk argument relations using the LLM.
+        """Predict cross-chunk argument relations using the LLM.
 
         Parameters
         ----------
@@ -149,41 +181,109 @@ class TAGARCClassifier(ARCClassifier):
             The relations already extracted locally.
         graph_store : GraphReader
             The graph database reader to fetch subgraph neighborhoods.
-        global_extractor : GlobalRelationExtractor
-            The extractor used to fetch the structural context.
-        schema : SchemaConfig
-            The pipeline schema definitions.
+        global_extractor : GlobalRelationExtractor | None, optional
+            Optional global extractor for structural neighborhoods.
+        schema : SchemaConfig | None, optional
+            The pipeline schema definitions. If None, defaults to SchemaConfig().
+        lineage_fingerprint : str | None, optional
+            Optional lineage fingerprint scoping the checkpoint phase tag.
 
         Returns
         -------
         list[TheoryRelation]
             A list of successfully predicted global relations.
         """
-        candidate_pairs = await self._cross_chunk_pairs(local_components, schema)
+        effective_schema = schema or SchemaConfig()
+        candidate_pairs = await self._cross_chunk_pairs(
+            local_components, effective_schema
+        )
         logger.info(
             "ARC: %d components → %d cross-chunk candidate pairs",
             len(local_components),
             len(candidate_pairs),
         )
 
-        tasks = [
-            self._classify_pair(a, b, graph_store, global_extractor, schema)
-            for a, b in candidate_pairs
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        return await self.classify_pairs(
+            candidate_pairs,
+            graph_store,
+            schema=effective_schema,
+            global_extractor=global_extractor,
+            lineage_fingerprint=lineage_fingerprint,
+        )
 
-        global_relations: list[TheoryRelation] = []
-        for (a, b), result in zip(candidate_pairs, results):
-            if isinstance(result, Exception):
-                logger.error("ARC pair (%s, %s) failed: %s", a.id, b.id, result)
-                continue
-            if result is not None:
-                global_relations.append(result)
+    async def classify_pairs(
+        self,
+        pairs: list[tuple[TheoryAtom, TheoryAtom]],
+        graph_store: GraphReader,
+        schema: SchemaConfig | None = None,
+        global_extractor: GlobalRelationExtractor | None = None,
+        lineage_fingerprint: str | None = None,
+    ) -> list[TheoryRelation]:
+        """Predict cross-chunk argument relations for specific candidate pairs using the LLM.
+
+        Parameters
+        ----------
+        pairs : list of tuple of (TheoryAtom, TheoryAtom)
+            Candidate argument component pairs to evaluate.
+        graph_store : GraphReader
+            The graph database reader to fetch subgraph neighborhoods.
+        schema : SchemaConfig or None, optional
+            The pipeline schema definitions. If None, defaults to SchemaConfig().
+        global_extractor : GlobalRelationExtractor or None, optional
+            Optional extractor for structural neighborhoods.
+        lineage_fingerprint : str or None, optional
+            Optional lineage fingerprint scoping the checkpoint phase tag.
+
+        Returns
+        -------
+        list of TheoryRelation
+            A list of successfully predicted global relations for evaluated pairs.
+        """
+        if not pairs:
+            return []
+        effective_schema = schema or SchemaConfig()
+        effective_checkpoint_store: PhaseCheckpointStore = (
+            graph_store
+            if isinstance(self.checkpoint_store, NoOpCheckpointStore)
+            and isinstance(graph_store, PhaseCheckpointStore)
+            else self.checkpoint_store
+        )
+        effective_phase_tag = (
+            f"phase4_arc:{lineage_fingerprint}" if lineage_fingerprint else "phase4_arc"
+        )
+
+        async def _eval_pair(
+            pair: tuple[TheoryAtom, TheoryAtom],
+        ) -> TheoryRelation | None:
+            return await self._classify_pair(
+                component_a=pair[0],
+                component_b=pair[1],
+                graph_store=graph_store,
+                schema=effective_schema,
+                global_extractor=global_extractor,
+            )
+
+        executor = CheckpointedBatchExecutor[
+            tuple[TheoryAtom, TheoryAtom], TheoryRelation
+        ](
+            checkpoint_store=effective_checkpoint_store,
+            phase_tag=effective_phase_tag,
+            batch_size=self.batch_size,
+            item_key_fn=lambda pair: (
+                f"arc::{min(pair[0].id, pair[1].id)}::{max(pair[0].id, pair[1].id)}"
+            ),
+            process_item_fn=_eval_pair,
+            output_codec=PydanticOutputCodec(TheoryRelation),
+            guard_systematic_failure=True,
+        )
+        res = await executor.execute(pairs)
 
         logger.info(
-            "ARC: extracted %d global argument relations", len(global_relations)
+            "ARC: extracted %d global argument relations for %d evaluated pairs",
+            len(res.outputs),
+            len(pairs),
         )
-        return global_relations
+        return list(res.outputs)
 
     async def _cross_chunk_pairs(
         self, components: list[TheoryAtom], schema: SchemaConfig
@@ -231,36 +331,11 @@ class TAGARCClassifier(ARCClassifier):
         list[tuple[TheoryAtom, TheoryAtom]]
             The selected pairs of components.
         """
-        partner_count: dict[str, int] = defaultdict(int)
-        seen: set[tuple[str, str]] = set()
-        pairs: list[tuple[TheoryAtom, TheoryAtom]] = []
-
-        priority_rank = {
-            ctype: idx for idx, ctype in enumerate(schema.component_types)
-        }
-        sorted_components = sorted(
+        return build_cross_chunk_candidate_pairs(
             components,
-            key=lambda c: priority_rank.get(c.component_type, 99),
+            schema,
+            max_candidates_per_component=self.max_candidates_per_component,
         )
-
-        for i, a in enumerate(sorted_components):
-            for b in sorted_components[i + 1 :]:
-                if a.source_chunk_id == b.source_chunk_id:
-                    continue
-                key = (min(a.id, b.id), max(a.id, b.id))
-                if key in seen:
-                    continue
-                if (
-                    partner_count[a.id] >= self.max_candidates_per_component
-                    or partner_count[b.id] >= self.max_candidates_per_component
-                ):
-                    continue
-                seen.add(key)
-                pairs.append((a, b))
-                partner_count[a.id] += 1
-                partner_count[b.id] += 1
-                
-        return pairs
 
     async def _get_pairs_by_embedding(
         self, components: list[TheoryAtom]
@@ -278,62 +353,27 @@ class TAGARCClassifier(ARCClassifier):
         list[tuple[TheoryAtom, TheoryAtom]]
             The selected pairs of components, ordered by highest similarity.
         """
-        partner_count: dict[str, int] = defaultdict(int)
-        seen: set[tuple[str, str]] = set()
-        pairs: list[tuple[TheoryAtom, TheoryAtom]] = []
-
-        texts = [c.text for c in components]
-        embeddings = await self.embedding_model.aget_text_embedding_batch(texts)
-        
-        emb_matrix = np.array(embeddings)
-        norms = np.linalg.norm(emb_matrix, axis=1, keepdims=True)
-        norms[norms == 0] = 1e-10
-        emb_matrix = emb_matrix / norms
-        
-        sim_matrix = np.dot(emb_matrix, emb_matrix.T)
-        
-        num_comp = len(components)
-        i_indices, j_indices = np.triu_indices(num_comp, k=1)
-        similarities = sim_matrix[i_indices, j_indices]
-        
-        sorted_idx = np.argsort(similarities)[::-1]
-        
-        for idx in sorted_idx:
-            i = i_indices[idx]
-            j = j_indices[idx]
-            a = components[i]
-            b = components[j]
-            
-            if a.source_chunk_id == b.source_chunk_id:
-                continue
-                
-            key = (min(a.id, b.id), max(a.id, b.id))
-            if key in seen:
-                continue
-                
-            if (
-                partner_count[a.id] >= self.max_candidates_per_component
-                or partner_count[b.id] >= self.max_candidates_per_component
-            ):
-                continue
-                
-            seen.add(key)
-            pairs.append((a, b))
-            partner_count[a.id] += 1
-            partner_count[b.id] += 1
-
-        return pairs
+        return await build_cross_chunk_embedding_pairs(
+            components,
+            self.embedding_model,
+            max_candidates_per_component=self.max_candidates_per_component,
+            use_csls=self.use_csls,
+            csls_k_nearest=self.csls_k_nearest,
+            use_adaptive_k=self.use_adaptive_k,
+            adaptive_k_gamma=self.adaptive_k_gamma,
+            adaptive_k_min=self.adaptive_k_min,
+            z_score_threshold=self.z_score_threshold,
+        )
 
     async def _classify_pair(
         self,
         component_a: TheoryAtom,
         component_b: TheoryAtom,
         graph_store: GraphReader,
-        global_extractor: GlobalRelationExtractor,
-        schema: SchemaConfig,
+        schema: SchemaConfig | None = None,
+        global_extractor: GlobalRelationExtractor | None = None,
     ) -> TheoryRelation | None:
-        """
-        Predict the argument relation between two specific theory atoms.
+        """Predict the argument relation between two specific theory atoms.
 
         This fetches the structural neighborhood for both components, merges them
         into an envelope, and prompts the LLM to decide the stance.
@@ -346,57 +386,45 @@ class TAGARCClassifier(ARCClassifier):
             The second theory atom.
         graph_store : GraphReader
             The graph storage client.
-        global_extractor : GlobalRelationExtractor
-            The extractor to retrieve structural contexts.
-        schema : SchemaConfig
-            The schema to validate relation types against.
+        schema : SchemaConfig or None, optional
+            The schema to validate relation types against. Defaults to ``SchemaConfig()``.
+        global_extractor : GlobalRelationExtractor or None, optional
+            Deprecated / optional global extractor. Subgraphs are fetched directly
+            from graph_store.
 
         Returns
         -------
-        TheoryRelation | None
+        TheoryRelation or None
             The predicted relation, or None if no valid relation was found.
         """
-        entity_a = _component_as_entity(component_a)
-        entity_b = _component_as_entity(component_b)
-
+        del global_extractor
+        effective_schema = schema or SchemaConfig()
+        prompt_bundle = self.prompts if self.prompts is not None else ARC_DIRECT_PROMPT
         env_a, env_b = await asyncio.gather(
-            global_extractor.get_structural_neighborhood(
-                entity_a, graph_store, self.subgraph_depth
-            ),
-            global_extractor.get_structural_neighborhood(
-                entity_b, graph_store, self.subgraph_depth
-            ),
+            graph_store.get_neighborhood(component_a.id, depth=self.subgraph_depth),
+            graph_store.get_neighborhood(component_b.id, depth=self.subgraph_depth),
         )
 
         envelope_text = format_envelope(env_a, env_b, include_description=False)
 
-        try:
-            raw: ARCRelationOutput = await self.llm.predict_structured(
-                ARCRelationOutput,
-                self.prompts,
-                strategy=self.strategy,
-                component_a_id=component_a.id,
-                component_a_type=component_a.component_type,
-                component_a_text=component_a.text,
-                component_b_id=component_b.id,
-                component_b_type=component_b.component_type,
-                component_b_text=component_b.text,
-                subgraph_envelope=envelope_text,
-                argument_relation_types=schema.argument_relation_types_str(),
-            )
-        except Exception as exc:
-            logger.warning(
-                "ARC LLM call failed for (%s, %s): %s",
-                component_a.id,
-                component_b.id,
-                exc,
-            )
-            return None
+        raw: ARCRelationOutput = await self.llm.predict_structured(
+            ARCRelationOutput,
+            prompt_bundle,
+            strategy=self.strategy,
+            component_a_id=component_a.id,
+            component_a_type=format_component_type_with_scope(component_a),
+            component_a_text=component_a.text,
+            component_b_id=component_b.id,
+            component_b_type=format_component_type_with_scope(component_b),
+            component_b_text=component_b.text,
+            subgraph_envelope=envelope_text,
+            argument_relation_types=effective_schema.argument_relation_types_str(),
+        )
 
         if raw.relation_type is None:
             return None
 
-        if raw.relation_type not in schema.argument_relation_types:
+        if raw.relation_type not in effective_schema.argument_relation_types:
             logger.warning(
                 "ARC: discarded unknown relation type %r for pair (%s, %s)",
                 raw.relation_type,

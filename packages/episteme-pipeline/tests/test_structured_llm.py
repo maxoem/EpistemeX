@@ -25,7 +25,7 @@ class _CompletionResponse:
 
 def test_sanitize_structured_output_extracts_first_json_value() -> None:
     sanitized = sanitize_structured_output(
-        "assistant: ```json\n{\"value\": 7}\n```\nextra text"
+        'assistant: ```json\n{"value": 7}\n```\nextra text'
     )
 
     assert sanitized.value == {"value": 7}
@@ -35,7 +35,9 @@ def test_sanitize_structured_output_extracts_first_json_value() -> None:
 
 
 class _StrictSuccessLLM:
-    async def astructured_predict(self, output_cls, prompt, llm_kwargs=None, **prompt_args):
+    async def astructured_predict(
+        self, output_cls, prompt, llm_kwargs=None, **prompt_args
+    ):
         return output_cls(value=3)
 
     async def acomplete(self, prompt: str, **kwargs):
@@ -46,12 +48,14 @@ class _ExceptionRecoveryLLM:
     def __init__(self) -> None:
         self.complete_calls = 0
 
-    async def astructured_predict(self, output_cls, prompt, llm_kwargs=None, **prompt_args):
-        raise ValueError("assistant: {\"value\": 5}")
+    async def astructured_predict(
+        self, output_cls, prompt, llm_kwargs=None, **prompt_args
+    ):
+        raise ValueError('assistant: {"value": 5}')
 
     async def acomplete(self, prompt: str, **kwargs):
         self.complete_calls += 1
-        return _CompletionResponse("{\"value\": 0}")
+        return _CompletionResponse('{"value": 0}')
 
 
 class _CompletionFallbackLLM:
@@ -59,7 +63,9 @@ class _CompletionFallbackLLM:
         self.complete_calls = 0
         self.completion_text = completion_text
 
-    async def astructured_predict(self, output_cls, prompt, llm_kwargs=None, **prompt_args):
+    async def astructured_predict(
+        self, output_cls, prompt, llm_kwargs=None, **prompt_args
+    ):
         raise RuntimeError("strict path failed")
 
     async def acomplete(self, prompt: str, **kwargs):
@@ -92,7 +98,7 @@ async def test_structured_llm_adapter_recovers_from_exception_payload() -> None:
 
 
 async def test_structured_llm_adapter_falls_back_to_raw_completion() -> None:
-    llm = _CompletionFallbackLLM("```json\n{\"value\": 9}\n```")
+    llm = _CompletionFallbackLLM('```json\n{"value": 9}\n```')
     adapter = LlamaIndexStructuredLLMAdapter(llm)
 
     output = await adapter.predict_structured(
@@ -106,9 +112,7 @@ async def test_structured_llm_adapter_falls_back_to_raw_completion() -> None:
 
 
 async def test_structured_llm_adapter_raises_on_unrecoverable_output() -> None:
-    adapter = LlamaIndexStructuredLLMAdapter(
-        _CompletionFallbackLLM("not json at all")
-    )
+    adapter = LlamaIndexStructuredLLMAdapter(_CompletionFallbackLLM("not json at all"))
 
     try:
         await adapter.predict_structured(
@@ -122,7 +126,9 @@ async def test_structured_llm_adapter_raises_on_unrecoverable_output() -> None:
 
 
 class _WrappedNERLLM:
-    async def astructured_predict(self, output_cls, prompt, llm_kwargs=None, **prompt_args):
+    async def astructured_predict(
+        self, output_cls, prompt, llm_kwargs=None, **prompt_args
+    ):
         raise ValueError(
             """assistant: {
   "entities": [
@@ -156,7 +162,6 @@ async def test_llm_ner_extractor_recovers_wrapped_assistant_json() -> None:
             relation_types=["TEIL_VON", "BEHANDELT_THEMA"],
         ),
     )
-
 
     assert len(entities) == 5
     assert {entity.label for entity in entities} == {"AXIOM", "KONZEPT"}

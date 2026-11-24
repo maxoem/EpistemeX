@@ -29,7 +29,9 @@ def test_gds_projection_management(mock_client: MagicMock) -> None:
     # Mock exists check
     mock_client.execute_query.side_effect = [
         [{"exists": True}],  # has_projection
-        [{"graphName": "test_proj", "nodeCount": 10, "relationshipCount": 15}],  # project_graph
+        [
+            {"graphName": "test_proj", "nodeCount": 10, "relationshipCount": 15}
+        ],  # project_graph
         [{"exists": True}],  # temporary_projection check
         [{"graphName": "temp_proj", "nodeCount": 5, "relationshipCount": 5}],  # project
         [{"graphName": "temp_proj"}],  # drop
@@ -68,7 +70,9 @@ def test_gds_pagerank_stream_and_write(mock_client: MagicMock) -> None:
     assert res["claim_B"] == 0.85
 
     # WRITE mode
-    write_res = engine.page_rank("test_proj", mode=AlgorithmExecutionMode.WRITE, write_property="pr")
+    write_res = engine.page_rank(
+        "test_proj", mode=AlgorithmExecutionMode.WRITE, write_property="pr"
+    )
     assert write_res["nodePropertiesWritten"] == 2
 
 

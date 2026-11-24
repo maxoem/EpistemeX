@@ -27,15 +27,24 @@ class CypherRequest(BaseModel):
         Maximum row budget cap override.
     """
 
-    query: str = Field(..., description="Cypher query string to execute in read-only transaction mode.")
-    params: dict[str, Any] = Field(default_factory=dict, description="Key-value query parameter map.")
-    limit: int | None = Field(default=None, description="Maximum returned rows before raising result-too-large.")
+    query: str = Field(
+        ..., description="Cypher query string to execute in read-only transaction mode."
+    )
+    params: dict[str, Any] = Field(
+        default_factory=dict, description="Key-value query parameter map."
+    )
+    limit: int | None = Field(
+        default=None,
+        description="Maximum returned rows before raising result-too-large.",
+    )
 
 
 @router.get("/view", response_model=GraphView)
 async def get_graph_view(
     limit: int = Query(500, description="Node budget limit."),
-    layer: int | None = Query(None, description="Optional filter for Layer 1, 2, or 3."),
+    layer: int | None = Query(
+        None, description="Optional filter for Layer 1, 2, or 3."
+    ),
     service: GraphService = Depends(get_graph_service),
 ) -> GraphView:
     """Retrieve full or layer-filtered GraphView projected from Neo4j.
@@ -128,7 +137,9 @@ class Neo4jConnectPayload(BaseModel):
 
     url: str = Field(..., description="Bolt URI for Neo4j database.")
     user: str | None = Field(default=None, description="Neo4j authentication user.")
-    password: str | None = Field(default=None, description="Neo4j authentication password.")
+    password: str | None = Field(
+        default=None, description="Neo4j authentication password."
+    )
     database: str | None = Field(default=None, description="Target Neo4j database.")
 
 
@@ -242,7 +253,7 @@ async def connect_neo4j(
     if old_driver is not None:
         try:
             await old_driver.close()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
     request.app.state.neo4j_driver = driver
@@ -282,7 +293,7 @@ async def disconnect_neo4j(request: Request) -> dict[str, Any]:
     if old_driver is not None:
         try:
             await old_driver.close()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
     request.app.state.neo4j_driver = None

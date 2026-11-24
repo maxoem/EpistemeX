@@ -59,6 +59,7 @@ def test_structured_prompt_bundle_fields():
 
 def test_ner_extractor_accepts_structured_prompt_bundle():
     """Verify LLMNERExtractor initializes with StructuredPromptBundle."""
+
     class DummyLLM:
         def predict_structured(self, *args, **kwargs):
             pass

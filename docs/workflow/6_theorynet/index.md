@@ -30,87 +30,93 @@ and [Theory-Nets, Posets & Topologies](../../concepts/theory_nets_and_topologies
 
 ### 1. TheoryNet Projector (`TheoryNetProjector`)
 
-- Projects the cumulative `Phase4ArtifactsView` into a formal `TheoryNet` domain contract.
-- Maps component classifications to formal theoretical partitions:
-    - **Partition A (Theoretical Core)**: `THEORETICAL_HYPOTHESIS`, `AXIOM`, `LAW`.
-    - **Partition B (Empirical Grounding)**: `EMPIRICAL_STATEMENT`, `OBSERVATION_UNIT`.
+- Projects the cumulative `Phase4ArtifactsView` (`Phase5ArtifactsView`, consuming `canonical_theory_atoms` and `canonical_theory_relations`) into a formal `TheoryNet` domain contract.
+- Maps component classifications to formal theoretical partitions via `SchemaConfig.component_partitions`:
+    - **Partition A (Theoretical Core)**: `TheoreticalHypothesis`, `CoreExpansion`.
+    - **Partition B (Empirical Grounding)**: `ObservationUnit`, `EmpiricalStatement`.
 
 ### 2. Ontological Decoupling & Continuous Quadratic Energy Semantics
 
-- **Node Propositional Modality**: Initializes `atom.modal_strength` ($M(\phi) \in [0, 1]$) and `atom.base_score` representing authorial propositional certainty asserted in text (Axiom/Law: 1.0, Observation: 0.85, Analytic Hypothesis: 0.75, Synthetic Hypothesis: 0.60, Conjecture: 0.35).
-- **Inferential Warrant Force**: Assigns `relation.inferential_force` ($I_{j \to i} \in [0, 1]$) representing conditional inferential validity under Toulmin argument schemes (Deductive entailment: 1.0, Inductive support: 0.75, Methodological undercut: 0.60, Defeasible analogy: 0.40).
-- **Perception Calibration**: Retains extraction confidence `stance_probability` ($P$) and calibration confidence `model_confidence` ($C$).
+- **Node Propositional Modality**: Resolves `atom.modal_prior` ($\tau_0(a) \equiv M(\phi_a) \in [0, 1]$), `resolver_type`, and `syntax_bounds` via `HybridModalResolver` (`StructuralistModalResolver` + optional `DecisionEngineModalResolver`, honoring `EpistemicCurationLedger.get_modality_override()`).
+- **Inferential Warrant Force**: Assigns `relation.inferential_warrant` ($I_{j \to i} \in [0, 1]$) representing conditional inferential validity under Toulmin argument schemes (`derive_relation_warrant`: Deductive entailment/refutation `1.00`, Inductive support/attack `0.75`, Methodological undercut `0.60`, Analogy/exemplification `0.40`).
+- **Perception Calibration**: Retains extraction stance probability `perception_stance_prob` ($P$) and empirical/calibrated confidence `perception_empirical_acc` / `calibrated_confidence` ($C$).
 - **Bivariate Admissibility Gating**:
-  - **Mode 1 (`hard`)**: Normative standard. Pruned at database level in Neo4j Cypher projection (`WHERE r.stance_probability >= $tau_p AND r.model_confidence >= $tau_c`).
+  - **Mode 1 (`hard`)**: Normative standard. Marks `is_admissible = (p >= tau_p) and (c >= tau_c)` (and filters at Neo4j Cypher projection via `WHERE r.perception_stance_prob >= $tau_p AND r.calibrated_confidence >= $tau_c`).
   - **Mode 2 (`soft`)**: Candidate passthrough with continuous sigmoidal relaxation $\mathcal{F}_{\text{soft}}(r) = \sigma(20(P - \tau_P)) \cdot \sigma(20(C - \tau_C))$ for smooth numerical optimization.
+- **Intensional Scoping & Conjunctive T-Norms**: Isolates `suppositional` (*Reductio*) and off-perspective `attributed` nodes (`isolate_suppositional`, `isolate_attributed`, `perspective` per [ADR 0023](../../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)) and evaluates multi-premise hyperedges under `"product"` or `"godel"` `conjunctive_t_norm`.
 - **Topology-Adaptive Quadratic Energy Semantics**:
-  - **Acyclic Graphs (DAGs)**: Evaluated in closed form in $O(|V| + |E|)$ along a single topological pass (Proposition 5).
-  - **Cyclic Graphs**: Evaluated via continuous adaptive ODE integration (`solve_ivp` RK45 / Radau fallback) with terminal root-finding stationary termination ($\|\dot{\mathbf{s}}\|_\infty < \text{atol}$).
-- **Keynes-Gärdenfors Orthogonal Telemetry**: Tracks gross epistemic weight $E_{\text{total}}$ and controversy volatility $\mathcal{V}$.
+  - **Acyclic Graphs (DAGs)**: Evaluated in closed form in $O(|V| + |E|)$ along a single topological pass from tenability-modulated prior $\tilde{\tau}_0(a) = \tau_0(a) \cdot TS_{\text{local}}(a)$ to `equilibrium_strength` ($\tau^*(a)$).
+  - **Cyclic Graphs**: Evaluated via continuous adaptive ODE integration (`solve_ivp` RK45 / Radau fallback) when `use_continuous=True` and `semantics_model="quadratic"`.
+- **Keynes-Gärdenfors Controversy Telemetry**: Records per-atom `controversy_volatility` ($\mathcal{V}(a)$).
 
-### 3. Empirical Content & $Z_1$ Connectivity Verification
+### 3. Empirical Content ($Z_1$) Verification & Epistemic Deficit Detection
 
-- Builds an adjacency projection over the theoretical partition ($A$-atoms).
-- Identifies $Z_1$-connected components: theoretical atoms directly connected to empirical $B$-atoms or reachable
-  through connected $A$-hypotheses.
-- Computes empirical content coverage and verifies that theoretical constructs maintain grounding in the empirical
-  manifold.
+- Builds an adjacency projection over Partition `A` (`TheoreticalHypothesis`, `CoreExpansion`) and Partition `B` (`ObservationUnit`, `EmpiricalStatement`) to compute $Z_1$ BFS reachability from empirical observations.
+- When configured with `deficit_detector: EpistemicDeficitDetector` (`TheoryNetDeficitDetector`), inspects $Z_1$-ungrounded `A`-atoms, zero-support central nodes (via `epistemetrics.page_rank(..., prefer_neo4j=False)` and `betweenness_centrality`), equilibrium strengths $\tau^*$, and controversy volatility $\mathcal{V}$ to emit typed `EpistemicDeficitArtifact` signals (`ENTHYMEME_GAP`, `POLYSEMY_COLLISION`, `UNGROUNDED_AXIOM`) for closed-loop refinement ([ADR 0024](../../adr/0024-closed-loop-hermeneutic-refinement.md)).
 
 ## Workflow
 
 ```mermaid
 flowchart TD
-    A["Phase4ArtifactsView<br>TheoryAtoms & TheoryRelations"] --> B["TheoryNetProjector.project<br>Formal Graph Formalization"]
-    B --> C["Derive Modal Base Scores<br>atom.modal_strength = M(phi)"]
-    C --> D["Derive Toulmin Warrants<br>rel.inferential_force = I_(j->i)"]
-    D --> E["Bivariate Admissibility Gating<br>Mode 1: Hard Pruning / Mode 2: Soft Margin"]
-    E --> F["Topology-Adaptive QBAF Semantics<br>DAG: Closed-Form O(|V|+|E|) / Cyclic: Adaptive solve_ivp"]
-    F --> G["Compute Keynes-Gärdenfors Telemetry<br>E_total (Volume) & V (Controversy)"]
-    G --> H["Bipartite Partitioning & Z_1 Grounding<br>Theoretical A-Atoms to Empirical B-Atoms"]
-    H --> I["Graph Commit & Cypher Projection<br>Persist TheoryNet in Neo4j"]
+    A["Phase4ArtifactsView<br>(Canonical TheoryAtoms & TheoryRelations)"] --> B["HybridModalResolver & Ledger Overrides<br>atom.modal_prior = M(phi)"]
+    B --> C["TheoryNetProjector.project()<br>Toulmin Warrants I_(j->i) & Bivariate Gating"]
+    C --> D["Topology-Adaptive D-QBAF Solver<br>(Intensional Isolation, Product/Godel t-Norm)<br>Updates tau* (equilibrium_strength) & V"]
+    D --> E["Bipartite Partitioning & Z_1 Grounding BFS<br>Theoretical A-Atoms to Empirical B-Atoms"]
+    E --> F["Optional TheoryNetDeficitDetector<br>Emits EpistemicDeficitArtifact (ENTHYMEME_GAP, POLYSEMY_COLLISION, UNGROUNDED_AXIOM)"]
+    E --> G["ArtifactCollection & Optional Graph Upsert<br>TheoryAtomArtifact, TheoryRelationArtifact, EpistemicDeficitArtifact"]
+    F --> G
 ```
 
 ## Implementation Details
 
 - [`pipeline_explanation.md`](pipeline_explanation.md) - Detailed step-by-step implementation walkthrough
-- **Runner**: `Phase6Runner` in `pipeline/phases/phase6_theorynet/runner.py`
-- **Projector**: `TheoryNetProjector` in `pipeline/projection/theorynet_projector.py`
-- **Configuration**: `Phase6Config` in `pipeline/config.py`
+- **Runner**: `Phase6Runner` in `episteme_pipeline/phases/phase6_theorynet/runner.py`
+- **Projector**: `TheoryNetProjector` in `episteme_pipeline/projection/theorynet_projector.py`
+- **Deficit Detector**: `TheoryNetDeficitDetector` in `episteme_pipeline/refinement/detector.py`
+- **Configuration**: `Phase6Config` in `episteme_pipeline/config.py`
 - **Solvers**: `WeightedQuadraticEnergySolver` and `QBAFGradualSemanticsSolver` in `epistemetrics.epistemic.qbaf`
 
 ## Configuration
 
-Configuration is managed via `Phase6Config` in `pipeline/config.py`:
+Configuration is managed via `Phase6Config` in `episteme_pipeline/config.py`:
 
 | Parameter | Type | Default | Description |
 |:----------|:-----|:--------|:------------|
 | `enabled` | `bool` | `True` | Whether to execute the formal TheoryNet projection pass. |
-| `admissibility_mode` | `Literal["hard", "soft"]` | `"hard"` | Bivariate gating mode: Mode 1 hard database pruning vs. Mode 2 continuous sigmoidal relaxation. |
-| `tau_p` | `float` | `0.0` | Minimum stance probability threshold for relation admissibility. |
-| `tau_c` | `float` | `0.0` | Minimum model confidence threshold for relation admissibility. |
-| `admissibility_threshold` | `float` | `0.0` | Legacy empirical accuracy threshold ($\tau_{\text{admissibility}}$). |
-| `prune_inadmissible` | `bool` | `False` | When True, relations failing admissibility are pruned; when False, tenability is set to False. |
+| `admissibility_mode` | `Literal["hard", "soft"]` | `"hard"` | Bivariate gating mode: hard threshold pruning vs. continuous sigmoidal relaxation. |
+| `tau_p` | `float` | `0.0` | Minimum perception stance probability threshold for relation admissibility. |
+| `tau_c` | `float` | `0.0` | Minimum perception calibration confidence threshold for relation admissibility. |
+| `admissibility_threshold` | `float` | `0.0` | Legacy empirical accuracy threshold ($\tau_{\text{admissibility}}$) fallback when `tau_p`/`tau_c` are `0.0`. |
+| `prune_inadmissible` | `bool` | `False` | When `True`, relations failing admissibility are dropped; when `False`, `is_admissible=False` and `active_weight=0.0`. |
 | `semantics_model` | `str` | `"quadratic"` | Gradual semantics model (`"quadratic"`, `"euler"`, `"categorizer"`, `"linear"`). |
+| `use_continuous` | `bool` | `True` | Use continuous `WeightedQuadraticEnergySolver` (DAG closed-form / adaptive ODE) for `"quadratic"`. |
 | `iterations` | `int` | `20` | Maximum iterative convergence steps for gradual semantics. |
 | `tolerance` | `float` | `1e-4` | Max error tolerance for equilibrium convergence. |
+| `perspective` | `str \| None` | `None` | Optional epistemic perspective filter (`"author"`, `"<Agent>"`, `"all"`, or `None`). |
+| `isolate_suppositional` | `bool` | `True` | Isolate `suppositional` (*Reductio*) premises from inflating asserted claims. |
+| `isolate_attributed` | `bool` | `True` | Isolate `attributed` opponent summaries from non-matching perspectives. |
+| `conjunctive_t_norm` | `Literal["product", "godel"]` | `"product"` | Conjunctive t-norm operator for multi-premise hyperedges (`premise_ids`). |
+| `modal_resolver` | `ModalResolverConfig` | `ModalResolverConfig()` | Configuration for `HybridModalResolver`. |
 
 ## Phase Contract
 
 **Inputs:**
 
-- `Phase4ArtifactsView`: Cumulative collection of `TheoryAtom` and `TheoryRelation` artifacts across the pipeline run.
+- `Phase4ArtifactsView` (`Phase5ArtifactsView`): Cumulative canonicalized `TheoryAtom` and `TheoryRelation` artifacts across the pipeline run.
 
 **Outputs:**
 
-- `ArtifactCollection` containing formal TheoryNet artifacts.
-- Neo4j graph updates:
-    - Updated `ArgumentComponent` / `TheoryAtom` nodes with `.modal_strength`, `.base_score`, and `.plausibility`.
-    - Updated `TheoryRelation` edges with `.inferential_force`, `.stance_probability`, `.model_confidence`, `.active_weight`, `.is_admissible`, `.effective_weight`, `.weight_support`, and `.weight_attack`.
+- `ArtifactCollection` containing:
+    - `TheoryAtomArtifact` envelopes with resolved `modal_prior`, `equilibrium_strength` ($\tau^*$), and `controversy_volatility` ($\mathcal{V}$).
+    - `TheoryRelationArtifact` envelopes with `inferential_warrant`, `is_admissible`, `active_weight`, `effective_weight`, `weight_support`, and `weight_attack`.
+    - Optional `EpistemicDeficitArtifact` envelopes when `deficit_detector` is configured (`refinement_pass` stamped on provenance).
+- Optional direct `ProjectionGraph` updates (when `graph_store` is injected):
+    - `upsert_argument_components()` and `upsert_theory_relations()`.
 
 **Invariants:**
 
-- Plausibility, modal strength, stance probability, and effective edge weights are bounded in $[0.0, 1.0]$.
-- Every $A$-atom's empirical grounding is verifiable via $Z_1$ paths.
+- Equilibrium plausibility $\tau^*$, modal prior $\tau_0$, inferential warrant, and active edge weights are bounded in $[0.0, 1.0]$.
+- Every $A$-atom's empirical grounding is verifiable via $Z_1$ paths; ungrounded central hubs or conflicting bridges trigger `EpistemicDeficitArtifact` emissions when deficit detection is active.
 
 ## Related
 

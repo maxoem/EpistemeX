@@ -76,7 +76,7 @@ def load_structuralist_benchmark(
 
     graph_nodes = data.get("@graph")
     if not isinstance(graph_nodes, list):
-        raise ValueError(f"STNB benchmark file {path} missing '@graph' list.")
+        raise ValueError(f"STNB benchmark file {path} missing '@graph' list.")  # noqa: TRY004 baseline
 
     gold_graph = nx.DiGraph()
     chunks: list[L1Chunk] = []
@@ -105,15 +105,9 @@ def load_structuralist_benchmark(
 
         if anchor and isinstance(anchor, dict):
             chunk_id = (
-                anchor.get("chunkId")
-                or anchor.get("chunk_id")
-                or f"chunk_{node_id}"
+                anchor.get("chunkId") or anchor.get("chunk_id") or f"chunk_{node_id}"
             )
-            quote = (
-                anchor.get("verbatimQuote")
-                or anchor.get("quote")
-                or ""
-            )
+            quote = anchor.get("verbatimQuote") or anchor.get("quote") or ""
             source_doc_id = (
                 anchor.get("sourceDocId")
                 or anchor.get("source_doc_id")
@@ -273,10 +267,15 @@ def structuralist_digraph_to_theory_graph(
         node_type = em.NodeType.from_str(
             attrs.get("node_type", attrs.get("type", attrs.get("label", "concept")))
         )
-        epistemic_status = em.EpistemicStatus.HARD_CORE if node_type in {
-            em.NodeType.ACTUAL_MODEL,
-            em.NodeType.AXIOM,
-        } else em.EpistemicStatus.NEUTRAL
+        epistemic_status = (
+            em.EpistemicStatus.HARD_CORE
+            if node_type
+            in {
+                em.NodeType.ACTUAL_MODEL,
+                em.NodeType.AXIOM,
+            }
+            else em.EpistemicStatus.NEUTRAL
+        )
 
         tg.add_node(
             node_id=node_id,
@@ -285,7 +284,11 @@ def structuralist_digraph_to_theory_graph(
             epistemic_status=epistemic_status,
             confidence=float(attrs.get("confidence", 1.0)),
             description=attrs.get("description", attrs.get("label")),
-            provenance=[attrs["anchor"]["chunkId"]] if attrs.get("anchor") and isinstance(attrs["anchor"], dict) and "chunkId" in attrs["anchor"] else [],
+            provenance=[attrs["anchor"]["chunkId"]]
+            if attrs.get("anchor")
+            and isinstance(attrs["anchor"], dict)
+            and "chunkId" in attrs["anchor"]
+            else [],
             attributes=attrs,
         )
 

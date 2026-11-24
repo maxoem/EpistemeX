@@ -12,7 +12,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from episteme_pipeline.contracts.domain import SubGraph
+    from episteme_pipeline.contracts.domain import SubGraph, TheoryAtom
 
 
 class InputFormatStrategy(str, Enum):
@@ -26,19 +26,14 @@ class BaseSubgraphFormatter(ABC):
 
     @abstractmethod
     def format(
-        self, 
-        env_a: SubGraph, 
-        env_b: SubGraph, 
-        include_description: bool = True
+        self, env_a: SubGraph, env_b: SubGraph, include_description: bool = True
     ) -> str:
         """Render two subgraph envelopes as a formatted string."""
         ...
 
     @staticmethod
     def _extract_payload(
-        env_a: SubGraph, 
-        env_b: SubGraph, 
-        include_description: bool = True
+        env_a: SubGraph, env_b: SubGraph, include_description: bool = True
     ) -> dict[str, Any]:
         """Extract merged node and edge dictionaries from subgraph envelopes."""
         all_nodes = {n.id: n for n in env_a.nodes + env_b.nodes}
@@ -53,11 +48,13 @@ class BaseSubgraphFormatter(ABC):
 
         edges_data = []
         for t in all_triples:
-            edges_data.append({
-                "subject": t.subject_id,
-                "predicate": t.predicate,
-                "object": t.object_id,
-            })
+            edges_data.append(
+                {
+                    "subject": t.subject_id,
+                    "predicate": t.predicate,
+                    "object": t.object_id,
+                }
+            )
 
         payload: dict[str, Any] = {"nodes": nodes_data, "edges": edges_data}
         if not payload["nodes"] and not payload["edges"]:
@@ -69,10 +66,7 @@ class JsonSubgraphFormatter(BaseSubgraphFormatter):
     """JSON serialization strategy (Recommended for LLM understanding)."""
 
     def format(
-        self, 
-        env_a: SubGraph, 
-        env_b: SubGraph, 
-        include_description: bool = True
+        self, env_a: SubGraph, env_b: SubGraph, include_description: bool = True
     ) -> str:
         payload = self._extract_payload(env_a, env_b, include_description)
         return json.dumps(payload, indent=2, ensure_ascii=False)
@@ -82,14 +76,12 @@ class YamlSubgraphFormatter(BaseSubgraphFormatter):
     """YAML serialization strategy."""
 
     def format(
-        self, 
-        env_a: SubGraph, 
-        env_b: SubGraph, 
-        include_description: bool = True
+        self, env_a: SubGraph, env_b: SubGraph, include_description: bool = True
     ) -> str:
         payload = self._extract_payload(env_a, env_b, include_description)
         try:
             import yaml
+
             return yaml.dump(payload, default_flow_style=False, allow_unicode=True)
         except ImportError:
             return json.dumps(payload, indent=2, ensure_ascii=False)
@@ -99,10 +91,7 @@ class TextSubgraphFormatter(BaseSubgraphFormatter):
     """Plain-text string rendering strategy."""
 
     def format(
-        self, 
-        env_a: SubGraph, 
-        env_b: SubGraph, 
-        include_description: bool = True
+        self, env_a: SubGraph, env_b: SubGraph, include_description: bool = True
     ) -> str:
         lines: list[str] = []
 
@@ -130,11 +119,70 @@ _FORMATTERS: dict[InputFormatStrategy, BaseSubgraphFormatter] = {
 
 
 def format_subgraph_envelope(
-    env_a: SubGraph, 
-    env_b: SubGraph, 
-    strategy: InputFormatStrategy = InputFormatStrategy.JSON, 
-    include_description: bool = True
+    env_a: SubGraph,
+    env_b: SubGraph,
+    strategy: InputFormatStrategy = InputFormatStrategy.JSON,
+    include_description: bool = True,
 ) -> str:
     """Render subgraph envelopes using the configured strategy."""
     formatter = _FORMATTERS.get(strategy, _FORMATTERS[InputFormatStrategy.JSON])
     return formatter.format(env_a, env_b, include_description=include_description)
+
+
+def _scope_metadata_parts(atom: TheoryAtom) -> list[str]:
+    """Collect non-default intensional scope descriptors for a ``TheoryAtom``."""
+    parts: list[str] = []
+    if atom.intensional_mode != "asserted":
+        parts.append(f"mode={atom.intensional_mode}")
+    if atom.attributed_to:
+        parts.append(f"attributed_to={atom.attributed_to}")
+    return parts
+
+
+def format_component_type_with_scope(atom: TheoryAtom) -> str:
+    """Format an argument component type annotated with non-default intensional scope.
+
+    Parameters
+    ----------
+    atom : TheoryAtom
+        Argument component whose ``component_type``, ``intensional_mode``, and
+        optional ``attributed_to`` should be surfaced to an ARC prompt.
+
+    Returns
+    -------
+    str
+        ``atom.component_type`` unchanged for plain unattributed asserted claims,
+        or ``"<type> [mode=..., attributed_to=...]"`` when scoped/attributed.
+    """
+    parts = _scope_metadata_parts(atom)
+    if not parts:
+        return atom.component_type
+    return f"{atom.component_type} [{', '.join(parts)}]"
+
+
+def format_arc_decision_pair_state(
+    source_atom: TheoryAtom, target_atom: TheoryAtom
+) -> str:
+    """Format a source/target ``TheoryAtom`` pair as a System 1 ARC decision state.
+
+    Parameters
+    ----------
+    source_atom : TheoryAtom
+        Candidate source (premise/attacker/supporter) component.
+    target_atom : TheoryAtom
+        Candidate target component.
+
+    Returns
+    -------
+    str
+        Two-line prompt state rendering source and target text, annotated with
+        ``[mode=..., attributed_to=...]`` whenever non-default scoping applies.
+    """
+    lines: list[str] = []
+    for role, atom in (("Source", source_atom), ("Target", target_atom)):
+        parts = _scope_metadata_parts(atom)
+        if not parts:
+            lines.append(f"{role}: {atom.text}")
+        else:
+            lines.append(f"{role} [{', '.join(parts)}]: {atom.text}")
+    return "\n".join(lines)

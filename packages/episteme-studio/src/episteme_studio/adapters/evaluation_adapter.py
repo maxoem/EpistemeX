@@ -110,8 +110,10 @@ from episteme_studio.domain.evaluation import (
     StressTestRequest,
     StructuralistSpecialization,
 )
+from episteme_studio.security import resolve_safe_child, validate_safe_identifier
 
 logger = logging.getLogger(__name__)
+
 
 def _resolve_pipeline_root() -> Path:
     """Resolve the episteme-pipeline package root directory resiliently."""
@@ -128,7 +130,9 @@ def _resolve_pipeline_root() -> Path:
 
 _PIPELINE_ROOT = _resolve_pipeline_root()
 _DEFAULT_EVAL_DATA_DIR = _PIPELINE_ROOT / "episteme_pipeline" / "evaluation" / "data"
-_DEFAULT_EVAL_MANIFESTS_DIR = _PIPELINE_ROOT / "episteme_pipeline" / "evaluation" / "manifests"
+_DEFAULT_EVAL_MANIFESTS_DIR = (
+    _PIPELINE_ROOT / "episteme_pipeline" / "evaluation" / "manifests"
+)
 
 
 class EvaluationAdapter:
@@ -152,8 +156,12 @@ class EvaluationAdapter:
         include_fixtures: bool = False,
     ) -> None:
         self.reports_dir = Path(reports_dir)
-        self.eval_data_dir = Path(eval_data_dir) if eval_data_dir else _DEFAULT_EVAL_DATA_DIR
-        self.manifests_dir = Path(manifests_dir) if manifests_dir else _DEFAULT_EVAL_MANIFESTS_DIR
+        self.eval_data_dir = (
+            Path(eval_data_dir) if eval_data_dir else _DEFAULT_EVAL_DATA_DIR
+        )
+        self.manifests_dir = (
+            Path(manifests_dir) if manifests_dir else _DEFAULT_EVAL_MANIFESTS_DIR
+        )
         self.include_fixtures = include_fixtures
 
     def discover_benchmarks(self) -> list[BenchmarkDescriptor]:
@@ -164,6 +172,7 @@ class EvaluationAdapter:
         list of BenchmarkDescriptor
             Available benchmark descriptors.
         """
+
         def _find_candidate_file(name: str) -> Path | None:
             cands = [
                 self.eval_data_dir / name,
@@ -176,11 +185,17 @@ class EvaluationAdapter:
                     return c
             return None
 
-        cpm_gold = _find_candidate_file("stnb_cpm_pilot.jsonld") or (self.eval_data_dir / "stnb_cpm_pilot.jsonld")
+        cpm_gold = _find_candidate_file("stnb_cpm_pilot.jsonld") or (
+            self.eval_data_dir / "stnb_cpm_pilot.jsonld"
+        )
         cpm_queries = _find_candidate_file("stnb_cpm_queries.yaml")
-        fc_gold = _find_candidate_file("stnb_festinger_carlsmith_1959.jsonld") or (self.eval_data_dir / "stnb_festinger_carlsmith_1959.jsonld")
+        fc_gold = _find_candidate_file("stnb_festinger_carlsmith_1959.jsonld") or (
+            self.eval_data_dir / "stnb_festinger_carlsmith_1959.jsonld"
+        )
         fc_queries = _find_candidate_file("stnb_festinger_carlsmith_queries.yaml")
-        cd_gold = _find_candidate_file("stnb_cognitive_dissonance.jsonld") or (self.eval_data_dir / "stnb_cognitive_dissonance.jsonld")
+        cd_gold = _find_candidate_file("stnb_cognitive_dissonance.jsonld") or (
+            self.eval_data_dir / "stnb_cognitive_dissonance.jsonld"
+        )
 
         benchmarks: list[BenchmarkDescriptor] = [
             BenchmarkDescriptor(
@@ -193,7 +208,9 @@ class EvaluationAdapter:
                 ),
                 task_type="structuralist",
                 gold_standard_path=str(fc_gold),
-                queries_path=str(fc_queries) if fc_queries and fc_queries.is_file() else None,
+                queries_path=str(fc_queries)
+                if fc_queries and fc_queries.is_file()
+                else None,
                 available=fc_gold.is_file(),
             ),
             BenchmarkDescriptor(
@@ -218,7 +235,9 @@ class EvaluationAdapter:
                 ),
                 task_type="structuralist",
                 gold_standard_path=str(cpm_gold),
-                queries_path=str(cpm_queries) if cpm_queries and cpm_queries.is_file() else None,
+                queries_path=str(cpm_queries)
+                if cpm_queries and cpm_queries.is_file()
+                else None,
                 available=cpm_gold.is_file(),
             ),
             BenchmarkDescriptor(
@@ -230,13 +249,17 @@ class EvaluationAdapter:
                 ),
                 task_type="retrieval",
                 gold_standard_path=str(cpm_gold),
-                queries_path=str(cpm_queries) if cpm_queries and cpm_queries.is_file() else None,
+                queries_path=str(cpm_queries)
+                if cpm_queries and cpm_queries.is_file()
+                else None,
                 available=bool(cpm_queries and cpm_queries.is_file()),
             ),
         ]
 
         # Also check for SciERC extraction benchmark
-        scierc_cand = _find_candidate_file("scierc_test.json") or _find_candidate_file("test.json")
+        scierc_cand = _find_candidate_file("scierc_test.json") or _find_candidate_file(
+            "test.json"
+        )
         if scierc_cand and scierc_cand.is_file():
             benchmarks.append(
                 BenchmarkDescriptor(
@@ -254,7 +277,11 @@ class EvaluationAdapter:
 
         # Scan for any additional .jsonld or .json gold files across data dirs
         registered_ids = {b.id for b in benchmarks}
-        search_dirs = [self.eval_data_dir, _resolve_pipeline_root().parent.parent / "datasets", Path.cwd() / "datasets"]
+        search_dirs = [
+            self.eval_data_dir,
+            _resolve_pipeline_root().parent.parent / "datasets",
+            Path.cwd() / "datasets",
+        ]
         for s_dir in search_dirs:
             if s_dir.is_dir():
                 for p in sorted(s_dir.glob("*.jsonld")):
@@ -273,7 +300,9 @@ class EvaluationAdapter:
 
         return [self._enrich_benchmark_descriptor(b) for b in benchmarks]
 
-    def _enrich_benchmark_descriptor(self, b: BenchmarkDescriptor) -> BenchmarkDescriptor:
+    def _enrich_benchmark_descriptor(
+        self, b: BenchmarkDescriptor
+    ) -> BenchmarkDescriptor:
         """Enrich benchmark descriptor with splits, domain metadata, and dynamic specialization payloads.
 
         Parameters
@@ -333,7 +362,9 @@ class EvaluationAdapter:
             b.domain = "Classical Mechanics"
             b.level = 2
             b.license = "Open Data"
-            b.citation = "Episteme Principia Downstream Competency Retrieval Query Suite (2026)."
+            b.citation = (
+                "Episteme Principia Downstream Competency Retrieval Query Suite (2026)."
+            )
             b.version = "v1.0-gold"
         elif "scierc" in bid:
             b.domain = "Computer Science / NLP"
@@ -349,9 +380,17 @@ class EvaluationAdapter:
             try:
                 with open(gold_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    data = json.loads(content) if gold_path.suffix in [".jsonld", ".json"] else yaml.safe_load(content)
+                    data = (
+                        json.loads(content)
+                        if gold_path.suffix in [".jsonld", ".json"]
+                        else yaml.safe_load(content)
+                    )
 
-                graph_items = data.get("@graph", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+                graph_items = (
+                    data.get("@graph", [])
+                    if isinstance(data, dict)
+                    else (data if isinstance(data, list) else [])
+                )
                 if "gold" in b.splits:
                     b.splits["gold"].item_count = len(graph_items)
 
@@ -374,18 +413,29 @@ class EvaluationAdapter:
                     prov = item.get("provenance") or {}
                     if prov.get("doc_id") and not bound_doc:
                         bound_doc = prov.get("doc_id")
-                    if prov.get("page") and (bound_pages is None or prov.get("page") > bound_pages):
+                    if prov.get("page") and (
+                        bound_pages is None or prov.get("page") > bound_pages
+                    ):
                         bound_pages = prov.get("page")
                     if prov.get("bbox"):
                         bbox_count += 1
 
                     if "source" in item and "target" in item:
                         total_relations += 1
-                        pred = item.get("predicate") or item.get("relation") or "specializes"
+                        pred = (
+                            item.get("predicate")
+                            or item.get("relation")
+                            or "specializes"
+                        )
                         dag.add_edge(item["source"], item["target"], predicate=pred)
                     else:
                         total_atoms += 1
-                        cls_name = str(item.get("class_name") or item.get("type") or item.get("@type") or "")
+                        cls_name = str(
+                            item.get("class_name")
+                            or item.get("type")
+                            or item.get("@type")
+                            or ""
+                        )
                         nodes_by_id[item_id] = {
                             "id": item_id,
                             "label": item.get("label") or item_id.split(":")[-1],
@@ -409,30 +459,42 @@ class EvaluationAdapter:
                             else:
                                 m_c += 1
 
-                is_dag = nx.is_directed_acyclic_graph(dag) if len(dag.edges) > 0 else True
-                roots = [n for n in dag.nodes if dag.in_degree(n) == 0] if len(dag.nodes) > 0 else list(nodes_by_id.keys())[:1]
+                is_dag = (
+                    nx.is_directed_acyclic_graph(dag) if len(dag.edges) > 0 else True
+                )
+                roots = (
+                    [n for n in dag.nodes if dag.in_degree(n) == 0]
+                    if len(dag.nodes) > 0
+                    else list(nodes_by_id.keys())[:1]
+                )
                 depth = 0
                 if is_dag and len(dag.nodes) > 0:
                     try:
                         depth = nx.dag_longest_path_length(dag)
-                    except Exception:
+                    except Exception:  # noqa: BLE001 baseline
                         depth = 1
 
                 poset_nodes: list[PosetPreviewNode] = []
                 poset_edges: list[PosetPreviewEdge] = []
                 for n_id, n_data in list(nodes_by_id.items())[:8]:
-                    poset_nodes.append(PosetPreviewNode(
-                        id=n_id,
-                        label=n_data["label"],
-                        class_name=n_data["class_name"] if n_data["class_name"] in ["Mp", "M", "Mpp", "C", "I"] else "M",
-                        level=0 if n_id in roots else 1,
-                    ))
+                    poset_nodes.append(
+                        PosetPreviewNode(
+                            id=n_id,
+                            label=n_data["label"],
+                            class_name=n_data["class_name"]
+                            if n_data["class_name"] in ["Mp", "M", "Mpp", "C", "I"]
+                            else "M",
+                            level=0 if n_id in roots else 1,
+                        )
+                    )
                 for u, v, d in list(dag.edges(data=True))[:10]:
-                    poset_edges.append(PosetPreviewEdge(
-                        source=u,
-                        target=v,
-                        predicate=d.get("predicate", "specializes"),
-                    ))
+                    poset_edges.append(
+                        PosetPreviewEdge(
+                            source=u,
+                            target=v,
+                            predicate=d.get("predicate", "specializes"),
+                        )
+                    )
 
                 b.structuralist_details = StructuralistSpecialization(
                     formal_framework="bourbaki",
@@ -448,24 +510,34 @@ class EvaluationAdapter:
                         root_elements=roots[:3],
                         specialization_depth=depth,
                     ),
-                    poset_preview=PosetPreviewGraph(nodes=poset_nodes, edges=poset_edges),
+                    poset_preview=PosetPreviewGraph(
+                        nodes=poset_nodes, edges=poset_edges
+                    ),
                     bound_document_id=bound_doc or "treatise_source.pdf",
                     bound_document_pages=bound_pages or 1,
                     annotated_bbox_count=bbox_count,
                 )
                 b.target_metrics = ["MCC", "AOR", "PFS", "GM-GBS"]
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 baseline
                 logger.warning(f"Failed to enrich structuralist benchmark {b.id}: {e}")
 
         if queries_path and queries_path.is_file():
             try:
                 with open(queries_path, "r", encoding="utf-8") as f:
                     q_data = yaml.safe_load(f) or []
-                queries = q_data if isinstance(q_data, list) else q_data.get("queries", [])
+                queries = (
+                    q_data if isinstance(q_data, list) else q_data.get("queries", [])
+                )
                 if "queries" in b.splits:
                     b.splits["queries"].item_count = len(queries)
 
-                cats = sorted({q.get("category", "General") for q in queries if isinstance(q, dict)})
+                cats = sorted(
+                    {
+                        q.get("category", "General")
+                        for q in queries
+                        if isinstance(q, dict)
+                    }
+                )
                 b.retrieval_details = RetrievalSpecialization(
                     query_count=len(queries),
                     query_categories=cats,
@@ -477,18 +549,31 @@ class EvaluationAdapter:
                             "category": q.get("category", "General"),
                             "target_nodes": q.get("target_nodes", []),
                         }
-                        for idx, q in enumerate(queries[:5]) if isinstance(q, dict)
+                        for idx, q in enumerate(queries[:5])
+                        if isinstance(q, dict)
                     ],
                 )
                 if b.task_type == "retrieval":
                     b.target_metrics = ["MRR", "Hits@1", "Hits@10", "nDCG@10"]
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 baseline
                 logger.warning(f"Failed to enrich retrieval queries for {b.id}: {e}")
 
         if b.task_type == "extraction":
             b.extraction_details = ExtractionSpecialization(
-                entity_types=["Task", "Method", "Metric", "Material", "OtherScientificTerm"],
-                relation_types=["USED-FOR", "FEATURE-OF", "EVALUATE-FOR", "COMPARE", "CONJUNCTION"],
+                entity_types=[
+                    "Task",
+                    "Method",
+                    "Metric",
+                    "Material",
+                    "OtherScientificTerm",
+                ],
+                relation_types=[
+                    "USED-FOR",
+                    "FEATURE-OF",
+                    "EVALUATE-FOR",
+                    "COMPARE",
+                    "CONJUNCTION",
+                ],
                 document_count=500,
                 sentence_count=3200,
             )
@@ -496,7 +581,9 @@ class EvaluationAdapter:
 
         return b
 
-    def get_benchmark_preview(self, benchmark_id: str, limit: int = 50) -> BenchmarkPreviewResponse:
+    def get_benchmark_preview(
+        self, benchmark_id: str, limit: int = 50
+    ) -> BenchmarkPreviewResponse:
         """Fetch tabular preview records for a benchmark in Hugging Face style.
 
         Parameters
@@ -519,7 +606,9 @@ class EvaluationAdapter:
         records: list[BenchmarkPreviewRecord] = []
         fmt = "jsonld"
 
-        gold_path = Path(target.gold_standard_path) if target.gold_standard_path else None
+        gold_path = (
+            Path(target.gold_standard_path) if target.gold_standard_path else None
+        )
         queries_path = Path(target.queries_path) if target.queries_path else None
 
         if target.task_type == "retrieval" and queries_path and queries_path.is_file():
@@ -527,25 +616,35 @@ class EvaluationAdapter:
             try:
                 with open(queries_path, "r", encoding="utf-8") as f:
                     q_data = yaml.safe_load(f) or []
-                queries = q_data if isinstance(q_data, list) else q_data.get("queries", [])
+                queries = (
+                    q_data if isinstance(q_data, list) else q_data.get("queries", [])
+                )
                 for idx, q in enumerate(queries[:limit]):
                     if isinstance(q, dict):
-                        records.append(BenchmarkPreviewRecord(
-                            record_id=str(q.get("id", f"q_{idx}")),
-                            type="query",
-                            class_or_category=str(q.get("category", "retrieval")),
-                            label_or_text=str(q.get("text", q.get("query", ""))),
-                            source_doc=str(q.get("source_doc") or ""),
-                            extra={"target_nodes": q.get("target_nodes", [])},
-                        ))
+                        records.append(
+                            BenchmarkPreviewRecord(
+                                record_id=str(q.get("id", f"q_{idx}")),
+                                type="query",
+                                class_or_category=str(q.get("category", "retrieval")),
+                                label_or_text=str(q.get("text", q.get("query", ""))),
+                                source_doc=str(q.get("source_doc") or ""),
+                                extra={"target_nodes": q.get("target_nodes", [])},
+                            )
+                        )
                 return BenchmarkPreviewResponse(
                     benchmark_id=benchmark_id,
                     total_records=len(queries),
-                    columns=["record_id", "type", "class_or_category", "label_or_text", "extra"],
+                    columns=[
+                        "record_id",
+                        "type",
+                        "class_or_category",
+                        "label_or_text",
+                        "extra",
+                    ],
                     records=records,
                     format=fmt,
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 baseline
                 logger.error(f"Error parsing queries for preview: {e}")
 
         if gold_path and gold_path.is_file():
@@ -553,35 +652,64 @@ class EvaluationAdapter:
             try:
                 with open(gold_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    data = json.loads(content) if fmt in ["jsonld", "json"] else yaml.safe_load(content)
+                    data = (
+                        json.loads(content)
+                        if fmt in ["jsonld", "json"]
+                        else yaml.safe_load(content)
+                    )
 
-                graph_items = data.get("@graph", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+                graph_items = (
+                    data.get("@graph", [])
+                    if isinstance(data, dict)
+                    else (data if isinstance(data, list) else [])
+                )
                 for idx, item in enumerate(graph_items[:limit]):
                     if isinstance(item, dict):
                         item_id = str(item.get("@id") or item.get("id") or f"rec_{idx}")
                         is_rel = "source" in item and "target" in item
                         rec_type = "relation" if is_rel else "atom"
-                        cls_name = str(item.get("predicate") if is_rel else (item.get("class_name") or item.get("type") or "Node"))
-                        label = str(item.get("label") or f"{item.get('source')} -> {item.get('target')}")
+                        cls_name = str(
+                            item.get("predicate")
+                            if is_rel
+                            else (item.get("class_name") or item.get("type") or "Node")
+                        )
+                        label = str(
+                            item.get("label")
+                            or f"{item.get('source')} -> {item.get('target')}"
+                        )
                         prov = item.get("provenance") or {}
-                        records.append(BenchmarkPreviewRecord(
-                            record_id=item_id,
-                            type=rec_type,
-                            class_or_category=cls_name,
-                            label_or_text=label,
-                            source_doc=prov.get("doc_id"),
-                            page=prov.get("page"),
-                            bbox=prov.get("bbox"),
-                            extra={k: v for k, v in item.items() if k not in ["@id", "id", "label", "provenance", "@type"]},
-                        ))
+                        records.append(
+                            BenchmarkPreviewRecord(
+                                record_id=item_id,
+                                type=rec_type,
+                                class_or_category=cls_name,
+                                label_or_text=label,
+                                source_doc=prov.get("doc_id"),
+                                page=prov.get("page"),
+                                bbox=prov.get("bbox"),
+                                extra={
+                                    k: v
+                                    for k, v in item.items()
+                                    if k
+                                    not in ["@id", "id", "label", "provenance", "@type"]
+                                },
+                            )
+                        )
                 return BenchmarkPreviewResponse(
                     benchmark_id=benchmark_id,
                     total_records=len(graph_items),
-                    columns=["record_id", "type", "class_or_category", "label_or_text", "source_doc", "page"],
+                    columns=[
+                        "record_id",
+                        "type",
+                        "class_or_category",
+                        "label_or_text",
+                        "source_doc",
+                        "page",
+                    ],
                     records=records,
                     format=fmt,
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 baseline
                 logger.error(f"Error parsing gold file for preview: {e}")
 
         return BenchmarkPreviewResponse(
@@ -613,12 +741,15 @@ class EvaluationAdapter:
                         "id": p.stem,
                         "path": str(p),
                         "run_id": data.get("run_id", p.stem),
-                        "dataset_type": data.get("corpus", {}).get("dataset_type", "unknown"),
-                        "strategy": data.get("strategy") or data.get("corpus", {}).get("strategy"),
+                        "dataset_type": data.get("corpus", {}).get(
+                            "dataset_type", "unknown"
+                        ),
+                        "strategy": data.get("strategy")
+                        or data.get("corpus", {}).get("strategy"),
                         "gold_path": data.get("corpus", {}).get("gold_standard_path"),
                     }
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 baseline
                 logger.debug("Failed to inspect manifest %s: %s", p, e)
 
         return manifests
@@ -631,10 +762,11 @@ class EvaluationAdapter:
         if self.include_fixtures:
             try:
                 from episteme_studio.fixtures import get_fixture_reports_dir
+
                 f_rep = get_fixture_reports_dir()
                 if f_rep.is_dir() and f_rep not in dirs:
                     dirs.append(f_rep)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
         return dirs
 
@@ -665,7 +797,11 @@ class EvaluationAdapter:
         seen_eval_ids: set[str] = set()
 
         for s_dir in search_dirs:
-            for p in sorted(s_dir.glob("report_*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
+            for p in sorted(
+                s_dir.glob("report_*.json"),
+                key=lambda f: f.stat().st_mtime,
+                reverse=True,
+            ):
                 try:
                     with open(p, "r", encoding="utf-8") as f:
                         data = json.load(f)
@@ -680,7 +816,7 @@ class EvaluationAdapter:
 
                     seen_eval_ids.add(summary.evaluation_id)
                     summaries.append(summary)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 baseline
                     logger.debug("Error reading report JSON %s: %s", p, e)
 
         return summaries
@@ -726,10 +862,12 @@ class EvaluationAdapter:
                     try:
                         with open(p, "r", encoding="utf-8") as f:
                             d = json.load(f)
-                        if d.get("evaluation_id") == evaluation_id or clean_id in d.get("run_ids", []):
+                        if d.get("evaluation_id") == evaluation_id or clean_id in d.get(
+                            "run_ids", []
+                        ):
                             target_file = p
                             break
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S112 baseline
                         continue
                 if target_file:
                     break
@@ -741,10 +879,14 @@ class EvaluationAdapter:
             with open(target_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             md_path = target_file.with_suffix(".md")
-            md_content = md_path.read_text(encoding="utf-8") if md_path.is_file() else ""
+            md_content = (
+                md_path.read_text(encoding="utf-8") if md_path.is_file() else ""
+            )
             return self._map_json_to_detail(data, target_file, md_content=md_content)
-        except Exception as e:
-            logger.error("Failed to parse evaluation report detail from %s: %s", target_file, e)
+        except Exception as e:  # noqa: BLE001 baseline
+            logger.error(
+                "Failed to parse evaluation report detail from %s: %s", target_file, e
+            )
             return None
 
     async def evaluate_run(
@@ -816,7 +958,9 @@ class EvaluationAdapter:
 
         target_gold_path = Path(target_gold)
         if not target_gold_path.is_file():
-            raise FileNotFoundError(f"Gold standard benchmark not found at: {target_gold}")
+            raise FileNotFoundError(
+                f"Gold standard benchmark not found at: {target_gold}"
+            )
 
         # 2. Extract run representation
         predicted_target = self._load_run_evaluation_target(run_id, reader)
@@ -843,14 +987,18 @@ class EvaluationAdapter:
         retrieval_detail: RetrievalEvaluationDetail | None = None
         if target_queries and Path(target_queries).is_file():
             try:
-                with open(target_queries, "r", encoding="utf-8") as qf:
+                with open(target_queries, "r", encoding="utf-8") as qf:  # noqa: ASYNC230 baseline
                     q_data = yaml.safe_load(qf) or {}
                 queries = q_data.get("queries", [])
                 if queries:
                     in_mem_store = InMemoryGraphStore()
                     in_mem_store.index_for_search(predicted_target, run_id=run_id)
-                    retrieval_eval = ExtrinsicRetrievalEvaluator(graph_reader=in_mem_store)
-                    ret_metrics = await retrieval_eval.evaluate_batch(queries, top_k=10, run_id=run_id)
+                    retrieval_eval = ExtrinsicRetrievalEvaluator(
+                        graph_reader=in_mem_store
+                    )
+                    ret_metrics = await retrieval_eval.evaluate_batch(
+                        queries, top_k=10, run_id=run_id
+                    )
 
                     retrieval_detail = RetrievalEvaluationDetail(
                         mrr=ret_metrics.get("MRR", 0.0),
@@ -860,7 +1008,7 @@ class EvaluationAdapter:
                         ndcg=ret_metrics.get("nDCG", 0.0),
                         num_queries=len(queries),
                     )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 baseline
                 logger.warning("Downstream retrieval evaluation skipped: %s", e)
 
         # 6. Optional Comparative Baseline Evaluation
@@ -868,7 +1016,11 @@ class EvaluationAdapter:
         baseline_summary_md = ""
         baseline_run_id = f"baseline_{baseline}_{run_id}" if baseline else ""
 
-        if baseline and baseline.strip().lower() in ("naive_kg", "text_rag", "zero_shot"):
+        if baseline and baseline.strip().lower() in (
+            "naive_kg",
+            "text_rag",
+            "zero_shot",
+        ):
             b_name = baseline.strip().lower()
             try:
                 pipeline_metrics: dict[str, float] = {}
@@ -912,7 +1064,9 @@ class EvaluationAdapter:
                         value_pipeline=c.value_b,
                         delta=c.delta,
                         favorable=(c.winner == "b") if c.winner else None,
-                        winner="Pipeline" if c.winner == "b" else ("Baseline" if c.winner == "a" else "Tie"),
+                        winner="Pipeline"
+                        if c.winner == "b"
+                        else ("Baseline" if c.winner == "a" else "Tie"),
                     )
                     for c in comparisons
                 ]
@@ -922,7 +1076,7 @@ class EvaluationAdapter:
                     name_a="Baseline",
                     name_b="Pipeline",
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 baseline
                 logger.warning("Baseline evaluation %s failed: %s", b_name, e)
 
         # 7. Synthesize complete detail domain model
@@ -1032,7 +1186,9 @@ class EvaluationAdapter:
                 value_pipeline=c.value_b,
                 delta=c.delta,
                 favorable=(c.winner == "b") if c.winner else None,
-                winner=run_id_b if c.winner == "b" else (run_id_a if c.winner == "a" else "Tie"),
+                winner=run_id_b
+                if c.winner == "b"
+                else (run_id_a if c.winner == "a" else "Tie"),
             )
             for c in comparisons
         ]
@@ -1049,7 +1205,9 @@ class EvaluationAdapter:
             run_id_a=run_id_a,
             run_id_b=run_id_b,
             axis=axis,
-            dataset_ref=rep_a.dataset_ref if rep_a else (rep_b.dataset_ref if rep_b else None),
+            dataset_ref=rep_a.dataset_ref
+            if rep_a
+            else (rep_b.dataset_ref if rep_b else None),
             deltas=deltas,
             summary_markdown=summary_md,
         )
@@ -1098,10 +1256,17 @@ class EvaluationAdapter:
                 text_anchor = None
                 if isinstance(anchor_data, dict):
                     text_anchor = TextAnchor(
-                        source_doc_id=anchor_data.get("sourceDocId") or anchor_data.get("source_doc_id"),
-                        char_start=anchor_data.get("charStart") if anchor_data.get("charStart") is not None else anchor_data.get("char_start"),
-                        char_end=anchor_data.get("charEnd") if anchor_data.get("charEnd") is not None else anchor_data.get("char_end"),
-                        verbatim_quote=anchor_data.get("verbatimQuote") or anchor_data.get("verbatim_quote") or anchor_data.get("quote"),
+                        source_doc_id=anchor_data.get("sourceDocId")
+                        or anchor_data.get("source_doc_id"),
+                        char_start=anchor_data.get("charStart")
+                        if anchor_data.get("charStart") is not None
+                        else anchor_data.get("char_start"),
+                        char_end=anchor_data.get("charEnd")
+                        if anchor_data.get("charEnd") is not None
+                        else anchor_data.get("char_end"),
+                        verbatim_quote=anchor_data.get("verbatimQuote")
+                        or anchor_data.get("verbatim_quote")
+                        or anchor_data.get("quote"),
                     )
                 atoms.append(
                     TheoryAtom(
@@ -1143,7 +1308,10 @@ class EvaluationAdapter:
                             predicate=pred,
                             object_id=tgt,
                             confidence=payload.get("confidence", 1.0),
-                            scope=payload.get("scope", "global" if kind == "global_relation" else "local"),
+                            scope=payload.get(
+                                "scope",
+                                "global" if kind == "global_relation" else "local",
+                            ),
                         )
                     )
 
@@ -1158,10 +1326,18 @@ class EvaluationAdapter:
         for n in graph_view.nodes:
             g.add_node(n.id, label=n.label, node_type=n.type, layer=n.layer.value)
         for e in graph_view.edges:
-            g.add_edge(e.source, e.target, label=e.type, polarity=e.polarity, confidence=e.confidence)
+            g.add_edge(
+                e.source,
+                e.target,
+                label=e.type,
+                polarity=e.polarity,
+                confidence=e.confidence,
+            )
         return g
 
-    def _persist_evaluation_report(self, detail: EvaluationReportDetail, full_markdown: str) -> None:
+    def _persist_evaluation_report(
+        self, detail: EvaluationReportDetail, full_markdown: str
+    ) -> None:
         """Persist generated report JSON and Markdown into reports_dir."""
         try:
             self.reports_dir.mkdir(parents=True, exist_ok=True)
@@ -1174,8 +1350,10 @@ class EvaluationAdapter:
 
             with open(md_file, "w", encoding="utf-8") as f:
                 f.write(full_markdown)
-        except Exception as e:
-            logger.error("Failed to persist evaluation report to %s: %s", self.reports_dir, e)
+        except Exception as e:  # noqa: BLE001 baseline
+            logger.error(
+                "Failed to persist evaluation report to %s: %s", self.reports_dir, e
+            )
 
     def _map_pipeline_report_to_detail(
         self,
@@ -1210,7 +1388,11 @@ class EvaluationAdapter:
                         level=str(r.evaluation_level),
                         phase_name=r.phase_name,
                         dataset_ref=r.dataset_ref,
-                        outcome=EvaluationOutcome(r.outcome.value if hasattr(r.outcome, "value") else str(r.outcome)),
+                        outcome=EvaluationOutcome(
+                            r.outcome.value
+                            if hasattr(r.outcome, "value")
+                            else str(r.outcome)
+                        ),
                         metrics=m_vals,
                         notes=getattr(r, "notes", {}),
                         evaluated_at=getattr(r, "evaluated_at", datetime.now(UTC)),
@@ -1222,14 +1404,20 @@ class EvaluationAdapter:
         all_res = [res for sublist in results_by_lvl.values() for res in sublist]
         overall_outcome = (
             EvaluationOutcome.PASS
-            if all(r.outcome in (EvaluationOutcome.PASS, EvaluationOutcome.WARNING) for r in all_res) and all_res
+            if all(
+                r.outcome in (EvaluationOutcome.PASS, EvaluationOutcome.WARNING)
+                for r in all_res
+            )
+            and all_res
             else EvaluationOutcome.FAIL
         )
 
         # Parse structuralist decomposition, poset, and retrieval from summary markdown
         decomp = self._parse_model_decomposition_table(summary_markdown)
         poset = self._parse_poset_detail(summary_markdown, key_metrics)
-        retrieval = retrieval_detail or self._parse_retrieval_detail(summary_markdown, key_metrics)
+        retrieval = retrieval_detail or self._parse_retrieval_detail(
+            summary_markdown, key_metrics
+        )
         polarity = self._parse_polarity_detail(key_metrics)
 
         deltas = comparative_deltas or []
@@ -1241,7 +1429,9 @@ class EvaluationAdapter:
                     value_pipeline=c.value_b,
                     delta=c.delta,
                     favorable=(c.winner == "b") if c.winner else None,
-                    winner=c.run_id_b if c.winner == "b" else (c.run_id_a if c.winner == "a" else "Tie"),
+                    winner=c.run_id_b
+                    if c.winner == "b"
+                    else (c.run_id_a if c.winner == "a" else "Tie"),
                 )
                 for c in report.pairwise_comparisons
             ]
@@ -1250,7 +1440,11 @@ class EvaluationAdapter:
             evaluation_id=report.evaluation_id,
             run_ids=report.run_ids,
             dataset_ref=report.dataset_ref,
-            dataset_type=str(report.dataset_type.value if hasattr(report.dataset_type, "value") else report.dataset_type or "gold"),
+            dataset_type=str(
+                report.dataset_type.value
+                if hasattr(report.dataset_type, "value")
+                else report.dataset_type or "gold"
+            ),
             outcome=overall_outcome,
             created_at=report.created_at,
             key_metrics=key_metrics,
@@ -1265,7 +1459,9 @@ class EvaluationAdapter:
             summary_markdown=summary_markdown,
         )
 
-    def _map_json_to_summary(self, data: dict[str, Any], path: Path) -> EvaluationReportSummary:
+    def _map_json_to_summary(
+        self, data: dict[str, Any], path: Path
+    ) -> EvaluationReportSummary:
         """Map raw JSON report file to lightweight EvaluationReportSummary."""
         evaluation_id = data.get("evaluation_id", path.stem.replace("report_", ""))
         run_ids = data.get("run_ids", [])
@@ -1287,27 +1483,39 @@ class EvaluationAdapter:
             if isinstance(res_list, list):
                 for r in res_list:
                     if isinstance(r, dict):
-                        all_outcomes.append(str(r.get("outcome", "inconclusive")).lower())
+                        all_outcomes.append(
+                            str(r.get("outcome", "inconclusive")).lower()
+                        )
                         for m in r.get("metrics", []):
                             if isinstance(m, dict) and "name" in m and "value" in m:
                                 key_metrics[m["name"]] = float(m["value"])
 
         overall = EvaluationOutcome.INCONCLUSIVE
         if all_outcomes:
-            overall = EvaluationOutcome.PASS if all(o in ("pass", "warning") for o in all_outcomes) else EvaluationOutcome.FAIL
+            overall = (
+                EvaluationOutcome.PASS
+                if all(o in ("pass", "warning") for o in all_outcomes)
+                else EvaluationOutcome.FAIL
+            )
         elif "outcome" in data:
             try:
                 overall = EvaluationOutcome(str(data["outcome"]).lower())
-            except Exception:
+            except Exception:  # noqa: BLE001 baseline
                 overall = EvaluationOutcome.INCONCLUSIVE
 
         created_str = data.get("created_at")
         try:
-            created_at = datetime.fromisoformat(created_str) if created_str else datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
-        except Exception:
+            created_at = (
+                datetime.fromisoformat(created_str)
+                if created_str
+                else datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+            )
+        except Exception:  # noqa: BLE001 baseline
             created_at = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
 
-        has_baseline = "baseline" in res_by_lvl or bool(data.get("pairwise_comparisons"))
+        has_baseline = "baseline" in res_by_lvl or bool(
+            data.get("pairwise_comparisons")
+        )
         return EvaluationReportSummary(
             evaluation_id=evaluation_id,
             run_ids=run_ids,
@@ -1320,7 +1528,9 @@ class EvaluationAdapter:
             has_baseline=has_baseline,
         )
 
-    def _map_json_to_detail(self, data: dict[str, Any], path: Path, md_content: str = "") -> EvaluationReportDetail:
+    def _map_json_to_detail(
+        self, data: dict[str, Any], path: Path, md_content: str = ""
+    ) -> EvaluationReportDetail:
         """Map raw JSON report file to comprehensive EvaluationReportDetail."""
         summary_model = self._map_json_to_summary(data, path)
         full_md = md_content or data.get("summary", "")
@@ -1344,11 +1554,18 @@ class EvaluationAdapter:
                         ]
                         lvl_results.append(
                             EvaluationLevelResult(
-                                run_id=r.get("run_id", summary_model.run_ids[0] if summary_model.run_ids else "unknown"),
+                                run_id=r.get(
+                                    "run_id",
+                                    summary_model.run_ids[0]
+                                    if summary_model.run_ids
+                                    else "unknown",
+                                ),
                                 level=str(r.get("evaluation_level", lvl)),
                                 phase_name=r.get("phase_name"),
                                 dataset_ref=r.get("dataset_ref"),
-                                outcome=EvaluationOutcome(r.get("outcome", "inconclusive").lower()),
+                                outcome=EvaluationOutcome(
+                                    r.get("outcome", "inconclusive").lower()
+                                ),
                                 metrics=m_vals,
                                 notes=r.get("notes", {}),
                                 evaluated_at=summary_model.created_at,
@@ -1403,7 +1620,9 @@ class EvaluationAdapter:
     # Markdown Detail Parsers
     # -------------------------------------------------------------------------
 
-    def _parse_model_decomposition_table(self, markdown: str) -> list[ModelDecompositionEntry]:
+    def _parse_model_decomposition_table(
+        self, markdown: str
+    ) -> list[ModelDecompositionEntry]:
         """Extract Model Class Decomposition Breakdown table from report markdown."""
         entries: list[ModelDecompositionEntry] = []
         if not markdown:
@@ -1444,13 +1663,19 @@ class EvaluationAdapter:
                             pass
         return entries
 
-    def _parse_poset_detail(self, markdown: str, metrics: dict[str, float]) -> PosetEvaluationDetail | None:
+    def _parse_poset_detail(
+        self, markdown: str, metrics: dict[str, float]
+    ) -> PosetEvaluationDetail | None:
         """Extract poset hierarchy metrics from report markdown and metrics map."""
-        if "poset_f1" not in metrics and "is_dag" not in metrics and "Specialization Poset" not in markdown:
+        if (
+            "poset_f1" not in metrics
+            and "is_dag" not in metrics
+            and "Specialization Poset" not in markdown
+        ):
             return None
 
-        is_dag = bool(metrics.get("is_dag", 1.0 > 0))
-        root_conf = bool(metrics.get("root_conformity", 0.0 > 0))
+        is_dag = bool(metrics.get("is_dag", 1.0 > 0))  # noqa: PLR0133 baseline
+        root_conf = bool(metrics.get("root_conformity", 0.0 > 0))  # noqa: PLR0133 baseline
         tr_f1 = metrics.get("poset_f1", 0.0)
         reach_f1 = metrics.get("poset_reachability_f1", 0.0)
 
@@ -1473,9 +1698,14 @@ class EvaluationAdapter:
             reference_edge_count=ref_edges,
         )
 
-    def _parse_polarity_detail(self, metrics: dict[str, float]) -> PolarityConcordanceDetail | None:
+    def _parse_polarity_detail(
+        self, metrics: dict[str, float]
+    ) -> PolarityConcordanceDetail | None:
         """Extract polarity accuracy and conflict rate from metrics map."""
-        if "polarity_accuracy" not in metrics and "polarity_conflict_rate" not in metrics:
+        if (
+            "polarity_accuracy" not in metrics
+            and "polarity_conflict_rate" not in metrics
+        ):
             return None
 
         return PolarityConcordanceDetail(
@@ -1483,7 +1713,9 @@ class EvaluationAdapter:
             polarity_conflict_rate=metrics.get("polarity_conflict_rate", 0.0),
         )
 
-    def _parse_retrieval_detail(self, markdown: str, metrics: dict[str, float]) -> RetrievalEvaluationDetail | None:
+    def _parse_retrieval_detail(
+        self, markdown: str, metrics: dict[str, float]
+    ) -> RetrievalEvaluationDetail | None:
         """Extract Information Retrieval ranking metrics."""
         if "mrr" not in metrics and "Hits@1" not in markdown and "MRR" not in markdown:
             return None
@@ -1538,7 +1770,9 @@ class EvaluationAdapter:
             snapshots = list(request.snapshots)
         elif request.run_ids:
             if not reader:
-                raise ValueError("ArtifactReader is required when evaluating trajectory by run_ids.")
+                raise ValueError(
+                    "ArtifactReader is required when evaluating trajectory by run_ids."
+                )
             for rid in request.run_ids:
                 target = self._load_run_evaluation_target(rid, reader)
                 if isinstance(target, TheoryNet):
@@ -1614,7 +1848,7 @@ class EvaluationAdapter:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return [EdgeAdjudicationItem.model_validate(item) for item in data]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 baseline
             logger.error("Failed to load adjudications from %s: %s", path, e)
             return []
 
@@ -1638,7 +1872,9 @@ class EvaluationAdapter:
         stored_items = list(existing.values())
         path = self._get_adjudications_path()
         with open(path, "w", encoding="utf-8") as f:
-            json.dump([item.model_dump(mode="json") for item in stored_items], f, indent=2)
+            json.dump(
+                [item.model_dump(mode="json") for item in stored_items], f, indent=2
+            )
 
         exported_path: str | None = None
         target_dest = request.export_dataset_path or request.gold_standard_path
@@ -1647,11 +1883,14 @@ class EvaluationAdapter:
             dest_file.parent.mkdir(parents=True, exist_ok=True)
 
             gold_data: dict[str, Any] = {}
-            if request.gold_standard_path and Path(request.gold_standard_path).is_file():
+            if (
+                request.gold_standard_path
+                and Path(request.gold_standard_path).is_file()
+            ):
                 try:
                     with open(request.gold_standard_path, "r", encoding="utf-8") as gf:
                         gold_data = json.load(gf)
-                except Exception:
+                except Exception:  # noqa: BLE001 baseline
                     gold_data = {}
 
             if "@graph" not in gold_data or not isinstance(gold_data["@graph"], list):
@@ -1668,9 +1907,21 @@ class EvaluationAdapter:
             for item in request.items:
                 if item.decision == AdjudicationDecision.TRUE_POSITIVE:
                     edge = item.predicted_edge
-                    src = edge.get("source") or edge.get("source_id") or edge.get("subject_id")
-                    tgt = edge.get("target") or edge.get("target_id") or edge.get("object_id")
-                    pred = edge.get("predicate") or edge.get("relation") or edge.get("relation_type")
+                    src = (
+                        edge.get("source")
+                        or edge.get("source_id")
+                        or edge.get("subject_id")
+                    )
+                    tgt = (
+                        edge.get("target")
+                        or edge.get("target_id")
+                        or edge.get("object_id")
+                    )
+                    pred = (
+                        edge.get("predicate")
+                        or edge.get("relation")
+                        or edge.get("relation_type")
+                    )
                     if src and tgt and pred:
                         gold_data["@graph"].append(
                             {
@@ -1683,9 +1934,16 @@ class EvaluationAdapter:
                                 "adjudicated_status": "true_positive",
                             }
                         )
-                elif item.decision == AdjudicationDecision.SCHEMA_ALIAS and item.alias_target:
+                elif (
+                    item.decision == AdjudicationDecision.SCHEMA_ALIAS
+                    and item.alias_target
+                ):
                     edge = item.predicted_edge
-                    pred = edge.get("predicate") or edge.get("relation") or edge.get("relation_type")
+                    pred = (
+                        edge.get("predicate")
+                        or edge.get("relation")
+                        or edge.get("relation_type")
+                    )
                     if pred and isinstance(gold_data.get("@context"), dict):
                         gold_data["@context"][str(pred)] = str(item.alias_target)
 
@@ -1732,13 +1990,17 @@ class EvaluationAdapter:
 
         # Load reference gold standard if available
         gold_path = self.eval_data_dir / "stnb_cpm_pilot.jsonld"
-        is_festinger = any(k in evaluation_id.lower() or (report and report.dataset_ref and k in report.dataset_ref.lower()) for k in ("festinger", "cognitive", "dissonance"))
+        is_festinger = any(
+            k in evaluation_id.lower()
+            or (report and report.dataset_ref and k in report.dataset_ref.lower())
+            for k in ("festinger", "cognitive", "dissonance")
+        )
 
         if report and report.dataset_ref and Path(report.dataset_ref).is_file():
             gold_path = Path(report.dataset_ref)
         elif is_festinger:
             for bm in self.discover_benchmarks():
-                if "festinger" in bm.id or "dissonance" in bm.id:
+                if "festinger" in bm.id or "dissonance" in bm.id:  # noqa: SIM102 baseline
                     if Path(bm.gold_standard_path).is_file():
                         gold_path = Path(bm.gold_standard_path)
                         break
@@ -1752,41 +2014,112 @@ class EvaluationAdapter:
                     gold_entities[nid] = ndata
                 for u, v, edata in g_graph.edges(data=True):
                     gold_edges.append({"source": u, "target": v, **edata})
-            except Exception as e:
-                logger.warning("Could not parse gold standard from %s: %s", gold_path, e)
+            except Exception as e:  # noqa: BLE001 baseline
+                logger.warning(
+                    "Could not parse gold standard from %s: %s", gold_path, e
+                )
 
         # Fallback structuralist entities if none parsed from gold
         if not gold_entities:
             if is_festinger:
                 gold_entities = {
-                    "str:TE_DissF": {"rdfs:label": "T(DissF) - Forced Compliance Domain Core", "symbol": "T", "class_name": "theory_elements"},
-                    "str:TE_DissF6": {"rdfs:label": "T(DissF6) - Festinger-Carlsmith Forced Compliance Reward Model", "symbol": "T", "class_name": "theory_elements"},
-                    "str:MP_DissF6": {"rdfs:label": "M_p(DissF6) - Potential Models of Forced Compliance", "symbol": "Mp", "class_name": "potential_models"},
-                    "str:M_DissF6_RatioLaw": {"rdfs:label": "M(DissF6) - Dissonance Magnitude Ratio Law", "symbol": "M", "class_name": "actual_models"},
-                    "str:M_DissF6_InverseRewardLaw": {"rdfs:label": "M(DissF6) - Inverse Reward Prediction Law", "symbol": "M", "class_name": "actual_models"},
-                    "str:M_DissF6_Corroboration": {"rdfs:label": "M(DissF6) - Experimental Corroboration Law", "symbol": "M", "class_name": "actual_models"},
-                    "str:I0_Carlsmith1959": {"rdfs:label": "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm", "symbol": "I0", "class_name": "paradigms"},
-                    "str:TE_Alternative_Rehearsal": {"rdfs:label": "Hypothesis: Janis-King Mental Rehearsal Alternative Explanation", "symbol": "H", "class_name": "hypotheses"},
-                    "str:EV_Rehearsal_Defeated": {"rdfs:label": "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal", "symbol": "E", "class_name": "evidence"},
+                    "str:TE_DissF": {
+                        "rdfs:label": "T(DissF) - Forced Compliance Domain Core",
+                        "symbol": "T",
+                        "class_name": "theory_elements",
+                    },
+                    "str:TE_DissF6": {
+                        "rdfs:label": "T(DissF6) - Festinger-Carlsmith Forced Compliance Reward Model",
+                        "symbol": "T",
+                        "class_name": "theory_elements",
+                    },
+                    "str:MP_DissF6": {
+                        "rdfs:label": "M_p(DissF6) - Potential Models of Forced Compliance",
+                        "symbol": "Mp",
+                        "class_name": "potential_models",
+                    },
+                    "str:M_DissF6_RatioLaw": {
+                        "rdfs:label": "M(DissF6) - Dissonance Magnitude Ratio Law",
+                        "symbol": "M",
+                        "class_name": "actual_models",
+                    },
+                    "str:M_DissF6_InverseRewardLaw": {
+                        "rdfs:label": "M(DissF6) - Inverse Reward Prediction Law",
+                        "symbol": "M",
+                        "class_name": "actual_models",
+                    },
+                    "str:M_DissF6_Corroboration": {
+                        "rdfs:label": "M(DissF6) - Experimental Corroboration Law",
+                        "symbol": "M",
+                        "class_name": "actual_models",
+                    },
+                    "str:I0_Carlsmith1959": {
+                        "rdfs:label": "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm",
+                        "symbol": "I0",
+                        "class_name": "paradigms",
+                    },
+                    "str:TE_Alternative_Rehearsal": {
+                        "rdfs:label": "Hypothesis: Janis-King Mental Rehearsal Alternative Explanation",
+                        "symbol": "H",
+                        "class_name": "hypotheses",
+                    },
+                    "str:EV_Rehearsal_Defeated": {
+                        "rdfs:label": "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal",
+                        "symbol": "E",
+                        "class_name": "evidence",
+                    },
                 }
             else:
                 gold_entities = {
-                    "str:Newtonian_Particle_Mechanics": {"rdfs:label": "Newtonian Particle Mechanics", "symbol": "Mp", "class_name": "potential_models"},
-                    "str:CPM_Axiom_1_Inertia": {"rdfs:label": "Law of Inertia", "symbol": "M", "class_name": "actual_models"},
-                    "str:CPM_Axiom_2_Force": {"rdfs:label": "Fundamental Law of Motion (F=ma)", "symbol": "M", "class_name": "actual_models"},
-                    "str:CPM_Axiom_3_ActionReaction": {"rdfs:label": "Action-Reaction Law", "symbol": "M", "class_name": "actual_models"},
-                    "str:Gravitational_Force_Law": {"rdfs:label": "Universal Gravitation Law", "symbol": "I0", "class_name": "intended_applications"},
+                    "str:Newtonian_Particle_Mechanics": {
+                        "rdfs:label": "Newtonian Particle Mechanics",
+                        "symbol": "Mp",
+                        "class_name": "potential_models",
+                    },
+                    "str:CPM_Axiom_1_Inertia": {
+                        "rdfs:label": "Law of Inertia",
+                        "symbol": "M",
+                        "class_name": "actual_models",
+                    },
+                    "str:CPM_Axiom_2_Force": {
+                        "rdfs:label": "Fundamental Law of Motion (F=ma)",
+                        "symbol": "M",
+                        "class_name": "actual_models",
+                    },
+                    "str:CPM_Axiom_3_ActionReaction": {
+                        "rdfs:label": "Action-Reaction Law",
+                        "symbol": "M",
+                        "class_name": "actual_models",
+                    },
+                    "str:Gravitational_Force_Law": {
+                        "rdfs:label": "Universal Gravitation Law",
+                        "symbol": "I0",
+                        "class_name": "intended_applications",
+                    },
                 }
 
         omitted_set = set(report.omitted_components if report else [])
 
         nodes: list[EvaluationNodeOverlay] = []
         edges: list[EvaluationEdgeOverlay] = []
-        counts = {"tp_nodes": 0, "fp_nodes": 0, "fn_nodes": 0, "tp_edges": 0, "fp_edges": 0, "fn_edges": 0, "conflict_edges": 0}
+        counts = {
+            "tp_nodes": 0,
+            "fp_nodes": 0,
+            "fn_nodes": 0,
+            "tp_edges": 0,
+            "fp_edges": 0,
+            "fn_edges": 0,
+            "conflict_edges": 0,
+        }
 
         # Add predicted nodes
         for g_id, g_data in gold_entities.items():
-            lbl = g_data.get("rdfs:label") or g_data.get("label") or g_data.get("name") or g_id.split(":")[-1]
+            lbl = (
+                g_data.get("rdfs:label")
+                or g_data.get("label")
+                or g_data.get("name")
+                or g_id.split(":")[-1]
+            )
             raw_type = g_data.get("node_type") or g_data.get("type") or "actual_model"
             sym = "M"
             cls_name = "actual_models"
@@ -1825,7 +2158,9 @@ class EvaluationAdapter:
                             gold_id=g_id,
                             similarity_score=0.0,
                             is_ghost=True,
-                            properties={"omission_reason": "Missing from predicted graph extraction"},
+                            properties={
+                                "omission_reason": "Missing from predicted graph extraction"
+                            },
                         )
                     )
                     counts["fn_nodes"] += 1
@@ -1846,7 +2181,7 @@ class EvaluationAdapter:
 
         # Synthesize ghost nodes for any omitted components not in gold entities
         for o_id in omitted_set:
-            if o_id not in {n.id for n in nodes}:
+            if o_id not in {n.id for n in nodes}:  # noqa: SIM102 baseline
                 if include_ghosts:
                     nodes.append(
                         EvaluationNodeOverlay(
@@ -1858,7 +2193,9 @@ class EvaluationAdapter:
                             gold_id=o_id,
                             similarity_score=0.0,
                             is_ghost=True,
-                            properties={"omission_reason": "Missing from predicted graph extraction"},
+                            properties={
+                                "omission_reason": "Missing from predicted graph extraction"
+                            },
                         )
                     )
                     counts["fn_nodes"] += 1
@@ -1887,10 +2224,14 @@ class EvaluationAdapter:
                 v = g_edge["target"]
                 rel = g_edge.get("relation") or g_edge.get("label") or "specializes"
                 is_fn = u in omitted_set or v in omitted_set
-                status = EdgeAlignmentStatus.FALSE_NEGATIVE if is_fn else EdgeAlignmentStatus.TRUE_POSITIVE
+                status = (
+                    EdgeAlignmentStatus.FALSE_NEGATIVE
+                    if is_fn
+                    else EdgeAlignmentStatus.TRUE_POSITIVE
+                )
                 edges.append(
                     EvaluationEdgeOverlay(
-                        id=f"edge_{idx+1}",
+                        id=f"edge_{idx + 1}",
                         source=u,
                         target=v,
                         predicate=rel,
@@ -1962,13 +2303,23 @@ class EvaluationAdapter:
         }
 
         # Discovered borderline alignment candidates
-        if any(k in evaluation_id.lower() for k in ("festinger", "cognitive", "dissonance")):
+        if any(
+            k in evaluation_id.lower() for k in ("festinger", "cognitive", "dissonance")
+        ):
             candidates_raw = [
                 {
                     "candidate_id": f"cand_{evaluation_id}_01",
                     "evaluation_id": evaluation_id,
-                    "predicted_edge": {"source": "str:M_DissF6_Corroboration", "predicate": "VALIDATES_PARADIGM", "target": "str:I0_Carlsmith1959"},
-                    "reference_edge": {"source": "str:TE_DissF6", "predicate": "hasParadigm", "target": "str:I0_Carlsmith1959"},
+                    "predicted_edge": {
+                        "source": "str:M_DissF6_Corroboration",
+                        "predicate": "VALIDATES_PARADIGM",
+                        "target": "str:I0_Carlsmith1959",
+                    },
+                    "reference_edge": {
+                        "source": "str:TE_DissF6",
+                        "predicate": "hasParadigm",
+                        "target": "str:I0_Carlsmith1959",
+                    },
                     "similarity_score": 0.885,
                     "evidence_snippet": "A laboratory experiment was designed to test these derivations ($1 vs $20 condition).",
                     "confidence": 0.94,
@@ -1976,8 +2327,16 @@ class EvaluationAdapter:
                 {
                     "candidate_id": f"cand_{evaluation_id}_02",
                     "evaluation_id": evaluation_id,
-                    "predicted_edge": {"source": "str:TE_Alternative_Rehearsal", "predicate": "UNDERMINES", "target": "str:TE_DissF6"},
-                    "reference_edge": {"source": "str:TE_Alternative_Rehearsal", "predicate": "attacks", "target": "str:TE_DissF6"},
+                    "predicted_edge": {
+                        "source": "str:TE_Alternative_Rehearsal",
+                        "predicate": "UNDERMINES",
+                        "target": "str:TE_DissF6",
+                    },
+                    "reference_edge": {
+                        "source": "str:TE_Alternative_Rehearsal",
+                        "predicate": "attacks",
+                        "target": "str:TE_DissF6",
+                    },
                     "similarity_score": 0.852,
                     "evidence_snippet": "Specifically, this alternative explanation would maintain that Ss in One Dollar condition rehearsed it more mentally.",
                     "confidence": 0.89,
@@ -1985,8 +2344,16 @@ class EvaluationAdapter:
                 {
                     "candidate_id": f"cand_{evaluation_id}_03",
                     "evaluation_id": evaluation_id,
-                    "predicted_edge": {"source": "str:EV_Rehearsal_Defeated", "predicate": "DISPROVES_HYPOTHESIS", "target": "str:TE_Alternative_Rehearsal"},
-                    "reference_edge": {"source": "str:EV_Rehearsal_Defeated", "predicate": "attacks", "target": "str:TE_Alternative_Rehearsal"},
+                    "predicted_edge": {
+                        "source": "str:EV_Rehearsal_Defeated",
+                        "predicate": "DISPROVES_HYPOTHESIS",
+                        "target": "str:TE_Alternative_Rehearsal",
+                    },
+                    "reference_edge": {
+                        "source": "str:EV_Rehearsal_Defeated",
+                        "predicate": "attacks",
+                        "target": "str:TE_Alternative_Rehearsal",
+                    },
                     "similarity_score": 0.915,
                     "evidence_snippet": "We are certainly justified in concluding that the Ss in the One Dollar condition did not improvise more nor act more convincingly.",
                     "confidence": 0.96,
@@ -1997,8 +2364,16 @@ class EvaluationAdapter:
                 {
                     "candidate_id": f"cand_{evaluation_id}_01",
                     "evaluation_id": evaluation_id,
-                    "predicted_edge": {"source": "str:Law_of_Force", "predicate": "EXPRESSES_FORCE", "target": "str:Mass"},
-                    "reference_edge": {"source": "str:CPM_Axiom_2_Force", "predicate": "HAS_GOVERNING_LAW", "target": "str:Mass"},
+                    "predicted_edge": {
+                        "source": "str:Law_of_Force",
+                        "predicate": "EXPRESSES_FORCE",
+                        "target": "str:Mass",
+                    },
+                    "reference_edge": {
+                        "source": "str:CPM_Axiom_2_Force",
+                        "predicate": "HAS_GOVERNING_LAW",
+                        "target": "str:Mass",
+                    },
                     "similarity_score": 0.865,
                     "evidence_snippet": "Mutationem motus proportionalem esse vi motrici impressae (Principia, Axiom II)",
                     "confidence": 0.92,
@@ -2006,8 +2381,16 @@ class EvaluationAdapter:
                 {
                     "candidate_id": f"cand_{evaluation_id}_02",
                     "evaluation_id": evaluation_id,
-                    "predicted_edge": {"source": "str:Gravity", "predicate": "ATTRACTS_TOWARDS", "target": "str:Center"},
-                    "reference_edge": {"source": "str:Centripetal_Force", "predicate": "DIRECTED_TOWARDS", "target": "str:Center"},
+                    "predicted_edge": {
+                        "source": "str:Gravity",
+                        "predicate": "ATTRACTS_TOWARDS",
+                        "target": "str:Center",
+                    },
+                    "reference_edge": {
+                        "source": "str:Centripetal_Force",
+                        "predicate": "DIRECTED_TOWARDS",
+                        "target": "str:Center",
+                    },
                     "similarity_score": 0.812,
                     "evidence_snippet": "Viribus centripetis corpora trahi vel tendere versus punctum aliquod tanquam ad centrum",
                     "confidence": 0.88,
@@ -2015,8 +2398,16 @@ class EvaluationAdapter:
                 {
                     "candidate_id": f"cand_{evaluation_id}_03",
                     "evaluation_id": evaluation_id,
-                    "predicted_edge": {"source": "str:Action", "predicate": "OPPOSES", "target": "str:Reaction"},
-                    "reference_edge": {"source": "str:CPM_Axiom_3_ActionReaction", "predicate": "EQUALS_OPPOSITE", "target": "str:Reaction"},
+                    "predicted_edge": {
+                        "source": "str:Action",
+                        "predicate": "OPPOSES",
+                        "target": "str:Reaction",
+                    },
+                    "reference_edge": {
+                        "source": "str:CPM_Axiom_3_ActionReaction",
+                        "predicate": "EQUALS_OPPOSITE",
+                        "target": "str:Reaction",
+                    },
                     "similarity_score": 0.785,
                     "evidence_snippet": "Actioni contrariam semper et aequalem esse reactionem (Principia, Axiom III)",
                     "confidence": 0.94,
@@ -2095,7 +2486,12 @@ class EvaluationAdapter:
             raise FileNotFoundError(f"Evaluation report '{evaluation_id}' not found.")
 
         # Recalculate metrics in memory
-        tp_count = sum(1 for item in request.items if item.decision in (AdjudicationDecision.TRUE_POSITIVE, AdjudicationDecision.SCHEMA_ALIAS))
+        tp_count = sum(
+            1
+            for item in request.items
+            if item.decision
+            in (AdjudicationDecision.TRUE_POSITIVE, AdjudicationDecision.SCHEMA_ALIAS)
+        )
         delta_f1 = round(min(0.15, tp_count * 0.035), 4)
         delta_pfs = round(min(0.12, tp_count * 0.025), 4)
 
@@ -2109,8 +2505,9 @@ class EvaluationAdapter:
         report.key_metrics["pfs"] = new_pfs
 
         # Persist updated report
-        rep_json = self.reports_dir / f"report_{evaluation_id}.json"
-        rep_md = self.reports_dir / f"report_{evaluation_id}.md"
+        safe_eval_id = validate_safe_identifier(evaluation_id, "evaluation_id")
+        rep_json = resolve_safe_child(self.reports_dir, f"report_{safe_eval_id}.json")
+        rep_md = resolve_safe_child(self.reports_dir, f"report_{safe_eval_id}.md")
         with open(rep_json, "w", encoding="utf-8") as f:
             json.dump(report.model_dump(mode="json"), f, indent=2)
 
@@ -2177,11 +2574,17 @@ class EvaluationAdapter:
                 )
             )
 
-        ece = round(sum(b.sample_count * b.calibration_gap for b in bins) / sum(b.sample_count for b in bins), 4)
+        ece = round(
+            sum(b.sample_count * b.calibration_gap for b in bins)
+            / sum(b.sample_count for b in bins),
+            4,
+        )
         mce = max(b.calibration_gap for b in bins)
         brier = 0.054
 
-        if any(k in evaluation_id.lower() for k in ("festinger", "cognitive", "dissonance")):
+        if any(
+            k in evaluation_id.lower() for k in ("festinger", "cognitive", "dissonance")
+        ):
             hallucinations = [
                 MiscalibratedAssertionItem(
                     assertion_id=f"halluc_{evaluation_id}_01",
@@ -2278,7 +2681,9 @@ class EvaluationAdapter:
                 "formula": r"\text{diss\_magnitude} = f\left(\frac{D}{D + C}\right)",
                 "iou": 1.0,
                 "comp_type": "actual_model",
-                "bbox": BoundingBoxCoordinates(page=204, x0=0.10, y0=0.45, x1=0.90, y1=0.58),
+                "bbox": BoundingBoxCoordinates(
+                    page=204, x0=0.10, y0=0.45, x1=0.90, y1=0.58
+                ),
             },
             "str:M_DissF6_InverseRewardLaw": {
                 "label": "M(DissF6) - Inverse Reward Prediction Law",
@@ -2290,7 +2695,9 @@ class EvaluationAdapter:
                 "formula": r"\forall s \in S: \text{reward}(s) > \text{reward}_{\min} \implies \frac{\partial \Delta O}{\partial R} < 0",
                 "iou": 1.0,
                 "comp_type": "actual_model",
-                "bbox": BoundingBoxCoordinates(page=204, x0=0.10, y0=0.72, x1=0.90, y1=0.82),
+                "bbox": BoundingBoxCoordinates(
+                    page=204, x0=0.10, y0=0.72, x1=0.90, y1=0.82
+                ),
             },
             "str:M_DissF6_Corroboration": {
                 "label": "M(DissF6) - Experimental Corroboration Law",
@@ -2302,7 +2709,9 @@ class EvaluationAdapter:
                 "formula": r"\Delta O(\$1) = +1.20 > \Delta O(\$20) = -0.05 \ge \Delta O(\text{control}) = -0.45",
                 "iou": 1.0,
                 "comp_type": "actual_model",
-                "bbox": BoundingBoxCoordinates(page=207, x0=0.10, y0=0.35, x1=0.90, y1=0.48),
+                "bbox": BoundingBoxCoordinates(
+                    page=207, x0=0.10, y0=0.35, x1=0.90, y1=0.48
+                ),
             },
             "str:I0_Carlsmith1959": {
                 "label": "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm",
@@ -2314,7 +2723,9 @@ class EvaluationAdapter:
                 "formula": None,
                 "iou": 1.0,
                 "comp_type": "paradigm",
-                "bbox": BoundingBoxCoordinates(page=208, x0=0.10, y0=0.70, x1=0.90, y1=0.85),
+                "bbox": BoundingBoxCoordinates(
+                    page=208, x0=0.10, y0=0.70, x1=0.90, y1=0.85
+                ),
             },
             "str:TE_Alternative_Rehearsal": {
                 "label": "Hypothesis: Janis-King Mental Rehearsal Alternative Explanation",
@@ -2326,7 +2737,9 @@ class EvaluationAdapter:
                 "formula": None,
                 "iou": 1.0,
                 "comp_type": "hypothesis",
-                "bbox": BoundingBoxCoordinates(page=207, x0=0.10, y0=0.68, x1=0.90, y1=0.82),
+                "bbox": BoundingBoxCoordinates(
+                    page=207, x0=0.10, y0=0.68, x1=0.90, y1=0.82
+                ),
             },
             "str:EV_Rehearsal_Defeated": {
                 "label": "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal",
@@ -2338,7 +2751,9 @@ class EvaluationAdapter:
                 "formula": None,
                 "iou": 1.0,
                 "comp_type": "evidence",
-                "bbox": BoundingBoxCoordinates(page=208, x0=0.10, y0=0.22, x1=0.90, y1=0.34),
+                "bbox": BoundingBoxCoordinates(
+                    page=208, x0=0.10, y0=0.22, x1=0.90, y1=0.34
+                ),
             },
             "str:MP_DissF6": {
                 "label": "M_p(DissF6) - Potential Models of Forced Compliance",
@@ -2350,7 +2765,9 @@ class EvaluationAdapter:
                 "formula": r"M_p(\text{DissF6}) = \langle S, X, \neg X, \text{Reward}, D, C, \Delta O \rangle",
                 "iou": 1.0,
                 "comp_type": "potential_model",
-                "bbox": BoundingBoxCoordinates(page=204, x0=0.10, y0=0.45, x1=0.90, y1=0.58),
+                "bbox": BoundingBoxCoordinates(
+                    page=204, x0=0.10, y0=0.45, x1=0.90, y1=0.58
+                ),
             },
             "str:TE_DissF6": {
                 "label": "T(DissF6) - Festinger-Carlsmith Forced Compliance Reward Model",
@@ -2362,13 +2779,17 @@ class EvaluationAdapter:
                 "formula": r"T(\text{DissF6}) = \langle M_p, M, I_0 \rangle",
                 "iou": 1.0,
                 "comp_type": "theory_element",
-                "bbox": BoundingBoxCoordinates(page=204, x0=0.10, y0=0.72, x1=0.90, y1=0.82),
+                "bbox": BoundingBoxCoordinates(
+                    page=204, x0=0.10, y0=0.72, x1=0.90, y1=0.82
+                ),
             },
         }
 
         # Check if component is in Festinger dictionary or if evaluation_id indicates Festinger
         target_info = fc_anchors.get(component_id)
-        if not target_info and any(k in evaluation_id.lower() for k in ("festinger", "cognitive", "dissonance")):
+        if not target_info and any(
+            k in evaluation_id.lower() for k in ("festinger", "cognitive", "dissonance")
+        ):
             # Fallback to ratio law anchor for generic Festinger requests
             target_info = fc_anchors["str:M_DissF6_RatioLaw"]
 
@@ -2459,9 +2880,15 @@ class EvaluationAdapter:
         """
         reports = self.list_reports()
         if request.benchmark_id:
-            reports = [r for r in reports if r.dataset_ref and request.benchmark_id in r.dataset_ref]
+            reports = [
+                r
+                for r in reports
+                if r.dataset_ref and request.benchmark_id in r.dataset_ref
+            ]
         if request.run_ids:
-            reports = [r for r in reports if any(rid in request.run_ids for rid in r.run_ids)]
+            reports = [
+                r for r in reports if any(rid in request.run_ids for rid in r.run_ids)
+            ]
 
         entries: list[LeaderboardEntry] = []
         for rep in reports:
@@ -2568,7 +2995,9 @@ class EvaluationAdapter:
 
             if not is_dominated:
                 e.is_pareto_optimal = True
-                pareto_points.append(ParetoFrontierPoint(run_id=e.run_id, coordinates=e_coords))
+                pareto_points.append(
+                    ParetoFrontierPoint(run_id=e.run_id, coordinates=e_coords)
+                )
 
         # Sort entries
         def sort_key(entry: LeaderboardEntry) -> float:
@@ -2646,10 +3075,7 @@ class EvaluationAdapter:
 
         chart_series = {
             "noise_levels": request.noise_levels,
-            "series": {
-                p: [pt.f1_score for pt in pts]
-                for p, pts in breakdown.items()
-            },
+            "series": {p: [pt.f1_score for pt in pts] for p, pts in breakdown.items()},
         }
 
         result = NoiseRobustnessReportDetail(
@@ -2664,7 +3090,10 @@ class EvaluationAdapter:
         )
 
         # Persist report
-        out_path = self.reports_dir / f"robustness_{request.run_id}.json"
+        safe_run_id = validate_safe_identifier(request.run_id, "run_id")
+        out_path = resolve_safe_child(
+            self.reports_dir, f"robustness_{safe_run_id}.json"
+        )
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(result.model_dump(mode="json"), f, indent=2)
 
@@ -2695,9 +3124,13 @@ class EvaluationAdapter:
                 if p.is_file():
                     try:
                         with open(p, "r", encoding="utf-8") as f:
-                            return NoiseRobustnessReportDetail.model_validate(json.load(f))
-                    except Exception as e:
-                        logger.error("Failed to read robustness report from %s: %s", p, e)
+                            return NoiseRobustnessReportDetail.model_validate(
+                                json.load(f)
+                            )
+                    except Exception as e:  # noqa: BLE001 baseline
+                        logger.error(
+                            "Failed to read robustness report from %s: %s", p, e
+                        )
 
         # Fallback generated report
         return self.execute_stress_test(StressTestRequest(run_id=evaluation_id))
@@ -2724,7 +3157,9 @@ class EvaluationAdapter:
         RetrievalDiagnosticsResponse
             Query breakdown items with ranking positions and hit flags.
         """
-        if any(k in evaluation_id.lower() for k in ("festinger", "cognitive", "dissonance")):
+        if any(
+            k in evaluation_id.lower() for k in ("festinger", "cognitive", "dissonance")
+        ):
             queries_raw = [
                 {
                     "query_id": "fc_q01",
@@ -2732,8 +3167,20 @@ class EvaluationAdapter:
                     "target_category": "core_law",
                     "expected": ["str:M_DissF6_InverseRewardLaw"],
                     "candidates": [
-                        {"rank": 1, "node_id": "str:M_DissF6_InverseRewardLaw", "label": "M(DissF6) - Inverse Reward Prediction Law", "similarity_score": 0.96, "is_gold_target": True},
-                        {"rank": 2, "node_id": "str:M_DissF6_RatioLaw", "label": "M(DissF6) - Dissonance Magnitude Ratio Law", "similarity_score": 0.74, "is_gold_target": False},
+                        {
+                            "rank": 1,
+                            "node_id": "str:M_DissF6_InverseRewardLaw",
+                            "label": "M(DissF6) - Inverse Reward Prediction Law",
+                            "similarity_score": 0.96,
+                            "is_gold_target": True,
+                        },
+                        {
+                            "rank": 2,
+                            "node_id": "str:M_DissF6_RatioLaw",
+                            "label": "M(DissF6) - Dissonance Magnitude Ratio Law",
+                            "similarity_score": 0.74,
+                            "is_gold_target": False,
+                        },
                     ],
                 },
                 {
@@ -2742,8 +3189,20 @@ class EvaluationAdapter:
                     "target_category": "core_law",
                     "expected": ["str:M_DissF6_RatioLaw"],
                     "candidates": [
-                        {"rank": 1, "node_id": "str:M_DissF6_RatioLaw", "label": "M(DissF6) - Dissonance Magnitude Ratio Law", "similarity_score": 0.95, "is_gold_target": True},
-                        {"rank": 2, "node_id": "str:MP_DissF6", "label": "M_p(DissF6) - Potential Models of Forced Compliance", "similarity_score": 0.78, "is_gold_target": False},
+                        {
+                            "rank": 1,
+                            "node_id": "str:M_DissF6_RatioLaw",
+                            "label": "M(DissF6) - Dissonance Magnitude Ratio Law",
+                            "similarity_score": 0.95,
+                            "is_gold_target": True,
+                        },
+                        {
+                            "rank": 2,
+                            "node_id": "str:MP_DissF6",
+                            "label": "M_p(DissF6) - Potential Models of Forced Compliance",
+                            "similarity_score": 0.78,
+                            "is_gold_target": False,
+                        },
                     ],
                 },
                 {
@@ -2752,8 +3211,20 @@ class EvaluationAdapter:
                     "target_category": "empirical_corroboration",
                     "expected": ["str:M_DissF6_Corroboration"],
                     "candidates": [
-                        {"rank": 1, "node_id": "str:M_DissF6_Corroboration", "label": "M(DissF6) - Experimental Corroboration Law", "similarity_score": 0.93, "is_gold_target": True},
-                        {"rank": 2, "node_id": "str:I0_Carlsmith1959", "label": "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm", "similarity_score": 0.71, "is_gold_target": False},
+                        {
+                            "rank": 1,
+                            "node_id": "str:M_DissF6_Corroboration",
+                            "label": "M(DissF6) - Experimental Corroboration Law",
+                            "similarity_score": 0.93,
+                            "is_gold_target": True,
+                        },
+                        {
+                            "rank": 2,
+                            "node_id": "str:I0_Carlsmith1959",
+                            "label": "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm",
+                            "similarity_score": 0.71,
+                            "is_gold_target": False,
+                        },
                     ],
                 },
                 {
@@ -2762,8 +3233,20 @@ class EvaluationAdapter:
                     "target_category": "paradigm",
                     "expected": ["str:I0_Carlsmith1959"],
                     "candidates": [
-                        {"rank": 1, "node_id": "str:I0_Carlsmith1959", "label": "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm", "similarity_score": 0.92, "is_gold_target": True},
-                        {"rank": 2, "node_id": "str:TE_DissF6", "label": "T(DissF6) - Festinger-Carlsmith Forced Compliance Reward Model", "similarity_score": 0.69, "is_gold_target": False},
+                        {
+                            "rank": 1,
+                            "node_id": "str:I0_Carlsmith1959",
+                            "label": "I_0(Carlsmith1959) - $1/$20 Forced Compliance Experimental Paradigm",
+                            "similarity_score": 0.92,
+                            "is_gold_target": True,
+                        },
+                        {
+                            "rank": 2,
+                            "node_id": "str:TE_DissF6",
+                            "label": "T(DissF6) - Festinger-Carlsmith Forced Compliance Reward Model",
+                            "similarity_score": 0.69,
+                            "is_gold_target": False,
+                        },
                     ],
                 },
                 {
@@ -2772,8 +3255,20 @@ class EvaluationAdapter:
                     "target_category": "competing_hypothesis",
                     "expected": ["str:TE_Alternative_Rehearsal"],
                     "candidates": [
-                        {"rank": 1, "node_id": "str:TE_Alternative_Rehearsal", "label": "Hypothesis: Janis-King Mental Rehearsal Alternative Explanation", "similarity_score": 0.91, "is_gold_target": True},
-                        {"rank": 2, "node_id": "str:EV_Rehearsal_Defeated", "label": "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal", "similarity_score": 0.76, "is_gold_target": False},
+                        {
+                            "rank": 1,
+                            "node_id": "str:TE_Alternative_Rehearsal",
+                            "label": "Hypothesis: Janis-King Mental Rehearsal Alternative Explanation",
+                            "similarity_score": 0.91,
+                            "is_gold_target": True,
+                        },
+                        {
+                            "rank": 2,
+                            "node_id": "str:EV_Rehearsal_Defeated",
+                            "label": "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal",
+                            "similarity_score": 0.76,
+                            "is_gold_target": False,
+                        },
                     ],
                 },
                 {
@@ -2782,8 +3277,20 @@ class EvaluationAdapter:
                     "target_category": "refuting_evidence",
                     "expected": ["str:EV_Rehearsal_Defeated"],
                     "candidates": [
-                        {"rank": 1, "node_id": "str:EV_Rehearsal_Defeated", "label": "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal", "similarity_score": 0.94, "is_gold_target": True},
-                        {"rank": 2, "node_id": "str:TE_Alternative_Rehearsal", "label": "Hypothesis: Janis-King Mental Rehearsal Alternative Explanation", "similarity_score": 0.73, "is_gold_target": False},
+                        {
+                            "rank": 1,
+                            "node_id": "str:EV_Rehearsal_Defeated",
+                            "label": "Evidence: Table 2 Observer Ratings Defeating Mental Rehearsal",
+                            "similarity_score": 0.94,
+                            "is_gold_target": True,
+                        },
+                        {
+                            "rank": 2,
+                            "node_id": "str:TE_Alternative_Rehearsal",
+                            "label": "Hypothesis: Janis-King Mental Rehearsal Alternative Explanation",
+                            "similarity_score": 0.73,
+                            "is_gold_target": False,
+                        },
                     ],
                 },
             ]
@@ -2795,8 +3302,20 @@ class EvaluationAdapter:
                     "target_category": "fundamental_laws",
                     "expected": ["str:CPM_Axiom_2_Force"],
                     "candidates": [
-                        {"rank": 1, "node_id": "str:CPM_Axiom_2_Force", "label": "Fundamental Law of Motion (F=ma)", "similarity_score": 0.94, "is_gold_target": True},
-                        {"rank": 2, "node_id": "str:CPM_Axiom_1_Inertia", "label": "Law of Inertia", "similarity_score": 0.72, "is_gold_target": False},
+                        {
+                            "rank": 1,
+                            "node_id": "str:CPM_Axiom_2_Force",
+                            "label": "Fundamental Law of Motion (F=ma)",
+                            "similarity_score": 0.94,
+                            "is_gold_target": True,
+                        },
+                        {
+                            "rank": 2,
+                            "node_id": "str:CPM_Axiom_1_Inertia",
+                            "label": "Law of Inertia",
+                            "similarity_score": 0.72,
+                            "is_gold_target": False,
+                        },
                     ],
                 },
                 {
@@ -2805,8 +3324,20 @@ class EvaluationAdapter:
                     "target_category": "intended_applications",
                     "expected": ["str:Gravitational_Force_Law"],
                     "candidates": [
-                        {"rank": 1, "node_id": "str:Centripetal_Force_Axiom", "label": "Centripetal Acceleration", "similarity_score": 0.81, "is_gold_target": False},
-                        {"rank": 2, "node_id": "str:Gravitational_Force_Law", "label": "Universal Gravitation Law", "similarity_score": 0.79, "is_gold_target": True},
+                        {
+                            "rank": 1,
+                            "node_id": "str:Centripetal_Force_Axiom",
+                            "label": "Centripetal Acceleration",
+                            "similarity_score": 0.81,
+                            "is_gold_target": False,
+                        },
+                        {
+                            "rank": 2,
+                            "node_id": "str:Gravitational_Force_Law",
+                            "label": "Universal Gravitation Law",
+                            "similarity_score": 0.79,
+                            "is_gold_target": True,
+                        },
                     ],
                 },
                 {
@@ -2815,7 +3346,13 @@ class EvaluationAdapter:
                     "target_category": "dialectical_balance",
                     "expected": ["str:CPM_Axiom_3_ActionReaction"],
                     "candidates": [
-                        {"rank": 1, "node_id": "str:Conservation_of_Energy", "label": "Energy Conservation", "similarity_score": 0.65, "is_gold_target": False},
+                        {
+                            "rank": 1,
+                            "node_id": "str:Conservation_of_Energy",
+                            "label": "Energy Conservation",
+                            "similarity_score": 0.65,
+                            "is_gold_target": False,
+                        },
                     ],
                 },
             ]
@@ -2837,9 +3374,9 @@ class EvaluationAdapter:
                     break
 
             reciprocal = (1.0 / first_rank) if first_rank else 0.0
-            h1 = (first_rank == 1)
-            h3 = (first_rank is not None and first_rank <= 3)
-            h10 = (first_rank is not None and first_rank <= 10)
+            h1 = first_rank == 1
+            h3 = first_rank is not None and first_rank <= 3
+            h10 = first_rank is not None and first_rank <= 10
 
             if h1:
                 hits_1_count += 1
@@ -2898,18 +3435,34 @@ class EvaluationAdapter:
         issues: list[BenchmarkValidationIssue] = []
         try:
             data = json.loads(raw_content)
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             try:
                 data = yaml.safe_load(raw_content) or {}
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 baseline
                 return BenchmarkValidationResult(
                     is_valid=False,
-                    issues=[BenchmarkValidationIssue(severity="error", rule_id="SYNTAX_ERROR", message=f"Invalid JSON/YAML: {e}")],
+                    issues=[
+                        BenchmarkValidationIssue(
+                            severity="error",
+                            rule_id="SYNTAX_ERROR",
+                            message=f"Invalid JSON/YAML: {e}",
+                        )
+                    ],
                 )
 
-        graph_items = data.get("@graph", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        graph_items = (
+            data.get("@graph", [])
+            if isinstance(data, dict)
+            else (data if isinstance(data, list) else [])
+        )
         if not graph_items:
-            issues.append(BenchmarkValidationIssue(severity="error", rule_id="EMPTY_GRAPH", message="Benchmark contains no graph items."))
+            issues.append(
+                BenchmarkValidationIssue(
+                    severity="error",
+                    rule_id="EMPTY_GRAPH",
+                    message="Benchmark contains no graph items.",
+                )
+            )
             return BenchmarkValidationResult(is_valid=False, issues=issues)
 
         # Check entity ID uniqueness and build specialization hierarchy
@@ -2921,16 +3474,34 @@ class EvaluationAdapter:
         for idx, item in enumerate(graph_items):
             item_id = item.get("@id") or item.get("id")
             if not item_id:
-                issues.append(BenchmarkValidationIssue(severity="warning", rule_id="MISSING_ID", message=f"Item at index {idx} has no @id.", location=str(idx)))
+                issues.append(
+                    BenchmarkValidationIssue(
+                        severity="warning",
+                        rule_id="MISSING_ID",
+                        message=f"Item at index {idx} has no @id.",
+                        location=str(idx),
+                    )
+                )
                 continue
 
             if item_id in seen_ids:
-                issues.append(BenchmarkValidationIssue(severity="error", rule_id="DUPLICATE_ID", message=f"Duplicate entity identifier '{item_id}'.", location=item_id))
+                issues.append(
+                    BenchmarkValidationIssue(
+                        severity="error",
+                        rule_id="DUPLICATE_ID",
+                        message=f"Duplicate entity identifier '{item_id}'.",
+                        location=item_id,
+                    )
+                )
             seen_ids.add(item_id)
 
             if "source" in item and "target" in item:
                 triples_count += 1
-                dag.add_edge(item["source"], item["target"], predicate=item.get("relation", "SPECIALIZES_TO"))
+                dag.add_edge(
+                    item["source"],
+                    item["target"],
+                    predicate=item.get("relation", "SPECIALIZES_TO"),
+                )
             else:
                 entities_count += 1
                 dag.add_node(item_id)
@@ -2948,7 +3519,7 @@ class EvaluationAdapter:
                         message=f"Specialization hierarchy contains cyclic dependencies: {cycle_str}",
                     )
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 baseline
                 issues.append(
                     BenchmarkValidationIssue(
                         severity="error",
@@ -2979,7 +3550,9 @@ class EvaluationAdapter:
             issues=issues,
         )
 
-    def register_benchmark(self, request: RegisterBenchmarkRequest) -> BenchmarkDescriptor:
+    def register_benchmark(
+        self, request: RegisterBenchmarkRequest
+    ) -> BenchmarkDescriptor:
         """Register a new gold-standard benchmark in the filesystem catalog.
 
         Parameters
@@ -2993,7 +3566,8 @@ class EvaluationAdapter:
             Registered benchmark descriptor.
         """
         self.eval_data_dir.mkdir(parents=True, exist_ok=True)
-        gold_file = self.eval_data_dir / f"{request.id}.jsonld"
+        safe_id = validate_safe_identifier(request.id, "benchmark_id")
+        gold_file = resolve_safe_child(self.eval_data_dir, f"{safe_id}.jsonld")
 
         # Determine if string is raw JSON or path
         content = request.gold_standard_jsonld
@@ -3005,7 +3579,9 @@ class EvaluationAdapter:
 
         queries_file: Path | None = None
         if request.queries_yaml:
-            queries_file = self.eval_data_dir / f"{request.id}_queries.yaml"
+            queries_file = resolve_safe_child(
+                self.eval_data_dir, f"{safe_id}_queries.yaml"
+            )
             q_content = request.queries_yaml
             if Path(q_content).is_file():
                 q_content = Path(q_content).read_text(encoding="utf-8")
@@ -3022,7 +3598,9 @@ class EvaluationAdapter:
             available=True,
         )
 
-    def export_report(self, evaluation_id: str, format: str = "latex") -> tuple[str, str]:
+    def export_report(
+        self, evaluation_id: str, format: str = "latex"
+    ) -> tuple[str, str]:
         """Export publication-ready LaTeX tables, CSV summaries, or JSON-LD graph bundles.
 
         Parameters
@@ -3074,4 +3652,6 @@ class EvaluationAdapter:
             return "\n".join(csv_lines), "text/csv"
 
         # Default JSON-LD
-        return json.dumps(report.model_dump(mode="json"), indent=2), "application/ld+json"
+        return json.dumps(
+            report.model_dump(mode="json"), indent=2
+        ), "application/ld+json"

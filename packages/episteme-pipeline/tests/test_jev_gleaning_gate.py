@@ -66,7 +66,9 @@ async def test_jev_gleaning_gate_fast_exit_when_prob_below_threshold():
     assert should_continue is False
     assert acc == 0.88
 
-    gating_events = [e for e in collector.events if isinstance(e, DecisionGatingTriggered)]
+    gating_events = [
+        e for e in collector.events if isinstance(e, DecisionGatingTriggered)
+    ]
     assert len(gating_events) == 1
     assert gating_events[0].gate_name == "gleaning_gate"
     assert gating_events[0].action_taken == "fast_exit"
@@ -105,7 +107,9 @@ async def test_jev_gleaning_gate_continues_when_prob_above_threshold():
     assert should_continue is True
     assert acc == 0.92
 
-    gating_events = [e for e in collector.events if isinstance(e, DecisionGatingTriggered)]
+    gating_events = [
+        e for e in collector.events if isinstance(e, DecisionGatingTriggered)
+    ]
     assert len(gating_events) == 1
     assert gating_events[0].action_taken == "escalated_to_llm"
 
@@ -135,7 +139,9 @@ async def test_jev_gleaning_gate_hard_boundary_max_passes():
     )
 
     assert should_continue is False
-    gating_events = [e for e in collector.events if isinstance(e, DecisionGatingTriggered)]
+    gating_events = [
+        e for e in collector.events if isinstance(e, DecisionGatingTriggered)
+    ]
     assert len(gating_events) == 1
     assert gating_events[0].action_taken == "loop_terminated"
 
@@ -171,7 +177,9 @@ async def test_jev_gleaning_gate_stochastic_audit():
     )
 
     assert should_continue is True
-    gating_events = [e for e in collector.events if isinstance(e, DecisionGatingTriggered)]
+    gating_events = [
+        e for e in collector.events if isinstance(e, DecisionGatingTriggered)
+    ]
     assert len(gating_events) == 1
     assert gating_events[0].action_taken == "stochastic_audit"
 
@@ -285,7 +293,9 @@ def test_jev_gleaning_gate_config_defaults():
     assert gate.max_passes == 3
 
     # Custom config overrides defaults
-    custom_cfg = GleaningConfig(confidence_threshold=0.80, audit_rate=0.05, max_passes=5)
+    custom_cfg = GleaningConfig(
+        confidence_threshold=0.80, audit_rate=0.05, max_passes=5
+    )
     gate_custom = JevGleaningGate(config=custom_cfg)
     assert gate_custom.config.confidence_threshold == 0.80
     assert gate_custom.config.audit_rate == 0.05
@@ -295,8 +305,15 @@ def test_jev_gleaning_gate_config_defaults():
 def test_jev_gleaning_gate_format_context():
     """Verify _format_context structures chunk text and typed domain objects."""
     entity = L2Entity(id="e1", name="Popper", label="PHILOSOPHER")
-    atom = TheoryAtom(id="a1", source_chunk_id="c1", text="Falsificationism criterion", component_type="claim")
-    context = JevGleaningGate._format_context("Sample philosophical text.", [entity, atom, "raw_string"])
+    atom = TheoryAtom(
+        id="a1",
+        source_chunk_id="c1",
+        text="Falsificationism criterion",
+        component_type="claim",
+    )
+    context = JevGleaningGate._format_context(
+        "Sample philosophical text.", [entity, atom, "raw_string"]
+    )
 
     assert context["chunk_text"] == "Sample philosophical text."
     assert context["total_extracted_so_far"] == 3
@@ -317,6 +334,7 @@ async def test_llm_ner_extractor_with_stopping_oracle():
     mock_llm = MagicMock()
     # First call: initial extraction; second call: gleaning pass with new finding
     from episteme_pipeline.phases.phase2_entity_discovery.models import ExtractedEntity
+
     raw_ent = ExtractedEntity(
         id="e1",
         label="CONCEPT",
@@ -340,4 +358,3 @@ async def test_llm_ner_extractor_with_stopping_oracle():
 
     assert mock_oracle.should_glean.call_count == 2
     assert mock_llm.predict_structured.call_count == 2
-

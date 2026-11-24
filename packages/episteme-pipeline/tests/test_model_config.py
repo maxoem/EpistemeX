@@ -16,7 +16,14 @@ from episteme_pipeline.runs.fingerprints import fingerprint_phase_config
 
 @pytest.fixture
 def clean_model_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("LLM_MODEL", "EMBED_MODEL", "RERANKER_MODEL", "LITELLM_API_BASE", "LLM_THINKING_LEVEL", "THINKING_LEVEL"):
+    for name in (
+        "LLM_MODEL",
+        "EMBED_MODEL",
+        "RERANKER_MODEL",
+        "LITELLM_API_BASE",
+        "LLM_THINKING_LEVEL",
+        "THINKING_LEVEL",
+    ):
         monkeypatch.delenv(name, raising=False)
 
 

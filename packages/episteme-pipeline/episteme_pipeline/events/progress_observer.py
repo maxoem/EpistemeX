@@ -26,10 +26,12 @@ except ImportError:
 
 from episteme_pipeline.events.bus import EventObserver
 from episteme_pipeline.events.models import (
+    PhaseFailed,
     PipelineEvent,
     ProgressAdvanced,
     ProgressCompleted,
     ProgressStarted,
+    RunFailed,
 )
 from episteme_pipeline.observability.logging import silence_noisy_loggers
 
@@ -88,7 +90,9 @@ class RichProgressObserver(EventObserver):
             raise ImportError("rich must be installed to use RichProgressObserver.")
 
         self.progress = progress
-        self._console = console or (progress.console if progress is not None else Console())
+        self._console = console or (
+            progress.console if progress is not None else Console()
+        )
         self.third_party_log_level = third_party_log_level
         self.auto_refresh = auto_refresh
         self.transient = transient
@@ -175,7 +179,10 @@ class RichProgressObserver(EventObserver):
         # Sync existing RichHandlers to share the same console so logs don't tear the progress bar
         if self.sync_root_handlers and RichHandler is not None:
             for handler in logging.getLogger().handlers:
-                if isinstance(handler, RichHandler) and handler.console is not self.console:
+                if (
+                    isinstance(handler, RichHandler)
+                    and handler.console is not self.console
+                ):
                     handler.console = self.console
 
         if self._owns_progress:
@@ -183,7 +190,7 @@ class RichProgressObserver(EventObserver):
 
         return self
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:  # noqa: PYI036 baseline
         """Stop the progress display if owned by this observer.
 
         Parameters
@@ -225,14 +232,18 @@ class RichProgressObserver(EventObserver):
         elif isinstance(event, ProgressCompleted):
             task_id = self._tasks.get(event.task_name)
             if task_id is not None:
-                task = (
-                    self.progress._tasks.get(task_id)
-                    if hasattr(self.progress, "_tasks")
-                    else None
-                )
+                tasks_map = self.progress._tasks
+                task = tasks_map.get(task_id) if isinstance(tasks_map, dict) else None
                 if task is not None and task.total is not None:
                     self.progress.update(task_id, completed=task.total)
                 else:
                     self.progress.update(task_id, completed=None)
                 self.progress.refresh()
 
+        elif isinstance(event, (PhaseFailed, RunFailed)):
+            self.progress.refresh()
+
+    def flush(self) -> None:
+        """Refresh and flush the active Rich progress display."""
+        if self.progress is not None:
+            self.progress.refresh()

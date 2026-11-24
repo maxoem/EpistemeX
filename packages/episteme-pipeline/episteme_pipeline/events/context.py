@@ -3,6 +3,7 @@
 Provides task-local binding and retrieval of active `EventEmitter` instances,
 eliminating the need to pass `event_emitter` through every function and class constructor.
 """
+
 from __future__ import annotations
 
 from collections.abc import Generator
@@ -50,6 +51,9 @@ def set_event_emitter(emitter: EventEmitter | None) -> Token:
 def use_event_emitter(emitter: EventEmitter | None) -> Generator[EventEmitter]:
     """Context manager to bind an `EventEmitter` for the duration of a code block.
 
+    Guarantees that `emitter.flush()` is invoked in a finally block upon exit,
+    ensuring that buffered spans and events are drained even if an exception occurs.
+
     Parameters
     ----------
     emitter : Optional[EventEmitter]
@@ -71,4 +75,9 @@ def use_event_emitter(emitter: EventEmitter | None) -> Generator[EventEmitter]:
     try:
         yield get_event_emitter()
     finally:
+        if isinstance(emitter, EventEmitter):
+            try:
+                emitter.flush()
+            except Exception:  # noqa: BLE001, S110 baseline
+                pass
         _CURRENT_EVENT_EMITTER.reset(token)

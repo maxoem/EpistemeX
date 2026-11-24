@@ -27,8 +27,9 @@ and [ADR 0005: Two-Pass Fusion Strategy](../../adr/0005-two-pass-fusion-strategy
 
 - **Batch Embedding**: Argument component texts are embedded concurrently via `embed_model.aget_text_embedding_batch()`.
 - **Cosine Similarity Matrix**: Normalised dot product matrix is computed over all component pairs.
-- **Union-Find Clustering**: Component pairs exceeding `fusion_similarity_threshold` (default: 0.85) are merged into
-  clusters.
+- **Clique-Constrained Clustering**: Component pairs exceeding `fusion_similarity_threshold` (default: 0.85) are partitioned
+  via `clique_constrained_components`, strictly enforcing `min_internal_similarity` (default: 0.75) and `max_diameter` bounds
+  to prevent single-linkage bridge chaining from collapsing distinct arguments.
 - **Representative Election**: The component with the highest mean cosine similarity to peers is elected as the cluster
   representative.
 
@@ -69,7 +70,7 @@ and [ADR 0005: Two-Pass Fusion Strategy](../../adr/0005-two-pass-fusion-strategy
 flowchart TD
     A[Layer 3 Argument Components] --> B[Concurrent Text Embedding]
     B --> C[Compute Pairwise Cosine Similarity]
-    C --> D[Union-Find Clustering<br>threshold = fusion_similarity_threshold]
+    C --> D[Clique-Constrained Clustering<br>threshold & min_internal_similarity]
     D --> E[Elect Representative Component<br>Highest Mean Centroid Similarity]
     E --> F{theory_fusion_enabled = True?}
     F -->|Yes| G[LeidenTheoryClustering<br>Hierarchical Community Detection]
@@ -92,6 +93,9 @@ Configuration is managed via `Phase5Config` in `pipeline/config.py`:
 | `argument_clustering_enabled` | `bool`               | `True`           | Whether to cluster semantically equivalent argument components.  |
 | `theory_fusion_enabled`       | `bool`               | `False`          | Whether to execute hierarchical Leiden community detection.      |
 | `fusion_similarity_threshold` | `float`              | `0.85`           | Minimum cosine similarity required to merge argument components. |
+| `min_internal_similarity`     | `float`              | `0.75`           | Minimum pairwise similarity floor across all members in a cluster.|
+| `max_diameter`                | `float \| None`      | `None`           | Optional maximum cluster diameter bound.                         |
+| `max_cluster_size`            | `int`                | `100`            | Maximum allowed nodes in a single cluster.                       |
 | `cluster_layer`               | `str`                | `"theory_atoms"` | Layer to cluster (`"theory_atoms"`, `"l2_entities"`, `"both"`).  |
 | `gating`                      | `FusionGatingConfig` | `default`        | Encapsulated configuration for calibrated theory fusion gating.  |
 | `gating.enabled`              | `bool`               | `False`          | Whether to verify candidate theory clusters using Jev decision engine. |

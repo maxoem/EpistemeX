@@ -53,6 +53,7 @@ from episteme_studio.domain.evaluation import (
 )
 from episteme_studio.domain.events import StudioEvent
 from episteme_studio.runtime.broker import EventBroker
+from episteme_studio.security import resolve_safe_child, validate_safe_identifier
 from episteme_studio.settings import StudioSettings
 
 
@@ -108,9 +109,10 @@ class EvaluationService:
             Job descriptor to serialize and persist.
         """
         try:
-            target_file = self._jobs_dir / f"{desc.job_id}.json"
+            safe_job_id = validate_safe_identifier(desc.job_id, "job_id")
+            target_file = resolve_safe_child(self._jobs_dir, f"{safe_job_id}.json")
             target_file.write_text(desc.model_dump_json(indent=2), encoding="utf-8")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 baseline
             logger.warning("Failed to persist evaluation job %s: %s", desc.job_id, e)
 
     @classmethod
@@ -383,7 +385,11 @@ class EvaluationService:
         if job_id in self._jobs:
             return self._jobs[job_id]
 
-        target_file = self._jobs_dir / f"{job_id}.json"
+        try:
+            safe_job_id = validate_safe_identifier(job_id, "job_id")
+            target_file = resolve_safe_child(self._jobs_dir, f"{safe_job_id}.json")
+        except ValueError:
+            return None
         if target_file.is_file():
             try:
                 desc = EvaluationJobDescriptor.model_validate_json(
@@ -391,7 +397,7 @@ class EvaluationService:
                 )
                 self._jobs[job_id] = desc
                 return desc
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 baseline
                 logger.warning("Failed to read job file for %s: %s", job_id, e)
         return None
 
@@ -589,7 +595,7 @@ class EvaluationService:
                 level="warning",
             )
         except Exception as e:
-            logger.error("Evaluation job %s failed: %s", job_id, e, exc_info=True)
+            logger.error("Evaluation job %s failed: %s", job_id, e, exc_info=True)  # noqa: G201 baseline
             desc = self._jobs.get(job_id)
             if desc:
                 desc.status = EvaluationJobStatus.FAILED
@@ -980,8 +986,10 @@ class EvaluationService:
         import json
         from pathlib import Path
 
-        decisions_file = Path(".pipeline_runs") / run_id / "decisions.jsonl"
-        adjudications_file = Path(".pipeline_runs") / run_id / "adjudications.json"
+        safe_run_id = validate_safe_identifier(run_id, "run_id")
+        run_dir = resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
+        decisions_file = run_dir / "decisions.jsonl"
+        adjudications_file = run_dir / "adjudications.json"
 
         adjudications: dict[str, dict[str, Any]] = {}
         if adjudications_file.is_file():
@@ -989,7 +997,7 @@ class EvaluationService:
                 adjudications = json.loads(
                     adjudications_file.read_text(encoding="utf-8")
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
         items: list[BorderlineDecisionItem] = []
@@ -1041,7 +1049,7 @@ class EvaluationService:
                                 curator_notes=adj_info.get("curator_notes"),
                             )
                         )
-            except Exception as err:
+            except Exception as err:  # noqa: BLE001 baseline
                 logger.warning("Error reading decisions.jsonl for %s: %s", run_id, err)
 
         # Fallback simulated borderline items if none on disk (e.g. for demo runs or tests)
@@ -1138,7 +1146,9 @@ class EvaluationService:
         import json
         from pathlib import Path
 
-        adjudications_file = Path(".pipeline_runs") / run_id / "adjudications.json"
+        safe_run_id = validate_safe_identifier(run_id, "run_id")
+        run_dir = resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
+        adjudications_file = run_dir / "adjudications.json"
         adjudications_file.parent.mkdir(parents=True, exist_ok=True)
 
         adjudications: dict[str, dict[str, Any]] = {}
@@ -1147,7 +1157,7 @@ class EvaluationService:
                 adjudications = json.loads(
                     adjudications_file.read_text(encoding="utf-8")
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
         adjudications[decision_id] = {
@@ -1162,7 +1172,7 @@ class EvaluationService:
             adjudications_file.write_text(
                 json.dumps(adjudications, indent=2), encoding="utf-8"
             )
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 baseline
             logger.warning(
                 "Could not persist adjudication to %s: %s", adjudications_file, err
             )
@@ -1232,7 +1242,8 @@ class EvaluationService:
                 }
             )
 
-        export_dir = Path(".pipeline_runs") / run_id
+        safe_run_id = validate_safe_identifier(run_id, "run_id")
+        export_dir = resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
         export_dir.mkdir(parents=True, exist_ok=True)
         export_path = export_dir / "active_learning_export.jsonl"
 

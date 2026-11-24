@@ -27,7 +27,7 @@ dev = [
     "pytest-asyncio==1.4.0",
     "pytest-socket>=0.8.1",
     "ruff>=0.17.0",
-    "zensical==0.0.64",
+    "zensical==0.0.71",
 ]
 
 [tool.pytest.ini_options]
@@ -44,3 +44,21 @@ pythonpath = [
     "packages/episteme-studio/src",
 ]
 norecursedirs = ["src", "frontend", "node_modules"]
+
+[tool.ruff]
+target-version = "py313"
+extend-exclude = ["*.md", "docs", "issues", "datasets", "evaluation/reports", "site"]
+
+[tool.ruff.lint]
+extend-select = ["RUF100"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.File",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Path",
+    "fastapi.Form",
+]

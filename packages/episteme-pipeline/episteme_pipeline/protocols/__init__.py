@@ -15,6 +15,7 @@ from episteme_pipeline.protocols.decision import (
     ensure_decision_engine,
     ensure_decision_question,
 )
+from episteme_pipeline.protocols.entity_maturation import ConceptionClustererProtocol
 from episteme_pipeline.protocols.extractors import (
     CrossEncoder,
     EmbeddingModel,
@@ -51,6 +52,25 @@ from episteme_pipeline.protocols.modality import (
     ensure_modal_strength_resolver,
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
+from episteme_pipeline.protocols.quality_gate import (
+    EpistemicQualityGate,
+    QualityGateResult,
+    QualityGateViolationError,
+    QualityGateWarning,
+    ensure_quality_gate,
+    ensure_quality_gates,
+)
+from episteme_pipeline.protocols.refinement import (
+    ConditionalRefinementHandler,
+    EpistemicDeficitDetector,
+    HermeneuticRefinementCoordinator,
+    LocalizedAxiomGrounder,
+    TargetedConceptSplitter,
+    TargetedRefinementPort,
+    TheoryGuidedPremiseRecoverer,
+    ensure_deficit_detector,
+    ensure_refinement_coordinator,
+)
 
 __all__ = [
     "ACCClassifier",
@@ -58,6 +78,8 @@ __all__ = [
     "ARCClassifier",
     "ARIIdentifier",
     "ArgumentClustering",
+    "ConceptionClustererProtocol",
+    "ConditionalRefinementHandler",
     "CrossEncoder",
     "DataSourceAdapter",
     "DecisionEngine",
@@ -67,6 +89,8 @@ __all__ = [
     "EmbeddingModel",
     "EntityGraph",
     "EntityLinker",
+    "EpistemicDeficitDetector",
+    "EpistemicQualityGate",
     "EvictionSignal",
     "Fingerprintable",
     "FusionGraph",
@@ -74,8 +98,10 @@ __all__ = [
     "GlobalStructuralAnchor",
     "GraphReader",
     "GraphWriter",
+    "HermeneuticRefinementCoordinator",
     "HuggingFaceEmbeddingModel",
     "InstanceFusion",
+    "LocalizedAxiomGrounder",
     "ModalStrengthResolver",
     "NERExtractor",
     "NoOpTraceSink",
@@ -85,14 +111,24 @@ __all__ = [
     "PhaseRunner",
     "ProcessingGraph",
     "ProjectionGraph",
+    "QualityGateResult",
+    "QualityGateViolationError",
+    "QualityGateWarning",
     "RelationReranker",
     "SyncEncoderEmbeddingModel",
+    "TargetedConceptSplitter",
+    "TargetedRefinementPort",
     "TheoryFusion",
+    "TheoryGuidedPremiseRecoverer",
     "TraceSink",
     "WorkingMemoryState",
     "ensure_decision_engine",
     "ensure_decision_question",
+    "ensure_deficit_detector",
     "ensure_embedding_model",
     "ensure_modal_strength_resolver",
+    "ensure_quality_gate",
+    "ensure_quality_gates",
+    "ensure_refinement_coordinator",
     "find_components",
 ]

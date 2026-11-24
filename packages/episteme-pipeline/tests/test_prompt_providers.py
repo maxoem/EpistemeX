@@ -17,7 +17,7 @@ from episteme_pipeline.protocols.prompts import PromptProvider
 
 def test_mustache_to_python_format_conversion():
     """Verify Mustache variable tags are converted while preserving JSON escapes."""
-    template = "Extract from {{chunk_text}} with schema {{\n  \"key\": \"val\"\n}} and {{entity_types}}."
+    template = 'Extract from {{chunk_text}} with schema {{\n  "key": "val"\n}} and {{entity_types}}.'
     converted = _mustache_to_python_format(template)
     assert "{chunk_text}" in converted
     assert "{entity_types}" in converted
@@ -74,7 +74,9 @@ def test_default_prompt_provider_populate_config():
     assert populated.phase2.ner_prompts.name == "ner_extraction"
     assert populated.phase2.entity_linking_prompts.name == "entity_linking"
     assert populated.phase3.global_relation_prompts.name == "global_relation"
-    assert populated.phase4_maturation.entity_synthesis_prompts.name == "entity_synthesis"
+    assert (
+        populated.phase4_maturation.entity_synthesis_prompts.name == "entity_synthesis"
+    )
     assert populated.phase4.adu_segmentation_prompts.name == "adu_segmentation"
     assert populated.phase4.acc_prompts.name == "acc_classification"
     assert populated.phase4.arc_prompts.name == "arc_classification"
@@ -97,7 +99,9 @@ def test_langfuse_prompt_provider_with_mock_client():
     mock_prompt.version = 5
     mock_prompt.labels = ["production"]
     mock_prompt.config = {"temperature": 0.1, "model": "gpt-4o"}
-    mock_prompt.prompt = "Extract entities from {{chunk_text}} matching {{entity_types}}."
+    mock_prompt.prompt = (
+        "Extract entities from {{chunk_text}} matching {{entity_types}}."
+    )
 
     mock_client.get_prompt.return_value = mock_prompt
 
@@ -119,11 +123,13 @@ def test_file_prompt_provider(tmp_path):
     """Verify FilePromptProvider loads JSON prompt definitions from disk."""
     prompt_file = tmp_path / "ner_extraction.json"
     prompt_file.write_text(
-        json.dumps({
-            "direct_template": "Custom file prompt: {chunk_text}",
-            "reasoning_template": "Custom reasoning: {chunk_text}",
-            "version": "1.0.0",
-        }),
+        json.dumps(
+            {
+                "direct_template": "Custom file prompt: {chunk_text}",
+                "reasoning_template": "Custom reasoning: {chunk_text}",
+                "version": "1.0.0",
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -148,7 +154,7 @@ async def test_prompt_version_changes_fingerprint(tmp_path, graph_store):
         projection_graph=graph_store,
         checkpoint_store=graph_store,
     )
-    fps1 = pipeline1._prompt_fingerprints()
+    fps1 = pipeline1.engine.prompt_fingerprints()
 
     config2 = PipelineConfig()
     config2.phase2.ner_prompts.version = 2
@@ -159,7 +165,7 @@ async def test_prompt_version_changes_fingerprint(tmp_path, graph_store):
         projection_graph=graph_store,
         checkpoint_store=graph_store,
     )
-    fps2 = pipeline2._prompt_fingerprints()
+    fps2 = pipeline2.engine.prompt_fingerprints()
 
     assert fps1["phase2"]["ner_extraction"] != fps2["phase2"]["ner_extraction"]
     assert fps1["phase3"]["global_relation"] == fps2["phase3"]["global_relation"]
@@ -173,7 +179,9 @@ def test_langfuse_prompt_provider_unreachable_passes_with_warning():
     return a valid StructuredPromptBundle without failing.
     """
     mock_failing_client = MagicMock()
-    mock_failing_client.get_prompt.side_effect = ConnectionError("Langfuse server connection refused at localhost:3000")
+    mock_failing_client.get_prompt.side_effect = ConnectionError(
+        "Langfuse server connection refused at localhost:3000"
+    )
 
     provider = LangfusePromptProvider(client=mock_failing_client)
 
@@ -212,7 +220,9 @@ def test_langfuse_provider_scenario_always_returns_valid_bundle(client_scenario)
         client.create_prompt.side_effect = TimeoutError("Langfuse request timed out")
         provider = LangfusePromptProvider(client=client)
 
-        with pytest.warns(UserWarning, match=r"Failed to (fetch|create) prompt.*timed out"):
+        with pytest.warns(
+            UserWarning, match=r"Failed to (fetch|create) prompt.*timed out"
+        ):
             bundle = provider.get_bundle("global_relation")
         assert isinstance(bundle, StructuredPromptBundle)
         assert bundle.direct_template
@@ -221,7 +231,10 @@ def test_langfuse_provider_scenario_always_returns_valid_bundle(client_scenario)
     elif client_scenario == "unconfigured":
         provider = LangfusePromptProvider(client=None)
 
-        with pytest.warns(UserWarning, match=r"(Failed to fetch prompt|Langfuse client is not initialized)"):
+        with pytest.warns(
+            UserWarning,
+            match=r"(Failed to fetch prompt|Langfuse client is not initialized)",
+        ):
             bundle = provider.get_bundle("global_relation")
         assert isinstance(bundle, StructuredPromptBundle)
         assert bundle.direct_template
@@ -283,7 +296,9 @@ def test_langfuse_prompt_provider_create_bundle():
 
     # 4 calls to create_prompt: direct, reasoning, format, gleaning
     assert mock_client.create_prompt.call_count == 4
-    created_names = [call.kwargs["name"] for call in mock_client.create_prompt.call_args_list]
+    created_names = [
+        call.kwargs["name"] for call in mock_client.create_prompt.call_args_list
+    ]
     assert "ner_extraction" in created_names
     assert "ner_extraction_reasoning" in created_names
     assert "ner_extraction_format" in created_names
@@ -316,7 +331,9 @@ def test_langfuse_prompt_provider_sync_defaults():
 
     # Verified create_prompt was invoked across all templates
     assert mock_client.create_prompt.call_count >= 7
-    all_created_names = {call.kwargs["name"] for call in mock_client.create_prompt.call_args_list}
+    all_created_names = {
+        call.kwargs["name"] for call in mock_client.create_prompt.call_args_list
+    }
     assert "ner_extraction" in all_created_names
     assert "ner_extraction_reasoning" in all_created_names
     assert "global_relation" in all_created_names
@@ -335,11 +352,11 @@ def test_langfuse_prompt_provider_populate_config_triggers_sync():
 
     provider = LangfusePromptProvider(client=mock_client)
     config = PipelineConfig()
-    populated = provider.populate_config(config, label_or_version="production", sync_defaults=True)
+    populated = provider.populate_config(
+        config, label_or_version="production", sync_defaults=True
+    )
 
     assert mock_client.create_prompt.call_count >= 7
     assert populated.phase2.ner_prompts.version == 1
     assert populated.phase3.global_relation_prompts.version == 1
     assert populated.phase4.acc_prompts.version == 1
-
-

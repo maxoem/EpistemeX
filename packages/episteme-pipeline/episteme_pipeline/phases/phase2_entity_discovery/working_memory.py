@@ -88,10 +88,14 @@ class JsonPatchWorkingMemoryState(WorkingMemoryState):
                 self._state["unresolved_references"] = new_refs[-10:]
 
         if state_delta.get("current_argument_branch"):
-            self._state["current_argument_branch"] = str(state_delta["current_argument_branch"])
+            self._state["current_argument_branch"] = str(
+                state_delta["current_argument_branch"]
+            )
 
         if state_delta.get("transitional_summary"):
-            self._state["transitional_summary"] = str(state_delta["transitional_summary"])
+            self._state["transitional_summary"] = str(
+                state_delta["transitional_summary"]
+            )
 
     def reset(self, transitional_summary: str | None = None) -> None:
         """
@@ -121,7 +125,9 @@ class JsonPatchWorkingMemoryState(WorkingMemoryState):
         active = {k: v for k, v in self._state.items() if v}
         if not active:
             return "Active Short-Term Memory: None (Initial Episode State)"
-        return f"Active Short-Term Memory (RAM Context):\n{json.dumps(active, indent=2)}"
+        return (
+            f"Active Short-Term Memory (RAM Context):\n{json.dumps(active, indent=2)}"
+        )
 
     def get_raw_state(self) -> dict[str, Any]:
         """
@@ -134,14 +140,34 @@ class JsonPatchWorkingMemoryState(WorkingMemoryState):
         """
         return dict(self._state)
 
+    def load_raw_state(self, state: dict[str, Any]) -> None:
+        """
+        Restore raw state variables from snapshot dictionary.
+
+        Parameters
+        ----------
+        state : dict[str, Any]
+            State dictionary to restore.
+        """
+        self._state = dict(state)
+
 
 class PydanticWorkingMemoryState(WorkingMemoryState):
     """
     Pydantic-backed state machine implementation of WorkingMemoryState.
     """
 
-    def __init__(self, initial_schema: WorkingMemorySchema | None = None) -> None:
-        self._schema = initial_schema or WorkingMemorySchema()
+    def __init__(
+        self,
+        initial_schema: WorkingMemorySchema | None = None,
+        initial_state: dict[str, Any] | None = None,
+    ) -> None:
+        if initial_schema is not None:
+            self._schema = initial_schema
+        elif initial_state is not None:
+            self._schema = WorkingMemorySchema(**initial_state)
+        else:
+            self._schema = WorkingMemorySchema()
 
     def update(self, state_delta: dict[str, Any]) -> None:
         """
@@ -156,19 +182,31 @@ class PydanticWorkingMemoryState(WorkingMemoryState):
             return
 
         current_dict = self._schema.model_dump()
-        if "active_entities" in state_delta and isinstance(state_delta["active_entities"], list):
+        if "active_entities" in state_delta and isinstance(
+            state_delta["active_entities"], list
+        ):
             combined = current_dict["active_entities"] + state_delta["active_entities"]
             seen = set()
-            current_dict["active_entities"] = [e for e in combined if not (e in seen or seen.add(e))][-15:]
+            current_dict["active_entities"] = [
+                e for e in combined if not (e in seen or seen.add(e))
+            ][-15:]
 
-        if "unresolved_references" in state_delta and isinstance(state_delta["unresolved_references"], list):
-            current_dict["unresolved_references"] = state_delta["unresolved_references"][-10:]
+        if "unresolved_references" in state_delta and isinstance(
+            state_delta["unresolved_references"], list
+        ):
+            current_dict["unresolved_references"] = state_delta[
+                "unresolved_references"
+            ][-10:]
 
         if state_delta.get("current_argument_branch"):
-            current_dict["current_argument_branch"] = str(state_delta["current_argument_branch"])
+            current_dict["current_argument_branch"] = str(
+                state_delta["current_argument_branch"]
+            )
 
         if state_delta.get("transitional_summary"):
-            current_dict["transitional_summary"] = str(state_delta["transitional_summary"])
+            current_dict["transitional_summary"] = str(
+                state_delta["transitional_summary"]
+            )
 
         self._schema = WorkingMemorySchema(**current_dict)
 
@@ -208,6 +246,17 @@ class PydanticWorkingMemoryState(WorkingMemoryState):
         """
         return self._schema.model_dump()
 
+    def load_raw_state(self, state: dict[str, Any]) -> None:
+        """
+        Restore raw state variables from snapshot dictionary.
+
+        Parameters
+        ----------
+        state : dict[str, Any]
+            State dictionary to restore.
+        """
+        self._schema = WorkingMemorySchema(**state)
+
 
 class KeyValueWorkingMemoryState(WorkingMemoryState):
     """
@@ -237,7 +286,11 @@ class KeyValueWorkingMemoryState(WorkingMemoryState):
         transitional_summary : str | None, optional
             Optional transitional context bridge.
         """
-        self._state = {"transitional_summary": transitional_summary} if transitional_summary else {}
+        self._state = (
+            {"transitional_summary": transitional_summary}
+            if transitional_summary
+            else {}
+        )
 
     def to_prompt_context(self) -> str:
         """
@@ -266,6 +319,17 @@ class KeyValueWorkingMemoryState(WorkingMemoryState):
             State dictionary.
         """
         return dict(self._state)
+
+    def load_raw_state(self, state: dict[str, Any]) -> None:
+        """
+        Restore raw state variables from snapshot dictionary.
+
+        Parameters
+        ----------
+        state : dict[str, Any]
+            State dictionary to restore.
+        """
+        self._state = dict(state)
 
 
 class EpisodicEvictionHandler:
@@ -300,12 +364,19 @@ class EpisodicEvictionHandler:
         EvictionSignal
             Eviction signal containing boundary detection status and type.
         """
-        meta = getattr(chunk, "metadata", {}) if hasattr(chunk, "metadata") and isinstance(chunk.metadata, dict) else {}
-        section_path = meta.get("section_path") or meta.get("chapter") or getattr(chunk, "chapter_id", None)
+        meta = chunk.metadata if isinstance(chunk.metadata, dict) else {}
+        section_path = (
+            meta.get("section_path") or meta.get("chapter") or chunk.chapter_id
+        )
         parent_header = meta.get("parent_header") or meta.get("header")
 
         structural_boundary = False
-        if self._last_section_path is not None and section_path != self._last_section_path or self._last_parent_header is not None and parent_header != self._last_parent_header:
+        if (
+            self._last_section_path is not None
+            and section_path != self._last_section_path
+            or self._last_parent_header is not None
+            and parent_header != self._last_parent_header
+        ):
             structural_boundary = True
 
         # Update last tracked structural coordinates
@@ -362,7 +433,9 @@ class EpisodicWorkingMemoryManager:
         else:
             return JsonPatchWorkingMemoryState()
 
-    def get_effective_anchor(self, chunk: L1Chunk | None = None) -> GlobalStructuralAnchor | None:
+    def get_effective_anchor(
+        self, chunk: L1Chunk | None = None
+    ) -> GlobalStructuralAnchor | None:
         """
         Return the configured structural anchor, or None if not set.
 
@@ -417,3 +490,58 @@ class EpisodicWorkingMemoryManager:
             self.state.reset(transitional_summary=signal.transitional_summary)
 
         return signal
+
+    def snapshot_state(self) -> dict[str, Any]:
+        """
+        Serialize current working memory state into a raw snapshot dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            Raw state snapshot dictionary including structural eviction coordinates.
+        """
+        raw = dict(self.state.get_raw_state())
+        raw["__eviction_last_section_path"] = self.eviction_handler._last_section_path
+        raw["__eviction_last_parent_header"] = self.eviction_handler._last_parent_header
+        return raw
+
+    def restore_state(self, snapshot: dict[str, Any]) -> None:
+        """
+        Restore working memory state from a raw snapshot dictionary.
+
+        Parameters
+        ----------
+        snapshot : dict[str, Any]
+            Raw state snapshot dictionary.
+        """
+        clean = dict(snapshot)
+        if "__eviction_last_section_path" in clean:
+            self.eviction_handler._last_section_path = clean.pop(
+                "__eviction_last_section_path"
+            )
+        if "__eviction_last_parent_header" in clean:
+            self.eviction_handler._last_parent_header = clean.pop(
+                "__eviction_last_parent_header"
+            )
+        self.state.load_raw_state(clean)
+
+    def fork(
+        self, anchor: GlobalStructuralAnchor | None = None
+    ) -> EpisodicWorkingMemoryManager:
+        """
+        Create an isolated working memory manager with fresh short-term state.
+
+        Parameters
+        ----------
+        anchor : GlobalStructuralAnchor | None, optional
+            Optional structural anchor override, by default None.
+
+        Returns
+        -------
+        EpisodicWorkingMemoryManager
+            Isolated working memory manager instance sharing the state strategy.
+        """
+        return type(self)(
+            anchor=anchor if anchor is not None else self.anchor,
+            state_strategy=self.state_strategy,
+        )

@@ -34,28 +34,34 @@ from episteme_pipeline.artifacts.execution import (
     ArtifactExecutionContext,
     Phase2ArtifactsView,
 )
+from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.config import Phase3Config
 from episteme_pipeline.contracts.domain import CandidatePair, L2Triple, PhaseItemRecord
-from episteme_pipeline.events.bus import EventEmitter
-from episteme_pipeline.events.models import (
-    ProgressAdvanced,
-    ProgressCompleted,
-    ProgressStarted,
-)
 from episteme_pipeline.phases.phase3_global_relations.tag_extractor import (
     TAGRelationExtractor,
 )
 from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
-from episteme_pipeline.protocols.graph_store import EntityGraph, ProcessingGraph
+from episteme_pipeline.protocols.graph_store import (
+    EntityGraph,
+    GraphReader,
+    GraphWriter,
+    PhaseCheckpointStore,
+    ProcessingGraph,
+)
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
 
+from episteme_pipeline.runtime.batch_executor import (
+    CheckpointedBatchExecutor,
+    SystematicBatchFailureError,
+)
+
 _PHASE_TAG = "phase3"
 
 
-class SystematicPairFailure(RuntimeError):
+class SystematicPairFailure(SystematicBatchFailureError):
     """Raised when every candidate pair in the initial batch fails identically."""
 
 
@@ -63,6 +69,8 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
     name = "Phase 3: Global Relation Extraction"
     phase_key = "phase3"
     input_view = Phase2ArtifactsView
+    reads_kinds = frozenset({ArtifactKind.LINKED_ENTITY, ArtifactKind.LOCAL_RELATION})
+    writes_kinds = frozenset({ArtifactKind.GLOBAL_RELATION})
 
     def __init__(
         self,
@@ -71,7 +79,7 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
         *,
         llm,
         embedding_model,
-        graph_store: ProcessingGraph | EntityGraph,
+        graph_store: ProcessingGraph | EntityGraph | PhaseCheckpointStore | None = None,
         global_extractor: GlobalRelationExtractor | None = None,
     ) -> None:
         self.config = config
@@ -85,17 +93,17 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
         )
 
     @property
-    def event_emitter(self) -> EventEmitter:
-        """Event emitter for publishing phase execution lifecycle events.
+    def checkpoint_store(self) -> PhaseCheckpointStore | None:
+        """Return the graph store if it satisfies PhaseCheckpointStore.
 
         Returns
         -------
-        EventEmitter
-            Context-bound event emitter.
+        PhaseCheckpointStore or None
+            Checkpoint store instance, or None if not supported.
         """
-        from episteme_pipeline.events.context import get_event_emitter
-
-        return get_event_emitter()
+        if isinstance(self.graph_store, PhaseCheckpointStore):
+            return self.graph_store
+        return None
 
     @staticmethod
     def _guard_systematic_failure(
@@ -120,7 +128,11 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
             If every pair in the first evaluated batch failed.
         """
         failed_records = [r for r in item_records if r.status == "failed"]
-        if succeeded_total == 0 and len(failed_records) == len(batch) and len(batch) > 0:
+        if (
+            succeeded_total == 0
+            and len(failed_records) == len(batch)
+            and len(batch) > 0
+        ):
             sample_error = failed_records[0].error or "Unknown error"
             raise SystematicPairFailure(
                 f"All {len(batch)} candidate pairs of the first batch failed in Phase 3. "
@@ -135,7 +147,7 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
         Parameters
         ----------
         input : Phase2ArtifactsView
-            View containing entity and chunk artifacts from Phase 2.
+            View containing entity and chunk artifacts from Phase 2 / 3b / 4-maturation.
         context : ArtifactExecutionContext
             Pipeline execution context.
 
@@ -144,11 +156,20 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
         ArtifactCollection
             Generated GlobalRelationArtifact instances.
         """
-        # Prefer graph-resident entities for crash-safe resume: a re-run will
-        # pick up any entities committed in a previous partial run.
-        entities = await self.graph_store.get_entities()
-        if not entities:
-            entities = input.entities
+        effective_phase = (
+            f"{_PHASE_TAG}:{context.lineage_fingerprint}"
+            if context and context.lineage_fingerprint
+            else _PHASE_TAG
+        )
+
+        if isinstance(self.graph_store, GraphReader) and not (
+            context and context.lineage_fingerprint
+        ):
+            entities = await self.graph_store.get_entities()
+            if not entities:
+                entities = list(input.entities)
+        else:
+            entities = list(input.entities)
 
         if len(entities) < 2:
             logger.info("Phase 3: fewer than 2 entities — skipping global extraction.")
@@ -158,64 +179,106 @@ class Phase3Runner(PhaseRunner[Phase2ArtifactsView]):
         entities = sorted(entities, key=lambda e: e.id)
 
         candidates = await self.global_extractor.candidate_pairs(entities)
-        if not candidates:
+        if isinstance(context, ArtifactExecutionContext):
+            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase3(
+                candidates, entities, input.chunks
+            )
+            candidates = hydration.delta_candidates
+            hydrated_triples = list(hydration.hydrated_triples)
+        else:
+            hydrated_triples = []
+
+        if not candidates and not hydrated_triples:
             logger.info("Phase 3: 0 candidate pairs generated — skipping extraction.")
             return ArtifactCollection([])
 
-        batch_size = getattr(self.config, "batch_size", 50)
-        progress_task = f"Phase 3: {len(candidates)} global candidate pairs"
-        self.event_emitter.emit(
-            ProgressStarted(
-                task_name=progress_task,
-                total_items=len(candidates),
-                description="Global Relations",
+        reader: GraphReader = (
+            input.to_graph_reader()
+            if (
+                not isinstance(self.graph_store, GraphReader)
+                or (context and context.lineage_fingerprint)
             )
+            else self.graph_store
         )
 
-        all_triples: list[L2Triple] = []
-        succeeded_total = 0
+        batch_size = self.config.batch_size
+        progress_task = f"Phase 3: {len(candidates)} global candidate pairs"
+        checkpoint_store = self.checkpoint_store
+        prior_triples: list[L2Triple] = (
+            list(await checkpoint_store.get_committed_triples(effective_phase))
+            if checkpoint_store is not None
+            else []
+        )
+        all_triples: list[L2Triple] = list(hydrated_triples) + list(prior_triples)
+        succeeded_total = len(prior_triples)  # noqa: F841 baseline
 
-        for batch in batched(candidates, batch_size):
-            batch_list = list(batch)
-            if hasattr(self.graph_store, "filter_unprocessed_items"):
-                batch_keys = [c.key for c in batch_list]
-                pending_keys = set(
-                    await self.graph_store.filter_unprocessed_items(batch_keys, _PHASE_TAG)
-                )
-                pending_batch = [c for c in batch_list if c.key in pending_keys]
-            else:
-                pending_batch = batch_list
+        if candidates:
+            with self.progress_scope(
+                progress_task,
+                total_items=len(candidates),
+                description="Global Relations",
+            ) as advance:
 
-            if pending_batch:
-                batch_triples, batch_records = await self.global_extractor.extract_pairs(
-                    pending_batch, self.graph_store, self.schema
-                )
-                self._guard_systematic_failure(pending_batch, batch_records, succeeded_total)
-                succeeded_total += len([r for r in batch_records if r.status == "completed"])
-
-                if hasattr(self.graph_store, "commit_phase_batch"):
-                    await self.graph_store.commit_phase_batch(
-                        _PHASE_TAG, batch_triples, batch_records
-                    )
-                else:
-                    if batch_triples:
+                async def _custom_commit(
+                    phase: str,
+                    batch_triples: list[L2Triple],
+                    batch_records: list[PhaseItemRecord],
+                ) -> None:
+                    if checkpoint_store is not None:
+                        await checkpoint_store.commit_phase_batch(
+                            phase, batch_triples, batch_records
+                        )
+                    elif isinstance(self.graph_store, GraphWriter) and batch_triples:
                         for triple_chunk in batched(batch_triples, 20):
                             await self.graph_store.upsert_triples(list(triple_chunk))
 
-                all_triples.extend(batch_triples)
+                executor = CheckpointedBatchExecutor[CandidatePair, L2Triple](
+                    checkpoint_store=checkpoint_store,
+                    phase_tag=effective_phase,
+                    batch_size=batch_size,
+                    item_key_fn=lambda c: c.key,
+                    process_batch_fn=lambda batch: self.global_extractor.extract_pairs(
+                        batch, reader, self.schema
+                    ),
+                    custom_commit_fn=_custom_commit,
+                    guard_systematic_failure=True,
+                )
+                try:
+                    result = await executor.execute(
+                        candidates, on_batch_advance=advance
+                    )
+                    all_triples.extend(result.outputs)
+                except SystematicBatchFailureError as exc:
+                    msg = str(exc).replace("items", "candidate pairs")
+                    raise SystematicPairFailure(msg) from exc
 
-            self.event_emitter.emit(
-                ProgressAdvanced(task_name=progress_task, advance=len(batch_list))
+        deduped_triples: list[L2Triple] = []
+        seen_triple_keys: set[tuple[str, str, str, str | None]] = set()
+        for t in all_triples:
+            t_key = (t.subject_id, t.predicate, t.object_id, t.source_chunk_id)
+            if t_key not in seen_triple_keys:
+                seen_triple_keys.add(t_key)
+                deduped_triples.append(t)
+
+        curation_ledger = (
+            context.pipeline_input.resolved_curation_ledger()
+            if context and context.pipeline_input
+            else None
+        )
+        if curation_ledger is not None:
+            deduped_triples = curation_ledger.apply_to_triples(
+                deduped_triples,
+                {e.id for e in entities},
+                scope="global",
+                schema=self.schema,
             )
 
-        self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
-
         relation_dist: dict[str, int] = defaultdict(int)
-        for t in all_triples:
+        for t in deduped_triples:
             relation_dist[t.predicate] += 1
 
         artifacts = []
-        for triple in all_triples:
+        for triple in deduped_triples:
             artifacts.append(
                 build_global_relation_artifact(
                     triple,

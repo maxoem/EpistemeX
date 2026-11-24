@@ -80,7 +80,7 @@ class FileEngineSettingsStorage:
             content = self.storage_path.read_text(encoding="utf-8")
             data = json.loads(content)
             return EngineSettings.model_validate(data)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.warning(
                 "Failed to deserialize engine settings from %s (%s). Falling back to defaults.",
                 self.storage_path,
@@ -109,9 +109,11 @@ class FileEngineSettingsStorage:
             if temp_path.exists():
                 try:
                     temp_path.unlink()
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 baseline
                     pass
-            logger.error("Failed to persist engine settings to %s: %s", self.storage_path, exc)
+            logger.error(
+                "Failed to persist engine settings to %s: %s", self.storage_path, exc
+            )
             raise
 
     async def reset(self) -> EngineSettings:
@@ -126,7 +128,7 @@ class FileEngineSettingsStorage:
             try:
                 self.storage_path.unlink()
                 logger.info("Deleted custom engine settings file %s", self.storage_path)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 baseline
                 logger.warning("Could not delete %s: %s", self.storage_path, exc)
 
         clean = EngineSettings()

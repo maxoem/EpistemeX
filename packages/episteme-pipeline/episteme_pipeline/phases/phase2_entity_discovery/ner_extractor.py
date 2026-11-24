@@ -5,8 +5,11 @@ Uses LlamaIndex's astructured_predict to call the LLM with a typed Pydantic
 output schema. The NER prompt (from pipeline/prompts/default_prompts.py) is
 injected with {entity_types} and {relation_types} from SchemaConfig at runtime.
 
-On parsing failure (malformed LLM output) the extractor logs and returns empty
-lists — the chunk is NOT marked as processed so it will be retried on re-run.
+On LLM or structured-decoding failure the extractor lets the exception propagate
+so ``Phase2Runner``'s ``CheckpointedStreamExecutor`` leaves the chunk unprocessed
+for retry and triggers ``SystematicChunkFailure`` if an entire initial batch fails
+systematically. Chunks that legitimately contain no entities return empty lists
+and are checkpointed normally.
 
 CoT strategy (from docs/workflow/2_entity_discovery/prompting.md):
   The prompt instructs the model to first identify logical connectives and
@@ -16,8 +19,8 @@ CoT strategy (from docs/workflow/2_entity_discovery/prompting.md):
 
 from __future__ import annotations
 
-import hashlib
 import logging
+from enum import Enum
 from typing import Any
 
 from episteme_pipeline.config import StructuredPromptBundle
@@ -36,18 +39,12 @@ from episteme_pipeline.prompts import (
 )
 from episteme_pipeline.protocols.decision import DecisionEngine, GleaningStoppingOracle
 from episteme_pipeline.protocols.extractors import NERExtractor
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
+from episteme_pipeline.protocols.prompts import PromptContextual
 from episteme_pipeline.schema.default_schema import SchemaConfig
+from episteme_pipeline.utils.identifiers import stable_entity_id as _stable_entity_id
 
 logger = logging.getLogger(__name__)
-
-
-def _stable_entity_id(label: str, name: str) -> str:
-    """
-    Deterministic entity ID from label + normalized name.
-    Same entity name + label across chunks → same ID → MERGE deduplicates.
-    """
-    key = f"{label.upper()}::{name.strip().lower()}"
-    return f"entity_{hashlib.sha256(key.encode()).hexdigest()[:14]}"
 
 
 DEFAULT_NER_PROMPTS = StructuredPromptBundle(
@@ -80,20 +77,24 @@ class LLMNERExtractor(NERExtractor):
     """
 
     def __init__(
-        self, 
-        llm: Any, 
+        self,
+        llm: Any,
         prompts: StructuredPromptBundle | None = None,
-        max_gleanings: int = 0, 
+        max_gleanings: int = 0,
         mention_context_injector: Any = None,
         strategy: Any = "direct_constrained",
         stopping_oracle: GleaningStoppingOracle | None = None,
     ) -> None:
         self.llm = ensure_structured_llm(llm)
         self.max_gleanings = max_gleanings
-        self.mention_context_injector = mention_context_injector or DefaultMentionContextInjector()
+        self.mention_context_injector = (
+            mention_context_injector or DefaultMentionContextInjector()
+        )
         self.prompts = prompts or DEFAULT_NER_PROMPTS
         self.strategy = strategy
-        self.stopping_oracle = stopping_oracle or FixedPassGleaningOracle(max_passes=max_gleanings)
+        self.stopping_oracle = stopping_oracle or FixedPassGleaningOracle(
+            max_passes=max_gleanings
+        )
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic NER extractor configuration.
@@ -108,13 +109,18 @@ class LLMNERExtractor(NERExtractor):
 
         oracle_fp = (
             self.stopping_oracle.fingerprint()
-            if hasattr(self.stopping_oracle, "fingerprint") and callable(self.stopping_oracle.fingerprint)
+            if isinstance(self.stopping_oracle, Fingerprintable)
             else fingerprint_method(self.stopping_oracle)
+        )
+        strategy_str = (
+            self.strategy.value
+            if isinstance(self.strategy, Enum)
+            else str(self.strategy)
         )
         return {
             "class": self.__class__.__name__,
             "max_gleanings": self.max_gleanings,
-            "strategy": str(getattr(self.strategy, "value", self.strategy)),
+            "strategy": strategy_str,
             "llm": fingerprint_method(self.llm),
             "stopping_oracle": oracle_fp,
         }
@@ -170,8 +176,12 @@ class LLMNERExtractor(NERExtractor):
         memory: Any | None = None,
         anchor: Any | None = None,
     ) -> tuple[list[L2Entity], list[L2Triple], dict | None, bool, str | None]:
-        global_structural_anchor_str = anchor.to_prompt_context() if anchor and hasattr(anchor, "to_prompt_context") else ""
-        working_memory_str = memory.to_prompt_context() if memory and hasattr(memory, "to_prompt_context") else ""
+        global_structural_anchor_str = (
+            anchor.to_prompt_context() if isinstance(anchor, PromptContextual) else ""
+        )
+        working_memory_str = (
+            memory.to_prompt_context() if isinstance(memory, PromptContextual) else ""
+        )
 
         all_raw_entities = []
         all_raw_triples = []
@@ -179,64 +189,55 @@ class LLMNERExtractor(NERExtractor):
         boundary_detected = False
         transitional_summary: str | None = None
 
-        try:
-            raw: NERExtractionOutput = await self.llm.predict_structured(
-                NERExtractionOutput,
-                self.prompts,
-                strategy=self.strategy,
-                global_structural_anchor=global_structural_anchor_str,
-                working_memory_context=working_memory_str,
-                entity_types=schema.node_types_str(),
-                relation_types=schema.relation_types_str(),
+        raw: NERExtractionOutput = await self.llm.predict_structured(
+            NERExtractionOutput,
+            self.prompts,
+            strategy=self.strategy,
+            global_structural_anchor=global_structural_anchor_str,
+            working_memory_context=working_memory_str,
+            entity_types=schema.node_types_str(),
+            relation_types=schema.relation_types_str(),
+            chunk_text=chunk_text,
+        )
+        raw = raw.validate_references()
+        all_raw_entities.extend(raw.entities)
+        all_raw_triples.extend(raw.triples)
+        if raw.working_memory:
+            memory_update = raw.working_memory.state_delta
+            boundary_detected = raw.working_memory.boundary_detected
+            transitional_summary = raw.working_memory.transitional_summary
+
+        # Unified gleanings loop via stopping oracle
+        gleaning_prompt = self.prompts.gleaning_template or NER_GLEANING_PROMPT
+        pass_count = 0
+        while True:
+            should_continue, _ = await self.stopping_oracle.should_glean(
                 chunk_text=chunk_text,
+                current_extractions=all_raw_entities,
+                pass_count=pass_count,
             )
-            raw = raw.validate_references()
-            all_raw_entities.extend(raw.entities)
-            all_raw_triples.extend(raw.triples)
-            if raw.working_memory:
-                memory_update = raw.working_memory.state_delta
-                boundary_detected = raw.working_memory.boundary_detected
-                transitional_summary = raw.working_memory.transitional_summary
-
-            # Unified gleanings loop via stopping oracle
-            gleaning_prompt = self.prompts.gleaning_template or NER_GLEANING_PROMPT
-            pass_count = 0
-            while True:
-                should_continue, _ = await self.stopping_oracle.should_glean(
-                    chunk_text=chunk_text,
-                    current_extractions=all_raw_entities,
-                    pass_count=pass_count,
-                )
-                if not should_continue:
-                    break
-                pass_count += 1
-                prior_text = ", ".join([e.name for e in all_raw_entities])
-                raw_glean: NERExtractionOutput = await self.llm.predict_structured(
-                    NERExtractionOutput,
-                    gleaning_prompt,
-                    chunk_text=chunk_text,
-                    prior_extractions=prior_text,
-                )
-                raw_glean = raw_glean.validate_references()
-                if not raw_glean.entities and not raw_glean.triples:
-                    break  # model found nothing new
-
-                all_raw_entities.extend(raw_glean.entities)
-                all_raw_triples.extend(raw_glean.triples)
-
-        except Exception as exc:
-            logger.warning(
-                "NER extraction failed for chunk %s: %s", chunk_id, exc
+            if not should_continue:
+                break
+            pass_count += 1
+            prior_text = ", ".join([e.name for e in all_raw_entities])
+            raw_glean: NERExtractionOutput = await self.llm.predict_structured(
+                NERExtractionOutput,
+                gleaning_prompt,
+                chunk_text=chunk_text,
+                prior_extractions=prior_text,
             )
-            return [], [], None, False, None
+            raw_glean = raw_glean.validate_references()
+            if not raw_glean.entities and not raw_glean.triples:
+                break  # model found nothing new
+
+            all_raw_entities.extend(raw_glean.entities)
+            all_raw_triples.extend(raw_glean.triples)
 
         # Validate labels against schema (drop unknown types silently)
         valid_node_types = set(schema.node_types)
         valid_rel_types = set(schema.relation_types)
 
-        valid_entities = [
-            e for e in all_raw_entities if e.label in valid_node_types
-        ]
+        valid_entities = [e for e in all_raw_entities if e.label in valid_node_types]
         if len(valid_entities) < len(all_raw_entities):
             logger.debug(
                 "Dropped %d entities with unknown labels for chunk %s",
@@ -251,21 +252,23 @@ class LLMNERExtractor(NERExtractor):
         for ext in valid_entities:
             stable_id = _stable_entity_id(ext.label, ext.name)
             id_map[ext.id] = stable_id
-            
+
             # Topologically inject the textual envelope bounds
             textual_envelope = self.mention_context_injector.inject(
-                chunk_text=chunk_text, 
-                mention_name=ext.name, 
-                mention_quote=ext.mention_quote, 
-                chunk_id=chunk_id
+                chunk_text=chunk_text,
+                mention_name=ext.name,
+                mention_quote=ext.mention_quote,
+                chunk_id=chunk_id,
             )
-            
+
             entities.append(
                 L2Entity(
                     id=stable_id,
                     label=ext.label,
                     name=ext.name,
-                    description=ext.mention_quote if ext.mention_quote != ext.name else None,
+                    description=ext.mention_quote
+                    if ext.mention_quote != ext.name
+                    else None,
                     textual_envelope=textual_envelope,
                     confidence=ext.confidence,
                     source_chunk_ids=[chunk_id],

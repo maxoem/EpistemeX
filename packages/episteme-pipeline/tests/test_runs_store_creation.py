@@ -8,12 +8,14 @@ from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.phases.phase1_foundation import Phase1Runner
 from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import RunStatus
 from episteme_pipeline.runs.persistence import JsonRunManifestStore
 
 
-class _NoopPhase:
+class _NoopPhase(PhaseRunner[object]):
     name = "Phase X: Noop"
+    phase_key = "phase_noop"
 
     async def run(self, input, context):
         # Pass artifacts-through without writes
@@ -21,13 +23,21 @@ class _NoopPhase:
 
 
 @pytest.mark.asyncio
-async def test_pipeline_init_creates_runs_and_artifacts_dirs(tmp_path: Path, graph_store):
+async def test_pipeline_init_creates_runs_and_artifacts_dirs(
+    tmp_path: Path, graph_store
+):
     cfg = PipelineConfig()
     cfg.execution.runs_dir = str(tmp_path / "runs")
     cfg.execution.artifacts_dir = str(tmp_path / "artifacts")
 
     # Initialize with no phases — should create both dirs eagerly
-    Pipeline(phases=[], config=cfg, graph_reader=graph_store, projection_graph=graph_store, checkpoint_store=graph_store)
+    Pipeline(
+        phases=[],
+        config=cfg,
+        graph_reader=graph_store,
+        projection_graph=graph_store,
+        checkpoint_store=graph_store,
+    )
 
     assert (tmp_path / "runs").exists()
     assert (tmp_path / "artifacts").exists()
@@ -39,7 +49,13 @@ async def test_run_persists_manifest_even_with_no_phases(tmp_path: Path, graph_s
     cfg.execution.runs_dir = str(tmp_path / "runs")
     cfg.execution.artifacts_dir = str(tmp_path / "artifacts")
 
-    pipeline = Pipeline(phases=[], config=cfg, graph_reader=graph_store, projection_graph=graph_store, checkpoint_store=graph_store)
+    pipeline = Pipeline(
+        phases=[],
+        config=cfg,
+        graph_reader=graph_store,
+        projection_graph=graph_store,
+        checkpoint_store=graph_store,
+    )
     result = await pipeline.run(PipelineInput(source_paths=[]))
 
     # Manifest written and status completed
@@ -51,17 +67,29 @@ async def test_run_persists_manifest_even_with_no_phases(tmp_path: Path, graph_s
 
 
 @pytest.mark.asyncio
-async def test_run_persists_manifest_when_phase2_has_nothing_to_do(tmp_path: Path, graph_store, schema):
+async def test_run_persists_manifest_when_phase2_has_nothing_to_do(
+    tmp_path: Path, graph_store, schema
+):
     cfg = PipelineConfig()
     cfg.execution.runs_dir = str(tmp_path / "runs")
     cfg.execution.artifacts_dir = str(tmp_path / "artifacts")
 
     # Build Phase 1 + Phase 2 with no input paths so Phase 1 produces no chunks
     phases = [
-        Phase1Runner(cfg.phase1, llm=None, embedding_model=None, graph_store=graph_store),
-        Phase2Runner(cfg.phase2, schema, llm=None, embedding_model=None, graph_store=graph_store),
+        Phase1Runner(
+            cfg.phase1, llm=None, embedding_model=None, graph_store=graph_store
+        ),
+        Phase2Runner(
+            cfg.phase2, schema, llm=None, embedding_model=None, graph_store=graph_store
+        ),
     ]
-    pipeline = Pipeline(phases=phases, config=cfg, graph_reader=graph_store, projection_graph=graph_store, checkpoint_store=graph_store)
+    pipeline = Pipeline(
+        phases=phases,
+        config=cfg,
+        graph_reader=graph_store,
+        projection_graph=graph_store,
+        checkpoint_store=graph_store,
+    )
 
     result = await pipeline.run(PipelineInput(source_paths=[]))
 

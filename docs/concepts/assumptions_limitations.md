@@ -12,7 +12,7 @@ application, scholarly interpretation, and empirical verification.
 | **Text as Theory Repository**    | Authorial ambiguity, informal prose, and unstated enthymemes.                     | Episodic working memory context, verbatim character span provenance, and confidence scoring.                      |
 | **LLM Competence**               | Generative hallucination, self-affirmation bias, and reasoning drift.             | Optimal Edit Paths (OEP) error quantification, schema-constrained decoding, and human expert review rubrics.      |
 | **Compositional Structure**      | Oversimplification or loss of emergent holism when theories are graph-decomposed. | Multi-layer stratification (Layers 1 & 2 for facts/triples, Layer 3 for TheoryNets and defeasible argument webs). |
-| **Cross-Document Consistency**   | Polysemy and conceptual drift across historical periods and schools of thought.   | Context-aware embeddings, cluster silhouette drift detection, and author-centric empirical bases ($B(t)$).        |
+| **Cross-Document Consistency**   | Polysemy, exegetical attribution, and conceptual drift across historical periods and schools of thought. | Spherical polysemy stratification into `EntityConception` facets (ADR 0023), Layer 3 `intensional_mode` / `attributed_to` scoping, and author-centric empirical bases ($B(t)$). |
 | **Scalability vs. Expressivity** | Combinatorial explosion in global cross-document link candidate generation.       | Dense retrieval candidate pruning, cross-encoder reranking (ADR 0002), and asynchronous Neo4j driver pooling.     |
 
 ---
@@ -95,6 +95,7 @@ To ensure responsible scholarly use of pipeline outputs:
    author's contemporary empirical horizon ($B (t)$), rather than modern scientific consensus.
 4. **Treat Graphs as Hypotheses:** Regard generated Theory Graphs as structured interpretative hypotheses that serve as
    starting points for human hermeneutic analysis.
+5. **Inspect Intensional Scopes & Stratified Conceptions:** When reviewing multi-perspective debates or *Reductio* arguments, distinguish `asserted`, `suppositional`, and `attributed` Layer 3 propositions (`intensional_mode` / `attributed_to`) and inspect Layer 2 `EntityConception` facets rather than relying solely on the joined summary string ([ADR 0023](../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)).
 
 ---
 
@@ -105,3 +106,4 @@ To ensure responsible scholarly use of pipeline outputs:
 * **Evaluation Methodology**: [Evaluation Methodology](../research/evaluation_methodology.md)
 * **Empirical Construction Metrics**: [Empirical Metrics & Validation](../research/metrics.md)
 * **Pipeline Runtime Analysis**: [Pipeline Runtime Analysis](../architecture/runtime_analysis.md)
+* **Intensional Scoping & Conception Stratification**: [ADR 0023](../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)

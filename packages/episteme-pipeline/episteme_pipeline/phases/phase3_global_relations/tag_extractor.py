@@ -30,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import defaultdict
+from typing import Any
 
 from episteme_pipeline.config import Phase3Config
 from episteme_pipeline.contracts.domain import (
@@ -55,10 +56,22 @@ class TAGRelationExtractor(GlobalRelationExtractor):
     The same instance is reused by Phase 4 ARC via get_structural_neighborhood().
     """
 
-    def __init__(self, llm, embedding_model, config: Phase3Config) -> None:
+    def __init__(
+        self, llm: Any, embedding_model: Any = None, config: Phase3Config | None = None
+    ) -> None:
+        """Initialize TAGRelationExtractor.
+
+        Parameters
+        ----------
+        llm : Any
+            Underlying language model facade or client.
+        embedding_model : Any, optional
+            Ignored; retained for call-site compatibility.
+        config : Phase3Config or None, optional
+            Configuration parameters for Phase 3.
+        """
         self.llm = ensure_structured_llm(llm)
-        self.embedding_model = embedding_model
-        self.config = config
+        self.config = config or Phase3Config()
 
     # ------------------------------------------------------------------
     # GlobalRelationExtractor interface
@@ -111,9 +124,7 @@ class TAGRelationExtractor(GlobalRelationExtractor):
         )
         return triples
 
-    async def candidate_pairs(
-        self, entities: list[L2Entity]
-    ) -> list[CandidatePair]:
+    async def candidate_pairs(self, entities: list[L2Entity]) -> list[CandidatePair]:
         """Generate candidate entity pairs via shared chunk blocking.
 
         Parameters
@@ -150,15 +161,15 @@ class TAGRelationExtractor(GlobalRelationExtractor):
         L2Triple | None
             Extracted triple if validated, otherwise None.
         """
-        return await self._extract_pair(pair.entity_a, pair.entity_b, graph_store, schema)
+        return await self._extract_pair(
+            pair.entity_a, pair.entity_b, graph_store, schema
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _candidate_pairs(
-        self, entities: list[L2Entity]
-    ) -> list[CandidatePair]:
+    def _candidate_pairs(self, entities: list[L2Entity]) -> list[CandidatePair]:
         """
         Block on shared source_chunk_ids. For each entity, cap the number of
         candidate partners to `max_candidates_per_entity_pair` to prevent hub
@@ -232,7 +243,7 @@ class TAGRelationExtractor(GlobalRelationExtractor):
                 relation_types=schema.relation_types_str(),
                 subgraph_envelope=envelope_text,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.warning(
                 "Phase 3 LLM call failed for pair (%s, %s): %s",
                 entity_a.name,

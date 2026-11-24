@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 
 class InducedTheoryLaw(BaseModel):
@@ -84,6 +85,33 @@ class InducedTheoryElement(BaseModel):
     )
     max_admissible_blur: float = Field(default=1.0, ge=0.0)
 
+    def to_definition(self) -> TheoryElementDefinition:
+        """Convert induced theory element to formal TheoryElementDefinition.
+
+        Returns
+        -------
+        TheoryElementDefinition
+            Formal theory-element definition.
+        """
+        laws = [
+            TheoryLaw(
+                law_id=law.law_id,
+                description=law.description,
+                formula_expression=law.formula_expression,
+                involved_parameters=law.involved_parameters,
+            )
+            for law in self.laws
+        ]
+        return TheoryElementDefinition(
+            theory_id=self.theory_id,
+            name=self.name,
+            required_dimensions=self.required_dimensions,
+            parameter_names=self.parameter_names,
+            laws=laws,
+            max_admissible_blur=self.max_admissible_blur,
+            claimant_hypothesis_ids=self.claimant_hypothesis_ids,
+        )
+
 
 class TheoryInductionOutput(BaseModel):
     """Structured LLM output schema for Theory-Element induction."""
@@ -107,7 +135,9 @@ class ClusterProjectionOutput(BaseModel):
         default_factory=dict,
         description="Estimated latent parameter values in [0.0, 1.0] under this theoretical lens",
     )
-    fit_rationale: str = Field(default="", description="Justification for the parameter estimation")
+    fit_rationale: str = Field(
+        default="", description="Justification for the parameter estimation"
+    )
 
 
 @dataclass(slots=True)
@@ -152,13 +182,14 @@ class TheoryLaw:
         if self.evaluator is not None:
             try:
                 return float(self.evaluator(parameters))
-            except Exception:
+            except Exception:  # noqa: BLE001 baseline
                 return 1.0
 
         if self.formula_expression:
             from episteme_pipeline.post_processing.theoretical_enrichment.solvers import (
                 evaluate_formula_safely,
             )
+
             return evaluate_formula_safely(self.formula_expression, parameters)
 
         return 0.0
@@ -232,7 +263,7 @@ class EmpiricalCluster:
         return dims
 
 
-class TheoryRegistry:
+class TheoryRegistry(Fingerprintable):
     """Registry holding active Theory-Element definitions.
 
     Parameters
@@ -248,6 +279,38 @@ class TheoryRegistry:
         if seed_theories:
             for theory in seed_theories:
                 self.register(theory)
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint of all registered Theory-Element definitions.
+
+        Returns
+        -------
+        dict of str to Any
+            JSON-serializable registry identity and sorted theory definitions.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "theories": [
+                {
+                    "theory_id": t.theory_id,
+                    "name": t.name,
+                    "required_dimensions": sorted(t.required_dimensions),
+                    "parameter_names": sorted(t.parameter_names),
+                    "max_admissible_blur": t.max_admissible_blur,
+                    "claimant_hypothesis_ids": sorted(t.claimant_hypothesis_ids),
+                    "laws": [
+                        {
+                            "law_id": law.law_id,
+                            "description": law.description,
+                            "formula_expression": law.formula_expression,
+                            "involved_parameters": sorted(law.involved_parameters),
+                        }
+                        for law in t.laws
+                    ],
+                }
+                for _, t in sorted(self._theories.items())
+            ],
+        }
 
     def register(self, theory: TheoryElementDefinition) -> None:
         """Register a new Theory-Element definition.
@@ -276,24 +339,7 @@ class TheoryRegistry:
         """
         registered: list[TheoryElementDefinition] = []
         for item in induced:
-            laws = [
-                TheoryLaw(
-                    law_id=law.law_id,
-                    description=law.description,
-                    formula_expression=law.formula_expression,
-                    involved_parameters=law.involved_parameters,
-                )
-                for law in item.laws
-            ]
-            theory_def = TheoryElementDefinition(
-                theory_id=item.theory_id,
-                name=item.name,
-                required_dimensions=item.required_dimensions,
-                parameter_names=item.parameter_names,
-                laws=laws,
-                max_admissible_blur=item.max_admissible_blur,
-                claimant_hypothesis_ids=item.claimant_hypothesis_ids,
-            )
+            theory_def = item.to_definition()
             self.register(theory_def)
             registered.append(theory_def)
         return registered

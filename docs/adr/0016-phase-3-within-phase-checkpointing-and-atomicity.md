@@ -28,9 +28,11 @@ Where $\mathcal{H}$ denotes a stable 16-character SHA-256 fingerprint of the ent
 * **Content Sensitivity:** If an entity's textual envelope changes across runs due to upstream re-extraction, the pair key changes, automatically invalidating stale evaluations without requiring manual cache busting.
 * **Run Independence:** The key deliberately excludes ephemeral `run_id` strings, enabling run $R_2$ to resume seamlessly from partial progress left by interrupted run $R_1$.
 
-### 2. Streaming $\mathcal{O}(1)$ Memory Candidate Delta Checking in Neo4j
+### 2. Lineage-Scoped Candidate Delta Checking & `FileSystemCheckpointStore`
 
-Rather than loading millions of processed pair keys into driver memory, candidate pairs are evaluated in configurable batches (`Phase3Config.batch_size`, default 50). Unprocessed items are filtered directly within the graph store via an indexed Cypher query:
+Rather than loading millions of processed pair keys into driver memory, candidate pairs are evaluated in configurable batches (`Phase3Config.batch_size`, default 50). Checkpoints are scoped by `(phase_key, lineage_fingerprint)` where `lineage_fingerprint` is the deterministic hash of upstream phase output fingerprints plus the current phase's config and method fingerprints.
+
+By default, `Pipeline.for_task()` wires `FileSystemCheckpointStore` (an append-only JSONL Write-Ahead Log under `<artifacts_dir>/_checkpoints/` implementing `PhaseCheckpointStore`, including `get_committed_triples(phase)` for crash-resume recovery) so the entire pipeline executes and recovers 100% offline without requiring Neo4j. When a Neo4j `PhaseCheckpointStore` is explicitly supplied, unprocessed items are filtered within the graph store via an indexed Cypher query:
 
 ```cypher
 UNWIND $items AS item
@@ -73,6 +75,7 @@ The extractor interface (`GlobalRelationExtractor.extract_pairs`) wraps individu
 * **Systematic Failure Guard:** To prevent silently burning API budget or continuing execution when a global failure occurs (e.g., invalid LLM API key, revoked credentials, or network partition), `Phase3Runner` validates the first processed batch:
 $$\text{if } B_0 \neq \emptyset \land \frac{|\{item \in B_0 \mid item.status = \text{"failed"}\}|}{|B_0|} = 1.0 \implies \text{Abort}$$
   If 100% of pairs in the initial batch fail, execution immediately terminates with a descriptive `RuntimeError`.
+* **Inter-Phase Epistemic Quality Gates (`ISSUE-058`):** In addition to the intra-phase Batch 0 exception guard, `ArtifactExecutionEngine` evaluates semantic `EpistemicQualityGate` circuit breakers (`OntologyEntropyGate`, `PercolationQualityGate`, and `ConformalCalibrationGate`) between phases on the emitted `ArtifactCollection`, halting or warning when ontological collapse, giant-component percolation, or conformal OOD spikes occur.
 
 ### 5. Automated Checkpoint Invalidation Hook
 

@@ -108,7 +108,9 @@ class StructuralistModalResolver:
         tuple of (ScopeType or None, str, EpistemicStatus or None)
             Canonical scope enum, component category, and epistemic status enum.
         """
-        comp_raw = (atom.component_type or "").upper().replace(" ", "_").replace("-", "_")
+        comp_raw = (
+            (atom.component_type or "").upper().replace(" ", "_").replace("-", "_")
+        )
         return (
             ScopeType.from_str(atom.scope_type),
             self._classify_component(comp_raw),
@@ -160,7 +162,9 @@ class StructuralistModalResolver:
 
             # 3. Default fallback
             case _:
-                return ModalSyntaxProfile(score=self.default_base_score, bounds=(0.30, 0.85))
+                return ModalSyntaxProfile(
+                    score=self.default_base_score, bounds=(0.30, 0.85)
+                )
 
     def get_syntax_bounds(self, atom: TheoryAtom) -> tuple[float, float]:
         """Compute admissible modal certainty interval [M_min, M_max] for guardrail clipping.
@@ -196,7 +200,11 @@ class StructuralistModalResolver:
         float
             Propositional modal strength M(phi) in [0.0, 1.0].
         """
-        return self.evaluate_syntax_profile(atom).score
+        profile = self.evaluate_syntax_profile(atom)
+        atom.modal_prior = profile.score
+        atom.resolver_type = "structural"
+        atom.syntax_bounds = profile.bounds
+        return profile.score
 
     async def resolve_modality(
         self,
@@ -242,9 +250,20 @@ class DecisionEngineModalResolver:
         question_template: str = "Assess the author's propositional certainty / modal qualification for this claim.",
         levels: list[float] | None = None,
     ) -> None:
+        from episteme_pipeline.prompts.models import StructuredPromptBundle
+
         self.decision_engine = decision_engine
         self.question_template = question_template
         self.levels = levels or [0.2, 0.4, 0.6, 0.8, 1.0]
+        self.prompt_bundle = StructuredPromptBundle(
+            direct_template=self.question_template,
+            decision_template=self.question_template,
+            decision_criteria={
+                f"Level_{i}": f"Certainty {lvl:.2f}"
+                for i, lvl in enumerate(self.levels)
+            },
+            name="modal_strength_resolution",
+        )
         self._fallback_resolver = StructuralistModalResolver()
 
     def fingerprint(self) -> dict[str, Any]:
@@ -256,15 +275,18 @@ class DecisionEngineModalResolver:
             Dictionary containing class identifier, question template, levels,
             and underlying decision engine fingerprint.
         """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+
         eng_fp = (
             self.decision_engine.fingerprint()
-            if hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            if isinstance(self.decision_engine, Fingerprintable)
             else {"class": self.decision_engine.__class__.__name__}
         )
         return {
             "class": self.__class__.__name__,
             "question_template": self.question_template,
             "levels": list(self.levels),
+            "prompt_bundle": self.prompt_bundle.fingerprint(),
             "decision_engine": eng_fp,
         }
 
@@ -290,7 +312,9 @@ class DecisionEngineModalResolver:
         claim_text = atom.text or ""
         state_str = f"Claim: {claim_text}\nContext:\n{context or claim_text}"
 
-        level_options = {f"Level_{i}": f"Certainty {lvl:.2f}" for i, lvl in enumerate(self.levels)}
+        level_options = {
+            f"Level_{i}": f"Certainty {lvl:.2f}" for i, lvl in enumerate(self.levels)
+        }
         try:
             score: DecisionScore = await self.decision_engine.evaluate_choice(
                 state=state_str,
@@ -317,9 +341,15 @@ class DecisionEngineModalResolver:
                 if f"Level_{i}" in sel:
                     return lvl
 
-            return float(score.class_probability) if score.class_probability is not None else 0.60
-        except Exception as e:
-            logger.warning("DecisionEngineModalResolver failed (%s); falling back to syntax", e)
+            return (
+                float(score.class_probability)
+                if score.class_probability is not None
+                else 0.60
+            )
+        except Exception as e:  # noqa: BLE001 baseline
+            logger.warning(
+                "DecisionEngineModalResolver failed (%s); falling back to syntax", e
+            )
             return self._fallback_resolver.resolve_modality_sync(atom, context)
 
     def resolve_modality_sync(
@@ -370,7 +400,9 @@ class HybridModalResolver:
         self,
         structural_resolver: StructuralistModalResolver | None = None,
         decision_resolver: DecisionEngineModalResolver | None = None,
-        mode: Literal["guardrail", "convex", "structural_only", "engine_only"] = "guardrail",
+        mode: Literal[
+            "guardrail", "convex", "structural_only", "engine_only"
+        ] = "guardrail",
         fusion_alpha: float = 0.50,
     ) -> None:
         self.structural_resolver = structural_resolver or StructuralistModalResolver()
@@ -386,18 +418,20 @@ class HybridModalResolver:
         dict of str to Any
             Dictionary containing mode, fusion alpha, and component resolver fingerprints.
         """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+
         return {
             "class": self.__class__.__name__,
             "mode": self.mode,
             "fusion_alpha": self.fusion_alpha,
             "structural_resolver": (
                 self.structural_resolver.fingerprint()
-                if hasattr(self.structural_resolver, "fingerprint") and callable(self.structural_resolver.fingerprint)
+                if isinstance(self.structural_resolver, Fingerprintable)
                 else {"class": self.structural_resolver.__class__.__name__}
             ),
             "decision_resolver": (
                 self.decision_resolver.fingerprint()
-                if self.decision_resolver and hasattr(self.decision_resolver, "fingerprint") and callable(self.decision_resolver.fingerprint)
+                if isinstance(self.decision_resolver, Fingerprintable)
                 else None
             ),
         }
@@ -433,7 +467,11 @@ class HybridModalResolver:
 
         if isinstance(config, dict):
             cfg_dict = config.get("modal_resolver", config)
-            cfg = ModalResolverConfig.model_validate(cfg_dict) if isinstance(cfg_dict, dict) else ModalResolverConfig()
+            cfg = (
+                ModalResolverConfig.model_validate(cfg_dict)
+                if isinstance(cfg_dict, dict)
+                else ModalResolverConfig()
+            )
         elif isinstance(config, ModalResolverConfig):
             cfg = config
         else:
@@ -443,7 +481,9 @@ class HybridModalResolver:
             default_base_score=cfg.default_base_score
         )
         dec_res = decision_resolver or (
-            DecisionEngineModalResolver(decision_engine) if decision_engine is not None else None
+            DecisionEngineModalResolver(decision_engine)
+            if decision_engine is not None
+            else None
         )
         mode = cfg.mode if dec_res is not None else "structural_only"
 
@@ -482,16 +522,24 @@ class HybridModalResolver:
             final_score = syntax_score
             resolver_type = "structural"
         elif self.mode == "engine_only":
-            raw_engine_score = await self.decision_resolver.resolve_modality(atom, context)
+            raw_engine_score = await self.decision_resolver.resolve_modality(
+                atom, context
+            )
             final_score = raw_engine_score
             resolver_type = "decision_engine"
         elif self.mode == "convex":
-            raw_engine_score = await self.decision_resolver.resolve_modality(atom, context)
-            final_score = (self.fusion_alpha * syntax_score) + ((1.0 - self.fusion_alpha) * raw_engine_score)
+            raw_engine_score = await self.decision_resolver.resolve_modality(
+                atom, context
+            )
+            final_score = (self.fusion_alpha * syntax_score) + (
+                (1.0 - self.fusion_alpha) * raw_engine_score
+            )
             resolver_type = "hybrid_convex"
         else:
             # Mode "guardrail": evaluate engine score and clamp within structural bounds
-            raw_engine_score = await self.decision_resolver.resolve_modality(atom, context)
+            raw_engine_score = await self.decision_resolver.resolve_modality(
+                atom, context
+            )
             bounds = syntax_profile.bounds
             clamped_score = max(bounds[0], min(bounds[1], raw_engine_score))
             clamped = clamped_score != raw_engine_score
@@ -499,6 +547,9 @@ class HybridModalResolver:
             resolver_type = "hybrid_guardrail"
 
         final_score = float(max(0.0, min(1.0, final_score)))
+        atom.resolver_type = resolver_type
+        atom.syntax_bounds = syntax_profile.bounds
+        atom.modal_prior = final_score
 
         # Emit observability domain event
         try:
@@ -514,7 +565,7 @@ class HybridModalResolver:
                     clamped=clamped,
                 )
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 baseline
             logger.debug("Failed to emit ModalStrengthResolved event: %s", e)
 
         logger.debug(

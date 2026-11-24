@@ -123,38 +123,51 @@ cfg_v2 = PipelineConfig(phase2=Phase2Config(ner_confidence_threshold=0.9))
 print(stable_fingerprint(cfg_v1) != stable_fingerprint(cfg_v2))  # True
 ```
 
-## Incremental Processing
+## Incremental Processing & Corpus Evolution
 
-Add new documents to existing runs efficiently.
+Add new documents to existing runs efficiently without re-processing the entire corpus.
 
-### Extending Input Sets
+### Extending Input Sets ($\mathcal{G}_t + \Delta D \to \mathcal{G}_{t+1}$)
 
-Process additional documents while reusing previous results:
+When new literature is added to an existing project:
 
 ```python
+from episteme_pipeline.config import PipelineConfig, ExecutionConfig
+from episteme_pipeline.contracts.phase_contracts import PipelineInput
+
 # Original run processed documents A and B
 original_input = PipelineInput(source_paths=["docA.pdf", "docB.pdf"])
+res_1 = await pipeline.run(original_input)
 
-# New run adds document C while reusing A and B results
-extended_input = PipelineInput(source_paths=["docA.pdf", "docB.pdf", "docC.pdf"])
+# New run adds document C while automatically reusing A and B results
+extended_input = PipelineInput(
+    source_paths=["docA.pdf", "docB.pdf", "docC.pdf"],
+    curation_ledger_path="curation_ledger.json"  # Optional HITL constraints
+)
 
-result = await pipeline.resume_from_run(
-    run_id="original-run-id",
-    input=extended_input
+res_2 = await pipeline.run(
+    extended_input,
+    parent_run_id=res_1.run_id
 )
 ```
 
-### Conditional Processing
+### How Incremental Processing Operates
 
-Control which documents trigger reprocessing:
+The orchestrator inspects `RunManifest.document_fingerprints`:
+
+1. **Phase 1 Ingestion**: Documents A and B match prior hashes; their `DocumentArtifact` and `ChunkArtifact` envelopes are hydrated directly. Only `docC.pdf` is parsed and chunked.
+2. **Phase 2 Entity Discovery**: Surviving entities, mention envelopes, and local relation triples are retained. NER runs strictly over chunks from `docC.pdf`.
+3. **Phase 3 Global Relations**: Candidate entity pairs between two unmodified entities are skipped (their prior `GlobalRelationArtifact` triples are hydrated). Only pairs involving newly discovered entities are extracted.
+4. **Phase 4 Argument Mining**: Local argument components (`TheoryAtom`) and relations from A and B chunks are hydrated. Only `docC.pdf` chunks are mined.
+5. **Curation Ledger Overrides**: Any expert corrections in `curation_ledger.json` (`SUPPORTS`, `ATTACKS`, `REJECTED`, or modality priors) are enforced across the resulting graphs.
+
+Execution settings are controlled via `ExecutionConfig`:
 
 ```python
-from pipeline.config import ExecutionConfig
-
 cfg = PipelineConfig(
     execution=ExecutionConfig(
         allow_phase_reuse=True,
-        reuse_policy="conservative"  # Only reuse when certain safe
+        allow_artifact_hydration=True,
     )
 )
 ```

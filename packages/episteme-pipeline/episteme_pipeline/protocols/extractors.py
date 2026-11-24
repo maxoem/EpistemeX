@@ -50,6 +50,8 @@ from episteme_pipeline.contracts.domain import (
     PhaseItemRecord,
     SubGraph,
 )
+from episteme_pipeline.decision.cascade import TriageDecision
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
@@ -74,7 +76,9 @@ class EmbeddingModel(Protocol):
 
     async def aget_text_embedding(self, text: str) -> list[float]: ...
 
-    async def aget_text_embedding_batch(self, texts: list[str]) -> list[list[float]]: ...
+    async def aget_text_embedding_batch(
+        self, texts: list[str]
+    ) -> list[list[float]]: ...
 
 
 @runtime_checkable
@@ -235,7 +239,11 @@ class HuggingFaceEmbeddingModel:
 
         with torch.no_grad():
             inputs = self.tokenizer(
-                texts, padding=True, truncation=True, max_length=512, return_tensors="pt"
+                texts,
+                padding=True,
+                truncation=True,
+                max_length=512,
+                return_tensors="pt",
             )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             outputs = self.model(**inputs)
@@ -326,8 +334,12 @@ class ObservableEmbeddingModel:
         duration = time.perf_counter() - t0
 
         total_chars = sum(len(t) for t in texts)
-        total_tokens = sum(LLMResponseMetadataExtractor.estimate_tokens(t) for t in texts)
-        vector_dim = len(embeddings[0]) if embeddings and embeddings[0] else self.dimension
+        total_tokens = sum(
+            LLMResponseMetadataExtractor.estimate_tokens(t) for t in texts
+        )
+        vector_dim = (
+            len(embeddings[0]) if embeddings and embeddings[0] else self.dimension
+        )
 
         try:
             get_event_emitter().emit(
@@ -342,7 +354,7 @@ class ObservableEmbeddingModel:
                     operation="embedding",
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         return embeddings
@@ -372,7 +384,9 @@ def ensure_embedding_model(model: Any | None) -> EmbeddingModel | None:
     if isinstance(model, str):
         hf = HuggingFaceEmbeddingModel(model_name=model)
         return ObservableEmbeddingModel(hf, model_name=model)
-    if hasattr(model, "aget_text_embedding") and hasattr(model, "aget_text_embedding_batch"):
+    if hasattr(model, "aget_text_embedding") and hasattr(
+        model, "aget_text_embedding_batch"
+    ):
         return ObservableEmbeddingModel(model)
     if hasattr(model, "encode"):
         sync_model = SyncEncoderEmbeddingModel(model)
@@ -384,13 +398,12 @@ def ensure_embedding_model(model: Any | None) -> EmbeddingModel | None:
     )
 
 
-
 # ----------------------------------------------------------------------
 # Pipeline extension points (nominal — implement by subclassing)
 # ----------------------------------------------------------------------
 
 
-class RelationReranker(ABC):
+class RelationReranker(Fingerprintable, ABC):
     """
     Scores the likelihood of a relationship existing between two entities
     based on their contextual subgraph envelopes.
@@ -405,6 +418,8 @@ class RelationReranker(ABC):
     the two slots explicitly at the composition root.
     """
 
+    max_length: int | None = None
+
     @abstractmethod
     async def score_relation(
         self,
@@ -414,8 +429,47 @@ class RelationReranker(ABC):
         env_b: SubGraph,
     ) -> float: ...
 
+    def describe_relation_input(
+        self,
+        entity_a: L2Entity,
+        env_a: SubGraph,
+        entity_b: L2Entity,
+        env_b: SubGraph,
+    ) -> dict[str, object]:
+        """Summarize the current reranker input without executing inference.
 
-class NERExtractor(ABC):
+        Parameters
+        ----------
+        entity_a : L2Entity
+            Query-side entity.
+        env_a : SubGraph
+            Query-side envelope.
+        entity_b : L2Entity
+            Document-side entity.
+        env_b : SubGraph
+            Document-side envelope.
+
+        Returns
+        -------
+        dict[str, object]
+            Size metadata for the reranker query/document pair.
+        """
+        from episteme_pipeline.phases.phase3_global_relations.rerankers import (
+            build_relation_reranker_inputs,
+            summarize_reranker_text_pair,
+        )
+
+        query, doc_text = build_relation_reranker_inputs(
+            entity_a, env_a, entity_b, env_b
+        )
+        return summarize_reranker_text_pair(
+            query,
+            doc_text,
+            max_length=self.max_length,
+        )
+
+
+class NERExtractor(Fingerprintable, ABC):
     """
     Local Relation & Entity Extractor (Phase 2).
 
@@ -435,7 +489,7 @@ class NERExtractor(ABC):
     ) -> tuple[list[L2Entity], list[L2Triple], dict | None, bool, str | None]: ...
 
 
-class GlobalRelationExtractor(ABC):
+class GlobalRelationExtractor(Fingerprintable, ABC):
     """
     Global Relation Extractor (Phase 3).
 
@@ -453,9 +507,7 @@ class GlobalRelationExtractor(ABC):
     reranker model before LLM triple decoding.
     """
 
-    async def candidate_pairs(
-        self, entities: list[L2Entity]
-    ) -> list[CandidatePair]:
+    async def candidate_pairs(self, entities: list[L2Entity]) -> list[CandidatePair]:
         """Generate candidate entity pairs for relation extraction.
 
         Parameters
@@ -526,11 +578,13 @@ class GlobalRelationExtractor(ABC):
 
         logger = logging.getLogger(__name__)
 
-        async def _eval_one(pair: CandidatePair) -> tuple[L2Triple | None, PhaseItemRecord]:
+        async def _eval_one(
+            pair: CandidatePair,
+        ) -> tuple[L2Triple | None, PhaseItemRecord]:
             try:
                 triple = await self.extract_pair(pair, graph_store, schema)
                 return triple, PhaseItemRecord(key=pair.key, status="completed")
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 baseline
                 logger.error("Phase 3 quarantined failed pair %s: %s", pair.key, exc)
                 return None, PhaseItemRecord(
                     key=pair.key,
@@ -576,13 +630,16 @@ class GlobalRelationExtractor(ABC):
         return triples
 
     async def get_structural_neighborhood(
-        self, entity: L2Entity, graph_store: GraphReader, depth: int = 2,
+        self,
+        entity: L2Entity,
+        graph_store: GraphReader,
+        depth: int = 2,
     ) -> SubGraph:
         """Default structural neighborhood retrieval via graph_store."""
         return await graph_store.get_neighborhood(entity.id, depth=depth)
 
 
-class EntityLinker(ABC):
+class EntityLinker(Fingerprintable, ABC):
     """
     Phase 2 Step 3: Links extracted entity mentions to canonical graph nodes.
     Bi-encoder retrieval + cross-encoder reranking.
@@ -607,6 +664,47 @@ class EntityLinker(ABC):
         duplicated as signature defaults.
         """
         ...
+
+    async def link_with_decision(
+        self,
+        mention: L2Entity,
+        graph_store: GraphReader,
+        *,
+        top_k: int | None = None,
+        threshold: float | None = None,
+        alpha: float | None = None,
+    ) -> TriageDecision[L2Entity | None]:
+        """Link mention to canonical entity, returning triage decision envelope.
+
+        Default implementation calls ``link(mention, graph_store, top_k=top_k, threshold=threshold)``.
+        If the linker matches an entity, it is returned with ``is_ambiguous=False``.
+        If the linker returns None (e.g. out-of-ontology/novel entity), it is returned with
+        ``is_ambiguous=False``, preventing false escalation to fallback linkers.
+        Subclasses with calibrated conformal sets (e.g. Jev) override this method to flag
+        ambiguous sets (|C(X)| != 1) or low-confidence predictions.
+
+        Parameters
+        ----------
+        mention : L2Entity
+            The extracted entity mention to link.
+        graph_store : GraphReader
+            Active graph store.
+        top_k : int or None, default None
+            Optional candidate retrieval count override.
+        threshold : float or None, default None
+            Optional confidence threshold override.
+        alpha : float or None, default None
+            Optional conformal significance level.
+
+        Returns
+        -------
+        TriageDecision of L2Entity or None
+            Triage decision containing matched entity and ambiguity status.
+        """
+        matched = await self.link(
+            mention, graph_store, top_k=top_k, threshold=threshold
+        )
+        return TriageDecision(value=matched, is_ambiguous=False)
 
 
 def _static_conformance() -> None:

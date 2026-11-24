@@ -47,11 +47,13 @@ def load_scifact_subset(
             for doc_id in data.get("evidence", {}):
                 gold_ids.append(str(doc_id))
 
-            queries.append({
-                "query": query,
-                "gold_ids": set(gold_ids),
-            })
-    except Exception:
+            queries.append(
+                {
+                    "query": query,
+                    "gold_ids": set(gold_ids),
+                }
+            )
+    except Exception:  # noqa: BLE001 baseline
         return []
 
     return queries

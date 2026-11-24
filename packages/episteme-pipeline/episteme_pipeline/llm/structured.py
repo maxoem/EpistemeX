@@ -13,7 +13,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel
 
@@ -32,8 +32,9 @@ class StructuredPredictionError(RuntimeError):
     """Raised when a structured prediction cannot be recovered."""
 
 
-class StructuredLLM(Protocol):
-    """Owned boundary for structured LLM prediction in the pipeline."""
+@runtime_checkable
+class StructuredPredictable(Protocol):
+    """Minimal owned protocol for async structured Pydantic prediction."""
 
     async def predict_structured(
         self,
@@ -45,6 +46,11 @@ class StructuredLLM(Protocol):
         **prompt_args: Any,
     ) -> ModelT:
         """Predict a Pydantic model from a prompt bundle or string."""
+
+
+@runtime_checkable
+class StructuredLLM(StructuredPredictable, Protocol):
+    """Owned boundary for structured and text LLM prediction in the pipeline."""
 
     async def predict_text(
         self,
@@ -58,6 +64,7 @@ class StructuredLLM(Protocol):
 # ----------------------------------------------------------------------
 # Decoding Strategy Handlers (Strategy Pattern)
 # ----------------------------------------------------------------------
+
 
 class BaseOutputDecodingStrategyHandler(ABC):
     """Abstract Strategy interface for structured output decoding."""
@@ -102,8 +109,14 @@ class DirectDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
         llm_kwargs: dict[str, Any] | None = None,
         **prompt_args: Any,
     ) -> ModelT:
-        prompt = _as_prompt_template(getattr(prompt_bundle, "direct_template", prompt_bundle))
-        rendered_prompt = prompt.format(llm=adapter.base_llm, **prompt_args) if hasattr(prompt, "format") else str(prompt).format(**prompt_args)
+        prompt = _as_prompt_template(
+            getattr(prompt_bundle, "direct_template", prompt_bundle)
+        )
+        rendered_prompt = (
+            prompt.format(llm=adapter.base_llm, **prompt_args)
+            if hasattr(prompt, "format")
+            else str(prompt).format(**prompt_args)
+        )
         start_time = time.time()
 
         try:
@@ -114,9 +127,17 @@ class DirectDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
                 **prompt_args,
             )
             duration = time.time() - start_time
-            model_name = LLMResponseMetadataExtractor.extract_model_name(adapter.base_llm)
-            model_params = LLMResponseMetadataExtractor.extract_model_parameters(adapter.base_llm)
-            out_text = result.model_dump_json() if hasattr(result, "model_dump_json") else str(result)
+            model_name = LLMResponseMetadataExtractor.extract_model_name(
+                adapter.base_llm
+            )
+            model_params = LLMResponseMetadataExtractor.extract_model_parameters(
+                adapter.base_llm
+            )
+            out_text = (
+                result.model_dump_json()
+                if hasattr(result, "model_dump_json")
+                else str(result)
+            )
             out_json = result.model_dump() if hasattr(result, "model_dump") else None
             usage = LLMResponseMetadataExtractor.extract_usage(
                 result, prompt_text=str(rendered_prompt), output_text=out_text
@@ -211,7 +232,9 @@ class TriggerTokenDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
         llm_kwargs: dict[str, Any] | None = None,
         **prompt_args: Any,
     ) -> ModelT:
-        logger.info("TRIGGER_TOKEN strategy requested; executing constrained direct decoding on local model.")
+        logger.info(
+            "TRIGGER_TOKEN strategy requested; executing constrained direct decoding on local model."
+        )
         direct_handler = DirectDecodingStrategyHandler()
         return await direct_handler.decode(
             adapter,
@@ -258,9 +281,16 @@ async def execute_nl_to_format[ModelT: BaseModel](
     Recursion is bounded: pass 2 always requests ``DIRECT``, which never routes
     back here.
     """
-    reasoning_prompt = getattr(prompt_bundle, "reasoning_template", None)
-    format_prompt = getattr(prompt_bundle, "format_template", None)
-    direct_prompt = getattr(prompt_bundle, "direct_template", prompt_bundle)
+    from episteme_pipeline.prompts.models import StructuredPromptBundle
+
+    if isinstance(prompt_bundle, StructuredPromptBundle):
+        reasoning_prompt = prompt_bundle.reasoning_template
+        format_prompt = prompt_bundle.format_template
+        direct_target: Any = prompt_bundle
+    else:
+        reasoning_prompt = getattr(prompt_bundle, "reasoning_template", None)
+        format_prompt = getattr(prompt_bundle, "format_template", None)
+        direct_target = getattr(prompt_bundle, "direct_template", prompt_bundle)
 
     async def _direct(target: Any) -> ModelT:
         return await llm.predict_structured(
@@ -277,23 +307,33 @@ async def execute_nl_to_format[ModelT: BaseModel](
             "Prompt bundle for %s carries no two-pass templates; decoding directly.",
             output_cls.__name__,
         )
-        return await _direct(direct_prompt)
+        return await _direct(direct_target)
 
+    reasoning_target = (
+        prompt_bundle.model_copy(update={"direct_template": reasoning_prompt})
+        if isinstance(prompt_bundle, StructuredPromptBundle)
+        else reasoning_prompt
+    )
     try:
         reasoning_text = await llm.predict_text(
-            reasoning_prompt, llm_kwargs, **prompt_args
+            reasoning_target, llm_kwargs, **prompt_args
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 baseline
         logger.warning(
             "Reasoning pass for %s failed (%s: %s); falling back to DIRECT.",
             output_cls.__name__,
             type(exc).__name__,
             exc,
         )
-        return await _direct(direct_prompt)
+        return await _direct(direct_target)
 
     prompt_args["reasoning_text"] = reasoning_text
-    return await _direct(format_prompt)
+    format_target = (
+        prompt_bundle.model_copy(update={"direct_template": format_prompt})
+        if isinstance(prompt_bundle, StructuredPromptBundle)
+        else format_prompt
+    )
+    return await _direct(format_target)
 
 
 @dataclass(frozen=True)
@@ -323,15 +363,28 @@ class LlamaIndexStructuredLLMAdapter:
         **prompt_args: Any,
     ) -> str:
         """Predict raw text."""
+        from episteme_pipeline.prompts.models import StructuredPromptBundle
+
         start_time = time.time()
-        rendered_prompt = prompt.format(llm=self.base_llm, **prompt_args) if hasattr(prompt, "format") else str(prompt).format(**prompt_args)
+        template_obj = (
+            prompt.direct_template
+            if isinstance(prompt, StructuredPromptBundle)
+            else prompt
+        )
+        rendered_prompt = (
+            template_obj.format(llm=self.base_llm, **prompt_args)
+            if hasattr(template_obj, "format")
+            else str(template_obj).format(**prompt_args)
+        )
         response = await self.base_llm.acomplete(
             rendered_prompt,
             **(llm_kwargs or {}),
         )
         duration = time.time() - start_time
         model_name = LLMResponseMetadataExtractor.extract_model_name(self.base_llm)
-        model_params = LLMResponseMetadataExtractor.extract_model_parameters(self.base_llm)
+        model_params = LLMResponseMetadataExtractor.extract_model_parameters(
+            self.base_llm
+        )
         out_text = getattr(response, "text", str(response))
         usage = LLMResponseMetadataExtractor.extract_usage(
             response, prompt_text=str(rendered_prompt), output_text=out_text
@@ -377,7 +430,12 @@ class LlamaIndexStructuredLLMAdapter:
             strategy_key, DECODING_STRATEGY_HANDLERS["direct_constrained"]
         )
         return await handler.decode(
-            self, output_cls, prompt_bundle, fallback_behavior, llm_kwargs, **prompt_args
+            self,
+            output_cls,
+            prompt_bundle,
+            fallback_behavior,
+            llm_kwargs,
+            **prompt_args,
         )
 
     async def _fallback_complete(
@@ -388,14 +446,20 @@ class LlamaIndexStructuredLLMAdapter:
     ) -> str:
         """Run a raw completion fallback after strict structured parsing fails."""
         start_time = time.time()
-        rendered_prompt = prompt.format(llm=self.base_llm, **prompt_args) if hasattr(prompt, "format") else str(prompt).format(**prompt_args)
+        rendered_prompt = (
+            prompt.format(llm=self.base_llm, **prompt_args)
+            if hasattr(prompt, "format")
+            else str(prompt).format(**prompt_args)
+        )
         response = await self.base_llm.acomplete(
             rendered_prompt,
             **(llm_kwargs or {}),
         )
         duration = time.time() - start_time
         model_name = LLMResponseMetadataExtractor.extract_model_name(self.base_llm)
-        model_params = LLMResponseMetadataExtractor.extract_model_parameters(self.base_llm)
+        model_params = LLMResponseMetadataExtractor.extract_model_parameters(
+            self.base_llm
+        )
         out_text = getattr(response, "text", str(response))
         usage = LLMResponseMetadataExtractor.extract_usage(
             response, prompt_text=str(rendered_prompt), output_text=out_text
@@ -425,7 +489,6 @@ class LlamaIndexStructuredLLMAdapter:
             )
         )
         return out_text
-
 
     def _recover_from_exception(
         self,
@@ -457,7 +520,7 @@ class LlamaIndexStructuredLLMAdapter:
         try:
             sanitized = sanitize_structured_output(raw_text)
             parsed = output_cls.model_validate(sanitized.value)
-        except Exception as parse_exc:
+        except Exception as parse_exc:  # noqa: BLE001 baseline
             raise StructuredPredictionError(
                 f"Structured prediction recovery failed via {recovery_source}: "
                 f"{type(parse_exc).__name__}: {parse_exc}"
@@ -473,23 +536,71 @@ class LlamaIndexStructuredLLMAdapter:
         return parsed
 
 
-def ensure_structured_llm(llm: Any | None, use_cache: bool = True) -> StructuredLLM | None:
-    """Return an owned structured-output adapter for an LLM facade."""
+def ensure_structured_llm(
+    llm: Any | None, use_cache: bool = True
+) -> StructuredLLM | None:
+    """Return an owned structured-output adapter for an LLM facade.
+
+    Parameters
+    ----------
+    llm : Any or None
+        Raw LlamaIndex LLM facade or existing ``StructuredLLM`` implementation.
+    use_cache : bool, default True
+        Whether to wrap non-cached adapters in ``DiskCachedStructuredLLM``.
+
+    Returns
+    -------
+    StructuredLLM or None
+        Adapted structured LLM port, or ``None`` if ``llm`` is ``None``.
+    """
     if llm is None:
         return None
 
     from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
+
     if isinstance(llm, DiskCachedStructuredLLM):
         return llm
-        
-    if hasattr(llm, "predict_structured") and hasattr(llm, "predict_text"):
-        adapter = llm
+
+    if isinstance(llm, StructuredPredictable) or (
+        hasattr(llm, "predict_structured") and hasattr(llm, "predict_text")
+    ):
+        adapter: Any = llm
     else:
         adapter = LlamaIndexStructuredLLMAdapter(llm)
-        
+
     if use_cache:
         return DiskCachedStructuredLLM(adapter)
     return adapter
+
+
+def normalize_structured_llm(
+    llm: Any | None,
+    *,
+    use_cache: bool = True,
+) -> StructuredPredictable | None:
+    """Normalize an optional LLM facade or port to ``StructuredPredictable``.
+
+    Preserves existing ``StructuredPredictable`` ports (including already-cached
+    ``DiskCachedStructuredLLM`` instances and lightweight test doubles) without
+    re-wrapping, while adapting raw LLM facades via ``ensure_structured_llm``.
+
+    Parameters
+    ----------
+    llm : Any or None
+        Optional raw LLM facade, ``StructuredLLM``, or ``StructuredPredictable`` port.
+    use_cache : bool, default True
+        Whether newly adapted raw LLM facades enable disk caching.
+
+    Returns
+    -------
+    StructuredPredictable or None
+        Normalized structured prediction port, or ``None``.
+    """
+    if llm is None:
+        return None
+    if isinstance(llm, StructuredPredictable):
+        return llm
+    return ensure_structured_llm(llm, use_cache=use_cache)
 
 
 def sanitize_structured_output(text: str) -> SanitizedStructuredOutput:
@@ -506,7 +617,9 @@ def sanitize_structured_output(text: str) -> SanitizedStructuredOutput:
         Parsed JSON plus deterministic normalization metadata.
     """
     stripped = text.strip()
-    start_indexes = [idx for idx in (stripped.find("{"), stripped.find("[")) if idx >= 0]
+    start_indexes = [
+        idx for idx in (stripped.find("{"), stripped.find("[")) if idx >= 0
+    ]
     if not start_indexes:
         raise ValueError("No JSON object or array found in LLM response")
 

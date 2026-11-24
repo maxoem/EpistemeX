@@ -26,8 +26,12 @@ class CapabilitiesResponse(BaseModel):
 
     artifacts: bool = Field(description="True if artifact store is available on disk.")
     neo4j: bool = Field(description="True if Neo4j driver connection is active.")
-    execution: bool = Field(description="True if pipeline execution subsystem is enabled.")
-    overlays: list[str] = Field(description="List of available or implemented overlay kinds.")
+    execution: bool = Field(
+        description="True if pipeline execution subsystem is enabled."
+    )
+    overlays: list[str] = Field(
+        description="List of available or implemented overlay kinds."
+    )
 
 
 @router.get("/api/health", response_model=HealthResponse)

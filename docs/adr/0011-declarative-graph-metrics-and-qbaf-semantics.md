@@ -141,3 +141,34 @@ Following rigorous theoretical and numerical evaluation of ticket ISSUE-041 and 
 - Eliminates double-penalization of tentative premises while maintaining rigorous Toulmin warrant accounting.
 - Guarantees $O(|V| + |E|)$ execution for acyclic theory graphs while ensuring numerically stable, early-halting ODE relaxation for cyclic structures.
 - Provides complete mathematical harmony between database projections, runtime solvers, and visualization telemetry.
+
+---
+
+## Addendum 3 (2026-10-31): Active Inter-Phase Epistemic Quality Gates (`ISSUE-058`)
+
+### Context
+While `epistemetrics` provides rich post-construction theory-graph evaluation, structural or calibration pathologies arising mid-run (such as Phase 2 ontological collapse, Phase 3b/5 giant-component percolation, or Phase 3/4 conformal OOD spikes) previously went undetected until after all downstream LLM phases completed.
+
+### Decision Amendment
+We complement passive post-construction analytics with active inter-phase `EpistemicQualityGate` circuit breakers evaluated by `ArtifactExecutionEngine` on the `ArtifactCollection` emitted by each phase in `WorkflowDAG`:
+- **`OntologyEntropyGate` (Post-Phase 2)**: Enforces Shannon entropy $H(\text{entity\_types}) \ge H_{\min}$, bounds single-type dominance ratio, and verifies non-zero entity density on non-empty chunks.
+- **`PercolationQualityGate` (Post-Phase 3b & Phase 5)**: Verifies that the largest merged equivalence class does not exceed $\rho_{\max} \cdot |E|$, preventing giant-component collapse prior to QBAF / TheoryNet synthesis.
+- **`ConformalCalibrationGate` (Post-Phase 3 & Phase 4)**: Monitors empirical rates of empty ($|C(X)| = 0$) and ambiguous ($|C(X)| > 1$) conformal prediction sets, emitting `QualityGateWarning` or raising `QualityGateViolationError` before corrupted artifacts are persisted or projected.
+
+---
+
+## Addendum 4 (2026-11-15): Bipartite Inference Hypergraph, Conjunctive T-Norms & Warrant Dynamics (`ISSUE-055`)
+
+### Context
+Binary atom-to-atom edges cannot faithfully represent linked/conjunctive inferences (e.g., Duhem–Quine derivation $\text{Law} \land \text{BoundaryCondition} \implies \text{Observation}$, where falsifying the boundary condition must eliminate the derivation's support) or meta-level warrant modifiers (Pollockian undercutters attacking the inference rule rather than rebutting the conclusion below its prior $\tau_0$, and Toulmin backing strengthening a warrant).
+
+### Decision Amendment
+1. **Domain & Artifact Hypergraph Support**:
+   - `TheoryRelation` (`TheoryInference` alias), `TheoryRelationArtifact` (`TheoryInferenceArtifact` alias), and `epistemetrics.TheoryEdge` now carry optional `id`, `premise_ids: tuple[str, ...]`, and `undercuts_relation_id: str | None`, preserving lossless codec round-trips (`TheoryRelationCodec`) and Phase 5 canonical ID remapping (`_resolve_l3_atoms_and_relations`).
+2. **Selective Bipartite `:TheoryInference` Projection (`ArtifactGraphProjector`)**:
+   - Inferences with $|\text{Prem}| > 1$ or targeted by an undercutter (`undercuts_relation_id`) or backing relation are materialized as intermediate `:TheoryInference` nodes connected via `HAS_PREMISE`, `CONCLUDES`, `UNDERCUTS`, and `BACKS` edges in a deterministic two-pass `ProjectionBatch.flush()`.
+   - Untargeted unary inferences remain lightweight direct pairwise edges, keeping graph projection cost minimal.
+3. **Conjunctive T-Norms & Warrant State ODEs (`epistemetrics`)**:
+   - `WeightedQuadraticEnergySolver` and `QBAFGradualSemanticsSolver` accept `t_norm: Literal["product", "godel"] = "product"` (configured pipeline-wide via `Phase6Config.conjunctive_t_norm`), aggregating conjunctive premises via Product ($\prod$) or Gödel ($\min$) t-norms.
+   - Reified warrants are modeled by `HyperedgeSpec` with dynamic warrant state $s(w_k, t)$ modulated by Toulmin backing and Pollockian undercutters in both topological closed-form DAG evaluation and coupled augmented ODE integration (`s_atoms` + `s_warrants`), reported in `QBAFSolverResult.warrant_states` and solver telemetry without polluting atom degree dictionaries.
+   - Untargeted 1-premise `HyperedgeSpec` instances reduce numerically identically to pairwise weighted edges.

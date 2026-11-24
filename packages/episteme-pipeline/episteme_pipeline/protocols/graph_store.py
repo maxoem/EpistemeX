@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from typing import Any
 
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
@@ -43,9 +46,7 @@ class GraphReader(GraphHandle, ABC):
     async def get_all_entity_triples(self) -> list[L2Triple]: ...
 
     @abstractmethod
-    async def get_neighborhood(
-        self, node_id: str, depth: int = 1
-    ) -> SubGraph:
+    async def get_neighborhood(self, node_id: str, depth: int = 1) -> SubGraph:
         """Return a depth-limited structural neighborhood around a node.
 
         Parameters
@@ -132,6 +133,39 @@ class GraphWriter(GraphHandle, ABC):
         """
         ...
 
+    async def upsert_nodes(
+        self,
+        label: str,
+        nodes: list[dict],
+        *,
+        extra_labels: tuple[str, ...] = (),
+    ) -> None:
+        """Bulk-upsert a batch of nodes sharing ``label``.
+
+        Parameters
+        ----------
+        label : str
+            Primary node label.
+        nodes : list of dict
+            Each item must carry ``"id"``, ``"props"`` (or ``"properties"``),
+            and optionally ``"create_props"``.
+        extra_labels : tuple of str, optional
+            Additional labels stamped on each node.
+        """
+        for node in nodes:
+            props = dict(node.get("props") or node.get("properties") or {})
+            create_props = node.get("create_props")
+            if extra_labels or create_props is not None:
+                await self.upsert_node(
+                    label,
+                    str(node["id"]),
+                    props,
+                    extra_labels=extra_labels,
+                    create_only_properties=create_props,
+                )
+            else:
+                await self.upsert_node(label, str(node["id"]), props)
+
     @abstractmethod
     async def prune_document_children(
         self,
@@ -159,9 +193,7 @@ class GraphWriter(GraphHandle, ABC):
     ) -> None: ...
 
     @abstractmethod
-    async def upsert_relations(
-        self, relations: list[dict]
-    ) -> None: ...
+    async def upsert_relations(self, relations: list[dict]) -> None: ...
 
     @abstractmethod
     async def upsert_chunk(self, chunk: L1Chunk) -> None: ...
@@ -182,19 +214,15 @@ class GraphWriter(GraphHandle, ABC):
     async def upsert_triples(self, triples: list[L2Triple]) -> None: ...
 
     @abstractmethod
-    async def upsert_argument_component(
-        self, component: TheoryAtom
-    ) -> None: ...
-    
+    async def upsert_argument_component(self, component: TheoryAtom) -> None: ...
+
     @abstractmethod
     async def upsert_argument_components(
         self, components: list[TheoryAtom]
     ) -> None: ...
 
     @abstractmethod
-    async def upsert_theory_relation(
-        self, relation: TheoryRelation
-    ) -> None: ...
+    async def upsert_theory_relation(self, relation: TheoryRelation) -> None: ...
 
     @abstractmethod
     async def upsert_theory_relations(
@@ -202,16 +230,48 @@ class GraphWriter(GraphHandle, ABC):
     ) -> None: ...
 
     @abstractmethod
-    async def upsert_community(self, community_id: str, level: int, entity_ids: list[str]) -> None: ...
+    async def upsert_community(
+        self, community_id: str, level: int, entity_ids: list[str]
+    ) -> None: ...
 
     @abstractmethod
     async def upsert_communities(self, communities: list[dict]) -> None: ...
+
+    async def prune_retired_entities(self, entity_ids: list[str]) -> int:
+        """Delete retired entity nodes and incident edges from the projection graph.
+
+        Parameters
+        ----------
+        entity_ids : list of str
+            Canonical identifiers of entities retired by concept splitting.
+
+        Returns
+        -------
+        int
+            Number of retired entity nodes deleted.
+        """
+        return 0
+
+    async def prune_retired_mentions(self, mentions: list[tuple[str, str]]) -> int:
+        """Delete retired ``EXTRACTED_FROM`` mention edges from the projection graph.
+
+        Parameters
+        ----------
+        mentions : list of tuple of (str, str)
+            Pairs of ``(entity_id, chunk_id)`` whose mention edges were retired.
+
+        Returns
+        -------
+        int
+            Number of retired mention relationships deleted.
+        """
+        return 0
 
 
 class PhaseCheckpointStore(GraphHandle, ABC):
     @abstractmethod
     async def mark_chunk_processed(self, chunk_id: str, phase: str) -> None: ...
-    
+
     @abstractmethod
     async def mark_chunks_processed(self, chunk_ids: list[str], phase: str) -> None: ...
 
@@ -261,6 +321,58 @@ class PhaseCheckpointStore(GraphHandle, ABC):
         ...
 
     @abstractmethod
+    async def commit_phase_items(
+        self, phase: str, items: list[PhaseItemRecord]
+    ) -> None:
+        """Persist phase item checkpoints without requiring triple upserts.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        items : list[PhaseItemRecord]
+            Phase item checkpoint records to persist.
+        """
+        ...
+
+    @abstractmethod
+    async def save_chunk_state_snapshot(
+        self, phase: str, chunk_id: str, snapshot: dict[str, Any]
+    ) -> None:
+        """Persist a serialized state machine snapshot associated with a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+        snapshot : dict[str, Any]
+            State dictionary snapshot.
+        """
+        ...
+
+    @abstractmethod
+    async def get_chunk_state_snapshot(
+        self, phase: str, chunk_id: str
+    ) -> dict[str, Any] | None:
+        """Retrieve a prior serialized state machine snapshot for a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+
+        Returns
+        -------
+        dict[str, Any] or None
+            Restored state snapshot, or None if no prior snapshot was recorded.
+        """
+        ...
+
+    @abstractmethod
     async def clear_phase_checkpoints(self, phase: str) -> None:
         """Clear all item checkpoints for the given phase upon invalidation.
 
@@ -270,6 +382,115 @@ class PhaseCheckpointStore(GraphHandle, ABC):
             Phase identifier tag.
         """
         ...
+
+    async def get_committed_triples(self, phase: str) -> list[L2Triple]:
+        """Return triples committed across prior batches for ``phase``.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier (optionally scoped by lineage fingerprint).
+
+        Returns
+        -------
+        list of L2Triple
+            Committed triples for ``phase``.
+        """
+        return []
+
+    async def save_checkpoint_payloads(
+        self, phase: str, payloads: dict[str, dict[str, Any]]
+    ) -> None:
+        """Persist intermediate JSON-serializable item outputs for mid-phase crash recovery.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier (optionally scoped by lineage fingerprint).
+        payloads : dict of str to dict of str to Any
+            Mapping from item key (e.g. chunk_id, entity_id, pair_key) to
+            serialized output payload.
+        """
+        return
+
+    async def get_checkpoint_payloads(self, phase: str) -> dict[str, dict[str, Any]]:
+        """Retrieve all persisted intermediate item outputs for ``phase``.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier (optionally scoped by lineage fingerprint).
+
+        Returns
+        -------
+        dict of str to dict of str to Any
+            Mapping from item key to serialized output payload.
+        """
+        return {}
+
+
+class NoOpCheckpointStore(PhaseCheckpointStore):
+    """Null-object :class:`PhaseCheckpointStore` for ephemeral or non-checkpointed execution.
+
+    Treats all items as unprocessed and discards persisted checkpoints, allowing
+    phase runners and executors to operate uniformly through a single code path
+    without ``None`` branching.
+    """
+
+    async def close(self) -> None:
+        """No-op close hook."""
+        return
+
+    async def mark_chunk_processed(self, chunk_id: str, phase: str) -> None:
+        """No-op chunk marker."""
+        return
+
+    async def mark_chunks_processed(self, chunk_ids: list[str], phase: str) -> None:
+        """No-op batch chunk marker."""
+        return
+
+    async def get_unprocessed_chunks(
+        self, phase: str, limit: int | None = None
+    ) -> list[L1Chunk]:
+        """Return empty list (no stored chunk corpus)."""
+        return []
+
+    async def filter_unprocessed_items(
+        self, item_keys: list[str], phase: str
+    ) -> list[str]:
+        """Return all candidate item keys as unprocessed."""
+        return list(item_keys)
+
+    async def commit_phase_batch(
+        self,
+        phase: str,
+        triples: list[L2Triple],
+        items: list[PhaseItemRecord],
+    ) -> None:
+        """No-op batch commit."""
+        return
+
+    async def commit_phase_items(
+        self, phase: str, items: list[PhaseItemRecord]
+    ) -> None:
+        """No-op item commit."""
+        return
+
+    async def save_chunk_state_snapshot(
+        self, phase: str, chunk_id: str, snapshot: dict[str, Any]
+    ) -> None:
+        """No-op state snapshot save."""
+        return
+
+    async def get_chunk_state_snapshot(
+        self, phase: str, chunk_id: str
+    ) -> dict[str, Any] | None:
+        """Return ``None`` (no persisted snapshot)."""
+        return None
+
+    async def clear_phase_checkpoints(self, phase: str) -> None:
+        """No-op checkpoint clear."""
+        return
 
 
 class EntityGraph(GraphReader, GraphWriter, ABC):
@@ -294,6 +515,7 @@ __all__ = [
     "GraphHandle",
     "GraphReader",
     "GraphWriter",
+    "NoOpCheckpointStore",
     "PhaseCheckpointStore",
     "ProcessingGraph",
     "ProjectionGraph",

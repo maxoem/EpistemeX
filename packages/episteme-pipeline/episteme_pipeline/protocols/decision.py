@@ -13,6 +13,8 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
+
 
 @dataclass(frozen=True, slots=True)
 class DecisionQuestion:
@@ -64,10 +66,10 @@ class DecisionQuestion:
         DecisionQuestion
             Instantiated typed decision question.
         """
-        text = getattr(bundle, "decision_template", None) or getattr(bundle, "direct_template", "")
+        text = bundle.decision_template or bundle.direct_template or ""
         if format_kwargs:
             text = text.format(**format_kwargs)
-        criteria = getattr(bundle, "decision_criteria", None)
+        criteria = bundle.decision_criteria
         return cls(
             question=text,
             type=type,
@@ -76,7 +78,9 @@ class DecisionQuestion:
         )
 
 
-def ensure_decision_question(spec: DecisionQuestion | dict[str, Any]) -> DecisionQuestion:
+def ensure_decision_question(
+    spec: DecisionQuestion | dict[str, Any],
+) -> DecisionQuestion:
     """Normalize a DecisionQuestion or legacy dictionary specification into a typed DecisionQuestion.
 
     Parameters
@@ -163,9 +167,7 @@ class DecisionNoulResult(BaseModel):
         Boolean evaluation outcome (e.g. probability >= threshold).
     """
 
-    probability: float = Field(
-        description="Calibrated probability P(true) in [0, 1]."
-    )
+    probability: float = Field(description="Calibrated probability P(true) in [0, 1].")
     empirical_accuracy: float = Field(
         description="Calibrated empirical accuracy frequency."
     )
@@ -173,7 +175,7 @@ class DecisionNoulResult(BaseModel):
 
 
 @runtime_checkable
-class DecisionEngine(Protocol):
+class DecisionEngine(Fingerprintable, Protocol):
     """Structural protocol for non-generative, typed System 1 decision engines.
 
     Implementations evaluate state blocks against typed questions or rubrics,
@@ -310,7 +312,7 @@ class DecisionEngine(Protocol):
 
 
 @runtime_checkable
-class GleaningStoppingOracle(Protocol):
+class GleaningStoppingOracle(Fingerprintable, Protocol):
     """Protocol for evaluating whether an iterative extraction pass should continue.
 
     Decouples the extraction Actor (generative LLM) from the stopping Critic

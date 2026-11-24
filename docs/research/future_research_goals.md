@@ -110,6 +110,10 @@ Episteme**, anchored in *Pan et al. (2024)* ("Unifying Large Language Models and
 * **Description:** For local or supported inference the model switches into constrained decoding during generation task
   after certain trigger-tokens have been generated.
 
+### 1.11 World Models for Empirical Node Validation & Simulation
+
+* **Description:** Generative and neuro-symbolic simulation environments designed to evaluate the empirical adequacy and correctness of empirical nodes ($I \subseteq M_{pp}$) in TheoryNets. By simulating domain mechanics, causal dependencies, and dynamic state transitions, candidate empirical assertions are evaluated against executable environment rollouts rather than static text co-occurrence or subjective LLM plausibility scores ($p(i, x)$).
+
 ---
 
 ## 2. Theoretical Analysis & Formal Explanations

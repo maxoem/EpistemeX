@@ -21,8 +21,11 @@ from .models import (
     CandidateRejectedByThreshold,
     DenseCandidatesGenerated,
     EntityMaturationSynthesized,
+    EpistemicDeficitDetected,
     LLMRelationDecoded,
     PipelineEvent,
+    RefinementCycleCompleted,
+    RefinementCycleStarted,
     RerankerScoreAssigned,
     SchemaValidationRejectedRelation,
     TripleCommitted,
@@ -97,9 +100,33 @@ class LoggingObserver(EventObserver):
                 f"Synthesized mature description for entity '{event.entity_name}' "
                 f"using top {event.top_k_used} of {event.envelope_count} envelopes."
             )
+        elif isinstance(event, EpistemicDeficitDetected):
+            self.logger.info(
+                f"Epistemic deficit [{event.deficit_kind}] '{event.deficit_id}' "
+                f"(severity={event.severity:.3f}, pass={event.refinement_pass}, "
+                f"chunks={len(event.target_chunk_ids)}, entities={len(event.target_entity_ids)})"
+            )
+        elif isinstance(event, RefinementCycleStarted):
+            self.logger.info(
+                f"Hermeneutic refinement cycle {event.refinement_pass} started "
+                f"for {event.deficit_count} deficit(s) across "
+                f"{len(event.target_chunk_ids)} chunk(s) and {len(event.target_entity_ids)} entity(ies)."
+            )
+        elif isinstance(event, RefinementCycleCompleted):
+            self.logger.info(
+                f"Hermeneutic refinement cycle {event.refinement_pass} completed: "
+                f"resolved={event.resolved_deficit_count}, remaining={event.remaining_deficit_count}, "
+                f"delta_artifacts={event.delta_artifact_count}, converged={event.converged} "
+                f"({event.duration_seconds:.3f}s)"
+            )
         else:
             # Generic logging for other events
             self.logger.debug(f"{event_type}: {serialized}")
+
+    def flush(self) -> None:
+        """Flush logger handlers."""
+        for handler in self.logger.handlers:
+            handler.flush()
 
 
 class JsonlRunObserver(EventObserver):
@@ -172,6 +199,11 @@ class JsonlRunObserver(EventObserver):
         self.file_handle.write(json.dumps(serialized, default=str) + "\n")
         self.file_handle.flush()
 
+    def flush(self) -> None:
+        """Flush the underlying JSONL file buffer to disk."""
+        if self.file_handle:
+            self.file_handle.flush()
+
 
 class MetricsObserver(EventObserver):
     """Observer that aggregates metrics from events.
@@ -186,6 +218,9 @@ class MetricsObserver(EventObserver):
             lambda: {"total": 0, "accepted": 0}
         )
         self.total_triples_committed = 0
+        self.epistemic_deficits_detected: dict[str, int] = defaultdict(int)
+        self.refinement_cycles_completed = 0
+        self.refinement_deficits_resolved = 0
 
     def on_event(self, event: PipelineEvent) -> None:
         """Aggregate metrics from the event.
@@ -205,6 +240,11 @@ class MetricsObserver(EventObserver):
                 self.candidate_acceptance_rates[key]["accepted"] += 1
         elif isinstance(event, TripleCommitted):
             self.total_triples_committed += 1
+        elif isinstance(event, EpistemicDeficitDetected):
+            self.epistemic_deficits_detected[str(event.deficit_kind)] += 1
+        elif isinstance(event, RefinementCycleCompleted):
+            self.refinement_cycles_completed += 1
+            self.refinement_deficits_resolved += event.resolved_deficit_count
 
     def get_candidate_acceptance_rate(self, candidate_key: str) -> float:
         """Get the acceptance rate for a specific candidate.
@@ -242,12 +282,15 @@ class MetricsObserver(EventObserver):
             return 0.0
         return total_accepted / total_candidates
 
+    def flush(self) -> None:
+        """No-op flush for metrics observer."""
+
 
 class CompositeObserver(EventObserver):
     """Observer that forwards events to multiple observers.
 
     This observer acts as a fan-out mechanism, distributing events to all
-    registered observers with failure isolation.
+    registered observers with failure isolation and delivery/error accounting.
 
     Parameters
     ----------
@@ -257,6 +300,8 @@ class CompositeObserver(EventObserver):
 
     def __init__(self, observers: list[EventObserver]) -> None:
         self.observers = observers
+        self.events_delivered: dict[str, int] = defaultdict(int)
+        self.observer_errors: dict[str, list[str]] = defaultdict(list)
 
     def on_event(self, event: PipelineEvent) -> None:
         """Forward event to all observers with failure isolation.
@@ -266,12 +311,51 @@ class CompositeObserver(EventObserver):
         event : PipelineEvent
             The event to forward to all observers.
         """
-        # Failure-isolated forwarding - one observer failing shouldn't break others
         for observer in self.observers:
+            obs_name = observer.__class__.__name__
             try:
                 observer.on_event(event)
-            except Exception as e:
-                # Log the error but continue with other observers
+                self.events_delivered[obs_name] += 1
+            except Exception as e:  # noqa: BLE001 baseline
+                self.observer_errors[obs_name].append(f"{type(e).__name__}: {e}")
                 logging.getLogger(__name__).warning(
-                    f"Observer {observer.__class__.__name__} failed to process event: {e}"
+                    f"Observer {obs_name} failed to process event: {e}"
                 )
+
+    def flush(self) -> None:
+        """Flush all registered observers with failure isolation."""
+        for observer in self.observers:
+            if isinstance(observer, EventObserver):
+                try:
+                    observer.flush()
+                except Exception as exc:  # noqa: BLE001 baseline
+                    obs_name = observer.__class__.__name__
+                    self.observer_errors[obs_name].append(
+                        f"flush:{type(exc).__name__}: {exc}"
+                    )
+                    logging.getLogger(__name__).warning(
+                        "Observer %s failed to flush: %s",
+                        obs_name,
+                        exc,
+                    )
+
+    def get_observer_telemetry(self) -> dict[str, object]:
+        """Return aggregated delivery and error statistics for child observers.
+
+        Returns
+        -------
+        dict of str to object
+            Dictionary containing events_delivered and observer_errors mappings.
+        """
+        return {
+            "events_delivered": dict(self.events_delivered),
+            "observer_errors": {k: list(v) for k, v in self.observer_errors.items()},
+        }
+
+    def reset_observer_telemetry(self) -> None:
+        """Reset delivery and error counters for all child observers."""
+        self.events_delivered.clear()
+        self.observer_errors.clear()
+        for observer in self.observers:
+            if isinstance(observer, CompositeObserver):
+                observer.reset_observer_telemetry()

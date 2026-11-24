@@ -15,16 +15,16 @@ from episteme_pipeline.llm.structured import StructuredLLM, ensure_structured_ll
 from episteme_pipeline.post_processing.theoretical_enrichment.enrichment_models import (
     TheoryElementDefinition,
     TheoryInductionOutput,
-    TheoryLaw,
 )
 from episteme_pipeline.prompts.default_prompts import THEORY_INDUCTION_DIRECT_PROMPT
 from episteme_pipeline.prompts.models import StructuredPromptBundle
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
 
 logger = logging.getLogger(__name__)
 
 
-class TheoryInducer(Protocol):
+class TheoryInducer(Fingerprintable, Protocol):
     """Protocol for dynamic Theory-Element induction."""
 
     async def induce_theories(
@@ -75,8 +75,39 @@ class LLMTheoryInducer:
         strategy: Any = "direct_constrained",
     ) -> None:
         self.llm: StructuredLLM = ensure_structured_llm(llm)
-        self.prompts = prompts or THEORY_INDUCTION_DIRECT_PROMPT
+        if isinstance(prompts, StructuredPromptBundle):
+            self.prompts: StructuredPromptBundle = prompts
+        else:
+            self.prompts = StructuredPromptBundle(
+                direct_template=prompts or THEORY_INDUCTION_DIRECT_PROMPT,
+                name="theory_induction",
+            )
         self.strategy = strategy
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint representation of the inducer.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        llm_fp = (
+            self.llm.fingerprint()
+            if isinstance(self.llm, Fingerprintable)
+            else str(self.llm)
+        )
+        prompts_fp = (
+            self.prompts.fingerprint()
+            if isinstance(self.prompts, Fingerprintable)
+            else str(self.prompts)
+        )
+        return {
+            "type": self.__class__.__name__,
+            "strategy": str(self.strategy),
+            "llm": llm_fp,
+            "prompts": prompts_fp,
+        }
 
     async def induce_theories(
         self,
@@ -110,14 +141,16 @@ class LLMTheoryInducer:
         observations: list[TheoryAtom] = []
 
         for atom in atoms:
-            part = graph_schema.component_partitions.get(atom.component_type, "")
-            if part == "A" or "hypothesis" in atom.component_type.lower() or "claim" in atom.component_type.lower():
+            part = graph_schema.resolve_component_partition(atom.component_type)
+            if part == "A":
                 hypotheses.append(atom)
             else:
                 observations.append(atom)
 
         if not hypotheses:
-            logger.info("LLMTheoryInducer: No TheoreticalHypothesis nodes found to induce theories from.")
+            logger.info(
+                "LLMTheoryInducer: No TheoreticalHypothesis nodes found to induce theories from."
+            )
             return []
 
         # Format prompt context
@@ -153,31 +186,13 @@ class LLMTheoryInducer:
                 structural_relations=rel_str,
                 max_theories=max_theories,
             )
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 baseline
             logger.error("LLMTheoryInducer failed structured induction: %s", err)
             return []
 
-        definitions: list[TheoryElementDefinition] = []
-        for item in raw_output.theories:
-            laws = [
-                TheoryLaw(
-                    law_id=law.law_id,
-                    description=law.description,
-                    formula_expression=law.formula_expression,
-                    involved_parameters=law.involved_parameters,
-                )
-                for law in item.laws
-            ]
-            theory_def = TheoryElementDefinition(
-                theory_id=item.theory_id,
-                name=item.name,
-                required_dimensions=item.required_dimensions,
-                parameter_names=item.parameter_names,
-                laws=laws,
-                max_admissible_blur=item.max_admissible_blur,
-                claimant_hypothesis_ids=item.claimant_hypothesis_ids,
-            )
-            definitions.append(theory_def)
+        definitions: list[TheoryElementDefinition] = [
+            item.to_definition() for item in raw_output.theories
+        ]
 
         logger.info(
             "LLMTheoryInducer: Successfully induced %d Theory-Elements: %s",

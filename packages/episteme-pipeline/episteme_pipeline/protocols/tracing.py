@@ -4,6 +4,7 @@ Tracing protocols for backward compatibility.
 These protocols are deprecated in favor of the event-driven architecture
 but are kept for backward compatibility during the transition.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -13,7 +14,7 @@ from typing import Any, Protocol
 
 class TraceSpan(Protocol):
     """Protocol for trace spans."""
-    
+
     def update(self, **kwargs: Any) -> None:
         """Update span with additional data."""
         ...
@@ -21,7 +22,7 @@ class TraceSpan(Protocol):
 
 class TraceSink(Protocol):
     """Protocol for trace sinks (deprecated)."""
-    
+
     @contextmanager
     def span(
         self,
@@ -36,7 +37,7 @@ class TraceSink(Protocol):
 
 class NoOpTraceSink:
     """No-op trace sink for disabling tracing."""
-    
+
     @contextmanager
     def span(
         self,
@@ -51,6 +52,6 @@ class NoOpTraceSink:
 
 class _NoOpSpan:
     """No-op span implementation."""
-    
+
     def update(self, **kwargs: Any) -> None:
         """Ignore span updates."""

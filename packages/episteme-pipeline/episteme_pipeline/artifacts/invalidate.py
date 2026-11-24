@@ -42,6 +42,8 @@ class ArtifactDependencyGraph:
     def __init__(self) -> None:
         self.nodes: dict[str, ArtifactEnvelope] = {}
         self._identity_by_artifact_id: dict[str, str] = {}
+        self._envelopes_by_artifact_id: dict[str, ArtifactEnvelope] = {}
+        self._versions_by_key: dict[str, list[ArtifactEnvelope]] = defaultdict(list)
         self._raw_upstream: dict[str, tuple[str, ...]] = {}
         self._downstream: dict[str, set[str]] = defaultdict(set)
         self._upstream: dict[str, set[str]] = defaultdict(set)
@@ -49,12 +51,31 @@ class ArtifactDependencyGraph:
         self._edges_resolved = False
 
     def add(self, artifact: ArtifactEnvelope) -> None:
+        """Register an artifact envelope and keep the latest non-superseded version per key.
+
+        Parameters
+        ----------
+        artifact : ArtifactEnvelope
+            Artifact envelope to add to the dependency graph.
+        """
         key = artifact.identity_key
         if key is None:
             return
-        self.nodes[key] = artifact
+        self._envelopes_by_artifact_id[artifact.artifact_id] = artifact
         self._identity_by_artifact_id[artifact.artifact_id] = key
-        self._raw_upstream[key] = tuple(artifact.provenance.upstream_artifact_ids)
+        versions = self._versions_by_key[key]
+        versions.append(artifact)
+
+        max_pass = max(v.provenance.refinement_pass for v in versions)
+        top_versions = [v for v in versions if v.provenance.refinement_pass == max_pass]
+        referenced_ids: set[str] = set()
+        for v in versions:
+            referenced_ids.update(v.provenance.upstream_artifact_ids)
+        sinks = [v for v in top_versions if v.artifact_id not in referenced_ids]
+        chosen = sinks[-1] if sinks else top_versions[-1]
+
+        self.nodes[key] = chosen
+        self._raw_upstream[key] = tuple(chosen.provenance.upstream_artifact_ids)
         self._edges_resolved = False
 
     def _resolve_edges(self) -> None:
@@ -65,6 +86,7 @@ class ArtifactDependencyGraph:
         self._upstream = defaultdict(set)
         self._unresolved_upstream = defaultdict(set)
         for key, raw_ids in self._raw_upstream.items():
+            node = self.nodes[key]
             for up_id in raw_ids:
                 up_key = self._identity_by_artifact_id.get(up_id)
                 if up_key is None:
@@ -73,6 +95,21 @@ class ArtifactDependencyGraph:
                     # not loaded. Recorded rather than dropped so callers can see
                     # that the graph is incomplete instead of reading a missing
                     # edge as "no dependency".
+                    self._unresolved_upstream[key].add(up_id)
+                    continue
+                if up_key == key:
+                    continue
+                up_node = self.nodes.get(up_key)
+                up_source = self._envelopes_by_artifact_id.get(up_id)
+                if (
+                    up_node is not None
+                    and up_source is not None
+                    and up_node.artifact_id != up_source.artifact_id
+                    and up_node.provenance.refinement_pass
+                    > node.provenance.refinement_pass
+                ):
+                    # ``up_source`` was superseded by a later refinement pass on ``up_key``.
+                    # A later-pass version cannot be a topological prerequisite of an earlier pass.
                     self._unresolved_upstream[key].add(up_id)
                     continue
                 self._downstream[up_key].add(key)

@@ -14,11 +14,17 @@ from episteme_pipeline.prompts.default_prompts import (
     ARC_DIRECT_PROMPT,
     ARC_FORMAT_PROMPT,
     ARC_REASONING_PROMPT,
+    AXIOM_GROUNDING_PROMPT,
+    CONCEPT_SPLIT_PROMPT,
     DECISION_ACC_CRITERIA,
     DECISION_ACC_QUESTION,
     DECISION_ARC_CRITERIA,
     DECISION_ARC_QUESTION,
+    DECISION_ENTHYMEME_RECOVERABILITY_QUESTION,
     DECISION_GLEANING_QUESTION,
+    DECISION_OBSERVATION_GROUNDING_QUESTION,
+    DECISION_POLYSEMY_DISAMBIGUATION_CRITERIA,
+    DECISION_POLYSEMY_DISAMBIGUATION_QUESTION,
     ENTITY_LINKING_PROMPT,
     ENTITY_SYNTHESIS_PROMPT,
     GLOBAL_RELATION_DIRECT_PROMPT,
@@ -29,6 +35,7 @@ from episteme_pipeline.prompts.default_prompts import (
     NER_GLEANING_PROMPT,
     NER_REASONING_PROMPT,
     PAIR_GATING_DECISION_PROMPT,
+    PREMISE_RECOVERY_PROMPT,
 )
 from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
@@ -167,24 +174,30 @@ class Phase2Config(BaseModel):
     ner_confidence_threshold: float = 0.0
     local_relation_confidence_threshold: float = 0.0
     batch_size: int = 10
-    ner_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=NER_DIRECT_PROMPT,
-        reasoning_template=NER_REASONING_PROMPT,
-        format_template=NER_FORMAT_PROMPT,
-        gleaning_template=NER_GLEANING_PROMPT,
-        decision_template=DECISION_GLEANING_QUESTION,
-        name="ner_extraction",
-    ))
-    ner_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
+    ner_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=NER_DIRECT_PROMPT,
+            reasoning_template=NER_REASONING_PROMPT,
+            format_template=NER_FORMAT_PROMPT,
+            gleaning_template=NER_GLEANING_PROMPT,
+            decision_template=DECISION_GLEANING_QUESTION,
+            name="ner_extraction",
+        )
+    )
+    ner_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.NL_TO_FORMAT
+    )
     entity_linking_prompt_template: str = ENTITY_LINKING_PROMPT
-    entity_linking_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=ENTITY_LINKING_PROMPT,
-        name="entity_linking",
-    ))
+    entity_linking_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=ENTITY_LINKING_PROMPT,
+            name="entity_linking",
+        )
+    )
     jev_ooo_threshold: float = 0.75
     conformal_linking_alpha: float = 0.05
+    max_concurrent_chapters: int = 4
     gleaning: GleaningConfig = Field(default_factory=GleaningConfig)
-
 
 
 class Phase3Config(BaseModel):
@@ -192,14 +205,18 @@ class Phase3Config(BaseModel):
     global_relation_confidence_threshold: float = 0.7
     max_candidates_per_entity_pair: int = 200
     subgraph_depth: int = 2
-    global_relation_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=GLOBAL_RELATION_DIRECT_PROMPT,
-        reasoning_template=GLOBAL_RELATION_REASONING_PROMPT,
-        format_template=GLOBAL_RELATION_FORMAT_PROMPT,
-        decision_template=PAIR_GATING_DECISION_PROMPT,
-        name="global_relation",
-    ))
-    global_relation_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
+    global_relation_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=GLOBAL_RELATION_DIRECT_PROMPT,
+            reasoning_template=GLOBAL_RELATION_REASONING_PROMPT,
+            format_template=GLOBAL_RELATION_FORMAT_PROMPT,
+            decision_template=PAIR_GATING_DECISION_PROMPT,
+            name="global_relation",
+        )
+    )
+    global_relation_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.NL_TO_FORMAT
+    )
     dense_similarity_threshold: float = 0.5
     reranker_threshold: float = 0.6
     trace_dense_retrieval: bool = True
@@ -207,6 +224,12 @@ class Phase3Config(BaseModel):
     use_jev_pair_gating: bool = False
     pair_gating_threshold: float = 0.60
     pair_gating_audit_rate: float = 0.02
+    use_csls: bool = True
+    csls_k_nearest: int = 10
+    use_adaptive_k: bool = True
+    adaptive_k_gamma: float = 2.0
+    adaptive_k_min: int = 2
+    z_score_threshold: float | None = None
 
 
 class ConsolidationVerificationConfig(BaseModel):
@@ -249,6 +272,16 @@ class Phase3bConfig(BaseModel):
         The minimum Jaccard similarity of Phase 3 relation edges required to
         commit a SAME_AS edge between candidates. A conservative default
         ensures distinct but related entities are not incorrectly merged.
+    use_csls : bool, default True
+        Whether to compute Cross-Domain Similarity Local Scaling (CSLS) to penalize
+        hub entities and correct for embedding anisotropy.
+    csls_k_nearest : int, default 10
+        Neighborhood size for mean nearest-neighbor cosine similarity in CSLS.
+    min_internal_similarity : float, default 0.70
+        Minimum internal pairwise similarity floor required across all nodes within
+        a merged cluster, preventing non-transitive single-linkage bridge chaining.
+    max_diameter : float | None, default None
+        Optional maximum diameter constraint for merged clusters.
     verification : ConsolidationVerificationConfig
         Sub-configuration for calibrated borderline pair and cluster verification.
     """
@@ -256,7 +289,18 @@ class Phase3bConfig(BaseModel):
     enabled: bool = True
     dense_similarity_threshold: float = 0.85
     relation_overlap_threshold: float = 0.8
-    verification: ConsolidationVerificationConfig = Field(default_factory=ConsolidationVerificationConfig)
+    use_csls: bool = True
+    csls_k_nearest: int = 10
+    use_adaptive_k: bool = True
+    adaptive_k_gamma: float = 2.0
+    adaptive_k_min: int = 2
+    max_candidates_per_entity: int = 50
+    z_score_threshold: float | None = None
+    min_internal_similarity: float = 0.70
+    max_diameter: float | None = None
+    verification: ConsolidationVerificationConfig = Field(
+        default_factory=ConsolidationVerificationConfig
+    )
 
 
 class Phase4EntityMaturationConfig(BaseModel):
@@ -269,20 +313,43 @@ class Phase4EntityMaturationConfig(BaseModel):
         geometric centroid for LLM synthesis.
     batch_size : int, default 10
         The number of entities to synthesize concurrently via the LLM API.
+    enable_conception_stratification : bool, default True
+        Whether to detect multi-modal / high-variance entity mention envelopes
+        across documents or theories and synthesize perspective-specific
+        :class:`EntityConception` facets.
+    polysemy_variance_threshold : float, default 0.15
+        Spherical dispersion threshold :math:`\\tau_{\\text{polysemy}}` above which
+        entity mention envelopes trigger multi-centroid conception stratification.
+    min_silhouette_score : float, default 0.15
+        Minimum cosine silhouette score required to accept a multi-centroid
+        spherical k-means partition when explicit perspective separation is absent.
+    max_conceptions_per_entity : int, default 4
+        Maximum number of perspective-specific conceptions K synthesized per entity.
+    min_envelopes_for_stratification : int, default 2
+        Minimum number of mention envelopes required to test for polysemous variance.
     entity_synthesis_prompts : StructuredPromptBundle
         The prompt bundle used when calling the LLM to synthesize a mature
         entity description.
     entity_synthesis_decoding_strategy : StructuredDecodingStrategy
         Which decoding strategy the synthesis call routes through.
     """
+
     maturation_top_k: int = 5
     batch_size: int = 10
-    entity_synthesis_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=ENTITY_SYNTHESIS_PROMPT,
-        name="entity_synthesis",
-    ))
-    entity_synthesis_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.DIRECT
-
+    enable_conception_stratification: bool = True
+    polysemy_variance_threshold: float = Field(default=0.15, ge=0.0, le=2.0)
+    min_silhouette_score: float = Field(default=0.15, ge=-1.0, le=1.0)
+    max_conceptions_per_entity: int = Field(default=4, ge=2, le=10)
+    min_envelopes_for_stratification: int = Field(default=2, ge=2)
+    entity_synthesis_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=ENTITY_SYNTHESIS_PROMPT,
+            name="entity_synthesis",
+        )
+    )
+    entity_synthesis_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.DIRECT
+    )
 
 
 class ModalResolverConfig(BaseModel):
@@ -309,41 +376,62 @@ class ModalResolverConfig(BaseModel):
 
 class Phase4Config(BaseModel):
     adu_segmentation_prompt_template: str = ADU_SEGMENTATION_PROMPT
-    adu_segmentation_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=ADU_SEGMENTATION_PROMPT,
-        name="adu_segmentation",
-    ))
+    adu_segmentation_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=ADU_SEGMENTATION_PROMPT,
+            name="adu_segmentation",
+        )
+    )
     adu_confidence_threshold: float = 0.0
     acc_confidence_threshold: float = 0.0
     batch_size: int = 10
-    modal_resolver: ModalResolverConfig = Field(default_factory=lambda: ModalResolverConfig())
-    acc_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=ACC_DIRECT_PROMPT,
-        reasoning_template=ACC_REASONING_PROMPT,
-        format_template=ACC_FORMAT_PROMPT,
-        decision_template=DECISION_ACC_QUESTION,
-        decision_criteria=DECISION_ACC_CRITERIA,
-        name="acc_classification",
-    ))
-    acc_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
-    arc_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=ARC_DIRECT_PROMPT,
-        reasoning_template=ARC_REASONING_PROMPT,
-        format_template=ARC_FORMAT_PROMPT,
-        decision_template=DECISION_ARC_QUESTION,
-        decision_criteria=DECISION_ARC_CRITERIA,
-        name="arc_classification",
-    ))
-    arc_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
+    modal_resolver: ModalResolverConfig = Field(
+        default_factory=lambda: ModalResolverConfig()
+    )
+    acc_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=ACC_DIRECT_PROMPT,
+            reasoning_template=ACC_REASONING_PROMPT,
+            format_template=ACC_FORMAT_PROMPT,
+            decision_template=DECISION_ACC_QUESTION,
+            decision_criteria=DECISION_ACC_CRITERIA,
+            name="acc_classification",
+        )
+    )
+    acc_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.NL_TO_FORMAT
+    )
+    arc_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=ARC_DIRECT_PROMPT,
+            reasoning_template=ARC_REASONING_PROMPT,
+            format_template=ARC_FORMAT_PROMPT,
+            decision_template=DECISION_ARC_QUESTION,
+            decision_criteria=DECISION_ARC_CRITERIA,
+            name="arc_classification",
+        )
+    )
+    arc_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.NL_TO_FORMAT
+    )
     arc_confidence_threshold: float = 0.65
     arc_subgraph_depth: int = 2
     arc_max_candidates_per_component: int = 10
     arc_use_priority_rank: bool = False
+    arc_use_csls: bool = True
+    arc_csls_k_nearest: int = 10
+    arc_use_adaptive_k: bool = True
+    arc_adaptive_k_gamma: float = 2.0
+    arc_adaptive_k_min: int = 2
+    arc_z_score_threshold: float | None = None
     adu_markup_open: str = "<AC"
     adu_markup_close: str = ">"
     triage_confidence_threshold: float = 0.85
     conformal_alpha: float = 0.05
     stochastic_audit_rate: float = 0.02
+    acc_infer_intensional_mode: bool = True
+    require_multi_adu_relations: bool = False
+    require_entity_binding: bool = False
     pass_priors_to_llm: bool = True
     gleaning: GleaningConfig = Field(default_factory=GleaningConfig)
 
@@ -371,11 +459,35 @@ class FusionGatingConfig(BaseModel):
 
 
 class Phase5Config(BaseModel):
-    """Configuration for Phase 5: Argument Web & Theory Fusion."""
+    """Configuration for Phase 5: Argument Web & Theory Fusion.
+
+    Attributes
+    ----------
+    argument_clustering_enabled : bool, default True
+        Whether to perform cross-document argument clustering.
+    theory_fusion_enabled : bool, default False
+        Whether theory fusion gating is enabled.
+    fusion_similarity_threshold : float, default 0.85
+        The minimum cosine similarity required for argument clustering merges.
+    min_internal_similarity : float, default 0.75
+        The minimum internal similarity floor across all node pairs in a cluster,
+        preventing single-linkage bridge chaining.
+    max_diameter : float | None, default None
+        Optional maximum cluster diameter constraint.
+    max_cluster_size : int, default 100
+        Maximum allowed nodes in a single cluster.
+    cluster_layer : Literal["theory_atoms", "l2_entities", "both"], default "theory_atoms"
+        Target graph layer to cluster.
+    gating : FusionGatingConfig
+        Calibrated fusion gating sub-configuration.
+    """
 
     argument_clustering_enabled: bool = True
     theory_fusion_enabled: bool = False
     fusion_similarity_threshold: float = 0.85
+    min_internal_similarity: float = 0.75
+    max_diameter: float | None = None
+    max_cluster_size: int = 100
     cluster_layer: Literal["theory_atoms", "l2_entities", "both"] = "theory_atoms"
     gating: FusionGatingConfig = Field(default_factory=FusionGatingConfig)
 
@@ -406,6 +518,18 @@ class Phase6Config(BaseModel):
         Perception stance probability threshold.
     tau_c : float, default 0.0
         Perception calibration confidence threshold.
+    perspective : str or None, optional
+        Optional epistemic perspective filter for QBAF evaluation ('author',
+        agent name, or None for isolated authorial evaluation).
+    isolate_suppositional : bool, default True
+        Whether suppositional/Reductio premises are isolated from inflating
+        authorial claim justification.
+    isolate_attributed : bool, default True
+        Whether attributed opponent summaries are isolated from directly inflating
+        asserted authorial claims.
+    conjunctive_t_norm : Literal["product", "godel"], default "product"
+        Conjunctive t-norm operator applied over multi-premise inferences in QBAF
+        gradual semantics evaluation (``"product"`` or ``"godel"``).
     """
 
     enabled: bool = True
@@ -414,10 +538,17 @@ class Phase6Config(BaseModel):
     iterations: int = 20
     tolerance: float = 1e-4
     semantics_model: str = "quadratic"
+    use_continuous: bool = True
     admissibility_mode: Literal["hard", "soft"] = "hard"
     tau_p: float = 0.0
     tau_c: float = 0.0
-    modal_resolver: ModalResolverConfig = Field(default_factory=lambda: ModalResolverConfig())
+    perspective: str | None = None
+    isolate_suppositional: bool = True
+    isolate_attributed: bool = True
+    conjunctive_t_norm: Literal["product", "godel"] = "product"
+    modal_resolver: ModalResolverConfig = Field(
+        default_factory=lambda: ModalResolverConfig()
+    )
 
 
 class TheoreticalEnrichmentConfig(BaseModel):
@@ -457,6 +588,169 @@ class TheoreticalEnrichmentConfig(BaseModel):
     projection_prompts: StructuredPromptBundle | None = None
 
 
+class HermeneuticRefinementConfig(BaseModel):
+    """Configuration for bounded closed-loop hermeneutic refinement (ISSUE-053).
+
+    Controls top-down epistemic deficit detection (L4/L3 -> L2/L1), System 1
+    ``DecisionEngine`` triage gating, managed prompt bundles, and localized
+    re-extraction, concept splitting, and premise recovery cycles.
+
+    Parameters
+    ----------
+    max_refinement_cycles : int, default 0
+        Maximum top-down refinement cycles executed after the forward pass
+        (``0`` preserves strictly feed-forward execution).
+    enthymeme_min_centrality : float, default 0.0
+        Minimum graph centrality required for an unwarranted claim or hypothesis
+        to trigger an ``ENTHYMEME_GAP`` deficit.
+    polysemy_edge_tenability_threshold : float, default 0.5
+        Edge tenability floor ``TS_edge`` below which bridging concepts are
+        candidates for ``POLYSEMY_COLLISION`` detection.
+    polysemy_volatility_threshold : float, default 0.25
+        Controversy volatility threshold ``V(a)`` above which bridging entities
+        or atoms trigger ``POLYSEMY_COLLISION`` detection.
+    polysemy_ambiguity_similarity_threshold : float, default 0.82
+        Upper semantic cosine similarity threshold across contextual usages;
+        pairs below this floor indicate true semantic divergence rather than
+        univocal disagreement.
+    ungrounded_local_tenability_threshold : float, default 0.5
+        Local tenability floor ``TS_local`` below which empirical clusters or
+        axioms trigger ``UNGROUNDED_AXIOM`` detection.
+    max_deficits_per_cycle : int, default 20
+        Maximum number of prioritized deficits processed in each refinement cycle.
+    enable_theory_guided_premise_recovery : bool, default True
+        Whether ``ENTHYMEME_GAP`` signals dispatch theory-guided premise recovery.
+    enable_targeted_concept_split : bool, default True
+        Whether ``POLYSEMY_COLLISION`` signals dispatch targeted L2 concept splitting.
+    enable_localized_axiom_grounding : bool, default True
+        Whether ``UNGROUNDED_AXIOM`` signals dispatch localized parameter and
+        observation re-extraction.
+    use_decision_engine_gating : bool, default True
+        When True and a ``DecisionEngine`` is provided, applies System 1 triage
+        gates (conformal/calibratable Noul & Choice checks with deterministic
+        auditing) before invoking System 2 structured LLM handlers.
+    decision_confidence_threshold : float, default 0.70
+        Minimum System 1 confidence / positive likelihood required to accept
+        or escalate a gated candidate without full bypass.
+    conformal_alpha : float, default 0.10
+        Significance level ``alpha`` for System 1 conformal prediction sets on
+        polysemy disambiguation triage.
+    stochastic_audit_rate : float, default 0.05
+        Deterministic hash-based audit rate applied when System 1 recommends
+        skipping a deficit handler, preventing silent false-negative suppression.
+    concept_split_prompts : StructuredPromptBundle
+        Managed prompt bundle for ``ConceptionConceptSplitter`` and System 1
+        polysemy disambiguation.
+    premise_recovery_prompts : StructuredPromptBundle
+        Managed prompt bundle for ``LLMTheoryGuidedPremiseRecoverer`` and System 1
+        enthymeme recoverability gating.
+    axiom_grounding_prompts : StructuredPromptBundle
+        Managed prompt bundle for ``TheoryGuidedAxiomGrounder`` and System 1
+        observation grounding gating.
+    concept_split_decoding_strategy : StructuredDecodingStrategy, default DIRECT
+        Structured decoding strategy used for concept split extraction.
+    premise_recovery_decoding_strategy : StructuredDecodingStrategy, default DIRECT
+        Structured decoding strategy used for implicit premise recovery.
+    axiom_grounding_decoding_strategy : StructuredDecodingStrategy, default DIRECT
+        Structured decoding strategy used for observation and parameter grounding.
+    """
+
+    max_refinement_cycles: int = Field(default=0, ge=0, le=5)
+    enthymeme_min_centrality: float = Field(default=0.0, ge=0.0)
+    polysemy_edge_tenability_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    polysemy_volatility_threshold: float = Field(default=0.25, ge=0.0)
+    polysemy_ambiguity_similarity_threshold: float = Field(default=0.82, ge=0.0, le=1.0)
+    ungrounded_local_tenability_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    max_deficits_per_cycle: int = Field(default=20, ge=1)
+    enable_theory_guided_premise_recovery: bool = True
+    enable_targeted_concept_split: bool = True
+    enable_localized_axiom_grounding: bool = True
+    use_decision_engine_gating: bool = True
+    decision_confidence_threshold: float = Field(default=0.70, ge=0.0, le=1.0)
+    conformal_alpha: float = Field(default=0.10, gt=0.0, lt=1.0)
+    stochastic_audit_rate: float = Field(default=0.05, ge=0.0, le=1.0)
+    concept_split_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=CONCEPT_SPLIT_PROMPT,
+            decision_template=DECISION_POLYSEMY_DISAMBIGUATION_QUESTION,
+            decision_criteria=DECISION_POLYSEMY_DISAMBIGUATION_CRITERIA,
+            name="concept_split",
+        )
+    )
+    premise_recovery_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=PREMISE_RECOVERY_PROMPT,
+            decision_template=DECISION_ENTHYMEME_RECOVERABILITY_QUESTION,
+            name="premise_recovery",
+        )
+    )
+    axiom_grounding_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=AXIOM_GROUNDING_PROMPT,
+            decision_template=DECISION_OBSERVATION_GROUNDING_QUESTION,
+            name="axiom_grounding",
+        )
+    )
+    concept_split_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.DIRECT
+    )
+    premise_recovery_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.DIRECT
+    )
+    axiom_grounding_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.DIRECT
+    )
+
+
+class QualityGatesConfig(BaseModel):
+    """Configuration for inter-phase epistemic quality gates (ISSUE-058).
+
+    Attributes
+    ----------
+    enabled : bool, default True
+        Whether default inter-phase quality gates are attached at pipeline composition.
+    on_violation : Literal["warn", "raise"], default "warn"
+        Default policy when a quality gate threshold is violated ('warn' emits
+        a ``QualityGateWarning`` and domain event; 'raise' halts the run with
+        ``QualityGateViolationError``).
+    min_entity_type_entropy : float, default 0.30
+        Minimum Shannon entropy H(entity_types) in bits required post-Phase 2.
+    max_dominant_type_ratio : float, default 0.90
+        Maximum fraction of extracted entities assignable to a single ontological type.
+    min_entities_for_entropy : int, default 5
+        Minimum number of extracted entities before ontological entropy bounds are enforced.
+    min_entity_density : float, default 0.0
+        Minimum entity density per non-empty chunk required post-Phase 2.
+    max_percolation_fraction : float, default 0.50
+        Maximum fraction rho_max of total nodes allowed in a single merged equivalence
+        class post-Phase 3b and Phase 5.
+    min_population_for_percolation : int, default 4
+        Minimum entity/atom count required before percolation fraction bounds are enforced.
+    max_conformal_empty_rate : float, default 0.30
+        Maximum allowed fraction of empty conformal prediction sets (|C(X)| == 0).
+    max_conformal_ambiguous_rate : float, default 0.70
+        Maximum allowed fraction of ambiguous multi-label prediction sets (|C(X)| > 1).
+    max_conformal_ood_rate : float, default 0.70
+        Maximum allowed combined conformal OOD rate (|C(X)| != 1).
+    min_conformal_samples : int, default 1
+        Minimum number of conformal evaluations required before OOD bounds are checked.
+    """
+
+    enabled: bool = True
+    on_violation: Literal["warn", "raise"] = "warn"
+    min_entity_type_entropy: float = 0.30
+    max_dominant_type_ratio: float = 0.90
+    min_entities_for_entropy: int = 5
+    min_entity_density: float = 0.0
+    require_nonzero_entity_density: bool = True
+    max_percolation_fraction: float = 0.50
+    min_population_for_percolation: int = 4
+    max_conformal_empty_rate: float = 0.30
+    max_conformal_ambiguous_rate: float = 0.70
+    max_conformal_ood_rate: float = 0.70
+    min_conformal_samples: int = 1
+
+
 class ExecutionConfig(BaseModel):
     persist_run_manifests: bool = True
     persist_phase1_artifacts: bool = True
@@ -468,6 +762,7 @@ class ExecutionConfig(BaseModel):
     persist_phase5_artifacts: bool = True
     persist_phase6_artifacts: bool = True
     persist_theoretical_enrichment_artifacts: bool = True
+    persist_refinement_artifacts: bool = True
     project_artifacts_to_graph: bool = False
     allow_phase_reuse: bool = Field(
         default=True,
@@ -493,6 +788,33 @@ class ExecutionConfig(BaseModel):
     )
     runs_dir: str = ".pipeline_runs"
     artifacts_dir: str = ".pipeline_artifacts"
+
+    def should_persist_artifacts(self, phase_key: str) -> bool:
+        """Check whether artifacts should be persisted for a given phase key.
+
+        Parameters
+        ----------
+        phase_key : str
+            The phase identifier (e.g. 'phase1', 'phase2', etc.).
+
+        Returns
+        -------
+        bool
+            True if persistence is enabled for this phase, False otherwise.
+        """
+        mapping: dict[str, bool] = {
+            "phase1": self.persist_phase1_artifacts,
+            "phase2": self.persist_phase2_artifacts,
+            "phase3": self.persist_phase3_artifacts,
+            "phase3b": self.persist_phase3b_artifacts,
+            "phase4_maturation": self.persist_phase4_maturation_artifacts,
+            "phase4": self.persist_phase4_artifacts,
+            "phase5": self.persist_phase5_artifacts,
+            "phase6": self.persist_phase6_artifacts,
+            "theoretical_enrichment": self.persist_theoretical_enrichment_artifacts,
+            "refinement": self.persist_refinement_artifacts,
+        }
+        return mapping.get(phase_key, True)
 
 
 class DecisionEngineConfig(BaseModel):
@@ -540,6 +862,18 @@ class DecisionEngineConfig(BaseModel):
     device: str = "auto"
     fast_exit_threshold: float = 0.92
     uncertainty_threshold: float = 0.55
+    global_alpha: float = 0.05
+    default_task_id: str | None = None
+    language: str | None = None
+    risk_budget_weights: dict[str, float] = Field(
+        default_factory=lambda: {
+            "phase2_entity_discovery": 0.25,
+            "phase3b_consolidation": 0.10,
+            "phase4_argument_mining": 0.25,
+            "phase5_fusion": 0.25,
+            "refinement": 0.15,
+        }
+    )
     phase_gates: dict[str, bool] = Field(
         default_factory=lambda: {
             "phase2_entity_discovery": True,
@@ -550,6 +884,51 @@ class DecisionEngineConfig(BaseModel):
             "phase6_theorynet": True,
         }
     )
+
+    def allocate_phase_alphas(self) -> dict[str, float]:
+        """Allocate per-phase conformal significance levels from global risk budget.
+
+        Uses weighted union bound allocation:
+        :math:`\\alpha_m = \\alpha_{\\text{global}} \\cdot \\frac{w_m}{\\sum_k w_k}`
+        guaranteeing :math:`\\sum_{m=1}^M \\alpha_m \\le \\alpha_{\\text{global}}`.
+
+        Returns
+        -------
+        dict of str to float
+            Mapping from phase key to allocated conformal significance level.
+        """
+        if not self.risk_budget_weights:
+            return {}
+        from episteme_pipeline.decision.conformal import ConformalCalibrator
+
+        try:
+            return ConformalCalibrator.allocate_risk_budget(
+                global_alpha=self.global_alpha,
+                weights=self.risk_budget_weights,
+            )
+        except ValueError:
+            return {k: self.conformal_alpha for k in self.risk_budget_weights}
+
+    def get_allocated_alpha(self, phase_or_task: Any) -> float:
+        """Return the allocated alpha for a given PhaseRunner class, phase_key, or task.
+
+        Parameters
+        ----------
+        phase_or_task : type of PhaseRunner, PhaseRunner, or str
+            PhaseRunner subclass, instance, class name, ``phase_key``, or decision task.
+
+        Returns
+        -------
+        float
+            Allocated significance level, or default conformal_alpha if unweighted.
+        """
+        from episteme_pipeline.protocols.phase_runner import PhaseRunner
+
+        allocated = self.allocate_phase_alphas()
+        for candidate in PhaseRunner.related_identifiers(phase_or_task):
+            if candidate in allocated:
+                return allocated[candidate]
+        return self.conformal_alpha
 
 
 class PipelineConfig(BaseModel):
@@ -562,17 +941,27 @@ class PipelineConfig(BaseModel):
 
     models: ModelConfig = Field(default_factory=ModelConfig)
 
-    graph_schema: SchemaConfig = Field(default_factory=lambda: DEFAULT_SCHEMA.model_copy())
+    graph_schema: SchemaConfig = Field(
+        default_factory=lambda: DEFAULT_SCHEMA.model_copy()
+    )
     phase1: Phase1Config = Field(default_factory=Phase1Config)
     phase2: Phase2Config = Field(default_factory=Phase2Config)
     phase3: Phase3Config = Field(default_factory=Phase3Config)
     phase3b: Phase3bConfig = Field(default_factory=Phase3bConfig)
-    phase4_maturation: Phase4EntityMaturationConfig = Field(default_factory=Phase4EntityMaturationConfig)
+    phase4_maturation: Phase4EntityMaturationConfig = Field(
+        default_factory=Phase4EntityMaturationConfig
+    )
     phase4: Phase4Config = Field(default_factory=Phase4Config)
     phase5: Phase5Config = Field(default_factory=Phase5Config)
     phase6: Phase6Config = Field(default_factory=Phase6Config)
-    theoretical_enrichment: TheoreticalEnrichmentConfig = Field(default_factory=TheoreticalEnrichmentConfig)
+    theoretical_enrichment: TheoreticalEnrichmentConfig = Field(
+        default_factory=TheoreticalEnrichmentConfig
+    )
+    refinement: HermeneuticRefinementConfig = Field(
+        default_factory=HermeneuticRefinementConfig
+    )
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
+    quality_gates: QualityGatesConfig = Field(default_factory=QualityGatesConfig)
     decision_engine: DecisionEngineConfig | None = Field(default=None)
     modal_resolver: ModalResolverConfig = Field(default_factory=ModalResolverConfig)
 
@@ -595,3 +984,61 @@ class PipelineConfig(BaseModel):
     def default_reranker_model(self) -> str:
         """Deprecated alias for ``config.models.reranker_model``."""
         return self.models.reranker_model
+
+    def get_phase_config(self, phase_key: str) -> BaseModel | None:
+        """Retrieve the configuration model for a phase key without reflection.
+
+        Parameters
+        ----------
+        phase_key : str
+            The phase identifier.
+
+        Returns
+        -------
+        BaseModel or None
+            The corresponding phase config model, or None if unknown.
+        """
+        mapping: dict[str, BaseModel] = {
+            "phase1": self.phase1,
+            "phase2": self.phase2,
+            "phase3": self.phase3,
+            "phase3b": self.phase3b,
+            "phase4_maturation": self.phase4_maturation,
+            "phase4": self.phase4,
+            "phase5": self.phase5,
+            "phase6": self.phase6,
+            "theoretical_enrichment": self.theoretical_enrichment,
+            "refinement": self.refinement,
+        }
+        return mapping.get(phase_key)
+
+    def sync_allocated_risk_budgets(self) -> None:
+        """Synchronize per-phase conformal significance levels from DecisionEngineConfig.
+
+        When a global risk budget is configured on ``decision_engine``, allocates
+        per-phase significance levels via weighted union bounds and assigns them
+        to the corresponding phase configurations:
+        - ``phase2.conformal_linking_alpha``
+        - ``phase3b.verification.conformal_alpha``
+        - ``phase4.conformal_alpha``
+        - ``phase5.gating.conformal_alpha``
+        - ``refinement.conformal_alpha``
+        """
+        if self.decision_engine is None:
+            return
+
+        self.phase2.conformal_linking_alpha = self.decision_engine.get_allocated_alpha(
+            "phase2_entity_discovery"
+        )
+        self.phase3b.verification.conformal_alpha = (
+            self.decision_engine.get_allocated_alpha("phase3b_consolidation")
+        )
+        self.phase4.conformal_alpha = self.decision_engine.get_allocated_alpha(
+            "phase4_argument_mining"
+        )
+        self.phase5.gating.conformal_alpha = self.decision_engine.get_allocated_alpha(
+            "phase5_fusion"
+        )
+        self.refinement.conformal_alpha = self.decision_engine.get_allocated_alpha(
+            "refinement"
+        )

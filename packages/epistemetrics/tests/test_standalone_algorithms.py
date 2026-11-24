@@ -23,12 +23,14 @@ from epistemetrics.graph.algorithms.wcc import networkx_wcc, weakly_connected_co
 def sample_graph() -> nx.DiGraph:
     """Sample test graph."""
     g = nx.DiGraph()
-    g.add_edges_from([
-        ("A", "B"),
-        ("B", "C"),
-        ("C", "A"),
-        ("B", "D"),
-    ])
+    g.add_edges_from(
+        [
+            ("A", "B"),
+            ("B", "C"),
+            ("C", "A"),
+            ("B", "D"),
+        ]
+    )
     return g
 
 

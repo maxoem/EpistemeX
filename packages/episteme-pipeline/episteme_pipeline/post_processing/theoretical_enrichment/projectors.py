@@ -19,11 +19,12 @@ from episteme_pipeline.post_processing.theoretical_enrichment.enrichment_models 
 )
 from episteme_pipeline.prompts.default_prompts import CLUSTER_PROJECTION_DIRECT_PROMPT
 from episteme_pipeline.prompts.models import StructuredPromptBundle
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 logger = logging.getLogger(__name__)
 
 
-class TheoryProjector(ABC):
+class TheoryProjector(Fingerprintable, ABC):
     """Abstract base protocol for theory-specific projectors (Phi_spec)."""
 
     @abstractmethod
@@ -45,6 +46,35 @@ class TheoryProjector(ABC):
             Dictionary of parameter name to postulated value.
         """
         ...
+
+    async def aproject(
+        self, cluster: EmpiricalCluster, theory: TheoryElementDefinition
+    ) -> dict[str, Any]:
+        """Asynchronously project an empirical cluster into candidate theoretical parameters.
+
+        Parameters
+        ----------
+        cluster : EmpiricalCluster
+            Target empirical cluster.
+        theory : TheoryElementDefinition
+            Theory-element specifying M_pp and M_p signatures.
+
+        Returns
+        -------
+        dict[str, Any]
+            Dictionary of parameter name to postulated value.
+        """
+        return self.project(cluster, theory)
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint dictionary for caching.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        return {"type": self.__class__.__name__}
 
 
 def extract_matching_measurements(
@@ -78,7 +108,9 @@ def extract_matching_measurements(
         Numeric values of measurements that align with the parameter.
     """
     p_clean = param_name.lower().replace("_", "")
-    tokens = [t.lower() for t in re.findall(r"[A-Z]?[a-z]+|[a-z]+", param_name) if len(t) > 3]
+    tokens = [
+        t.lower() for t in re.findall(r"[A-Z]?[a-z]+|[a-z]+", param_name) if len(t) > 3
+    ]
     matching_req_dims = [
         rd.lower().replace("_", "")
         for rd in required_dimensions
@@ -92,13 +124,23 @@ def extract_matching_measurements(
         for m in obs.measurements:
             m_clean = m.dimension.lower().replace("_", "")
             # 1. Direct match against parameter name or sub-tokens
-            if m_clean in p_clean or p_clean in m_clean or any(t in m_clean for t in tokens) or matching_req_dims and any(rd in m_clean or m_clean in rd for rd in matching_req_dims):
+            if (
+                m_clean in p_clean
+                or p_clean in m_clean
+                or any(t in m_clean for t in tokens)
+                or matching_req_dims
+                and any(rd in m_clean or m_clean in rd for rd in matching_req_dims)
+            ):
                 if isinstance(m.value, (int, float)):
                     matched_vals.append(float(m.value))
             # 3. Ordinal positional fallback when parameter and dimension vocabularies are disjoint
-            elif not matching_req_dims and param_index is not None and param_index < len(required_dimensions):
+            elif (
+                not matching_req_dims
+                and param_index is not None
+                and param_index < len(required_dimensions)
+            ):
                 req_dim = required_dimensions[param_index].lower().replace("_", "")
-                if req_dim in m_clean or m_clean in req_dim:
+                if req_dim in m_clean or m_clean in req_dim:  # noqa: SIM102 baseline
                     if isinstance(m.value, (int, float)):
                         matched_vals.append(float(m.value))
 
@@ -116,6 +158,19 @@ class GenericTheoryProjector(TheoryProjector):
 
     def __init__(self, fallback_default: float = 0.5) -> None:
         self.fallback_default = fallback_default
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint dictionary for caching.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        return {
+            "type": self.__class__.__name__,
+            "fallback_default": self.fallback_default,
+        }
 
     def project(
         self, cluster: EmpiricalCluster, theory: TheoryElementDefinition
@@ -142,7 +197,11 @@ class GenericTheoryProjector(TheoryProjector):
 
             # Match parameter tokens and potential numeric indicators in text if no measurements found
             if not matched_vals:
-                tokens = [t.lower() for t in re.findall(r"[A-Z]?[a-z]+|[a-z]+", param_name) if len(t) > 3]
+                tokens = [
+                    t.lower()
+                    for t in re.findall(r"[A-Z]?[a-z]+|[a-z]+", param_name)
+                    if len(t) > 3
+                ]
                 for obs in cluster.observations:
                     obs_text = obs.text.lower()
                     for token in tokens:
@@ -155,7 +214,9 @@ class GenericTheoryProjector(TheoryProjector):
                                 num_str = match.group(1) or match.group(2)
                                 if num_str:
                                     val = float(num_str)
-                                    matched_vals.append(val / 100.0 if val > 1.0 else val)
+                                    matched_vals.append(
+                                        val / 100.0 if val > 1.0 else val
+                                    )
                             elif not matched_vals:
                                 matched_vals.append(0.7)
 
@@ -191,9 +252,40 @@ class LLMTheoryProjector(TheoryProjector):
         strategy: Any = "direct_constrained",
     ) -> None:
         self.llm: StructuredLLM = ensure_structured_llm(llm)
-        self.prompts = prompts or CLUSTER_PROJECTION_DIRECT_PROMPT
+        if isinstance(prompts, StructuredPromptBundle):
+            self.prompts: StructuredPromptBundle = prompts
+        else:
+            self.prompts = StructuredPromptBundle(
+                direct_template=prompts or CLUSTER_PROJECTION_DIRECT_PROMPT,
+                name="cluster_projection",
+            )
         self.strategy = strategy
         self._fallback = GenericTheoryProjector()
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint dictionary for caching.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        llm_fp = (
+            self.llm.fingerprint()
+            if isinstance(self.llm, Fingerprintable)
+            else str(self.llm)
+        )
+        prompts_fp = (
+            self.prompts.fingerprint()
+            if isinstance(self.prompts, Fingerprintable)
+            else str(self.prompts)
+        )
+        return {
+            "type": self.__class__.__name__,
+            "strategy": str(self.strategy),
+            "llm": llm_fp,
+            "prompts": prompts_fp,
+        }
 
     async def aproject(
         self, cluster: EmpiricalCluster, theory: TheoryElementDefinition
@@ -224,7 +316,10 @@ class LLMTheoryProjector(TheoryProjector):
             obs_lines.append(f"- [{o.id}] ({o.component_type}) {o.text}{dim_str}")
         obs_str = "\n".join(obs_lines) if obs_lines else "No observations."
 
-        laws_str = "; ".join([f"{law.law_id}: {law.description}" for law in theory.laws]) or "None"
+        laws_str = (
+            "; ".join([f"{law.law_id}: {law.description}" for law in theory.laws])
+            or "None"
+        )
 
         try:
             raw: ClusterProjectionOutput = await self.llm.predict_structured(
@@ -232,7 +327,8 @@ class LLMTheoryProjector(TheoryProjector):
                 self.prompts,
                 strategy=self.strategy,
                 theory_name=theory.name,
-                required_dimensions=", ".join(theory.required_dimensions) or "None specified",
+                required_dimensions=", ".join(theory.required_dimensions)
+                or "None specified",
                 parameter_names=", ".join(theory.parameter_names) or "None specified",
                 theory_laws=laws_str,
                 cluster_observations=obs_str,
@@ -242,8 +338,11 @@ class LLMTheoryProjector(TheoryProjector):
                 if p not in result:
                     result[p] = 0.5
             return result
-        except Exception as err:
-            logger.warning("LLMTheoryProjector failed structured projection: %s. Using fallback.", err)
+        except Exception as err:  # noqa: BLE001 baseline
+            logger.warning(
+                "LLMTheoryProjector failed structured projection: %s. Using fallback.",
+                err,
+            )
             return self._fallback.project(cluster, theory)
 
     def project(
@@ -344,9 +443,23 @@ class CompositeTheoryProjector(TheoryProjector):
             Postulated parameter values.
         """
         projector = self._projectors.get(theory.theory_id, self._default)
-        if hasattr(projector, "aproject"):
-            return await projector.aproject(cluster, theory)
-        return projector.project(cluster, theory)
+        return await projector.aproject(cluster, theory)
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint dictionary for caching.
+
+        Returns
+        -------
+        dict[str, Any]
+            Deterministic component configuration dictionary.
+        """
+        return {
+            "type": self.__class__.__name__,
+            "default": self._default.fingerprint(),
+            "projectors": {
+                k: p.fingerprint() for k, p in sorted(self._projectors.items())
+            },
+        }
 
     def project(
         self, cluster: EmpiricalCluster, theory: TheoryElementDefinition

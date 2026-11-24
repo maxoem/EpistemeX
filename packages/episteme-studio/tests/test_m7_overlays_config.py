@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from episteme_studio.adapters.metrics_adapter import (
     compute_component,
@@ -90,6 +92,7 @@ def create_sample_graph(
 # Overlay Unit & Service Tests
 # ---------------------------------------------------------------------------
 
+
 def test_gradual_strength_reports_incomplete_inputs_on_null_data() -> None:
     """When tau and phi are null, all missing inputs must be tracked (D-12)."""
     graph = create_sample_graph(with_tau_phi=False)
@@ -165,7 +168,6 @@ def test_pagerank_computation() -> None:
     assert pr_overlay.domain[0] <= pr_overlay.domain[1]
 
 
-
 def test_overlay_service_caching_and_reserved_kinds() -> None:
     """Overlay service caches by (graph_version, kind, params) and rejects reserved kinds."""
     service = OverlayService()
@@ -192,6 +194,7 @@ def test_overlay_service_caching_and_reserved_kinds() -> None:
 # Config Service Tests
 # ---------------------------------------------------------------------------
 
+
 def test_config_service_provenance_and_secret_redaction() -> None:
     """ConfigService tracks field provenance and masks secrets as '***'."""
     service = ConfigService()
@@ -201,7 +204,10 @@ def test_config_service_provenance_and_secret_redaction() -> None:
     )
 
     # Overridden field has OVERRIDE provenance
-    assert effective.provenance.get("phase3.dense_similarity_threshold") == FieldProvenance.OVERRIDE
+    assert (
+        effective.provenance.get("phase3.dense_similarity_threshold")
+        == FieldProvenance.OVERRIDE
+    )
     assert effective.values.get("phase3.dense_similarity_threshold") == 0.99
 
     # Default fields have DEFAULT provenance
@@ -246,12 +252,15 @@ def test_invalidation_preview_models_change_zero_invalidations() -> None:
 # API Endpoints Integration Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_api_overlays_reserved_kind_returns_501() -> None:
     """POST /api/overlays with reserved kind returns RFC 7807 501 Not Implemented."""
     app = create_app(StudioSettings(demo_mode=True))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         response = await client.post(
             "/api/overlays",
             json={"kind": "b_consistency"},
@@ -275,7 +284,9 @@ async def test_api_overlays_compute_and_list() -> None:
     """POST /api/overlays computes degree overlay and GET /api/overlays lists it."""
     app = create_app(StudioSettings(demo_mode=True))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # Compute degree overlay
         res = await client.post(
             "/api/overlays",
@@ -295,7 +306,9 @@ async def test_api_overlays_compute_and_list() -> None:
 
 
 @pytest.mark.asyncio
-async def test_api_overlays_pagerank_and_neo4j_source(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_api_overlays_pagerank_and_neo4j_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """POST /api/overlays computes PageRank overlay and supports source='neo4j'."""
     from episteme_studio.services.graph_service import GraphService
 
@@ -307,11 +320,17 @@ async def test_api_overlays_pagerank_and_neo4j_source(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr(GraphService, "get_neo4j_view", mock_neo4j_view)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # Compute PageRank overlay from Neo4j source
         res = await client.post(
             "/api/overlays",
-            json={"kind": "pagerank", "source": "neo4j", "graph_version": "neo4j-sample"},
+            json={
+                "kind": "pagerank",
+                "source": "neo4j",
+                "graph_version": "neo4j-sample",
+            },
         )
         assert res.status_code == 200
         overlay = res.json()
@@ -320,13 +339,14 @@ async def test_api_overlays_pagerank_and_neo4j_source(monkeypatch: pytest.Monkey
         assert overlay["node_values"]["a1"] > overlay["node_values"]["b1"]
 
 
-
 @pytest.mark.asyncio
 async def test_api_config_effective_and_profiles() -> None:
     """GET /api/config/effective and /api/config/profiles deliver effective configs."""
     app = create_app(StudioSettings(demo_mode=True))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # Profiles list
         prof_res = await client.get("/api/config/profiles")
         assert prof_res.status_code == 200
@@ -348,7 +368,9 @@ async def test_api_config_invalidation_preview_endpoints() -> None:
     """POST /api/config/invalidation-preview correctly compares phase fingerprints."""
     app = create_app(StudioSettings(demo_mode=True))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # 1. Models change produces 0 invalidations (D-14)
         model_res = await client.post(
             "/api/config/invalidation-preview",
@@ -384,7 +406,9 @@ async def test_api_config_prompts_resolve_endpoints() -> None:
     """POST /api/config/prompts/resolve resolves default and fallback prompt bundles."""
     app = create_app(StudioSettings(demo_mode=True))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # Resolve default prompts
         res = await client.post(
             "/api/config/prompts/resolve",
@@ -413,7 +437,9 @@ async def test_api_config_inputs_endpoints() -> None:
     """GET /api/config/inputs returns candidate document inputs in repository."""
     app = create_app(StudioSettings(demo_mode=True))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         res = await client.get("/api/config/inputs")
         assert res.status_code == 200
         inputs = res.json()
@@ -423,13 +449,23 @@ async def test_api_config_inputs_endpoints() -> None:
 
 
 @pytest.mark.asyncio
-async def test_api_config_inputs_upload_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_api_config_inputs_upload_endpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """POST /api/config/inputs/upload saves candidate document and returns metadata."""
     monkeypatch.chdir(tmp_path)
     app = create_app(StudioSettings(demo_mode=True))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        files = {"file": ("my_sample.md", b"# Sample Document\n\nSome text content.", "text/markdown")}
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        files = {
+            "file": (
+                "my_sample.md",
+                b"# Sample Document\n\nSome text content.",
+                "text/markdown",
+            )
+        }
         res = await client.post("/api/config/inputs/upload", files=files)
         assert res.status_code == 200
         data = res.json()
@@ -449,7 +485,9 @@ async def test_api_config_langfuse_status_endpoint() -> None:
     """GET /api/config/langfuse/status returns connection and telemetry status."""
     app = create_app(StudioSettings(demo_mode=True))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         res = await client.get("/api/config/langfuse/status")
         assert res.status_code == 200
         status_data = res.json()
@@ -465,10 +503,16 @@ async def test_api_config_langfuse_test_endpoint() -> None:
     """POST /api/config/langfuse/test probes connection with custom or default credentials."""
     app = create_app(StudioSettings(demo_mode=True))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         res = await client.post(
             "/api/config/langfuse/test",
-            json={"host": "http://localhost:3000", "public_key": "pk-lf-test", "secret_key": "sk-lf-test"},
+            json={
+                "host": "http://localhost:3000",
+                "public_key": "pk-lf-test",
+                "secret_key": "sk-lf-test",
+            },
         )
         assert res.status_code == 200
         data = res.json()

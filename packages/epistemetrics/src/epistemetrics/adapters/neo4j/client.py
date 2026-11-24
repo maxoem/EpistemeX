@@ -83,7 +83,7 @@ class Neo4jClient:
             driver = self._ensure_driver()
             driver.verify_connectivity()
             return True
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.debug("Neo4j connectivity check failed: %s", exc)
             return False
 
@@ -101,7 +101,7 @@ class Neo4jClient:
         try:
             results = self.execute_query("RETURN gds.version() AS version")
             return bool(results and results[0].get("version"))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.debug("Neo4j GDS version query failed: %s", exc)
             return False
 
@@ -152,7 +152,9 @@ class Neo4jClient:
         except Exception as exc:
             err_type = type(exc).__name__
             if "ServiceUnavailable" in err_type or "AuthError" in err_type:
-                raise RepositoryConnectionError(f"Neo4j connection error: {exc}") from exc
+                raise RepositoryConnectionError(
+                    f"Neo4j connection error: {exc}"
+                ) from exc
             raise AdapterError(f"Neo4j query execution failed: {exc}") from exc
 
     def close(self) -> None:

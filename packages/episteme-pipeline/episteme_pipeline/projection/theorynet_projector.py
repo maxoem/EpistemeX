@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Literal
+from typing import Any, Literal
 
-from epistemetrics.core.models import RelationType, TheoryEdge
+from epistemetrics.core.models import RelationType, TheoryEdge, TheoryNode
 from epistemetrics.epistemic.qbaf import (
     GradualSemanticsModel,
     QBAFGradualSemanticsSolver,
@@ -106,21 +106,21 @@ def get_cypher_projection_query(
     if admissibility_mode == "hard":
         return f"""CALL gds.graph.project.cypher(
   '{graph_name}',
-  'MATCH (n:TheoryAtom) RETURN id(n) AS id, n.modal_strength AS base_score',
+  'MATCH (n:TheoryAtom) RETURN id(n) AS id, n.modal_prior AS base_score',
   'MATCH (s:TheoryAtom)-[r:THEORY_RELATION]->(t:TheoryAtom)
-   WHERE r.stance_probability >= {p_val} AND r.model_confidence >= {c_val}
+   WHERE r.perception_stance_prob >= {p_val} AND r.calibrated_confidence >= {c_val}
    RETURN id(s) AS source, id(t) AS target,
-          r.inferential_force AS weight,
+          r.inferential_warrant AS weight,
           type(r) AS relation_type'
 )"""
     return f"""CALL gds.graph.project.cypher(
   '{graph_name}',
-  'MATCH (n:TheoryAtom) RETURN id(n) AS id, n.modal_strength AS base_score',
+  'MATCH (n:TheoryAtom) RETURN id(n) AS id, n.modal_prior AS base_score',
   'MATCH (s:TheoryAtom)-[r:THEORY_RELATION]->(t:TheoryAtom)
    RETURN id(s) AS source, id(t) AS target,
-          r.inferential_force AS inferential_force,
-          r.stance_probability AS stance_probability,
-          r.model_confidence AS model_confidence,
+          r.inferential_warrant AS inferential_warrant,
+          r.perception_stance_prob AS perception_stance_prob,
+          r.calibrated_confidence AS calibrated_confidence,
           type(r) AS relation_type'
 )"""
 
@@ -156,6 +156,19 @@ class TheoryNetProjector:
         Gradual semantics formulation ('quadratic', 'euler', 'categorizer', or 'linear').
     modal_resolver : ModalStrengthResolver | None, optional
         Injected authorial modal strength resolver. If None, defaults to StructuralistModalResolver.
+    use_continuous : bool, default True
+        Whether to use the continuous WeightedQuadraticEnergySolver (closed-form DAG
+        and adaptive RK45/Radau ODE integration) when semantics_model is 'quadratic'.
+    perspective : str or None, optional
+        Optional epistemic perspective filter ('author', agent name, or None).
+    isolate_suppositional : bool, default True
+        Whether suppositional/Reductio nodes are isolated from contributing positive prior.
+    isolate_attributed : bool, default True
+        Whether attributed opponent summaries are isolated from directly inflating
+        asserted authorial claims.
+    t_norm : Literal["product", "godel"], default "product"
+        Conjunctive t-norm operator applied across multi-premise inferences in QBAF
+        solvers (``"product"`` or ``"godel"``).
     """
 
     def __init__(
@@ -171,6 +184,11 @@ class TheoryNetProjector:
         tolerance: float = 1e-4,
         semantics_model: GradualSemanticsModel | str = GradualSemanticsModel.QUADRATIC,
         modal_resolver: ModalStrengthResolver | None = None,
+        use_continuous: bool = True,
+        perspective: str | None = None,
+        isolate_suppositional: bool = True,
+        isolate_attributed: bool = True,
+        t_norm: Literal["product", "godel"] = "product",
     ) -> None:
         self.schema = schema or SchemaConfig()
         self.modal_resolver = modal_resolver or StructuralistModalResolver()
@@ -186,17 +204,63 @@ class TheoryNetProjector:
             if isinstance(semantics_model, GradualSemanticsModel)
             else str(semantics_model)
         )
+        self.use_continuous = bool(
+            use_continuous
+            and self.semantics_model == GradualSemanticsModel.QUADRATIC.value
+        )
+        self.perspective = perspective
+        self.isolate_suppositional = isolate_suppositional
+        self.isolate_attributed = isolate_attributed
+        self.t_norm: Literal["product", "godel"] = t_norm
         self.solver = solver or QBAFGradualSemanticsSolver(
             semantics_model=self.semantics_model,
             max_iterations=iterations,
             tolerance=tolerance,
             admissibility_threshold=admissibility_threshold,
             prune_inadmissible=prune_inadmissible,
+            use_continuous=self.use_continuous,
+            perspective=perspective,
+            isolate_suppositional=isolate_suppositional,
+            isolate_attributed=isolate_attributed,
+            t_norm=self.t_norm,
         )
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic configuration fingerprint for run cache invalidation.
+
+        Returns
+        -------
+        dict of str to Any
+            Projector configuration and dependency fingerprints.
+        """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+
+        return {
+            "class": self.__class__.__name__,
+            "admissibility_threshold": self.admissibility_threshold,
+            "admissibility_mode": self.admissibility_mode,
+            "tau_p": self.tau_p,
+            "tau_c": self.tau_c,
+            "prune_inadmissible": self.prune_inadmissible,
+            "iterations": self.iterations,
+            "tolerance": self.tolerance,
+            "semantics_model": self.semantics_model,
+            "use_continuous": self.use_continuous,
+            "perspective": self.perspective,
+            "isolate_suppositional": self.isolate_suppositional,
+            "isolate_attributed": self.isolate_attributed,
+            "t_norm": self.t_norm,
+            "modal_resolver": (
+                self.modal_resolver.fingerprint()
+                if isinstance(self.modal_resolver, Fingerprintable)
+                else {"class": self.modal_resolver.__class__.__name__}
+            ),
+        }
 
     def project(
         self,
         view: Phase4ArtifactsView,
+        perspective: str | None = None,
     ) -> TheoryNet:
         """Constructs the full TheoryNet formal model from pipeline artifacts.
 
@@ -204,41 +268,44 @@ class TheoryNetProjector:
         ----------
         view : Phase4ArtifactsView
             Extracted theory atoms and dialectical relations from Phase 4.
+        perspective : str or None, optional
+            Optional perspective filter overriding ``self.perspective`` for
+            perspective-scoped QBAF projection.
 
         Returns
         -------
         TheoryNet
             Materialized TheoryNet with equilibrium justification plausibilities.
         """
+        active_perspective = (
+            perspective if perspective is not None else self.perspective
+        )
         # Retrieve and filter all theory relations with decoupled weights
+        source_relations = (
+            view.canonical_theory_relations
+            if view.canonical_theory_relations
+            else view.theory_relations
+        )
         relations: list[TheoryRelation] = []
-        for r in view.theory_relations:
+        for r in source_relations:
             rel = r.model_copy()
 
             # Apply upstream heuristic warrant mapping if not explicitly defined
-            if "inferential_force" not in rel.model_fields_set and "modal_strength" not in rel.model_fields_set:
-                rel.inferential_force = derive_relation_warrant(rel)
+            if "inferential_warrant" not in rel.model_fields_set:
+                rel.inferential_warrant = derive_relation_warrant(rel)
 
             p_val = (
-                rel.stance_probability
-                if rel.stance_probability is not None
-                else (
-                    rel.class_probability
-                    if rel.class_probability is not None
-                    else (rel.confidence if rel.confidence is not None else 1.0)
-                )
+                rel.perception_stance_prob
+                if rel.perception_stance_prob is not None
+                else (rel.confidence if rel.confidence is not None else 1.0)
             )
             c_val = (
-                rel.model_confidence
-                if rel.model_confidence is not None
+                rel.perception_empirical_acc
+                if rel.perception_empirical_acc is not None
                 else (
                     rel.calibrated_confidence
                     if rel.calibrated_confidence is not None
-                    else (
-                        rel.empirical_accuracy
-                        if rel.empirical_accuracy is not None
-                        else (rel.confidence if rel.confidence is not None else 1.0)
-                    )
+                    else (rel.confidence if rel.confidence is not None else 1.0)
                 )
             )
 
@@ -262,9 +329,9 @@ class TheoryNetProjector:
                         continue
                     else:
                         rel.active_weight = 0.0
-                        rel.tenability = 0.0
+                        rel.edge_tenability = 0.0
                 else:
-                    rel.active_weight = rel.inferential_force
+                    rel.active_weight = rel.inferential_warrant
             else:
                 # Mode 2: Continuous sigmoidal relaxation with k1 = k2 = 20
                 rel.is_admissible = bool(p_val >= self.tau_p and c_val >= self.tau_c)
@@ -274,33 +341,52 @@ class TheoryNetProjector:
                 exp_p = math.exp(-20.0 * max(-30.0, min(30.0, diff_p)))
                 exp_c = math.exp(-20.0 * max(-30.0, min(30.0, diff_c)))
                 f_soft = (1.0 / (1.0 + exp_p)) * (1.0 / (1.0 + exp_c))
-                rel.active_weight = float(rel.inferential_force * f_soft)
+                rel.active_weight = float(rel.inferential_warrant * f_soft)
 
             rel.weight = self.compute_relation_weight(rel)
             relations.append(rel)
 
         # Retrieve all theory atoms (empirical base and theoretical antecedents)
+        source_atoms = (
+            view.canonical_theory_atoms
+            if view.canonical_theory_atoms
+            else view.theory_atoms
+        )
         atoms: list[TheoryAtom] = []
-        for c in view.theory_atoms:
+        for c in source_atoms:
             atom = c.model_copy()
-            if "modal_strength" not in atom.model_fields_set and "base_score" not in atom.model_fields_set:
-                atom.modal_strength = self.modal_resolver.resolve_modality_sync(atom)
-                atom.base_score = atom.modal_strength
-            atom.plausibility = self.compute_weight(atom)
+            if (
+                "modal_prior" not in atom.model_fields_set
+                and atom.resolver_type is None
+            ):
+                atom.modal_prior = self.modal_resolver.resolve_modality_sync(atom)
             atoms.append(atom)
 
         # Execute Gradual Semantics Convergence via sovereign epistemetrics solver
-        if atoms and relations:
+        # Single source of truth: solver handles intensional supposition discharge & perspective scoping
+        if atoms:
             theory_edges = self._to_theory_edges(relations)
-            node_priors = self._to_node_priors(atoms)
+            solver_nodes = self._to_solver_nodes(atoms)
             solver_res = self.solver.solve(
-                nodes=node_priors,
+                nodes=solver_nodes,
                 edges=theory_edges,
                 normalization_mode=WeightNormalizationMode.CALIBRATED_MODAL,
+                perspective=active_perspective,
+                isolate_suppositional=self.isolate_suppositional,
+                isolate_attributed=self.isolate_attributed,
             )
             for atom in atoms:
                 if atom.id in solver_res.degrees:
-                    atom.plausibility = solver_res.degrees[atom.id]
+                    atom.equilibrium_strength = solver_res.degrees[atom.id]
+                else:
+                    atom.equilibrium_strength = self.compute_weight(
+                        atom, perspective=active_perspective
+                    )
+                if (
+                    solver_res.volatility_index
+                    and atom.id in solver_res.volatility_index
+                ):
+                    atom.controversy_volatility = solver_res.volatility_index[atom.id]
 
         return TheoryNet(
             atoms=atoms,
@@ -328,10 +414,32 @@ class TheoryNetProjector:
                     -1
                     if any(
                         k in (rel.relation_type or "").upper()
-                        for k in ("ATTACK", "REFUTE", "CONTRADICT", "UNDERCUT", "INHIBIT", "REBUT")
+                        for k in (
+                            "ATTACK",
+                            "REFUTE",
+                            "CONTRADICT",
+                            "UNDERCUT",
+                            "INHIBIT",
+                            "REBUT",
+                        )
                     )
                     else 1
                 )
+            ts_edge = (
+                float(rel.edge_tenability) if rel.edge_tenability is not None else 1.0
+            )
+            if not rel.is_admissible:
+                solver_eff_weight = 0.0
+            elif self.admissibility_mode == "soft":
+                solver_eff_weight = float(rel.active_weight * ts_edge)
+            else:
+                p_factor = (
+                    float(rel.perception_stance_prob)
+                    if rel.perception_stance_prob is not None
+                    else 1.0
+                )
+                unscaled_base = float(rel.inferential_warrant * p_factor)
+                solver_eff_weight = float(unscaled_base * ts_edge)
             theory_edges.append(
                 TheoryEdge(
                     source=rel.source_id,
@@ -340,54 +448,107 @@ class TheoryNetProjector:
                     confidence=rel.confidence if rel.confidence is not None else 1.0,
                     weight=rel.weight if rel.weight is not None else 1.0,
                     polarity=pol,
-                    inferential_force=rel.inferential_force,
-                    stance_probability=rel.stance_probability,
-                    model_confidence=rel.model_confidence,
-                    empirical_accuracy=rel.empirical_accuracy,
-                    active_weight=rel.active_weight,
-                    effective_weight=rel.effective_weight,
+                    id=rel.relation_id,
+                    premise_ids=rel.premise_ids,
+                    undercuts_relation_id=rel.undercuts_relation_id,
+                    inferential_force=rel.inferential_warrant,
+                    stance_probability=rel.perception_stance_prob,
+                    model_confidence=rel.calibrated_confidence,
+                    empirical_accuracy=rel.perception_empirical_acc,
+                    active_weight=solver_eff_weight,
+                    effective_weight=solver_eff_weight,
                 )
             )
         return theory_edges
 
-    def _to_node_priors(self, atoms: list[TheoryAtom]) -> dict[str, float]:
-        """Extract node prior plausibility mappings from theoretical atoms.
+    def _to_solver_nodes(
+        self,
+        atoms: list[TheoryAtom],
+    ) -> list[TheoryNode]:
+        """Convert theoretical atoms into strongly-typed :class:`TheoryNode` inputs.
+
+        Preserves each atom's intrinsic tenability-modulated prior
+        (:math:`M(\\phi) \\cdot TS_{\\text{local}}(\\phi)`) alongside ``intensional_mode``
+        and ``attributed_to`` so :class:`QBAFGradualSemanticsSolver` remains the
+        single source of truth for perspective and supposition (*Reductio*) scoping.
 
         Parameters
         ----------
         atoms : list of TheoryAtom
-            Theoretical atoms with base scores or computed plausibility.
+            Theoretical atoms with base scores, local tenability, and intensional scope.
+
+        Returns
+        -------
+        list of TheoryNode
+            Typed solver nodes carrying intrinsic ``base_score``, ``intensional_mode``,
+            and ``attributed_to``.
+        """
+        return [
+            TheoryNode(
+                id=atom.id,
+                name=atom.id,
+                base_score=atom.effective_base_prior(
+                    include_suppositional=True,
+                    perspective="all",
+                ),
+                modal_strength=atom.modal_prior
+                if atom.modal_prior is not None
+                else 0.6,
+                intensional_mode=atom.intensional_mode,
+                attributed_to=atom.attributed_to,
+                description=atom.text,
+                provenance=[atom.source_chunk_id] if atom.source_chunk_id else [],
+            )
+            for atom in atoms
+        ]
+
+    def _to_node_priors(self, atoms: list[TheoryAtom]) -> dict[str, float]:
+        """Extract tenability-modulated node prior plausibility mappings from theoretical atoms.
+
+        Parameters
+        ----------
+        atoms : list of TheoryAtom
+            Theoretical atoms with base scores and optional local tenability.
 
         Returns
         -------
         dict of str to float
-            Mapping from atom identifier to prior plausibility score.
+            Mapping from atom identifier to tenability-modulated prior :math:`\\tilde{\\tau}_0(a)`.
         """
-        return {
-            atom.id: atom.plausibility if atom.plausibility is not None else atom.base_score
-            for atom in atoms
-        }
+        return {atom.id: self.compute_weight(atom) for atom in atoms}
 
-    def compute_weight(self, atom: TheoryAtom) -> float:
-        """Derive prior plausibility weight for a theoretical atom.
+    def compute_weight(
+        self,
+        atom: TheoryAtom,
+        perspective: str | None = None,
+    ) -> float:
+        """Derive tenability-modulated prior plausibility weight :math:`\\tilde{\\tau}_0(a)` for a theoretical atom.
+
+        .. math::
+            \\tilde{\\tau}_0(a) = \\tau_0(a) \\cdot TS_{\\text{local}}(a)
+
+        Applies intensional scoping so suppositional (*Reductio*) and off-perspective
+        atoms return ``0.0`` when isolated.
 
         Parameters
         ----------
         atom : TheoryAtom
             Target atom.
+        perspective : str or None, optional
+            Optional perspective override; falls back to ``self.perspective``.
 
         Returns
         -------
         float
-            Assigned prior plausibility.
+            Assigned prior plausibility in ``[0.0, 1.0]``.
         """
-        if atom.base_score is not None:
-            return atom.base_score
-        if atom.modal_strength is not None:
-            return atom.modal_strength
-        if atom.plausibility is not None:
-            return atom.plausibility
-        return atom.confidence if atom.confidence is not None else 0.60
+        active_perspective = (
+            perspective if perspective is not None else self.perspective
+        )
+        return atom.effective_base_prior(
+            include_suppositional=not self.isolate_suppositional,
+            perspective=active_perspective,
+        )
 
     def compute_relation_weight(self, rel: TheoryRelation) -> float:
         """Compute signed directional relation weight.
@@ -409,12 +570,12 @@ class TheoryNetProjector:
             base = rel.active_weight
         elif rel.effective_weight is not None:
             base = rel.effective_weight
-        elif rel.class_probability is not None:
-            base = rel.modal_strength * rel.class_probability
+        elif rel.perception_stance_prob is not None:
+            base = rel.inferential_warrant * rel.perception_stance_prob
         elif rel.weight is not None:
             base = abs(rel.weight)
         else:
-            base = rel.inferential_force
+            base = rel.inferential_warrant
 
         polarity = self.schema.relation_polarities.get(rel.relation_type, 0)
         return float(base * polarity)

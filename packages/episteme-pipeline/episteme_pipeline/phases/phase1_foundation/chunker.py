@@ -37,11 +37,15 @@ def _get_encoder() -> tiktoken.Encoding | None:
         The cl100k_base encoding instance if available offline, otherwise None.
     """
     import os
-    if os.environ.get("TIKTOKEN_OFFLINE") == "1" or os.environ.get("HF_HUB_OFFLINE") == "1":
+
+    if (
+        os.environ.get("TIKTOKEN_OFFLINE") == "1"
+        or os.environ.get("HF_HUB_OFFLINE") == "1"
+    ):
         return None
     try:
         return tiktoken.get_encoding("cl100k_base")
-    except Exception:
+    except Exception:  # noqa: BLE001 baseline
         return None
 
 
@@ -61,7 +65,7 @@ def _split_sentences(text: str) -> list[str]:
     """
     try:
         return nltk.sent_tokenize(text)
-    except Exception:
+    except Exception:  # noqa: BLE001 baseline
         return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
 
 
@@ -83,7 +87,7 @@ def _count_tokens(text: str) -> int:
     if enc is not None:
         try:
             return len(enc.encode(text, disallowed_special=()))
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
     return max(1, int(len(text.split()) * 1.35))
 
@@ -121,11 +125,14 @@ class RawChunk:
         Text content of the chunk.
     sequence_index : int
         Zero-based monotonic sequence index within the document.
+    token_count : int
+        Accurate BPE token count for the chunk text.
     """
 
     chapter_title: str
     text: str
     sequence_index: int
+    token_count: int = 0
 
 
 def parse_sections(markdown: str) -> list[RawSection]:
@@ -152,7 +159,9 @@ def parse_sections(markdown: str) -> list[RawSection]:
     for match in _HEADER_RE.finditer(markdown):
         content = markdown[last_end : match.start()].strip()
         if content:
-            sections.append(RawSection(title=last_title, text=content, level=last_level))
+            sections.append(
+                RawSection(title=last_title, text=content, level=last_level)
+            )
         last_title = match.group(2).strip()
         last_level = len(match.group(1))
         last_end = match.end()
@@ -217,6 +226,7 @@ def chunk_section(
                     chapter_title=section.title,
                     text="\n\n".join(current_units),
                     sequence_index=seq,
+                    token_count=current_tokens,
                 )
             )
             seq += 1
@@ -243,6 +253,7 @@ def chunk_section(
                 chapter_title=section.title,
                 text="\n\n".join(current_units),
                 sequence_index=seq,
+                token_count=current_tokens,
             )
         )
 

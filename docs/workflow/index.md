@@ -37,7 +37,7 @@ triple decoding, TAG subgraph envelopes.
 **Purpose**: Non-generative mathematical sweep over dense vectors and 1-hop relation signatures to resolve parallel
 entity duplicates.  
 **Theoretical Basis**: Latent topological invariance  
-**Key Concepts**: Pairwise cosine similarity matrix, Jaccard relation-overlap verification, Union-Find clustering,
+**Key Concepts**: Pairwise cosine similarity matrix, Jaccard relation-overlap verification, Clique-constrained clustering,
 canonical entity election.
 
 ### [Phase 4: Entity Maturation (Batch Synthesis)](4_entity_maturation/)
@@ -94,6 +94,12 @@ Neo4j), event telemetry.
 **Key Concepts**: Bourbaki uniformities, admissible blurs ($\mathcal{A}$), AST-based safe core laws ($M$), dynamic
 theory induction, anomaly detection.
 
+### [Deficit Graph Analysis & Hermeneutic Refinement](post_processing/hermeneutic_refinement.md)
+
+**Purpose**: Bounded top-down refinement ($\text{L4/L3} \to \text{L2/L1}$) when `max_refinement_cycles > 0`.  
+**Theoretical Basis**: Synergized Bidirectional Reasoning ([Pan et al., 2024]), Schurz-Lakatos $Z_1$ grounding ([ADR 0024](../adr/0024-closed-loop-hermeneutic-refinement.md)).  
+**Key Concepts**: Deterministic graph diagnosis (`_detector_analysis.py`, `_sub_detectors.py`), System 1 `DecisionEngine` triage gates, localized L1/L2/L3 repairs, pass-aware identity overlays.
+
 ---
 
 ## Architecture Overview
@@ -102,7 +108,7 @@ theory induction, anomaly detection.
 flowchart TD
     P1["Phase 1: Data Foundation<br>(Document/Chapter/Chunk)"] --> P2["Phase 2: Entity Discovery<br>(L2 Entities, Local Triples, Episodic RAM)"]
     P2 --> P3["Phase 3: Global Relations<br>(Dense Retrieval + Cross-Encoder)"]
-    P3 --> P3b["Phase 3b: Latent Consolidation<br>(Union-Find + Jaccard Sweep)"]
+    P3 --> P3b["Phase 3b: Latent Consolidation<br>(Clique-Constrained + Jaccard Sweep)"]
     P3b --> P4["Phase 4: Entity Maturation<br>(Centroid Synthesis & Stabilization)"]
     P4 --> P4b["Phase 4b: Argument Mining<br>(ADU, ACC+ARI, ARC, TF Mapping)"]
     P4b --> P5["Phase 5: Alignment & Theory Fusion<br>(Argument Clustering & Leiden Communities)"]
@@ -111,7 +117,28 @@ flowchart TD
     G --> H["Post-Processing Suite (Phi_spec)"]
     H --> H1["Theoretical Enrichment & Tenability"]
     H --> H2["Analytical Solvers & Epistemetrics"]
+    H1 --> R["Optional Closed-Loop Refinement<br>(TheoryNetDeficitDetector -> Localized Deltas)"]
 ```
+
+---
+
+## Software Design Patterns Across Workflow Phases
+
+To keep the pipeline extensible for rapid research iteration while serving as a readable knowledge project, each phase applies canonical software design patterns defined in **[Design Patterns, Clean Code & Architectural Standards](../architecture/design_patterns_and_standards.md)**:
+
+| Phase / Subsystem | Primary Design Patterns Applied | Core Ports & Abstractions (`episteme_pipeline/protocols/`) |
+| :--- | :--- | :--- |
+| **Orchestrator (`Pipeline`)** | **Composition Root / Facade**, **Decorator (`ensure_*`)**, **Visitor (`Fingerprintable`)** | `PhaseRunner[ViewT]`, `Fingerprintable`, `ArtifactViewProtocol[ViewT]` |
+| **Phase 1: Data Foundation** | **Adapter Pattern** (`TexAdapter`, `MarkdownAdapter`), **Strategy / Chain of Responsibility** (`AutoToCParser`) | `DataSourceAdapter`, `ToCParserStrategy`, `EmbeddingModel` |
+| **Phase 2: Entity Discovery** | **Strategy Pattern** (`NERExtractor`, `EntityLinker`), **Calibrated Cascade** (`CascadingEntityLinker`, `JevGleaningGate`), **Stateful Reducer** (`EpisodicWorkingMemoryManager`) | `NERExtractor`, `EntityLinker`, `GleaningStoppingOracle`, `WorkingMemoryState` |
+| **Phase 3: Global Relations** | **Retrieve $\to$ Rerank $\to$ Decode Pipeline**, **Calibrated Cascade** (System 1 pair gating), **Unit-of-Work Batch Checkpointing** (`ADR-0016`) | `GlobalRelationExtractor`, `RelationReranker`, `PhaseCheckpointStore` |
+| **Phase 3b: Consolidation** | **Strategy Pattern** (`InstanceFusion`), **Conformal Triage Gate** (borderline verification & canonical surface election) | `InstanceFusion`, `DecisionEngine` |
+| **Phase 4: Entity Maturation** | **Two-Stage Batch Synthesis** (latent geometric centroid + top-$K$ LLM synthesis) | `PhaseRunner[Phase3ArtifactsView]`, `StructuredLLM`, `EmbeddingModel` |
+| **Phase 4b: Argument Mining** | **Strategy Pattern** (`ADUSegmenter`, `ACCClassifier`, `ARCClassifier`, `ModalStrengthResolver`), **Calibrated Cascade** (`CascadingACCClassifier`, `CascadingARCClassifier`) | `ADUSegmenter`, `ACCClassifier`, `ARCClassifier`, `ModalStrengthResolver` |
+| **Phase 5: Theory Fusion** | **Strategy Pattern** (`ArgumentClustering`, `TheoryFusion`), **Conformal Triage Gate** (`InterDocumentClusterVerifier`) | `ArgumentClustering`, `TheoryFusion`, `DecisionEngine` |
+| **Phase 6: TheoryNet** | **Projector / Builder Pattern** (`TheoryNetProjector`), **Topology-Adaptive Solver Strategy** (DAG closed-form vs. cyclic ODE QBAF) | `TheoryNetProjector`, `ModalStrengthResolver` |
+| **Post-Processing ($\Phi_{\text{spec}}$)** | **Open/Closed Plugin Runner** (`PhaseRunner[ViewT]`), **Strategy Pattern** (`TheoryInducer`, `TheoryProjector`, `TenabilitySolver`) | `PhaseRunner`, `TheoryProjector`, `TenabilitySolver` |
+| **Hermeneutic Refinement (`L4->L1`)** | **Deterministic Graph Diagnosis**, **Conformal / Binary System 1 Gate**, **Pass-Aware Identity Overlay** | `EpistemicDeficitDetector`, `HermeneuticRefinementCoordinator`, `TargetedRefinementPort` |
 
 ---
 
@@ -124,7 +151,7 @@ The pipeline uses an event-driven architecture for telemetry and monitoring:
 
 ## Configuration
 
-All phases are configured through `pipeline/config.py`. See:
+All phases are configured through `episteme_pipeline/config.py`. See:
 
 - [Configuration Guide](../getting_started/configuration.md) - Setup and environment configuration
 - [Customizing Configuration](../how_to/customize_config.md) - Advanced phase overrides and custom prompts
@@ -133,6 +160,8 @@ All phases are configured through `pipeline/config.py`. See:
 
 ## Related Documentation
 
+- **Architecture & Standards**: [Design Patterns, Clean Code & Architectural Standards](../architecture/design_patterns_and_standards.md) - Canonical engineering patterns and anti-pattern guide
 - **Theory**: [Concepts](../concepts/) - Mathematical and epistemological foundations
 - **API**: [Reference](../reference/) - Technical API documentation and contracts
 - **Decisions**: [ADRs](../adr/) - Architectural Decision Records
+

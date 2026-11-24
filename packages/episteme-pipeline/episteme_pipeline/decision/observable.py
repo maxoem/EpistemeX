@@ -10,7 +10,8 @@ to the active event emitter.
 from __future__ import annotations
 
 import hashlib
-import random
+import hmac
+import json
 import time
 from typing import Any
 
@@ -31,6 +32,7 @@ from episteme_pipeline.protocols.decision import (
     DecisionScore,
     ensure_decision_question,
 )
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 
 class ObservableDecisionEngine:
@@ -47,8 +49,14 @@ class ObservableDecisionEngine:
         Optional prompt bundle carrying prompt_name, prompt_version, and
         prompt_label for telemetry prompt binding.
     stochastic_audit_rate : float, default 0.0
-        Probability in [0, 1] of randomly marking a fast-exit evaluation for
+        Probability in [0, 1] of marking a fast-exit evaluation for
         stochastic auditing (System 2 validation).
+    seed : int or str or None, default None
+        Run seed for deterministic HMAC-SHA256 PRF stochastic auditing.
+    task_id : str or None, default None
+        Identifier for the decision task (e.g., 'p2_linking', 'p3_rerank').
+    calibrator : Any, default None
+        Optional conformal calibrator instance.
     """
 
     def __init__(
@@ -57,11 +65,75 @@ class ObservableDecisionEngine:
         engine_name: str | None = None,
         prompt_bundle: StructuredPromptBundle | None = None,
         stochastic_audit_rate: float = 0.0,
+        seed: int | str | None = None,
+        task_id: str | None = None,
+        calibrator: Any = None,
+        language: str | None = None,
     ) -> None:
         self.inner = inner
         self.engine_name = engine_name or inner.name
         self.prompt_bundle = prompt_bundle
         self.stochastic_audit_rate = stochastic_audit_rate
+        self.seed = seed
+        self.task_id = task_id
+        self.language = language
+        self.calibrator = calibrator
+        self.active_phase_key: str | None = None
+        self.recorded_prediction_sets: list[list[str]] = []
+        self.prediction_sets_by_phase: dict[str, list[list[str]]] = {}
+
+    def _resolve_task_id(self, task_id: str | None = None) -> str | None:
+        """Resolve effective Mondrian task/stage identifier."""
+        if task_id is not None:
+            return task_id
+        if self.task_id is not None:
+            return self.task_id
+        return self.active_phase_key
+
+    def start_phase(self, phase_key: str) -> None:
+        """Scope conformal prediction set recording to ``phase_key`` and reset its buffer.
+
+        Parameters
+        ----------
+        phase_key : str
+            Machine identifier of the starting pipeline phase.
+        """
+        self.active_phase_key = phase_key
+        self.recorded_prediction_sets.clear()
+        self.prediction_sets_by_phase[phase_key] = []
+
+    def _record_prediction_set(self, prediction_set: list[str]) -> None:
+        """Append an observed conformal prediction set to active buffers."""
+        copied = list(prediction_set)
+        self.recorded_prediction_sets.append(copied)
+        if self.active_phase_key is not None:
+            self.prediction_sets_by_phase.setdefault(self.active_phase_key, []).append(
+                copied
+            )
+
+    def consume_prediction_sets(self, phase_key: str | None = None) -> list[list[str]]:
+        """Return and clear conformal prediction sets recorded for ``phase_key``.
+
+        Parameters
+        ----------
+        phase_key : str or None, optional
+            Specific phase key to consume prediction sets for. When ``None`` or
+            when no phase-scoped sets were recorded under ``phase_key`` (e.g.
+            standalone unit tests), consumes ``recorded_prediction_sets``.
+
+        Returns
+        -------
+        list of list of str
+            Observed conformal prediction sets in evaluation order.
+        """
+        if phase_key is not None and phase_key in self.prediction_sets_by_phase:
+            recorded = list(self.prediction_sets_by_phase.pop(phase_key, []))
+            if self.active_phase_key == phase_key:
+                self.recorded_prediction_sets.clear()
+            return recorded
+        recorded = list(self.recorded_prediction_sets)
+        self.recorded_prediction_sets.clear()
+        return recorded
 
     @property
     def name(self) -> str:
@@ -75,17 +147,31 @@ class ObservableDecisionEngine:
         -------
         dict of str to Any
             Deterministic dictionary containing wrapper metadata, audit rate,
-            and inner engine fingerprint.
+            seed, calibrator state, prompt bundle, and inner engine fingerprint.
         """
         inner_fp = (
             self.inner.fingerprint()
-            if hasattr(self.inner, "fingerprint") and callable(self.inner.fingerprint)
+            if isinstance(self.inner, Fingerprintable)
             else {"class": self.inner.__class__.__name__}
+        )
+        calibrator_fp = (
+            self.calibrator.fingerprint()
+            if isinstance(self.calibrator, Fingerprintable)
+            else None
+        )
+        prompt_fp = (
+            self.prompt_bundle.fingerprint()
+            if isinstance(self.prompt_bundle, Fingerprintable)
+            else None
         )
         return {
             "class": self.__class__.__name__,
             "engine_name": self.engine_name,
             "stochastic_audit_rate": self.stochastic_audit_rate,
+            "seed": str(self.seed) if self.seed is not None else None,
+            "task_id": self.task_id,
+            "calibrator": calibrator_fp,
+            "prompt_bundle": prompt_fp,
             "inner": inner_fp,
         }
 
@@ -103,21 +189,58 @@ class ObservableDecisionEngine:
         tuple of (str, int)
             Hex-encoded SHA-256 digest and character length.
         """
-        state_str = str(state)
+        if isinstance(state, str):
+            state_str = state
+        else:
+            try:
+                state_str = json.dumps(
+                    state,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                    default=str,
+                )
+            except (TypeError, ValueError):
+                state_str = str(state)
         state_hash = hashlib.sha256(state_str.encode("utf-8")).hexdigest()
         return state_hash, len(state_str)
 
-    def _should_audit(self) -> bool:
+    def _should_audit(self, state_hash: str = "", task_id: str | None = None) -> bool:
         """Determine whether the current evaluation should be marked for stochastic audit.
+
+        Uses a deterministic HMAC-SHA256 PRF keyed by (seed, task_id, state_hash).
+        This guarantees invariant audit selection across arbitrary async execution
+        schedules while maintaining a uniform U(0, 1) marginal probability.
+
+        Parameters
+        ----------
+        state_hash : str, default ""
+            SHA-256 hash of the input state.
+        task_id : str or None, default None
+            Evaluation primitive or task identifier.
 
         Returns
         -------
         bool
-            True if random sample falls within stochastic_audit_rate.
+            True if deterministic PRF value falls within stochastic_audit_rate.
         """
         if self.stochastic_audit_rate <= 0.0:
             return False
-        return random.random() < self.stochastic_audit_rate
+        if self.stochastic_audit_rate >= 1.0:
+            return True
+
+        effective_seed = str(self.seed if self.seed is not None else 42)
+        if self.task_id and task_id and task_id != self.task_id:
+            effective_task = f"{self.task_id}:{task_id}"
+        else:
+            effective_task = str(
+                task_id or self.task_id or self.engine_name or "decision"
+            )
+        effective_hash = state_hash or hashlib.sha256(b"").hexdigest()
+        msg = f"{effective_task}:{effective_hash}".encode()
+        digest = hmac.new(effective_seed.encode("utf-8"), msg, hashlib.sha256).digest()
+        uniform_val = int.from_bytes(digest[:8], "big") / float(1 << 64)
+        return uniform_val < self.stochastic_audit_rate
 
     async def evaluate_noul(
         self,
@@ -152,15 +275,17 @@ class ObservableDecisionEngine:
                     state_character_count=char_count,
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         t0 = time.perf_counter()
         result = await self.inner.evaluate_noul(state, question)
         duration = time.perf_counter() - t0
 
-        is_audit = self._should_audit()
-        tokens_saved = result.tokens_saved_estimate if isinstance(result, DecisionScore) else 0
+        is_audit = self._should_audit(state_hash, "noul")
+        tokens_saved = (
+            result.tokens_saved_estimate if isinstance(result, DecisionScore) else 0
+        )
         if not tokens_saved:
             tokens_saved = (char_count // 4) + (len(question) // 4) + 30
 
@@ -171,8 +296,12 @@ class ObservableDecisionEngine:
                     primitive="noul",
                     question=question,
                     prompt_name=self.prompt_bundle.name if self.prompt_bundle else None,
-                    prompt_version=self.prompt_bundle.version if self.prompt_bundle else None,
-                    prompt_label=self.prompt_bundle.label if self.prompt_bundle else None,
+                    prompt_version=self.prompt_bundle.version
+                    if self.prompt_bundle
+                    else None,
+                    prompt_label=self.prompt_bundle.label
+                    if self.prompt_bundle
+                    else None,
                     selected_value=result.passed,
                     class_probability=result.probability,
                     empirical_accuracy=result.empirical_accuracy,
@@ -186,7 +315,7 @@ class ObservableDecisionEngine:
                     tokens_saved_estimate=tokens_saved,
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         return result
@@ -197,6 +326,9 @@ class ObservableDecisionEngine:
         question: str,
         options: list[str] | dict[str, str],
         alpha: float | None = None,
+        *,
+        task_id: str | None = None,
+        language: str | None = None,
     ) -> DecisionScore:
         """Evaluate a categorical choice with latency and event tracking.
 
@@ -210,6 +342,10 @@ class ObservableDecisionEngine:
             Allowed options or dictionary mapping option labels to rubric definitions.
         alpha : float or None, default None
             Optional significance level for conformal prediction set (1 - alpha coverage).
+        task_id : str or None, optional
+            Optional Mondrian task identifier override.
+        language : str or None, optional
+            Optional Mondrian language code override ('de', 'en').
 
         Returns
         -------
@@ -230,14 +366,36 @@ class ObservableDecisionEngine:
                     state_character_count=char_count,
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
-        t0 = time.perf_counter()
-        result = await self.inner.evaluate_choice(state, question, options, alpha=alpha)
-        duration = time.perf_counter() - t0
+        effective_task_id = self._resolve_task_id(task_id)
+        effective_language = language if language is not None else self.language
+        effective_alpha = alpha
+        if (
+            effective_alpha is None
+            and self.calibrator is not None
+            and effective_task_id is not None
+        ):
+            effective_alpha = self.calibrator.get_allocated_alpha(effective_task_id)
 
-        is_audit = self._should_audit()
+        t0 = time.perf_counter()
+        result = await self.inner.evaluate_choice(
+            state, question, options, alpha=effective_alpha
+        )
+        duration = time.perf_counter() - t0
+        if result.prediction_set is None and self.calibrator is not None:
+            computed_set = self.calibrator.predict_set(
+                result,
+                alpha=effective_alpha,
+                task_id=effective_task_id,
+                language=effective_language,
+            )
+            result = result.model_copy(update={"prediction_set": computed_set})
+        if result.prediction_set is not None:
+            self._record_prediction_set(result.prediction_set)
+
+        is_audit = self._should_audit(state_hash, effective_task_id or "choice")
         tokens_saved = result.tokens_saved_estimate or (
             (char_count // 4) + (len(question) // 4) + (len(options) * 8) + 50
         )
@@ -249,8 +407,12 @@ class ObservableDecisionEngine:
                     primitive="choice",
                     question=question,
                     prompt_name=self.prompt_bundle.name if self.prompt_bundle else None,
-                    prompt_version=self.prompt_bundle.version if self.prompt_bundle else None,
-                    prompt_label=self.prompt_bundle.label if self.prompt_bundle else None,
+                    prompt_version=self.prompt_bundle.version
+                    if self.prompt_bundle
+                    else None,
+                    prompt_label=self.prompt_bundle.label
+                    if self.prompt_bundle
+                    else None,
                     selected_value=str(result.selected_option),
                     class_probability=result.class_probability,
                     empirical_accuracy=result.empirical_accuracy,
@@ -261,7 +423,7 @@ class ObservableDecisionEngine:
                     tokens_saved_estimate=tokens_saved,
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         return result
@@ -271,6 +433,10 @@ class ObservableDecisionEngine:
         state: str | dict[str, Any] | list[Any],
         question: str,
         levels: list[int | str],
+        alpha: float | None = None,
+        *,
+        task_id: str | None = None,
+        language: str | None = None,
     ) -> DecisionScore:
         """Evaluate an ordered scale or score with latency and event tracking.
 
@@ -282,6 +448,12 @@ class ObservableDecisionEngine:
             Scoring question or grading rubric.
         levels : list of int or list of str
             Ordered scale levels.
+        alpha : float or None, default None
+            Optional significance level for conformal prediction set.
+        task_id : str or None, optional
+            Optional Mondrian task identifier override.
+        language : str or None, optional
+            Optional Mondrian language code override ('de', 'en').
 
         Returns
         -------
@@ -301,14 +473,34 @@ class ObservableDecisionEngine:
                     state_character_count=char_count,
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
+
+        effective_task_id = self._resolve_task_id(task_id)
+        effective_language = language if language is not None else self.language
+        effective_alpha = alpha
+        if (
+            effective_alpha is None
+            and self.calibrator is not None
+            and effective_task_id is not None
+        ):
+            effective_alpha = self.calibrator.get_allocated_alpha(effective_task_id)
 
         t0 = time.perf_counter()
         result = await self.inner.evaluate_score(state, question, levels)
         duration = time.perf_counter() - t0
+        if result.prediction_set is None and self.calibrator is not None:
+            computed_set = self.calibrator.predict_set(
+                result,
+                alpha=effective_alpha,
+                task_id=effective_task_id,
+                language=effective_language,
+            )
+            result = result.model_copy(update={"prediction_set": computed_set})
+        if result.prediction_set is not None:
+            self._record_prediction_set(result.prediction_set)
 
-        is_audit = self._should_audit()
+        is_audit = self._should_audit(state_hash, effective_task_id or "score")
         tokens_saved = result.tokens_saved_estimate or (
             (char_count // 4) + (len(question) // 4) + (len(levels) * 4) + 40
         )
@@ -320,8 +512,12 @@ class ObservableDecisionEngine:
                     primitive="score",
                     question=question,
                     prompt_name=self.prompt_bundle.name if self.prompt_bundle else None,
-                    prompt_version=self.prompt_bundle.version if self.prompt_bundle else None,
-                    prompt_label=self.prompt_bundle.label if self.prompt_bundle else None,
+                    prompt_version=self.prompt_bundle.version
+                    if self.prompt_bundle
+                    else None,
+                    prompt_label=self.prompt_bundle.label
+                    if self.prompt_bundle
+                    else None,
                     selected_value=result.selected_option,
                     class_probability=result.class_probability,
                     empirical_accuracy=result.empirical_accuracy,
@@ -332,7 +528,7 @@ class ObservableDecisionEngine:
                     tokens_saved_estimate=tokens_saved,
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         return result
@@ -379,10 +575,56 @@ class ObservableDecisionEngine:
         dict of str to (DecisionScore or DecisionNoulResult)
             Batch evaluation results.
         """
-        if hasattr(self.inner, "evaluate_batch"):
-            return await self.inner.evaluate_batch(state, questions)
         return await evaluate_questions_sequentially(self, state, questions)
 
-    def __getattr__(self, name: str) -> Any:
-        """Delegate unhandled attribute and method lookups to the inner engine."""
-        return getattr(self.inner, name)
+
+def ensure_observable_decision_engine(
+    engine: Any | None,
+    engine_name: str | None = None,
+    prompt_bundle: StructuredPromptBundle | None = None,
+    stochastic_audit_rate: float = 0.0,
+    seed: int | str | None = None,
+    task_id: str | None = None,
+    calibrator: Any = None,
+    language: str | None = None,
+) -> ObservableDecisionEngine | None:
+    """Ensure a DecisionEngine is decorated with ObservableDecisionEngine idempotently.
+
+    Parameters
+    ----------
+    engine : Any or None
+        Candidate decision engine.
+    engine_name : str or None, optional
+        Human-readable name of the decision engine.
+    prompt_bundle : StructuredPromptBundle or None, optional
+        Prompt bundle for telemetry.
+    stochastic_audit_rate : float, default 0.0
+        Audit rate in [0, 1].
+    seed : int or str or None, optional
+        Run seed for deterministic PRF auditing.
+    task_id : str or None, optional
+        Decision task identifier.
+    calibrator : Any or None, optional
+        Conformal calibrator instance.
+    language : str or None, optional
+        Mondrian language stratum code ('de', 'en').
+
+    Returns
+    -------
+    ObservableDecisionEngine or None
+        Decorated decision engine, or None if engine was None.
+    """
+    if engine is None:
+        return None
+    if isinstance(engine, ObservableDecisionEngine):
+        return engine
+    return ObservableDecisionEngine(
+        inner=engine,
+        engine_name=engine_name,
+        prompt_bundle=prompt_bundle,
+        stochastic_audit_rate=stochastic_audit_rate,
+        seed=seed,
+        task_id=task_id,
+        calibrator=calibrator,
+        language=language,
+    )

@@ -1,5 +1,18 @@
-"""Artifact domain models for durable, run-scoped pipeline outputs."""
-
+from episteme_pipeline.artifacts.checkpoint_store import (
+    FileSystemCheckpointStore,
+)
+from episteme_pipeline.artifacts.codecs import (
+    ArtifactCodec,
+    ChunkCodec,
+    DocumentCodec,
+    EpistemicDeficitCodec,
+    GlobalRelationCodec,
+    LinkedEntityCodec,
+    LocalRelationCodec,
+    TheoryAtomCodec,
+    TheoryRelationCodec,
+    TripleCodec,
+)
 from episteme_pipeline.artifacts.models import (
     ArtifactEnvelope,
     ArtifactKind,
@@ -9,40 +22,44 @@ from episteme_pipeline.artifacts.models import (
     ChunkArtifact,
     DocumentArtifact,
     EntityMentionArtifact,
+    EpistemicDeficitArtifact,
     FusionDecisionArtifact,
     GlobalRelationArtifact,
     LinkedEntityArtifact,
     LocalRelationArtifact,
     TheoryAtomArtifact,
+    TheoryInferenceArtifact,
     TheoryRelationArtifact,
 )
+from episteme_pipeline.artifacts.subgraph_reader import ArtifactSubgraphReader
 
 __all__ = [
+    "ArtifactCodec",
     "ArtifactEnvelope",
     "ArtifactKind",
     "ArtifactProvenance",
     "ArtifactRef",
+    "ArtifactSubgraphReader",
     "CanonicalizationArtifact",
     "ChunkArtifact",
+    "ChunkCodec",
     "DocumentArtifact",
+    "DocumentCodec",
     "EntityMentionArtifact",
+    "EpistemicDeficitArtifact",
+    "EpistemicDeficitCodec",
+    "FileSystemCheckpointStore",
     "FusionDecisionArtifact",
     "GlobalRelationArtifact",
+    "GlobalRelationCodec",
     "LinkedEntityArtifact",
+    "LinkedEntityCodec",
     "LocalRelationArtifact",
+    "LocalRelationCodec",
     "TheoryAtomArtifact",
+    "TheoryAtomCodec",
+    "TheoryInferenceArtifact",
     "TheoryRelationArtifact",
-]
-from episteme_pipeline.artifacts.mappers import (
-    map_phase1_output_to_artifacts,
-    map_phase2_output_to_artifacts,
-    map_phase3_output_to_artifacts,
-    map_phase4_output_to_artifacts,
-)
-
-__all__ = [
-    "map_phase1_output_to_artifacts",
-    "map_phase2_output_to_artifacts",
-    "map_phase3_output_to_artifacts",
-    "map_phase4_output_to_artifacts",
+    "TheoryRelationCodec",
+    "TripleCodec",
 ]

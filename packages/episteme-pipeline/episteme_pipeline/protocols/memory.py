@@ -88,3 +88,15 @@ class WorkingMemoryState(ABC):
             Dictionary of active state variables.
         """
         ...
+
+    @abstractmethod
+    def load_raw_state(self, state: dict[str, Any]) -> None:
+        """
+        Restore working memory state variables from a raw snapshot dictionary.
+
+        Parameters
+        ----------
+        state : dict[str, Any]
+            State dictionary to restore.
+        """
+        ...

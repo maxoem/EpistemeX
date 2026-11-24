@@ -163,7 +163,11 @@ class TestSTNBAdapterIssue027:
         chunks, _gold_graph = load_structuralist_benchmark(test_file)
         assert len(chunks) == 3
         assert [c.id for c in chunks] == ["c1", "c2", "c3"]
-        assert [c.text for c in chunks] == ["First quote.", "Second quote.", "Third quote."]
+        assert [c.text for c in chunks] == [
+            "First quote.",
+            "Second quote.",
+            "Third quote.",
+        ]
 
     def test_complete_edge_coverage(self, tmp_path: Path):
         """Verify all structuralist edge types are decoded properly."""
@@ -206,7 +210,9 @@ class TestSTNBAdapterIssue027:
         assert gold_graph["str:T1"]["str:M1"]["relation"] == "hasActualModel"
 
         assert gold_graph.has_edge("str:T1", "str:Mpp1")
-        assert gold_graph["str:T1"]["str:Mpp1"]["relation"] == "hasPartialPotentialModel"
+        assert (
+            gold_graph["str:T1"]["str:Mpp1"]["relation"] == "hasPartialPotentialModel"
+        )
 
         assert gold_graph.has_edge("str:T1", "str:GC1")
         assert gold_graph["str:T1"]["str:GC1"]["relation"] == "hasConstraint"
@@ -360,7 +366,9 @@ class TestPackagingAndInMemoryExecutionIssue028:
     def test_no_legacy_evaluation_dir(self):
         """Verify legacy evaluation directory is completely removed."""
         legacy_dir = Path("packages/episteme-pipeline/evaluation")
-        assert not legacy_dir.exists(), "Legacy packages/episteme-pipeline/evaluation must be deleted."
+        assert not legacy_dir.exists(), (
+            "Legacy packages/episteme-pipeline/evaluation must be deleted."
+        )
 
     def test_package_exports_cleanly(self):
         """Verify all evaluation symbols are importable from episteme_pipeline.evaluation."""
@@ -376,9 +384,7 @@ class TestPackagingAndInMemoryExecutionIssue028:
 
     def test_in_memory_theorynet_model_evaluation(self):
         """Verify EvaluationHarness evaluates in-memory TheoryNet against gold STNB graph."""
-        cpm_gold_path = (
-            "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
-        )
+        cpm_gold_path = "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
         _chunks, gold_graph = load_structuralist_benchmark(cpm_gold_path)
 
         # Construct an in-memory TheoryNet mimicking pipeline output for CPM
@@ -504,7 +510,9 @@ class TestPackagingAndInMemoryExecutionIssue028:
         )
 
         assert report.evaluation_id == "eval_test_in_memory_run"
-        stage_res = report.results_by_level[em.EvaluationLevel.STAGE if hasattr(em, "EvaluationLevel") else "stage"][0]
+        stage_res = report.results_by_level[
+            em.EvaluationLevel.STAGE if hasattr(em, "EvaluationLevel") else "stage"
+        ][0]
         assert stage_res.outcome == EvaluationOutcome.PASS
         metrics = {m.name: m.value for m in stage_res.metrics}
         assert metrics["mcc"] == 1.0
@@ -512,9 +520,7 @@ class TestPackagingAndInMemoryExecutionIssue028:
 
     def test_in_memory_artifact_collection_evaluation(self):
         """Verify EvaluationHarness evaluates in-memory ArtifactCollection."""
-        cpm_gold_path = (
-            "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
-        )
+        cpm_gold_path = "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
         _chunks, _gold_graph = load_structuralist_benchmark(cpm_gold_path)
 
         atom_payload = TheoryAtomArtifact(
@@ -559,9 +565,7 @@ class TestSTNBIssue031PosetSpecialization:
 
     def test_stnb_cpm_pilot_poset_properties(self):
         """Verify specialization tree in stnb_cpm_pilot conforms to strict poset properties."""
-        cpm_gold_path = (
-            "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
-        )
+        cpm_gold_path = "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
         _, tg = load_structuralist_theory_graph(cpm_gold_path)
 
         poset_res = em.evaluate_specialization_poset(
@@ -588,12 +592,8 @@ class TestSTNBIssue032CompetencyRetrieval:
 
     def test_stnb_cpm_queries_file_integrity(self):
         """Verify stnb_cpm_queries.yaml contains valid queries matching pilot node IDs."""
-        queries_path = (
-            "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_queries.yaml"
-        )
-        cpm_gold_path = (
-            "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
-        )
+        queries_path = "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_queries.yaml"
+        cpm_gold_path = "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
 
         assert Path(queries_path).is_file()
         with open(queries_path, "r", encoding="utf-8") as f:
@@ -614,17 +614,17 @@ class TestSTNBIssue032CompetencyRetrieval:
 
             # Verify target IDs exist in gold graph
             for target_id in q["gold_target_ids"]:
-                assert target_id in gold_node_ids, f"Target ID '{target_id}' missing in gold graph"
+                assert target_id in gold_node_ids, (
+                    f"Target ID '{target_id}' missing in gold graph"
+                )
 
     @pytest.mark.asyncio
-    async def test_evaluation_harness_manifest_with_competency_queries(self, tmp_path: Path):
+    async def test_evaluation_harness_manifest_with_competency_queries(
+        self, tmp_path: Path
+    ):
         """Verify evaluate_manifest runs both intrinsic scoring and extrinsic competency retrieval."""
-        manifest_path = (
-            "packages/episteme-pipeline/episteme_pipeline/evaluation/manifests/eval_stnb.yaml"
-        )
-        cpm_gold_path = (
-            "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
-        )
+        manifest_path = "packages/episteme-pipeline/episteme_pipeline/evaluation/manifests/eval_stnb.yaml"
+        cpm_gold_path = "packages/episteme-pipeline/episteme_pipeline/evaluation/data/stnb_cpm_pilot.jsonld"
         harness = EvaluationHarness(reports_dir=tmp_path / "reports")
         _, gold_graph = load_structuralist_benchmark(cpm_gold_path)
         harness.graph_store.index_theory_graph(gold_graph)
@@ -663,4 +663,3 @@ class TestSTNBIssue032CompetencyRetrieval:
         # Reports persisted
         assert (tmp_path / "reports" / f"report_{report.run_ids[0]}.json").is_file()
         assert (tmp_path / "reports" / f"report_{report.run_ids[0]}.md").is_file()
-

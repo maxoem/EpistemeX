@@ -7,7 +7,9 @@ from pathlib import Path
 from episteme_pipeline.phases.phase1_foundation.adapters.tex_adapter import TexAdapter
 
 
-def test_tex_adapter_runs_pandoc_from_source_directory(monkeypatch, tmp_path: Path) -> None:
+def test_tex_adapter_runs_pandoc_from_source_directory(
+    monkeypatch, tmp_path: Path
+) -> None:
     """Pandoc should be executed in the TeX file directory so includes resolve."""
     source_dir = tmp_path / "tex"
     source_dir.mkdir()
@@ -54,7 +56,9 @@ def test_tex_adapter_runs_pandoc_from_source_directory(monkeypatch, tmp_path: Pa
     }
 
 
-def test_tex_adapter_autodiscovers_bib_from_tex_command(monkeypatch, tmp_path: Path) -> None:
+def test_tex_adapter_autodiscovers_bib_from_tex_command(
+    monkeypatch, tmp_path: Path
+) -> None:
     source_dir = tmp_path / "tex"
     source_dir.mkdir()
     source_path = source_dir / "paper.tex"
@@ -66,8 +70,10 @@ def test_tex_adapter_autodiscovers_bib_from_tex_command(monkeypatch, tmp_path: P
 
     def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
         recorded["cmd"] = cmd
+
         class Result:
             stdout = "# Paper"
+
         return Result()
 
     monkeypatch.setattr(
@@ -81,7 +87,9 @@ def test_tex_adapter_autodiscovers_bib_from_tex_command(monkeypatch, tmp_path: P
     assert str(bib_path.resolve()) in recorded["cmd"]
 
 
-def test_tex_adapter_autodiscovers_bib_from_directory(monkeypatch, tmp_path: Path) -> None:
+def test_tex_adapter_autodiscovers_bib_from_directory(
+    monkeypatch, tmp_path: Path
+) -> None:
     source_dir = tmp_path / "tex"
     source_dir.mkdir()
     source_path = source_dir / "paper.tex"
@@ -93,8 +101,10 @@ def test_tex_adapter_autodiscovers_bib_from_directory(monkeypatch, tmp_path: Pat
 
     def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
         recorded["cmd"] = cmd
+
         class Result:
             stdout = "# Paper"
+
         return Result()
 
     monkeypatch.setattr(
@@ -106,4 +116,3 @@ def test_tex_adapter_autodiscovers_bib_from_directory(monkeypatch, tmp_path: Pat
     assert output == "# Paper"
     assert "--bibliography" in recorded["cmd"]
     assert str(bib_path.resolve()) in recorded["cmd"]
-

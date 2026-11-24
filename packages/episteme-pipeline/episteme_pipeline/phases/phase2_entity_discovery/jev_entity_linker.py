@@ -8,12 +8,15 @@ protocol.
 from __future__ import annotations
 
 import logging
-import random
 from typing import Any
 
 import torch
 
 from episteme_pipeline.contracts.domain import L2Entity
+from episteme_pipeline.decision.cascade import (
+    TriageDecision,
+    should_audit_deterministically,
+)
 from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.events.context import get_event_emitter
 from episteme_pipeline.events.models import (
@@ -21,9 +24,11 @@ from episteme_pipeline.events.models import (
     EntityLinkingReranked,
     UnlinkableMentionError,
 )
+from episteme_pipeline.phases.phase2_entity_discovery.candidate_cache import (
+    CandidateEmbeddingCache,
+)
 from episteme_pipeline.protocols.decision import (
     DecisionEngine,
-    DecisionScore,
     ensure_decision_engine,
 )
 from episteme_pipeline.protocols.extractors import (
@@ -32,7 +37,9 @@ from episteme_pipeline.protocols.extractors import (
     as_tensor,
     ensure_embedding_model,
 )
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.graph_store import GraphReader
+from episteme_pipeline.utils.similarity import cosine_similarity_matrix
 
 logger = logging.getLogger(__name__)
 
@@ -70,20 +77,23 @@ class JevEntityLinker(EntityLinker):
     ) -> None:
         engine = ensure_decision_engine(decision_engine)
         if engine is None:
-            raise ValueError("A valid DecisionEngine must be provided to JevEntityLinker.")
+            raise ValueError(
+                "A valid DecisionEngine must be provided to JevEntityLinker."
+            )
         self.decision_engine: DecisionEngine = engine
 
         model = ensure_embedding_model(embedding_model)
         if model is None:
-            raise ValueError("A valid EmbeddingModel must be provided to JevEntityLinker.")
+            raise ValueError(
+                "A valid EmbeddingModel must be provided to JevEntityLinker."
+            )
         self.embedding_model: EmbeddingModel = model
 
         self.alpha = alpha
         self.top_k = top_k
         self.ooo_threshold = ooo_threshold
 
-        # Candidate envelope cache: entity_id -> (text, embedding)
-        self._candidate_cache: dict[str, tuple[str, list[float]]] = {}
+        self._candidate_cache = CandidateEmbeddingCache(self.embedding_model)
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic Jev entity linker configuration.
@@ -98,7 +108,7 @@ class JevEntityLinker(EntityLinker):
 
         de_fp = (
             self.decision_engine.fingerprint()
-            if hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            if isinstance(self.decision_engine, Fingerprintable)
             else fingerprint_method(self.decision_engine)
         )
         return {
@@ -106,7 +116,11 @@ class JevEntityLinker(EntityLinker):
             "alpha": self.alpha,
             "top_k": self.top_k,
             "ooo_threshold": self.ooo_threshold,
-            "embedding_model": fingerprint_method(self.embedding_model),
+            "embedding_model": (
+                self.embedding_model.fingerprint()
+                if isinstance(self.embedding_model, Fingerprintable)
+                else fingerprint_method(self.embedding_model)
+            ),
             "decision_engine": de_fp,
         }
 
@@ -114,34 +128,6 @@ class JevEntityLinker(EntityLinker):
     def event_emitter(self) -> EventEmitter:
         """Return the bound domain event emitter."""
         return get_event_emitter()
-
-    @staticmethod
-    def _canonical_entity_string(candidate: L2Entity) -> str:
-        """Format candidate entity for bi-encoder embedding with explicit type grounding."""
-        return f"[{candidate.label}] {candidate.name}: {candidate.description or ''}"
-
-    async def _populate_candidate_cache(self, candidates: list[L2Entity]) -> None:
-        """Pre-fetch embeddings for new or stale candidates."""
-        stale_candidates = []
-        stale_basic_texts = []
-        for c in candidates:
-            basic_text = self._canonical_entity_string(c)
-            cached = self._candidate_cache.get(c.id)
-            if not cached or cached[0] != basic_text:
-                stale_candidates.append(c)
-                stale_basic_texts.append(basic_text)
-
-        if not stale_candidates:
-            return
-
-        fresh_vectors = await self.embedding_model.aget_text_embedding_batch(stale_basic_texts)
-        for c, b_text, vec in zip(stale_candidates, stale_basic_texts, fresh_vectors):
-            self._candidate_cache[c.id] = (b_text, vec)
-
-    async def _candidate_embeddings(self, candidates: list[L2Entity]) -> torch.Tensor:
-        """Return cached embeddings as a torch Tensor."""
-        embs = [self._candidate_cache[c.id][1] for c in candidates]
-        return as_tensor(embs)
 
     async def link_with_decision(
         self,
@@ -151,7 +137,7 @@ class JevEntityLinker(EntityLinker):
         top_k: int | None = None,
         threshold: float | None = None,
         alpha: float | None = None,
-    ) -> tuple[L2Entity | None, DecisionScore | None, bool]:
+    ) -> TriageDecision[L2Entity | None]:
         """Link a mention to a canonical entity and return detailed decision telemetry.
 
         Parameters
@@ -169,15 +155,18 @@ class JevEntityLinker(EntityLinker):
 
         Returns
         -------
-        tuple of (L2Entity or None, DecisionScore or None, bool)
-            - Matched canonical entity, or None if novel/ambiguous.
-            - Decision score telemetry from the DecisionEngine.
-            - ``is_ambiguous`` flag indicating whether decision escalated (e.g.
-              conformal set size > 1 or empty).
+        TriageDecision of L2Entity or None
+            Triage decision containing matched entity, decision score telemetry,
+            conformal prediction set, empirical accuracy, and ambiguity status.
         """
         if not mention.textual_envelope:
-            logger.warning("Mention %s lacks textual envelope. Raising UnlinkableMentionError.", mention.name)
-            raise UnlinkableMentionError(f"Mention {mention.name} lacks textual envelope.")
+            logger.warning(
+                "Mention %s lacks textual envelope. Raising UnlinkableMentionError.",
+                mention.name,
+            )
+            raise UnlinkableMentionError(
+                f"Mention {mention.name} lacks textual envelope."
+            )
 
         effective_top_k = min(self.top_k if top_k is None else top_k, 5)
         effective_alpha = self.alpha if alpha is None else alpha
@@ -185,20 +174,23 @@ class JevEntityLinker(EntityLinker):
 
         candidates = await graph_store.get_entities()
         if not candidates:
-            return None, None, False
+            return TriageDecision(
+                value=None, decision=None, is_ambiguous=False, empirical_accuracy=1.0
+            )
 
         # 1. Bi-Encoder retrieval
         t_n = f"[{mention.label}] {mention.textual_envelope}"
         raw_t_n_emb = await self.embedding_model.aget_text_embedding_batch([t_n])
         t_n_emb = as_tensor(raw_t_n_emb)[0]
-        t_n_emb = torch.nn.functional.normalize(t_n_emb, p=2, dim=0)
 
-        await self._populate_candidate_cache(candidates)
-        g_embs = await self._candidate_embeddings(candidates)
-        g_embs = torch.nn.functional.normalize(g_embs, p=2, dim=1)
+        await self._candidate_cache.populate(candidates)
+        g_embs = self._candidate_cache.get_embeddings(candidates)
 
-        scores = torch.matmul(g_embs, t_n_emb)
-        top_k_indices = torch.topk(scores, min(effective_top_k, len(candidates))).indices
+        scores_arr = cosine_similarity_matrix(g_embs.numpy(), t_n_emb.numpy())
+        scores = torch.as_tensor(scores_arr)
+        top_k_indices = torch.topk(
+            scores, min(effective_top_k, len(candidates))
+        ).indices
 
         top_candidates = [candidates[i] for i in top_k_indices]
         top_scores = scores[top_k_indices].tolist()
@@ -239,7 +231,11 @@ class JevEntityLinker(EntityLinker):
 
         conformal_set = decision.prediction_set
         if conformal_set is None:
-            conformal_set = [str(decision.selected_option)] if decision.selected_option is not None else []
+            conformal_set = (
+                [str(decision.selected_option)]
+                if decision.selected_option is not None
+                else []
+            )
 
         # If conformal set contains multiple candidates or is empty (uncertain), mark ambiguous
         if len(conformal_set) > 1 or len(conformal_set) == 0:
@@ -248,13 +244,21 @@ class JevEntityLinker(EntityLinker):
                 conformal_set,
                 mention.name,
             )
-            return None, decision, True
+            return TriageDecision(
+                value=None,
+                decision=decision,
+                is_ambiguous=True,
+                empirical_accuracy=decision.empirical_accuracy,
+                prediction_set=conformal_set,
+            )
 
         selected = conformal_set[0]
 
         # Case: Confidently novel Out-of-Ontology
         if selected == "OUT_OF_ONTOLOGY":
-            logger.debug("JevEntityLinker: Out-of-Ontology declared for %s", mention.name)
+            logger.debug(
+                "JevEntityLinker: Out-of-Ontology declared for %s", mention.name
+            )
             self.event_emitter.emit(
                 EntityLinkingReranked(
                     mention_id=mention.id,
@@ -266,7 +270,13 @@ class JevEntityLinker(EntityLinker):
                     threshold=effective_threshold,
                 )
             )
-            return None, decision, False
+            return TriageDecision(
+                value=None,
+                decision=decision,
+                is_ambiguous=False,
+                empirical_accuracy=decision.empirical_accuracy,
+                prediction_set=conformal_set,
+            )
 
         # Case: Confidently matched single canonical entity
         matched = key_to_candidate.get(selected)
@@ -288,9 +298,21 @@ class JevEntityLinker(EntityLinker):
                     threshold=effective_threshold,
                 )
             )
-            return matched, decision, False
+            return TriageDecision(
+                value=matched,
+                decision=decision,
+                is_ambiguous=False,
+                empirical_accuracy=decision.empirical_accuracy,
+                prediction_set=conformal_set,
+            )
 
-        return None, decision, True
+        return TriageDecision(
+            value=None,
+            decision=decision,
+            is_ambiguous=True,
+            empirical_accuracy=decision.empirical_accuracy,
+            prediction_set=conformal_set,
+        )
 
     async def link(
         self,
@@ -368,12 +390,12 @@ class CascadingEntityLinker(EntityLinker):
             "audit_rate": self.audit_rate,
             "primary": (
                 self.primary.fingerprint()
-                if hasattr(self.primary, "fingerprint") and callable(self.primary.fingerprint)
+                if isinstance(self.primary, Fingerprintable)
                 else fingerprint_method(self.primary)
             ),
             "fallback": (
                 self.fallback.fingerprint()
-                if hasattr(self.fallback, "fingerprint") and callable(self.fallback.fingerprint)
+                if isinstance(self.fallback, Fingerprintable)
                 else fingerprint_method(self.fallback)
             ),
         }
@@ -404,23 +426,32 @@ class CascadingEntityLinker(EntityLinker):
         L2Entity or None
             The matched canonical entity, or None to mint a novel entity.
         """
-        if self.audit_rate > 0.0 and random.random() < self.audit_rate:
-            logger.debug("CascadingEntityLinker: stochastic audit triggered for %s", mention.name)
-            return await self.fallback.link(mention, graph_store, top_k=top_k, threshold=threshold)
-
-        if isinstance(self.primary, JevEntityLinker):
-            matched, _decision, is_ambiguous = await self.primary.link_with_decision(
-                mention, graph_store, top_k=top_k, threshold=threshold
+        is_audit = (
+            should_audit_deterministically(
+                mention.id, "phase2_entity_linking", mention.name, self.audit_rate
             )
-            if not is_ambiguous:
-                return matched
+            if self.audit_rate > 0.0
+            else False
+        )
+        if is_audit:
             logger.debug(
-                "CascadingEntityLinker: primary returned ambiguous decision for %s; escalating to fallback",
+                "CascadingEntityLinker: deterministic audit triggered for %s",
                 mention.name,
             )
-        else:
-            matched = await self.primary.link(mention, graph_store, top_k=top_k, threshold=threshold)
-            if matched is not None:
-                return matched
+            return await self.fallback.link(
+                mention, graph_store, top_k=top_k, threshold=threshold
+            )
 
-        return await self.fallback.link(mention, graph_store, top_k=top_k, threshold=threshold)
+        triage = await self.primary.link_with_decision(
+            mention, graph_store, top_k=top_k, threshold=threshold
+        )
+        if not triage.is_ambiguous:
+            return triage.value
+
+        logger.debug(
+            "CascadingEntityLinker: primary returned ambiguous decision for %s; escalating to fallback",
+            mention.name,
+        )
+        return await self.fallback.link(
+            mention, graph_store, top_k=top_k, threshold=threshold
+        )

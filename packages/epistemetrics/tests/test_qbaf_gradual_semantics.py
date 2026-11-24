@@ -34,8 +34,8 @@ class TestQBAFGradualSemantics:
             "attacker": 0.7,
         }
         edges = [
-            ("supporter", "claim", 0.9, 1),   # Support with weight 0.9
-            ("attacker", "claim", 0.6, -1),   # Attack with weight 0.6
+            ("supporter", "claim", 0.9, 1),  # Support with weight 0.9
+            ("attacker", "claim", 0.6, -1),  # Attack with weight 0.6
         ]
 
         result = solve_qbaf_gradual_semantics(
@@ -126,7 +126,9 @@ class TestQBAFGradualSemantics:
             normalization_mode=WeightNormalizationMode.CALIBRATED_MODAL,
         )
         assert res_graph.converged
-        assert res_graph.degrees["hypothesis_claim"] == result.degrees["hypothesis_claim"]
+        assert (
+            res_graph.degrees["hypothesis_claim"] == result.degrees["hypothesis_claim"]
+        )
 
     def test_admissibility_gating_prunes_inadmissible_edges(self) -> None:
         """Verify empirical accuracy below threshold prunes edges."""
@@ -148,7 +150,11 @@ class TestQBAFGradualSemantics:
                 "modal_strength": 1.0,
             },
         ]
-        nodes = {"conclusion": 0.5, "premise_reliable": 0.8, "premise_uncalibrated": 0.8}
+        nodes = {
+            "conclusion": 0.5,
+            "premise_reliable": 0.8,
+            "premise_uncalibrated": 0.8,
+        }
 
         # With admissibility threshold 0.70, the low-accuracy attack should be pruned
         res_gated = solve_qbaf_gradual_semantics(
@@ -201,14 +207,17 @@ class TestQBAFGradualSemantics:
         # In calibrated mode, strong support (0.95) outweighs weak speculative attack (0.18)
         assert comp.calibrated_result.degrees["hypothesis"] > 0.5
         # In unweighted binary mode, unit attack distorts hypothesis downward
-        assert comp.unweighted_result.degrees["hypothesis"] < comp.calibrated_result.degrees["hypothesis"]
+        assert (
+            comp.unweighted_result.degrees["hypothesis"]
+            < comp.calibrated_result.degrees["hypothesis"]
+        )
 
     def test_duality_cancellation_and_controversy_telemetry(self) -> None:
         """Verify Duality/Balance cancellation (s = w when E = 0) while tracking Keynes-Gärdenfors controversy."""
         # Target X (w=0.5) has symmetric supporter S and attacker A
         nodes = {"X": 0.5, "S": 0.8, "A": 0.8}
         edges = [
-            ("S", "X", 0.8, 1),   # Support with weight 0.8
+            ("S", "X", 0.8, 1),  # Support with weight 0.8
             ("A", "X", 0.8, -1),  # Attack with weight 0.8
         ]
 
@@ -261,7 +270,9 @@ class TestQBAFGradualSemantics:
         adj = (g_supp + g_att) > 0
         g_nx = nx.DiGraph(adj)
         topo_order = list(nx.topological_sort(g_nx))
-        s_closed = solver._solve_dag_closed_form(base_scores, g_supp.T, g_att.T, topo_order)
+        s_closed = solver._solve_dag_closed_form(
+            base_scores, g_supp.T, g_att.T, topo_order
+        )
 
         # 2. ODE numerical integration via solve_ivp
         sol = solve_ivp(
@@ -302,6 +313,7 @@ class TestQBAFGradualSemantics:
 
         # Test solve_ivp event directly to verify termination time < 10.0
         event_tol = max(solver.atol, 1e-4)
+
         def stationary_event(t, s, w_arr, supp_t, att_t):
             ds = solver._derivatives(t, s, w_arr, supp_t, att_t)
             return float(np.max(np.abs(ds)) - event_tol)
@@ -327,8 +339,18 @@ class TestQBAFGradualSemantics:
         """Verify cyclic mutual rebuttal loop reaches stable equilibrium without flip-flop oscillation."""
         nodes = {"A": 0.8, "B": 0.8}
         edges = [
-            {"source": "A", "target": "B", "relation_type": "ATTACKS", "inferential_force": 0.8},
-            {"source": "B", "target": "A", "relation_type": "ATTACKS", "inferential_force": 0.8},
+            {
+                "source": "A",
+                "target": "B",
+                "relation_type": "ATTACKS",
+                "inferential_force": 0.8,
+            },
+            {
+                "source": "B",
+                "target": "A",
+                "relation_type": "ATTACKS",
+                "inferential_force": 0.8,
+            },
         ]
 
         res = solve_continuous_qbaf(nodes=nodes, edges=edges)
@@ -347,12 +369,14 @@ class TestQBAFGradualSemantics:
         for i in range(n_attackers):
             att_id = f"attacker_{i}"
             nodes[att_id] = 0.8
-            edges.append({
-                "source": att_id,
-                "target": "hub_claim",
-                "relation_type": "ATTACKS",
-                "inferential_force": 0.8,
-            })
+            edges.append(
+                {
+                    "source": att_id,
+                    "target": "hub_claim",
+                    "relation_type": "ATTACKS",
+                    "inferential_force": 0.8,
+                }
+            )
 
         res = solve_continuous_qbaf(nodes=nodes, edges=edges)
 
@@ -367,14 +391,16 @@ class TestQBAFGradualSemantics:
         """Verify Hard pruning drops sub-threshold edge while Soft margin smoothly relaxes weight."""
         nodes = {"conclusion": 0.5, "premise": 0.8}
         # Premise supports conclusion with stance_probability 0.74 (below tau_p = 0.75)
-        edges = [{
-            "source": "premise",
-            "target": "conclusion",
-            "relation_type": "SUPPORTS",
-            "inferential_force": 1.0,
-            "stance_probability": 0.74,
-            "model_confidence": 0.90,
-        }]
+        edges = [
+            {
+                "source": "premise",
+                "target": "conclusion",
+                "relation_type": "SUPPORTS",
+                "inferential_force": 1.0,
+                "stance_probability": 0.74,
+                "model_confidence": 0.90,
+            }
+        ]
 
         # 1. Hard mode: pruned because P(0.74) < tau_p(0.75)
         res_hard = solve_qbaf_gradual_semantics(
@@ -398,3 +424,305 @@ class TestQBAFGradualSemantics:
         assert res_soft.admissibility_pruned_count == 0
         # Conclusion receives positive support from relaxed edge
         assert res_soft.degrees["conclusion"] > 0.5
+
+
+class TestPerspectivalAndSuppositionalScoping:
+    """Deterministic unit tests for Issue-054 intensional & perspectival D-QBAF scoping."""
+
+    def test_suppositional_reductio_isolation_prevents_inflation(self) -> None:
+        """Verify Reductio assumptions do not inflate asserted claims when isolated."""
+        from epistemetrics.core.models import TheoryNode
+        from epistemetrics.epistemic.qbaf import QBAFGradualSemanticsSolver
+
+        nodes = [
+            TheoryNode(
+                id="author_thesis",
+                name="Author Thesis",
+                base_score=0.5,
+                intensional_mode="asserted",
+            ),
+            TheoryNode(
+                id="reductio_premise",
+                name="Reductio Premise",
+                base_score=0.95,
+                intensional_mode="suppositional",
+            ),
+        ]
+        edges = [
+            {
+                "source": "reductio_premise",
+                "target": "author_thesis",
+                "relation_type": "SUPPORTS",
+                "inferential_force": 1.0,
+            }
+        ]
+
+        isolated = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            isolate_suppositional=True,
+        )
+        assert isolated.suppositional_isolated_count == 1
+        assert isolated.degrees["author_thesis"] == pytest.approx(0.5)
+
+        unisolated = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            isolate_suppositional=False,
+        )
+        assert unisolated.suppositional_isolated_count == 0
+        assert unisolated.degrees["author_thesis"] > 0.5
+
+        solver = QBAFGradualSemanticsSolver(isolate_suppositional=True)
+        continuous = solver.solve_continuous(nodes=nodes, edges=edges)
+        assert continuous.converged
+        assert continuous.suppositional_isolated_count == 1
+        assert continuous.degrees["author_thesis"] == pytest.approx(0.5, abs=1e-4)
+
+    def test_perspective_filtering_author_vs_attributed_agents(self) -> None:
+        """Verify attributed opponent claims are isolated under authorial evaluation."""
+        nodes = {
+            "author_claim": {
+                "prior": 0.5,
+                "intensional_mode": "asserted",
+            },
+            "hume_premise": {
+                "prior": 0.9,
+                "intensional_mode": "attributed",
+                "attributed_to": "David Hume",
+            },
+            "hume_conclusion": {
+                "prior": 0.5,
+                "intensional_mode": "attributed",
+                "attributed_to": "David Hume",
+            },
+            "leibniz_critique": {
+                "prior": 0.85,
+                "intensional_mode": "attributed",
+                "attributed_to": "Leibniz",
+            },
+        }
+        edges = [
+            {
+                "source": "hume_premise",
+                "target": "author_claim",
+                "relation_type": "SUPPORTS",
+                "inferential_force": 1.0,
+            },
+            {
+                "source": "hume_premise",
+                "target": "hume_conclusion",
+                "relation_type": "SUPPORTS",
+                "inferential_force": 1.0,
+            },
+            {
+                "source": "leibniz_critique",
+                "target": "hume_conclusion",
+                "relation_type": "ATTACKS",
+                "inferential_force": 1.0,
+            },
+        ]
+
+        res_author = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="author",
+        )
+        assert res_author.perspective == "author"
+        assert res_author.perspective_filtered_count == 3
+        assert res_author.degrees["author_claim"] == pytest.approx(0.5)
+
+        res_hume = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="David Hume",
+        )
+        assert res_hume.perspective == "David Hume"
+        assert res_hume.perspective_filtered_count == 2
+        assert res_hume.degrees["hume_conclusion"] > 0.5
+
+        res_all = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="all",
+            isolate_attributed=False,
+        )
+        assert res_all.perspective == "all"
+        assert res_all.perspective_filtered_count == 0
+        assert res_all.degrees["author_claim"] > 0.5
+
+        res_cont_hume = solve_continuous_qbaf(
+            nodes=nodes,
+            edges=edges,
+            perspective="David Hume",
+        )
+        assert res_cont_hume.converged
+        assert res_cont_hume.perspective_filtered_count == 2
+        assert res_cont_hume.degrees["hume_conclusion"] > 0.5
+
+    def test_reductio_ad_absurdum_discharge_vs_unrefuted_supposition(self) -> None:
+        """Verify refuted Reductio chains discharge via modus tollens while unrefuted ones stay isolated."""
+        nodes = {
+            "thesis": {"prior": 0.5, "intensional_mode": "asserted"},
+            "rival_supp": {"prior": 0.9, "intensional_mode": "suppositional"},
+            "absurd_conseq": {"prior": 0.85, "intensional_mode": "suppositional"},
+            "empirical_fact": {"prior": 0.95, "intensional_mode": "asserted"},
+            "other_thesis": {"prior": 0.5, "intensional_mode": "asserted"},
+            "unrefuted_supp": {"prior": 0.95, "intensional_mode": "suppositional"},
+            "false_support_supp": {"prior": 0.9, "intensional_mode": "suppositional"},
+        }
+        edges = [
+            # Classic 2-hop reductio: rival_supp -> absurd_conseq, attacked by empirical_fact
+            {
+                "source": "rival_supp",
+                "target": "absurd_conseq",
+                "relation_type": "SUPPORTS",
+                "inferential_force": 0.9,
+            },
+            {
+                "source": "empirical_fact",
+                "target": "absurd_conseq",
+                "relation_type": "ATTACKS",
+                "inferential_force": 0.95,
+            },
+            {
+                "source": "rival_supp",
+                "target": "thesis",
+                "relation_type": "ATTACKS",
+                "inferential_force": 0.9,
+            },
+            # Unrefuted supposition attacking other_thesis stays isolated
+            {
+                "source": "unrefuted_supp",
+                "target": "other_thesis",
+                "relation_type": "ATTACKS",
+                "inferential_force": 0.95,
+            },
+            # Refuted supposition that merely SUPPORTED other_thesis must NOT discharge positive support
+            {
+                "source": "empirical_fact",
+                "target": "false_support_supp",
+                "relation_type": "ATTACKS",
+                "inferential_force": 0.9,
+            },
+            {
+                "source": "false_support_supp",
+                "target": "other_thesis",
+                "relation_type": "SUPPORTS",
+                "inferential_force": 0.9,
+            },
+        ]
+
+        res = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="author",
+            isolate_suppositional=True,
+        )
+        assert res.degrees["thesis"] > 0.5
+        assert res.degrees["other_thesis"] == pytest.approx(0.5)
+        assert res.degrees["unrefuted_supp"] == pytest.approx(0.0)
+        assert res.degrees["rival_supp"] < 0.9
+
+        res_cont = solve_continuous_qbaf(
+            nodes=nodes,
+            edges=edges,
+            perspective="author",
+            isolate_suppositional=True,
+        )
+        assert res_cont.converged
+        assert res_cont.degrees["thesis"] > 0.5
+        assert res_cont.degrees["other_thesis"] == pytest.approx(0.5, abs=1e-4)
+
+    def test_dialectical_mode_preserves_external_attacks_blocks_external_support(
+        self,
+    ) -> None:
+        """Verify isolate_attributed=False keeps incoming opponent ATTACKS while blocking off-perspective SUPPORTS."""
+        nodes = {
+            "hume_claim": {
+                "prior": 0.5,
+                "intensional_mode": "attributed",
+                "attributed_to": "David Hume",
+            },
+            "kant_attack": {
+                "prior": 0.9,
+                "intensional_mode": "attributed",
+                "attributed_to": "Immanuel Kant",
+            },
+            "kant_support": {
+                "prior": 0.9,
+                "intensional_mode": "attributed",
+                "attributed_to": "Immanuel Kant",
+            },
+            "hume_target_for_support": {
+                "prior": 0.5,
+                "intensional_mode": "attributed",
+                "attributed_to": "David Hume",
+            },
+        }
+        edges = [
+            {
+                "source": "kant_attack",
+                "target": "hume_claim",
+                "relation_type": "ATTACKS",
+                "inferential_force": 0.9,
+            },
+            {
+                "source": "kant_support",
+                "target": "hume_target_for_support",
+                "relation_type": "SUPPORTS",
+                "inferential_force": 0.9,
+            },
+        ]
+
+        res_dialectic = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="David Hume",
+            isolate_attributed=False,
+        )
+        assert res_dialectic.degrees["hume_claim"] < 0.5
+        assert res_dialectic.degrees["hume_target_for_support"] == pytest.approx(0.5)
+
+    def test_historical_unattributed_shared_vs_agent_attributed(self) -> None:
+        """Verify unattributed historical claims act as shared premises while attributed historical claims isolate."""
+        nodes = {
+            "author_claim": {"prior": 0.5, "intensional_mode": "asserted"},
+            "hist_shared": {"prior": 0.85, "intensional_mode": "historical"},
+            "hist_aristotle": {
+                "prior": 0.9,
+                "intensional_mode": "historical",
+                "attributed_to": "Aristotle",
+            },
+        }
+        edges = [
+            {
+                "source": "hist_shared",
+                "target": "author_claim",
+                "relation_type": "SUPPORTS",
+                "inferential_force": 0.8,
+            },
+            {
+                "source": "hist_aristotle",
+                "target": "author_claim",
+                "relation_type": "SUPPORTS",
+                "inferential_force": 0.9,
+            },
+        ]
+
+        res_author = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="author",
+        )
+        assert res_author.perspective_filtered_count == 1
+        assert res_author.degrees["author_claim"] > 0.5
+        assert res_author.degrees["hist_aristotle"] == pytest.approx(0.0)
+
+        res_aristotle = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            perspective="Aristotle",
+        )
+        assert res_aristotle.degrees["hist_shared"] == pytest.approx(0.85)
+        assert res_aristotle.degrees["hist_aristotle"] == pytest.approx(0.9)

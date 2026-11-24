@@ -52,7 +52,9 @@ async def test_metric_descriptor_models_serialization() -> None:
 async def test_definitions_endpoint_returns_descriptors_with_valid_schema() -> None:
     """GET /api/metrics/definitions returns registered descriptors with JSON Schemas."""
     app = create_app(StudioSettings())
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         resp = await client.get("/api/metrics/definitions")
         assert resp.status_code == 200
         data = resp.json()

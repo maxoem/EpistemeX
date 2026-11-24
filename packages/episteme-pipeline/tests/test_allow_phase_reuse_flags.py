@@ -8,11 +8,13 @@ from episteme_pipeline.artifacts.execution import (
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 
 
-class StubPhase:
-    def __init__(self, name: str):
+class StubPhase(PhaseRunner[object]):
+    def __init__(self, name: str, phase_key: str | None = None):
         self.name = name
+        self.phase_key = phase_key or name.lower().split(":")[0].replace(" ", "")
 
     async def run(self, input, context: ArtifactExecutionContext):
         return ArtifactCollection([])
@@ -61,4 +63,3 @@ async def test_disables_phase_reuse_and_hydration(tmp_path: Path, graph_store):
     # Expect no reused phases and full invalidation when reuse is disabled
     assert result2.report.reused_phase_ordinals == []
     assert result2.report.invalidated_phase_ordinals == [1, 2]
-

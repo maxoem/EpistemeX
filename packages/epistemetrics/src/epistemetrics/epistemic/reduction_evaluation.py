@@ -56,9 +56,15 @@ class ReductionEvaluationResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    precision: float = Field(..., description="Overall relational link precision in [0.0, 1.0].")
-    recall: float = Field(..., description="Overall relational link recall in [0.0, 1.0].")
-    f1: float = Field(..., description="Overall relational link F1 score in [0.0, 1.0].")
+    precision: float = Field(
+        ..., description="Overall relational link precision in [0.0, 1.0]."
+    )
+    recall: float = Field(
+        ..., description="Overall relational link recall in [0.0, 1.0]."
+    )
+    f1: float = Field(
+        ..., description="Overall relational link F1 score in [0.0, 1.0]."
+    )
     per_relation_scores: dict[str, dict[str, float]] = Field(
         default_factory=dict, description="Precision, recall, F1 per relation type."
     )
@@ -81,7 +87,8 @@ class ReductionEvaluationResult(BaseModel):
         default=0, description="Matched count of presupposition links."
     )
     matched_links: list[tuple[str, str, str]] = Field(
-        default_factory=list, description="Correctly matched (source, target, relation) triples."
+        default_factory=list,
+        description="Correctly matched (source, target, relation) triples.",
     )
     unmatched_ref_links: list[tuple[str, str, str]] = Field(
         default_factory=list, description="Omitted reference triples."
@@ -143,7 +150,9 @@ class ReductionEvaluationResult(BaseModel):
             p = scores.get("precision", 0.0)
             r = scores.get("recall", 0.0)
             f = scores.get("f1", 0.0)
-            lines.append(f"| `{rel}` | {ref_c} | {pred_c} | {match_c} | {p:.2%} | {r:.2%} | {f:.4f} |")
+            lines.append(
+                f"| `{rel}` | {ref_c} | {pred_c} | {match_c} | {p:.2%} | {r:.2%} | {f:.4f} |"
+            )
 
         if self.unmatched_ref_links:
             lines.append("")
@@ -212,13 +221,17 @@ def extract_intertheoretical_links(
     if isinstance(graph, (nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph)):
         if graph.is_multigraph():
             for u, v, _k, data in graph.edges(keys=True, data=True):
-                raw_rel = data.get("relation_type", data.get("relation", data.get("label", "")))
+                raw_rel = data.get(
+                    "relation_type", data.get("relation", data.get("label", ""))
+                )
                 rel = _canonicalize_intertheoretical_relation(raw_rel)
                 if rel and rel in targets:
                     links.add((str(u), str(v), rel.value))
         else:
             for u, v, data in graph.edges(data=True):
-                raw_rel = data.get("relation_type", data.get("relation", data.get("label", "")))
+                raw_rel = data.get(
+                    "relation_type", data.get("relation", data.get("label", ""))
+                )
                 rel = _canonicalize_intertheoretical_relation(raw_rel)
                 if rel and rel in targets:
                     links.add((str(u), str(v), rel.value))
@@ -255,8 +268,12 @@ def evaluate_intertheoretical_links(
         Precision, recall, and F1 scores overall and per relation type.
     """
     mapping = node_mapping or {}
-    ref_links = extract_intertheoretical_links(ref_graph, allowed_relations=allowed_relations)
-    pred_raw_links = extract_intertheoretical_links(pred_graph, allowed_relations=allowed_relations)
+    ref_links = extract_intertheoretical_links(
+        ref_graph, allowed_relations=allowed_relations
+    )
+    pred_raw_links = extract_intertheoretical_links(
+        pred_graph, allowed_relations=allowed_relations
+    )
 
     # Apply node mapping to predicted links
     pred_links: set[tuple[str, str, str]] = set()
@@ -307,9 +324,7 @@ def evaluate_intertheoretical_links(
             p_rel = float(match_c) / float(pred_c) if pred_c > 0 else 0.0
             r_rel = float(match_c) / float(ref_c) if ref_c > 0 else 0.0
             f_rel = (
-                2.0 * (p_rel * r_rel) / (p_rel + r_rel)
-                if (p_rel + r_rel) > 0
-                else 0.0
+                2.0 * (p_rel * r_rel) / (p_rel + r_rel) if (p_rel + r_rel) > 0 else 0.0
             )
         per_rel_scores[rel_str] = {
             "precision": p_rel,

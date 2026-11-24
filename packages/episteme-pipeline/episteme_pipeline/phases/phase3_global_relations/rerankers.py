@@ -15,6 +15,7 @@ from episteme_pipeline.protocols.extractors import (
     RelationReranker,
     normalize_scores,
 )
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.utils import format_envelope
 
 _model_cache: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
@@ -49,10 +50,18 @@ def build_relation_reranker_inputs(
         T_A and T_B passed to the cross-encoder.
     """
     # Use Textual Envelopes if available; fallback to legacy format otherwise.
-    query = entity_a.textual_envelope if entity_a.textual_envelope else f"Entity: {entity_a.name}\nContext: {format_envelope(env_a, SubGraph(center_id='', nodes=[], triples=[], depth=0))}"
-    
-    doc_text = entity_b.textual_envelope if entity_b.textual_envelope else f"Entity: {entity_b.name}\nContext: {format_envelope(SubGraph(center_id='', nodes=[], triples=[], depth=0), env_b)}"
-    
+    query = (
+        entity_a.textual_envelope
+        if entity_a.textual_envelope
+        else f"Entity: {entity_a.name}\nContext: {format_envelope(env_a, SubGraph(center_id='', nodes=[], triples=[], depth=0))}"
+    )
+
+    doc_text = (
+        entity_b.textual_envelope
+        if entity_b.textual_envelope
+        else f"Entity: {entity_b.name}\nContext: {format_envelope(SubGraph(center_id='', nodes=[], triples=[], depth=0), env_b)}"
+    )
+
     return query, doc_text
 
 
@@ -140,13 +149,15 @@ class CrossEncoderRelationReranker(RelationReranker):
         Any object satisfying the ``CrossEncoder`` protocol.
     """
 
-    def __init__(self, cross_encoder: CrossEncoder) -> None:
-        if not hasattr(cross_encoder, "predict"):
+    def __init__(
+        self, cross_encoder: CrossEncoder, max_length: int | None = None
+    ) -> None:
+        if not isinstance(cross_encoder, CrossEncoder):
             raise TypeError(
-                f"{type(cross_encoder).__name__} has no .predict(pairs) method; "
-                "it does not satisfy the CrossEncoder protocol."
+                f"{type(cross_encoder).__name__} does not satisfy the CrossEncoder protocol."
             )
         self.cross_encoder = cross_encoder
+        self.max_length = max_length
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic cross-encoder relation reranker configuration.
@@ -158,11 +169,12 @@ class CrossEncoderRelationReranker(RelationReranker):
         """
         ce_fp = (
             self.cross_encoder.fingerprint()
-            if hasattr(self.cross_encoder, "fingerprint") and callable(self.cross_encoder.fingerprint)
+            if isinstance(self.cross_encoder, Fingerprintable)
             else {"class": self.cross_encoder.__class__.__name__}
         )
         return {
             "class": self.__class__.__name__,
+            "max_length": self.max_length,
             "cross_encoder": ce_fp,
         }
 
@@ -173,8 +185,44 @@ class CrossEncoderRelationReranker(RelationReranker):
         entity_b: L2Entity,
         env_b: SubGraph,
     ) -> float:
-        query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
+        query, doc_text = build_relation_reranker_inputs(
+            entity_a, env_a, entity_b, env_b
+        )
         return normalize_scores(self.cross_encoder.predict([(query, doc_text)]))[0]
+
+    def describe_relation_input(
+        self,
+        entity_a: L2Entity,
+        env_a: SubGraph,
+        entity_b: L2Entity,
+        env_b: SubGraph,
+    ) -> dict[str, object]:
+        """Summarize the current reranker input without executing inference.
+
+        Parameters
+        ----------
+        entity_a : L2Entity
+            Query-side entity.
+        env_a : SubGraph
+            Query-side envelope.
+        entity_b : L2Entity
+            Document-side entity.
+        env_b : SubGraph
+            Document-side envelope.
+
+        Returns
+        -------
+        dict[str, object]
+            Size metadata for the reranker query/document pair.
+        """
+        query, doc_text = build_relation_reranker_inputs(
+            entity_a, env_a, entity_b, env_b
+        )
+        return summarize_reranker_text_pair(
+            query,
+            doc_text,
+            max_length=self.max_length,
+        )
 
 
 class SentenceTransformerCrossEncoderReranker(RelationReranker):
@@ -350,13 +398,14 @@ class SentenceTransformerCrossEncoderReranker(RelationReranker):
             pairs,
             batch_size=batch_size,
             show_progress_bar=show_progress_bar,
-            activation_fn=activation_fn or self.activation_fn or self._default_activation_fn(),
+            activation_fn=activation_fn
+            or self.activation_fn
+            or self._default_activation_fn(),
             apply_softmax=apply_softmax,
             convert_to_numpy=convert_to_numpy,
             convert_to_tensor=convert_to_tensor,
             prompt_name=self.prompt_name,
         )
-
 
     def describe_relation_input(
         self,
@@ -483,6 +532,7 @@ def _qwen_reranker_prompts() -> dict[str, str]:
         )
     }
 
+
 class JevRelationReranker(RelationReranker):
     """Relation reranker backed by the TypeSafe Jev Decision Engine.
 
@@ -522,7 +572,7 @@ class JevRelationReranker(RelationReranker):
         """
         eng_fp = (
             self.decision_engine.fingerprint()
-            if hasattr(self.decision_engine, "fingerprint") and callable(self.decision_engine.fingerprint)
+            if isinstance(self.decision_engine, Fingerprintable)
             else {"class": self.decision_engine.__class__.__name__}
         )
         return {
@@ -530,6 +580,23 @@ class JevRelationReranker(RelationReranker):
             "decision_template": self.decision_template,
             "decision_engine": eng_fp,
         }
+
+    def describe_relation_input(
+        self,
+        entity_a: L2Entity,
+        env_a: SubGraph,
+        entity_b: L2Entity,
+        env_b: SubGraph,
+    ) -> dict[str, object]:
+        """Summarize the current reranker input without executing inference."""
+        query, doc_text = build_relation_reranker_inputs(
+            entity_a, env_a, entity_b, env_b
+        )
+        return summarize_reranker_text_pair(
+            query,
+            doc_text,
+            max_length=self.max_length,
+        )
 
     async def score_relation(
         self,
@@ -540,8 +607,10 @@ class JevRelationReranker(RelationReranker):
     ) -> float:
         # Context window guard - limit tokens to < 800 (or characters approx 3200)
         # Using a simple character truncation for envelope
-        query, doc_text = build_relation_reranker_inputs(entity_a, env_a, entity_b, env_b)
-        
+        query, doc_text = build_relation_reranker_inputs(
+            entity_a, env_a, entity_b, env_b
+        )
+
         # Simple truncation to stay within budget
         if len(query) > 1600:
             query = query[:1600] + "..."
@@ -549,13 +618,18 @@ class JevRelationReranker(RelationReranker):
             doc_text = doc_text[:1600] + "..."
 
         context = f"Entity A:\n{query}\n\nEntity B:\n{doc_text}"
-        question = self.decision_template.format(entity_a=entity_a.name, entity_b=entity_b.name)
+        question = self.decision_template.format(
+            entity_a=entity_a.name, entity_b=entity_b.name
+        )
 
         decision = await self.decision_engine.evaluate_noul(
             state=context,
             question=question,
         )
-        
-        # return calibrated probability or empirical accuracy
-        return decision.probability if decision.passed else (1.0 - decision.probability) * 0.1
 
+        # return calibrated probability or empirical accuracy
+        return (
+            decision.probability
+            if decision.passed
+            else (1.0 - decision.probability) * 0.1
+        )

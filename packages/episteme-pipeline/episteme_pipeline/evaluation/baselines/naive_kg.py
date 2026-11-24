@@ -46,10 +46,13 @@ class BaselineNaiveKG:
         self,
         schema: SchemaConfig | None = None,
         extraction_strategy: ExtractionStrategy | None = None,
-        extractor_fn: Callable[[str], tuple[list[L2Entity], list[L2Triple]]] | None = None,
+        extractor_fn: Callable[[str], tuple[list[L2Entity], list[L2Triple]]]
+        | None = None,
     ) -> None:
         self.schema = schema or DEFAULT_SCHEMA
-        self.extraction_strategy = extraction_strategy or ExtractionStrategy(schema=self.schema)
+        self.extraction_strategy = extraction_strategy or ExtractionStrategy(
+            schema=self.schema
+        )
         self.extractor_fn = extractor_fn
 
     def _extract_from_text(self, text: str) -> tuple[list[L2Entity], list[L2Triple]]:
@@ -72,7 +75,9 @@ class BaselineNaiveKG:
         triples: list[L2Triple] = []
 
         # Canonical relations directly from the injected schema
-        candidate_relations = list(self.schema.relation_types) + list(self.schema.argument_relation_types)
+        candidate_relations = list(self.schema.relation_types) + list(
+            self.schema.argument_relation_types
+        )
 
         # Split text into sentences/clauses
         clauses = re.split(r"[.;\n]+", text)
@@ -88,12 +93,16 @@ class BaselineNaiveKG:
                 pattern = rf"\b{re.escape(rel_phrase)}(?:s|ed|ing)?\b"
                 match = re.search(pattern, clause, re.IGNORECASE)
                 if match:
-                    subj_text = clause[:match.start()].strip()
-                    obj_text = clause[match.end():].strip()
+                    subj_text = clause[: match.start()].strip()
+                    obj_text = clause[match.end() :].strip()
 
                     # Clean candidate subject and object spans
-                    subj_cleaned = re.sub(r"^(?:the|a|an|where)\s+", "", subj_text, flags=re.IGNORECASE).strip()
-                    obj_cleaned = re.sub(r"^(?:the|a|an)\s+", "", obj_text, flags=re.IGNORECASE).strip()
+                    subj_cleaned = re.sub(
+                        r"^(?:the|a|an|where)\s+", "", subj_text, flags=re.IGNORECASE
+                    ).strip()
+                    obj_cleaned = re.sub(
+                        r"^(?:the|a|an)\s+", "", obj_text, flags=re.IGNORECASE
+                    ).strip()
 
                     # Restrict span lengths to plausible entity phrases
                     if 2 <= len(subj_cleaned) <= 60 and 2 <= len(obj_cleaned) <= 60:
@@ -184,7 +193,9 @@ class BaselineNaiveKG:
         graph = l2_triples_to_digraph(entities, triples)
         for u, v, data in graph.edges(data=True):
             lbl = str(data.get("label", data.get("relation", "")))
-            data["polarity"] = self.schema.relation_polarities.get(lbl, self.schema.relation_polarities.get(lbl.upper(), 0))
+            data["polarity"] = self.schema.relation_polarities.get(
+                lbl, self.schema.relation_polarities.get(lbl.upper(), 0)
+            )
         return graph
 
     async def evaluate(
@@ -260,7 +271,7 @@ class BaselineNaiveKG:
                 scierc_data = load_scierc_subset(path_str)
                 items = scierc_data.get("texts", [])
             else:
-                with open(corpus, "r", encoding="utf-8") as f:
+                with open(corpus, "r", encoding="utf-8") as f:  # noqa: ASYNC230 baseline
                     items = [f.read()]
         elif isinstance(corpus, list):
             items = corpus
@@ -284,10 +295,14 @@ class BaselineNaiveKG:
 
         # Inject latency and token_cost metrics into the primary result
         if results:
-            results[0].metrics.extend([
-                EvaluationMetric(name="latency", value=round(latency, 4), unit="seconds"),
-                EvaluationMetric(name="token_cost", value=token_cost, unit="USD"),
-            ])
+            results[0].metrics.extend(
+                [
+                    EvaluationMetric(
+                        name="latency", value=round(latency, 4), unit="seconds"
+                    ),
+                    EvaluationMetric(name="token_cost", value=token_cost, unit="USD"),
+                ]
+            )
 
         metadata = {
             "latency": latency,

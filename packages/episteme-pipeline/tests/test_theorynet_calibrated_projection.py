@@ -36,7 +36,7 @@ class TestTheoryRelationContracts:
     """Test suite for TheoryRelation calibrated attributes and weight decoupling."""
 
     def test_theory_relation_calibrated_fields_defaults(self) -> None:
-        """Verify default effective weight is derived as M * P."""
+        """Verify default effective weight and warrant defaults without edge modal_strength."""
         rel = TheoryRelation(
             source_id="c1",
             target_id="c2",
@@ -44,32 +44,32 @@ class TestTheoryRelationContracts:
             confidence=0.8,
             scope="global",
         )
-        assert rel.modal_strength == 1.0
-        assert rel.class_probability is None
-        assert rel.empirical_accuracy is None
-        # Default effective_weight = modal_strength (1.0) * confidence (0.8)
+        assert not hasattr(rel, "modal_strength")
+        assert rel.inferential_warrant == 0.75
+        assert rel.perception_stance_prob is None
+        assert rel.perception_empirical_acc is None
+        # Default effective_weight when warrant is not explicitly set uses confidence (0.8)
         assert pytest.approx(rel.effective_weight) == 0.8
         assert pytest.approx(rel.weight) == 0.8
 
-    def test_decoupling_epistemic_confidence_from_modal_strength(self) -> None:
-        """Verify high extraction confidence does not inflate tentative epistemic modality."""
-        # Author: 'It is conceivable that space is an illusion' (Extraction P=0.99, but Modality M=0.30)
+    def test_decoupling_epistemic_confidence_from_inferential_warrant(self) -> None:
+        """Verify high extraction confidence does not inflate weak inferential warrant."""
         rel = TheoryRelation(
             source_id="speculative_hypothesis",
             target_id="space_concept",
             relation_type="SUPPORTS",
             confidence=0.99,
-            class_probability=0.99,
-            empirical_accuracy=0.96,
-            modal_strength=0.30,
+            perception_stance_prob=0.99,
+            perception_empirical_acc=0.96,
+            inferential_warrant=0.30,
             scope="global",
             decision_engine_provider="typesafe_jev",
         )
 
-        assert rel.class_probability == 0.99
-        assert rel.empirical_accuracy == 0.96
-        assert rel.modal_strength == 0.30
-        # Crucial check: effective weight is M * P = 0.30 * 0.99 = 0.297, NOT 0.99!
+        assert rel.perception_stance_prob == 0.99
+        assert rel.perception_empirical_acc == 0.96
+        assert rel.inferential_warrant == 0.30
+        # Crucial check: effective weight is I * P = 0.30 * 0.99 = 0.297, NOT 0.99!
         assert pytest.approx(rel.effective_weight, rel=1e-3) == 0.297
         assert pytest.approx(rel.weight, rel=1e-3) == 0.297
         assert rel.decision_engine_provider == "typesafe_jev"
@@ -81,9 +81,9 @@ class TestTheoryRelationContracts:
             target_id="atom_2",
             relation_type="ATTACKS",
             confidence=0.88,
-            class_probability=0.88,
-            empirical_accuracy=0.92,
-            modal_strength=0.75,
+            perception_stance_prob=0.88,
+            perception_empirical_acc=0.92,
+            inferential_warrant=0.75,
             scope="global",
             decision_engine_provider="mock_jev",
         )
@@ -99,9 +99,9 @@ class TestTheoryRelationContracts:
         assert restored.source_id == "atom_1"
         assert restored.target_id == "atom_2"
         assert restored.relation_type == "ATTACKS"
-        assert restored.class_probability == 0.88
-        assert restored.empirical_accuracy == 0.92
-        assert restored.modal_strength == 0.75
+        assert restored.perception_stance_prob == 0.88
+        assert restored.perception_empirical_acc == 0.92
+        assert restored.inferential_warrant == 0.75
         assert pytest.approx(restored.effective_weight, rel=1e-3) == 0.75 * 0.88
         assert restored.decision_engine_provider == "mock_jev"
 
@@ -117,8 +117,8 @@ class TestTheoryNetProjectorCalibrated:
             target_id="a2",
             relation_type="SUPPORTS",
             confidence=0.9,
-            class_probability=0.9,
-            modal_strength=0.5,
+            perception_stance_prob=0.9,
+            inferential_warrant=0.5,
             scope="global",
         )
         rel_att = TheoryRelation(
@@ -126,8 +126,8 @@ class TestTheoryNetProjectorCalibrated:
             target_id="a2",
             relation_type="ATTACKS",
             confidence=0.8,
-            class_probability=0.8,
-            modal_strength=0.5,
+            perception_stance_prob=0.8,
+            inferential_warrant=0.5,
             scope="global",
         )
 
@@ -152,7 +152,7 @@ class TestTheoryNetProjectorCalibrated:
             target_id="a2",
             relation_type="SUPPORTS",
             confidence=0.9,
-            empirical_accuracy=0.85,
+            perception_empirical_acc=0.85,
             scope="global",
         )
         rel_inadmissible = TheoryRelation(
@@ -160,7 +160,7 @@ class TestTheoryNetProjectorCalibrated:
             target_id="a3",
             relation_type="ATTACKS",
             confidence=0.9,
-            empirical_accuracy=0.60,  # Below 0.75!
+            perception_empirical_acc=0.60,  # Below 0.75!
             scope="global",
         )
 
@@ -174,7 +174,7 @@ class TestTheoryNetProjectorCalibrated:
         assert tnet.relations[0].target_id == "a2"
 
     def test_admissibility_gating_flagging(self) -> None:
-        """Verify relations below threshold are flagged with tenability=0.0 when not pruning."""
+        """Verify relations below threshold are flagged with edge_tenability=0.0 when not pruning."""
         proj_flagging = TheoryNetProjector(
             admissibility_threshold=0.75,
             prune_inadmissible=False,
@@ -191,7 +191,7 @@ class TestTheoryNetProjectorCalibrated:
             target_id="a3",
             relation_type="ATTACKS",
             confidence=0.9,
-            empirical_accuracy=0.50,
+            perception_empirical_acc=0.50,
             scope="global",
         )
 
@@ -202,7 +202,7 @@ class TestTheoryNetProjectorCalibrated:
 
         tnet = proj_flagging.project(view)
         assert len(tnet.relations) == 1
-        assert tnet.relations[0].tenability == 0.0
+        assert tnet.relations[0].edge_tenability == 0.0
 
     def test_double_penalization_elimination(self) -> None:
         """Verify conjecture premise M=0.35 connected via warrant I=1.0 does not double-penalize warrant weight."""
@@ -210,21 +210,21 @@ class TestTheoryNetProjectorCalibrated:
             id="p_conjecture",
             text="Conjecture premise",
             component_type="TentativeConjecture",
-            modal_strength=0.35,
+            modal_prior=0.35,
             source_chunk_id="c1",
         )
         atom_conclusion = TheoryAtom(
             id="c_target",
             text="Conclusion target",
             component_type="TheoreticalHypothesis",
-            base_score=0.5,
+            modal_prior=0.5,
             source_chunk_id="c1",
         )
         rel_deductive = TheoryRelation(
             source_id="p_conjecture",
             target_id="c_target",
             relation_type="ENTAILS",
-            inferential_force=1.0,
+            inferential_warrant=1.0,
             confidence=1.0,
             scope="global",
         )
@@ -240,20 +240,41 @@ class TestTheoryNetProjectorCalibrated:
         # Inferential warrant force on the edge must NOT be scaled down by atom modal strength (no 0.35 * 0.35)
         projected_rel = tnet.relations[0]
         assert projected_rel.active_weight == 1.0
-        assert projected_rel.inferential_force == 1.0
+        assert projected_rel.inferential_warrant == 1.0
 
-        # Conclusion's plausibility increases mediated strictly by premise's justification degree (s_p <= 0.35)
+        # Conclusion's equilibrium strength increases mediated strictly by premise's justification degree (s_p <= 0.35)
         # under warrant weight W = 1.0
         c_projected = next(a for a in tnet.atoms if a.id == "c_target")
-        assert c_projected.plausibility > 0.5
+        assert c_projected.equilibrium_strength > 0.5
 
     def test_upstream_heuristic_mappings(self) -> None:
         """Verify Phase 6 heuristic mappings assign expected modal strength and warrant validity."""
-        axiom = TheoryAtom(id="a1", text="Axiom", component_type="CoreAxiom", source_chunk_id="c1")
-        obs = TheoryAtom(id="a2", text="Obs", component_type="ObservationUnit", source_chunk_id="c1")
-        hyp_ana = TheoryAtom(id="a3", text="Hyp", component_type="TheoreticalHypothesis", epistemic_status="Analytisch", source_chunk_id="c1")
-        hyp_syn = TheoryAtom(id="a4", text="Hyp", component_type="TheoreticalHypothesis", epistemic_status="Synthetisch", source_chunk_id="c1")
-        conj = TheoryAtom(id="a5", text="Conjecture", component_type="TentativeConjecture", source_chunk_id="c1")
+        axiom = TheoryAtom(
+            id="a1", text="Axiom", component_type="CoreAxiom", source_chunk_id="c1"
+        )
+        obs = TheoryAtom(
+            id="a2", text="Obs", component_type="ObservationUnit", source_chunk_id="c1"
+        )
+        hyp_ana = TheoryAtom(
+            id="a3",
+            text="Hyp",
+            component_type="TheoreticalHypothesis",
+            epistemic_status="Analytisch",
+            source_chunk_id="c1",
+        )
+        hyp_syn = TheoryAtom(
+            id="a4",
+            text="Hyp",
+            component_type="TheoreticalHypothesis",
+            epistemic_status="Synthetisch",
+            source_chunk_id="c1",
+        )
+        conj = TheoryAtom(
+            id="a5",
+            text="Conjecture",
+            component_type="TentativeConjecture",
+            source_chunk_id="c1",
+        )
 
         assert derive_atom_modality(axiom) == 1.0
         assert derive_atom_modality(obs) == 0.85
@@ -261,10 +282,34 @@ class TestTheoryNetProjectorCalibrated:
         assert derive_atom_modality(hyp_syn) == 0.60
         assert derive_atom_modality(conj) == 0.35
 
-        rel_ded = TheoryRelation(source_id="1", target_id="2", relation_type="DEDUCES", confidence=1.0, scope="global")
-        rel_sup = TheoryRelation(source_id="1", target_id="2", relation_type="SUPPORTS", confidence=1.0, scope="global")
-        rel_und = TheoryRelation(source_id="1", target_id="2", relation_type="UNDERCUTS", confidence=1.0, scope="global")
-        rel_ana = TheoryRelation(source_id="1", target_id="2", relation_type="ANALOGY", confidence=1.0, scope="global")
+        rel_ded = TheoryRelation(
+            source_id="1",
+            target_id="2",
+            relation_type="DEDUCES",
+            confidence=1.0,
+            scope="global",
+        )
+        rel_sup = TheoryRelation(
+            source_id="1",
+            target_id="2",
+            relation_type="SUPPORTS",
+            confidence=1.0,
+            scope="global",
+        )
+        rel_und = TheoryRelation(
+            source_id="1",
+            target_id="2",
+            relation_type="UNDERCUTS",
+            confidence=1.0,
+            scope="global",
+        )
+        rel_ana = TheoryRelation(
+            source_id="1",
+            target_id="2",
+            relation_type="ANALOGY",
+            confidence=1.0,
+            scope="global",
+        )
 
         assert derive_relation_warrant(rel_ded) == 1.0
         assert derive_relation_warrant(rel_sup) == 0.75
@@ -273,15 +318,28 @@ class TestTheoryNetProjectorCalibrated:
 
     def test_cypher_projection_query_modes(self) -> None:
         """Verify Cypher projection query generation differentiates hard database pruning vs soft passthrough."""
-        q_hard = get_cypher_projection_query(graph_name="test_hard", admissibility_mode="hard", tau_p="$tau_p", tau_c="$tau_c")
-        assert "WHERE r.stance_probability >= $tau_p AND r.model_confidence >= $tau_c" in q_hard
-        assert "r.inferential_force AS weight" in q_hard
+        q_hard = get_cypher_projection_query(
+            graph_name="test_hard",
+            admissibility_mode="hard",
+            tau_p="$tau_p",
+            tau_c="$tau_c",
+        )
+        assert (
+            "WHERE r.perception_stance_prob >= $tau_p AND r.calibrated_confidence >= $tau_c"
+            in q_hard
+        )
+        assert "r.inferential_warrant AS weight" in q_hard
 
-        q_soft = get_cypher_projection_query(graph_name="test_soft", admissibility_mode="soft", tau_p="$tau_p", tau_c="$tau_c")
-        assert "WHERE r.stance_probability" not in q_soft
-        assert "r.inferential_force AS inferential_force" in q_soft
-        assert "r.stance_probability AS stance_probability" in q_soft
-        assert "r.model_confidence AS model_confidence" in q_soft
+        q_soft = get_cypher_projection_query(
+            graph_name="test_soft",
+            admissibility_mode="soft",
+            tau_p="$tau_p",
+            tau_c="$tau_c",
+        )
+        assert "WHERE r.perception_stance_prob" not in q_soft
+        assert "r.inferential_warrant AS inferential_warrant" in q_soft
+        assert "r.perception_stance_prob AS perception_stance_prob" in q_soft
+        assert "r.calibrated_confidence AS calibrated_confidence" in q_soft
 
 
 @pytest.mark.asyncio
@@ -297,23 +355,23 @@ class TestPhase6RunnerProjection:
             text="Empirical observation data",
             component_type="ObservationUnit",
             source_chunk_id="chk1",
-            plausibility=0.9,
+            modal_prior=0.9,
         )
         atom2 = TheoryAtom(
             id="atom_conclusion",
             text="Theoretical hypothesis",
             component_type="TheoreticalHypothesis",
             source_chunk_id="chk1",
-            plausibility=0.5,
+            modal_prior=0.5,
         )
         rel = TheoryRelation(
             source_id="atom_premise",
             target_id="atom_conclusion",
             relation_type="SUPPORTS",
             confidence=0.95,
-            class_probability=0.95,
-            empirical_accuracy=0.92,
-            modal_strength=0.80,
+            perception_stance_prob=0.95,
+            perception_empirical_acc=0.92,
+            inferential_warrant=0.80,
             scope="global",
             decision_engine_provider="typesafe_jev",
         )
@@ -349,9 +407,9 @@ class TestPhase6RunnerProjection:
         assert stored_rel.target_id == "atom_conclusion"
         assert stored_rel.relation_type == "SUPPORTS"
 
-        assert stored_rel.class_probability == 0.95
-        assert stored_rel.empirical_accuracy == 0.92
-        assert stored_rel.modal_strength == 0.80
+        assert stored_rel.perception_stance_prob == 0.95
+        assert stored_rel.perception_empirical_acc == 0.92
+        assert stored_rel.inferential_warrant == 0.80
         assert pytest.approx(stored_rel.effective_weight, rel=1e-3) == 0.76
         assert stored_rel.decision_engine_provider == "typesafe_jev"
 
@@ -361,14 +419,15 @@ class TestPhase6RunnerProjection:
         props = raw_rels[0]["properties"]
 
         assert props["calibrated_confidence"] == 0.92
-        assert props["class_probability"] == 0.95
-        assert props["empirical_accuracy"] == 0.92
-        assert props["modal_strength"] == 0.80
+        assert props["perception_stance_prob"] == 0.95
+        assert props["perception_empirical_acc"] == 0.92
+        assert props["inferential_warrant"] == 0.80
+        assert "modal_strength" not in props
+        assert "inferential_force" not in props
         # effective_weight = 0.80 * 0.95 = 0.76
         assert pytest.approx(props["effective_weight"], rel=1e-3) == 0.76
         assert pytest.approx(props["weight_support"], rel=1e-3) == 0.76
         assert props["weight_attack"] == 0.0
-        assert props["decision_engine_provider"] == "typesafe_jev"
         assert props["decision_engine_provider"] == "typesafe_jev"
 
 
@@ -401,11 +460,28 @@ class TestEvaluationCalibrationMetrics:
             scope="global",
         )
 
-        atom1 = TheoryAtom(id="c1", text="text 1", component_type="ObservationUnit", source_chunk_id="1")
-        atom2 = TheoryAtom(id="c2", text="text 2", component_type="ObservationUnit", source_chunk_id="1")
-        atom3 = TheoryAtom(id="c3", text="text 3", component_type="ObservationUnit", source_chunk_id="1")
+        atom1 = TheoryAtom(
+            id="c1",
+            text="text 1",
+            component_type="ObservationUnit",
+            source_chunk_id="1",
+        )
+        atom2 = TheoryAtom(
+            id="c2",
+            text="text 2",
+            component_type="ObservationUnit",
+            source_chunk_id="1",
+        )
+        atom3 = TheoryAtom(
+            id="c3",
+            text="text 3",
+            component_type="ObservationUnit",
+            source_chunk_id="1",
+        )
 
-        pred_net = TheoryNet(atoms=[atom1, atom2, atom3], relations=[pred_rel1, pred_rel2])
+        pred_net = TheoryNet(
+            atoms=[atom1, atom2, atom3], relations=[pred_rel1, pred_rel2]
+        )
         gold_net = TheoryNet(atoms=[atom1, atom2], relations=[gold_rel])
 
         strategy = ArgumentationStrategy()

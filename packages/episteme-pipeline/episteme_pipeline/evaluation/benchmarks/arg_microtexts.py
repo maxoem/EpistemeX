@@ -37,7 +37,11 @@ def load_arg_microtexts_subset(
 
     if not file_path.exists():
         return {
-            "metadata": {"dataset_type": "arg_microtexts", "limit": limit, "error": f"File not found: {path}"},
+            "metadata": {
+                "dataset_type": "arg_microtexts",
+                "limit": limit,
+                "error": f"File not found: {path}",
+            },
             "l2_entities": [],
             "l2_triples": [],
             "l3_atoms": [],
@@ -73,9 +77,13 @@ def load_arg_microtexts_subset(
                 )
                 relations.append(relation)
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 baseline
         return {
-            "metadata": {"dataset_type": "arg_microtexts", "limit": limit, "error": str(e)},
+            "metadata": {
+                "dataset_type": "arg_microtexts",
+                "limit": limit,
+                "error": str(e),
+            },
             "l2_entities": [],
             "l2_triples": [],
             "l3_atoms": [],

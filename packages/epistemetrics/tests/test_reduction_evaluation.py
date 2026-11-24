@@ -11,13 +11,23 @@ from epistemetrics.epistemic.reduction_evaluation import (
 def test_intertheoretical_links_perfect_match():
     """Verify precision, recall, and F1 when predicted reduction links match reference."""
     ref_tg = em.TheoryGraph(name="RefNet")
-    ref_tg.add_node("T_Collision", name="Collision Mechanics", node_type=em.NodeType.THEORY_ELEMENT)
-    ref_tg.add_node("T_CPM", name="Classical Particle Mechanics", node_type=em.NodeType.THEORY_ELEMENT)
-    ref_tg.add_node("T_Thermodynamics", name="Thermodynamics", node_type=em.NodeType.THEORY_ELEMENT)
+    ref_tg.add_node(
+        "T_Collision", name="Collision Mechanics", node_type=em.NodeType.THEORY_ELEMENT
+    )
+    ref_tg.add_node(
+        "T_CPM",
+        name="Classical Particle Mechanics",
+        node_type=em.NodeType.THEORY_ELEMENT,
+    )
+    ref_tg.add_node(
+        "T_Thermodynamics", name="Thermodynamics", node_type=em.NodeType.THEORY_ELEMENT
+    )
 
     # Cross-theory links
     ref_tg.add_edge("T_Collision", "T_CPM", relation_type=em.RelationType.REDUCES_TO)
-    ref_tg.add_edge("T_Thermodynamics", "T_CPM", relation_type=em.RelationType.PRESUPPOSES)
+    ref_tg.add_edge(
+        "T_Thermodynamics", "T_CPM", relation_type=em.RelationType.PRESUPPOSES
+    )
 
     result = evaluate_intertheoretical_links(ref_tg, ref_tg)
 
@@ -57,7 +67,9 @@ def test_intertheoretical_links_partial_and_spurious():
 def test_intertheoretical_links_node_mapping():
     """Verify node mapping translates predicted node IDs to reference IDs."""
     ref_tg = em.TheoryGraph(name="Ref")
-    ref_tg.add_edge("str:T_Gold_1", "str:T_Gold_2", relation_type=em.RelationType.REDUCES_TO)
+    ref_tg.add_edge(
+        "str:T_Gold_1", "str:T_Gold_2", relation_type=em.RelationType.REDUCES_TO
+    )
 
     pred_tg = em.TheoryGraph(name="Pred")
     pred_tg.add_edge("pred_t1", "pred_t2", relation_type=em.RelationType.REDUCES_TO)

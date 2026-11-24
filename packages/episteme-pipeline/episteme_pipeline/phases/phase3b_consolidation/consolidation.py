@@ -10,6 +10,10 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from episteme_pipeline.contracts.phase_contracts import EpistemicCurationLedger
 
 import numpy as np
 
@@ -18,46 +22,21 @@ from episteme_pipeline.phases.phase3b_consolidation.clustering import (
     CanonicalRepresentativeElector,
 )
 from episteme_pipeline.protocols.decision import DecisionEngine
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.fusion import InstanceFusion
 from episteme_pipeline.protocols.graph_store import FusionGraph
+from episteme_pipeline.runs.fingerprints import fingerprint_method
+from episteme_pipeline.utils.graph_algorithms import (
+    clique_constrained_components,
+)
+from episteme_pipeline.utils.similarity import (
+    cosine_similarity_matrix,
+    csls_similarity_matrix,
+    dynamic_k_effective,
+    z_score_normalize,
+)
 
 logger = logging.getLogger(__name__)
-
-
-def _union_find_components(n: int, edges: list[tuple[int, int]]) -> list[list[int]]:
-    """Compute connected components of a graph using Union-Find.
-
-    Parameters
-    ----------
-    n : int
-        The number of nodes in the graph (indexed from 0 to n-1).
-    edges : list[tuple[int, int]]
-        A list of undirected edges represented as pairs of node indices.
-
-    Returns
-    -------
-    list[list[int]]
-        A list of lists, where each sublist contains the node indices belonging to
-        the same connected component.
-    """
-    parent = list(range(n))
-
-    def find(x: int) -> int:
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    def union(x: int, y: int) -> None:
-        parent[find(x)] = find(y)
-
-    for i, j in edges:
-        union(i, j)
-
-    groups: dict[int, list[int]] = defaultdict(list)
-    for i in range(n):
-        groups[find(i)].append(i)
-    return list(groups.values())
 
 
 class LatentGraphConsolidation(InstanceFusion):
@@ -99,12 +78,32 @@ class LatentGraphConsolidation(InstanceFusion):
         enable_jev_cluster_verification: bool = False,
         merge_confidence_threshold: float = 0.80,
         conformal_merge_alpha: float = 0.05,
+        use_csls: bool = True,
+        csls_k_nearest: int = 10,
+        use_adaptive_k: bool = True,
+        adaptive_k_gamma: float = 2.0,
+        adaptive_k_min: int = 2,
+        max_candidates_per_entity: int = 50,
+        z_score_threshold: float | None = None,
+        min_internal_similarity: float = 0.70,
+        max_diameter: float | None = None,
     ) -> None:
         self.embedding_model = embedding_model
         self.dense_similarity_threshold = dense_similarity_threshold
         self.relation_overlap_threshold = relation_overlap_threshold
         self.borderline_similarity_lower = borderline_similarity_lower
         self.borderline_similarity_upper = borderline_similarity_upper
+        self.merge_confidence_threshold = merge_confidence_threshold
+        self.conformal_merge_alpha = conformal_merge_alpha
+        self.use_csls = use_csls
+        self.csls_k_nearest = csls_k_nearest
+        self.use_adaptive_k = use_adaptive_k
+        self.adaptive_k_gamma = adaptive_k_gamma
+        self.adaptive_k_min = adaptive_k_min
+        self.max_candidates_per_entity = max_candidates_per_entity
+        self.z_score_threshold = z_score_threshold
+        self.min_internal_similarity = min_internal_similarity
+        self.max_diameter = max_diameter
 
         if verifier is not None:
             self.verifier = verifier
@@ -120,9 +119,58 @@ class LatentGraphConsolidation(InstanceFusion):
         if canonical_elector is not None:
             self.canonical_elector = canonical_elector
         elif enable_jev_cluster_verification and decision_engine is not None:
-            self.canonical_elector = CanonicalRepresentativeElector(decision_engine=decision_engine)
+            self.canonical_elector = CanonicalRepresentativeElector(
+                decision_engine=decision_engine
+            )
         else:
             self.canonical_elector = CanonicalRepresentativeElector()
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic consolidation configuration and sub-component fingerprints.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, similarity thresholds, and fingerprints
+            for embedding_model, verifier, and canonical_elector.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "dense_similarity_threshold": self.dense_similarity_threshold,
+            "relation_overlap_threshold": self.relation_overlap_threshold,
+            "borderline_similarity_lower": self.borderline_similarity_lower,
+            "borderline_similarity_upper": self.borderline_similarity_upper,
+            "use_csls": self.use_csls,
+            "csls_k_nearest": self.csls_k_nearest,
+            "use_adaptive_k": self.use_adaptive_k,
+            "adaptive_k_gamma": self.adaptive_k_gamma,
+            "adaptive_k_min": self.adaptive_k_min,
+            "max_candidates_per_entity": self.max_candidates_per_entity,
+            "z_score_threshold": self.z_score_threshold,
+            "min_internal_similarity": self.min_internal_similarity,
+            "max_diameter": self.max_diameter,
+            "merge_confidence_threshold": self.merge_confidence_threshold,
+            "conformal_merge_alpha": self.conformal_merge_alpha,
+            "embedding_model": (
+                self.embedding_model.fingerprint()
+                if isinstance(self.embedding_model, Fingerprintable)
+                else (
+                    fingerprint_method(self.embedding_model)
+                    if self.embedding_model is not None
+                    else None
+                )
+            ),
+            "verifier": (
+                self.verifier.fingerprint()
+                if isinstance(self.verifier, Fingerprintable)
+                else None
+            ),
+            "canonical_elector": (
+                self.canonical_elector.fingerprint()
+                if isinstance(self.canonical_elector, Fingerprintable)
+                else None
+            ),
+        }
 
     @classmethod
     def from_config(
@@ -150,10 +198,12 @@ class LatentGraphConsolidation(InstanceFusion):
         verifier = None
         canonical_elector = None
         if config.verification.enabled and decision_engine is not None:
-            verifier = BorderlinePairVerifier.from_config(config.verification, decision_engine)
+            verifier = BorderlinePairVerifier.from_config(
+                config.verification, decision_engine
+            )
             canonical_elector = CanonicalRepresentativeElector(
                 decision_engine=decision_engine,
-                prompt_bundle=getattr(config.verification, "canonical_election_prompts", None),
+                prompt_bundle=config.verification.canonical_election_prompts,
             )
 
         return cls(
@@ -164,9 +214,22 @@ class LatentGraphConsolidation(InstanceFusion):
             borderline_similarity_upper=config.verification.similarity_upper,
             verifier=verifier,
             canonical_elector=canonical_elector,
+            merge_confidence_threshold=config.verification.confidence_threshold,
+            conformal_merge_alpha=config.verification.conformal_alpha,
+            use_csls=config.use_csls,
+            csls_k_nearest=config.csls_k_nearest,
+            use_adaptive_k=config.use_adaptive_k,
+            adaptive_k_gamma=config.adaptive_k_gamma,
+            adaptive_k_min=config.adaptive_k_min,
+            max_candidates_per_entity=config.max_candidates_per_entity,
+            z_score_threshold=config.z_score_threshold,
+            min_internal_similarity=config.min_internal_similarity,
+            max_diameter=config.max_diameter,
         )
 
-    async def _get_relations_for_entity(self, entity_id: str, graph_store: FusionGraph) -> set[str]:
+    async def _get_relations_for_entity(
+        self, entity_id: str, graph_store: FusionGraph
+    ) -> set[str]:
         """Fetch the relation signatures for a given entity.
 
         Parameters
@@ -184,7 +247,7 @@ class LatentGraphConsolidation(InstanceFusion):
         env = await graph_store.get_neighborhood(entity_id, depth=1)
         if not env.nodes and not env.triples:
             return set()
-        
+
         signatures = set()
         for t in env.triples:
             if t.subject_id == entity_id:
@@ -210,24 +273,31 @@ class LatentGraphConsolidation(InstanceFusion):
             both sets are empty.
         """
         if not set1 or not set2:
-            # If both are empty, Jaccard is mathematically 1.0, but semantically 
+            # If both are empty, Jaccard is mathematically 1.0, but semantically
             # we return 0.0 for graph merging (isolated nodes aren't automatically identical).
             return 0.0
         intersection = len(set1.intersection(set2))
         union = len(set1.union(set2))
         return float(intersection) / union
 
-    async def fuse(self, graph_store: FusionGraph) -> dict[str, str]:
+    async def fuse(
+        self,
+        graph_store: FusionGraph,
+        curation_ledger: EpistemicCurationLedger | None = None,
+    ) -> dict[str, str]:
         """Find and merge duplicate Layer 2 nodes in the graph.
 
         Finds groups of entities with the same label that meet both the dense similarity
         threshold and structural relation overlap threshold, then maps duplicates to a
-        canonical entity.
+        canonical entity. Respects axiomatic must-link and cannot-link constraints from
+        an EpistemicCurationLedger.
 
         Parameters
         ----------
         graph_store : FusionGraph
             The graph store containing Layer 2 entities and relation edges.
+        curation_ledger : EpistemicCurationLedger | None, optional
+            Axiomatic human curation constraints (must-link / cannot-link), by default None.
 
         Returns
         -------
@@ -235,7 +305,9 @@ class LatentGraphConsolidation(InstanceFusion):
             A dictionary mapping duplicate entity IDs to their canonical entity ID.
         """
         if self.embedding_model is None:
-            logger.warning("LatentGraphConsolidation: no embedding_model — returning empty map.")
+            logger.warning(
+                "LatentGraphConsolidation: no embedding_model — returning empty map."
+            )
             return {}
 
         entities = await graph_store.get_entities()
@@ -247,15 +319,33 @@ class LatentGraphConsolidation(InstanceFusion):
         embeddings_list = await self.embedding_model.aget_text_embedding_batch(texts)
         embeddings = np.array(embeddings_list)
 
-        # Normalize for cosine similarity via dot product
-        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-        # Avoid division by zero
-        norms[norms == 0] = 1e-10
-        embeddings_normalized = embeddings / norms
-        sim_matrix = np.dot(embeddings_normalized, embeddings_normalized.T)
+        cosine_matrix = cosine_similarity_matrix(embeddings)
+        if self.use_csls:
+            candidate_sim_matrix = csls_similarity_matrix(
+                embeddings, k_nearest=self.csls_k_nearest
+            )
+        else:
+            candidate_sim_matrix = cosine_matrix.copy()
+        constraint_sim_matrix = cosine_matrix.copy()
 
         n = len(entities)
         edges = []
+
+        if self.use_adaptive_k:
+            k_eff = dynamic_k_effective(
+                n=n,
+                k_min=self.adaptive_k_min,
+                k_max=self.max_candidates_per_entity,
+                gamma=self.adaptive_k_gamma,
+            )
+        else:
+            k_eff = self.max_candidates_per_entity
+
+        z_scores = (
+            z_score_normalize(candidate_sim_matrix, symmetric=True)
+            if self.z_score_threshold is not None
+            else None
+        )
 
         definite_threshold = (
             self.borderline_similarity_upper
@@ -263,39 +353,99 @@ class LatentGraphConsolidation(InstanceFusion):
             else self.dense_similarity_threshold
         )
 
+        i_indices, j_indices = np.triu_indices(n, k=1)
+        similarities = candidate_sim_matrix[i_indices, j_indices]
+        sorted_idx = np.argsort(similarities)[::-1]
+        partner_count: dict[int, int] = defaultdict(int)
+
         # 2. Find candidates passing definite threshold or borderline verification
-        for i in range(n):
-            for j in range(i + 1, n):
-                # Only compare entities of the same label
-                if entities[i].label != entities[j].label:
+        for idx in sorted_idx:
+            i = int(i_indices[idx])
+            j = int(j_indices[idx])
+
+            # EpistemicCurationLedger: Hard cannot-link constraint
+            if curation_ledger is not None and curation_ledger.is_cannot_link(
+                entities[i].id, entities[j].id, entities[i].name, entities[j].name
+            ):
+                constraint_sim_matrix[i, j] = -1.0
+                constraint_sim_matrix[j, i] = -1.0
+                candidate_sim_matrix[i, j] = -1.0
+                candidate_sim_matrix[j, i] = -1.0
+                continue
+
+            # EpistemicCurationLedger: Hard must-link constraint
+            if curation_ledger is not None and curation_ledger.is_must_link(
+                entities[i].id, entities[j].id, entities[i].name, entities[j].name
+            ):
+                constraint_sim_matrix[i, j] = 1.0
+                constraint_sim_matrix[j, i] = 1.0
+                candidate_sim_matrix[i, j] = 1.0
+                candidate_sim_matrix[j, i] = 1.0
+                edges.append((i, j))
+                continue
+
+            # Only compare entities of the same label
+            if entities[i].label != entities[j].label:
+                continue
+
+            if self.z_score_threshold is not None and z_scores is not None:  # noqa: SIM102 baseline
+                if float(z_scores[i, j]) < self.z_score_threshold:
                     continue
 
-                sim = float(sim_matrix[i, j])
+            if partner_count[i] >= k_eff or partner_count[j] >= k_eff:
+                continue
 
-                if sim >= definite_threshold:
-                    rel_i = await self._get_relations_for_entity(entities[i].id, graph_store)
-                    rel_j = await self._get_relations_for_entity(entities[j].id, graph_store)
-                    if self._jaccard(rel_i, rel_j) >= self.relation_overlap_threshold:
-                        edges.append((i, j))
-                elif self.verifier is not None and sim >= self.borderline_similarity_lower:
-                    rel_i = await self._get_relations_for_entity(entities[i].id, graph_store)
-                    rel_j = await self._get_relations_for_entity(entities[j].id, graph_store)
-                    selected, emp_acc, pred_set = await self.verifier.verify(
-                        entities[i],
-                        entities[j],
-                        relation_signatures_a=rel_i,
-                        relation_signatures_b=rel_j,
-                    )
-                    is_singleton = (pred_set == ["IDENTICAL_MERGE"])
-                    is_high_conf = (
-                        selected == "IDENTICAL_MERGE"
-                        and emp_acc >= self.verifier.confidence_threshold
-                    )
-                    if is_singleton or is_high_conf:
-                        edges.append((i, j))
+            sim = float(candidate_sim_matrix[i, j])
 
-        # 4. Cluster connected components
-        clusters = _union_find_components(n, edges)
+            if sim >= definite_threshold:
+                partner_count[i] += 1
+                partner_count[j] += 1
+                rel_i = await self._get_relations_for_entity(
+                    entities[i].id, graph_store
+                )
+                rel_j = await self._get_relations_for_entity(
+                    entities[j].id, graph_store
+                )
+                if self._jaccard(rel_i, rel_j) >= self.relation_overlap_threshold:
+                    edges.append((i, j))
+            elif self.verifier is not None and sim >= self.borderline_similarity_lower:
+                partner_count[i] += 1
+                partner_count[j] += 1
+                rel_i = await self._get_relations_for_entity(
+                    entities[i].id, graph_store
+                )
+                rel_j = await self._get_relations_for_entity(
+                    entities[j].id, graph_store
+                )
+                selected, emp_acc, pred_set = await self.verifier.verify(
+                    entities[i],
+                    entities[j],
+                    relation_signatures_a=rel_i,
+                    relation_signatures_b=rel_j,
+                )
+                is_singleton = pred_set == ["IDENTICAL_MERGE"]
+                is_high_conf = (
+                    selected == "IDENTICAL_MERGE"
+                    and emp_acc >= self.verifier.confidence_threshold
+                    and len(pred_set) <= 1
+                )
+                if is_singleton or is_high_conf:
+                    edges.append((i, j))
+                else:
+                    constraint_sim_matrix[i, j] = -1.0
+                    constraint_sim_matrix[j, i] = -1.0
+                    candidate_sim_matrix[i, j] = -1.0
+                    candidate_sim_matrix[j, i] = -1.0
+
+        # 4. Cluster connected components with clique constraints on raw cosine matrix
+        #    to prevent single-linkage chaining and enforce rejected pair prohibitions
+        clusters = clique_constrained_components(
+            n,
+            edges,
+            constraint_sim_matrix,
+            min_internal_similarity=self.min_internal_similarity,
+            max_diameter=self.max_diameter,
+        )
 
         # 5. Build fused map
         fused_map: dict[str, str] = {}

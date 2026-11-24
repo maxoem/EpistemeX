@@ -28,7 +28,6 @@ def test_silence_noisy_loggers_default() -> None:
             assert logging.getLogger(name).level == logging.WARNING
 
 
-
 def test_silence_noisy_loggers_custom_level_and_extras() -> None:
     """Test configuring noisy loggers to a custom level (e.g. DEBUG) and adding extra loggers."""
     extra = ["custom_noisy_lib", "another_noisy_lib"]

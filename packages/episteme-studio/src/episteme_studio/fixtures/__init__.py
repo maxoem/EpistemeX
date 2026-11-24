@@ -19,7 +19,7 @@ def get_fixtures_dir() -> Path:
     try:
         ref = importlib.resources.files("episteme_studio") / "fixtures"
         return Path(str(ref))
-    except Exception:
+    except Exception:  # noqa: BLE001 baseline
         return Path(__file__).parent
 
 

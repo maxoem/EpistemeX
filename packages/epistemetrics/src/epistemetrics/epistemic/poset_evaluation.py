@@ -85,12 +85,8 @@ class PosetEvaluationResult(BaseModel):
     hierarchical_subsumption_valid: bool = Field(
         ..., description="Whether all specialization edges satisfy subsumption."
     )
-    precision: float = Field(
-        ..., description="Poset transitive reduction precision."
-    )
-    recall: float = Field(
-        ..., description="Poset transitive reduction recall."
-    )
+    precision: float = Field(..., description="Poset transitive reduction precision.")
+    recall: float = Field(..., description="Poset transitive reduction recall.")
     f1: float = Field(..., description="Poset transitive reduction F1 score.")
     reachability_precision: float = Field(
         default=1.0, description="Reachability path precision."
@@ -132,9 +128,13 @@ class PosetEvaluationResult(BaseModel):
         str
             GitHub-flavored Markdown report.
         """
-        status_dag = "✅ PASSED (Acyclic DAG)" if self.is_dag else "❌ FAILED (Cycles Detected)"
-        status_root = "✅ PASSED" if self.root_conformity else "❌ FAILED"
-        status_subsume = "✅ PASSED" if self.hierarchical_subsumption_valid else "❌ FAILED"
+        status_dag = (
+            "☼ PASSED (Acyclic DAG)" if self.is_dag else "❌ FAILED (Cycles Detected)"
+        )
+        status_root = "☼ PASSED" if self.root_conformity else "❌ FAILED"
+        status_subsume = (
+            "☼ PASSED" if self.hierarchical_subsumption_valid else "❌ FAILED"
+        )
 
         lines = [
             "# Specialization Poset Hierarchy Evaluation Report",
@@ -209,12 +209,16 @@ def extract_specialization_subgraph(graph: Any) -> nx.DiGraph:
 
         if graph.is_multigraph():
             for u, v, _k, data in graph.edges(keys=True, data=True):
-                rel = data.get("relation_type", data.get("relation", data.get("label", "")))
+                rel = data.get(
+                    "relation_type", data.get("relation", data.get("label", ""))
+                )
                 if _is_specialization_edge(rel):
                     spec_graph.add_edge(str(u), str(v), **data)
         else:
             for u, v, data in graph.edges(data=True):
-                rel = data.get("relation_type", data.get("relation", data.get("label", "")))
+                rel = data.get(
+                    "relation_type", data.get("relation", data.get("label", ""))
+                )
                 if _is_specialization_edge(rel):
                     spec_graph.add_edge(str(u), str(v), **data)
 
@@ -285,7 +289,7 @@ def verify_strict_partial_order(graph: nx.DiGraph) -> tuple[bool, list[list[str]
     # Extract elementary cycles for diagnostics
     try:
         cycles = list(nx.simple_cycles(graph))
-    except Exception:
+    except Exception:  # noqa: BLE001 baseline
         cycles = [["detected_cycle"]]
 
     return False, cycles
@@ -486,10 +490,16 @@ def check_hierarchical_subsumption(
                     node_potential_models[str(nid)].add(str(m))
 
         for u, v, data in graph.edges(data=True):
-            rel = str(data.get("relation_type", data.get("relation", data.get("label", ""))))
+            rel = str(
+                data.get("relation_type", data.get("relation", data.get("label", "")))
+            )
             if rel in {"hasActualModel", "HAS_ACTUAL_MODEL", "has_actual_model"}:
                 node_actual_models.setdefault(str(u), set()).add(str(v))
-            elif rel in {"hasPotentialModel", "HAS_POTENTIAL_MODEL", "has_potential_model"}:
+            elif rel in {
+                "hasPotentialModel",
+                "HAS_POTENTIAL_MODEL",
+                "has_potential_model",
+            }:
                 node_potential_models.setdefault(str(u), set()).add(str(v))
 
     passed_count = 0
@@ -506,7 +516,9 @@ def check_hierarchical_subsumption(
         # Syntactically: child has laws that restrict parent.
         # Either child declares distinct specialized laws (c_act != empty, or c_act != p_act)
         # or cumulative laws expand.
-        has_specializing_laws = len(c_act) > 0 or "formalAxiom" in node_attrs.get(child_id, {})
+        has_specializing_laws = len(c_act) > 0 or "formalAxiom" in node_attrs.get(
+            child_id, {}
+        )
 
         # Check potential models:
         # Conceptual base sets/signatures: child framework is compatible with parent framework
@@ -532,7 +544,7 @@ def check_hierarchical_subsumption(
         )
 
     score = float(passed_count) / float(len(spec_edges)) if spec_edges else 1.0
-    valid = (score == 1.0)
+    valid = score == 1.0
     details = {
         "total_edges": len(spec_edges),
         "passed_edges": passed_count,
@@ -588,7 +600,9 @@ def evaluate_specialization_poset(
 
     # Verify Root Element Conformity: B(TN_pred) = {T_{0, gold}}
     if gold_root_id is not None:
-        mapped_root = (node_mapping or {}).get(root_node, root_node) if root_node else None
+        mapped_root = (
+            (node_mapping or {}).get(root_node, root_node) if root_node else None
+        )
         root_conformity = has_unique_root and (
             mapped_root == gold_root_id or root_node == gold_root_id
         )

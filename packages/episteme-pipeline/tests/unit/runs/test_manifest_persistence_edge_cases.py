@@ -18,16 +18,16 @@ class TestManifestPersistenceEdgeCases:
             # Create a deeply nested path that doesn't exist
             runs_dir = Path(temp_dir) / "very" / "deeply" / "nested" / "pipeline_runs"
             assert not runs_dir.exists()
-            
+
             store = JsonRunManifestStore(runs_dir)
-            
+
             # Directory should be created
             assert runs_dir.exists()
-            
+
             # Writing should work
             manifest = RunManifest(run_id="test-nested-789")
             path = store.write_manifest(manifest)
-            
+
             assert path.exists()
             assert path.name == "test-nested-789.json"
 
@@ -35,18 +35,18 @@ class TestManifestPersistenceEdgeCases:
         """Test that write_manifest handles directory creation issues gracefully."""
         with tempfile.TemporaryDirectory() as temp_dir:
             runs_dir = Path(temp_dir) / ".pipeline_runs"
-            
+
             # Create the store normally first
             store = JsonRunManifestStore(runs_dir)
             assert runs_dir.exists()
-            
+
             # Create a manifest
             manifest = RunManifest(run_id="perm-test-123")
-            
+
             # Writing should succeed normally
             path = store.write_manifest(manifest)
             assert path.exists()
-            
+
             # Verify we can read it back
             read_manifest = store.read_manifest("perm-test-123")
             assert read_manifest is not None
@@ -57,17 +57,17 @@ class TestManifestPersistenceEdgeCases:
         with tempfile.TemporaryDirectory() as temp_dir:
             runs_dir = Path(temp_dir) / ".pipeline_runs"
             store = JsonRunManifestStore(runs_dir)
-            
+
             # Create a minimal manifest that would represent a run with no artifacts
             manifest = RunManifest(
                 run_id="minimal-run",
                 status=RunStatus.COMPLETED,
             )
-            
+
             # Should be able to write and read this manifest
             path = store.write_manifest(manifest)
             assert path.exists()
-            
+
             read_manifest = store.read_manifest("minimal-run")
             assert read_manifest is not None
             assert read_manifest.run_id == "minimal-run"
@@ -78,7 +78,7 @@ class TestManifestPersistenceEdgeCases:
         with tempfile.TemporaryDirectory() as temp_dir:
             runs_dir = Path(temp_dir) / ".pipeline_runs"
             store = JsonRunManifestStore(runs_dir)
-            
+
             # Create a report that would represent a run with no artifacts
             RunReport(
                 run_id="empty-report-run",
@@ -90,20 +90,19 @@ class TestManifestPersistenceEdgeCases:
                 reused_artifact_counts_by_kind={},
                 reused_artifact_counts_by_phase={},
             )
-            
+
             # For this test, we're really checking that our persistence works,
             # but note that RunReport isn't directly persisted - only RunManifest is
-            
+
             # Create corresponding manifest
             manifest = RunManifest(
                 run_id="empty-report-run",
                 status=RunStatus.COMPLETED,
-            ) 
-            
+            )
+
             # Should be able to write and read the manifest
             path = store.write_manifest(manifest)
             assert path.exists()
-            
+
             read_manifest = store.read_manifest("empty-report-run")
             assert read_manifest is not None
-

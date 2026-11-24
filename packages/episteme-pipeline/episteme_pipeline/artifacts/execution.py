@@ -1,15 +1,35 @@
+"""Artifact collection, cumulative epistemic state views, and phase execution context.
+
+Implements:
+- Identity-keyed versioning (last-write-wins per ``identity_key``) in
+  :class:`ArtifactCollection` while preserving full append-only ``history``.
+- Canonical L2 entity and triple resolution from :class:`CanonicalizationArtifact`
+  envelopes emitted by Phase 3b.
+- Canonical L3 theory atom and relation resolution from :class:`FusionDecisionArtifact`
+  envelopes emitted by Phase 5.
+- Cumulative :class:`EpistemicStateView` hierarchy (:class:`Phase1ArtifactsView`
+  through :class:`Phase4ArtifactsView`) with explicit ``consumed_artifact_ids``
+  lineage tracking and :meth:`~EpistemicStateView.to_graph_reader` factory.
+"""
+
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, ClassVar
 
 from episteme_pipeline.artifacts.builders import parse_mention_id
 from episteme_pipeline.artifacts.models import (
     ArtifactEnvelope,
     ArtifactKind,
     ArtifactPayload,
+    CanonicalizationArtifact,
     ChunkArtifact,
     DocumentArtifact,
     EntityMentionArtifact,
+    EpistemicDeficitArtifact,
+    FusionDecisionArtifact,
     GlobalRelationArtifact,
     LinkedEntityArtifact,
     LocalRelationArtifact,
@@ -17,7 +37,11 @@ from episteme_pipeline.artifacts.models import (
     TheoryAtomArtifact,
     TheoryRelationArtifact,
 )
+from episteme_pipeline.artifacts.subgraph_reader import ArtifactSubgraphReader
 from episteme_pipeline.contracts.domain import (
+    CandidatePair,
+    EntityConception,
+    EpistemicDeficit,
     L1Chunk,
     L1Document,
     L2Entity,
@@ -25,234 +49,1068 @@ from episteme_pipeline.contracts.domain import (
     TheoryAtom,
     TheoryRelation,
 )
-from episteme_pipeline.contracts.phase_contracts import PipelineInput
+from episteme_pipeline.contracts.phase_contracts import (
+    CURATION_LEDGER_RESOLVER_TYPE,
+    PipelineInput,
+)
+from episteme_pipeline.runs.fingerprints import is_phase_unchanged
 from episteme_pipeline.runs.models import RunManifest
 
 
-@dataclass(slots=True)
+def _strip_artifact_prefix(raw_id: str) -> str:
+    """Strip ``artifact::...::`` or ``artifact::`` prefixes from an ID string.
+
+    Parameters
+    ----------
+    raw_id : str
+        Artifact or domain identifier.
+
+    Returns
+    -------
+    str
+        Normalized domain identifier.
+    """
+    for prefix in (
+        "artifact::theory-atom::",
+        "artifact::argument_component::",
+        "artifact::linked_entity::",
+        "artifact::",
+    ):
+        if raw_id.startswith(prefix):
+            return raw_id[len(prefix) :]
+    return raw_id
+
+
+def _resolve_alias_chain(node_id: str, alias_map: dict[str, str]) -> str:
+    """Follow transitive canonicalization mappings with cycle protection.
+
+    Parameters
+    ----------
+    node_id : str
+        Starting entity or atom identifier.
+    alias_map : dict of str to str
+        Mapping from merged alias ID to canonical target ID.
+
+    Returns
+    -------
+    str
+        Resolved canonical identifier.
+    """
+    visited: set[str] = set()
+    curr = node_id
+    while curr in alias_map and curr not in visited:
+        visited.add(curr)
+        curr = alias_map[curr]
+    return curr
+
+
 class ArtifactCollection:
-    artifacts: list[ArtifactEnvelope[ArtifactPayload]]
+    """Collection of artifact envelopes maintaining history and identity-keyed lookup.
 
-    def of_kind(self, *kinds: ArtifactKind) -> list[ArtifactEnvelope[ArtifactPayload]]:
+    Parameters
+    ----------
+    artifacts : Iterable of ArtifactEnvelope, optional
+        Initial sequence of artifact envelopes.
+    """
+
+    __slots__ = ("history", "latest_by_identity")
+
+    def __init__(
+        self, artifacts: Iterable[ArtifactEnvelope[ArtifactPayload]] = ()
+    ) -> None:
+        self.history: list[ArtifactEnvelope[ArtifactPayload]] = list(artifacts)
+        self.latest_by_identity: dict[str, ArtifactEnvelope[ArtifactPayload]] = {}
+        for artifact in self.history:
+            key = artifact.identity_key or artifact.artifact_id
+            self.latest_by_identity[key] = artifact
+
+    @property
+    def artifacts(self) -> list[ArtifactEnvelope[ArtifactPayload]]:
+        """Return the append-only history of artifact envelopes.
+
+        Returns
+        -------
+        list of ArtifactEnvelope
+            All envelopes added to this collection in emission order.
+        """
+        return self.history
+
+    @artifacts.setter
+    def artifacts(self, value: Iterable[ArtifactEnvelope[ArtifactPayload]]) -> None:
+        self.history = list(value)
+        self.latest_by_identity = {
+            (a.identity_key or a.artifact_id): a for a in self.history
+        }
+
+    def __len__(self) -> int:
+        """Return the number of artifact envelopes in ``history``.
+
+        Returns
+        -------
+        int
+            Count of envelopes in history.
+        """
+        return len(self.history)
+
+    def __iter__(self) -> Iterator[ArtifactEnvelope[ArtifactPayload]]:
+        """Iterate over the artifact envelopes in ``history``.
+
+        Returns
+        -------
+        Iterator of ArtifactEnvelope
+            Iterator over envelopes.
+        """
+        return iter(self.history)
+
+    def __getitem__(self, index: int) -> ArtifactEnvelope[ArtifactPayload]:
+        """Index into the artifact collection history.
+
+        Parameters
+        ----------
+        index : int
+            Position index.
+
+        Returns
+        -------
+        ArtifactEnvelope
+            Artifact envelope at ``index``.
+        """
+        return self.history[index]
+
+    def of_kind(
+        self, *kinds: ArtifactKind, latest_only: bool = True
+    ) -> list[ArtifactEnvelope[ArtifactPayload]]:
+        """Return artifact envelopes matching ``kinds``.
+
+        Parameters
+        ----------
+        *kinds : ArtifactKind
+            Target artifact kinds to filter by.
+        latest_only : bool, default True
+            When ``True`` (default), returns only the most recently emitted
+            envelope per ``identity_key`` (last-write-wins). When ``False``,
+            returns all matching envelopes from ``history``.
+
+        Returns
+        -------
+        list of ArtifactEnvelope
+            Filtered artifact envelopes.
+        """
         allowed = set(kinds)
-        return [artifact for artifact in self.artifacts if artifact.kind in allowed]
+        source: Iterable[ArtifactEnvelope[ArtifactPayload]] = (
+            self.latest_by_identity.values() if latest_only else self.history
+        )
+        return [artifact for artifact in source if artifact.kind in allowed]
 
 
-@dataclass(slots=True)
-class Phase1ArtifactsView:
-    _allowed_kinds = (ArtifactKind.DOCUMENT, ArtifactKind.CHUNK)
+def _extract_l1_state(
+    collection: ArtifactCollection,
+) -> tuple[list[L1Document], list[L1Chunk], list[str]]:
+    """Hydrate Phase 1 documents and chunks along with consumed artifact IDs."""
+    documents: list[L1Document] = []
+    chunks: list[L1Chunk] = []
+    consumed_ids: list[str] = []
 
-    documents: list[L1Document]
-    chunks: list[L1Chunk]
-
-    @classmethod
-    def from_collection(cls, collection: ArtifactCollection) -> Phase1ArtifactsView:
-        documents: list[L1Document] = []
-        chunks: list[L1Chunk] = []
-        for artifact in collection.of_kind(*cls._allowed_kinds):
-            payload = artifact.payload
-            if artifact.kind == ArtifactKind.DOCUMENT and isinstance(
-                payload, DocumentArtifact
-            ):
-                documents.append(
-                    L1Document(
-                        id=payload.document_id,
-                        title=payload.title,
-                        source_path=payload.source_path,
-                        ingested_at=payload.ingested_at,
-                        chapter_count=int(payload.metadata.get("chapter_count", "0")),
-                        chunk_count=int(payload.metadata.get("chunk_count", "0")),
-                        structural_anchor=payload.structural_anchor,
-                        metadata=payload.metadata,
-                    )
-                )
-            elif artifact.kind == ArtifactKind.CHUNK and isinstance(
-                payload, ChunkArtifact
-            ):
-                chunks.append(
-                    L1Chunk(
-                        id=payload.chunk_id,
-                        text=payload.text,
-                        source_doc_id=payload.document_id,
-                        chapter_id=payload.chapter_id,
-                        sequence_index=payload.sequence_index,
-                        token_count=payload.token_count,
-                    )
-                )
-        return cls(documents=documents, chunks=chunks)
+    for artifact in collection.of_kind(
+        ArtifactKind.DOCUMENT, ArtifactKind.CHUNK, latest_only=True
+    ):
+        consumed_ids.append(artifact.artifact_id)
+        payload = artifact.payload
+        if artifact.kind == ArtifactKind.DOCUMENT and isinstance(
+            payload, DocumentArtifact
+        ):
+            documents.append(payload.to_domain())
+        elif artifact.kind == ArtifactKind.CHUNK and isinstance(payload, ChunkArtifact):
+            chunks.append(payload.to_domain())
+    return documents, chunks, consumed_ids
 
 
-@dataclass(slots=True)
-class Phase2ArtifactsView:
-    _allowed_kinds = (
+def _collect_retired_entity_ids(
+    envelopes: Iterable[ArtifactEnvelope[ArtifactPayload]],
+    alias_map: dict[str, str],
+) -> set[str]:
+    """Return canonical and raw entity IDs marked retired in ``envelopes``."""
+    retired: set[str] = set()
+    for artifact in envelopes:
+        if artifact.kind == ArtifactKind.LINKED_ENTITY and isinstance(  # noqa: SIM102 baseline
+            artifact.payload, LinkedEntityArtifact
+        ):
+            if artifact.payload.is_retired:
+                retired.add(artifact.payload.entity_id)
+                retired.add(_resolve_alias_chain(artifact.payload.entity_id, alias_map))
+    return retired
+
+
+def _extract_l2_state(
+    collection: ArtifactCollection,
+) -> tuple[
+    list[L2Entity],
+    list[L2Triple],
+    dict[str, int],
+    dict[str, list[str]],
+    dict[str, list[dict[str, str]]],
+    dict[str, str],
+    list[str],
+]:
+    """Hydrate and canonicalize Phase 2 / 3b / 4-maturation L2 state."""
+    consumed_ids: list[str] = []
+    alias_map: dict[str, str] = {}
+
+    for canon_art in collection.of_kind(
+        ArtifactKind.CANONICALIZATION, latest_only=True
+    ):
+        consumed_ids.append(canon_art.artifact_id)
+        payload = canon_art.payload
+        if isinstance(payload, CanonicalizationArtifact):
+            canon_id = _strip_artifact_prefix(payload.canonical_id)
+            for orig_id in payload.original_artifact_ids:
+                clean_orig = _strip_artifact_prefix(orig_id)
+                if clean_orig and clean_orig != canon_id:
+                    alias_map[clean_orig] = canon_id
+
+    mention_chunk_ids_by_entity: dict[str, list[str]] = {}
+    entity_envelopes_by_id: dict[str, list[str]] = {}
+    entity_mentions_by_id: dict[str, list[dict[str, str]]] = {}
+
+    l2_envelopes = collection.of_kind(
         ArtifactKind.ENTITY_MENTION,
         ArtifactKind.LINKED_ENTITY,
         ArtifactKind.LOCAL_RELATION,
+        latest_only=True,
+    )
+    retired_entity_ids = _collect_retired_entity_ids(l2_envelopes, alias_map)
+
+    for artifact in l2_envelopes:
+        if artifact.kind == ArtifactKind.ENTITY_MENTION and isinstance(
+            artifact.payload, EntityMentionArtifact
+        ):
+            consumed_ids.append(artifact.artifact_id)
+            payload = artifact.payload
+            if payload.is_retired:
+                continue
+            raw_eid, parsed_cid = parse_mention_id(payload.mention_id)
+            eid = payload.entity_id or raw_eid
+            cid = payload.chunk_id or parsed_cid
+            canon_eid = _resolve_alias_chain(eid, alias_map)
+            if eid in retired_entity_ids or canon_eid in retired_entity_ids:
+                continue
+
+            if cid:
+                cids = mention_chunk_ids_by_entity.setdefault(canon_eid, [])
+                if cid not in cids:
+                    cids.append(cid)
+            if payload.textual_envelope:
+                envs = entity_envelopes_by_id.setdefault(canon_eid, [])
+                if payload.textual_envelope not in envs:
+                    envs.append(payload.textual_envelope)
+            recs = entity_mentions_by_id.setdefault(canon_eid, [])
+            mention_rec = {
+                "mention_id": f"mention::{canon_eid}::{cid}"
+                if cid
+                else payload.mention_id,
+                "chunk_id": cid,
+            }
+            if payload.textual_envelope:
+                mention_rec["textual_envelope"] = payload.textual_envelope
+            if mention_rec not in recs:
+                recs.append(mention_rec)
+
+    raw_entities: list[L2Entity] = []
+    raw_local_triples: list[L2Triple] = []
+
+    for artifact in l2_envelopes:
+        payload = artifact.payload
+        if artifact.kind == ArtifactKind.LINKED_ENTITY and isinstance(
+            payload, LinkedEntityArtifact
+        ):
+            consumed_ids.append(artifact.artifact_id)
+            if not payload.is_retired:
+                raw_entities.append(payload.to_domain())
+        elif artifact.kind == ArtifactKind.LOCAL_RELATION and isinstance(
+            payload, LocalRelationArtifact
+        ):
+            consumed_ids.append(artifact.artifact_id)
+            raw_local_triples.append(payload.to_domain())
+
+    # Group and canonicalize entities via alias_map
+    grouped_entities: dict[str, list[L2Entity]] = {}
+    for entity in raw_entities:
+        canon_id = _resolve_alias_chain(entity.id, alias_map)
+        grouped_entities.setdefault(canon_id, []).append(entity)
+
+    canonical_entities: list[L2Entity] = []
+    entity_count_by_type: dict[str, int] = {}
+
+    for canon_id, group in grouped_entities.items():
+        # Prefer the representative whose ID already equals canon_id
+        rep = next((e for e in group if e.id == canon_id), group[0])
+        merged_chunks: list[str] = []
+        for member in group:
+            for cid in member.source_chunk_ids:
+                if cid not in merged_chunks:
+                    merged_chunks.append(cid)
+            if member.textual_envelope:
+                envs = entity_envelopes_by_id.setdefault(canon_id, [])
+                if member.textual_envelope not in envs:
+                    envs.append(member.textual_envelope)
+        for cid in mention_chunk_ids_by_entity.get(canon_id, []):
+            if cid not in merged_chunks:
+                merged_chunks.append(cid)
+
+        description = rep.description or next(
+            (m.description for m in group if m.description), None
+        )
+        textual_envelope = rep.textual_envelope or next(
+            (m.textual_envelope for m in group if m.textual_envelope), None
+        )
+        if not textual_envelope and entity_envelopes_by_id.get(canon_id):
+            textual_envelope = entity_envelopes_by_id[canon_id][0]
+
+        is_mature = any(m.is_mature for m in group)
+        conf_vals = [m.confidence for m in group if m.confidence is not None]
+        max_conf = max(conf_vals) if conf_vals else rep.confidence
+
+        merged_conceptions_by_id: dict[str, EntityConception] = {}
+        for c in rep.conceptions:
+            merged_conceptions_by_id[c.id] = c
+        for member in group:
+            for c in member.conceptions:
+                if c.id not in merged_conceptions_by_id:
+                    merged_conceptions_by_id[c.id] = c
+        polysemy_variance = (
+            rep.polysemy_variance
+            if rep.polysemy_variance is not None
+            else next(
+                (m.polysemy_variance for m in group if m.polysemy_variance is not None),
+                None,
+            )
+        )
+
+        canon_entity = rep.model_copy(
+            update={
+                "id": canon_id,
+                "source_chunk_ids": merged_chunks,
+                "description": description,
+                "textual_envelope": textual_envelope,
+                "is_mature": is_mature,
+                "confidence": max_conf,
+                "conceptions": list(merged_conceptions_by_id.values()),
+                "polysemy_variance": polysemy_variance,
+            }
+        )
+        canonical_entities.append(canon_entity)
+        entity_count_by_type[canon_entity.label] = (
+            entity_count_by_type.get(canon_entity.label, 0) + 1
+        )
+
+    canonical_local_triples = _canonicalize_triples(
+        raw_local_triples,
+        alias_map,
+        retired_entity_ids=retired_entity_ids,
+    )
+    return (
+        canonical_entities,
+        canonical_local_triples,
+        entity_count_by_type,
+        entity_envelopes_by_id,
+        entity_mentions_by_id,
+        alias_map,
+        consumed_ids,
     )
 
-    entities: list[L2Entity]
-    local_triples: list[L2Triple]
-    entity_count_by_type: dict[str, int]
+
+def _canonicalize_triples(
+    triples: list[L2Triple],
+    alias_map: dict[str, str],
+    *,
+    retired_entity_ids: set[str] | frozenset[str] = frozenset(),
+) -> list[L2Triple]:
+    """Rewrite triple endpoints via ``alias_map``, drop retired endpoints, and deduplicate."""
+    if not alias_map and not retired_entity_ids:
+        return list(triples)
+
+    deduped: dict[tuple[str, str, str, str, str | None], L2Triple] = {}
+    for triple in triples:
+        new_subj = _resolve_alias_chain(triple.subject_id, alias_map)
+        new_obj = _resolve_alias_chain(triple.object_id, alias_map)
+        if new_subj in retired_entity_ids or new_obj in retired_entity_ids:
+            continue
+        # Drop self-loops induced by merging two distinct alias entities
+        if triple.subject_id != triple.object_id and new_subj == new_obj:
+            continue
+        rewritten = (
+            triple.model_copy(update={"subject_id": new_subj, "object_id": new_obj})
+            if (new_subj != triple.subject_id or new_obj != triple.object_id)
+            else triple
+        )
+        key = (
+            rewritten.subject_id,
+            rewritten.predicate,
+            rewritten.object_id,
+            rewritten.scope,
+            rewritten.source_chunk_id if rewritten.scope == "local" else None,
+        )
+        existing = deduped.get(key)
+        if existing is None:
+            deduped[key] = rewritten
+        else:
+            t_confs = [
+                c for c in (existing.confidence, rewritten.confidence) if c is not None
+            ]
+            best_conf = max(t_confs) if t_confs else existing.confidence
+            reranks = [
+                r
+                for r in (existing.rerank_score, rewritten.rerank_score)
+                if r is not None
+            ]
+            best_rerank = max(reranks) if reranks else None
+            deduped[key] = existing.model_copy(
+                update={"confidence": best_conf, "rerank_score": best_rerank}
+            )
+    return list(deduped.values())
+
+
+def _resolve_l3_atoms_and_relations(
+    theory_atoms: list[TheoryAtom],
+    theory_relations: list[TheoryRelation],
+    fusion_decisions: list[FusionDecisionArtifact],
+) -> tuple[list[TheoryAtom], list[TheoryRelation]]:
+    """Apply Phase 5 ``FusionDecisionArtifact`` decisions to produce canonical L3 graph.
+
+    Parameters
+    ----------
+    theory_atoms : list of TheoryAtom
+        Raw theory atoms from Phase 4 / 6.
+    theory_relations : list of TheoryRelation
+        Raw theory relations from Phase 4 / 6.
+    fusion_decisions : list of FusionDecisionArtifact
+        Cluster and merge decisions from Phase 5.
+
+    Returns
+    -------
+    tuple of (list of TheoryAtom, list of TheoryRelation)
+        Canonicalized theory atoms and theory relations.
+    """
+    if not fusion_decisions:
+        return list(theory_atoms), list(theory_relations)
+
+    atom_alias_map: dict[str, str] = {}
+    for decision in fusion_decisions:
+        if decision.decision_type not in ("cluster", "merge"):
+            continue
+        clean_ids = [
+            _strip_artifact_prefix(aid)
+            for aid in decision.artifact_ids
+            if _strip_artifact_prefix(aid)
+        ]
+        if len(clean_ids) < 2:
+            continue
+        canon_id = (
+            _strip_artifact_prefix(decision.canonical_artifact_id)
+            if decision.canonical_artifact_id
+            else clean_ids[0]
+        )
+        for member_id in clean_ids:
+            if member_id != canon_id:
+                atom_alias_map[member_id] = canon_id
+
+    if not atom_alias_map:
+        return list(theory_atoms), list(theory_relations)
+
+    grouped_atoms: dict[str, list[TheoryAtom]] = {}
+    for atom in theory_atoms:
+        canon_id = _resolve_alias_chain(atom.id, atom_alias_map)
+        grouped_atoms.setdefault(canon_id, []).append(atom)
+
+    canonical_atoms: list[TheoryAtom] = []
+    effective_alias_map: dict[str, str] = {}
+    for canon_id, group in grouped_atoms.items():
+        primary_rep = next((a for a in group if a.id == canon_id), group[0])
+        primary_scope = (
+            primary_rep.intensional_mode,
+            (primary_rep.attributed_to or "").strip().lower(),
+        )
+        scoped_subgroups: dict[tuple[str, str], list[TheoryAtom]] = {}
+        for member in group:
+            skey = (
+                member.intensional_mode,
+                (member.attributed_to or "").strip().lower(),
+            )
+            scoped_subgroups.setdefault(skey, []).append(member)
+
+        for skey, subgroup in scoped_subgroups.items():
+            sub_canon_id = canon_id if skey == primary_scope else subgroup[0].id
+            rep = next((a for a in subgroup if a.id == sub_canon_id), subgroup[0])
+            for member in subgroup:
+                if member.id != sub_canon_id:
+                    effective_alias_map[member.id] = sub_canon_id
+
+            if len(subgroup) == 1 and rep.id == sub_canon_id:
+                canonical_atoms.append(rep)
+                continue
+
+            merged_entity_ids: list[str] = []
+            merged_measurements = list(rep.measurements)
+            merged_parameters: dict[str, Any] = dict(rep.parameters)
+            for member in subgroup:
+                for eid in member.entity_ids:
+                    if eid not in merged_entity_ids:
+                        merged_entity_ids.append(eid)
+                for meas in member.measurements:
+                    if meas not in merged_measurements:
+                        merged_measurements.append(meas)
+                for pk, pv in member.parameters.items():
+                    merged_parameters.setdefault(pk, pv)
+
+            conf_vals = [m.confidence for m in subgroup if m.confidence is not None]
+            max_conf = max(conf_vals) if conf_vals else rep.confidence
+            curated_modals = [
+                m.modal_prior
+                for m in subgroup
+                if m.resolver_type == CURATION_LEDGER_RESOLVER_TYPE
+                and m.modal_prior is not None
+            ]
+            resolved_members = [
+                m
+                for m in subgroup
+                if (m.resolver_type is not None or m.equilibrium_strength is not None)
+                and m.modal_prior is not None
+            ]
+            if curated_modals:
+                max_modal = curated_modals[0]
+                resolved_resolver_type = CURATION_LEDGER_RESOLVER_TYPE
+            elif resolved_members:
+                chosen = rep if rep in resolved_members else resolved_members[0]
+                max_modal = chosen.modal_prior
+                resolved_resolver_type = chosen.resolver_type
+            else:
+                modal_vals = [
+                    m.modal_prior for m in subgroup if m.modal_prior is not None
+                ]
+                max_modal = max(modal_vals) if modal_vals else rep.modal_prior
+                resolved_resolver_type = rep.resolver_type
+            tenabilities = [m.tenability for m in subgroup if m.tenability is not None]
+            tenability = (
+                min(tenabilities, key=lambda t: t.local_score)
+                if tenabilities
+                else rep.tenability
+            )
+            local_ts_vals = [
+                m.local_tenability for m in subgroup if m.local_tenability is not None
+            ]
+            if tenabilities:
+                local_ts_vals.extend(t.local_score for t in tenabilities)
+            local_ts = min(local_ts_vals) if local_ts_vals else rep.local_tenability
+
+            eq_vals = [
+                m.equilibrium_strength
+                for m in subgroup
+                if m.equilibrium_strength is not None
+            ]
+            if eq_vals:
+                best_eq = (
+                    min(eq_vals)
+                    if (local_ts is not None and local_ts < 1.0)
+                    else max(eq_vals)
+                )
+            else:
+                best_eq = rep.equilibrium_strength
+
+            attributed_to = rep.attributed_to or next(
+                (m.attributed_to for m in subgroup if m.attributed_to),
+                None,
+            )
+            canonical_atoms.append(
+                rep.model_copy(
+                    update={
+                        "id": sub_canon_id,
+                        "entity_ids": merged_entity_ids,
+                        "measurements": merged_measurements,
+                        "parameters": merged_parameters,
+                        "confidence": max_conf,
+                        "equilibrium_strength": best_eq,
+                        "modal_prior": max_modal,
+                        "resolver_type": resolved_resolver_type,
+                        "local_tenability": local_ts,
+                        "tenability": tenability,
+                        "intensional_mode": rep.intensional_mode,
+                        "attributed_to": attributed_to,
+                    }
+                )
+            )
+
+    # First pass: rewrite atom-level endpoints (`source_id`, `premise_ids`, `target_id`)
+    # and record canonical relation ID shifts when atom merges alter a relation's canonical ID.
+    preliminary_relations: list[tuple[TheoryRelation, str]] = []
+    rel_id_alias_map: dict[str, str] = {}
+    for rel in theory_relations:
+        old_rel_id = rel.relation_id
+        new_src = _resolve_alias_chain(rel.source_id, effective_alias_map)
+        new_tgt = _resolve_alias_chain(rel.target_id, effective_alias_map)
+
+        new_premises: tuple[str, ...] = ()
+        if rel.premise_ids:
+            seen_p: set[str] = set()
+            cleaned_p: list[str] = []
+            for pid in rel.premise_ids:
+                canon_pid = _resolve_alias_chain(pid, effective_alias_map)
+                if canon_pid and canon_pid not in seen_p:
+                    seen_p.add(canon_pid)
+                    cleaned_p.append(canon_pid)
+            new_premises = tuple(cleaned_p)
+            if new_premises and new_src not in seen_p:
+                new_src = new_premises[0]
+
+        eff_premises = new_premises if new_premises else (new_src,)
+        # Drop self-loops induced by atom merging only when no distinct premise or
+        # undercutter target remains.
+        if (
+            rel.undercuts_relation_id is None
+            and rel.source_id != rel.target_id
+            and len(eff_premises) == 1
+            and eff_premises[0] == new_tgt
+        ):
+            continue
+
+        updates: dict[str, Any] = {}
+        if new_src != rel.source_id:
+            updates["source_id"] = new_src
+        if new_tgt != rel.target_id:
+            updates["target_id"] = new_tgt
+        if new_premises != rel.premise_ids:
+            updates["premise_ids"] = new_premises
+
+        rewritten = rel.model_copy(update=updates) if updates else rel
+        candidate_new_id = rewritten.relation_id
+        if old_rel_id != candidate_new_id:
+            rel_id_alias_map[old_rel_id] = candidate_new_id
+        if rel.id and rel.id != candidate_new_id:
+            rel_id_alias_map[rel.id] = candidate_new_id
+        preliminary_relations.append((rewritten, candidate_new_id))
+
+    deduped_relations: dict[
+        tuple[tuple[str, ...], str, str, str | None], TheoryRelation
+    ] = {}
+    for rel, _ in preliminary_relations:
+        extra_updates: dict[str, Any] = {}
+        if rel.undercuts_relation_id is not None:
+            resolved_u = _resolve_alias_chain(
+                rel.undercuts_relation_id, rel_id_alias_map
+            )
+            if resolved_u != rel.undercuts_relation_id:
+                extra_updates["undercuts_relation_id"] = resolved_u
+        if rel.target_id in rel_id_alias_map:
+            resolved_tgt_rel = _resolve_alias_chain(rel.target_id, rel_id_alias_map)
+            if resolved_tgt_rel != rel.target_id:
+                extra_updates["target_id"] = resolved_tgt_rel
+
+        final_rel = rel.model_copy(update=extra_updates) if extra_updates else rel
+        rkey = (
+            final_rel.effective_premise_ids,
+            final_rel.relation_type,
+            final_rel.target_id,
+            final_rel.undercuts_relation_id,
+        )
+        existing = deduped_relations.get(rkey)
+        if existing is None or (final_rel.confidence or 0.0) > (
+            existing.confidence or 0.0
+        ):
+            deduped_relations[rkey] = final_rel
+
+    return canonical_atoms, list(deduped_relations.values())
+
+
+def _extract_epistemic_deficits(
+    collection: ArtifactCollection,
+) -> tuple[list[EpistemicDeficitArtifact], list[str]]:
+    """Hydrate latest-by-identity epistemic deficit payloads and artifact IDs."""
+    deficits: list[EpistemicDeficitArtifact] = []
+    consumed_ids: list[str] = []
+    for artifact in collection.of_kind(
+        ArtifactKind.EPISTEMIC_DEFICIT, latest_only=True
+    ):
+        payload = artifact.payload
+        if isinstance(payload, EpistemicDeficitArtifact):
+            consumed_ids.append(artifact.artifact_id)
+            deficits.append(payload)
+    return deficits, consumed_ids
+
+
+def _populate_canonical_l3(view: EpistemicStateView) -> None:
+    """Resolve canonical L3 atoms and relations if not already populated."""
+    if not view.canonical_theory_atoms and view.theory_atoms:
+        canon_atoms, canon_rels = _resolve_l3_atoms_and_relations(
+            view.theory_atoms, view.theory_relations, view.fusion_decisions
+        )
+        view.canonical_theory_atoms = canon_atoms
+        if not view.canonical_theory_relations:
+            view.canonical_theory_relations = canon_rels
+    elif not view.canonical_theory_relations and view.theory_relations:
+        _, canon_rels = _resolve_l3_atoms_and_relations(
+            view.theory_atoms, view.theory_relations, view.fusion_decisions
+        )
+        view.canonical_theory_relations = canon_rels
+
+
+def _full_state_kwargs(collection: ArtifactCollection) -> dict[str, Any]:
+    """Assemble full cumulative L1–L4 state plus hydrated epistemic deficits."""
+    p4 = Phase4ArtifactsView.from_collection(collection)
+    deficits, deficit_ids = _extract_epistemic_deficits(collection)
+    return {
+        "documents": p4.documents,
+        "chunks": p4.chunks,
+        "entities": p4.entities,
+        "local_triples": p4.local_triples,
+        "entity_count_by_type": p4.entity_count_by_type,
+        "global_triples": p4.global_triples,
+        "relation_type_distribution": p4.relation_type_distribution,
+        "theory_atoms": p4.theory_atoms,
+        "theory_relations": p4.theory_relations,
+        "fusion_decisions": p4.fusion_decisions,
+        "canonical_theory_atoms": p4.canonical_theory_atoms,
+        "canonical_theory_relations": p4.canonical_theory_relations,
+        "entity_envelopes_by_id": p4.entity_envelopes_by_id,
+        "entity_mentions_by_id": p4.entity_mentions_by_id,
+        "theoretical_enrichments": p4.theoretical_enrichments,
+        "epistemic_deficits": deficits,
+        "consumed_artifact_ids": [*p4.consumed_artifact_ids, *deficit_ids],
+    }
+
+
+@dataclass(slots=True)
+class EpistemicStateView:
+    """Base contract for cumulative inter-phase artifact views."""
+
+    _allowed_kinds: ClassVar[tuple[ArtifactKind, ...]] = ()
+    allowed_kinds: ClassVar[tuple[ArtifactKind, ...]] = ()
+
+    documents: list[L1Document] = field(default_factory=list)
+    chunks: list[L1Chunk] = field(default_factory=list)
+    entities: list[L2Entity] = field(default_factory=list)
+    local_triples: list[L2Triple] = field(default_factory=list)
+    entity_count_by_type: dict[str, int] = field(default_factory=dict)
+    global_triples: list[L2Triple] = field(default_factory=list)
+    relation_type_distribution: dict[str, int] = field(default_factory=dict)
+    theory_atoms: list[TheoryAtom] = field(default_factory=list)
+    theory_relations: list[TheoryRelation] = field(default_factory=list)
+    fusion_decisions: list[FusionDecisionArtifact] = field(default_factory=list)
+    canonical_theory_atoms: list[TheoryAtom] = field(default_factory=list)
+    canonical_theory_relations: list[TheoryRelation] = field(default_factory=list)
+    entity_envelopes_by_id: dict[str, list[str]] = field(default_factory=dict)
+    entity_mentions_by_id: dict[str, list[dict[str, str]]] = field(default_factory=dict)
+    theoretical_enrichments: list[TheoreticalEnrichmentArtifact] = field(
+        default_factory=list
+    )
+    epistemic_deficits: list[EpistemicDeficitArtifact] = field(default_factory=list)
+    consumed_artifact_ids: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_collection(cls, collection: ArtifactCollection) -> EpistemicStateView:
+        """Hydrate a full cumulative :class:`EpistemicStateView` including deficits.
+
+        Parameters
+        ----------
+        collection : ArtifactCollection
+            Run artifact collection to hydrate from.
+
+        Returns
+        -------
+        EpistemicStateView
+            Hydrated cumulative state view with canonical L2/L3 state and deficits.
+        """
+        return cls(**_full_state_kwargs(collection))
+
+    def to_domain_deficits(self) -> list[EpistemicDeficit]:
+        """Convert hydrated deficit payloads into domain :class:`EpistemicDeficit` models.
+
+        Returns
+        -------
+        list of EpistemicDeficit
+            Hydrated epistemic deficit domain contracts.
+        """
+        return [deficit.to_domain() for deficit in self.epistemic_deficits]
+
+    def to_graph_reader(self) -> ArtifactSubgraphReader:
+        """Build an in-memory :class:`ArtifactSubgraphReader` from this view.
+
+        Returns
+        -------
+        ArtifactSubgraphReader
+            Deterministic in-memory graph reader over this view's state.
+        """
+        return ArtifactSubgraphReader.from_view(self)
+
+
+@dataclass(slots=True)
+class Phase1ArtifactsView(EpistemicStateView):
+    """Cumulative view of Phase 1 foundation artifacts."""
+
+    _allowed_kinds = (ArtifactKind.DOCUMENT, ArtifactKind.CHUNK)
+    allowed_kinds = _allowed_kinds
+
+    @classmethod
+    def from_collection(cls, collection: ArtifactCollection) -> Phase1ArtifactsView:
+        """Hydrate a :class:`Phase1ArtifactsView` from an :class:`ArtifactCollection`."""
+        documents, chunks, consumed_ids = _extract_l1_state(collection)
+        return cls(
+            documents=documents,
+            chunks=chunks,
+            consumed_artifact_ids=consumed_ids,
+        )
+
+
+@dataclass(slots=True)
+class Phase2ArtifactsView(EpistemicStateView):
+    """Cumulative view of Phase 1 + Phase 2 / 3b / 4-maturation artifacts."""
+
+    _allowed_kinds = (
+        ArtifactKind.DOCUMENT,
+        ArtifactKind.CHUNK,
+        ArtifactKind.ENTITY_MENTION,
+        ArtifactKind.LINKED_ENTITY,
+        ArtifactKind.LOCAL_RELATION,
+        ArtifactKind.CANONICALIZATION,
+    )
+    allowed_kinds = _allowed_kinds
 
     @classmethod
     def from_collection(cls, collection: ArtifactCollection) -> Phase2ArtifactsView:
-        entities: list[L2Entity] = []
-        triples: list[L2Triple] = []
-        entity_count_by_type: dict[str, int] = {}
-        mention_chunk_ids_by_entity: dict[str, list[str]] = {}
-
-        for artifact in collection.of_kind(*cls._allowed_kinds):
-            payload = artifact.payload
-            if artifact.kind == ArtifactKind.ENTITY_MENTION and isinstance(
-                payload, EntityMentionArtifact
-            ):
-                entity_id, chunk_id = parse_mention_id(payload.mention_id)
-                mention_chunk_ids_by_entity.setdefault(entity_id, []).append(
-                    chunk_id
-                )
-
-        for artifact in collection.of_kind(*cls._allowed_kinds):
-            payload = artifact.payload
-            if artifact.kind == ArtifactKind.LINKED_ENTITY and isinstance(
-                payload, LinkedEntityArtifact
-            ):
-                source_chunk_ids = mention_chunk_ids_by_entity.get(
-                    payload.entity_id, []
-                )
-                entities.append(
-                    L2Entity(
-                        id=payload.entity_id,
-                        label=payload.entity_type,
-                        name=payload.canonical_name,
-                        description=payload.description,
-                        textual_envelope=payload.textual_envelope,
-                        is_mature=payload.is_mature,
-                        confidence=payload.confidence,
-                        source_chunk_ids=source_chunk_ids,
-                    )
-                )
-                entity_count_by_type[payload.entity_type] = (
-                    entity_count_by_type.get(payload.entity_type, 0) + 1
-                )
-            elif artifact.kind == ArtifactKind.LOCAL_RELATION and isinstance(
-                payload, LocalRelationArtifact
-            ):
-                triples.append(
-                    L2Triple(
-                        subject_id=payload.subject_entity_id,
-                        predicate=payload.predicate,
-                        object_id=payload.object_entity_id,
-                        confidence=payload.confidence,
-                        scope="local",
-                        source_chunk_id=payload.source_chunk_id,
-                    )
-                )
+        """Hydrate a canonicalized :class:`Phase2ArtifactsView` from ``collection``."""
+        documents, chunks, l1_ids = _extract_l1_state(collection)
+        (
+            entities,
+            local_triples,
+            entity_count_by_type,
+            entity_envelopes_by_id,
+            entity_mentions_by_id,
+            _alias_map,
+            l2_ids,
+        ) = _extract_l2_state(collection)
         return cls(
             entities=entities,
-            local_triples=triples,
+            local_triples=local_triples,
             entity_count_by_type=entity_count_by_type,
+            documents=documents,
+            chunks=chunks,
+            entity_envelopes_by_id=entity_envelopes_by_id,
+            entity_mentions_by_id=entity_mentions_by_id,
+            consumed_artifact_ids=[*l1_ids, *l2_ids],
         )
 
 
 @dataclass(slots=True)
-class Phase3ArtifactsView:
-    global_triples: list[L2Triple]
-    relation_type_distribution: dict[str, int]
-    chunks: list[L1Chunk]
+class Phase3ArtifactsView(EpistemicStateView):
+    """Cumulative view of Phase 1 + Phase 2/3b/4-maturation + Phase 3 artifacts."""
+
+    _allowed_kinds = (
+        ArtifactKind.DOCUMENT,
+        ArtifactKind.CHUNK,
+        ArtifactKind.ENTITY_MENTION,
+        ArtifactKind.LINKED_ENTITY,
+        ArtifactKind.LOCAL_RELATION,
+        ArtifactKind.CANONICALIZATION,
+        ArtifactKind.GLOBAL_RELATION,
+    )
+    allowed_kinds = _allowed_kinds
 
     @classmethod
     def from_collection(cls, collection: ArtifactCollection) -> Phase3ArtifactsView:
-        triples: list[L2Triple] = []
-        distribution: dict[str, int] = {}
-        chunks: list[L1Chunk] = []
-        for artifact in collection.artifacts:
+        """Hydrate a cumulative :class:`Phase3ArtifactsView` from ``collection``."""
+        documents, chunks, l1_ids = _extract_l1_state(collection)
+        (
+            entities,
+            local_triples,
+            entity_count_by_type,
+            entity_envelopes_by_id,
+            entity_mentions_by_id,
+            alias_map,
+            l2_ids,
+        ) = _extract_l2_state(collection)
+
+        raw_global_triples: list[L2Triple] = []
+        l3_ids: list[str] = []
+        for artifact in collection.of_kind(
+            ArtifactKind.GLOBAL_RELATION, latest_only=True
+        ):
             payload = artifact.payload
-            if artifact.kind == ArtifactKind.CHUNK and isinstance(
-                payload, ChunkArtifact
-            ):
-                chunks.append(
-                    L1Chunk(
-                        id=payload.chunk_id,
-                        text=payload.text,
-                        source_doc_id=payload.document_id,
-                        chapter_id=payload.chapter_id,
-                        sequence_index=payload.sequence_index,
-                        token_count=payload.token_count,
-                    )
-                )
-            elif artifact.kind == ArtifactKind.GLOBAL_RELATION and isinstance(
-                payload, GlobalRelationArtifact
-            ):
-                triples.append(
-                    L2Triple(
-                        subject_id=payload.subject_entity_id,
-                        predicate=payload.predicate,
-                        object_id=payload.object_entity_id,
-                        confidence=payload.confidence,
-                        scope="global",
-                        source_chunk_id=payload.supporting_chunk_ids[0]
-                        if payload.supporting_chunk_ids
-                        else "",
-                    )
-                )
-                distribution[payload.predicate] = (
-                    distribution.get(payload.predicate, 0) + 1
-                )
+            if isinstance(payload, GlobalRelationArtifact):
+                l3_ids.append(artifact.artifact_id)
+                raw_global_triples.append(payload.to_domain())
+
+        retired_entity_ids = _collect_retired_entity_ids(
+            collection.of_kind(ArtifactKind.LINKED_ENTITY, latest_only=True),
+            alias_map,
+        )
+        global_triples = _canonicalize_triples(
+            raw_global_triples,
+            alias_map,
+            retired_entity_ids=retired_entity_ids,
+        )
+        distribution: dict[str, int] = {}
+        for triple in global_triples:
+            distribution[triple.predicate] = distribution.get(triple.predicate, 0) + 1
+
         return cls(
-            global_triples=triples,
+            global_triples=global_triples,
             relation_type_distribution=distribution,
             chunks=chunks,
+            documents=documents,
+            entities=entities,
+            local_triples=local_triples,
+            entity_count_by_type=entity_count_by_type,
+            entity_envelopes_by_id=entity_envelopes_by_id,
+            entity_mentions_by_id=entity_mentions_by_id,
+            consumed_artifact_ids=[*l1_ids, *l2_ids, *l3_ids],
         )
 
 
 @dataclass(slots=True)
-class Phase4ArtifactsView:
-    theory_atoms: list[TheoryAtom]
-    theory_relations: list[TheoryRelation]
+class Phase4ArtifactsView(EpistemicStateView):
+    """Cumulative view of Phase 1–5 artifacts including canonical L3 fusion."""
+
+    _allowed_kinds = (
+        ArtifactKind.DOCUMENT,
+        ArtifactKind.CHUNK,
+        ArtifactKind.ENTITY_MENTION,
+        ArtifactKind.LINKED_ENTITY,
+        ArtifactKind.LOCAL_RELATION,
+        ArtifactKind.CANONICALIZATION,
+        ArtifactKind.GLOBAL_RELATION,
+        ArtifactKind.THEORY_ATOM,
+        ArtifactKind.THEORY_RELATION,
+        ArtifactKind.FUSION_DECISION,
+        ArtifactKind.THEORETICAL_ENRICHMENT,
+    )
+    allowed_kinds = _allowed_kinds
+
+    def __post_init__(self) -> None:
+        _populate_canonical_l3(self)
 
     @classmethod
     def from_collection(cls, collection: ArtifactCollection) -> Phase4ArtifactsView:
+        """Hydrate a cumulative :class:`Phase4ArtifactsView` from ``collection``."""
+        p3 = Phase3ArtifactsView.from_collection(collection)
+
         components: list[TheoryAtom] = []
         relations: list[TheoryRelation] = []
-        for artifact in collection.artifacts:
+        fusion_decisions: list[FusionDecisionArtifact] = []
+        enrichments: list[TheoreticalEnrichmentArtifact] = []
+        p4_ids: list[str] = []
+
+        for artifact in collection.of_kind(
+            ArtifactKind.THEORY_ATOM,
+            ArtifactKind.THEORY_RELATION,
+            ArtifactKind.FUSION_DECISION,
+            ArtifactKind.THEORETICAL_ENRICHMENT,
+            latest_only=True,
+        ):
+            p4_ids.append(artifact.artifact_id)
             payload = artifact.payload
             if artifact.kind == ArtifactKind.THEORY_ATOM and isinstance(
                 payload, TheoryAtomArtifact
             ):
-                components.append(
-                    TheoryAtom(
-                        id=payload.component_id,
-                        text=payload.text,
-                        component_type=payload.component_type,
-                        source_chunk_id=payload.chunk_id,
-                        plausibility=payload.plausibility,
-                        epistemic_status=payload.epistemic_status,
-                        scope_type=payload.scope_type,
-                    )
-                )
+                components.append(payload.to_domain())
             elif artifact.kind == ArtifactKind.THEORY_RELATION and isinstance(
                 payload, TheoryRelationArtifact
             ):
-                relations.append(
-                    TheoryRelation(
-                        source_id=payload.source_component_id,
-                        target_id=payload.target_component_id,
-                        relation_type=payload.relation_type,
-                        confidence=payload.confidence,
-                        scope=payload.scope,
-                        weight=payload.weight,
-                        class_probability=payload.class_probability,
-                        empirical_accuracy=payload.empirical_accuracy,
-                        modal_strength=payload.modal_strength,
-                        effective_weight=payload.effective_weight,
-                        decision_engine_provider=payload.decision_engine_provider,
-                        tenability=payload.tenability,
-                        calibrated_confidence=payload.calibrated_confidence,
-                        weight_support=payload.weight_support,
-                        weight_attack=payload.weight_attack,
+                relations.append(payload.to_domain())
+            elif artifact.kind == ArtifactKind.FUSION_DECISION and isinstance(
+                payload, FusionDecisionArtifact
+            ):
+                fusion_decisions.append(payload)
+            elif artifact.kind == ArtifactKind.THEORETICAL_ENRICHMENT and isinstance(
+                payload, TheoreticalEnrichmentArtifact
+            ):
+                enrichments.append(payload)
+
+        if enrichments:
+            from episteme_pipeline.contracts.domain import TenabilityResult
+
+            edge_tenability_map: dict[str, float] = {}
+            atom_enrichment_map: dict[str, TheoreticalEnrichmentArtifact] = {}
+            cluster_enrichment_map: dict[str, TheoreticalEnrichmentArtifact] = {}
+            equilibrium_map: dict[str, float] = {}
+
+            for enr in enrichments:
+                edge_tenability_map.update(enr.edge_tenabilities)
+                equilibrium_map.update(enr.equilibrium_strengths)
+                cluster_enrichment_map[enr.cluster_id] = enr
+                for aid in enr.claimant_atom_ids:
+                    atom_enrichment_map[aid] = enr
+
+            if edge_tenability_map:
+                updated_rels: list[TheoryRelation] = []
+                for rel in relations:
+                    rkey = f"{rel.source_id}->{rel.relation_type}->{rel.target_id}"
+                    if rkey in edge_tenability_map:
+                        ts_val = edge_tenability_map[rkey]
+                        updated_rels.append(
+                            rel.model_copy(
+                                update={
+                                    "edge_tenability": ts_val,
+                                }
+                            )
+                        )
+                    else:
+                        updated_rels.append(rel)
+                relations = updated_rels
+
+            updated_atoms: list[TheoryAtom] = []
+            for atom in components:
+                enr_match = atom_enrichment_map.get(atom.id)
+                if enr_match is None and atom.component_type != "ObservationUnit":
+                    enr_match = cluster_enrichment_map.get(
+                        f"cluster-{atom.source_chunk_id}"
                     )
-                )
-        return cls(theory_atoms=components, theory_relations=relations)
+                updates: dict[str, Any] = {}
+                if enr_match is not None:
+                    updates["local_tenability"] = enr_match.local_tenability
+                    if atom.tenability is None:
+                        updates["tenability"] = TenabilityResult(
+                            local_score=enr_match.local_tenability,
+                            edge_scores=dict(enr_match.edge_tenabilities),
+                            aggregated_score=enr_match.aggregated_tenability,
+                            tightest_blur=enr_match.admissible_blur_delta,
+                            is_tenable=enr_match.is_tenable,
+                            anomalies=list(enr_match.anomalies),
+                        )
+                    if enr_match.projected_parameters:
+                        merged_params = dict(atom.parameters)
+                        merged_params.update(enr_match.projected_parameters)
+                        updates["parameters"] = merged_params
+                if atom.id in equilibrium_map:
+                    updates["equilibrium_strength"] = equilibrium_map[atom.id]
+                if updates:
+                    updated_atoms.append(atom.model_copy(update=updates))
+                else:
+                    updated_atoms.append(atom)
+            components = updated_atoms
+
+        canon_atoms, canon_rels = _resolve_l3_atoms_and_relations(
+            components, relations, fusion_decisions
+        )
+
+        return cls(
+            theory_atoms=components,
+            theory_relations=relations,
+            fusion_decisions=fusion_decisions,
+            canonical_theory_atoms=canon_atoms,
+            canonical_theory_relations=canon_rels,
+            documents=p3.documents,
+            chunks=p3.chunks,
+            entities=p3.entities,
+            local_triples=p3.local_triples,
+            entity_count_by_type=p3.entity_count_by_type,
+            global_triples=p3.global_triples,
+            relation_type_distribution=p3.relation_type_distribution,
+            entity_envelopes_by_id=p3.entity_envelopes_by_id,
+            entity_mentions_by_id=p3.entity_mentions_by_id,
+            theoretical_enrichments=enrichments,
+            consumed_artifact_ids=[*p3.consumed_artifact_ids, *p4_ids],
+        )
+
+
+Phase5ArtifactsView = Phase4ArtifactsView
 
 
 @dataclass(slots=True)
@@ -261,39 +1119,614 @@ class TheoreticalEnrichmentArtifactsView:
 
     Parameters
     ----------
-    enrichments : list[TheoreticalEnrichmentArtifact]
+    enrichments : list of TheoreticalEnrichmentArtifact
         Enrichment and tenability score artifacts.
     """
 
     _allowed_kinds = (ArtifactKind.THEORETICAL_ENRICHMENT,)
+    allowed_kinds = _allowed_kinds
 
-    enrichments: list[TheoreticalEnrichmentArtifact]
+    enrichments: list[TheoreticalEnrichmentArtifact] = field(default_factory=list)
+    consumed_artifact_ids: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_collection(cls, collection: ArtifactCollection) -> TheoreticalEnrichmentArtifactsView:
-        """Construct the view from an artifact collection.
+    def from_collection(
+        cls, collection: ArtifactCollection
+    ) -> TheoreticalEnrichmentArtifactsView:
+        """Construct the view from an artifact collection."""
+        enrichments: list[TheoreticalEnrichmentArtifact] = []
+        consumed_ids: list[str] = []
+        for artifact in collection.of_kind(*cls._allowed_kinds, latest_only=True):
+            payload = artifact.payload
+            if isinstance(payload, TheoreticalEnrichmentArtifact):
+                consumed_ids.append(artifact.artifact_id)
+                enrichments.append(payload)
+        return cls(enrichments=enrichments, consumed_artifact_ids=consumed_ids)
+
+
+@dataclass(slots=True)
+class EpistemicDeficitArtifactsView(EpistemicStateView):
+    """Cumulative view including L1–L4 artifacts and top-down epistemic deficits.
+
+    Kept separate from forward :class:`Phase1ArtifactsView` through
+    :class:`Phase4ArtifactsView` so :class:`WorkflowDAG` preserves strict forward
+    acyclicity while top-down refinement coordinators receive complete state
+    and active :class:`EpistemicDeficitArtifact` payloads.
+    """
+
+    _allowed_kinds = (
+        *Phase4ArtifactsView._allowed_kinds,
+        ArtifactKind.EPISTEMIC_DEFICIT,
+    )
+    allowed_kinds = _allowed_kinds
+
+    def __post_init__(self) -> None:
+        _populate_canonical_l3(self)
+
+    @classmethod
+    def from_collection(
+        cls, collection: ArtifactCollection
+    ) -> EpistemicDeficitArtifactsView:
+        """Hydrate an :class:`EpistemicDeficitArtifactsView` from ``collection``.
 
         Parameters
         ----------
         collection : ArtifactCollection
-            The artifact collection to filter.
+            Run artifact collection containing L1–L4 and epistemic deficit artifacts.
 
         Returns
         -------
-        TheoreticalEnrichmentArtifactsView
-            View containing only theoretical enrichment artifacts.
+        EpistemicDeficitArtifactsView
+            Hydrated refinement view.
         """
-        enrichments: list[TheoreticalEnrichmentArtifact] = []
-        for artifact in collection.of_kind(*cls._allowed_kinds):
-            payload = artifact.payload
-            if isinstance(payload, TheoreticalEnrichmentArtifact):
-                enrichments.append(payload)
-        return cls(enrichments=enrichments)
+        return cls(**_full_state_kwargs(collection))
 
 
 @dataclass(slots=True)
 class ArtifactExecutionContext:
+    """Per-phase execution context carrying run metadata and upstream artifacts.
+
+    Parameters
+    ----------
+    run_id : str
+        Unique run identifier.
+    manifest : RunManifest
+        Run manifest.
+    pipeline_input : PipelineInput
+        Initial pipeline input contract.
+    previous : ArtifactCollection or None, optional
+        Cumulative artifact collection from completed upstream phases.
+    lineage_fingerprint : str or None, optional
+        Deterministic lineage fingerprint for the currently executing phase.
+    prior_artifacts : ArtifactCollection or None, optional
+        Cumulative artifact collection hydrated from historical parent run lineage.
+    prior_manifest : RunManifest or None, optional
+        RunManifest of the immediate parent or resume run.
+    """
+
     run_id: str
     manifest: RunManifest
     pipeline_input: PipelineInput
     previous: ArtifactCollection | None = None
+    lineage_fingerprint: str | None = None
+    prior_artifacts: ArtifactCollection | None = None
+    prior_manifest: RunManifest | None = None
+
+    def hydrator(
+        self,
+        phase_key: str,
+        phase_name: str,
+    ) -> ArtifactHydrator:
+        """Construct an ArtifactHydrator bound to this execution context.
+
+        Parameters
+        ----------
+        phase_key : str
+            Unique machine phase key (e.g. 'phase1', 'phase4').
+        phase_name : str
+            Canonical phase name (e.g. 'Phase 1: Data Foundation').
+
+        Returns
+        -------
+        ArtifactHydrator
+            Bound hydrator instance.
+        """
+        return ArtifactHydrator(self, phase_key, phase_name)
+
+
+@dataclass(frozen=True, slots=True)
+class IncrementalRetentionScope:
+    """Retention scope defining unchanged documents, chunks, and entities across runs.
+
+    Parameters
+    ----------
+    unchanged_doc_ids : frozenset of str
+        Identifiers of documents whose SHA-256 fingerprints did not change.
+    unchanged_chunk_ids : frozenset of str
+        Identifiers of chunks belonging to unchanged documents.
+    unmodified_prior_entity_chunks : dict of str to frozenset of str
+        Map of entity ID to its prior source chunk IDs, populated only for entities
+        whose entire evidence set fell strictly within unchanged chunks.
+    """
+
+    unchanged_doc_ids: frozenset[str]
+    unchanged_chunk_ids: frozenset[str]
+    unmodified_prior_entity_chunks: dict[str, frozenset[str]]
+
+    @classmethod
+    def from_context(
+        cls,
+        context: ArtifactExecutionContext,
+        chunks: Sequence[L1Chunk] | None = None,
+    ) -> IncrementalRetentionScope:
+        """Construct an IncrementalRetentionScope from execution context and optional chunks.
+
+        Parameters
+        ----------
+        context : ArtifactExecutionContext
+            Phase execution context containing current and prior manifests and artifacts.
+        chunks : Sequence of L1Chunk, optional
+            Input chunks from current run. If None, unchanged_chunk_ids remains empty.
+
+        Returns
+        -------
+        IncrementalRetentionScope
+            Calculated retention scope.
+        """
+        prior_manifest = context.prior_manifest
+        curr_manifest = context.manifest
+        prior_artifacts = context.prior_artifacts
+
+        if prior_manifest is None or curr_manifest is None:
+            return cls(frozenset(), frozenset(), {})
+
+        prior_fps = prior_manifest.document_fingerprints
+        curr_fps = curr_manifest.document_fingerprints
+        unchanged_doc_ids = frozenset(
+            d_id for d_id, fp in curr_fps.items() if prior_fps.get(d_id) == fp
+        )
+
+        unchanged_chunk_ids = (
+            frozenset(c.id for c in chunks if c.source_doc_id in unchanged_doc_ids)
+            if chunks is not None
+            else frozenset()
+        )
+
+        unmodified_prior_entity_chunks: dict[str, frozenset[str]] = {}
+        if prior_artifacts is not None and unchanged_chunk_ids:
+            for art in prior_artifacts.latest_by_identity.values():
+                if (
+                    isinstance(art.payload, LinkedEntityArtifact)
+                    and not art.payload.is_retired
+                ):
+                    cids = frozenset(art.payload.source_chunk_ids)
+                    if cids and cids.issubset(unchanged_chunk_ids):
+                        unmodified_prior_entity_chunks[art.payload.entity_id] = cids
+
+        return cls(
+            unchanged_doc_ids, unchanged_chunk_ids, unmodified_prior_entity_chunks
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class Phase1HydrationResult:
+    """Result of Phase 1 artifact hydration.
+
+    Parameters
+    ----------
+    delta_source_paths : list of str
+        Source document paths requiring ingestion and chunking.
+    retained_artifacts : list of ArtifactEnvelope
+        Retained DocumentArtifact and ChunkArtifact envelopes from unchanged documents.
+    """
+
+    delta_source_paths: list[str]
+    retained_artifacts: list[ArtifactEnvelope]
+
+
+@dataclass(frozen=True, slots=True)
+class Phase2HydrationResult:
+    """Result of Phase 2 artifact hydration.
+
+    Parameters
+    ----------
+    delta_chunks : list of L1Chunk
+        Chunks requiring entity extraction and local relation discovery.
+    entities : list of L2Entity
+        Surviving hydrated entities with pruned source chunk IDs.
+    triples : list of L2Triple
+        Surviving hydrated local triples connecting surviving entities within unchanged chunks.
+    mention_envelopes : dict of tuple of (str, str) to str
+        Mapping from (entity_id, chunk_id) to mention textual envelope.
+    """
+
+    delta_chunks: list[L1Chunk]
+    entities: list[L2Entity]
+    triples: list[L2Triple]
+    mention_envelopes: dict[tuple[str, str], str]
+
+
+@dataclass(frozen=True, slots=True)
+class Phase3HydrationResult:
+    """Result of Phase 3 artifact hydration.
+
+    Parameters
+    ----------
+    delta_candidates : list of CandidatePair
+        Candidate entity pairs requiring global relation extraction.
+    hydrated_triples : list of L2Triple
+        Retained global relation triples between unchanged entities.
+    """
+
+    delta_candidates: list[CandidatePair]
+    hydrated_triples: list[L2Triple]
+
+
+@dataclass(frozen=True, slots=True)
+class Phase4HydrationResult:
+    """Result of Phase 4 artifact hydration.
+
+    Parameters
+    ----------
+    delta_chunks : list of L1Chunk
+        Chunks requiring argument component extraction.
+    components : list of TheoryAtom
+        Hydrated argument components from unchanged chunks.
+    local_relations : list of TheoryRelation
+        Hydrated local argument relations connecting surviving components.
+    """
+
+    delta_chunks: list[L1Chunk]
+    components: list[TheoryAtom]
+    local_relations: list[TheoryRelation]
+
+
+class ArtifactHydrator:
+    """Strategy engine orchestrating declarative artifact hydration across incremental runs.
+
+    Parameters
+    ----------
+    context : ArtifactExecutionContext
+        Phase execution context containing current and prior run manifests and artifacts.
+    phase_key : str
+        Unique machine phase key (e.g., 'phase1', 'phase4').
+    phase_name : str
+        Canonical phase name (e.g., 'Phase 1: Data Foundation').
+    """
+
+    def __init__(
+        self,
+        context: ArtifactExecutionContext,
+        phase_key: str,
+        phase_name: str,
+    ) -> None:
+        self.context = context
+        self.phase_key = phase_key
+        self.phase_name = phase_name
+
+    @property
+    def can_hydrate(self) -> bool:
+        """Check if prior artifacts and manifests exist and phase configuration and ledger are unchanged."""
+        return (
+            self.context.prior_artifacts is not None
+            and self.context.prior_manifest is not None
+            and self.context.manifest.curation_ledger_fingerprint
+            == self.context.prior_manifest.curation_ledger_fingerprint
+            and is_phase_unchanged(
+                self.context.manifest,
+                self.context.prior_manifest,
+                self.phase_key,
+                self.phase_name,
+            )
+        )
+
+    def hydrate_phase1(self, source_paths: Sequence[str]) -> Phase1HydrationResult:
+        """Hydrate Phase 1 document and chunk artifacts for unchanged source files.
+
+        Parameters
+        ----------
+        source_paths : Sequence of str
+            Input source document file paths.
+
+        Returns
+        -------
+        Phase1HydrationResult
+            Delta source paths to process and retained artifact envelopes.
+        """
+        if (
+            not self.can_hydrate
+            or self.context.prior_artifacts is None
+            or self.context.prior_manifest is None
+        ):
+            return Phase1HydrationResult(
+                delta_source_paths=list(source_paths), retained_artifacts=[]
+            )
+
+        from episteme_pipeline.phases.phase1_foundation.provenance import doc_id
+
+        prior_artifacts = self.context.prior_artifacts
+
+        retained: list[ArtifactEnvelope] = []
+        delta_paths: list[str] = []
+
+        prior_fps = self.context.prior_manifest.document_fingerprints
+        curr_fps = self.context.manifest.document_fingerprints
+
+        for source_path in source_paths:
+            p = Path(source_path)
+            d_id = doc_id(p)
+            p_str = str(source_path)
+            curr_fp = curr_fps.get(d_id) or curr_fps.get(p_str)
+            prior_fp = prior_fps.get(d_id) or prior_fps.get(p_str)
+
+            if curr_fp and prior_fp and curr_fp == prior_fp:
+                doc_arts = [
+                    a
+                    for a in prior_artifacts.artifacts
+                    if a.kind == ArtifactKind.DOCUMENT
+                    and (
+                        (
+                            isinstance(a.payload, DocumentArtifact)
+                            and a.payload.document_id == d_id
+                        )
+                        or a.provenance.source_document_id == d_id
+                        or a.provenance.source_path == p_str
+                    )
+                ]
+                chunk_arts = [
+                    a
+                    for a in prior_artifacts.artifacts
+                    if a.kind == ArtifactKind.CHUNK
+                    and (
+                        (
+                            isinstance(a.payload, ChunkArtifact)
+                            and a.payload.document_id == d_id
+                        )
+                        or a.provenance.source_document_id == d_id
+                    )
+                ]
+                if doc_arts and chunk_arts:
+                    for da in doc_arts:
+                        retained.append(
+                            da.model_copy(update={"run_id": self.context.run_id})
+                        )
+                    for ca in chunk_arts:
+                        retained.append(
+                            ca.model_copy(update={"run_id": self.context.run_id})
+                        )
+                    continue
+            delta_paths.append(source_path)
+
+        return Phase1HydrationResult(
+            delta_source_paths=delta_paths, retained_artifacts=retained
+        )
+
+    def hydrate_phase2(self, chunks: Sequence[L1Chunk]) -> Phase2HydrationResult:
+        """Hydrate Phase 2 entities, mentions, and local triples for unchanged chunks.
+
+        Parameters
+        ----------
+        chunks : Sequence of L1Chunk
+            Input chunks from Phase 1.
+
+        Returns
+        -------
+        Phase2HydrationResult
+            Delta chunks to process, surviving entities, surviving local triples, and mention envelopes.
+        """
+        if not self.can_hydrate or self.context.prior_artifacts is None:
+            return Phase2HydrationResult(
+                delta_chunks=list(chunks),
+                entities=[],
+                triples=[],
+                mention_envelopes={},
+            )
+
+        scope = IncrementalRetentionScope.from_context(self.context, chunks=chunks)
+        prior_artifacts = self.context.prior_artifacts
+
+        surviving_entities: list[L2Entity] = []
+        for art in prior_artifacts.latest_by_identity.values():
+            if (
+                isinstance(art.payload, LinkedEntityArtifact)
+                and not art.payload.is_retired
+            ):
+                ent = art.payload.to_domain()
+                valid_chunks = [
+                    cid
+                    for cid in ent.source_chunk_ids
+                    if cid in scope.unchanged_chunk_ids
+                ]
+                if valid_chunks:
+                    hydrated_ent = ent.model_copy(
+                        update={"source_chunk_ids": valid_chunks}
+                    )
+                    surviving_entities.append(hydrated_ent)
+
+        surviving_entity_ids = {e.id for e in surviving_entities}
+
+        mention_envelopes: dict[tuple[str, str], str] = {}
+        for art in prior_artifacts.latest_by_identity.values():
+            if (  # noqa: SIM102 baseline
+                isinstance(art.payload, EntityMentionArtifact)
+                and not art.payload.is_retired
+            ):
+                if art.payload.chunk_id in scope.unchanged_chunk_ids:
+                    eid = art.payload.entity_id or art.payload.mention_id
+                    if eid in surviving_entity_ids:
+                        mention_envelopes[(eid, art.payload.chunk_id)] = (
+                            art.payload.textual_envelope or ""
+                        )
+
+        surviving_triples: list[L2Triple] = []
+        for art in prior_artifacts.artifacts:
+            if isinstance(art.payload, LocalRelationArtifact):
+                triple = art.payload.to_domain()
+                if (
+                    triple.source_chunk_id in scope.unchanged_chunk_ids
+                    and triple.subject_id in surviving_entity_ids
+                    and triple.object_id in surviving_entity_ids
+                ):
+                    surviving_triples.append(triple)
+
+        delta_chunks = [c for c in chunks if c.id not in scope.unchanged_chunk_ids]
+
+        return Phase2HydrationResult(
+            delta_chunks=delta_chunks,
+            entities=surviving_entities,
+            triples=surviving_triples,
+            mention_envelopes=mention_envelopes,
+        )
+
+    def hydrate_phase3(
+        self,
+        candidates: Sequence[CandidatePair],
+        entities: Sequence[L2Entity],
+        chunks: Sequence[L1Chunk],
+    ) -> Phase3HydrationResult:
+        """Hydrate Phase 3 global relation triples and filter candidate pairs via bidirectional invariant.
+
+        Parameters
+        ----------
+        candidates : Sequence of CandidatePair
+            All candidate entity pairs generated for the current run.
+        entities : Sequence of L2Entity
+            All current entities.
+        chunks : Sequence of L1Chunk
+            Input chunks from Phase 1.
+
+        Returns
+        -------
+        Phase3HydrationResult
+            Filtered delta candidate pairs and hydrated global relation triples.
+        """
+        if not self.can_hydrate or self.context.prior_artifacts is None:
+            return Phase3HydrationResult(
+                delta_candidates=list(candidates),
+                hydrated_triples=[],
+            )
+
+        scope = IncrementalRetentionScope.from_context(self.context, chunks=chunks)
+        prior_artifacts = self.context.prior_artifacts
+
+        has_prior_entities = any(
+            isinstance(art.payload, LinkedEntityArtifact)
+            for art in prior_artifacts.artifacts
+        )
+
+        if has_prior_entities:
+            prior_only = {
+                e.id
+                for e in entities
+                if e.id in scope.unmodified_prior_entity_chunks
+                and frozenset(e.source_chunk_ids)
+                == scope.unmodified_prior_entity_chunks[e.id]
+            }
+        else:
+            prior_only = {
+                e.id
+                for e in entities
+                if e.source_chunk_ids
+                and all(cid in scope.unchanged_chunk_ids for cid in e.source_chunk_ids)
+            }
+
+        delta_candidates = [
+            c
+            for c in candidates
+            if c.entity_a.id not in prior_only or c.entity_b.id not in prior_only
+        ]
+
+        hydrated_triples: list[L2Triple] = []
+        for art in prior_artifacts.artifacts:
+            if isinstance(art.payload, GlobalRelationArtifact):  # noqa: SIM102 baseline
+                if (
+                    art.payload.subject_entity_id in prior_only
+                    and art.payload.object_entity_id in prior_only
+                ):
+                    hydrated_triples.append(art.payload.to_domain())
+
+        return Phase3HydrationResult(
+            delta_candidates=delta_candidates,
+            hydrated_triples=hydrated_triples,
+        )
+
+    def hydrate_phase4(self, chunks: Sequence[L1Chunk]) -> Phase4HydrationResult:
+        """Hydrate Phase 4 argument components and local relations for unchanged chunks.
+
+        Parameters
+        ----------
+        chunks : Sequence of L1Chunk
+            Input chunks from Phase 1.
+
+        Returns
+        -------
+        Phase4HydrationResult
+            Delta chunks to process, hydrated argument components, and surviving local relations.
+        """
+        if not self.can_hydrate or self.context.prior_artifacts is None:
+            return Phase4HydrationResult(
+                delta_chunks=list(chunks),
+                components=[],
+                local_relations=[],
+            )
+
+        scope = IncrementalRetentionScope.from_context(self.context, chunks=chunks)
+        prior_artifacts = self.context.prior_artifacts
+
+        hydrated_components: list[TheoryAtom] = []
+        for art in prior_artifacts.artifacts:
+            if isinstance(art.payload, TheoryAtomArtifact):
+                atom = art.payload.to_domain()
+                if atom.source_chunk_id in scope.unchanged_chunk_ids:
+                    hydrated_components.append(atom)
+
+        surviving_atom_ids = {atom.id for atom in hydrated_components}
+
+        candidate_local_rels: list[TheoryRelation] = []
+        for art in prior_artifacts.artifacts:
+            if isinstance(art.payload, TheoryRelationArtifact):
+                rel = art.payload.to_domain()
+                prov_chunk = art.provenance.source_chunk_id if art.provenance else None
+                chunk_ok = prov_chunk is None or prov_chunk in scope.unchanged_chunk_ids
+                if rel.scope == "local" and chunk_ok:
+                    candidate_local_rels.append(rel)
+
+        # Fixed-point hydration so reified relations and undercutters/backings
+        # referencing surviving relation IDs are retained consistently.
+        hydrated_local_relations: list[TheoryRelation] = []
+        surviving_rel_ids: set[str] = set()
+        remaining = list(candidate_local_rels)
+        while remaining:
+            progressed = False
+            next_remaining: list[TheoryRelation] = []
+            valid_targets = surviving_atom_ids | surviving_rel_ids
+            for rel in remaining:
+                premises_ok = all(
+                    pid in surviving_atom_ids for pid in rel.effective_premise_ids
+                )
+                if not premises_ok:
+                    continue
+                target_ok = rel.target_id in valid_targets
+                undercut_ok = (
+                    rel.undercuts_relation_id is None
+                    or rel.undercuts_relation_id in surviving_rel_ids
+                )
+                if target_ok and undercut_ok:
+                    hydrated_local_relations.append(rel)
+                    surviving_rel_ids.add(rel.relation_id)
+                    if rel.id:
+                        surviving_rel_ids.add(rel.id)
+                    progressed = True
+                else:
+                    next_remaining.append(rel)
+            if not progressed:
+                break
+            remaining = next_remaining
+
+        delta_chunks = [c for c in chunks if c.id not in scope.unchanged_chunk_ids]
+
+        return Phase4HydrationResult(
+            delta_chunks=delta_chunks,
+            components=hydrated_components,
+            local_relations=hydrated_local_relations,
+        )

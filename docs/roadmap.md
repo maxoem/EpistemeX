@@ -7,36 +7,102 @@ and epistemetrics) with a **production-grade software engine** (`episteme-pipeli
 
 ---
 
+## Delivered Capabilities & Completed Milestones
+
+**Production Engine | Implemented**
+
+Foundational architectural capabilities and inference systems that have transitioned from research and evaluation into production-grade, tested implementations within the core engine.
+
+| Target / Initiative                               | Component                             | Status        | Key Deliverable & Implementation Artifacts                                                                                                                           |
+|:--------------------------------------------------|:--------------------------------------|:--------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **TypeSafe / Jev Classification & Gating**        | `episteme-pipeline`                   | `Implemented` | Sub-second typed classification, conformal prediction set gating, and AOP routing (`JevClassifier`, `JevEntityLinker`, `JevRelationReranker`, `JevGleaningGate`) |
+| **DAG Stage Execution Engine**                    | `episteme-pipeline`                   | `Implemented` | Declarative `WorkflowDAG`, `PipelineFactory`, and `ArtifactExecutionEngine` with topological reuse and inter-phase `EpistemicQualityGate`s ([ADR 0017](adr/0017-explicit-batch-contracts-and-bulk-io.md)) |
+| **Gradual Semantics Solvers (QBAF & TheoryNet)**  | `epistemetrics` / `episteme-pipeline` | `Implemented` | Topology-adaptive D-QBAF solver (`QBAFGradualSemanticsSolver`, `WeightedQuadraticEnergySolver`), `TheoryNetProjector`, and intensional scoping ([ADR 0011](adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), [ADR 0022](adr/0022-unified-stratified-epistemic-metamodel.md), [ADR 0023](adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)) |
+| **Closed-Loop Hermeneutic Refinement (ISSUE-053)** | `episteme-pipeline`                  | `Implemented` | Bounded $\text{L4/L3} \to \text{L2/L1}$ feedback via `EpistemicDeficitArtifact`, `TheoryNetDeficitDetector`, `ClosedLoopRefinementCoordinator`, localized handlers, and `ArtifactCollection` overlays ([ADR 0024](adr/0024-closed-loop-hermeneutic-refinement.md)) |
+
+---
+
+### TypeSafe / Jev Typed Classification & Gating Engine (`JevClassifier`)
+
+| Status        | Target Component                                                                                                                                                                                   | Focus Area                                 |
+|:--------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:-------------------------------------------|
+| `Implemented` | `episteme-pipeline` (`episteme_pipeline/decision/`, `episteme_pipeline/phases/phase2_entity_discovery/`, `episteme_pipeline/phases/phase3_global_relations/`, `episteme_pipeline/phases/phase4_argument_mining/`) | Ultra-Low Latency Inference & Flow Routing |
+
+Integrates TypeSafe's Jev as a non-generative, typed classification and decision-gating adapter across the pipeline. Fully implemented and integrated into production.
+
+Unlike generative LLMs, Jev directly emits typed values and calibrated confidence scores (empirically reflecting true
+classification accuracy / ground-truth fit frequencies rather than uncalibrated LLM probabilities) with sub-second
+response times (70–500ms) at 40–200× lower cost and latency.
+
+**Delivered Capabilities & Implementation Artifacts:**
+
+- **`JevEntityLinker` & `CascadingEntityLinker`**: Fast candidate triage and conformal prediction set gating ($C(X)$) in Phase 2 Entity Discovery ([`jev_entity_linker.py`](../packages/episteme-pipeline/episteme_pipeline/phases/phase2_entity_discovery/jev_entity_linker.py)).
+- **`JevGleaningGate`**: Non-generative critic oracle decoupling generative extraction from deterministic stopping criteria in Phase 2 and Phase 4 ([`gleaning.py`](../packages/episteme-pipeline/episteme_pipeline/decision/gleaning.py)).
+- **`JevRelationReranker` & Jev Pair Gating**: Drop-in calibrated reranking and binary `Noul` gating in Phase 3 Global Relations ([`rerankers.py`](../packages/episteme-pipeline/episteme_pipeline/phases/phase3_global_relations/rerankers.py)).
+- **`JevClusterVerification`**: Borderline candidate verification and canonical terminology election via Jev `Choice` in Phase 3b Consolidation ([`consolidation.py`](../packages/episteme-pipeline/episteme_pipeline/phases/phase3b_consolidation/consolidation.py)).
+- **`JevACCClassifier` & `JevARCClassifier`**: High-throughput argument component and defeasible stance classification in Phase 4 Argument Mining ([`classifiers.py`](../packages/episteme-pipeline/episteme_pipeline/phases/phase4_argument_mining/classifiers.py)).
+- **Engine Clients & Test Harness**: Complete runtime provisioning via `AutoDecisionEngine`, `LayaDecisionEngine`, and deterministic `MockJevDecisionEngine` ([`decision/`](../packages/episteme-pipeline/episteme_pipeline/decision/)).
+
+---
+
+### Declarative DAG Execution Engine (`WorkflowDAG` & `ArtifactExecutionEngine`)
+
+| Status        | Target Component                                                            | Focus Area                |
+|:--------------|:----------------------------------------------------------------------------|:--------------------------|
+| `Implemented` | `episteme-pipeline` (`episteme_pipeline/pipeline.py`, `episteme_pipeline/runtime/`) | Stage Graph Orchestration |
+
+Refactors pipeline execution from a sequential 1-based ordinal loop into a declarative Directed Acyclic Graph (DAG) stage execution engine (`WorkflowDAG`, `PipelineFactory`, `ArtifactExecutionEngine`).
+
+**Delivered Capabilities:**
+
+- Resolves `reads_kinds` / `writes_kinds` and explicit phase dependencies in `WorkflowDAG.topological_order()`, supporting branching analytical passes and post-processors.
+- Preserves deterministic `RunManifest` tracking, phase-level reuse (`ArtifactExecutionEngine.choose_reuse_source`), and artifact-envelope provenance across runs.
+- Enforces inter-phase epistemic quality gates (`OntologyEntropyGate`, `PercolationQualityGate`, `ConformalCalibrationGate`).
+
+---
+
+### Gradual Semantics Solvers (`QBAFGradualSemanticsSolver` & `TheoryNetProjector`)
+
+| Status        | Target Component                                                                                           | Focus Area                     |
+|:--------------|:-----------------------------------------------------------------------------------------------------------|:-------------------------------|
+| `Implemented` | `epistemetrics` & `episteme-pipeline` (`episteme_pipeline/phases/phase6_theorynet/`, `episteme_pipeline/projection/`) | Argumentation Convergence Math |
+
+Implements topology-adaptive Dynamic QBAF gradual semantics for TheoryNet, governed by [ADR 0011](adr/0011-declarative-graph-metrics-and-qbaf-semantics.md), [ADR 0022](adr/0022-unified-stratified-epistemic-metamodel.md), and [ADR 0023](adr/0023-intensional-perspectival-scoping-and-conception-stratification.md).
+
+**Delivered Capabilities:**
+
+- Implements closed-form $O(|V| + |E|)$ DAG topological evaluation and adaptive `WeightedQuadraticEnergySolver` ODE integration (`RK45`/`Radau`) alongside Eulerian, categorizer, and linear models.
+- Computes equilibrium justification degrees ($\tau^*$), Keynes-Gärdenfors controversy volatility ($\mathcal{V}$), $Z_1$ empirical grounding paths, intensional supposition/attribution isolation, and coupled tenability re-convergence ($TS_{\text{local}}$, $TS_{\text{edge}}$).
+
+---
+
+### Closed-Loop Hermeneutic Refinement (`ISSUE-053` / `ADR 0024`)
+
+| Status        | Target Component                                                            | Focus Area                        |
+|:--------------|:----------------------------------------------------------------------------|:----------------------------------|
+| `Implemented` | `episteme-pipeline` (`episteme_pipeline/refinement/`, `episteme_pipeline/runtime/`) | Top-Down Bidirectional Feedback   |
+
+Operationalizes [Future Research Goals §1.8 (Synergized Bidirectional Reasoning)](research/future_research_goals.md#18-synergized-bidirectional-reasoning) across epistemic layers ($\text{L4/L3} \to \text{L2/L1}$), governed by [ADR 0024](adr/0024-closed-loop-hermeneutic-refinement.md).
+
+**Delivered Capabilities:**
+
+- **Typed Deficit Detection (`TheoryNetDeficitDetector`)**: Emits `EpistemicDeficitArtifact` signals (`ENTHYMEME_GAP`, `POLYSEMY_COLLISION`, `UNGROUNDED_AXIOM`) from `epistemetrics.page_rank`, $Z_1$ reachability, $TS_{\text{local}}$, $TS_{\text{edge}}$, and $\mathcal{V}$.
+- **Localized Recovery Handlers**: `LLMTheoryGuidedPremiseRecoverer`, `ConceptionConceptSplitter` (upgrading [ADR 0023](adr/0023-intensional-perspectival-scoping-and-conception-stratification.md) `EntityConception` stratification with `cannot_link` guards), and `TheoryGuidedAxiomGrounder`.
+- **Bounded Outer Loop & Orchestrator Wiring (`ClosedLoopRefinementCoordinator`)**: Wired across `PipelineFactory`, `Pipeline`, and `ArtifactExecutionEngine._run_refinement_stage()`, executing `1..max_refinement_cycles` via `HermeneuticRefinementConfig` using `ArtifactCollection.latest_by_identity` overlays and `refinement_pass` / `deficit_id` provenance without invalidating unaffected subgraphs.
+
+---
+
 ## Horizon 1: Platform Stabilization & Core Engine
 
 **Current Focus | Active Development**
 
-Focuses on completing the transition to a non-linear stage-execution engine, operationalizing the automated evaluation
-harness, and hardening the user workbench.
+Focuses on operationalizing the automated evaluation harness, hardening schema/graph validation, and advancing the user workbench.
 
 | Target / Initiative              | Component                        | Status               | Key Deliverable                                                    |
 |:---------------------------------|:---------------------------------|:---------------------|:-------------------------------------------------------------------|
-| **DAG Stage Execution Engine**   | `episteme-pipeline`                   | `Active Development` | Non-linear DAG stage scheduler (`_execute_via_plan`)               |
 | **Evaluation Harness Execution** | `episteme-pipeline` / `epistemetrics` | `Active Development` | Wire G-BS, OEP, MRR, and nDCG to `EvaluationRun`                   |
 | **Neo4j Constraint Reasoning**   | `episteme-pipeline`                   | `Active Development` | Polarity-aware disjointness & schema validation (`GraphValidator`) |
 | **Episteme Studio Workbench v0.2**    | `episteme-studio`                     | `Active Development` | Run-to-run identity diffing, candidate triage, and tenability UI   |
-
----
-
-### DAG Stage Execution Engine (`_execute_via_plan`)
-
-| Status               | Target Component                                             | Focus Area                |
-|:---------------------|:-------------------------------------------------------------|:--------------------------|
-| `Active Development` | `episteme-pipeline` (`pipeline/pipeline.py`, `pipeline/runtime/`) | Stage Graph Orchestration |
-
-Refactors pipeline execution from a sequential 1-based ordinal loop into an arbitrary Directed Acyclic Graph (DAG) stage
-execution plan (`_build_execution_plan`, `_resolve_phase_order`, `_execute_via_plan`).
-
-**Key Capabilities & Milestones:**
-
-- Supports non-linear, branching, and conditionally skipped phase topologies.
-- Preserves deterministic `RunManifest` tracking and artifact-envelope provenance across concurrent branches.
-- Enables injecting analytical passes at arbitrary graph boundaries rather than appending solely at the tail.
 
 ---
 
@@ -44,9 +110,9 @@ execution plan (`_build_execution_plan`, `_resolve_phase_order`, `_execute_via_p
 
 | Status               | Target Component                                          | Focus Area                  |
 |:---------------------|:----------------------------------------------------------|:----------------------------|
-| `Active Development` | `episteme-pipeline` & `epistemetrics` (`pipeline/evaluation/`) | Automated Metric Evaluation |
+| `Active Development` | `episteme-pipeline` & `epistemetrics` (`episteme_pipeline/evaluation/`) | Automated Metric Evaluation |
 
-Wires intrinsic and extrinsic scorers into the `EvaluationRun` orchestrator (`pipeline/evaluation/`).
+Wires intrinsic and extrinsic scorers into the `EvaluationRun` orchestrator (`episteme_pipeline/evaluation/`).
 
 **Key Capabilities & Milestones:**
 
@@ -61,7 +127,7 @@ Wires intrinsic and extrinsic scorers into the `EvaluationRun` orchestrator (`pi
 
 | Status               | Target Component                                       | Focus Area                    |
 |:---------------------|:-------------------------------------------------------|:------------------------------|
-| `Active Development` | `episteme-pipeline` (`pipeline/graph/`, `pipeline/events/`) | Schema & Logical Disjointness |
+| `Active Development` | `episteme-pipeline` (`episteme_pipeline/graph/`, `episteme_pipeline/events/`) | Schema & Logical Disjointness |
 
 Integrates `GraphValidator` checks directly into the pipeline lifecycle.
 
@@ -101,10 +167,9 @@ and deepening gradual argumentation semantics.
 | **Authentic Human Baseline & LLM Judges**      | `episteme-pipeline`                   | `Under Evaluation` | Human-annotated gold standard & Krippendorff's $\alpha$ calibration           |
 | **Standardized Benchmark Adapters**            | `episteme-pipeline`                   | `Under Evaluation` | Adapters for `Arg-Microtexts`, `SciERC`, and `SciFact`                        |
 | **Weak Supervision for Extraction**            | `episteme-pipeline`                   | `Under Evaluation` | CQP rhetorical queries & SetFit few-shot classifier bootstrapping             |
-| **Gradual Semantics Solvers (QBAF)**           | `epistemetrics` / `episteme-pipeline` | `Under Evaluation` | Iterative convergence algorithms for TheoryNet $(\text{TF} = (\text{At}, R))$ |
 | **Streaming Large Corpus Ingestion**           | `episteme-pipeline`                   | `Under Evaluation` | Memory-bounded chunking & windowed episodic memory eviction                   |
 | **Pluggable Vector Store Adapters**            | `episteme-pipeline`                   | `Under Evaluation` | Qdrant, Milvus, and pgvector reference implementations                        |
-| **TypeSafe / Jev Classification & Gating**     | `episteme-pipeline`                   | `Under Evaluation` | Sub-second typed classification & decision gating (`JevClassifier`)           |
+| **World Models & Empirical Simulation**        | `episteme-pipeline` / `epistemetrics` | `Under Evaluation` | Simulating world dynamics & environments to evaluate empirical node correctness |
 
 ---
 
@@ -112,7 +177,7 @@ and deepening gradual argumentation semantics.
 
 | Status             | Target Component                        | Focus Area                        |
 |:-------------------|:----------------------------------------|:----------------------------------|
-| `Under Evaluation` | `episteme-pipeline` (`pipeline/evaluation/`) | Empirical Grounding & Calibration |
+| `Under Evaluation` | `episteme-pipeline` (`episteme_pipeline/evaluation/`) | Empirical Grounding & Calibration |
 
 Establishes a human-expert baseline on authentic scientific texts before deploying automated LLM judges.
 
@@ -130,7 +195,7 @@ Establishes a human-expert baseline on authentic scientific texts before deployi
 
 | Status             | Target Component                                 | Focus Area                  |
 |:-------------------|:-------------------------------------------------|:----------------------------|
-| `Under Evaluation` | `episteme-pipeline` (`pipeline/evaluation/adapters/`) | Standardized NLP Benchmarks |
+| `Under Evaluation` | `episteme-pipeline` (`episteme_pipeline/evaluation/adapters/`) | Standardized NLP Benchmarks |
 
 Standardizes evaluation against recognized NLP and argument mining benchmarks.
 
@@ -146,7 +211,7 @@ Standardizes evaluation against recognized NLP and argument mining benchmarks.
 
 | Status             | Target Component                                                                                       | Focus Area                         |
 |:-------------------|:-------------------------------------------------------------------------------------------------------|:-----------------------------------|
-| `Under Evaluation` | `episteme-pipeline` (`pipeline/phases/phase2_entity_discovery/`, `pipeline/phases/phase4_argument_mining/`) | Zero-Cost Classifier Bootstrapping |
+| `Under Evaluation` | `episteme-pipeline` (`episteme_pipeline/phases/phase2_entity_discovery/`, `episteme_pipeline/phases/phase4_argument_mining/`) | Zero-Cost Classifier Bootstrapping |
 
 Bootstraps extraction classifiers without expensive manual labeling.
 
@@ -157,28 +222,11 @@ Bootstraps extraction classifiers without expensive manual labeling.
 
 ---
 
-### Advanced Gradual Semantics Solvers (QBAF & TheoryNet)
-
-| Status             | Target Component                                                       | Focus Area                     |
-|:-------------------|:-----------------------------------------------------------------------|:-------------------------------|
-| `Under Evaluation` | `epistemetrics` & `episteme-pipeline` (`pipeline/phases/phase6_theorynet/`) | Argumentation Convergence Math |
-
-Implements high-performance iterative convergence algorithms for dense, cyclic argumentation networks. Governed
-by [ADR 0011](adr/0011-declarative-graph-metrics-and-qbaf-semantics.md).
-
-**Key Capabilities & Milestones:**
-
-- Implements gradual argumentation semantics (Eulerian, quadratic energy, and categorization models).
-- Solves for equilibrium justification degrees ($\tau$) and empirical content ratios ($B \cap P$) in TheoryNet
-  ($\text{TF} = (\text{At}, R)$).
-
----
-
 ### Streaming & Large Corpus Ingestion
 
 | Status             | Target Component                                      | Focus Area             |
 |:-------------------|:------------------------------------------------------|:-----------------------|
-| `Under Evaluation` | `episteme-pipeline` (`pipeline/phases/phase1_foundation/`) | Memory-Bounded Scaling |
+| `Under Evaluation` | `episteme-pipeline` (`episteme_pipeline/phases/phase1_foundation/`) | Memory-Bounded Scaling |
 
 Enables memory-bounded ingestion of multi-chapter scientific treatises and book-length corpora.
 
@@ -193,7 +241,7 @@ Enables memory-bounded ingestion of multi-chapter scientific treatises and book-
 
 | Status             | Target Component                   | Focus Area                 |
 |:-------------------|:-----------------------------------|:---------------------------|
-| `Under Evaluation` | `episteme-pipeline` (`pipeline/graph/`) | Backend Storage Decoupling |
+| `Under Evaluation` | `episteme-pipeline` (`episteme_pipeline/graph/`) | Backend Storage Decoupling |
 
 Supports specialized vector backends alongside Neo4j.
 
@@ -204,29 +252,22 @@ Supports specialized vector backends alongside Neo4j.
 
 ---
 
-### TypeSafe / Jev Typed Classification & Gating Engine (`JevClassifier`)
+### World Models for Empirical Node Validation
 
-| Status             | Target Component                                                                                   | Focus Area                                 |
-|:-------------------|:---------------------------------------------------------------------------------------------------|:-------------------------------------------|
-| `Under Evaluation` | `episteme-pipeline` (`pipeline/protocols/extractors.py`, `pipeline/phases/phase4_argument_mining/`) | Ultra-Low Latency Inference & Flow Routing |
+| Status             | Target Component                                                                                         | Focus Area                                    |
+|:-------------------|:---------------------------------------------------------------------------------------------------------|:----------------------------------------------|
+| `Under Evaluation` | `episteme-pipeline` / `epistemetrics` (`episteme_pipeline/phases/phase6_theorynet/`, `epistemetrics/epistemic/`) | Environmental Simulation & Empirical Adequacy |
 
-Integrates TypeSafe's Jev as a non-generative, typed classification and decision-gating adapter across the pipeline.
+Explores generative and neuro-symbolic world models as simulation testbeds for evaluating the correctness, empirical adequacy, and real-world grounding of empirical nodes in theory graphs.
 
-Unlike generative LLMs, Jev directly emits typed values and calibrated confidence scores (empirically reflecting true
-classification accuracy / ground-truth fit frequencies rather than uncalibrated LLM probabilities) with sub-second
-response times (70–500ms) at 40–200× lower cost and latency.
+In formal structuralism (*Wissenschaftstheorie*) and Episteme's tri-layer architecture, intended applications ($I$) and empirical nodes assert concrete claims about domain phenomena. Traditional pipelines evaluate these nodes via static text matching or subjective LLM plausibility scores ($p(i, x)$). By integrating world models, Episteme simulates environment dynamics, state transitions, and counterfactual interventions directly, providing objective empirical feedback on whether extracted empirical assertions hold.
 
 **Key Capabilities & Milestones:**
 
-- **`JevACCClassifier`**: High-throughput argument component classification (`CLAIM`, `PREMISE`, `CONCLUSION`) in Phase
-  4.
-- **`JevARCClassifier`**: Defeasible relation stance classification (`SUPPORTS`, `ATTACKS`) bypassing heavy LLM prompt
-  envelopes.
-- **`JevRelationReranker`**: Drop-in replacement for CrossEncoder relation scoring in Phase 3 Global Relations.
-- **AOP Decision Points & Dynamic Gating**: Intercepts pipeline flow (e.g., via aspect-oriented decorators) at critical
-  junctures—deciding whether to continue iterative reasoning, trigger gleaning passes, or route to specialized
-  components—using calibrated confidence thresholds to maximize speed and minimize token burn.
-- Evaluates throughput speedups and cost reductions on book-length corpora against frontier generative LLM baselines.
+- **Domain Environment Simulation**: Constructs executable generative or symbolic simulation sandboxes modeling the physical, social, or historical conditions asserted by empirical claims.
+- **Empirical Node Correctness Evaluation**: Evaluates whether the factual claims, observational residuals ($d(i, x)$), and predictive implications of candidate empirical nodes hold under forward simulation rollouts.
+- **Counterfactual & Perturbation Stress-Testing**: Systematically perturbs simulation parameters to evaluate the boundary conditions, empirical vulnerability, and falsifiability of theoretical nodes.
+- **Closed-Loop Grounding**: Synthesizes empirical simulation rollouts with TheoryNet post-processing, computing grounded empirical adequacy and tenability scores for empirical subgraphs.
 
 ---
 

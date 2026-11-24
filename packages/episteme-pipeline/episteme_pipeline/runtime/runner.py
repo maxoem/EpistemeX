@@ -18,6 +18,7 @@ from llama_index.llms.litellm import LiteLLM
 
 from episteme_pipeline.config import (
     ExecutionConfig,
+    GleaningConfig,
     Phase2Config,
     Phase3bConfig,
     Phase3Config,
@@ -27,11 +28,7 @@ from episteme_pipeline.config import (
 from episteme_pipeline.contracts.domain import GlobalStructuralAnchor
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.events.bus import EventEmitter
-from episteme_pipeline.graph import (
-    Neo4jGraphReader,
-    Neo4jGraphWriter,
-    Neo4jProcessingGraph,
-)
+from episteme_pipeline.graph import Neo4jProcessingGraph
 from episteme_pipeline.phases.phase3_global_relations.rerankers import (
     SentenceTransformerCrossEncoderReranker,
 )
@@ -109,23 +106,25 @@ async def run_pipeline(
     elif isinstance(config, dict):
         cfg = PipelineConfig(**config)
     else:
-        prompt_provider = LangfusePromptProvider()
-        cfg = PipelineConfig(
+        cfg = PipelineConfig.from_env(
             execution=ExecutionConfig(project_artifacts_to_graph=True),
-            phase2=Phase2Config(max_gleanings=2),
+            phase2=Phase2Config(gleaning=GleaningConfig(max_passes=2)),
             phase3=Phase3Config(dense_similarity_threshold=0.8),
             phase3b=Phase3bConfig(dense_similarity_threshold=0.8),
             phase5=Phase5Config(theory_fusion_enabled=True, cluster_layer="both"),
         )
+        prompt_provider = LangfusePromptProvider()
         try:
             cfg = prompt_provider.populate_config(cfg, label_or_version="production")
-        except Exception as exc:
-            logger.warning("Could not populate config from Langfuse prompt provider: %s", exc)
+        except Exception as exc:  # noqa: BLE001 baseline
+            logger.warning(
+                "Could not populate config from Langfuse prompt provider: %s", exc
+            )
 
     # 2. OpenAILike / LiteLLM Generation Model
-    model_name = getattr(cfg.models, "llm_model", None) or os.getenv("LLM_MODEL", "openai/gpt-4o-mini")
-    api_base = getattr(cfg.models, "llm_api_base", None) or os.getenv("LITELLM_API_BASE")
-    temperature = getattr(cfg.models, "temperature", 0.0)
+    model_name = cfg.models.llm_model or os.getenv("LLM_MODEL", "openai/gpt-4o-mini")
+    api_base = cfg.models.llm_api_base or os.getenv("LITELLM_API_BASE")
+    temperature = cfg.models.temperature
 
     llm_kwargs: dict[str, Any] = {
         "model": model_name,
@@ -138,7 +137,9 @@ async def run_pipeline(
     llm = LiteLLM(**llm_kwargs)
 
     # 3. OpenAILike / LiteLLM Embedding Model
-    embed_name = getattr(cfg.models, "embedding_model", None) or os.getenv("EMBED_MODEL", "openai/text-embedding-3-small")
+    embed_name = cfg.models.embedding_model or os.getenv(
+        "EMBED_MODEL", "openai/text-embedding-3-small"
+    )
     embed_kwargs: dict[str, Any] = {
         "model_name": embed_name,
         "api_key": os.getenv("LITELLM_API_KEY") or os.getenv("OPENAI_API_KEY"),
@@ -149,28 +150,27 @@ async def run_pipeline(
     embed_model = LiteLLMEmbedding(**embed_kwargs)
 
     # 4. HuggingFace CrossEncoder Reranker Model
-    reranker_name = getattr(cfg.models, "reranker_model", None) or os.getenv("RERANKER_MODEL", "Qwen/Qwen3-Reranker-0.6B")
+    reranker_name = cfg.models.reranker_model or os.getenv(
+        "RERANKER_MODEL", "Qwen/Qwen3-Reranker-0.6B"
+    )
     reranker = SentenceTransformerCrossEncoderReranker(
         model_name=reranker_name,
         cache_model=True,
         model_kwargs={"torch_dtype": "auto"},
     )
 
-    # 5. Neo4j Graph Store Components
+    # 5. Neo4j Graph Store Components (single connection pool)
     url = neo4j_url or os.getenv("NEO4J_URL", "neo4j://127.0.0.1:7687")
     user = neo4j_user or os.getenv("NEO4J_USERNAME", "neo4j")
     password = neo4j_password or os.getenv("NEO4J_PASSWORD", "neo4jdbpass")
     database = neo4j_database or os.getenv("NEO4J_DATABASE", "neo4j")
 
-    graph_reader = Neo4jGraphReader(
+    neo4j_graph = Neo4jProcessingGraph(
         url=url, username=user, password=password, database=database
     )
-    projection_graph = Neo4jGraphWriter(
-        url=url, username=user, password=password, database=database
-    )
-    checkpoint_store = Neo4jProcessingGraph(
-        url=url, username=user, password=password, database=database
-    )
+    graph_reader = neo4j_graph
+    projection_graph = neo4j_graph
+    checkpoint_store = neo4j_graph
 
     # 6. Instantiate Pipeline via Pipeline.for_task()
     pipeline = Pipeline.for_task(
@@ -212,11 +212,13 @@ async def run_pipeline(
             parent_run_id,
             len(pipeline_input.source_paths),
         )
-        result = await pipeline.run(pipeline_input, run_id=run_id, parent_run_id=parent_run_id)
+        result = await pipeline.run(
+            pipeline_input, run_id=run_id, parent_run_id=parent_run_id
+        )
         return result
     finally:
         for handle in (graph_reader, projection_graph, checkpoint_store):
             try:
                 await handle.close()
-            except Exception as close_exc:
+            except Exception as close_exc:  # noqa: BLE001 baseline
                 logger.debug("Error closing graph handle %s: %s", handle, close_exc)

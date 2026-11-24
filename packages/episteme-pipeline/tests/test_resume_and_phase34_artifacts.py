@@ -9,10 +9,6 @@ from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
 )
-from episteme_pipeline.artifacts.mappers import (
-    map_phase3_output_to_artifacts,
-    map_phase4_output_to_artifacts,
-)
 from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.domain import (
@@ -28,11 +24,17 @@ from episteme_pipeline.contracts.phase_contracts import (
     PipelineInput,
 )
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import (
     ExecutionResult,
     RunManifest,
     RunPhaseRecord,
     RunStatus,
+)
+
+from tests.helpers.artifact_mappers import (
+    map_phase3_output_to_artifacts,
+    map_phase4_output_to_artifacts,
 )
 
 
@@ -87,22 +89,25 @@ def test_phase4_mapper_emits_argument_artifacts() -> None:
     }
 
 
-class StubPhase1:
+class StubPhase1(PhaseRunner[object]):
     name = "Phase 1: Data Foundation"
+    phase_key = "phase1"
 
     async def run(self, input, context: ArtifactExecutionContext) -> ArtifactCollection:
         return ArtifactCollection([])
 
 
-class StubPhase2:
+class StubPhase2(PhaseRunner[object]):
     name = "Phase 2: Entity & Local Relation Discovery"
+    phase_key = "phase2"
 
     async def run(self, input, context: ArtifactExecutionContext) -> ArtifactCollection:
         return ArtifactCollection([])
 
 
-class StubPhase3:
+class StubPhase3(PhaseRunner[object]):
     name = "Phase 3: Global Relation Extraction"
+    phase_key = "phase3"
 
     async def run(self, input, context: ArtifactExecutionContext) -> ArtifactCollection:
         return ArtifactCollection([])
@@ -136,7 +141,7 @@ async def test_run_from_phase_persists_resume_manifest(tmp_path: Path, graph_sto
             )
         ],
     )
-    pipeline._manifest_store.write_manifest(prior)
+    pipeline.manifest_store.write_manifest(prior)
 
     artifact_store = JsonArtifactStore(tmp_path / "artifacts")
     document = L1Document(
@@ -170,7 +175,7 @@ async def test_run_from_phase_persists_resume_manifest(tmp_path: Path, graph_sto
             method="test.phase1",
         )
     )
-    pipeline._artifact_store = artifact_store
+    pipeline.artifact_store = artifact_store
 
     result = await pipeline.run_from_phase(
         2, PipelineInput(source_paths=["docs/doc.md"])

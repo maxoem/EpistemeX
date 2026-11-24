@@ -28,8 +28,16 @@ from episteme_pipeline.contracts.domain import (
     TheoryAtom,
     TheoryRelation,
 )
+from episteme_pipeline.graph.theory_graph_mapper import (
+    is_theory_edge,
+    theory_relation_from_graph_properties,
+    theory_relation_to_graph_properties,
+)
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
-from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
+from episteme_pipeline.schema.default_schema import (
+    DEFAULT_SCHEMA,
+    StructuralRelationType,
+)
 
 
 def deterministic_text_embedding(text: str, dim: int = 128) -> list[float]:
@@ -74,15 +82,18 @@ class InMemoryGraphStore(ProcessingGraph):
         self._theory_atoms: dict[str, TheoryAtom] = {}
         self._theory_relations: list[TheoryRelation] = []
         self._generic_relations: list[dict[str, Any]] = []
-        self._processed_chunks: dict[str, set[str]] = {}  # chunk_id -> set of phase tags
+        self._processed_chunks: dict[
+            str, set[str]
+        ] = {}  # chunk_id -> set of phase tags
         self._processed_items: dict[str, dict[str, PhaseItemRecord]] = {}
+        self._chunk_snapshots: dict[tuple[str, str], dict[str, Any]] = {}
+        self._checkpoint_payloads: dict[str, dict[str, dict[str, Any]]] = {}
         self._nodes: dict[str, dict[str, Any]] = {}
         self._embeddings: dict[str, list[float]] = {}
         self._node_run_ids: dict[str, str] = {}
-        self._argument_relation_types: set[str] = (
-            set(DEFAULT_SCHEMA.argument_relation_types)
-            | set(DEFAULT_SCHEMA.relation_polarities.keys())
-        )
+        self._argument_relation_types: set[str] = set(
+            DEFAULT_SCHEMA.argument_relation_types
+        ) | set(DEFAULT_SCHEMA.relation_polarities.keys())
 
     async def close(self) -> None:
         """Close handle (no-op for in-memory)."""
@@ -109,11 +120,11 @@ class InMemoryGraphStore(ProcessingGraph):
         return list(self._triples)
 
     async def get_neighborhood(self, node_id: str, depth: int = 1) -> SubGraph:
-        neighbor_nodes = [
-            e for e in self._entities.values() if e.id != node_id
-        ][:10]
+        neighbor_nodes = [e for e in self._entities.values() if e.id != node_id][:10]
         neighbor_triples = [
-            t for t in self._triples if t.subject_id == node_id or t.object_id == node_id
+            t
+            for t in self._triples
+            if t.subject_id == node_id or t.object_id == node_id
         ]
         return SubGraph(
             center_id=node_id,
@@ -184,13 +195,17 @@ class InMemoryGraphStore(ProcessingGraph):
 
         # Filter by run_id if specified
         if run_id:
-            candidates = {k: v for k, v in candidates.items() if v.get("run_id") == run_id}
+            candidates = {
+                k: v for k, v in candidates.items() if v.get("run_id") == run_id
+            }
 
         # Filter by node_label if specified
         if node_label:
             nl_lower = node_label.lower()
             candidates = {
-                k: v for k, v in candidates.items() if nl_lower in v["node_label"].lower()
+                k: v
+                for k, v in candidates.items()
+                if nl_lower in v["node_label"].lower()
             }
 
         scored_results: list[SearchResult] = []
@@ -381,7 +396,9 @@ class InMemoryGraphStore(ProcessingGraph):
                         target_id=str(v),
                         relation_type=rel_str,
                         confidence=float(edata.get("confidence", 1.0)),
-                        scope=scope_val if scope_val in ("local", "global") else "global",
+                        scope=scope_val
+                        if scope_val in ("local", "global")
+                        else "global",
                     )
                 )
             return indexed_count
@@ -405,7 +422,9 @@ class InMemoryGraphStore(ProcessingGraph):
                     id=node_id,
                     text=node.description or node.name,
                     component_type=str(node.node_type),
-                    source_chunk_id=node.provenance[0] if node.provenance else f"chunk_{node_id}",
+                    source_chunk_id=node.provenance[0]
+                    if node.provenance
+                    else f"chunk_{node_id}",
                     confidence=node.confidence,
                 )
                 indexed_count += 1
@@ -418,7 +437,9 @@ class InMemoryGraphStore(ProcessingGraph):
                         target_id=str(edge.target),
                         relation_type=str(edge.relation_type),
                         confidence=edge.confidence,
-                        scope=edge_scope if edge_scope in ("local", "global") else "global",
+                        scope=edge_scope
+                        if edge_scope in ("local", "global")
+                        else "global",
                     )
                 )
             return indexed_count
@@ -443,7 +464,31 @@ class InMemoryGraphStore(ProcessingGraph):
         return list(self._theory_atoms.values())
 
     async def get_all_theory_relations(self) -> list[TheoryRelation]:
-        return list(self._theory_relations)
+        """Return all stored pairwise and reified :class:`TheoryRelation` items."""
+        by_id: dict[str, TheoryRelation] = {
+            rel.relation_id: rel for rel in self._theory_relations
+        }
+        for node_id, node in self._nodes.items():
+            if node.get("label") != "TheoryInference":
+                continue
+            rel_type = node.get("relation_type")
+            if not rel_type:
+                continue
+            source_id = node.get("source_id")
+            if not source_id:
+                premises = node.get("premise_ids") or ()
+                source_id = premises[0] if premises else node_id
+            target_id = node.get("target_id") or ""
+            if not target_id:
+                continue
+            rel = theory_relation_from_graph_properties(
+                source_id=str(source_id),
+                relation_type=str(rel_type),
+                target_id=str(target_id),
+                properties=node,
+            )
+            by_id[rel.relation_id] = rel
+        return list(by_id.values())
 
     async def find_entities_by_name(
         self, name: str, label: str | None = None
@@ -451,7 +496,7 @@ class InMemoryGraphStore(ProcessingGraph):
         name_lower = name.lower()
         matches = []
         for ent in self._entities.values():
-            if ent.name and ent.name.lower() == name_lower:
+            if ent.name and ent.name.lower() == name_lower:  # noqa: SIM102 baseline
                 if label is None or ent.label == label:
                     matches.append(ent)
         return matches
@@ -464,9 +509,7 @@ class InMemoryGraphStore(ProcessingGraph):
 
     async def get_chunk_entities(self, chunk_id: str) -> list[L2Entity]:
         return [
-            e
-            for e in self._entities.values()
-            if chunk_id in (e.source_chunk_ids or [])
+            e for e in self._entities.values() if chunk_id in (e.source_chunk_ids or [])
         ]
 
     async def upsert_node(
@@ -478,11 +521,17 @@ class InMemoryGraphStore(ProcessingGraph):
         extra_labels: tuple[str, ...] = (),
         create_only_properties: dict | None = None,
     ) -> None:
-        self._nodes[node_id] = {
-            "label": label,
-            "extra_labels": extra_labels,
-            **properties,
-        }
+        existing = self._nodes.get(node_id)
+        if existing is None:
+            merged: dict[str, Any] = {}
+            if create_only_properties:
+                merged.update(create_only_properties)
+        else:
+            merged = dict(existing)
+        merged["label"] = label
+        merged["extra_labels"] = extra_labels
+        merged.update(properties)
+        self._nodes[node_id] = merged
 
     async def prune_document_children(
         self,
@@ -501,6 +550,75 @@ class InMemoryGraphStore(ProcessingGraph):
             del self._chunks[cid]
         return {"chunks": len(dead), "chapters": 0}
 
+    async def prune_retired_entities(self, entity_ids: list[str]) -> int:
+        """Delete retired entity nodes and incident edges from the in-memory store.
+
+        Parameters
+        ----------
+        entity_ids : list of str
+            Retired entity identifiers to prune.
+
+        Returns
+        -------
+        int
+            Number of retired entity records removed.
+        """
+        target_ids = {eid for eid in entity_ids if eid}
+        if not target_ids:
+            return 0
+        removed = 0
+        for eid in target_ids:
+            if eid in self._entities:
+                del self._entities[eid]
+                removed += 1
+            if (
+                eid in self._nodes
+                and eid not in self._chunks
+                and eid not in self._theory_atoms
+            ):
+                del self._nodes[eid]
+            self._embeddings.pop(eid, None)
+            self._node_run_ids.pop(eid, None)
+        self._triples = [
+            t
+            for t in self._triples
+            if t.subject_id not in target_ids and t.object_id not in target_ids
+        ]
+        self._generic_relations = [
+            r
+            for r in self._generic_relations
+            if r.get("from_id") not in target_ids and r.get("to_id") not in target_ids
+        ]
+        return removed
+
+    async def prune_retired_mentions(self, mentions: list[tuple[str, str]]) -> int:
+        """Delete retired ``EXTRACTED_FROM`` mention edges from the in-memory store.
+
+        Parameters
+        ----------
+        mentions : list of tuple of (str, str)
+            Pairs of ``(entity_id, chunk_id)`` identifying retired mentions.
+
+        Returns
+        -------
+        int
+            Number of mention edges removed.
+        """
+        target_mentions = {(eid, cid) for eid, cid in mentions if eid and cid}
+        if not target_mentions:
+            return 0
+        before = len(self._generic_relations)
+        self._generic_relations = [
+            r
+            for r in self._generic_relations
+            if not (
+                r.get("relation_type") == StructuralRelationType.EXTRACTED_FROM
+                and (str(r.get("from_id", "")), str(r.get("to_id", "")))
+                in target_mentions
+            )
+        ]
+        return before - len(self._generic_relations)
+
     async def upsert_relation(
         self,
         from_id: str,
@@ -517,17 +635,27 @@ class InMemoryGraphStore(ProcessingGraph):
         }
         self._generic_relations.append(rel_dict)
 
-        # Delegate theory edge classification and domain reconstruction to TheoryRelation
-        if TheoryRelation.is_theory_edge(
+        # Reified hyperedge segments (HAS_PREMISE, CONCLUDES, and outgoing
+        # modifiers originating from :TheoryInference nodes) are reconstructed
+        # directly from their :TheoryInference nodes in get_all_theory_relations().
+        if (
+            relation_type == StructuralRelationType.HAS_PREMISE
+            or "inference_id" in props
+            or self._nodes.get(from_id, {}).get("label") == "TheoryInference"
+        ):
+            return
+
+        # Delegate theory edge classification and domain reconstruction to graph mapper
+        if is_theory_edge(
             relation_type=relation_type,
             properties=props,
             source_is_atom=from_id in self._theory_atoms,
             target_is_atom=to_id in self._theory_atoms,
         ):
             self._theory_relations.append(
-                TheoryRelation.from_graph_properties(
+                theory_relation_from_graph_properties(
                     source_id=from_id,
-                    relation_type=relation_type,
+                    relation_type=str(props.get("relation_type") or relation_type),
                     target_id=to_id,
                     properties=props,
                 )
@@ -542,12 +670,14 @@ class InMemoryGraphStore(ProcessingGraph):
             Domain relation instance.
         """
         self._theory_relations.append(relation)
-        self._generic_relations.append({
-            "from_id": relation.source_id,
-            "relation_type": relation.relation_type,
-            "to_id": relation.target_id,
-            "properties": relation.to_graph_properties(),
-        })
+        self._generic_relations.append(
+            {
+                "from_id": relation.source_id,
+                "relation_type": relation.relation_type,
+                "to_id": relation.target_id,
+                "properties": theory_relation_to_graph_properties(relation),
+            }
+        )
 
     async def upsert_theory_relations(self, relations: list[TheoryRelation]) -> None:
         """Upsert a batch of TheoryRelation domain instances.
@@ -593,9 +723,7 @@ class InMemoryGraphStore(ProcessingGraph):
     async def upsert_argument_component(self, component: TheoryAtom) -> None:
         self._theory_atoms[component.id] = component
 
-    async def upsert_argument_components(
-        self, components: list[TheoryAtom]
-    ) -> None:
+    async def upsert_argument_components(self, components: list[TheoryAtom]) -> None:
         for comp in components:
             await self.upsert_argument_component(comp)
 
@@ -606,7 +734,7 @@ class InMemoryGraphStore(ProcessingGraph):
             self._generic_relations.append(
                 {
                     "from_id": e_id,
-                    "relation_type": "IN_COMMUNITY",
+                    "relation_type": StructuralRelationType.IN_COMMUNITY.value,
                     "to_id": community_id,
                     "properties": {"level": level},
                 }
@@ -652,8 +780,79 @@ class InMemoryGraphStore(ProcessingGraph):
         for record in items:
             phase_items[record.key] = record
 
+    async def commit_phase_items(
+        self, phase: str, items: list[PhaseItemRecord]
+    ) -> None:
+        """Persist phase item checkpoints without requiring triple upserts.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        items : list[PhaseItemRecord]
+            Phase item checkpoint records to persist.
+        """
+        phase_items = self._processed_items.setdefault(phase, {})
+        for record in items:
+            phase_items[record.key] = record
+
+    async def save_chunk_state_snapshot(
+        self, phase: str, chunk_id: str, snapshot: dict[str, Any]
+    ) -> None:
+        """Persist a serialized state machine snapshot associated with a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+        snapshot : dict[str, Any]
+            State dictionary snapshot.
+        """
+        self._chunk_snapshots[(phase, chunk_id)] = dict(snapshot)
+
+    async def get_chunk_state_snapshot(
+        self, phase: str, chunk_id: str
+    ) -> dict[str, Any] | None:
+        """Retrieve a prior serialized state machine snapshot for a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+
+        Returns
+        -------
+        dict[str, Any] or None
+            Restored state snapshot, or None if no prior snapshot was recorded.
+        """
+        snapshot = self._chunk_snapshots.get((phase, chunk_id))
+        return dict(snapshot) if snapshot is not None else None
+
+    async def save_checkpoint_payloads(
+        self, phase: str, payloads: dict[str, dict[str, Any]]
+    ) -> None:
+        """Persist intermediate JSON-serializable item outputs in memory."""
+        if not payloads:
+            return
+        store = self._checkpoint_payloads.setdefault(phase, {})
+        for k, v in payloads.items():
+            store[k] = dict(v)
+
+    async def get_checkpoint_payloads(self, phase: str) -> dict[str, dict[str, Any]]:
+        """Retrieve persisted intermediate item outputs from memory."""
+        raw = self._checkpoint_payloads.get(phase, {})
+        return {k: dict(v) for k, v in raw.items()}
+
     async def clear_phase_checkpoints(self, phase: str) -> None:
         if phase in self._processed_items:
             del self._processed_items[phase]
+        self._checkpoint_payloads.pop(phase, None)
+        keys_to_del = [k for k in self._chunk_snapshots if k[0] == phase]
+        for k in keys_to_del:
+            del self._chunk_snapshots[k]
         for tags in self._processed_chunks.values():
             tags.discard(phase)

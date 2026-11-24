@@ -27,6 +27,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from episteme_pipeline.contracts.domain import (
+    EntityConception,
     L1Chunk,
     L2Entity,
     L2Triple,
@@ -38,6 +39,11 @@ from episteme_pipeline.contracts.domain import (
     TheoryAtom,
     TheoryRelation,
 )
+from episteme_pipeline.graph.theory_graph_mapper import (
+    theory_atom_to_graph_properties,
+    theory_relation_from_graph_properties,
+    theory_relation_to_graph_properties,
+)
 from episteme_pipeline.protocols.graph_store import (
     EntityGraph,
     FusionGraph,
@@ -45,6 +51,7 @@ from episteme_pipeline.protocols.graph_store import (
     ProcessingGraph,
     ProjectionGraph,
 )
+from episteme_pipeline.schema.default_schema import StructuralRelationType
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +60,17 @@ ENTITY_LABEL = "Entity"
 
 #: Labels that are structurally *not* entities. Used only by the one-time
 #: backfill migration, which has to reproduce the old exclusion heuristic.
-_NON_ENTITY_LABELS = ("Chunk", "Chapter", "Document", "TheoryAtom", "Community")
+_NON_ENTITY_LABELS = (
+    "Chunk",
+    "Chapter",
+    "Document",
+    "TheoryAtom",
+    "TheoryInference",
+    "Community",
+)
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_PHASE_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z0-9_-]+)?$")
 
 
 def _cypher_identifier(value: str, *, kind: str) -> str:
@@ -80,6 +95,40 @@ def _cypher_identifier(value: str, *, kind: str) -> str:
             "and underscores not starting with a digit."
         )
     return normalised
+
+
+def _normalize_phase_key(
+    phase: str, *, kind: str = "phase identifier"
+) -> tuple[str, str]:
+    """Validate a phase identifier (including lineage-scoped ``phase:fp``) and return ``(phase_value, safe_prop_prefix)``.
+
+    Parameters
+    ----------
+    phase : str
+        Phase key, e.g. ``"phase2"`` or ``"phase2:a1b2c3d4"``.
+    kind : str, default "phase identifier"
+        Label used in validation error messages.
+
+    Returns
+    -------
+    tuple of (str, str)
+        ``(phase_value, safe_prop_prefix)`` where ``phase_value`` is the validated
+        key used as a Cypher parameter and ``safe_prop_prefix`` replaces ``:`` and
+        ``-`` with ``_`` for safe property name interpolation on ``:Chunk`` nodes.
+
+    Raises
+    ------
+    ValueError
+        If ``phase`` contains unsafe characters.
+    """
+    raw = str(phase)
+    if not _PHASE_KEY_RE.match(raw):
+        raise ValueError(
+            f"Unsafe Cypher {kind} {phase!r}: expected a phase identifier of letters, "
+            "digits, underscores, and an optional ':lineage_fingerprint' suffix."
+        )
+    safe_prefix = raw.replace(":", "__").replace("-", "_")
+    return raw, safe_prefix
 
 
 def _is_homogeneous_primitive_list(items: list | tuple) -> bool:
@@ -196,7 +245,9 @@ class _Neo4jConnection:
                     try:
                         from neo4j import AsyncGraphDatabase
                     except ImportError:
-                        raise RuntimeError("neo4j package is required: pip install neo4j")
+                        raise RuntimeError(
+                            "neo4j package is required: pip install neo4j"
+                        )
                     self._driver = AsyncGraphDatabase.driver(
                         self.url, auth=(self.username, self.password)
                     )
@@ -265,28 +316,79 @@ class _Neo4jWriteMixin:
             query += "SET n" + "".join(f":`{extra}`" for extra in extras) + " "
         query += "SET n += $props"
         props = _writable_props({**properties, "id": node_id})
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
-                await tx.run(
-                    query, id=node_id, props=props, create_props=create_props
-                )
+                await tx.run(query, id=node_id, props=props, create_props=create_props)
                 await tx.commit()
 
-    async def upsert_relations(
-        self, relations: list[dict]
+    async def upsert_nodes(
+        self,
+        label: str,
+        nodes: list[dict],
+        *,
+        extra_labels: tuple[str, ...] = (),
     ) -> None:
+        """Bulk-upsert a batch of nodes sharing ``label`` via Cypher ``UNWIND``.
+
+        Parameters
+        ----------
+        label : str
+            Primary node label.
+        nodes : list of dict
+            Items carrying ``"id"``, ``"props"`` (or ``"properties"``), and
+            optionally ``"create_props"``.
+        extra_labels : tuple of str, optional
+            Additional labels stamped on each node.
+        """
+        if not nodes:
+            return
+        primary = _cypher_identifier(label, kind="label")
+        extras = [
+            safe
+            for safe in (
+                _cypher_identifier(extra, kind="label") for extra in extra_labels
+            )
+            if safe != primary
+        ]
+        batch_data = []
+        for n in nodes:
+            node_id = str(n["id"])
+            raw_props = dict(n.get("props") or n.get("properties") or {})
+            raw_create = dict(n.get("create_props") or {})
+            batch_data.append(
+                {
+                    "id": node_id,
+                    "props": _writable_props({**raw_props, "id": node_id}),
+                    "create_props": _writable_props(raw_create),
+                }
+            )
+
+        query = f"UNWIND $batch AS item MERGE (n:`{primary}` {{id: item.id}}) "
+        query += "ON CREATE SET n += item.create_props "
+        if extras:
+            query += "SET n" + "".join(f":`{extra}`" for extra in extras) + " "
+        query += "SET n += item.props"
+
+        async with self._session() as session:  # noqa: SIM117 baseline
+            async with await session.begin_transaction() as tx:
+                await tx.run(query, batch=batch_data)
+                await tx.commit()
+
+    async def upsert_relations(self, relations: list[dict]) -> None:
         if not relations:
             return
         rels_by_type: dict[str, list[dict]] = {}
         for r in relations:
             rel_safe = _cypher_identifier(r["relation_type"], kind="relationship type")
-            rels_by_type.setdefault(rel_safe, []).append({
-                "from_id": r["from_id"],
-                "to_id": r["to_id"],
-                "props": _writable_props(r.get("properties") or {})
-            })
-            
-        async with self._session() as session:
+            rels_by_type.setdefault(rel_safe, []).append(
+                {
+                    "from_id": r["from_id"],
+                    "to_id": r["to_id"],
+                    "props": _writable_props(r.get("properties") or {}),
+                }
+            )
+
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 for rel_type, batch_data in rels_by_type.items():
                     query = f"""
@@ -306,12 +408,16 @@ class _Neo4jWriteMixin:
         to_id: str,
         properties: dict | None = None,
     ) -> None:
-        await self.upsert_relations([{
-            "from_id": from_id, 
-            "relation_type": relation_type, 
-            "to_id": to_id, 
-            "properties": properties
-        }])
+        await self.upsert_relations(
+            [
+                {
+                    "from_id": from_id,
+                    "relation_type": relation_type,
+                    "to_id": to_id,
+                    "properties": properties,
+                }
+            ]
+        )
 
     async def upsert_chunks(self, chunks: list[L1Chunk]) -> None:
         if not chunks:
@@ -328,13 +434,15 @@ class _Neo4jWriteMixin:
             if c.metadata:
                 props.update(c.metadata)
             create_props = props.pop("_create_props", {})
-            batch_data.append({
-                "id": c.id,
-                "props": _writable_props(props),
-                "create_props": _writable_props(create_props)
-            })
+            batch_data.append(
+                {
+                    "id": c.id,
+                    "props": _writable_props(props),
+                    "create_props": _writable_props(create_props),
+                }
+            )
 
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 await tx.run(query, batch=batch_data)
                 await tx.commit()
@@ -378,7 +486,7 @@ class _Neo4jWriteMixin:
             "FOREACH (n IN dead_chapters | DETACH DELETE n) "
             "RETURN chunks_deleted, size(dead_chapters) AS chapters_deleted"
         )
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 result = await tx.run(
                     query,
@@ -401,10 +509,74 @@ class _Neo4jWriteMixin:
             )
         return deleted
 
+    async def prune_retired_entities(self, entity_ids: list[str]) -> int:
+        """Delete retired entity nodes and incident edges from Neo4j.
+
+        Parameters
+        ----------
+        entity_ids : list of str
+            Retired entity identifiers to delete.
+
+        Returns
+        -------
+        int
+            Number of retired entity nodes deleted.
+        """
+        cleaned = [eid for eid in dict.fromkeys(entity_ids) if eid]
+        if not cleaned:
+            return 0
+        query = (
+            "UNWIND $entity_ids AS eid "
+            f"MATCH (n:`{ENTITY_LABEL}` {{id: eid}}) "
+            "WITH collect(DISTINCT n) AS dead "
+            "FOREACH (x IN dead | DETACH DELETE x) "
+            "RETURN size(dead) AS deleted_count"
+        )
+        async with self._session() as session:  # noqa: SIM117 baseline
+            async with await session.begin_transaction() as tx:
+                result = await tx.run(query, entity_ids=cleaned)
+                row = await result.single()
+                await tx.commit()
+        return int(row["deleted_count"]) if row else 0
+
+    async def prune_retired_mentions(self, mentions: list[tuple[str, str]]) -> int:
+        """Delete retired ``EXTRACTED_FROM`` edges between entities and chunks in Neo4j.
+
+        Parameters
+        ----------
+        mentions : list of tuple of (str, str)
+            Pairs of ``(entity_id, chunk_id)`` identifying retired mentions.
+
+        Returns
+        -------
+        int
+            Number of ``EXTRACTED_FROM`` relationships deleted.
+        """
+        payload = [
+            {"entity_id": eid, "chunk_id": cid}
+            for eid, cid in dict.fromkeys(mentions)
+            if eid and cid
+        ]
+        if not payload:
+            return 0
+        query = (
+            "UNWIND $mentions AS m "
+            f"MATCH (e:`{ENTITY_LABEL}` {{id: m.entity_id}})-[r:{StructuralRelationType.EXTRACTED_FROM.value}]->(c:Chunk {{id: m.chunk_id}}) "
+            "WITH collect(DISTINCT r) AS dead_rels "
+            "FOREACH (rel IN dead_rels | DELETE rel) "
+            "RETURN size(dead_rels) AS deleted_count"
+        )
+        async with self._session() as session:  # noqa: SIM117 baseline
+            async with await session.begin_transaction() as tx:
+                result = await tx.run(query, mentions=payload)
+                row = await result.single()
+                await tx.commit()
+        return int(row["deleted_count"]) if row else 0
+
     async def upsert_entities(self, entities: list[L2Entity]) -> None:
         if not entities:
             return
-        
+
         # In Cypher, we cannot set dynamic labels cleanly from a parameter in SET.
         # But we can group entities by label, and do one UNWIND per label.
         entities_by_label: dict[str, list[dict]] = {}
@@ -412,13 +584,15 @@ class _Neo4jWriteMixin:
             props = e.model_dump(exclude={"id", "label"})
             if not e.is_mature:
                 props.pop("is_mature", None)
-            
+            if not e.conceptions:
+                props.pop("conceptions", None)
+
             label_safe = _cypher_identifier(e.label, kind="label")
             entities_by_label.setdefault(label_safe, []).append(
                 {"id": e.id, "props": _writable_props(props)}
             )
-        
-        async with self._session() as session:
+
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 for label, batch_data in entities_by_label.items():
                     query = f"""
@@ -453,26 +627,26 @@ class _Neo4jWriteMixin:
         labelled = int(row["labelled"]) if row else 0
         logger.info("Backfilled :%s onto %d nodes.", ENTITY_LABEL, labelled)
         return labelled
-        
+
     async def upsert_triples(self, triples: list[L2Triple]) -> None:
         if not triples:
             return
-        
+
         triples_by_rel: dict[str, list[dict]] = {}
         for t in triples:
             rel_safe = _cypher_identifier(t.predicate, kind="relationship type")
-            props = _writable_props({
-                "confidence": t.confidence,
-                "scope": t.scope,
-                "source_chunk_id": t.source_chunk_id,
-            })
-            triples_by_rel.setdefault(rel_safe, []).append({
-                "from_id": t.subject_id,
-                "to_id": t.object_id,
-                "props": props
-            })
-            
-        async with self._session() as session:
+            props = _writable_props(
+                {
+                    "confidence": t.confidence,
+                    "scope": t.scope,
+                    "source_chunk_id": t.source_chunk_id,
+                }
+            )
+            triples_by_rel.setdefault(rel_safe, []).append(
+                {"from_id": t.subject_id, "to_id": t.object_id, "props": props}
+            )
+
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 for rel_type, batch_data in triples_by_rel.items():
                     query = f"""
@@ -505,7 +679,7 @@ class _Neo4jWriteMixin:
         """
         batch_data = []
         for c in components:
-            props = c.model_dump(exclude={"id"})
+            props = theory_atom_to_graph_properties(c)
             # Drop empty defaults so they neither cause Cypher Map{} errors
             # nor wipe existing enriched properties on re-runs (F-06).
             if not c.parameters:
@@ -518,7 +692,7 @@ class _Neo4jWriteMixin:
                 props.pop("entity_ids", None)
             batch_data.append({"id": c.id, "props": _writable_props(props)})
 
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 await tx.run(query, batch=batch_data)
                 await tx.commit()
@@ -546,14 +720,16 @@ class _Neo4jWriteMixin:
         rels_by_type: dict[str, list[dict]] = {}
         for rel in relations:
             rel_safe = _cypher_identifier(rel.relation_type, kind="relationship type")
-            props = rel.to_graph_properties()
-            rels_by_type.setdefault(rel_safe, []).append({
-                "from_id": rel.source_id,
-                "to_id": rel.target_id,
-                "props": _writable_props(props),
-            })
+            props = theory_relation_to_graph_properties(rel)
+            rels_by_type.setdefault(rel_safe, []).append(
+                {
+                    "from_id": rel.source_id,
+                    "to_id": rel.target_id,
+                    "props": _writable_props(props),
+                }
+            )
 
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 for rel_type, batch_data in rels_by_type.items():
                     query = f"""
@@ -588,13 +764,17 @@ class _Neo4jWriteMixin:
         MATCH (e {id: entity_id})
         MERGE (e)-[:IN_COMMUNITY]->(c)
         """
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 await tx.run(query_node, batch=communities)
                 await tx.commit()
 
-    async def upsert_community(self, community_id: str, level: int, entity_ids: list[str]) -> None:
-        await self.upsert_communities([{"community_id": community_id, "level": level, "entity_ids": entity_ids}])
+    async def upsert_community(
+        self, community_id: str, level: int, entity_ids: list[str]
+    ) -> None:
+        await self.upsert_communities(
+            [{"community_id": community_id, "level": level, "entity_ids": entity_ids}]
+        )
 
 
 #: Projects an entity row. ``labels(n)[0]`` is arbitrary for a multi-labelled
@@ -609,6 +789,29 @@ _ENTITY_RETURN = (
 
 def _entity_from_row(row: dict) -> L2Entity:
     props = row.get("props") or {}
+    raw_conceptions = props.get("conceptions")
+    conceptions: list[EntityConception] = []
+    if isinstance(raw_conceptions, str):
+        try:
+            loaded_c = json.loads(raw_conceptions)
+            if isinstance(loaded_c, list):
+                conceptions = [
+                    c
+                    if isinstance(c, EntityConception)
+                    else EntityConception.model_validate(c)
+                    for c in loaded_c
+                ]
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            logger.warning(
+                "Failed to parse conceptions JSON for entity %s: %s",
+                row.get("id"),
+                exc,
+            )
+    elif isinstance(raw_conceptions, list):
+        conceptions = [
+            c if isinstance(c, EntityConception) else EntityConception.model_validate(c)
+            for c in raw_conceptions
+        ]
     return L2Entity(
         id=row["id"],
         label=row["label"],
@@ -618,6 +821,8 @@ def _entity_from_row(row: dict) -> L2Entity:
         is_mature=props.get("is_mature", False),
         confidence=props.get("confidence"),
         source_chunk_ids=props.get("source_chunk_ids", []),
+        conceptions=conceptions,
+        polysemy_variance=props.get("polysemy_variance"),
     )
 
 
@@ -715,7 +920,12 @@ class _Neo4jReadMixin:
         query = (
             "MATCH (n:TheoryAtom) "
             "RETURN n.id as id, n.text as text, n.component_type as component_type, "
-            "n.source_chunk_id as source_chunk_id, n.confidence as confidence, n.plausibility as plausibility, "
+            "n.source_chunk_id as source_chunk_id, n.confidence as confidence, "
+            "n.modal_prior as modal_prior, n.local_tenability as local_tenability, "
+            "n.equilibrium_strength as equilibrium_strength, "
+            "n.controversy_volatility as controversy_volatility, "
+            "n.intensional_mode as intensional_mode, n.attributed_to as attributed_to, "
+            "n.resolver_type as resolver_type, n.syntax_bounds as syntax_bounds, "
             "n.epistemic_status as epistemic_status, n.scope_type as scope_type, "
             "n.entity_ids as entity_ids, n.parameters as parameters, "
             "n.measurements as measurements, n.tenability as tenability"
@@ -739,7 +949,7 @@ class _Neo4jReadMixin:
                             row.get("id"),
                             type(loaded).__name__,
                         )
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 baseline
                     logger.warning(
                         "Failed to parse parameters JSON for TheoryAtom %s: %s",
                         row.get("id"),
@@ -755,10 +965,12 @@ class _Neo4jReadMixin:
                     data = json.loads(raw_meas)
                     if isinstance(data, list):
                         meas_list = [
-                            m if isinstance(m, Measurement) else Measurement.model_validate(m)
+                            m
+                            if isinstance(m, Measurement)
+                            else Measurement.model_validate(m)
                             for m in data
                         ]
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 baseline
                     logger.warning(
                         "Failed to parse measurements JSON for TheoryAtom %s: %s",
                         row.get("id"),
@@ -767,10 +979,12 @@ class _Neo4jReadMixin:
             elif isinstance(raw_meas, list):
                 try:
                     meas_list = [
-                        m if isinstance(m, Measurement) else Measurement.model_validate(m)
+                        m
+                        if isinstance(m, Measurement)
+                        else Measurement.model_validate(m)
                         for m in raw_meas
                     ]
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 baseline
                     logger.warning(
                         "Failed to validate measurements list for TheoryAtom %s: %s",
                         row.get("id"),
@@ -782,7 +996,7 @@ class _Neo4jReadMixin:
             if isinstance(raw_tenab, str):
                 try:
                     tenability_res = TenabilityResult.model_validate_json(raw_tenab)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 baseline
                     logger.warning(
                         "Failed to parse tenability JSON for TheoryAtom %s: %s",
                         row.get("id"),
@@ -791,7 +1005,7 @@ class _Neo4jReadMixin:
             elif isinstance(raw_tenab, dict):
                 try:
                     tenability_res = TenabilityResult.model_validate(raw_tenab)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 baseline
                     logger.warning(
                         "Failed to validate tenability dict for TheoryAtom %s: %s",
                         row.get("id"),
@@ -800,41 +1014,70 @@ class _Neo4jReadMixin:
             elif isinstance(raw_tenab, TenabilityResult):
                 tenability_res = raw_tenab
 
-            atoms.append(
-                TheoryAtom(
-                    id=row["id"],
-                    text=row["text"],
-                    component_type=row["component_type"],
-                    source_chunk_id=row["source_chunk_id"],
-                    confidence=row.get("confidence"),
-                    plausibility=row.get("plausibility"),
-                    epistemic_status=row.get("epistemic_status"),
-                    scope_type=row.get("scope_type"),
-                    entity_ids=row.get("entity_ids") or [],
-                    parameters=params,
-                    measurements=meas_list,
-                    tenability=tenability_res,
-                )
+            raw_bounds = row.get("syntax_bounds")
+            syntax_bounds: tuple[float, float] | None = (
+                (float(raw_bounds[0]), float(raw_bounds[1]))
+                if isinstance(raw_bounds, (list, tuple)) and len(raw_bounds) == 2
+                else None
             )
+            atom_kwargs: dict[str, Any] = {
+                "id": row["id"],
+                "text": row["text"],
+                "component_type": row["component_type"],
+                "source_chunk_id": row["source_chunk_id"],
+                "confidence": row.get("confidence"),
+                "local_tenability": row.get("local_tenability"),
+                "equilibrium_strength": row.get("equilibrium_strength"),
+                "controversy_volatility": row.get("controversy_volatility"),
+                "intensional_mode": row.get("intensional_mode") or "asserted",
+                "attributed_to": row.get("attributed_to"),
+                "resolver_type": row.get("resolver_type"),
+                "syntax_bounds": syntax_bounds,
+                "epistemic_status": row.get("epistemic_status"),
+                "scope_type": row.get("scope_type"),
+                "entity_ids": row.get("entity_ids") or [],
+                "parameters": params,
+                "measurements": meas_list,
+                "tenability": tenability_res,
+            }
+            if row.get("modal_prior") is not None:
+                atom_kwargs["modal_prior"] = float(row["modal_prior"])
+            atoms.append(TheoryAtom(**atom_kwargs))
         return atoms
 
     async def get_all_theory_relations(self) -> list[TheoryRelation]:
+        """Fetch all pairwise and reified theory relations from Neo4j."""
         query = (
             "MATCH (a:TheoryAtom)-[r]->(b:TheoryAtom) "
             "RETURN a.id as source_id, type(r) as relation_type, b.id as target_id, "
             "coalesce(r.confidence, 1.0) as confidence, coalesce(r.scope, 'global') as scope, "
-            "r.weight as weight, r.tenability as tenability, properties(r) as props"
+            "r.weight as weight, r.edge_tenability as edge_tenability, properties(r) as props "
+            "UNION ALL "
+            "MATCH (w:TheoryInference) "
+            "WHERE w.relation_type IS NOT NULL AND w.target_id IS NOT NULL "
+            "RETURN coalesce(w.source_id, w.premise_ids[0], w.id) as source_id, "
+            "w.relation_type as relation_type, w.target_id as target_id, "
+            "coalesce(w.confidence, 1.0) as confidence, coalesce(w.scope, 'global') as scope, "
+            "w.weight as weight, w.edge_tenability as edge_tenability, properties(w) as props "
+            "UNION ALL "
+            "MATCH (a:TheoryAtom)-[r]->(w:TheoryInference) "
+            f"WHERE type(r) <> '{StructuralRelationType.HAS_PREMISE.value}' "
+            "RETURN a.id as source_id, coalesce(r.relation_type, type(r)) as relation_type, "
+            "coalesce(r.target_id, w.id) as target_id, "
+            "coalesce(r.confidence, 1.0) as confidence, coalesce(r.scope, 'global') as scope, "
+            "r.weight as weight, r.edge_tenability as edge_tenability, properties(r) as props"
         )
         async with self._session() as session:
             result = await session.run(query)
             rows = await result.data()
-        return [
-            TheoryRelation.from_graph_properties(
+        by_id: dict[str, TheoryRelation] = {}
+        for row in rows:
+            rel = theory_relation_from_graph_properties(
                 source_id=row["source_id"],
                 relation_type=row["relation_type"],
                 target_id=row["target_id"],
                 properties={
-                    **row.get("props", {}),
+                    **(row.get("props") or {}),
                     **{
                         k: v
                         for k, v in row.items()
@@ -843,10 +1086,12 @@ class _Neo4jReadMixin:
                     },
                 },
             )
-            for row in rows
-        ]
+            by_id[rel.relation_id] = rel
+        return list(by_id.values())
 
-    async def find_entities_by_name(self, name: str, label: str | None = None) -> list[L2Entity]:
+    async def find_entities_by_name(
+        self, name: str, label: str | None = None
+    ) -> list[L2Entity]:
         label_filter = (
             f"AND n:`{_cypher_identifier(label, kind='label')}` " if label else ""
         )
@@ -864,7 +1109,9 @@ class _Neo4jReadMixin:
             rows = await result.data()
         return [_entity_from_row(row) for row in rows]
 
-    async def get_chunks(self, filters: dict | None = None, limit: int | None = None) -> list[L1Chunk]:
+    async def get_chunks(
+        self, filters: dict | None = None, limit: int | None = None
+    ) -> list[L1Chunk]:
         clause, params = _property_filter("c", filters)
         where = f"WHERE {clause}" if clause else ""
         limit_clause = f"LIMIT {int(limit)}" if limit else ""
@@ -889,7 +1136,9 @@ class _Neo4jReadMixin:
             for row in rows
         ]
 
-    async def get_entities(self, labels: list[str] | None = None, filters: dict | None = None) -> list[L2Entity]:
+    async def get_entities(
+        self, labels: list[str] | None = None, filters: dict | None = None
+    ) -> list[L2Entity]:
         conditions: list[str] = []
         if labels:
             safe = [_cypher_identifier(label, kind="label") for label in labels]
@@ -913,7 +1162,7 @@ class _Neo4jReadMixin:
         async with self._session() as session:
             result = await session.run(query)
             rows = await result.data()
-        
+
         return [
             L2Triple(
                 subject_id=row["subj"],
@@ -928,7 +1177,7 @@ class _Neo4jReadMixin:
 
     async def get_entity_envelopes(self, entity_id: str) -> list[str]:
         query = (
-            "MATCH (e {id: $entity_id})-[r:EXTRACTED_FROM]->(c:Chunk) "
+            f"MATCH (e {{id: $entity_id}})-[r:{StructuralRelationType.EXTRACTED_FROM.value}]->(c:Chunk) "
             "WHERE r.textual_envelope IS NOT NULL "
             "RETURN r.textual_envelope AS envelope"
         )
@@ -939,7 +1188,7 @@ class _Neo4jReadMixin:
 
     async def get_chunk_entities(self, chunk_id: str) -> list[L2Entity]:
         query = (
-            f"MATCH (n:`{ENTITY_LABEL}`)-[:EXTRACTED_FROM]->(c:Chunk {{id: $chunk_id}}) "
+            f"MATCH (n:`{ENTITY_LABEL}`)-[:{StructuralRelationType.EXTRACTED_FROM.value}]->(c:Chunk {{id: $chunk_id}}) "
             f"{_ENTITY_RETURN}"
         )
         async with self._session() as session:
@@ -960,7 +1209,9 @@ class _Neo4jReadMixin:
         hops = max(1, int(depth))
         if getattr(self, "_apoc_available", True):
             try:
-                rows = await self._run_neighborhood(_apoc_neighborhood_query(), node_id, hops)
+                rows = await self._run_neighborhood(
+                    _apoc_neighborhood_query(), node_id, hops
+                )
             except Exception as exc:
                 if not _is_missing_procedure(exc):
                     raise
@@ -975,7 +1226,9 @@ class _Neo4jReadMixin:
                     _plain_neighborhood_query(hops), node_id, hops
                 )
         else:
-            rows = await self._run_neighborhood(_plain_neighborhood_query(hops), node_id, hops)
+            rows = await self._run_neighborhood(
+                _plain_neighborhood_query(hops), node_id, hops
+            )
 
         nodes: list[L2Entity] = []
         triples: list[L2Triple] = []
@@ -1009,7 +1262,9 @@ class _Neo4jReadMixin:
 
         return SubGraph(center_id=node_id, nodes=nodes, triples=triples, depth=depth)
 
-    async def _run_neighborhood(self, query: str, node_id: str, depth: int) -> list[dict]:
+    async def _run_neighborhood(
+        self, query: str, node_id: str, depth: int
+    ) -> list[dict]:
         async with self._session() as session:
             result = await session.run(query, node_id=node_id, depth=depth)
             return await result.data()
@@ -1022,7 +1277,11 @@ class _Neo4jReadMixin:
         run_id: str | None = None,
     ) -> list[SearchResult]:
         where_conditions: list[str] = []
-        params: dict[str, Any] = {"index": "chunk_embedding", "k": top_k, "embedding": embedding}
+        params: dict[str, Any] = {
+            "index": "chunk_embedding",
+            "k": top_k,
+            "embedding": embedding,
+        }
         if node_label:
             safe_label = _cypher_identifier(node_label, kind="label")
             where_conditions.append(f"node:`{safe_label}`")
@@ -1046,7 +1305,12 @@ class _Neo4jReadMixin:
             result = await session.run(query, **params)
             rows = await result.data()
         return [
-            SearchResult(node_id=row["node_id"], score=row["score"], node_label=row["node_label"], node_name=row["node_name"])
+            SearchResult(
+                node_id=row["node_id"],
+                score=row["score"],
+                node_label=row["node_label"],
+                node_name=row["node_name"],
+            )
             for row in rows
         ]
 
@@ -1055,7 +1319,8 @@ class _Neo4jCheckpointMixin:
     async def mark_chunks_processed(self, chunk_ids: list[str], phase: str) -> None:
         if not chunk_ids:
             return
-        prop_key = _cypher_identifier(f"{phase}_processed", kind="property name")
+        _, safe_prefix = _normalize_phase_key(phase, kind="property name")
+        prop_key = f"{safe_prefix}_processed"
         query = f"UNWIND $chunk_ids AS chunk_id MATCH (c:Chunk {{id: chunk_id}}) SET c.`{prop_key}` = true"
         async with self._session() as session:
             await session.run(query, chunk_ids=chunk_ids)
@@ -1063,7 +1328,10 @@ class _Neo4jCheckpointMixin:
     async def mark_chunk_processed(self, chunk_id: str, phase: str) -> None:
         await self.mark_chunks_processed([chunk_id], phase)
 
-    async def get_unprocessed_chunks(self, phase: str, limit: int | None = None) -> list[L1Chunk]:
+    async def get_unprocessed_chunks(
+        self, phase: str, limit: int | None = None
+    ) -> list[L1Chunk]:
+        _, safe_prefix = _normalize_phase_key(phase, kind="property name")
         limit_clause = f"LIMIT {limit}" if limit else ""
         query = (
             "MATCH (c:Chunk) WHERE coalesce(c[$prop_key], false) = false "
@@ -1072,7 +1340,7 @@ class _Neo4jCheckpointMixin:
             f"{limit_clause}"
         )
         async with self._session() as session:
-            result = await session.run(query, prop_key=f"{phase}_processed")
+            result = await session.run(query, prop_key=f"{safe_prefix}_processed")
             rows = await result.data()
         return [
             L1Chunk(
@@ -1091,7 +1359,7 @@ class _Neo4jCheckpointMixin:
     ) -> list[str]:
         if not item_keys:
             return []
-        phase_safe = _cypher_identifier(phase, kind="phase identifier")
+        phase_safe, _ = _normalize_phase_key(phase, kind="phase identifier")
         query = (
             "UNWIND $keys AS k "
             "WITH k "
@@ -1111,28 +1379,32 @@ class _Neo4jCheckpointMixin:
     ) -> None:
         if not triples and not items:
             return
-        phase_safe = _cypher_identifier(phase, kind="phase identifier")
+        phase_safe, _ = _normalize_phase_key(phase, kind="phase identifier")
 
         triples_by_rel: dict[str, list[dict]] = {}
         for t in triples:
             rel_safe = _cypher_identifier(t.predicate, kind="relationship type")
-            props = _writable_props({
-                "confidence": t.confidence,
-                "scope": t.scope,
-                "source_chunk_id": t.source_chunk_id,
-            })
-            triples_by_rel.setdefault(rel_safe, []).append({
-                "from_id": t.subject_id,
-                "to_id": t.object_id,
-                "props": props,
-            })
+            props = _writable_props(
+                {
+                    "confidence": t.confidence,
+                    "scope": t.scope,
+                    "source_chunk_id": t.source_chunk_id,
+                }
+            )
+            triples_by_rel.setdefault(rel_safe, []).append(
+                {
+                    "from_id": t.subject_id,
+                    "to_id": t.object_id,
+                    "props": props,
+                }
+            )
 
         items_payload = [
             {"key": item.key, "status": item.status, "error": item.error}
             for item in items
         ]
 
-        async with self._session() as session:
+        async with self._session() as session:  # noqa: SIM117 baseline
             async with await session.begin_transaction() as tx:
                 for rel_type, batch_data in triples_by_rel.items():
                     query = f"""
@@ -1152,14 +1424,140 @@ class _Neo4jCheckpointMixin:
                         "    p.error = item.error, "
                         "    p.updated_at = datetime() "
                     )
-                    await tx.run(checkpoint_query, phase=phase_safe, items=items_payload)
+                    await tx.run(
+                        checkpoint_query, phase=phase_safe, items=items_payload
+                    )
                 await tx.commit()
 
+    async def commit_phase_items(
+        self, phase: str, items: list[PhaseItemRecord]
+    ) -> None:
+        """Persist phase item checkpoints without requiring triple upserts.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        items : list[PhaseItemRecord]
+            Phase item checkpoint records to persist.
+        """
+        if not items:
+            return
+        await self.commit_phase_batch(phase, triples=[], items=items)
+
+    async def save_chunk_state_snapshot(
+        self, phase: str, chunk_id: str, snapshot: dict[str, Any]
+    ) -> None:
+        """Persist a serialized state machine snapshot associated with a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+        snapshot : dict[str, Any]
+            State dictionary snapshot.
+        """
+        import json
+
+        _, safe_prefix = _normalize_phase_key(phase, kind="phase identifier")
+        prop_key = f"{safe_prefix}_state_snapshot"
+        snapshot_json = json.dumps(snapshot)
+        query = f"MATCH (c:Chunk {{id: $chunk_id}}) SET c.`{prop_key}` = $snapshot_json"
+        async with self._session() as session:
+            await session.run(query, chunk_id=chunk_id, snapshot_json=snapshot_json)
+
+    async def get_chunk_state_snapshot(
+        self, phase: str, chunk_id: str
+    ) -> dict[str, Any] | None:
+        """Retrieve a prior serialized state machine snapshot for a chunk checkpoint.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier tag.
+        chunk_id : str
+            Source chunk identifier.
+
+        Returns
+        -------
+        dict[str, Any] or None
+            Restored state snapshot, or None if no prior snapshot was recorded.
+        """
+        import json
+
+        _, safe_prefix = _normalize_phase_key(phase, kind="phase identifier")
+        prop_key = f"{safe_prefix}_state_snapshot"
+        query = f"MATCH (c:Chunk {{id: $chunk_id}}) RETURN c.`{prop_key}` as snapshot"
+        async with self._session() as session:
+            result = await session.run(query, chunk_id=chunk_id)
+            row = await result.single()
+            if row and row["snapshot"]:
+                return json.loads(row["snapshot"])
+        return None
+
     async def clear_phase_checkpoints(self, phase: str) -> None:
-        phase_safe = _cypher_identifier(phase, kind="phase identifier")
+        phase_safe, safe_prefix = _normalize_phase_key(phase, kind="phase identifier")
+        prop_snapshot = f"{safe_prefix}_state_snapshot"
+        prop_processed = f"{safe_prefix}_processed"
         query = "MATCH (p:PhaseItem {phase: $phase}) DELETE p"
+        query_chunk = (
+            f"MATCH (c:Chunk) REMOVE c.`{prop_snapshot}`, c.`{prop_processed}`"
+        )
         async with self._session() as session:
             await session.run(query, phase=phase_safe)
+            await session.run(query_chunk)
+
+    async def save_checkpoint_payloads(
+        self, phase: str, payloads: dict[str, dict[str, Any]]
+    ) -> None:
+        """Persist intermediate JSON-serializable item outputs onto ``:PhaseItem`` nodes."""
+        if not payloads:
+            return
+        import json
+
+        phase_safe, _ = _normalize_phase_key(phase, kind="phase identifier")
+        items_payload = [
+            {"key": k, "payload_json": json.dumps(v)} for k, v in payloads.items()
+        ]
+        query = (
+            "UNWIND $items AS item "
+            "MERGE (p:PhaseItem {phase: $phase, key: item.key}) "
+            "SET p.payload_json = item.payload_json, "
+            "    p.updated_at = datetime() "
+        )
+        async with self._session() as session:
+            await session.run(query, phase=phase_safe, items=items_payload)
+
+    async def get_checkpoint_payloads(self, phase: str) -> dict[str, dict[str, Any]]:
+        """Retrieve persisted intermediate item outputs from ``:PhaseItem`` nodes."""
+        import json
+
+        phase_safe, _ = _normalize_phase_key(phase, kind="phase identifier")
+        query = (
+            "MATCH (p:PhaseItem {phase: $phase}) "
+            "WHERE p.payload_json IS NOT NULL "
+            "RETURN p.key AS key, p.payload_json AS payload_json"
+        )
+        async with self._session() as session:
+            result = await session.run(query, phase=phase_safe)
+            rows = await result.data()
+        out: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            raw_json = row.get("payload_json")
+            if isinstance(raw_json, str):
+                try:
+                    loaded = json.loads(raw_json)
+                    if isinstance(loaded, dict):
+                        out[str(row["key"])] = loaded
+                except (ValueError, TypeError) as exc:
+                    logger.warning(
+                        "Failed to parse checkpoint payload JSON for key %s: %s",
+                        row.get("key"),
+                        exc,
+                    )
+        return out
 
 
 class Neo4jGraphWriter(_Neo4jConnection, _Neo4jWriteMixin, ProjectionGraph):
@@ -1174,7 +1572,9 @@ class Neo4jGraphReader(
     pass
 
 
-class Neo4jCheckpointStore(_Neo4jConnection, _Neo4jCheckpointMixin, PhaseCheckpointStore):
+class Neo4jCheckpointStore(
+    _Neo4jConnection, _Neo4jCheckpointMixin, PhaseCheckpointStore
+):
     pass
 
 

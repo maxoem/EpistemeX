@@ -37,7 +37,7 @@ from episteme_studio.lifespan import create_lifespan
 from episteme_studio.runtime.broker import EventBroker
 from episteme_studio.runtime.executor import PipelineExecutor
 from episteme_studio.runtime.registry import RunRegistry
-from episteme_studio.security import validate_host_and_token
+from episteme_studio.security import resolve_safe_child, validate_host_and_token
 from episteme_studio.services.metric_service import MetricService
 from episteme_studio.settings import StudioSettings, get_default_settings
 
@@ -60,7 +60,7 @@ def resolve_static_dir(settings: StudioSettings) -> Path:
     try:
         ref = importlib.resources.files("episteme_studio") / "static"
         return Path(str(ref))
-    except Exception:
+    except Exception:  # noqa: BLE001 baseline
         return Path(__file__).parent / "static"
 
 
@@ -261,9 +261,20 @@ def create_app(settings: StudioSettings | None = None) -> FastAPI:
                     status_code=404,
                     content={"type": "not-found", "title": "Not Found", "status": 404},
                 )
-            target_file = static_dir / full_path
-            if full_path and target_file.is_file():
-                return HTMLResponse(target_file.read_text(encoding="utf-8"))
+            if full_path:
+                try:
+                    target_file = resolve_safe_child(static_dir, full_path)
+                except ValueError:
+                    return JSONResponse(
+                        status_code=404,
+                        content={
+                            "type": "not-found",
+                            "title": "Not Found",
+                            "status": 404,
+                        },
+                    )
+                if target_file.is_file():
+                    return HTMLResponse(target_file.read_text(encoding="utf-8"))
             return HTMLResponse(index_html.read_text(encoding="utf-8"))
     else:
 

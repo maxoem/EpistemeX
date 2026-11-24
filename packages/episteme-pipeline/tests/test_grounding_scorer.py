@@ -77,7 +77,9 @@ class TestTabularAndVisualGrounding:
         t1 = {"table_id": "table_1", "cells": [(1, 1), (1, 2)]}
         t2 = {"table_id": "table_1", "cells": [(1, 1), (2, 2)]}
         # intersection = 1, union = 3 -> 1/3
-        assert pytest.approx(calculate_tabular_grounding_iou(t1, t2), 0.001) == 1.0 / 3.0
+        assert (
+            pytest.approx(calculate_tabular_grounding_iou(t1, t2), 0.001) == 1.0 / 3.0
+        )
 
     def test_tabular_mismatched_table_id(self):
         """Verify different table identifiers return 0.0."""
@@ -137,9 +139,9 @@ class TestAnchorRoutingAndScorer:
         ]
         preds = [
             {"charStart": 0, "charEnd": 100, "sourceDocId": "doc1"},  # IoU 1.0
-            {"bbox": [10.0, 10.0, 50.0, 50.0, 1]},                    # IoU 1.0
-            {"table_id": "t1", "cells": [(0, 0)]},                    # IoU 1.0
-            {"formula_id": "eq_schrodinger"},                         # IoU 0.0
+            {"bbox": [10.0, 10.0, 50.0, 50.0, 1]},  # IoU 1.0
+            {"table_id": "t1", "cells": [(0, 0)]},  # IoU 1.0
+            {"formula_id": "eq_schrodinger"},  # IoU 0.0
         ]
 
         result = scorer.score(refs, preds)

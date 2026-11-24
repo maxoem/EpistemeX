@@ -50,6 +50,7 @@ def test_execution_config_has_all_phase_toggles():
 def test_pipeline_for_task_instantiation():
     """Verify Pipeline.for_task instantiates all 7 phase runners without TypeError."""
     from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
+
     mock_llm = MagicMock(spec=DiskCachedStructuredLLM)
     mock_reranker = MagicMock()
     mock_embed = MagicMock()
@@ -82,6 +83,7 @@ def test_pipeline_for_task_instantiation():
 def test_phase_config_fingerprints_mapping():
     """Verify each phase runner maps to its correct sub-config."""
     from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
+
     mock_llm = MagicMock(spec=DiskCachedStructuredLLM)
     mock_reranker = MagicMock()
     mock_embed = MagicMock()
@@ -100,23 +102,24 @@ def test_phase_config_fingerprints_mapping():
         checkpoint_store=mock_ckpt,
     )
 
-    cfg_fps = pipeline._phase_config_fingerprints()
+    cfg_fps = pipeline.engine.phase_config_fingerprints()
     assert len(cfg_fps) == 9
-    # Modifying phase3b config should change fingerprint for phase index 4
-    cfg_fps_orig_4 = cfg_fps[4]
+    # Modifying phase3b config should change fingerprint for phase3b
+    cfg_fps_orig_3b = cfg_fps["phase3b"]
     pipeline.config.phase3b.dense_similarity_threshold = 0.99
-    cfg_fps_new = pipeline._phase_config_fingerprints()
-    assert cfg_fps_new[4] != cfg_fps_orig_4
-    # Modifying phase4_maturation config should change fingerprint for phase index 5
-    cfg_fps_orig_5 = cfg_fps[5]
+    cfg_fps_new = pipeline.engine.phase_config_fingerprints()
+    assert cfg_fps_new["phase3b"] != cfg_fps_orig_3b
+    # Modifying phase4_maturation config should change fingerprint for phase4_maturation
+    cfg_fps_orig_4m = cfg_fps["phase4_maturation"]
     pipeline.config.phase4_maturation.maturation_top_k = 99
-    cfg_fps_new_5 = pipeline._phase_config_fingerprints()
-    assert cfg_fps_new_5[5] != cfg_fps_orig_5
+    cfg_fps_new_4m = pipeline.engine.phase_config_fingerprints()
+    assert cfg_fps_new_4m["phase4_maturation"] != cfg_fps_orig_4m
 
 
 def test_prompt_fingerprints_includes_entity_synthesis():
-    """Verify _prompt_fingerprints includes entity_synthesis template."""
+    """Verify prompt_fingerprints includes entity_synthesis template."""
     from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
+
     mock_llm = MagicMock(spec=DiskCachedStructuredLLM)
     mock_reranker = MagicMock()
     mock_embed = MagicMock()
@@ -135,13 +138,14 @@ def test_prompt_fingerprints_includes_entity_synthesis():
         checkpoint_store=mock_ckpt,
     )
 
-    prompts = pipeline._prompt_fingerprints()
+    prompts = pipeline.engine.prompt_fingerprints()
     assert "entity_synthesis" in prompts.get("phase4_maturation", {})
 
 
 def test_build_phase_input_routing():
-    """Verify _build_phase_input routes inputs accurately to phase views."""
+    """Verify build_phase_input routes inputs accurately to phase views."""
     from episteme_pipeline.llm.cache import DiskCachedStructuredLLM
+
     mock_llm = MagicMock(spec=DiskCachedStructuredLLM)
     mock_reranker = MagicMock()
     mock_embed = MagicMock()
@@ -161,36 +165,58 @@ def test_build_phase_input_routing():
     )
 
     inp = PipelineInput(source_paths=["doc.txt"])
-    doc = L1Document(id="doc1", title="Doc 1", source_path="doc.txt", chapter_count=1, chunk_count=1)
-    chunk = L1Chunk(id="c1", text="Sample text", source_doc_id="doc1", sequence_index=0, token_count=2)
+    doc = L1Document(
+        id="doc1", title="Doc 1", source_path="doc.txt", chapter_count=1, chunk_count=1
+    )
+    chunk = L1Chunk(
+        id="c1",
+        text="Sample text",
+        source_doc_id="doc1",
+        sequence_index=0,
+        token_count=2,
+    )
     doc_art = build_document_artifact(doc, run_id="r1", phase_name="P1", method="m")
     chunk_art = build_chunk_artifact(chunk, run_id="r1", phase_name="P1", method="m")
     col1 = ArtifactCollection([doc_art, chunk_art])
 
-    p1_in = pipeline._build_phase_input(entry=pipeline._phase_entries[0], pipeline_input=inp, previous=None)
+    p1_in = pipeline.engine.build_phase_input(
+        entry=pipeline.workflow.nodes[0], pipeline_input=inp, previous=None
+    )
     assert isinstance(p1_in, PipelineInput)
 
-    p2_in = pipeline._build_phase_input(entry=pipeline._phase_entries[1], pipeline_input=inp, previous=col1)
+    p2_in = pipeline.engine.build_phase_input(
+        entry=pipeline.workflow.nodes[1], pipeline_input=inp, previous=col1
+    )
     assert isinstance(p2_in, Phase1ArtifactsView)
     assert len(p2_in.chunks) == 1
 
-    p3b_in = pipeline._build_phase_input(entry=pipeline._phase_entries[3], pipeline_input=inp, previous=col1)
+    p3b_in = pipeline.engine.build_phase_input(
+        entry=pipeline.workflow.nodes[3], pipeline_input=inp, previous=col1
+    )
     assert isinstance(p3b_in, Phase3ArtifactsView)
 
-    p4m_in = pipeline._build_phase_input(entry=pipeline._phase_entries[4], pipeline_input=inp, previous=col1)
+    p4m_in = pipeline.engine.build_phase_input(
+        entry=pipeline.workflow.nodes[4], pipeline_input=inp, previous=col1
+    )
     assert isinstance(p4m_in, Phase3ArtifactsView)
 
-    p4a_in = pipeline._build_phase_input(entry=pipeline._phase_entries[5], pipeline_input=inp, previous=col1)
+    p4a_in = pipeline.engine.build_phase_input(
+        entry=pipeline.workflow.nodes[5], pipeline_input=inp, previous=col1
+    )
     assert isinstance(p4a_in, Phase3ArtifactsView)
     assert len(p4a_in.chunks) == 1
 
-    p5_in = pipeline._build_phase_input(entry=pipeline._phase_entries[6], pipeline_input=inp, previous=col1)
+    p5_in = pipeline.engine.build_phase_input(
+        entry=pipeline.workflow.nodes[6], pipeline_input=inp, previous=col1
+    )
     assert isinstance(p5_in, Phase4ArtifactsView)
 
 
 def test_symmetrical_dag_structure_comparison():
     """Verify _compare_dag_structures detects deleted prior nodes as stale."""
-    doc = L1Document(id="doc1", title="Doc 1", source_path="doc.txt", chapter_count=1, chunk_count=1)
+    doc = L1Document(
+        id="doc1", title="Doc 1", source_path="doc.txt", chapter_count=1, chunk_count=1
+    )
     art1 = build_document_artifact(doc, run_id="r1", phase_name="P1", method="m")
     dag_current = ArtifactDependencyGraph.from_artifacts([art1])
 
@@ -207,8 +233,21 @@ def test_symmetrical_dag_structure_comparison():
 def test_qbaf_projection_preserves_weights():
     """Verify TheoryNetProjector.compute_weight preserves pre-computed weights."""
     proj = TheoryNetProjector()
-    comp = TheoryAtom(id="a1", text="Text", component_type="ANTECEDENT", source_chunk_id="c1", plausibility=0.85)
-    rel = TheoryRelation(source_id="a1", target_id="a2", relation_type="SUPPORTS", confidence=0.9, scope="local", weight=0.75)
+    comp = TheoryAtom(
+        id="a1",
+        text="Text",
+        component_type="ANTECEDENT",
+        source_chunk_id="c1",
+        modal_prior=0.85,
+    )
+    rel = TheoryRelation(
+        source_id="a1",
+        target_id="a2",
+        relation_type="SUPPORTS",
+        confidence=0.9,
+        scope="local",
+        weight=0.75,
+    )
 
     assert proj.compute_weight(comp) == 0.85
     assert proj.compute_relation_weight(rel) == 0.75

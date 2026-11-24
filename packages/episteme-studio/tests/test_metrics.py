@@ -73,15 +73,63 @@ class _MockNeo4jDriver:
 def _make_sample_graph() -> GraphView:
     """Create a sample epistemic graph for testing local gradual strength."""
     nodes = [
-        StudioNode(id="focus", layer=Layer.L3, type="Claim", label="Main Thesis", plausibility=0.6),
-        StudioNode(id="premise_1", layer=Layer.L3, type="Claim", label="Supporting Premise", plausibility=0.8),
-        StudioNode(id="counter_1", layer=Layer.L3, type="Claim", label="Counterargument", plausibility=0.7),
-        StudioNode(id="rebuttal_1", layer=Layer.L3, type="Claim", label="Rebuttal", plausibility=0.9),
+        StudioNode(
+            id="focus",
+            layer=Layer.L3,
+            type="Claim",
+            label="Main Thesis",
+            plausibility=0.6,
+        ),
+        StudioNode(
+            id="premise_1",
+            layer=Layer.L3,
+            type="Claim",
+            label="Supporting Premise",
+            plausibility=0.8,
+        ),
+        StudioNode(
+            id="counter_1",
+            layer=Layer.L3,
+            type="Claim",
+            label="Counterargument",
+            plausibility=0.7,
+        ),
+        StudioNode(
+            id="rebuttal_1",
+            layer=Layer.L3,
+            type="Claim",
+            label="Rebuttal",
+            plausibility=0.9,
+        ),
     ]
     edges = [
-        StudioEdge(id="e1", source="premise_1", target="focus", type="SUPPORTS", layer=Layer.L3, polarity=1, weight=0.9),
-        StudioEdge(id="e2", source="counter_1", target="focus", type="ATTACKS", layer=Layer.L3, polarity=-1, weight=0.8),
-        StudioEdge(id="e3", source="rebuttal_1", target="counter_1", type="ATTACKS", layer=Layer.L3, polarity=-1, weight=0.85),
+        StudioEdge(
+            id="e1",
+            source="premise_1",
+            target="focus",
+            type="SUPPORTS",
+            layer=Layer.L3,
+            polarity=1,
+            weight=0.9,
+        ),
+        StudioEdge(
+            id="e2",
+            source="counter_1",
+            target="focus",
+            type="ATTACKS",
+            layer=Layer.L3,
+            polarity=-1,
+            weight=0.8,
+        ),
+        StudioEdge(
+            id="e3",
+            source="rebuttal_1",
+            target="counter_1",
+            type="ATTACKS",
+            layer=Layer.L3,
+            polarity=-1,
+            weight=0.85,
+        ),
     ]
     return GraphView(
         nodes=nodes,
@@ -110,13 +158,18 @@ async def test_fast_path_sub_250ms_returns_200_ok() -> None:
                 def list_runs(self, limit: int = 1):
                     class _MockSummary:
                         run_id = "test-run"
+
                     return [_MockSummary()]
+
             return _MockReader()
 
     from episteme_studio.api.deps import get_graph_service
+
     app.dependency_overrides[get_graph_service] = lambda: _MockGraphService()
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         resp = await client.post(
             "/api/metric-executions",
             json={
@@ -176,7 +229,9 @@ async def test_cooperative_cancellation() -> None:
         fast_path_timeout=0.00001,
     )
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         del_resp = await client.delete(f"/api/metric-executions/{job.execution_id}")
         assert del_resp.status_code == 200
         assert del_resp.json()["status"] == "cancelled"
@@ -191,12 +246,32 @@ async def test_cooperative_cancellation() -> None:
 async def test_qbaf_cyclic_graph_terminates_without_locking() -> None:
     """Circular argument graphs (A attacks B, B attacks A) converge without infinite loops."""
     nodes = [
-        StudioNode(id="A", layer=Layer.L3, type="Claim", label="Claim A", plausibility=0.6),
-        StudioNode(id="B", layer=Layer.L3, type="Claim", label="Claim B", plausibility=0.6),
+        StudioNode(
+            id="A", layer=Layer.L3, type="Claim", label="Claim A", plausibility=0.6
+        ),
+        StudioNode(
+            id="B", layer=Layer.L3, type="Claim", label="Claim B", plausibility=0.6
+        ),
     ]
     edges = [
-        StudioEdge(id="e_ab", source="A", target="B", type="ATTACKS", layer=Layer.L3, polarity=-1, weight=0.8),
-        StudioEdge(id="e_ba", source="B", target="A", type="ATTACKS", layer=Layer.L3, polarity=-1, weight=0.8),
+        StudioEdge(
+            id="e_ab",
+            source="A",
+            target="B",
+            type="ATTACKS",
+            layer=Layer.L3,
+            polarity=-1,
+            weight=0.8,
+        ),
+        StudioEdge(
+            id="e_ba",
+            source="B",
+            target="A",
+            type="ATTACKS",
+            layer=Layer.L3,
+            polarity=-1,
+            weight=0.8,
+        ),
     ]
     graph = GraphView(
         nodes=nodes,
@@ -224,14 +299,48 @@ async def test_multi_role_node_detection_opposing_pathways() -> None:
     # S supports focus directly (+1)
     # S also attacks M, which supports focus -> net path (-1 * +1 = -1)
     nodes = [
-        StudioNode(id="F", layer=Layer.L3, type="Claim", label="Focus Thesis", plausibility=0.5),
-        StudioNode(id="M", layer=Layer.L3, type="Claim", label="Intermediate", plausibility=0.7),
-        StudioNode(id="S", layer=Layer.L3, type="Claim", label="Controversial Source", plausibility=0.8),
+        StudioNode(
+            id="F", layer=Layer.L3, type="Claim", label="Focus Thesis", plausibility=0.5
+        ),
+        StudioNode(
+            id="M", layer=Layer.L3, type="Claim", label="Intermediate", plausibility=0.7
+        ),
+        StudioNode(
+            id="S",
+            layer=Layer.L3,
+            type="Claim",
+            label="Controversial Source",
+            plausibility=0.8,
+        ),
     ]
     edges = [
-        StudioEdge(id="e_sf", source="S", target="F", type="SUPPORTS", layer=Layer.L3, polarity=1, weight=0.7),
-        StudioEdge(id="e_sm", source="S", target="M", type="ATTACKS", layer=Layer.L3, polarity=-1, weight=0.8),
-        StudioEdge(id="e_mf", source="M", target="F", type="SUPPORTS", layer=Layer.L3, polarity=1, weight=0.9),
+        StudioEdge(
+            id="e_sf",
+            source="S",
+            target="F",
+            type="SUPPORTS",
+            layer=Layer.L3,
+            polarity=1,
+            weight=0.7,
+        ),
+        StudioEdge(
+            id="e_sm",
+            source="S",
+            target="M",
+            type="ATTACKS",
+            layer=Layer.L3,
+            polarity=-1,
+            weight=0.8,
+        ),
+        StudioEdge(
+            id="e_mf",
+            source="M",
+            target="F",
+            type="SUPPORTS",
+            layer=Layer.L3,
+            polarity=1,
+            weight=0.9,
+        ),
     ]
     graph = GraphView(
         nodes=nodes,
@@ -291,7 +400,9 @@ async def test_gds_projection_dropped_in_finally_on_error() -> None:
 @pytest.mark.asyncio
 async def test_pagerank_epistemetrics_fallback_when_gds_missing() -> None:
     """When GDS is missing, execute_metric falls back to epistemetrics and records warning."""
-    service = MetricService(neo4j_reader=None)  # No Neo4j reader, forces in-memory fallback
+    service = MetricService(
+        neo4j_reader=None
+    )  # No Neo4j reader, forces in-memory fallback
     graph = _make_sample_graph()
 
     result = await service.execute_metric(
@@ -302,7 +413,9 @@ async def test_pagerank_epistemetrics_fallback_when_gds_missing() -> None:
     assert result.metric_id == "pagerank_global"
     assert result.scope == MetricScope.GLOBAL
     assert len(result.affected_nodes) == len(graph.nodes)
-    assert any("Executed via in-memory epistemetrics fallback" in w for w in result.warnings)
+    assert any(
+        "Executed via in-memory epistemetrics fallback" in w for w in result.warnings
+    )
     assert result.summary["engine"] == "epistemetrics"
 
 

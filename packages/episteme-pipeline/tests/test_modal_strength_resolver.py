@@ -179,9 +179,11 @@ class TestHybridModalResolver:
     @pytest.mark.asyncio
     async def test_guardrail_clamping_upper(self) -> None:
         """Verify an overconfident engine score is clamped down by syntactic bounds on a conjecture."""
+
         class MockOverconfidentEngine:
             async def evaluate_choice(self, state, question, options, alpha=None):
                 from episteme_pipeline.protocols.decision import DecisionScore
+
                 # Returns 0.99 certainty
                 return DecisionScore(
                     selected_option="Level_4",
@@ -214,9 +216,11 @@ class TestHybridModalResolver:
     @pytest.mark.asyncio
     async def test_guardrail_clamping_lower(self) -> None:
         """Verify an underconfident engine score is clamped up by syntactic bounds on an axiom."""
+
         class MockUnderconfidentEngine:
             async def evaluate_choice(self, state, question, options, alpha=None):
                 from episteme_pipeline.protocols.decision import DecisionScore
+
                 # Returns 0.20 certainty
                 return DecisionScore(
                     selected_option="Level_0",
@@ -251,9 +255,11 @@ class TestHybridModalResolver:
     @pytest.mark.asyncio
     async def test_convex_fusion_mode(self) -> None:
         """Verify convex mode computes weighted sum alpha * M_syntax + (1 - alpha) * M_engine."""
+
         class MockFixedEngine:
             async def evaluate_choice(self, state, question, options, alpha=None):
                 from episteme_pipeline.protocols.decision import DecisionScore
+
                 return DecisionScore(
                     selected_option="Level_4",
                     class_probability=1.0,
@@ -264,7 +270,9 @@ class TestHybridModalResolver:
 
         engine = MockFixedEngine()
         structural = StructuralistModalResolver()
-        decision_res = DecisionEngineModalResolver(engine, levels=[0.2, 0.4, 0.6, 0.8, 1.0])
+        decision_res = DecisionEngineModalResolver(
+            engine, levels=[0.2, 0.4, 0.6, 0.8, 1.0]
+        )
         hybrid = HybridModalResolver(
             structural_resolver=structural,
             decision_resolver=decision_res,
@@ -297,7 +305,9 @@ class TestHybridModalResolver:
         emitter.register_observer(TestObserver())
 
         structural = StructuralistModalResolver()
-        hybrid = HybridModalResolver(structural_resolver=structural, mode="structural_only")
+        hybrid = HybridModalResolver(
+            structural_resolver=structural, mode="structural_only"
+        )
 
         atom = TheoryAtom(
             id="atom_event_test",
@@ -324,6 +334,7 @@ class TestPhase6TheoryNetProjectorIntegration:
 
     def test_projector_with_custom_modal_resolver(self) -> None:
         """Verify TheoryNetProjector uses custom resolver to assign modal strength."""
+
         class ConstantModalResolver:
             def resolve_modality_sync(self, atom, context=None):
                 return 0.777
@@ -337,6 +348,7 @@ class TestPhase6TheoryNetProjectorIntegration:
         )
 
         from episteme_pipeline.artifacts.execution import Phase4ArtifactsView
+
         atom = TheoryAtom(
             id="a1",
             text="Claim without explicit modal strength",
@@ -347,8 +359,7 @@ class TestPhase6TheoryNetProjectorIntegration:
         tnet: TheoryNet = projector.project(view)
 
         assert len(tnet.atoms) == 1
-        assert pytest.approx(tnet.atoms[0].modal_strength) == 0.777
-        assert pytest.approx(tnet.atoms[0].base_score) == 0.777
+        assert pytest.approx(tnet.atoms[0].modal_prior) == 0.777
 
 
 def test_ensure_modal_strength_resolver() -> None:
@@ -360,7 +371,9 @@ def test_ensure_modal_strength_resolver() -> None:
     class IncompleteResolver:
         pass
 
-    with pytest.raises(TypeError, match="does not satisfy the ModalStrengthResolver protocol"):
+    with pytest.raises(
+        TypeError, match="does not satisfy the ModalStrengthResolver protocol"
+    ):
         ensure_modal_strength_resolver(IncompleteResolver())
 
 
@@ -372,11 +385,24 @@ def test_scope_type_and_epistemic_status_enums() -> None:
     assert ScopeType.from_str("Essentieller Allsatz") == ScopeType.ESSENTIELLER_ALLSATZ
     assert ScopeType.from_str("essentieller_allsatz") == ScopeType.ESSENTIELLER_ALLSATZ
     assert ScopeType.from_str("ESSENTIELLER-ALLSATZ") == ScopeType.ESSENTIELLER_ALLSATZ
-    assert ScopeType.from_str("Lokalisierter Allsatz") == ScopeType.LOKALISIERTER_ALLSATZ
-    assert ScopeType.from_str("lokalisierter existenzsatz") == ScopeType.LOKALISIERTER_EXISTENZSATZ
-    assert ScopeType.from_str("Statistischer/probabilistischer Allsatz") == ScopeType.STATISTISCHER_ALLSATZ
-    assert ScopeType.from_str("statistischer allsatz") == ScopeType.STATISTISCHER_ALLSATZ
-    assert ScopeType.from_str("probabilistischer allsatz") == ScopeType.STATISTISCHER_ALLSATZ
+    assert (
+        ScopeType.from_str("Lokalisierter Allsatz") == ScopeType.LOKALISIERTER_ALLSATZ
+    )
+    assert (
+        ScopeType.from_str("lokalisierter existenzsatz")
+        == ScopeType.LOKALISIERTER_EXISTENZSATZ
+    )
+    assert (
+        ScopeType.from_str("Statistischer/probabilistischer Allsatz")
+        == ScopeType.STATISTISCHER_ALLSATZ
+    )
+    assert (
+        ScopeType.from_str("statistischer allsatz") == ScopeType.STATISTISCHER_ALLSATZ
+    )
+    assert (
+        ScopeType.from_str("probabilistischer allsatz")
+        == ScopeType.STATISTISCHER_ALLSATZ
+    )
     assert ScopeType.from_str("Existenzsatz") == ScopeType.EXISTENZSATZ
     assert ScopeType.from_str("unknown_scope") is None
 
@@ -405,6 +431,7 @@ def test_atom_boundary_normalization() -> None:
     from episteme_pipeline.phases.phase4_argument_mining.models import (
         ExtractedComponent,
     )
+
     comp = ExtractedComponent(
         id="AC1",
         component_type="ObservationUnit",
@@ -426,7 +453,9 @@ def test_hybrid_modal_resolver_create_factory() -> None:
 
     # 2. Creation with config and decision engine defaults to guardrail
     mock_engine = MockJevDecisionEngine()
-    cfg = ModalResolverConfig(mode="guardrail", fusion_alpha=0.75, default_base_score=0.55)
+    cfg = ModalResolverConfig(
+        mode="guardrail", fusion_alpha=0.75, default_base_score=0.55
+    )
     res_hybrid = HybridModalResolver.create(config=cfg, decision_engine=mock_engine)
     assert res_hybrid.mode == "guardrail"
     assert res_hybrid.fusion_alpha == 0.75

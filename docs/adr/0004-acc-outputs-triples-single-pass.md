@@ -46,8 +46,8 @@ plug in. In the default pipeline, this interface is not instantiated — ACC cov
 
 - `docs/workflow/4_argument_mining/3_ari.puml` documents the ARI step as defined; in the default implementation it is
   fused into ACC. The diagram is retained as a reference for alternative implementations.
-- The `ACCOutput.validate_references()` method drops relations whose `source_id` or `target_id` does not reference a
-  classified component, preventing dangling edges from LLM output errors.
+- The `ACCOutput.validate_references()` method performs fixed-point validation: it drops relations whose `source_id`, conjunctive `premise_ids`, or `target_id` does not reference a classified component or valid local inference `id` (for `undercuts_relation_id` / undercutter targets), cascading removal cleanly across dependent undercutters.
+- `ExtractedTheoryRelation` accepts optional local `id`, `premise_ids` (conjunctive premise sets for linked argumentation), and `undercuts_relation_id` (`ISSUE-055`), which `LLMACCClassifier.classify()` maps to deterministic chunk-scoped atom IDs and resolved local `TheoryRelation.relation_id` targets in fixed-point order regardless of LLM relation ordering.
 - Global argument relations (cross-chunk SUPPORTS/ATTACKS) are handled by ARC (Phase 4 Step 4), which uses the shared
   `GlobalRelationExtractor` — not by ACC.
 

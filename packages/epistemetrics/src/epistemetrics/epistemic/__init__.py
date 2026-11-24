@@ -22,6 +22,7 @@ from epistemetrics.epistemic.poset_evaluation import (
 )
 from epistemetrics.epistemic.qbaf import (
     GradualSemanticsModel,
+    HyperedgeSpec,
     QBAFComparisonResult,
     QBAFGradualSemanticsSolver,
     QBAFSolverResult,
@@ -41,6 +42,7 @@ __all__ = [
     "DynamicsEvaluationResult",
     # QBAF Gradual Semantics
     "GradualSemanticsModel",
+    "HyperedgeSpec",
     # Intrinsic model component evaluation
     "ModelComponentEvaluationResult",
     # Specialization poset hierarchies

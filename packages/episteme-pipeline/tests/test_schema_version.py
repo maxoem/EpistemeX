@@ -97,7 +97,7 @@ def test_build_manifest_includes_schema_version(config):
         checkpoint_store=checkpoint_store,
     )
 
-    manifest = pipeline._build_manifest(
+    manifest = pipeline.engine.build_manifest(
         run_id="test-run-schema",
         pipeline_input=PipelineInput(source_paths=["/path/doc.md"]),
     )
@@ -189,7 +189,7 @@ def test_build_manifest_schema_version_tracks_config_change(config):
         checkpoint_store=checkpoint_store,
     )
 
-    manifest = pipeline._build_manifest(
+    manifest = pipeline.engine.build_manifest(
         run_id="test-run-schema-v2",
         pipeline_input=PipelineInput(source_paths=["/path/doc.md"]),
     )

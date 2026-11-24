@@ -44,7 +44,9 @@ class ComputeOverlayRequest(BaseModel):
 
 @router.get("", response_model=list[Overlay])
 async def list_overlays(
-    graph_version: str | None = Query(default=None, description="Filter by graph version"),
+    graph_version: str | None = Query(
+        default=None, description="Filter by graph version"
+    ),
     overlay_service: OverlayService = Depends(get_overlay_service),
 ) -> list[Overlay]:
     """Retrieve previously computed and cached graph overlays.
@@ -116,7 +118,7 @@ async def compute_overlay(
                     graph_version=payload.graph_version or "empty-v0",
                     schema_version="v1",
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             graph_view = GraphView(
                 nodes=[],
                 edges=[],
@@ -126,7 +128,9 @@ async def compute_overlay(
             )
 
     if payload.graph_version:
-        graph_view = graph_view.model_copy(update={"graph_version": payload.graph_version})
+        graph_view = graph_view.model_copy(
+            update={"graph_version": payload.graph_version}
+        )
 
     try:
         return overlay_service.compute_overlay(

@@ -1,13 +1,10 @@
 """Quantitative Bipolar Argumentation Framework (QBAF) Gradual Semantics Solvers.
 
-Operationalizes dialectical equilibrium convergence over argument graphs
-with decoupled calibrated weights:
-
-.. math::
-    w = M(\\text{modal\\_strength}) \\times P(\\text{stance})
-
-Supports multiple gradual semantics update functions, empirical accuracy admissibility gating, and
-comparative evaluation between uncalibrated binary weights vs. calibrated modal weights.
+Operationalizes dialectical equilibrium convergence over argument graphs with
+decoupled weights separating node propositional modality/prior :math:`\\tau_0(a)`
+from relational inferential warrant :math:`W_{ji}` and admissibility gating,
+while supporting optional intensional supposition (*Reductio* refutation
+discharge) and epistemic perspective scoping.
 """
 
 from __future__ import annotations
@@ -26,6 +23,73 @@ from scipy.integrate import solve_ivp
 from epistemetrics.core.models import RelationType, TheoryEdge, TheoryNode
 from epistemetrics.graph.theory_graph import TheoryGraph
 
+_VALID_T_NORMS = frozenset({"product", "godel"})
+
+
+def _validate_t_norm(t_norm: str) -> Literal["product", "godel"]:
+    """Validate and normalize conjunctive t-norm selector."""
+    norm = t_norm.strip().lower()
+    if norm == "product":
+        return "product"
+    if norm == "godel":
+        return "godel"
+    raise ValueError(
+        f"Unsupported conjunctive t-norm '{t_norm}'. Expected 'product' or 'godel'."
+    )
+
+
+def _conjunctive_t_norm(
+    values: Sequence[float], t_norm: Literal["product", "godel"]
+) -> float:
+    """Aggregate conjunctive premise activations using the configured t-norm."""
+    if not values:
+        return 0.0
+    if len(values) == 1:
+        return float(values[0])
+    if t_norm == "godel":
+        return float(min(values))
+    return float(math.prod(values))
+
+
+@dataclass(slots=True, frozen=True)
+class HyperedgeSpec:
+    """Compiled bipartite hyperedge / warrant specification for QBAF solvers.
+
+    Attributes
+    ----------
+    warrant_id : str
+        Canonical identifier of the reified ``:TheoryInference`` warrant node.
+    premise_indices : tuple of int
+        Index tuple of conjunctive premise atoms in the solver's node vector.
+    target_idx : int
+        Index of the conclusion target atom in the solver's node vector.
+    polarity : int
+        Epistemic polarity toward the conclusion (``+1`` support, ``-1`` attack).
+    base_warrant : float
+        Intrinsic Toulminian warrant plausibility prior :math:`w_0 \\in [0, 1]`.
+    gate_factor : float, default 1.0
+        Multiplicative perception/tenability gating factor decoupling
+        :math:`s(w_k)` from extrinsic gate thresholds.
+    backing_edges : tuple of (tuple of int, float), optional
+        Positive backing modifiers ``(premise_indices, weight)`` targeting this warrant.
+    undercut_edges : tuple of (tuple of int, float), optional
+        Negative undercutting modifiers ``(premise_indices, weight)`` targeting this warrant.
+    target_warrant_idx : int or None, optional
+        Optional target warrant index in ``hyperedges`` when this specification
+        represents a modulated higher-order modifier acting on another warrant
+        (in which case ``target_idx`` is ``-1``).
+    """
+
+    warrant_id: str
+    premise_indices: tuple[int, ...]
+    target_idx: int
+    polarity: int
+    base_warrant: float = 0.75
+    gate_factor: float = 1.0
+    backing_edges: tuple[tuple[tuple[int, ...], float], ...] = ()
+    undercut_edges: tuple[tuple[tuple[int, ...], float], ...] = ()
+    target_warrant_idx: int | None = None
+
 
 @dataclass(slots=True, frozen=True)
 class _AdmissibleEdge:
@@ -35,6 +99,27 @@ class _AdmissibleEdge:
     target: str
     polarity: int
     weight: float
+    id: str | None = None
+    premise_ids: tuple[str, ...] = ()
+    undercuts_relation_id: str | None = None
+    base_warrant: float = 0.75
+
+
+@dataclass(slots=True, frozen=True)
+class _ParsedEdge:
+    """Internal parsed representation for candidate dialectical edges before scoping and gating."""
+
+    source: str
+    target: str
+    polarity: int
+    eff_w: float
+    acc: float | None
+    p_stance: float | None
+    model_conf: float | None
+    id: str | None = None
+    premise_ids: tuple[str, ...] = ()
+    undercuts_relation_id: str | None = None
+    base_warrant: float = 0.75
 
 
 class GradualSemanticsModel(str, Enum):
@@ -64,8 +149,9 @@ class WeightNormalizationMode(str, Enum):
     Attributes
     ----------
     CALIBRATED_MODAL : str
-        Continuous edge weights decoupled by modal strength and empirical accuracy:
-        :math:`w = M(\\text{modal\\_strength}) \\times P(\\text{stance})`.
+        Continuous edge weights modulated by inferential warrant, stance
+        probability, and edge tenability (retaining optional legacy
+        ``modal_strength`` factor on standalone ``TheoryEdge`` models).
     UNWEIGHTED_BINARY : str
         Standard uncalibrated binary edge weights (:math:`w = 1.0` for all active edges).
     """
@@ -151,6 +237,22 @@ class QBAFSolverResult(BaseModel, Mapping[str, float]):
     admissibility_pruned_count: int = Field(
         default=0,
         description="Count of edges pruned by the empirical accuracy admissibility gate.",
+    )
+    perspective: str | None = Field(
+        default=None,
+        description="Evaluated epistemic perspective filter ('author', agent name, or None).",
+    )
+    suppositional_isolated_count: int = Field(
+        default=0,
+        description="Number of suppositional/Reductio nodes isolated from contributing unconditioned positive prior.",
+    )
+    perspective_filtered_count: int = Field(
+        default=0,
+        description="Number of cross-perspective or off-perspective nodes isolated during evaluation.",
+    )
+    warrant_states: dict[str, float] = Field(
+        default_factory=dict,
+        description="Converged justification degrees s(w_k) for reified TheoryInference warrants.",
     )
 
     @property
@@ -247,6 +349,9 @@ class WeightedQuadraticEnergySolver:
         Maximum simulation horizon for continuous ODE relaxation.
     max_step : float, default 0.5
         Maximum allowable integration step size.
+    t_norm : Literal["product", "godel"], default "product"
+        Conjunctive t-norm operator applied across multi-premise inference sets
+        (``"product"`` multiplicative t-norm or ``"godel"`` minimum t-norm).
     """
 
     def __init__(
@@ -255,18 +360,132 @@ class WeightedQuadraticEnergySolver:
         atol: float = 1e-6,
         t_max: float = 50.0,
         max_step: float = 0.5,
+        t_norm: Literal["product", "godel"] = "product",
     ) -> None:
         self.rtol = rtol
         self.atol = atol
         self.t_max = t_max
         self.max_step = max_step
+        self.t_norm = _validate_t_norm(t_norm)
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic configuration fingerprint for cache invalidation.
+
+        Returns
+        -------
+        dict of str to Any
+            Solver class identity and continuous/t-norm hyperparameters.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "rtol": self.rtol,
+            "atol": self.atol,
+            "t_max": self.t_max,
+            "max_step": self.max_step,
+            "t_norm": self.t_norm,
+        }
 
     @staticmethod
     def _impact(x: np.ndarray | float) -> np.ndarray | float:
         """Quadratic impact attenuation function h(x) = (max(x, 0)^2) / (1 + max(x, 0)^2)."""
         pos = np.maximum(x, 0.0)
-        pos_sq = pos ** 2
+        pos_sq = pos**2
         return pos_sq / (1.0 + pos_sq)
+
+    def _conjunctive_activation(
+        self,
+        s: np.ndarray,
+        premise_indices: tuple[int, ...],
+    ) -> float:
+        """Evaluate conjunctive premise activation under the configured t-norm."""
+        if not premise_indices:
+            return 0.0
+        if len(premise_indices) == 1:
+            return float(s[premise_indices[0]])
+        vals = [float(s[idx]) for idx in premise_indices]
+        return _conjunctive_t_norm(vals, self.t_norm)
+
+    @staticmethod
+    def _group_warrant_modifiers(
+        hyperedges: Sequence[HyperedgeSpec],
+    ) -> dict[int, list[tuple[int, HyperedgeSpec]]]:
+        """Index higher-order modifier hyperedges by their target warrant index."""
+        mods: dict[int, list[tuple[int, HyperedgeSpec]]] = {}
+        for mod_k, spec in enumerate(hyperedges):
+            if spec.target_warrant_idx is not None:
+                mods.setdefault(spec.target_warrant_idx, []).append((mod_k, spec))
+        return mods
+
+    def _evaluate_warrant_energy(
+        self,
+        s_atoms: np.ndarray,
+        spec: HyperedgeSpec,
+        s_w: np.ndarray | None = None,
+        warrant_mods: Sequence[tuple[int, HyperedgeSpec]] = (),
+    ) -> float:
+        """Compute net Toulmin warrant energy ``E_back - E_undercut`` for ``spec``."""
+        e_back = sum(
+            w_b * self._conjunctive_activation(s_atoms, b_idxs)
+            for b_idxs, w_b in spec.backing_edges
+        )
+        e_und = sum(
+            w_u * self._conjunctive_activation(s_atoms, u_idxs)
+            for u_idxs, w_u in spec.undercut_edges
+        )
+        for mod_k, mod_spec in warrant_mods:
+            sw_mod = (
+                float(s_w[mod_k])
+                if s_w is not None
+                else float(np.clip(mod_spec.base_warrant, 0.0, 1.0))
+            )
+            mod_contrib = (
+                sw_mod
+                * mod_spec.gate_factor
+                * self._conjunctive_activation(s_atoms, mod_spec.premise_indices)
+            )
+            if mod_spec.polarity > 0:
+                e_back += mod_contrib
+            elif mod_spec.polarity < 0:
+                e_und += mod_contrib
+        return float(e_back - e_und)
+
+    def _compute_warrant_states(
+        self,
+        s_atoms: np.ndarray,
+        hyperedges: Sequence[HyperedgeSpec],
+    ) -> np.ndarray:
+        """Evaluate exact Quadratic Energy steady-state warrant degrees given atom states."""
+        m = len(hyperedges)
+        if m == 0:
+            return np.array([], dtype=np.float64)
+        warrant_mods = self._group_warrant_modifiers(hyperedges)
+        s_w = np.array(
+            [np.clip(spec.base_warrant, 0.0, 1.0) for spec in hyperedges],
+            dtype=np.float64,
+        )
+        max_sweeps = 1 if not warrant_mods else 256
+        tol = min(self.atol, 1e-9)
+        for _ in range(max_sweeps):
+            s_w_next = np.empty(m, dtype=np.float64)
+            for k, spec in enumerate(hyperedges):
+                e_w = self._evaluate_warrant_energy(
+                    s_atoms,
+                    spec,
+                    s_w=s_w,
+                    warrant_mods=warrant_mods.get(k, ()),
+                )
+                w0 = float(np.clip(spec.base_warrant, 0.0, 1.0))
+                val = (
+                    w0
+                    + (1.0 - w0) * float(self._impact(e_w))
+                    - w0 * float(self._impact(-e_w))
+                )
+                s_w_next[k] = float(np.clip(val, 0.0, 1.0))
+            max_delta = float(np.max(np.abs(s_w_next - s_w)))
+            s_w = s_w_next
+            if max_delta < tol:
+                break
+        return s_w
 
     def _derivatives(
         self,
@@ -275,12 +494,64 @@ class WeightedQuadraticEnergySolver:
         w: np.ndarray,
         g_supp_t: np.ndarray,
         g_att_t: np.ndarray,
+        hyperedges: Sequence[HyperedgeSpec] = (),
     ) -> np.ndarray:
         """Compute ODE time derivative vector s_dot under Quadratic Energy formulation."""
-        e = (g_supp_t @ s) - (g_att_t @ s)
-        h_pos = self._impact(e)
-        h_neg = self._impact(-e)
-        return w - s + (1.0 - w) * h_pos - w * h_neg
+        if not hyperedges:
+            e = (g_supp_t @ s) - (g_att_t @ s)
+            h_pos = self._impact(e)
+            h_neg = self._impact(-e)
+            return w - s + (1.0 - w) * h_pos - w * h_neg
+
+        n = len(w)
+        m = len(hyperedges)
+        s_atoms = s[:n]
+        has_warrant_state = len(s) >= n + m
+        s_warrants = (
+            s[n : n + m]
+            if has_warrant_state
+            else self._compute_warrant_states(s_atoms, hyperedges)
+        )
+
+        e_supp = np.array(g_supp_t @ s_atoms, dtype=np.float64)
+        e_att = np.array(g_att_t @ s_atoms, dtype=np.float64)
+        ds_warrants = np.zeros(m, dtype=np.float64)
+        warrant_mods = self._group_warrant_modifiers(hyperedges)
+
+        for k, spec in enumerate(hyperedges):
+            e_w = self._evaluate_warrant_energy(
+                s_atoms,
+                spec,
+                s_w=s_warrants,
+                warrant_mods=warrant_mods.get(k, ()),
+            )
+            w0 = float(np.clip(spec.base_warrant, 0.0, 1.0))
+            sw_k = float(s_warrants[k])
+            ds_warrants[k] = (
+                w0
+                - sw_k
+                + (1.0 - w0) * float(self._impact(e_w))
+                - w0 * float(self._impact(-e_w))
+            )
+            if spec.target_warrant_idx is not None or spec.target_idx < 0:
+                continue
+            contrib = (
+                sw_k
+                * spec.gate_factor
+                * self._conjunctive_activation(s_atoms, spec.premise_indices)
+            )
+            if spec.polarity > 0:
+                e_supp[spec.target_idx] += contrib
+            elif spec.polarity < 0:
+                e_att[spec.target_idx] += contrib
+
+        e_atoms = e_supp - e_att
+        ds_atoms = (
+            w - s_atoms + (1.0 - w) * self._impact(e_atoms) - w * self._impact(-e_atoms)
+        )
+        if has_warrant_state:
+            return np.concatenate([ds_atoms, ds_warrants])
+        return ds_atoms
 
     def _solve_dag_closed_form(
         self,
@@ -288,15 +559,78 @@ class WeightedQuadraticEnergySolver:
         g_supp_t: np.ndarray,
         g_att_t: np.ndarray,
         topo_order: list[int],
+        hyperedges: Sequence[HyperedgeSpec] = (),
     ) -> np.ndarray:
         """Evaluate exact equilibrium in closed form along topological order (Proposition 5)."""
         s = base_scores.copy()
-        for i in topo_order:
+        if not hyperedges:
+            for i in topo_order:
+                e_i = float(np.dot(g_supp_t[i], s) - np.dot(g_att_t[i], s))
+                h_pos = float(self._impact(e_i))
+                h_neg = float(self._impact(-e_i))
+                w_i = float(base_scores[i])
+                s[i] = w_i + (1.0 - w_i) * h_pos - w_i * h_neg
+            return np.clip(s, 0.0, 1.0)
+
+        n = len(base_scores)
+        m = len(hyperedges)
+        s_w = np.array(
+            [np.clip(h.base_warrant, 0.0, 1.0) for h in hyperedges], dtype=np.float64
+        )
+        warrant_done = [False] * m
+        warrant_mods = self._group_warrant_modifiers(hyperedges)
+        incoming_hyper: dict[int, list[int]] = {}
+        for k, spec in enumerate(hyperedges):
+            if spec.target_warrant_idx is None and 0 <= spec.target_idx < n:
+                incoming_hyper.setdefault(spec.target_idx, []).append(k)
+
+        def _eval_warrant(k_idx: int) -> None:
+            if warrant_done[k_idx]:
+                return
+            for mod_k, _ in warrant_mods.get(k_idx, ()):
+                if not warrant_done[mod_k]:
+                    _eval_warrant(mod_k)
+            spec = hyperedges[k_idx]
+            e_w = self._evaluate_warrant_energy(
+                s,
+                spec,
+                s_w=s_w,
+                warrant_mods=warrant_mods.get(k_idx, ()),
+            )
+            w0 = float(np.clip(spec.base_warrant, 0.0, 1.0))
+            val = (
+                w0
+                + (1.0 - w0) * float(self._impact(e_w))
+                - w0 * float(self._impact(-e_w))
+            )
+            s_w[k_idx] = float(np.clip(val, 0.0, 1.0))
+            warrant_done[k_idx] = True
+
+        for node_idx in topo_order:
+            if node_idx >= n:
+                _eval_warrant(node_idx - n)
+                continue
+
+            i = node_idx
             e_i = float(np.dot(g_supp_t[i], s) - np.dot(g_att_t[i], s))
+            for k in incoming_hyper.get(i, []):
+                if not warrant_done[k]:
+                    _eval_warrant(k)
+                spec = hyperedges[k]
+                contrib = (
+                    float(s_w[k])
+                    * spec.gate_factor
+                    * self._conjunctive_activation(s, spec.premise_indices)
+                )
+                if spec.polarity > 0:
+                    e_i += contrib
+                elif spec.polarity < 0:
+                    e_i -= contrib
             h_pos = float(self._impact(e_i))
             h_neg = float(self._impact(-e_i))
             w_i = float(base_scores[i])
             s[i] = w_i + (1.0 - w_i) * h_pos - w_i * h_neg
+
         return np.clip(s, 0.0, 1.0)
 
     def solve(
@@ -304,8 +638,9 @@ class WeightedQuadraticEnergySolver:
         base_scores: np.ndarray,
         g_supp: np.ndarray,
         g_att: np.ndarray,
+        hyperedges: Sequence[HyperedgeSpec] | None = None,
     ) -> tuple[np.ndarray, bool, dict[str, np.ndarray]]:
-        """Solve for dialectical equilibrium state over argument network.
+        """Solve for dialectical equilibrium state over argument network or bipartite hypergraph.
 
         Parameters
         ----------
@@ -315,6 +650,8 @@ class WeightedQuadraticEnergySolver:
             N x N adjacency matrix of support relation weights (j -> i at g_supp[j, i]).
         g_att : np.ndarray
             N x N adjacency matrix of attack relation weights (j -> i at g_att[j, i]).
+        hyperedges : Sequence of HyperedgeSpec or None, optional
+            Reified conjunctive and warrant-modulated inference specifications.
 
         Returns
         -------
@@ -323,38 +660,74 @@ class WeightedQuadraticEnergySolver:
         converged : bool
             Whether numerical equilibrium tolerance was attained.
         telemetry : dict[str, np.ndarray]
-            Diagnostic matrices: support_energy, attack_energy, total_weight_of_evidence, volatility_index.
+            Diagnostic arrays: support_energy, attack_energy, total_weight_of_evidence,
+            volatility_index, and warrant_states.
         """
         n = len(base_scores)
+        hyper_list: tuple[HyperedgeSpec, ...] = tuple(hyperedges) if hyperedges else ()
         if n == 0:
             empty = np.array([], dtype=np.float64)
-            return empty, True, {
-                "support_energy": empty,
-                "attack_energy": empty,
-                "total_weight_of_evidence": empty,
-                "volatility_index": empty,
-            }
+            return (
+                empty,
+                True,
+                {
+                    "support_energy": empty,
+                    "attack_energy": empty,
+                    "total_weight_of_evidence": empty,
+                    "volatility_index": empty,
+                    "warrant_states": empty,
+                },
+            )
 
         w = np.clip(base_scores, 0.0, 1.0)
         g_supp_t = g_supp.T
         g_att_t = g_att.T
+        m = len(hyper_list)
 
-        # Check for directed acyclic graph topology
+        # Build unified bipartite graph (0..n-1 = atoms, n..n+m-1 = warrants)
         adj = (g_supp + g_att) > 0
         g_nx = nx.DiGraph(adj)
+        if m > 0:
+            for k, spec in enumerate(hyper_list):
+                w_node = n + k
+                g_nx.add_node(w_node)
+                for p_idx in spec.premise_indices:
+                    g_nx.add_edge(p_idx, w_node)
+                for b_idxs, _ in spec.backing_edges:
+                    for b_idx in b_idxs:
+                        g_nx.add_edge(b_idx, w_node)
+                for u_idxs, _ in spec.undercut_edges:
+                    for u_idx in u_idxs:
+                        g_nx.add_edge(u_idx, w_node)
+                if spec.target_warrant_idx is not None:
+                    g_nx.add_edge(w_node, n + spec.target_warrant_idx)
+                elif 0 <= spec.target_idx < n:
+                    g_nx.add_edge(w_node, spec.target_idx)
 
         if nx.is_directed_acyclic_graph(g_nx):
-            # Fast-path: O(|V| + |E|) closed-form topological evaluation (Proposition 5)
+            # Fast-path: O(|V| + |W| + |E|) closed-form topological evaluation (Proposition 5)
             topo_order = list(nx.topological_sort(g_nx))
-            s_final = self._solve_dag_closed_form(w, g_supp_t, g_att_t, topo_order)
+            s_final = self._solve_dag_closed_form(
+                w, g_supp_t, g_att_t, topo_order, hyperedges=hyper_list
+            )
+            s_w = self._compute_warrant_states(s_final, hyper_list)
             converged = True
         else:
-            # Cyclic topology: Adaptive continuous ODE integration
-            s0 = w.copy()
-            ds0 = self._derivatives(0.0, s0, w, g_supp_t, g_att_t)
+            # Cyclic topology: Adaptive continuous ODE integration over [atoms, warrants]
+            w_warrants = (
+                np.array(
+                    [np.clip(h.base_warrant, 0.0, 1.0) for h in hyper_list],
+                    dtype=np.float64,
+                )
+                if m > 0
+                else np.array([], dtype=np.float64)
+            )
+            s0 = np.concatenate([w, w_warrants]) if m > 0 else w.copy()
+            ds0 = self._derivatives(0.0, s0, w, g_supp_t, g_att_t, hyper_list)
 
             if np.max(np.abs(ds0)) < self.atol:
-                s_final = s0
+                s_final = np.clip(s0[:n], 0.0, 1.0)
+                s_w = np.clip(s0[n:], 0.0, 1.0)
                 converged = True
             else:
                 event_tol = max(self.atol, 1e-4)
@@ -365,8 +738,9 @@ class WeightedQuadraticEnergySolver:
                     w_arr: np.ndarray,
                     supp_t: np.ndarray,
                     att_t: np.ndarray,
+                    hyper_seq: tuple[HyperedgeSpec, ...],
                 ) -> float:
-                    ds = self._derivatives(t, s, w_arr, supp_t, att_t)
+                    ds = self._derivatives(t, s, w_arr, supp_t, att_t, hyper_seq)
                     return float(np.max(np.abs(ds)) - event_tol)
 
                 stationary_event.terminal = True
@@ -379,7 +753,7 @@ class WeightedQuadraticEnergySolver:
                     fun=self._derivatives,
                     t_span=(0.0, self.t_max),
                     y0=s0,
-                    args=(w, g_supp_t, g_att_t),
+                    args=(w, g_supp_t, g_att_t, hyper_list),
                     method="RK45",
                     rtol=ode_rtol,
                     atol=ode_atol,
@@ -393,19 +767,37 @@ class WeightedQuadraticEnergySolver:
                         fun=self._derivatives,
                         t_span=(0.0, self.t_max),
                         y0=s0,
-                        args=(w, g_supp_t, g_att_t),
+                        args=(w, g_supp_t, g_att_t, hyper_list),
                         method="Radau",
                         rtol=ode_rtol,
                         atol=ode_atol,
                         events=stationary_event,
                     )
 
-                s_final = np.clip(sol.y[:, -1], 0.0, 1.0)
+                s_final = np.clip(sol.y[:n, -1], 0.0, 1.0)
+                s_w = (
+                    np.clip(sol.y[n : n + m, -1], 0.0, 1.0)
+                    if m > 0
+                    else np.array([], dtype=np.float64)
+                )
                 converged = bool(sol.status >= 0)
 
         # Compute orthogonal telemetry: Weight of Evidence E_total and Volatility V
-        e_supp = g_supp_t @ s_final
-        e_att = g_att_t @ s_final
+        e_supp = np.array(g_supp_t @ s_final, dtype=np.float64)
+        e_att = np.array(g_att_t @ s_final, dtype=np.float64)
+        for k, spec in enumerate(hyper_list):
+            if spec.target_warrant_idx is not None or spec.target_idx < 0:
+                continue
+            contrib = (
+                float(s_w[k])
+                * spec.gate_factor
+                * self._conjunctive_activation(s_final, spec.premise_indices)
+            )
+            if spec.polarity > 0:
+                e_supp[spec.target_idx] += contrib
+            elif spec.polarity < 0:
+                e_att[spec.target_idx] += contrib
+
         e_total = e_supp + e_att
         denom = 1.0 + e_total
         safe_denom = np.where(denom > 0, denom, 1.0)
@@ -416,6 +808,7 @@ class WeightedQuadraticEnergySolver:
             "attack_energy": e_att,
             "total_weight_of_evidence": e_total,
             "volatility_index": volatility,
+            "warrant_states": s_w,
         }
         return s_final, converged, telemetry
 
@@ -446,6 +839,21 @@ class QBAFGradualSemanticsSolver:
         Perception calibration confidence threshold.
     use_continuous : bool, default False
         Whether to route solve() to the unified continuous WeightedQuadraticEnergySolver.
+    perspective : str or None, optional
+        Optional epistemic perspective filter (e.g., ``"author"``, ``"asserted"``,
+        or an attributed agent/school identifier).
+    isolate_suppositional : bool, default True
+        Whether nodes with ``intensional_mode == "suppositional"`` (e.g., *Reductio*
+        assumptions) have their base prior zeroed and outgoing cross-scope edges isolated.
+    isolate_attributed : bool, default True
+        Whether ``attributed`` / ``historical`` nodes are isolated from directly
+        inflating or deflating ``asserted`` authorial claims when evaluating the
+        author's theory base.
+    t_norm : Literal["product", "godel"], default "product"
+        Conjunctive t-norm operator applied across multi-premise inference sets
+        (``"product"`` multiplicative t-norm or ``"godel"`` minimum t-norm).
+    continuous_solver : WeightedQuadraticEnergySolver or None, optional
+        Optional continuous Quadratic Energy solver injected for ``solve_continuous()``.
     """
 
     def __init__(
@@ -459,6 +867,11 @@ class QBAFGradualSemanticsSolver:
         tau_p: float = 0.0,
         tau_c: float = 0.0,
         use_continuous: bool = False,
+        perspective: str | None = None,
+        isolate_suppositional: bool = True,
+        isolate_attributed: bool = True,
+        t_norm: Literal["product", "godel"] = "product",
+        continuous_solver: WeightedQuadraticEnergySolver | None = None,
     ) -> None:
         if isinstance(semantics_model, str):
             semantics_model = GradualSemanticsModel(semantics_model.lower())
@@ -471,6 +884,212 @@ class QBAFGradualSemanticsSolver:
         self.tau_p = tau_p
         self.tau_c = tau_c
         self.use_continuous = use_continuous
+        self.perspective = perspective
+        self.isolate_suppositional = isolate_suppositional
+        self.isolate_attributed = isolate_attributed
+        self.t_norm = _validate_t_norm(t_norm)
+        self.continuous_solver = continuous_solver or WeightedQuadraticEnergySolver(
+            rtol=self.tolerance,
+            atol=max(self.tolerance * 0.01, 1e-6),
+            t_norm=self.t_norm,
+        )
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic configuration fingerprint for cache invalidation.
+
+        Returns
+        -------
+        dict of str to Any
+            Solver class identity and hypergraph/gradual-semantics hyperparameters.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "semantics_model": self.semantics_model.value,
+            "max_iterations": self.max_iterations,
+            "tolerance": self.tolerance,
+            "admissibility_threshold": self.admissibility_threshold,
+            "prune_inadmissible": self.prune_inadmissible,
+            "admissibility_mode": self.admissibility_mode,
+            "tau_p": self.tau_p,
+            "tau_c": self.tau_c,
+            "use_continuous": self.use_continuous,
+            "perspective": self.perspective,
+            "isolate_suppositional": self.isolate_suppositional,
+            "isolate_attributed": self.isolate_attributed,
+            "t_norm": self.t_norm,
+            "continuous_solver": self.continuous_solver.fingerprint(),
+        }
+
+    @staticmethod
+    def _partition_pairwise_and_hyperedges(
+        admissible_edges: Sequence[_AdmissibleEdge],
+        node_to_idx: Mapping[str, int],
+        normalization_mode: WeightNormalizationMode = WeightNormalizationMode.CALIBRATED_MODAL,
+    ) -> tuple[list[_AdmissibleEdge], list[HyperedgeSpec]]:
+        """Partition admissible edges into pairwise edges and reified hyperedges."""
+        explicit_edge_ids = {e.id for e in admissible_edges if e.id}
+        explicit_warrant_ids = explicit_edge_ids | {
+            e.undercuts_relation_id for e in admissible_edges if e.undercuts_relation_id
+        }
+
+        modifiers_by_target: dict[str, list[_AdmissibleEdge]] = {}
+        primary_edges: list[_AdmissibleEdge] = []
+        for edge in admissible_edges:
+            if edge.undercuts_relation_id is not None or (
+                edge.target in explicit_warrant_ids and edge.target not in node_to_idx
+            ):
+                target_w = edge.undercuts_relation_id or edge.target
+                modifiers_by_target.setdefault(target_w, []).append(edge)
+            else:
+                primary_edges.append(edge)
+
+        def _warrant_prior_and_gate(edge: _AdmissibleEdge) -> tuple[float, float]:
+            if normalization_mode == WeightNormalizationMode.UNWEIGHTED_BINARY:
+                return 1.0, float(edge.weight)
+            w0 = float(np.clip(edge.base_warrant, 0.0, 1.0))
+            gate_factor = (edge.weight / w0) if w0 > 1e-12 else 1.0
+            return w0, gate_factor
+
+        targeted_warrant_ids = set(modifiers_by_target.keys())
+        pairwise: list[_AdmissibleEdge] = []
+        hyperedges: list[HyperedgeSpec] = []
+        warrant_idx_by_id: dict[str, int] = {}
+        expansion_queue: list[tuple[int, str]] = []
+
+        for idx, edge in enumerate(primary_edges):
+            raw_premises = (
+                edge.premise_ids
+                if edge.premise_ids
+                else ((edge.source,) if edge.source else ())
+            )
+            is_conjunctive = len(raw_premises) > 1
+            is_targeted = edge.id is not None and edge.id in targeted_warrant_ids
+
+            if not (is_conjunctive or is_targeted):
+                pairwise.append(edge)
+                continue
+
+            target_idx = node_to_idx.get(edge.target)
+            if target_idx is None:
+                continue
+            premise_indices = tuple(
+                node_to_idx[p] for p in raw_premises if p in node_to_idx
+            )
+            if len(premise_indices) != len(raw_premises) or not premise_indices:
+                continue
+
+            w0, gate_factor = _warrant_prior_and_gate(edge)
+            warrant_id = edge.id or (
+                f"inf::{'&'.join(raw_premises)}->{edge.target}#{idx}"
+            )
+
+            backing_list: list[tuple[tuple[int, ...], float]] = []
+            undercut_list: list[tuple[tuple[int, ...], float]] = []
+            has_child_targeted = False
+            for mod in modifiers_by_target.get(warrant_id, ()):
+                mod_raw_prems = (
+                    mod.premise_ids
+                    if mod.premise_ids
+                    else ((mod.source,) if mod.source else ())
+                )
+                mod_idxs = tuple(
+                    node_to_idx[p] for p in mod_raw_prems if p in node_to_idx
+                )
+                if len(mod_idxs) != len(mod_raw_prems) or not mod_idxs:
+                    continue
+                if (
+                    mod.id is not None
+                    and mod.id in targeted_warrant_ids
+                    and mod.id != warrant_id
+                ):
+                    has_child_targeted = True
+                elif mod.polarity > 0:
+                    backing_list.append((mod_idxs, mod.weight))
+                elif mod.polarity < 0:
+                    undercut_list.append((mod_idxs, mod.weight))
+
+            parent_idx = len(hyperedges)
+            warrant_idx_by_id[warrant_id] = parent_idx
+            hyperedges.append(
+                HyperedgeSpec(
+                    warrant_id=warrant_id,
+                    premise_indices=premise_indices,
+                    target_idx=target_idx,
+                    polarity=edge.polarity,
+                    base_warrant=w0,
+                    gate_factor=gate_factor,
+                    backing_edges=tuple(backing_list),
+                    undercut_edges=tuple(undercut_list),
+                )
+            )
+            if has_child_targeted:
+                expansion_queue.append((parent_idx, warrant_id))
+
+        q_pos = 0
+        while q_pos < len(expansion_queue):
+            parent_idx, parent_wid = expansion_queue[q_pos]
+            q_pos += 1
+            for mod in modifiers_by_target.get(parent_wid, ()):
+                if mod.id is None or mod.id not in targeted_warrant_ids:
+                    continue
+                if mod.id in warrant_idx_by_id:
+                    continue
+                mod_raw_prems = (
+                    mod.premise_ids
+                    if mod.premise_ids
+                    else ((mod.source,) if mod.source else ())
+                )
+                mod_idxs = tuple(
+                    node_to_idx[p] for p in mod_raw_prems if p in node_to_idx
+                )
+                if len(mod_idxs) != len(mod_raw_prems) or not mod_idxs:
+                    continue
+
+                mod_w0, mod_gate = _warrant_prior_and_gate(mod)
+                sub_back: list[tuple[tuple[int, ...], float]] = []
+                sub_und: list[tuple[tuple[int, ...], float]] = []
+                has_sub_targeted = False
+                for sub_mod in modifiers_by_target.get(mod.id, ()):
+                    sub_raw_prems = (
+                        sub_mod.premise_ids
+                        if sub_mod.premise_ids
+                        else ((sub_mod.source,) if sub_mod.source else ())
+                    )
+                    sub_idxs = tuple(
+                        node_to_idx[p] for p in sub_raw_prems if p in node_to_idx
+                    )
+                    if len(sub_idxs) != len(sub_raw_prems) or not sub_idxs:
+                        continue
+                    if (
+                        sub_mod.id is not None
+                        and sub_mod.id in targeted_warrant_ids
+                        and sub_mod.id != mod.id
+                    ):
+                        has_sub_targeted = True
+                    elif sub_mod.polarity > 0:
+                        sub_back.append((sub_idxs, sub_mod.weight))
+                    elif sub_mod.polarity < 0:
+                        sub_und.append((sub_idxs, sub_mod.weight))
+
+                mod_idx = len(hyperedges)
+                warrant_idx_by_id[mod.id] = mod_idx
+                hyperedges.append(
+                    HyperedgeSpec(
+                        warrant_id=mod.id,
+                        premise_indices=mod_idxs,
+                        target_idx=-1,
+                        polarity=mod.polarity,
+                        base_warrant=mod_w0,
+                        gate_factor=mod_gate,
+                        backing_edges=tuple(sub_back),
+                        undercut_edges=tuple(sub_und),
+                        target_warrant_idx=parent_idx,
+                    )
+                )
+                if has_sub_targeted:
+                    expansion_queue.append((mod_idx, mod.id))
+
+        return pairwise, hyperedges
 
     def solve(
         self,
@@ -482,6 +1101,9 @@ class QBAFGradualSemanticsSolver:
         tau_p: float | None = None,
         tau_c: float | None = None,
         continuous: bool | None = None,
+        perspective: str | None = None,
+        isolate_suppositional: bool | None = None,
+        isolate_attributed: bool | None = None,
     ) -> QBAFSolverResult:
         """Compute equilibrium justification degrees over an argumentation network.
 
@@ -501,6 +1123,12 @@ class QBAFGradualSemanticsSolver:
             Model confidence threshold override.
         continuous : bool, optional
             Whether to solve using continuous WeightedQuadraticEnergySolver. Defaults to instance setting.
+        perspective : str or None, optional
+            Optional perspective filter overriding instance setting.
+        isolate_suppositional : bool or None, optional
+            Optional supposition-isolation override.
+        isolate_attributed : bool or None, optional
+            Optional attribution-isolation override.
 
         Returns
         -------
@@ -515,6 +1143,9 @@ class QBAFGradualSemanticsSolver:
                 admissibility_mode=admissibility_mode,
                 tau_p=tau_p,
                 tau_c=tau_c,
+                perspective=perspective,
+                isolate_suppositional=isolate_suppositional,
+                isolate_attributed=isolate_attributed,
             )
 
         if isinstance(normalization_mode, str):
@@ -523,22 +1154,52 @@ class QBAFGradualSemanticsSolver:
         active_adm_mode = admissibility_mode or self.admissibility_mode
         active_tau_p = tau_p if tau_p is not None else self.tau_p
         active_tau_c = tau_c if tau_c is not None else self.tau_c
+        active_perspective = (
+            perspective if perspective is not None else self.perspective
+        )
 
-        base_tau, admissible_edges, admissibility_pruned = self._prepare_graph_data(
+        (
+            base_tau,
+            admissible_edges,
+            admissibility_pruned,
+            suppositional_isolated,
+            perspective_filtered,
+        ) = self._prepare_graph_data(
             nodes=nodes,
             edges=edges,
             normalization_mode=normalization_mode,
             active_adm_mode=active_adm_mode,
             active_tau_p=active_tau_p,
             active_tau_c=active_tau_c,
+            perspective=perspective,
+            isolate_suppositional=isolate_suppositional,
+            isolate_attributed=isolate_attributed,
         )
 
+        node_list = list(base_tau.keys())
+        node_to_idx = {nid: i for i, nid in enumerate(node_list)}
+        pairwise_edges, hyperedges = self._partition_pairwise_and_hyperedges(
+            admissible_edges,
+            node_to_idx,
+            normalization_mode=normalization_mode,
+        )
+        hyper_mods_by_target: dict[int, list[tuple[int, HyperedgeSpec]]] = {}
+        for mod_k, h_spec in enumerate(hyperedges):
+            if h_spec.target_warrant_idx is not None:
+                hyper_mods_by_target.setdefault(h_spec.target_warrant_idx, []).append(
+                    (mod_k, h_spec)
+                )
+
         incoming_edges: dict[str, list[_AdmissibleEdge]] = {nid: [] for nid in base_tau}
-        for edge in admissible_edges:
-            incoming_edges[edge.target].append(edge)
+        for edge in pairwise_edges:
+            if edge.target in incoming_edges:
+                incoming_edges[edge.target].append(edge)
 
         # Iterative Gradual Semantics Convergence Loop
         tau_current: dict[str, float] = dict(base_tau)
+        warrant_states: dict[str, float] = {
+            spec.warrant_id: spec.base_warrant for spec in hyperedges
+        }
         final_delta = 0.0
         converged = False
         iteration_count = 0
@@ -550,11 +1211,57 @@ class QBAFGradualSemanticsSolver:
             iteration_count = it + 1
             max_delta = 0.0
             tau_next: dict[str, float] = {}
+            s_vec = [tau_current[nid] for nid in node_list]
+
+            hyper_supp: dict[str, float] = {nid: 0.0 for nid in base_tau}
+            hyper_att: dict[str, float] = {nid: 0.0 for nid in base_tau}
+            s_w_prev = [warrant_states[spec.warrant_id] for spec in hyperedges]
+            for k_idx, spec in enumerate(hyperedges):
+                e_back = sum(
+                    w_b * _conjunctive_t_norm([s_vec[i] for i in b_idxs], self.t_norm)
+                    for b_idxs, w_b in spec.backing_edges
+                )
+                e_und = sum(
+                    w_u * _conjunctive_t_norm([s_vec[i] for i in u_idxs], self.t_norm)
+                    for u_idxs, w_u in spec.undercut_edges
+                )
+                for mod_k, mod_spec in hyper_mods_by_target.get(k_idx, ()):
+                    mod_contrib = (
+                        s_w_prev[mod_k]
+                        * mod_spec.gate_factor
+                        * _conjunctive_t_norm(
+                            [s_vec[i] for i in mod_spec.premise_indices], self.t_norm
+                        )
+                    )
+                    if mod_spec.polarity > 0:
+                        e_back += mod_contrib
+                    elif mod_spec.polarity < 0:
+                        e_und += mod_contrib
+                w_new = self._compute_update(
+                    tau_0=spec.base_warrant,
+                    support=e_back,
+                    attack=e_und,
+                    model=self.semantics_model,
+                )
+                max_delta = max(max_delta, abs(w_new - s_w_prev[k_idx]))
+                warrant_states[spec.warrant_id] = w_new
+
+                if spec.target_warrant_idx is not None or spec.target_idx < 0:
+                    continue
+                conj_act = _conjunctive_t_norm(
+                    [s_vec[i] for i in spec.premise_indices], self.t_norm
+                )
+                contrib = w_new * spec.gate_factor * conj_act
+                tgt_nid = node_list[spec.target_idx]
+                if spec.polarity > 0:
+                    hyper_supp[tgt_nid] += contrib
+                elif spec.polarity < 0:
+                    hyper_att[tgt_nid] += contrib
 
             for nid in base_tau:
                 tau_0 = base_tau[nid]
-                s_sum = 0.0
-                a_sum = 0.0
+                s_sum = hyper_supp[nid]
+                a_sum = hyper_att[nid]
 
                 for inc in incoming_edges.get(nid, []):
                     src_val = tau_current[inc.source]
@@ -595,7 +1302,11 @@ class QBAFGradualSemanticsSolver:
         for nid in base_tau:
             e_tot = support_energy[nid] + attack_energy[nid]
             deg = tau_current[nid]
-            vol = (e_tot / (1.0 + e_tot)) * (1.0 - 2.0 * abs(deg - 0.5)) if e_tot > 0 else 0.0
+            vol = (
+                (e_tot / (1.0 + e_tot)) * (1.0 - 2.0 * abs(deg - 0.5))
+                if e_tot > 0
+                else 0.0
+            )
             total_evidence[nid] = round(e_tot, 6)
             volatility[nid] = round(vol, 6)
 
@@ -611,6 +1322,10 @@ class QBAFGradualSemanticsSolver:
             total_weight_of_evidence=total_evidence,
             volatility_index=volatility,
             admissibility_pruned_count=admissibility_pruned,
+            perspective=active_perspective,
+            suppositional_isolated_count=suppositional_isolated,
+            perspective_filtered_count=perspective_filtered,
+            warrant_states={k: round(v, 6) for k, v in warrant_states.items()},
         )
 
     def solve_continuous(
@@ -622,6 +1337,9 @@ class QBAFGradualSemanticsSolver:
         admissibility_mode: Literal["hard", "soft"] | None = None,
         tau_p: float | None = None,
         tau_c: float | None = None,
+        perspective: str | None = None,
+        isolate_suppositional: bool | None = None,
+        isolate_attributed: bool | None = None,
     ) -> QBAFSolverResult:
         """Solve QBAF equilibrium using the unified continuous WeightedQuadraticEnergySolver.
 
@@ -643,6 +1361,12 @@ class QBAFGradualSemanticsSolver:
             Stance probability threshold override.
         tau_c : float, optional
             Model confidence threshold override.
+        perspective : str or None, optional
+            Optional perspective filter overriding instance setting.
+        isolate_suppositional : bool or None, optional
+            Optional supposition-isolation override.
+        isolate_attributed : bool or None, optional
+            Optional attribution-isolation override.
 
         Returns
         -------
@@ -655,14 +1379,26 @@ class QBAFGradualSemanticsSolver:
         active_adm_mode = admissibility_mode or self.admissibility_mode
         active_tau_p = tau_p if tau_p is not None else self.tau_p
         active_tau_c = tau_c if tau_c is not None else self.tau_c
+        active_perspective = (
+            perspective if perspective is not None else self.perspective
+        )
 
-        base_tau, admissible_edges, admissibility_pruned = self._prepare_graph_data(
+        (
+            base_tau,
+            admissible_edges,
+            admissibility_pruned,
+            suppositional_isolated,
+            perspective_filtered,
+        ) = self._prepare_graph_data(
             nodes=nodes,
             edges=edges,
             normalization_mode=normalization_mode,
             active_adm_mode=active_adm_mode,
             active_tau_p=active_tau_p,
             active_tau_c=active_tau_c,
+            perspective=perspective,
+            isolate_suppositional=isolate_suppositional,
+            isolate_attributed=isolate_attributed,
         )
 
         node_list = list(base_tau.keys())
@@ -673,7 +1409,12 @@ class QBAFGradualSemanticsSolver:
         g_supp = np.zeros((n, n), dtype=np.float64)
         g_att = np.zeros((n, n), dtype=np.float64)
 
-        for edge in admissible_edges:
+        pairwise_edges, hyperedges = self._partition_pairwise_and_hyperedges(
+            admissible_edges,
+            node_to_idx,
+            normalization_mode=normalization_mode,
+        )
+        for edge in pairwise_edges:
             u = node_to_idx[edge.source]
             v = node_to_idx[edge.target]
             if edge.polarity > 0:
@@ -681,17 +1422,51 @@ class QBAFGradualSemanticsSolver:
             elif edge.polarity < 0:
                 g_att[u, v] += edge.weight
 
-        ode_solver = WeightedQuadraticEnergySolver(
-            rtol=self.tolerance,
-            atol=max(self.tolerance * 0.01, 1e-6),
+        ode_solver = (
+            self.continuous_solver
+            if self.continuous_solver.t_norm == self.t_norm
+            else WeightedQuadraticEnergySolver(
+                rtol=self.continuous_solver.rtol,
+                atol=self.continuous_solver.atol,
+                t_max=self.continuous_solver.t_max,
+                max_step=self.continuous_solver.max_step,
+                t_norm=self.t_norm,
+            )
         )
-        s_final, converged, telemetry = ode_solver.solve(base_scores, g_supp, g_att)
+        s_final, converged, telemetry = ode_solver.solve(
+            base_scores,
+            g_supp,
+            g_att,
+            hyperedges=hyperedges,
+        )
 
         degrees = {nid: round(float(s_final[i]), 6) for i, nid in enumerate(node_list)}
-        support_sums = {nid: round(float(telemetry["support_energy"][i]), 6) for i, nid in enumerate(node_list)}
-        attack_sums = {nid: round(float(telemetry["attack_energy"][i]), 6) for i, nid in enumerate(node_list)}
-        total_evidence = {nid: round(float(telemetry["total_weight_of_evidence"][i]), 6) for i, nid in enumerate(node_list)}
-        volatility = {nid: round(float(telemetry["volatility_index"][i]), 6) for i, nid in enumerate(node_list)}
+        support_sums = {
+            nid: round(float(telemetry["support_energy"][i]), 6)
+            for i, nid in enumerate(node_list)
+        }
+        attack_sums = {
+            nid: round(float(telemetry["attack_energy"][i]), 6)
+            for i, nid in enumerate(node_list)
+        }
+        total_evidence = {
+            nid: round(float(telemetry["total_weight_of_evidence"][i]), 6)
+            for i, nid in enumerate(node_list)
+        }
+        volatility = {
+            nid: round(float(telemetry["volatility_index"][i]), 6)
+            for i, nid in enumerate(node_list)
+        }
+        warrant_states_arr = telemetry.get("warrant_states")
+        warrant_states = (
+            {
+                spec.warrant_id: round(float(warrant_states_arr[k]), 6)
+                for k, spec in enumerate(hyperedges)
+            }
+            if warrant_states_arr is not None
+            and len(warrant_states_arr) == len(hyperedges)
+            else {}
+        )
 
         return QBAFSolverResult(
             degrees=degrees,
@@ -705,6 +1480,10 @@ class QBAFGradualSemanticsSolver:
             total_weight_of_evidence=total_evidence,
             volatility_index=volatility,
             admissibility_pruned_count=admissibility_pruned,
+            perspective=active_perspective,
+            suppositional_isolated_count=suppositional_isolated,
+            perspective_filtered_count=perspective_filtered,
+            warrant_states=warrant_states,
         )
 
     def compare_weight_modes(
@@ -768,7 +1547,9 @@ class QBAFGradualSemanticsSolver:
                 c_diff = cal_res.degrees[u] - cal_res.degrees[v]
                 u_diff = unw_res.degrees[u] - unw_res.degrees[v]
                 # Reversal if relative order strictly changes sign
-                if (c_diff > 1e-4 and u_diff < -1e-4) or (c_diff < -1e-4 and u_diff > 1e-4):
+                if (c_diff > 1e-4 and u_diff < -1e-4) or (
+                    c_diff < -1e-4 and u_diff > 1e-4
+                ):
                     rank_reversals += 1
 
         summary = {
@@ -828,6 +1609,297 @@ class QBAFGradualSemanticsSolver:
             val = tau_0 + supp_term - att_term
             return max(0.0, min(1.0, val))
 
+    def _evaluate_admissibility_gate(
+        self,
+        eff_w: float,
+        acc: float | None,
+        p_stance: float | None,
+        model_conf: float | None,
+        normalization_mode: WeightNormalizationMode,
+        active_adm_mode: Literal["hard", "soft"],
+        active_tau_p: float,
+        active_tau_c: float,
+    ) -> tuple[bool, float, bool]:
+        """Apply hard or soft empirical admissibility gating to a single parsed edge.
+
+        Returns
+        -------
+        tuple of (bool, float, bool)
+            ``(keep_edge, resolved_weight, was_pruned)``.
+        """
+        if active_adm_mode == "hard":
+            is_inadmissible = False
+            if (
+                self.admissibility_threshold > 0.0
+                and acc is not None
+                and acc < self.admissibility_threshold
+            ):
+                is_inadmissible = True
+            if active_tau_p > 0.0 and p_stance is not None and p_stance < active_tau_p:
+                is_inadmissible = True
+            if (
+                active_tau_c > 0.0
+                and model_conf is not None
+                and model_conf < active_tau_c
+            ):
+                is_inadmissible = True
+
+            if is_inadmissible:
+                if self.prune_inadmissible:
+                    return False, 0.0, True
+                return True, 0.0, True
+
+            final_w = (
+                1.0
+                if normalization_mode == WeightNormalizationMode.UNWEIGHTED_BINARY
+                else eff_w
+            )
+            return True, final_w, False
+
+        gate_p = (
+            1.0 / (1.0 + math.exp(-20.0 * (p_stance - active_tau_p)))
+            if (p_stance is not None and active_tau_p > 0.0)
+            else 1.0
+        )
+        gate_c = (
+            1.0 / (1.0 + math.exp(-20.0 * (model_conf - active_tau_c)))
+            if (model_conf is not None and active_tau_c > 0.0)
+            else 1.0
+        )
+        f_soft = gate_p * gate_c
+        final_w = (
+            1.0 * f_soft
+            if normalization_mode == WeightNormalizationMode.UNWEIGHTED_BINARY
+            else eff_w * f_soft
+        )
+        return True, final_w, False
+
+    def _resolve_reductio_discharge(
+        self,
+        sup_nodes: set[str],
+        active_refuters: set[str],
+        in_persp_non_sup: set[str],
+        raw_base_tau: dict[str, float],
+        sup_candidate_edges: list[_AdmissibleEdge],
+    ) -> tuple[set[str], list[_AdmissibleEdge]]:
+        """Resolve refuted *Reductio ad absurdum* chains and discharge refutation energy.
+
+        Unrefuted suppositional subgraphs retain ``0.0`` base priors and emit no
+        cross-scope edges. When an active non-suppositional proposition attacks a
+        suppositional consequence :math:`Q` (or directly attacks assumption :math:`S`),
+        refutation propagates backward along ``SUPPORTS`` derivations via *modus
+        tollens* and discharges the drop :math:`\\Delta_{\\text{ref}}(S) = \\tau_0(S) - \\tau^*(S)`
+        onto linked asserted theses without polluting unrefuted claims.
+        """
+
+        def _edge_premises(edge: _AdmissibleEdge) -> tuple[str, ...]:
+            return (
+                edge.premise_ids
+                if edge.premise_ids
+                else ((edge.source,) if edge.source else ())
+            )
+
+        direct_refutations = [
+            e
+            for e in sup_candidate_edges
+            if e.polarity < 0
+            and e.weight > 0.0
+            and _edge_premises(e)
+            and all(p in active_refuters for p in _edge_premises(e))
+            and e.target in sup_nodes
+        ]
+        if not direct_refutations:
+            return set(), []
+
+        # Reverse adjacency along suppositional (and mixed conjunctive) --SUPPORTS--> suppositional edges
+        rev_supp: dict[str, list[tuple[str, float]]] = {nid: [] for nid in sup_nodes}
+        for e in sup_candidate_edges:
+            if e.target not in sup_nodes or e.polarity <= 0 or e.weight <= 0.0:
+                continue
+            premises = _edge_premises(e)
+            sup_prems = [p for p in premises if p in sup_nodes]
+            if not sup_prems:
+                continue
+            non_sup_prems = [p for p in premises if p not in sup_nodes]
+            if any(raw_base_tau.get(p, 0.0) <= 0.0 for p in non_sup_prems):
+                continue
+            non_sup_scale = (
+                _conjunctive_t_norm(
+                    [raw_base_tau[p] for p in non_sup_prems], self.t_norm
+                )
+                if non_sup_prems
+                else 1.0
+            )
+            eff_sup_w = e.weight * non_sup_scale
+            for sp in sup_prems:
+                rev_supp[e.target].append((sp, eff_sup_w))
+
+        # Track (refuter -> sup_node) maximal contrapositive attack weight along simple paths
+        refuted_sup_nodes: set[str] = set()
+        direct_attack_pairs: set[tuple[str, str]] = set()
+        mt_weight_map: dict[tuple[str, str], float] = {}
+        refuter_contrib: dict[str, dict[str, float]] = {}
+
+        for e in direct_refutations:
+            prems = _edge_premises(e)
+            refuted_sup_nodes.add(e.target)
+            refuter_contrib.setdefault(e.target, {})
+            if len(prems) == 1:
+                step_contribs = [(e.source, e.weight)]
+            else:
+                ref_act = _conjunctive_t_norm(
+                    [raw_base_tau[p] for p in prems], self.t_norm
+                )
+                step_contribs = [
+                    (
+                        r_id,
+                        (e.weight * ref_act)
+                        / (len(prems) * max(raw_base_tau.get(r_id, 0.0), 1e-12)),
+                    )
+                    for r_id in prems
+                ]
+
+            for r_id, base_w in step_contribs:
+                direct_attack_pairs.add((r_id, e.target))
+                refuter_contrib[e.target][r_id] = (
+                    refuter_contrib[e.target].get(r_id, 0.0) + base_w
+                )
+
+                # BFS/DFS backward along SUPPORTS to propagate modus tollens refutation
+                stack: list[tuple[str, float, frozenset[str]]] = [
+                    (e.target, base_w, frozenset({e.target}))
+                ]
+                while stack:
+                    curr, path_w, visited = stack.pop()
+                    for prev_sup, edge_w in rev_supp.get(curr, ()):
+                        if prev_sup in visited:
+                            continue
+                        prop_w = min(1.0, path_w * edge_w)
+                        if prop_w <= 0.0:
+                            continue
+                        refuted_sup_nodes.add(prev_sup)
+                        pair_key = (r_id, prev_sup)
+                        if prop_w > mt_weight_map.get(pair_key, 0.0):
+                            mt_weight_map[pair_key] = prop_w
+                        refuter_contrib.setdefault(prev_sup, {})
+                        if prop_w > refuter_contrib[prev_sup].get(r_id, 0.0):
+                            refuter_contrib[prev_sup][r_id] = prop_w
+                        stack.append((prev_sup, prop_w, visited | {prev_sup}))
+
+        internal_sup_edges = [
+            e
+            for e in sup_candidate_edges
+            if e.target in refuted_sup_nodes
+            and any(p in sup_nodes for p in _edge_premises(e))
+            and all(
+                (p in refuted_sup_nodes) or (p not in sup_nodes)
+                for p in _edge_premises(e)
+            )
+        ]
+        mt_edges = [
+            _AdmissibleEdge(source=r_id, target=s_id, polarity=-1, weight=w_mt)
+            for (r_id, s_id), w_mt in mt_weight_map.items()
+            if (r_id, s_id) not in direct_attack_pairs
+        ]
+
+        # Local fixed-point evaluation of the refuted suppositional component
+        local_edges = direct_refutations + internal_sup_edges + mt_edges
+        active_r_nodes = {p for e in direct_refutations for p in _edge_premises(e)}
+        aux_non_sup_nodes = {
+            p
+            for e in internal_sup_edges
+            for p in _edge_premises(e)
+            if p not in sup_nodes
+        }
+        tau_sub: dict[str, float] = {
+            nid: raw_base_tau[nid]
+            for nid in (refuted_sup_nodes | active_r_nodes | aux_non_sup_nodes)
+        }
+        inc_by_target: dict[str, list[_AdmissibleEdge]] = {
+            nid: [] for nid in refuted_sup_nodes
+        }
+        for e in local_edges:
+            if e.target in inc_by_target:
+                inc_by_target[e.target].append(e)
+
+        iters = max(20, min(self.max_iterations, 50))
+        for _ in range(iters):
+            next_tau = dict(tau_sub)
+            max_delta = 0.0
+            for nid in refuted_sup_nodes:
+                s_sum = 0.0
+                a_sum = 0.0
+                for inc in inc_by_target.get(nid, ()):
+                    inc_prems = _edge_premises(inc)
+                    if not inc_prems:
+                        continue
+                    act = _conjunctive_t_norm(
+                        [tau_sub[p] for p in inc_prems], self.t_norm
+                    )
+                    if inc.polarity > 0:
+                        s_sum += act * inc.weight
+                    elif inc.polarity < 0:
+                        a_sum += act * inc.weight
+                updated = self._compute_update(
+                    tau_0=raw_base_tau[nid],
+                    support=s_sum,
+                    attack=a_sum,
+                    model=self.semantics_model,
+                )
+                max_delta = max(max_delta, abs(updated - tau_sub[nid]))
+                next_tau[nid] = updated
+            tau_sub = next_tau
+            if max_delta < self.tolerance:
+                break
+
+        discharged_edges: list[_AdmissibleEdge] = []
+        for e in sup_candidate_edges:
+            # Discharge applies only when a refuted supposition (alone or conjunctively)
+            # attacked an in-perspective non-suppositional claim (indirect proof: ¬S |- T).
+            premises = _edge_premises(e)
+            sup_prems = [p for p in premises if p in sup_nodes]
+            refuted_prems = [p for p in premises if p in refuted_sup_nodes]
+            if (
+                not refuted_prems
+                or len(refuted_prems) != len(sup_prems)
+                or e.target not in in_persp_non_sup
+                or e.polarity >= 0
+                or e.weight <= 0.0
+            ):
+                continue
+            prior_act = _conjunctive_t_norm(
+                [raw_base_tau[p] for p in premises], self.t_norm
+            )
+            post_act = _conjunctive_t_norm(
+                [tau_sub.get(p, raw_base_tau[p]) for p in premises], self.t_norm
+            )
+            delta_ref = max(0.0, prior_act - post_act)
+            if delta_ref <= 1e-6:
+                continue
+            contribs: dict[str, float] = {}
+            for sp in refuted_prems:
+                for r_id, c_val in refuter_contrib.get(sp, {}).items():
+                    contribs[r_id] = contribs.get(r_id, 0.0) + c_val
+            total_c = sum(contribs.values())
+            if total_c <= 0.0:
+                continue
+            discharged_energy = delta_ref * e.weight
+            for r_id, c_val in contribs.items():
+                share = c_val / total_c
+                ref_tau = max(tau_sub.get(r_id, 0.0), 1e-6)
+                discharge_w = min(1.0, (share * discharged_energy) / ref_tau)
+                if discharge_w > 0.0:
+                    discharged_edges.append(
+                        _AdmissibleEdge(
+                            source=r_id,
+                            target=e.target,
+                            polarity=1,
+                            weight=discharge_w,
+                        )
+                    )
+
+        return refuted_sup_nodes, local_edges + discharged_edges
+
     def _prepare_graph_data(
         self,
         nodes: TheoryGraph | Mapping[str, float] | Sequence[Any],
@@ -836,8 +1908,11 @@ class QBAFGradualSemanticsSolver:
         active_adm_mode: Literal["hard", "soft"],
         active_tau_p: float,
         active_tau_c: float,
-    ) -> tuple[dict[str, float], list[_AdmissibleEdge], int]:
-        """Normalize node base plausibilities and filter dialectical edges with admissibility gating.
+        perspective: str | None = None,
+        isolate_suppositional: bool | None = None,
+        isolate_attributed: bool | None = None,
+    ) -> tuple[dict[str, float], list[_AdmissibleEdge], int, int, int]:
+        """Normalize node base plausibilities, apply intensional scoping, and filter edges.
 
         Parameters
         ----------
@@ -853,11 +1928,19 @@ class QBAFGradualSemanticsSolver:
             Stance probability threshold.
         active_tau_c : float
             Model confidence threshold.
+        perspective : str or None, optional
+            Optional epistemic perspective filter overriding instance setting.
+        isolate_suppositional : bool or None, optional
+            Optional override controlling whether suppositional nodes are isolated.
+        isolate_attributed : bool or None, optional
+            Optional override controlling whether attributed nodes are isolated from
+            asserted authorial claims.
 
         Returns
         -------
-        tuple of (dict[str, float], list[_AdmissibleEdge], int)
-            Normalized node base priors, filtered admissible edges, and pruned edge count.
+        tuple of (dict[str, float], list[_AdmissibleEdge], int, int, int)
+            Normalized node base priors, filtered admissible edges, admissibility-pruned
+            edge count, isolated suppositional node count, and filtered perspective node count.
         """
         if isinstance(nodes, TheoryGraph):
             raw_nodes: Mapping[str, Any] | Sequence[Any] = nodes.nodes
@@ -866,84 +1949,432 @@ class QBAFGradualSemanticsSolver:
             raw_nodes = nodes
             raw_edges = edges if edges is not None else ()
 
-        base_tau: dict[str, float] = {}
+        eff_perspective = perspective if perspective is not None else self.perspective
+        active_perspective = (
+            eff_perspective.strip().lower() if eff_perspective is not None else None
+        )
+        eff_isolate_sup = (
+            self.isolate_suppositional
+            if isolate_suppositional is None
+            else isolate_suppositional
+        )
+        eff_isolate_attr = (
+            self.isolate_attributed
+            if isolate_attributed is None
+            else isolate_attributed
+        )
+
+        raw_base_tau: dict[str, float] = {}
+        node_modes: dict[str, str] = {}
+        node_attributions: dict[str, str | None] = {}
+
         if isinstance(raw_nodes, Mapping):
             for nid, val in raw_nodes.items():
+                nid_str = str(nid)
                 if isinstance(val, (int, float)):
-                    base_tau[str(nid)] = max(0.0, min(1.0, float(val)))
+                    raw_base_tau[nid_str] = max(0.0, min(1.0, float(val)))
+                    node_modes[nid_str] = "asserted"
+                    node_attributions[nid_str] = None
                 else:
-                    _, extracted_tau = self._extract_node_plausibility(val)
-                    base_tau[str(nid)] = max(0.0, min(1.0, extracted_tau))
+                    _, extracted_tau, mode, attr = self._extract_node_spec(val)
+                    raw_base_tau[nid_str] = max(0.0, min(1.0, extracted_tau))
+                    node_modes[nid_str] = mode
+                    node_attributions[nid_str] = attr
         else:
             for item in raw_nodes:
-                nid, val = self._extract_node_plausibility(item)
-                base_tau[nid] = max(0.0, min(1.0, val))
+                nid, val, mode, attr = self._extract_node_spec(item)
+                raw_base_tau[nid] = max(0.0, min(1.0, val))
+                node_modes[nid] = mode
+                node_attributions[nid] = attr
 
-        admissible_edges: list[_AdmissibleEdge] = []
-        admissibility_pruned = 0
-
+        # Parse all edges first and distinguish warrant modifiers from atom targets
+        parsed_edges: list[_ParsedEdge] = []
         for edge_item in raw_edges:
             parsed = self._parse_edge(edge_item)
             if not parsed:
                 continue
+            parsed_edges.append(parsed)
 
-            src, tgt, pol, eff_w, acc, p_stance, model_conf = parsed
+        explicit_edge_ids = {pe.id for pe in parsed_edges if pe.id}
+        undercut_target_ids = {
+            pe.undercuts_relation_id for pe in parsed_edges if pe.undercuts_relation_id
+        }
+        explicit_warrant_ids = explicit_edge_ids | undercut_target_ids
+        warrant_parent_map: dict[str, str] = {}
+        target_atom_by_warrant: dict[str, str] = {}
+        for pe in parsed_edges:
+            if not pe.id:
+                continue
+            direct_tgt = pe.undercuts_relation_id or pe.target
+            if (
+                pe.undercuts_relation_id is None
+                and pe.target not in explicit_warrant_ids
+            ):
+                target_atom_by_warrant[pe.id] = pe.target
+            elif direct_tgt:
+                warrant_parent_map[pe.id] = direct_tgt
 
-            # Ensure both endpoints exist in node index
-            if src not in base_tau:
-                base_tau[src] = 0.5
-            if tgt not in base_tau:
-                base_tau[tgt] = 0.5
+        def _resolve_ultimate_atom(w_id: str) -> str | None:
+            curr = w_id
+            seen: set[str] = set()
+            while curr not in target_atom_by_warrant:
+                if curr in seen or curr not in warrant_parent_map:
+                    return None
+                seen.add(curr)
+                curr = warrant_parent_map[curr]
+            return target_atom_by_warrant[curr]
 
-            # Enforce admissibility gating based on mode
-            if active_adm_mode == "hard":
-                is_inadmissible = False
-                if self.admissibility_threshold > 0.0 and acc is not None and acc < self.admissibility_threshold:
-                    is_inadmissible = True
-                if active_tau_p > 0.0 and p_stance is not None and p_stance < active_tau_p:
-                    is_inadmissible = True
-                if active_tau_c > 0.0 and model_conf is not None and model_conf < active_tau_c:
-                    is_inadmissible = True
+        for wid in list(warrant_parent_map.keys()):
+            atom_tgt = _resolve_ultimate_atom(wid)
+            if atom_tgt is not None:
+                target_atom_by_warrant[wid] = atom_tgt
 
-                if is_inadmissible:
-                    admissibility_pruned += 1
-                    if self.prune_inadmissible:
-                        continue
-                    else:
-                        eff_w = 0.0
+        # Never treat explicit or referenced inference/warrant IDs as atom nodes in base_scores
+        for wid in explicit_warrant_ids:
+            raw_base_tau.pop(wid, None)
+            node_modes.pop(wid, None)
+            node_attributions.pop(wid, None)
 
-                if normalization_mode == WeightNormalizationMode.UNWEIGHTED_BINARY:
-                    final_w = 1.0 if not is_inadmissible else 0.0
-                else:
-                    final_w = eff_w
+        default_unseen_tau = (
+            0.0
+            if active_perspective is not None
+            and active_perspective not in ("all", "suppositional")
+            else 0.5
+        )
+        for pe in parsed_edges:
+            atom_endpoints = (
+                list(pe.premise_ids)
+                if pe.premise_ids
+                else ([pe.source] if pe.source else [])
+            )
+            if (
+                pe.target
+                and pe.undercuts_relation_id is None
+                and pe.target not in explicit_warrant_ids
+            ):
+                atom_endpoints.append(pe.target)
+            for ep in atom_endpoints:
+                if ep not in raw_base_tau:
+                    raw_base_tau[ep] = default_unseen_tau
+                    node_modes.setdefault(ep, "asserted")
+                    node_attributions.setdefault(ep, None)
+
+        def _is_unattributed(nid: str) -> bool:
+            attr_norm = (node_attributions.get(nid) or "").strip().lower()
+            return attr_norm in ("", "author", "self")
+
+        def _is_authorial(nid: str) -> bool:
+            mode = node_modes.get(nid, "asserted")
+            allowed_modes = (
+                ("asserted", "historical")
+                if eff_isolate_sup
+                else ("asserted", "historical", "suppositional")
+            )
+            return mode in allowed_modes and _is_unattributed(nid)
+
+        def _matches_agent(nid: str, agent_norm: str) -> bool:
+            mode = node_modes.get(nid, "asserted")
+            if eff_isolate_sup and mode == "suppositional":
+                return False
+            attr_norm = (node_attributions.get(nid) or "").strip().lower()
+            if attr_norm == agent_norm:
+                return True
+            return mode == "historical" and _is_unattributed(nid)
+
+        sup_nodes = {nid for nid, mode in node_modes.items() if mode == "suppositional"}
+        sup_isolation_active = eff_isolate_sup and active_perspective != "suppositional"
+        suppositional_isolated = len(sup_nodes) if sup_isolation_active else 0
+
+        in_persp: dict[str, bool] = {}
+        for nid in raw_base_tau:
+            mode = node_modes.get(nid, "asserted")
+            if sup_isolation_active and mode == "suppositional":
+                in_persp[nid] = False
+            elif active_perspective is None or active_perspective in (
+                "all",
+                "suppositional",
+            ):
+                in_persp[nid] = True
+            elif active_perspective in ("author", "asserted"):
+                in_persp[nid] = _is_authorial(nid)
             else:
-                # Mode 2: Soft Margin continuous sigmoidal relaxation
-                gate_p = (
-                    1.0 / (1.0 + math.exp(-20.0 * (p_stance - active_tau_p)))
-                    if (p_stance is not None and active_tau_p > 0.0)
-                    else 1.0
-                )
-                gate_c = (
-                    1.0 / (1.0 + math.exp(-20.0 * (model_conf - active_tau_c)))
-                    if (model_conf is not None and active_tau_c > 0.0)
-                    else 1.0
-                )
-                f_soft = gate_p * gate_c
-                if normalization_mode == WeightNormalizationMode.UNWEIGHTED_BINARY:
-                    final_w = 1.0 * f_soft
-                else:
-                    final_w = eff_w * f_soft
+                in_persp[nid] = _matches_agent(nid, active_perspective)
 
-            admissible_edges.append(
-                _AdmissibleEdge(
-                    source=src,
-                    target=tgt,
-                    polarity=pol,
-                    weight=final_w,
+        # In dialectical mode (isolate_attributed=False) with an active perspective,
+        # external non-suppositional attackers attacking in-perspective claims remain active.
+        external_challengers: set[str] = set()
+        if (
+            not eff_isolate_attr
+            and active_perspective is not None
+            and active_perspective not in ("all", "suppositional")
+        ):
+            for pe in parsed_edges:
+                is_warrant_mod = (
+                    pe.undercuts_relation_id is not None
+                    or pe.target in explicit_warrant_ids
                 )
+                eff_tgt = (
+                    target_atom_by_warrant.get(
+                        pe.undercuts_relation_id or pe.target, pe.target
+                    )
+                    if is_warrant_mod
+                    else pe.target
+                )
+                if (
+                    pe.polarity < 0
+                    and pe.source not in sup_nodes
+                    and not in_persp.get(pe.source, False)
+                    and in_persp.get(eff_tgt, False)
+                ):
+                    keep, _, _ = self._evaluate_admissibility_gate(
+                        pe.eff_w,
+                        pe.acc,
+                        pe.p_stance,
+                        pe.model_conf,
+                        normalization_mode,
+                        active_adm_mode,
+                        active_tau_p,
+                        active_tau_c,
+                    )
+                    if keep:
+                        external_challengers.add(pe.source)
+
+        base_tau: dict[str, float] = {}
+        perspective_filtered_nodes: set[str] = set()
+        for nid, tau in raw_base_tau.items():
+            if nid in sup_nodes:
+                base_tau[nid] = 0.0 if sup_isolation_active else tau
+            elif in_persp[nid] or nid in external_challengers:
+                base_tau[nid] = tau
+            else:
+                base_tau[nid] = 0.0
+                perspective_filtered_nodes.add(nid)
+
+        admissible_edges: list[_AdmissibleEdge] = []
+        sup_candidate_edges: list[_AdmissibleEdge] = []
+        admissibility_pruned = 0
+
+        for pe in parsed_edges:
+            src, tgt = pe.source, pe.target
+            premises = pe.premise_ids if pe.premise_ids else ((src,) if src else ())
+            is_warrant_mod = (
+                pe.undercuts_relation_id is not None or tgt in explicit_warrant_ids
+            )
+            eff_tgt = (
+                target_atom_by_warrant.get(pe.undercuts_relation_id or tgt, tgt)
+                if is_warrant_mod
+                else tgt
+            )
+            src_sup = any(p in sup_nodes for p in premises)
+            tgt_sup = False if is_warrant_mod else (eff_tgt in sup_nodes)
+
+            # Handle edges touching suppositional nodes under active supposition isolation
+            if sup_isolation_active and (src_sup or tgt_sup):
+                # Only allow non-suppositional side to belong to active perspective
+                src_eligible = all(
+                    (p in sup_nodes)
+                    or (in_persp.get(p, False) and base_tau.get(p, 0.0) > 0.0)
+                    for p in premises
+                )
+                tgt_eligible = tgt_sup or in_persp.get(eff_tgt, False)
+                if not (src_eligible and tgt_eligible):
+                    continue
+                keep, final_w, pruned = self._evaluate_admissibility_gate(
+                    pe.eff_w,
+                    pe.acc,
+                    pe.p_stance,
+                    pe.model_conf,
+                    normalization_mode,
+                    active_adm_mode,
+                    active_tau_p,
+                    active_tau_c,
+                )
+                if pruned:
+                    admissibility_pruned += 1
+                if keep:
+                    sup_candidate_edges.append(
+                        _AdmissibleEdge(
+                            source=src,
+                            target=tgt,
+                            polarity=pe.polarity,
+                            weight=final_w,
+                            id=pe.id,
+                            premise_ids=pe.premise_ids,
+                            undercuts_relation_id=pe.undercuts_relation_id,
+                            base_warrant=pe.base_warrant,
+                        )
+                    )
+                continue
+
+            # Non-suppositional perspective edge filtering
+            if active_perspective is None:
+                if (
+                    eff_isolate_attr
+                    and _is_authorial(eff_tgt)
+                    and any(not _is_authorial(p) for p in premises)
+                ):
+                    for p in premises:
+                        if not _is_authorial(p):
+                            perspective_filtered_nodes.add(p)
+                    continue
+            elif active_perspective in ("all", "suppositional"):
+                if (
+                    eff_isolate_attr
+                    and active_perspective == "suppositional"
+                    and not (src_sup and tgt_sup)
+                ):
+                    continue
+            else:
+                both_in_persp = all(
+                    in_persp.get(p, False) for p in premises
+                ) and in_persp.get(eff_tgt, False)
+                is_external_attack = (
+                    not eff_isolate_attr
+                    and src in external_challengers
+                    and in_persp.get(eff_tgt, False)
+                    and pe.polarity < 0
+                )
+                is_same_challenger_support = (
+                    not eff_isolate_attr
+                    and src in external_challengers
+                    and eff_tgt in external_challengers
+                    and (node_attributions.get(src) or "").strip().lower()
+                    == (node_attributions.get(eff_tgt) or "").strip().lower()
+                )
+                if not (
+                    both_in_persp or is_external_attack or is_same_challenger_support
+                ):
+                    continue
+
+            keep, final_w, pruned = self._evaluate_admissibility_gate(
+                pe.eff_w,
+                pe.acc,
+                pe.p_stance,
+                pe.model_conf,
+                normalization_mode,
+                active_adm_mode,
+                active_tau_p,
+                active_tau_c,
+            )
+            if pruned:
+                admissibility_pruned += 1
+            if keep:
+                admissible_edges.append(
+                    _AdmissibleEdge(
+                        source=src,
+                        target=tgt,
+                        polarity=pe.polarity,
+                        weight=final_w,
+                        id=pe.id,
+                        premise_ids=pe.premise_ids,
+                        undercuts_relation_id=pe.undercuts_relation_id,
+                        base_warrant=pe.base_warrant,
+                    )
+                )
+
+        if sup_isolation_active and sup_candidate_edges:
+            active_refuters = {
+                nid
+                for nid in raw_base_tau
+                if nid not in sup_nodes
+                and base_tau.get(nid, 0.0) > 0.0
+                and (
+                    in_persp.get(nid, False)
+                    or active_perspective in (None, "all", "suppositional")
+                )
+            }
+            in_persp_non_sup = {
+                nid
+                for nid in raw_base_tau
+                if nid not in sup_nodes and in_persp.get(nid, False)
+            }
+            refuted_sup_nodes, reductio_edges = self._resolve_reductio_discharge(
+                sup_nodes=sup_nodes,
+                active_refuters=active_refuters,
+                in_persp_non_sup=in_persp_non_sup,
+                raw_base_tau=raw_base_tau,
+                sup_candidate_edges=sup_candidate_edges,
+            )
+            for nid in refuted_sup_nodes:
+                base_tau[nid] = raw_base_tau[nid]
+            admissible_edges.extend(reductio_edges)
+
+        return (
+            base_tau,
+            admissible_edges,
+            admissibility_pruned,
+            suppositional_isolated,
+            len(perspective_filtered_nodes),
+        )
+
+    def _extract_node_spec(self, node: Any) -> tuple[str, float, str, str | None]:
+        """Extract canonical ID, prior plausibility, intensional mode, and attribution.
+
+        Parameters
+        ----------
+        node : Any
+            Node representation (TheoryNode, BaseModel, Mapping, tuple, or identifier).
+
+        Returns
+        -------
+        tuple of (str, float, str, str or None)
+            Tuple of ``(node_id, tau_0, intensional_mode, attributed_to)``.
+        """
+        if isinstance(node, TheoryNode):
+            if "base_score" in node.model_fields_set:
+                tau = node.base_score
+            elif "confidence" in node.model_fields_set:
+                tau = node.confidence
+            else:
+                tau = node.base_score
+            return (
+                node.id,
+                float(tau),
+                str(node.intensional_mode).strip().lower(),
+                node.attributed_to,
             )
 
-        return base_tau, admissible_edges, admissibility_pruned
+        if isinstance(node, BaseModel):
+            return self._extract_node_spec(node.model_dump())
+
+        if isinstance(node, Mapping):
+            nid = str(node.get("id") or node.get("node_id") or "unknown")
+            raw_tau = node.get("base_score")
+            if raw_tau is None:
+                raw_tau = node.get("prior")
+            if raw_tau is None:
+                raw_tau = node.get("plausibility")
+            if raw_tau is None:
+                modal_prior = node.get("modal_prior")
+                if modal_prior is not None:
+                    local_ten = node.get("local_tenability")
+                    if local_ten is None and isinstance(
+                        node.get("tenability"), Mapping
+                    ):
+                        local_ten = node["tenability"].get("local_score")
+                    raw_tau = float(modal_prior) * float(
+                        local_ten if local_ten is not None else 1.0
+                    )
+            if raw_tau is None:
+                raw_tau = node.get("confidence")
+            tau = float(raw_tau) if raw_tau is not None else 0.5
+            mode = str(node.get("intensional_mode") or "asserted").strip().lower()
+            raw_attr = node.get("attributed_to")
+            attr = str(raw_attr) if raw_attr is not None else None
+            return nid, tau, mode, attr
+
+        if isinstance(node, (tuple, list)) and len(node) >= 2:
+            nid = str(node[0])
+            tau = float(node[1])
+            mode = (
+                str(node[2]).strip().lower()
+                if len(node) >= 3 and node[2] is not None
+                else "asserted"
+            )
+            attr = str(node[3]) if len(node) >= 4 and node[3] is not None else None
+            return nid, tau, mode, attr
+
+        return str(node), 0.5, "asserted", None
 
     def _extract_node_plausibility(self, node: Any) -> tuple[str, float]:
         """Extract canonical ID and prior plausibility from diverse node representations.
@@ -958,98 +2389,126 @@ class QBAFGradualSemanticsSolver:
         tuple of (str, float)
             Tuple of canonical node ID and prior plausibility tau_0 in [0, 1].
         """
-        if isinstance(node, TheoryNode):
-            if "base_score" in node.model_fields_set:
-                tau = node.base_score
-            elif "confidence" in node.model_fields_set:
-                tau = node.confidence
-            else:
-                tau = node.base_score
-            return node.id, float(tau)
+        nid, tau, _, _ = self._extract_node_spec(node)
+        return nid, tau
 
-        if isinstance(node, dict):
-            nid = str(node.get("id") or node.get("node_id") or "unknown")
-            tau = node.get("base_score") or node.get("plausibility") or node.get("confidence") or 0.5
-            return nid, float(tau)
-
-        if isinstance(node, (tuple, list)) and len(node) >= 2:
-            return str(node[0]), float(node[1])
-
-        if hasattr(node, "id"):
-            nid = str(node.id)
-            tau = 0.5
-            if hasattr(node, "base_score") and node.base_score is not None:
-                tau = node.base_score
-            elif hasattr(node, "plausibility") and node.plausibility is not None:
-                tau = node.plausibility
-            elif hasattr(node, "confidence") and node.confidence is not None:
-                tau = node.confidence
-            return nid, float(tau)
-
-        return str(node), 0.5
-
-    def _parse_edge(
-        self, edge: Any
-    ) -> tuple[str, str, int, float, float | None, float | None, float | None] | None:
-        """Parse source, target, polarity, effective weight, accuracy, stance probability, and model confidence.
+    def _parse_edge(self, edge: Any) -> _ParsedEdge | None:
+        """Parse edge into typed intermediate attributes without reflection.
 
         Parameters
         ----------
         edge : Any
-            Edge representation (TheoryEdge, dict, or tuple).
+            Edge representation (TheoryEdge, BaseModel, Mapping, or tuple).
 
         Returns
         -------
-        tuple of (str, str, int, float, float | None, float | None, float | None) or None
-            Parsed relational attributes (src, tgt, polarity, weight, accuracy, stance_prob, confidence).
+        _ParsedEdge or None
+            Parsed relational attributes, or ``None`` if endpoints cannot be determined.
         """
         # 1. First-class TheoryEdge domain object
         if isinstance(edge, TheoryEdge):
             pol = edge.polarity
             if pol == 0:
-                pol = edge.relation_type.default_polarity if isinstance(edge.relation_type, RelationType) else 1
-            eff_w, acc, p_stance, model_conf = self._extract_edge_weights_from_model(edge)
-            return edge.source, edge.target, pol, eff_w, acc, p_stance, model_conf
-
-        # 2. Dictionary representation
-        if isinstance(edge, dict):
-            src = str(edge.get("source") or edge.get("source_id") or edge.get("from_id", ""))
-            tgt = str(edge.get("target") or edge.get("target_id") or edge.get("to_id", ""))
+                pol = (
+                    edge.relation_type.default_polarity
+                    if isinstance(edge.relation_type, RelationType)
+                    else 1
+                )
+            eff_w, acc, p_stance, model_conf = self._extract_edge_weights_from_model(
+                edge
+            )
+            norm_premises = tuple(p for p in edge.premise_ids if p)
+            src = edge.source or (norm_premises[0] if norm_premises else "")
+            tgt = edge.target or (edge.undercuts_relation_id or "")
             if not src or not tgt:
                 return None
-            props = edge.get("properties") if isinstance(edge.get("properties"), dict) else edge
+            return _ParsedEdge(
+                source=src,
+                target=tgt,
+                polarity=pol,
+                eff_w=eff_w,
+                acc=acc,
+                p_stance=p_stance,
+                model_conf=model_conf,
+                id=edge.id,
+                premise_ids=norm_premises,
+                undercuts_relation_id=edge.undercuts_relation_id,
+                base_warrant=float(edge.inferential_force),
+            )
+
+        # 2. Foreign Pydantic BaseModel (e.g. episteme_pipeline TheoryRelation)
+        if isinstance(edge, BaseModel):
+            return self._parse_edge(edge.model_dump())
+
+        # 3. Mapping representation
+        if isinstance(edge, Mapping):
+            raw_props = edge.get("properties")
+            props = raw_props if isinstance(raw_props, Mapping) else edge
+            raw_premises = edge.get("premise_ids") or props.get("premise_ids") or ()
+            norm_premises = tuple(str(p) for p in raw_premises if p)
+            edge_id_val = edge.get("id") or props.get("id")
+            edge_id = str(edge_id_val) if edge_id_val else None
+            undercut_val = edge.get("undercuts_relation_id") or props.get(
+                "undercuts_relation_id"
+            )
+            undercut_id = str(undercut_val) if undercut_val else None
+
+            src = str(
+                edge.get("source")
+                or edge.get("source_id")
+                or edge.get("from_id")
+                or (norm_premises[0] if norm_premises else "")
+            )
+            tgt = str(
+                edge.get("target")
+                or edge.get("target_id")
+                or edge.get("to_id")
+                or (undercut_id or "")
+            )
+            if not src or not tgt:
+                return None
             pol = self._resolve_polarity(
                 props.get("polarity"),
-                edge.get("relation_type") or props.get("relation_type") or props.get("type"),
+                edge.get("relation_type")
+                or props.get("relation_type")
+                or props.get("type"),
             )
-            eff_w, acc, p_stance, model_conf = self._extract_edge_weights_from_dict(props)
-            return src, tgt, pol, eff_w, acc, p_stance, model_conf
+            eff_w, acc, p_stance, model_conf = self._extract_edge_weights_from_mapping(
+                props
+            )
+            raw_warrant = props.get("inferential_force")
+            if raw_warrant is None:
+                raw_warrant = props.get("inferential_warrant")
+            base_warrant = float(raw_warrant) if raw_warrant is not None else 0.75
+            return _ParsedEdge(
+                source=src,
+                target=tgt,
+                polarity=pol,
+                eff_w=eff_w,
+                acc=acc,
+                p_stance=p_stance,
+                model_conf=model_conf,
+                id=edge_id,
+                premise_ids=norm_premises,
+                undercuts_relation_id=undercut_id,
+                base_warrant=base_warrant,
+            )
 
-        # 3. Tuple (src, tgt, weight, polarity)
+        # 4. Tuple (src, tgt, weight, polarity)
         if isinstance(edge, (tuple, list)) and len(edge) >= 2:
             src = str(edge[0])
             tgt = str(edge[1])
             w = float(edge[2]) if len(edge) >= 3 else 1.0
             pol = int(edge[3]) if len(edge) >= 4 else 1
-            return src, tgt, pol, w, None, None, None
-
-        # 4. Fallback for foreign domain object with source/target or source_id/target_id
-        if hasattr(edge, "source_id") and hasattr(edge, "target_id"):
-            src = str(edge.source_id)
-            tgt = str(edge.target_id)
-            rel_type = edge.relation_type if hasattr(edge, "relation_type") else None
-            pol = self._resolve_polarity(None, rel_type)
-            eff_w, acc, p_stance, model_conf = self._extract_edge_weights_from_foreign(edge)
-            return src, tgt, pol, eff_w, acc, p_stance, model_conf
-
-        if hasattr(edge, "source") and hasattr(edge, "target"):
-            src = str(edge.source)
-            tgt = str(edge.target)
-            explicit_pol = edge.polarity if hasattr(edge, "polarity") else None
-            rel_type = edge.relation_type if hasattr(edge, "relation_type") else None
-            pol = self._resolve_polarity(explicit_pol, rel_type)
-            eff_w, acc, p_stance, model_conf = self._extract_edge_weights_from_foreign(edge)
-            return src, tgt, pol, eff_w, acc, p_stance, model_conf
+            return _ParsedEdge(
+                source=src,
+                target=tgt,
+                polarity=pol,
+                eff_w=w,
+                acc=None,
+                p_stance=None,
+                model_conf=None,
+            )
 
         return None
 
@@ -1112,7 +2571,11 @@ class QBAFGradualSemanticsSolver:
         tuple of (float, float | None, float | None, float | None)
             Resolved weight magnitude, empirical accuracy, stance probability, and model confidence.
         """
-        p_stance = edge.stance_probability if edge.stance_probability is not None else edge.class_probability
+        p_stance = (
+            edge.stance_probability
+            if edge.stance_probability is not None
+            else edge.class_probability
+        )
         model_conf = edge.model_confidence
         acc = edge.empirical_accuracy
         inferential = edge.inferential_force
@@ -1120,7 +2583,9 @@ class QBAFGradualSemanticsSolver:
 
         if edge.effective_weight is not None:
             w = float(edge.effective_weight)
-        elif "active_weight" in edge.model_fields_set and edge.active_weight is not None:
+        elif (
+            "active_weight" in edge.model_fields_set and edge.active_weight is not None
+        ):
             w = float(edge.active_weight)
         elif p_stance is not None:
             force = inferential if inferential is not None else modal
@@ -1132,18 +2597,28 @@ class QBAFGradualSemanticsSolver:
         else:
             w = 1.0
 
-        c_val = float(model_conf) if model_conf is not None else (float(acc) if acc is not None else None)
+        c_val = (
+            float(model_conf)
+            if model_conf is not None
+            else (float(acc) if acc is not None else None)
+        )
         return max(0.0, w), acc, p_stance, c_val
 
-    def _extract_edge_weights_from_dict(
+    def _extract_edge_weights_from_mapping(
         self, obj: Mapping[str, Any]
     ) -> tuple[float, float | None, float | None, float | None]:
-        """Extract decoupled mathematical weights from dictionary representation.
+        """Extract decoupled mathematical weights from mapping representation.
+
+        Supports both ``epistemetrics`` dict keys (``inferential_force``,
+        ``stance_probability``, ``model_confidence``, ``empirical_accuracy``)
+        and ``episteme_pipeline`` dumped ``TheoryRelation`` keys
+        (``inferential_warrant``, ``perception_stance_prob``,
+        ``calibrated_confidence``, ``perception_empirical_acc``, ``edge_tenability``).
 
         Parameters
         ----------
         obj : Mapping of str to Any
-            Relational property dictionary.
+            Relational property mapping.
 
         Returns
         -------
@@ -1151,10 +2626,20 @@ class QBAFGradualSemanticsSolver:
             Resolved weight magnitude, empirical accuracy, stance probability, and model confidence.
         """
         inferential = obj.get("inferential_force")
+        if inferential is None:
+            inferential = obj.get("inferential_warrant")
         modal = float(obj.get("modal_strength", 1.0) or 1.0)
-        p_stance = obj.get("stance_probability") or obj.get("class_probability")
+        p_stance = obj.get("stance_probability")
+        if p_stance is None:
+            p_stance = obj.get("perception_stance_prob")
+        if p_stance is None:
+            p_stance = obj.get("class_probability")
         model_conf = obj.get("model_confidence")
+        if model_conf is None:
+            model_conf = obj.get("calibrated_confidence")
         acc = obj.get("empirical_accuracy")
+        if acc is None:
+            acc = obj.get("perception_empirical_acc")
         explicit_active = obj.get("active_weight")
         explicit_eff = obj.get("effective_weight")
         explicit_w = obj.get("weight") or obj.get("confidence")
@@ -1176,60 +2661,11 @@ class QBAFGradualSemanticsSolver:
             w = 1.0
 
         p_val = float(p_stance) if p_stance is not None else None
-        c_val = float(model_conf) if model_conf is not None else (float(acc) if acc is not None else None)
-        acc_val = float(acc) if acc is not None else None
-        return max(0.0, w), acc_val, p_val, c_val
-
-    def _extract_edge_weights_from_foreign(
-        self, obj: Any
-    ) -> tuple[float, float | None, float | None, float | None]:
-        """Extract decoupled mathematical weights from foreign domain object without getattr reflection.
-
-        Parameters
-        ----------
-        obj : Any
-            Foreign object instance.
-
-        Returns
-        -------
-        tuple of (float, float | None, float | None, float | None)
-            Resolved weight magnitude, empirical accuracy, stance probability, and model confidence.
-        """
-        inferential = obj.inferential_force if hasattr(obj, "inferential_force") else None
-        modal = float(obj.modal_strength if hasattr(obj, "modal_strength") and obj.modal_strength is not None else 1.0)
-        p_stance = (
-            obj.stance_probability
-            if hasattr(obj, "stance_probability") and obj.stance_probability is not None
-            else (obj.class_probability if hasattr(obj, "class_probability") else None)
+        c_val = (
+            float(model_conf)
+            if model_conf is not None
+            else (float(acc) if acc is not None else None)
         )
-        model_conf = obj.model_confidence if hasattr(obj, "model_confidence") else None
-        acc = obj.empirical_accuracy if hasattr(obj, "empirical_accuracy") else None
-        explicit_active = obj.active_weight if hasattr(obj, "active_weight") else None
-        explicit_eff = obj.effective_weight if hasattr(obj, "effective_weight") else None
-        explicit_w = (
-            obj.weight
-            if hasattr(obj, "weight") and obj.weight is not None
-            else (obj.confidence if hasattr(obj, "confidence") else None)
-        )
-
-        if explicit_active is not None:
-            w = float(explicit_active)
-        elif explicit_eff is not None:
-            w = float(explicit_eff)
-        elif inferential is not None and p_stance is None:
-            w = float(inferential)
-        elif p_stance is not None:
-            force = inferential if inferential is not None else modal
-            w = float(force * float(p_stance))
-        elif inferential is not None:
-            w = float(inferential)
-        elif explicit_w is not None:
-            w = float(explicit_w)
-        else:
-            w = 1.0
-
-        p_val = float(p_stance) if p_stance is not None else None
-        c_val = float(model_conf) if model_conf is not None else (float(acc) if acc is not None else None)
         acc_val = float(acc) if acc is not None else None
         return max(0.0, w), acc_val, p_val, c_val
 
@@ -1247,6 +2683,10 @@ def solve_qbaf_gradual_semantics(
     max_iterations: int = 50,
     tolerance: float = 1e-4,
     continuous: bool = False,
+    perspective: str | None = None,
+    isolate_suppositional: bool = True,
+    isolate_attributed: bool = True,
+    t_norm: Literal["product", "godel"] = "product",
 ) -> QBAFSolverResult:
     """Convenience functional interface for solving QBAF gradual semantics.
 
@@ -1274,6 +2714,14 @@ def solve_qbaf_gradual_semantics(
         Numerical convergence threshold.
     continuous : bool, default False
         Whether to solve via unified continuous WeightedQuadraticEnergySolver.
+    perspective : str or None, optional
+        Optional epistemic perspective filter ('author', agent name, or None).
+    isolate_suppositional : bool, default True
+        Whether suppositional nodes are isolated from contributing positive prior weight.
+    isolate_attributed : bool, default True
+        Whether attributed nodes are isolated from directly inflating asserted claims.
+    t_norm : Literal["product", "godel"], default "product"
+        Conjunctive t-norm operator applied across multi-premise inferences.
 
     Returns
     -------
@@ -1289,6 +2737,10 @@ def solve_qbaf_gradual_semantics(
         tau_p=tau_p,
         tau_c=tau_c,
         use_continuous=continuous,
+        perspective=perspective,
+        isolate_suppositional=isolate_suppositional,
+        isolate_attributed=isolate_attributed,
+        t_norm=t_norm,
     )
     return solver.solve(
         nodes=nodes,
@@ -1298,6 +2750,9 @@ def solve_qbaf_gradual_semantics(
         tau_p=tau_p,
         tau_c=tau_c,
         continuous=continuous,
+        perspective=perspective,
+        isolate_suppositional=isolate_suppositional,
+        isolate_attributed=isolate_attributed,
     )
 
 
@@ -1310,6 +2765,10 @@ def solve_continuous_qbaf(
     tau_p: float = 0.0,
     tau_c: float = 0.0,
     tolerance: float = 1e-4,
+    perspective: str | None = None,
+    isolate_suppositional: bool = True,
+    isolate_attributed: bool = True,
+    t_norm: Literal["product", "godel"] = "product",
 ) -> QBAFSolverResult:
     """Convenience functional interface for continuous Quadratic Energy QBAF solving.
 
@@ -1329,6 +2788,14 @@ def solve_continuous_qbaf(
         Model confidence threshold.
     tolerance : float, default 1e-4
         Numerical convergence threshold.
+    perspective : str or None, optional
+        Optional epistemic perspective filter ('author', agent name, or None).
+    isolate_suppositional : bool, default True
+        Whether suppositional nodes are isolated from contributing positive prior weight.
+    isolate_attributed : bool, default True
+        Whether attributed nodes are isolated from directly inflating asserted claims.
+    t_norm : Literal["product", "godel"], default "product"
+        Conjunctive t-norm operator applied across multi-premise inferences.
 
     Returns
     -------
@@ -1341,8 +2808,19 @@ def solve_continuous_qbaf(
         admissibility_mode=admissibility_mode,
         tau_p=tau_p,
         tau_c=tau_c,
+        perspective=perspective,
+        isolate_suppositional=isolate_suppositional,
+        isolate_attributed=isolate_attributed,
+        t_norm=t_norm,
     )
-    return solver.solve_continuous(nodes=nodes, edges=edges, normalization_mode=normalization_mode)
+    return solver.solve_continuous(
+        nodes=nodes,
+        edges=edges,
+        normalization_mode=normalization_mode,
+        perspective=perspective,
+        isolate_suppositional=isolate_suppositional,
+        isolate_attributed=isolate_attributed,
+    )
 
 
 def compare_qbaf_weight_modes(

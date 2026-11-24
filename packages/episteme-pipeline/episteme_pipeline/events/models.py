@@ -7,21 +7,23 @@ scientifically relevant for analysis and reproducibility.
 All events inherit from BaseEvent and include timestamp, run_id, and phase for
 correlation and filtering.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class UnlinkableMentionError(Exception):
     """Raised when a mention cannot be linked to the graph (e.g., missing envelope)."""
 
+
 # Event base class
 class BaseEvent(BaseModel):
     """Base class for all pipeline events.
-    
+
     Attributes
     ----------
     timestamp : datetime
@@ -31,6 +33,7 @@ class BaseEvent(BaseModel):
     phase : str, optional
         Name of the pipeline phase when this event occurred.
     """
+
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     run_id: str | None = None
     phase: str | None = None
@@ -49,6 +52,7 @@ class EntityProcessed(BaseEvent):
     entity_type : str
         Type/label of the entity (schema class).
     """
+
     entity_id: str
     entity_name: str
     entity_type: str
@@ -57,10 +61,10 @@ class EntityProcessed(BaseEvent):
 # Dense retrieval events
 class DenseCandidatesGenerated(BaseEvent):
     """Dense candidate pairs were generated.
-    
+
     This event is emitted when the dense retrieval phase generates candidate
     entity pairs for further processing.
-    
+
     Attributes
     ----------
     candidate_count : int
@@ -70,6 +74,7 @@ class DenseCandidatesGenerated(BaseEvent):
     entities_count : int
         Number of entities used to generate candidates.
     """
+
     candidate_count: int
     candidates: list[dict]  # Simplified representation
     entities_count: int
@@ -77,10 +82,10 @@ class DenseCandidatesGenerated(BaseEvent):
 
 class RerankerScoreAssigned(BaseEvent):
     """A reranker assigned a score to a candidate pair.
-    
+
     This event is emitted when a reranker processes a candidate pair and assigns
     a score, which determines whether the candidate proceeds to the next stage.
-    
+
     Attributes
     ----------
     candidate_pair : tuple of (str, str)
@@ -102,6 +107,7 @@ class RerankerScoreAssigned(BaseEvent):
     recovery_attempts : list of dict, optional
         Recovery metadata when the reranker required retries before scoring.
     """
+
     candidate_pair: tuple[str, str]  # entity IDs
     score: float
     accepted: bool
@@ -115,10 +121,10 @@ class RerankerScoreAssigned(BaseEvent):
 
 class CandidateRejectedByThreshold(BaseEvent):
     """A candidate was rejected due to not meeting threshold.
-    
+
     This event is emitted when a candidate pair is rejected because its score
     falls below the required threshold.
-    
+
     Attributes
     ----------
     candidate_pair : tuple of (str, str)
@@ -130,6 +136,7 @@ class CandidateRejectedByThreshold(BaseEvent):
     reason : str
         Reason for rejection (default: "Below threshold").
     """
+
     candidate_pair: tuple[str, str]  # entity IDs
     score: float
     threshold: float
@@ -139,7 +146,7 @@ class CandidateRejectedByThreshold(BaseEvent):
 # Entity Linking events
 class EntityLinkingCandidatesRetrieved(BaseEvent):
     """Dense candidates retrieved for entity linking.
-    
+
     Attributes
     ----------
     mention_id : str
@@ -151,6 +158,7 @@ class EntityLinkingCandidatesRetrieved(BaseEvent):
     candidates : list of dict
         Retrieved candidates with their scores.
     """
+
     mention_id: str
     mention_name: str
     candidate_count: int
@@ -159,7 +167,7 @@ class EntityLinkingCandidatesRetrieved(BaseEvent):
 
 class EntityLinkingReranked(BaseEvent):
     """A cross-encoder score assigned to a linking candidate.
-    
+
     Attributes
     ----------
     mention_id : str
@@ -177,6 +185,7 @@ class EntityLinkingReranked(BaseEvent):
     threshold : float
         Threshold used.
     """
+
     mention_id: str
     mention_name: str
     candidate_id: str
@@ -189,7 +198,7 @@ class EntityLinkingReranked(BaseEvent):
 # Maturation events
 class EntityMaturationSynthesized(BaseEvent):
     """An entity description was synthesized from its envelopes.
-    
+
     Attributes
     ----------
     entity_id : str
@@ -203,6 +212,7 @@ class EntityMaturationSynthesized(BaseEvent):
     synthesized_description : str
         The final synthesized description.
     """
+
     entity_id: str
     entity_name: str
     envelope_count: int
@@ -210,9 +220,33 @@ class EntityMaturationSynthesized(BaseEvent):
     synthesized_description: str
 
 
+class EntityConceptionStratified(BaseEvent):
+    """Emitted when an entity's mention envelopes diverge across theories/perspectives.
+
+    Attributes
+    ----------
+    entity_id : str
+        Identifier of the parent canonical :class:`L2Entity` (Referential Topic).
+    entity_name : str
+        Display name of the canonical entity.
+    conception_count : int
+        Number of distinct perspective-specific conceptions synthesized.
+    polysemy_variance : float
+        Measured spherical dispersion across mention envelopes triggering stratification.
+    perspectives : list of str
+        Perspective or cluster labels for the synthesized conceptions.
+    """
+
+    entity_id: str
+    entity_name: str
+    conception_count: int
+    polysemy_variance: float
+    perspectives: list[str]
+
+
 class EnvelopeInjectionAttempted(BaseEvent):
     """An attempt was made to inject a textual envelope for a mention.
-    
+
     Attributes
     ----------
     mention_name : str
@@ -220,12 +254,14 @@ class EnvelopeInjectionAttempted(BaseEvent):
     chunk_id : str
         ID of the chunk where the mention was found.
     """
+
     mention_name: str
     chunk_id: str
 
+
 class EnvelopeInjectionFailed(BaseEvent):
     """Failed to inject a textual envelope for a mention after all fallbacks.
-    
+
     Attributes
     ----------
     mention_name : str
@@ -237,18 +273,20 @@ class EnvelopeInjectionFailed(BaseEvent):
     reason : str
         Reason for failure.
     """
+
     mention_name: str
     mention_quote: str
     chunk_id: str
     reason: str
 
+
 # LLM processing events
 class LLMRelationDecoded(BaseEvent):
     """An LLM decoded a relation from a candidate pair.
-    
+
     This event is emitted when an LLM extracts a semantic relation between
     a candidate pair of entities.
-    
+
     Attributes
     ----------
     candidate_pair : tuple of (str, str)
@@ -262,6 +300,7 @@ class LLMRelationDecoded(BaseEvent):
     raw_response : Any, optional
         Raw response from the LLM (may contain sensitive data).
     """
+
     candidate_pair: tuple[str, str]  # entity IDs
     relation: str | None
     direction: str | None
@@ -271,9 +310,9 @@ class LLMRelationDecoded(BaseEvent):
 
 class SchemaValidationRejectedRelation(BaseEvent):
     """Schema validation rejected a decoded relation.
-    
+
     This event is emitted when a decoded relation fails schema validation.
-    
+
     Attributes
     ----------
     candidate_pair : tuple of (str, str)
@@ -283,6 +322,7 @@ class SchemaValidationRejectedRelation(BaseEvent):
     reason : str
         Explanation of why the relation was rejected.
     """
+
     candidate_pair: tuple[str, str]  # entity IDs
     relation: str
     reason: str
@@ -291,10 +331,10 @@ class SchemaValidationRejectedRelation(BaseEvent):
 # Triple and artifact events
 class TripleCommitted(BaseEvent):
     """A triple was committed to the graph.
-    
+
     This event is emitted when a validated relation is committed as a triple
     to the knowledge graph.
-    
+
     Attributes
     ----------
     subject_id : str
@@ -310,6 +350,7 @@ class TripleCommitted(BaseEvent):
     source_chunk_id : str
         ID of the source text chunk.
     """
+
     subject_id: str
     predicate: str
     object_id: str
@@ -333,6 +374,7 @@ class FusionDecisionMade(BaseEvent):
     reason : str, optional
         Optional human-readable rationale.
     """
+
     entities_fused: list[str]
     fusion_type: str
     confidence: float
@@ -340,11 +382,104 @@ class FusionDecisionMade(BaseEvent):
 
 
 # Performance and metrics events
+class PhaseReused(BaseEvent):
+    """A phase's artifacts were reused from a prior run.
+
+    Attributes
+    ----------
+    phase_name : str
+        Name of the reused phase.
+    source_run_id : str
+        ID of the prior run supplying the artifacts.
+    artifact_count : int
+        Number of artifacts hydrated / reused.
+    """
+
+    phase_name: str
+    source_run_id: str
+    artifact_count: int
+
+
+class PhaseFailed(BaseEvent):
+    """A pipeline phase failed with an exception.
+
+    Attributes
+    ----------
+    phase_name : str
+        Name of the failed phase.
+    error_type : str
+        Class name of the exception.
+    error_message : str
+        String representation of the exception.
+    duration_seconds : float, default 0.0
+        Duration of the phase until failure in seconds.
+    """
+
+    phase_name: str
+    error_type: str
+    error_message: str
+    duration_seconds: float = 0.0
+
+
+class RunStarted(BaseEvent):
+    """A pipeline run started execution.
+
+    Attributes
+    ----------
+    parent_run_id : str, optional
+        Parent run ID if resuming/forking.
+    reused_phase_ordinals : list of int
+        Ordinals of phases reused from prior runs.
+    invalidated_phase_ordinals : list of int
+        Ordinals of phases invalidated and scheduled to run.
+    invalidation_reason : str, optional
+        Reason for phase invalidation.
+    """
+
+    parent_run_id: str | None = None
+    reused_phase_ordinals: list[int] = Field(default_factory=list)
+    invalidated_phase_ordinals: list[int] = Field(default_factory=list)
+    invalidation_reason: str | None = None
+
+
+class RunCompleted(BaseEvent):
+    """A pipeline run completed successfully.
+
+    Attributes
+    ----------
+    duration_seconds : float, default 0.0
+        Total run duration in seconds.
+    total_artifacts : int, default 0
+        Total number of artifacts in the run.
+    """
+
+    duration_seconds: float = 0.0
+    total_artifacts: int = 0
+
+
+class RunFailed(BaseEvent):
+    """A pipeline run failed.
+
+    Attributes
+    ----------
+    error_type : str
+        Exception class name.
+    error_message : str
+        Exception message.
+    duration_seconds : float, default 0.0
+        Duration until failure in seconds.
+    """
+
+    error_type: str
+    error_message: str
+    duration_seconds: float = 0.0
+
+
 class PhaseCompleted(BaseEvent):
     """A pipeline phase completed.
-    
+
     This event is emitted when a pipeline phase finishes execution.
-    
+
     Attributes
     ----------
     phase_name : str
@@ -358,18 +493,21 @@ class PhaseCompleted(BaseEvent):
     error_message : str, optional
         Error message if the phase failed.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
+
     phase_name: str
     duration_seconds: float
     artifact_count: int
     success: bool
-    error_message: str | None = None
+    error_message: str | None = Field(default=None, alias="error")
 
 
 class ComponentStarted(BaseEvent):
     """A component started processing.
-    
+
     This event is emitted when a pipeline component begins processing.
-    
+
     Attributes
     ----------
     component_name : str
@@ -377,15 +515,16 @@ class ComponentStarted(BaseEvent):
     input_description : str, optional
         Description of the input data.
     """
+
     component_name: str
     input_description: str | None = None
 
 
 class ComponentCompleted(BaseEvent):
     """A component completed processing.
-    
+
     This event is emitted when a pipeline component finishes processing.
-    
+
     Attributes
     ----------
     component_name : str
@@ -399,11 +538,14 @@ class ComponentCompleted(BaseEvent):
     error_message : str, optional
         Error message if the component failed.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
+
     component_name: str
     duration_seconds: float
     output_description: str | None = None
     success: bool
-    error_message: str | None = None
+    error_message: str | None = Field(default=None, alias="error")
 
 
 class LLMDurationMeasured(BaseEvent):
@@ -422,6 +564,7 @@ class LLMDurationMeasured(BaseEvent):
     operation : str
         Operation kind (e.g., "chat", "embedding").
     """
+
     model_name: str
     prompt_tokens: int
     completion_tokens: int
@@ -461,6 +604,7 @@ class LLMGenerationCompleted(BaseEvent):
     model_parameters : dict, optional
         Hyperparameters used (e.g., temperature, max_tokens).
     """
+
     model_name: str
     prompt: Any
     output_text: str
@@ -504,6 +648,7 @@ class EmbeddingGenerationCompleted(BaseEvent):
     cached : bool
         Whether the embeddings were served from a local cache.
     """
+
     model_name: str
     text_count: int
     total_characters: int
@@ -516,7 +661,6 @@ class EmbeddingGenerationCompleted(BaseEvent):
 
 
 class ArtifactProjected(BaseEvent):
-
     """An artifact was projected to a target system.
 
     Attributes
@@ -528,6 +672,7 @@ class ArtifactProjected(BaseEvent):
     success : bool
         Whether the projection succeeded.
     """
+
     artifact_type: str
     duration_seconds: float
     success: bool
@@ -547,6 +692,7 @@ class ChunksGenerated(BaseEvent):
     token_count : int
         Total token count across all chunks.
     """
+
     document_id: str
     document_title: str
     chunk_count: int
@@ -566,6 +712,7 @@ class ProgressStarted(BaseEvent):
     description : str
         Optional description of the task.
     """
+
     task_name: str
     total_items: int | None = None
     description: str = ""
@@ -581,6 +728,7 @@ class ProgressAdvanced(BaseEvent):
     advance : int
         Number of items processed in this step (default: 1).
     """
+
     task_name: str
     advance: int = 1
 
@@ -593,6 +741,7 @@ class ProgressCompleted(BaseEvent):
     task_name : str
         Name of the task that completed.
     """
+
     task_name: str
 
 
@@ -610,6 +759,7 @@ class EvaluationCompleted(BaseEvent):
     outcome : str
         Overall outcome of the evaluation.
     """
+
     evaluation_id: str
     run_id: str
     metrics: dict[str, float]
@@ -634,6 +784,7 @@ class EvaluationScoreLogged(BaseEvent):
     target_id : str, optional
         Target entity, triple, cluster, or phase identifier.
     """
+
     metric_name: str
     score: float
     comment: str | None = None
@@ -654,6 +805,7 @@ class ValidationViolationDetected(BaseEvent):
     description : str
         Description of the violation.
     """
+
     rule_name: str
     source_id: str
     target_id: str
@@ -796,31 +948,180 @@ class ModalStrengthResolved(BaseEvent):
     clamped: bool = False
 
 
+class QualityGateEvaluated(BaseEvent):
+    """An inter-phase epistemic quality gate was evaluated on phase artifacts.
+
+    Attributes
+    ----------
+    gate_name : str
+        Unique identifier of the quality gate.
+    phase_key : str
+        Machine key of the evaluated pipeline phase.
+    passed : bool
+        Whether the quality gate check passed.
+    severity : str
+        Evaluation outcome severity ('pass', 'warn', 'halt').
+    metrics : dict of str to float
+        Quantitative telemetry metrics computed by the gate.
+    message : str, default ""
+        Human-readable diagnostic summary.
+    """
+
+    gate_name: str
+    phase_key: str
+    passed: bool
+    severity: str = "pass"
+    metrics: dict[str, float] = Field(default_factory=dict)
+    message: str = ""
+
+
+class EpistemicDeficitDetected(BaseEvent):
+    """Emitted when a top-down epistemic deficit signal is detected (ISSUE-053).
+
+    Attributes
+    ----------
+    deficit_id : str
+        Deterministic identifier of the detected epistemic deficit.
+    deficit_kind : str
+        Canonical deficit classification (``enthymeme_gap``,
+        ``polysemy_collision``, or ``ungrounded_axiom``).
+    severity : float, default 0.5
+        Normalized severity score in ``[0.0, 1.0]``.
+    target_chunk_ids : list of str, optional
+        Target L1 chunk identifiers flagged for localized refinement.
+    target_entity_ids : list of str, optional
+        Target L2 entity identifiers implicated by the deficit.
+    target_atom_ids : list of str, optional
+        Target L3 theory atom identifiers exhibiting the deficit.
+    target_relation_ids : list of str, optional
+        Target L3 theory relation identifiers implicated by the deficit.
+    theory_id : str or None, optional
+        Identifier of the conditioning Theory-Element, if applicable.
+    refinement_pass : int, default 0
+        Refinement cycle index during which this deficit was detected.
+    rationale : str, default ""
+        Diagnostic explanation of why the deficit was emitted.
+    """
+
+    deficit_id: str
+    deficit_kind: str
+    severity: float = Field(default=0.5, ge=0.0, le=1.0)
+    target_chunk_ids: list[str] = Field(default_factory=list)
+    target_entity_ids: list[str] = Field(default_factory=list)
+    target_atom_ids: list[str] = Field(default_factory=list)
+    target_relation_ids: list[str] = Field(default_factory=list)
+    theory_id: str | None = None
+    refinement_pass: int = Field(default=0, ge=0)
+    rationale: str = ""
+
+
+class RefinementCycleStarted(BaseEvent):
+    """Emitted when a bounded hermeneutic refinement cycle begins execution.
+
+    Attributes
+    ----------
+    refinement_pass : int, default 1
+        1-based index of the refinement pass starting execution.
+    deficit_count : int, default 0
+        Number of prioritized deficits scheduled for this refinement cycle.
+    deficit_ids : list of str, optional
+        Identifiers of the scheduled deficits.
+    target_chunk_ids : list of str, optional
+        Distinct L1 chunk identifiers targeted across scheduled deficits.
+    target_entity_ids : list of str, optional
+        Distinct L2 entity identifiers targeted across scheduled deficits.
+    """
+
+    refinement_pass: int = Field(default=1, ge=0)
+    deficit_count: int = Field(default=0, ge=0)
+    deficit_ids: list[str] = Field(default_factory=list)
+    target_chunk_ids: list[str] = Field(default_factory=list)
+    target_entity_ids: list[str] = Field(default_factory=list)
+
+
+class RefinementCycleCompleted(BaseEvent):
+    """Emitted when a bounded hermeneutic refinement cycle finishes execution.
+
+    Attributes
+    ----------
+    refinement_pass : int, default 1
+        1-based index of the completed refinement pass.
+    resolved_deficit_count : int, default 0
+        Number of epistemic deficits resolved during this pass.
+    remaining_deficit_count : int, default 0
+        Number of epistemic deficits remaining after post-refinement re-evaluation.
+    resolved_deficit_ids : list of str, optional
+        Identifiers of deficits resolved during this pass.
+    delta_artifact_count : int, default 0
+        Total number of delta artifacts emitted during this pass.
+    duration_seconds : float, default 0.0
+        Wall-clock duration of the refinement cycle in seconds.
+    converged : bool, default False
+        True when no further actionable deficits remain or no delta was produced.
+    """
+
+    refinement_pass: int = Field(default=1, ge=0)
+    resolved_deficit_count: int = Field(default=0, ge=0)
+    remaining_deficit_count: int = Field(default=0, ge=0)
+    resolved_deficit_ids: list[str] = Field(default_factory=list)
+    delta_artifact_count: int = Field(default=0, ge=0)
+    duration_seconds: float = Field(default=0.0, ge=0.0)
+    converged: bool = False
+
+
 # Type union for event handling
 PipelineEvent = (
-    EntityProcessed |
-    DenseCandidatesGenerated | RerankerScoreAssigned |
-    CandidateRejectedByThreshold | LLMRelationDecoded | SchemaValidationRejectedRelation |
-    TripleCommitted | FusionDecisionMade | PhaseCompleted | ComponentStarted |
-    ComponentCompleted | LLMDurationMeasured | LLMGenerationCompleted | EmbeddingGenerationCompleted | ArtifactProjected | ChunksGenerated |
-    EntityLinkingCandidatesRetrieved | EntityLinkingReranked | EntityMaturationSynthesized |
-    EnvelopeInjectionAttempted | EnvelopeInjectionFailed |
-    ProgressStarted | ProgressAdvanced | ProgressCompleted |
-    EvaluationCompleted | EvaluationScoreLogged | ValidationViolationDetected |
-    DecisionEvaluationStarted | DecisionEvaluationCompleted | DecisionGatingTriggered |
-    ModalStrengthResolved
+    EntityProcessed
+    | DenseCandidatesGenerated
+    | RerankerScoreAssigned
+    | CandidateRejectedByThreshold
+    | LLMRelationDecoded
+    | SchemaValidationRejectedRelation
+    | TripleCommitted
+    | FusionDecisionMade
+    | PhaseCompleted
+    | PhaseReused
+    | PhaseFailed
+    | RunStarted
+    | RunCompleted
+    | RunFailed
+    | ComponentStarted
+    | ComponentCompleted
+    | LLMDurationMeasured
+    | LLMGenerationCompleted
+    | EmbeddingGenerationCompleted
+    | ArtifactProjected
+    | ChunksGenerated
+    | EntityLinkingCandidatesRetrieved
+    | EntityLinkingReranked
+    | EntityMaturationSynthesized
+    | EnvelopeInjectionAttempted
+    | EnvelopeInjectionFailed
+    | ProgressStarted
+    | ProgressAdvanced
+    | ProgressCompleted
+    | EvaluationCompleted
+    | EvaluationScoreLogged
+    | ValidationViolationDetected
+    | DecisionEvaluationStarted
+    | DecisionEvaluationCompleted
+    | DecisionGatingTriggered
+    | ModalStrengthResolved
+    | QualityGateEvaluated
+    | EpistemicDeficitDetected
+    | RefinementCycleStarted
+    | RefinementCycleCompleted
 )
-
 
 
 def get_event_type_name(event: BaseEvent) -> str:
     """Get the type name of an event for serialization/logging.
-    
+
     Parameters
     ----------
     event : BaseEvent
         The event instance.
-        
+
     Returns
     -------
     str
@@ -831,12 +1132,12 @@ def get_event_type_name(event: BaseEvent) -> str:
 
 def serialize_event(event: BaseEvent) -> dict:
     """Serialize an event to a dictionary.
-    
+
     Parameters
     ----------
     event : BaseEvent
         The event instance to serialize.
-        
+
     Returns
     -------
     dict

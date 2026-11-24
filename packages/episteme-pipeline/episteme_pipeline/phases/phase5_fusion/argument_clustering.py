@@ -25,10 +25,10 @@ plugged in by subclassing ArgumentClustering and injecting the new implementatio
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
 from typing import Any
 
 from episteme_pipeline.contracts.domain import L2Entity, TheoryAtom
+from episteme_pipeline.decision.cascade import should_audit_deterministically
 from episteme_pipeline.decision.conformal import ConformalCalibrator
 from episteme_pipeline.events.context import get_event_emitter
 from episteme_pipeline.events.models import DecisionGatingTriggered
@@ -40,30 +40,39 @@ from episteme_pipeline.prompts.models import StructuredPromptBundle
 from episteme_pipeline.protocols.decision import DecisionEngine
 from episteme_pipeline.protocols.fusion import ArgumentClustering
 from episteme_pipeline.protocols.graph_store import GraphReader
+from episteme_pipeline.utils.graph_algorithms import (
+    clique_constrained_components,
+)
+from episteme_pipeline.utils.similarity import cosine_similarity_matrix
 
 logger = logging.getLogger(__name__)
 
 
-def _union_find_components(n: int, edges: list[tuple[int, int]]) -> list[list[int]]:
-    """Union-find connected components from a list of (i, j) edges."""
-    parent = list(range(n))
+def are_intensional_scopes_compatible(a: TheoryAtom, b: TheoryAtom) -> bool:
+    """Return whether two TheoryAtoms share a compatible intensional scope.
 
-    def find(x: int) -> int:
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
+    Prevents Phase 5 embedding clustering from collapsing claims that differ in
+    intensional mode (e.g., ``asserted`` vs. ``suppositional`` or ``attributed``)
+    or epistemic agent attribution (ISSUE-054).
 
-    def union(x: int, y: int) -> None:
-        parent[find(x)] = find(y)
+    Parameters
+    ----------
+    a : TheoryAtom
+        First candidate theory atom.
+    b : TheoryAtom
+        Second candidate theory atom.
 
-    for i, j in edges:
-        union(i, j)
-
-    groups: dict[int, list[int]] = defaultdict(list)
-    for i in range(n):
-        groups[find(i)].append(i)
-    return list(groups.values())
+    Returns
+    -------
+    bool
+        ``True`` if both atoms have identical ``intensional_mode`` and matching
+        normalized ``attributed_to`` agent strings.
+    """
+    if a.intensional_mode != b.intensional_mode:
+        return False
+    attr_a = (a.attributed_to or "").strip().lower()
+    attr_b = (b.attributed_to or "").strip().lower()
+    return attr_a == attr_b
 
 
 class EmbeddingArgumentClustering(ArgumentClustering):
@@ -79,10 +88,43 @@ class EmbeddingArgumentClustering(ArgumentClustering):
         embedding_model=None,
         similarity_threshold: float = 0.85,
         max_components: int = 10000,
+        min_internal_similarity: float = 0.75,
+        max_diameter: float | None = None,
     ) -> None:
         self.embedding_model = embedding_model
         self.similarity_threshold = similarity_threshold
         self.max_components = max_components
+        self.min_internal_similarity = min_internal_similarity
+        self.max_diameter = max_diameter
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic argument clustering configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, similarity threshold, max components,
+            and embedding model fingerprint.
+        """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        return {
+            "class": self.__class__.__name__,
+            "similarity_threshold": self.similarity_threshold,
+            "max_components": self.max_components,
+            "min_internal_similarity": self.min_internal_similarity,
+            "max_diameter": self.max_diameter,
+            "embedding_model": (
+                self.embedding_model.fingerprint()
+                if isinstance(self.embedding_model, Fingerprintable)
+                else (
+                    fingerprint_method(self.embedding_model)
+                    if self.embedding_model is not None
+                    else None
+                )
+            ),
+        }
 
     async def cluster(
         self,
@@ -116,28 +158,27 @@ class EmbeddingArgumentClustering(ArgumentClustering):
         # The EmbeddingModel contract is async-only; no sync fallback needed.
         raw_embeddings = await self.embedding_model.aget_text_embedding_batch(texts)
 
-        import numpy as np
+        sim = cosine_similarity_matrix(raw_embeddings)
 
-        matrix = np.array(raw_embeddings, dtype=np.float32)
-        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-        norms[norms == 0] = 1.0
-        matrix = matrix / norms
-
-        # Pairwise cosine similarity (N×N, vectorized)
-        sim = matrix @ matrix.T
-
-        # Collect edges where similarity ≥ threshold (upper triangle only)
+        # Collect edges where similarity >= threshold and intensional scopes match
         edges = [
             (i, j)
             for i in range(n)
             for j in range(i + 1, n)
             if sim[i, j] >= self.similarity_threshold
+            and are_intensional_scopes_compatible(components[i], components[j])
         ]
 
         if not edges:
             return []
 
-        groups = _union_find_components(n, edges)
+        groups = clique_constrained_components(
+            n,
+            edges,
+            sim,
+            min_internal_similarity=self.min_internal_similarity,
+            max_diameter=self.max_diameter,
+        )
         ids = [c.id for c in components]
 
         clusters = [[ids[i] for i in group] for group in groups if len(group) > 1]
@@ -150,7 +191,9 @@ class EmbeddingArgumentClustering(ArgumentClustering):
         return clusters
 
 
-def _format_cluster_summary(cluster_nodes: list[TheoryAtom | L2Entity]) -> dict[str, Any]:
+def _format_cluster_summary(
+    cluster_nodes: list[TheoryAtom | L2Entity],
+) -> dict[str, Any]:
     """Format cluster members into a structured state block for decision evaluation.
 
     Parameters
@@ -165,23 +208,30 @@ def _format_cluster_summary(cluster_nodes: list[TheoryAtom | L2Entity]) -> dict[
     """
     items = []
     for node in cluster_nodes[:10]:
-        if hasattr(node, "text"):
-            items.append({
-                "id": node.id,
-                "type": getattr(node, "component_type", "TheoryAtom"),
-                "text": node.text,
-                "epistemic_status": getattr(node, "epistemic_status", None),
-                "scope_type": getattr(node, "scope_type", None),
-            })
-        elif hasattr(node, "name"):
-            items.append({
-                "id": node.id,
-                "type": getattr(node, "label", "L2Entity"),
-                "name": node.name,
-                "envelope": getattr(node, "textual_envelope", "") or "",
-            })
-        else:
-            items.append({"id": getattr(node, "id", "unknown"), "summary": str(node)})
+        match node:
+            case TheoryAtom():
+                items.append(
+                    {
+                        "id": node.id,
+                        "type": node.component_type,
+                        "text": node.text,
+                        "epistemic_status": node.epistemic_status,
+                        "scope_type": node.scope_type,
+                        "intensional_mode": node.intensional_mode,
+                        "attributed_to": node.attributed_to,
+                    }
+                )
+            case L2Entity():
+                items.append(
+                    {
+                        "id": node.id,
+                        "type": node.label,
+                        "name": node.name,
+                        "envelope": node.textual_envelope or "",
+                    }
+                )
+            case _:
+                items.append({"id": str(node), "summary": str(node)})
     return {
         "cluster_node_count": len(cluster_nodes),
         "cluster_members": items,
@@ -215,13 +265,75 @@ class InterDocumentClusterVerifier:
         audit_rate: float = 0.02,
         prompt_bundle: StructuredPromptBundle | None = None,
         calibrator: ConformalCalibrator | None = None,
+        language: str | None = None,
+        require_singleton_prediction_set: bool = True,
     ) -> None:
         self.decision_engine = decision_engine
         self.confidence_threshold = confidence_threshold
         self.conformal_alpha = conformal_alpha
         self.audit_rate = audit_rate
-        self.prompt_bundle = prompt_bundle
-        self.calibrator = calibrator
+        self.prompt_bundle = prompt_bundle or StructuredPromptBundle(
+            direct_template=DECISION_THEORY_FUSION_QUESTION,
+            decision_template=DECISION_THEORY_FUSION_QUESTION,
+            decision_criteria=DECISION_THEORY_FUSION_CRITERIA,
+            name="theory_fusion",
+        )
+        from episteme_pipeline.decision.observable import ObservableDecisionEngine
+
+        self.calibrator = (
+            calibrator
+            if calibrator is not None
+            else (
+                decision_engine.calibrator
+                if isinstance(decision_engine, ObservableDecisionEngine)
+                else None
+            )
+        )
+        self.language = (
+            language
+            if language is not None
+            else (
+                decision_engine.language
+                if isinstance(decision_engine, ObservableDecisionEngine)
+                else None
+            )
+        )
+        self.require_singleton_prediction_set = require_singleton_prediction_set
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic cluster verifier configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, thresholds, and decision engine fingerprint.
+        """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        return {
+            "class": self.__class__.__name__,
+            "confidence_threshold": self.confidence_threshold,
+            "conformal_alpha": self.conformal_alpha,
+            "audit_rate": self.audit_rate,
+            "language": self.language,
+            "require_singleton_prediction_set": self.require_singleton_prediction_set,
+            "prompt_bundle": (
+                self.prompt_bundle.fingerprint()
+                if isinstance(self.prompt_bundle, Fingerprintable)
+                else None
+            ),
+            "calibrator": (
+                self.calibrator.fingerprint()
+                if isinstance(self.calibrator, Fingerprintable)
+                else None
+            ),
+            "decision_engine": (
+                self.decision_engine.fingerprint()
+                if isinstance(self.decision_engine, Fingerprintable)
+                else fingerprint_method(self.decision_engine)
+            ),
+        }
 
     @classmethod
     def from_config(
@@ -230,6 +342,7 @@ class InterDocumentClusterVerifier:
         decision_engine: DecisionEngine,
         prompt_bundle: StructuredPromptBundle | None = None,
         calibrator: ConformalCalibrator | None = None,
+        language: str | None = None,
     ) -> InterDocumentClusterVerifier:
         """Construct InterDocumentClusterVerifier from configuration.
 
@@ -243,6 +356,8 @@ class InterDocumentClusterVerifier:
             Optional prompt bundle.
         calibrator : ConformalCalibrator or None, default None
             Optional pre-calibrated conformal prediction engine.
+        language : str or None, default None
+            Optional corpus language code ('de', 'en') for Mondrian calibration.
 
         Returns
         -------
@@ -254,13 +369,15 @@ class InterDocumentClusterVerifier:
             confidence_threshold=config.confidence_threshold,
             conformal_alpha=config.conformal_alpha,
             audit_rate=config.audit_rate,
-            prompt_bundle=prompt_bundle,
+            prompt_bundle=prompt_bundle or config.prompt_bundle,
             calibrator=calibrator,
+            language=language,
         )
 
     async def verify(
         self,
         cluster_nodes: list[TheoryAtom | L2Entity],
+        language: str | None = None,
     ) -> tuple[bool, float, list[str]]:
         """Verify semantic coherence and equivalence of an inter-document cluster.
 
@@ -268,6 +385,8 @@ class InterDocumentClusterVerifier:
         ----------
         cluster_nodes : list of (TheoryAtom or L2Entity)
             Candidate cluster nodes.
+        language : str or None, default None
+            Optional language code ('de', 'en') for Mondrian calibration.
 
         Returns
         -------
@@ -297,17 +416,36 @@ class InterDocumentClusterVerifier:
         )
 
         if self.calibrator is not None:
-            pred_set = self.calibrator.predict_set(score, alpha=self.conformal_alpha)
+            pred_set = self.calibrator.predict_set(
+                score,
+                alpha=self.conformal_alpha,
+                task_id="p5_fusion",
+                language=language or self.language,
+            )
         else:
-            pred_set = score.prediction_set or ([str(score.selected_option)] if score.selected_option is not None else [])
+            pred_set = score.prediction_set or (
+                [str(score.selected_option)]
+                if score.selected_option is not None
+                else []
+            )
 
-        selected = str(score.selected_option) if score.selected_option is not None else ""
+        selected = (
+            str(score.selected_option) if score.selected_option is not None else ""
+        )
         emp_acc = score.empirical_accuracy
 
-        has_equivalent = ("EQUIVALENT_FUSION" in pred_set or selected == "EQUIVALENT_FUSION")
-        is_confirmed = has_equivalent and (len(pred_set) == 1 or emp_acc >= self.confidence_threshold)
+        if self.require_singleton_prediction_set:
+            is_confirmed = (
+                pred_set == ["EQUIVALENT_FUSION"]
+                and emp_acc >= self.confidence_threshold
+            )
+        else:
+            has_equivalent = (
+                "EQUIVALENT_FUSION" in pred_set or selected == "EQUIVALENT_FUSION"
+            )
+            is_confirmed = has_equivalent and emp_acc >= self.confidence_threshold
 
-        if len(pred_set) > 1:
+        if len(pred_set) > 1 and not is_confirmed:
             action_taken = "active_learning"
         elif is_confirmed:
             action_taken = "fast_exit"
@@ -341,8 +479,8 @@ class InterDocumentClusterVerifier:
     ) -> bool:
         """Evaluate whether a candidate cluster should be merged or fused.
 
-        Applies conformal prediction verification, followed by stochastic audit
-        if the cluster was initially rejected.
+        Applies conformal prediction verification, and records deterministic stochastic
+        audit telemetry without overriding rejected merges.
 
         Parameters
         ----------
@@ -352,18 +490,25 @@ class InterDocumentClusterVerifier:
         Returns
         -------
         bool
-            True if verified or passed by stochastic audit; False otherwise.
+            True if verified by the decision model; False otherwise.
         """
-        import random
-
         if len(cluster_nodes) < 2:
             return True
 
         is_confirmed, emp_acc, pred_set = await self.verify(cluster_nodes)
-        if is_confirmed:
-            return True
 
-        if random.random() < self.audit_rate:
+        rep_id = cluster_nodes[0].id if cluster_nodes else "unknown"
+        is_audit = (
+            should_audit_deterministically(
+                rep_id,
+                "phase5_fusion",
+                f"{rep_id}:{len(cluster_nodes)}",
+                self.audit_rate,
+            )
+            if self.audit_rate > 0.0
+            else False
+        )
+        if is_audit:
             get_event_emitter().emit(
                 DecisionGatingTriggered(
                     gate_name="fusion_gate",
@@ -373,9 +518,8 @@ class InterDocumentClusterVerifier:
                     prediction_set_size=len(pred_set),
                 )
             )
-            return True
 
-        return False
+        return is_confirmed
 
     async def filter_clusters(
         self,

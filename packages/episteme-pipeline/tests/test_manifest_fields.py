@@ -57,21 +57,16 @@ def _make_phase4_runner(config, llm, embedding_model):
 def test_method_fingerprints_captures_llm(
     mock_llm, mock_embedding_model, simple_config
 ):
-    """Verify _method_fingerprints captures LLM and embedding_model identity."""
+    """Verify method_fingerprints captures LLM and embedding_model identity."""
     from episteme_pipeline.pipeline import Pipeline
 
     runner = _make_phase4_runner(simple_config, mock_llm, mock_embedding_model)
-    pipeline = Pipeline.__new__(Pipeline)
-    pipeline.config = simple_config
-    pipeline._phase_entries = [
-        MagicMock(
-            index=4,
-            runner=runner,
-            input_view_type=None,
-        )
-    ]
+    pipeline = Pipeline(
+        phases=[runner],
+        config=simple_config,
+    )
 
-    fps = pipeline._method_fingerprints()
+    fps = pipeline.engine.method_fingerprints()
 
     assert "Phase 4: Argument Mining.llm" in fps
     assert "Phase 4: Argument Mining.embedding_model" in fps
@@ -94,18 +89,13 @@ def test_method_fingerprints_uses_class_when_no_model_attrs(
     from episteme_pipeline.pipeline import Pipeline
 
     runner = _make_phase4_runner(simple_config, bare_llm, mock_embedding_model)
-    pipeline = Pipeline.__new__(Pipeline)
-    pipeline.config = simple_config
-    pipeline._phase_entries = [
-        MagicMock(
-            index=4,
-            runner=runner,
-            input_view_type=None,
-        )
-    ]
+    pipeline = Pipeline(
+        phases=[runner],
+        config=simple_config,
+    )
 
     # Should not raise, even with a bare object
-    fps = pipeline._method_fingerprints()
+    fps = pipeline.engine.method_fingerprints()
     assert isinstance(fps, dict)
 
 
@@ -145,7 +135,10 @@ def test_build_manifest_captures_source_fingerprint(simple_config):
     global_extractor = TAGRelationExtractor(llm, emb, simple_config.phase3)
     phases = [
         Phase1Runner(
-            simple_config.phase1, llm=llm, embedding_model=emb, graph_store=projection_graph
+            simple_config.phase1,
+            llm=llm,
+            embedding_model=emb,
+            graph_store=projection_graph,
         ),
         Phase2Runner(
             simple_config.phase2,
@@ -194,7 +187,7 @@ def test_build_manifest_captures_source_fingerprint(simple_config):
         checkpoint_store=checkpoint_store,
     )
 
-    manifest = pipeline._build_manifest(
+    manifest = pipeline.engine.build_manifest(
         run_id="test-run-1",
         pipeline_input=PipelineInput(
             source_paths=["/path/doc.md"], metadata={"k": "v"}
@@ -241,7 +234,10 @@ def test_build_manifest_captures_config_snapshot(simple_config):
     global_extractor = TAGRelationExtractor(llm, emb, simple_config.phase3)
     phases = [
         Phase1Runner(
-            simple_config.phase1, llm=llm, embedding_model=emb, graph_store=projection_graph
+            simple_config.phase1,
+            llm=llm,
+            embedding_model=emb,
+            graph_store=projection_graph,
         ),
         Phase2Runner(
             simple_config.phase2,
@@ -290,7 +286,7 @@ def test_build_manifest_captures_config_snapshot(simple_config):
         checkpoint_store=checkpoint_store,
     )
 
-    manifest = pipeline._build_manifest(
+    manifest = pipeline.engine.build_manifest(
         run_id="test-run-2",
         pipeline_input=PipelineInput(source_paths=["/path/doc.md"]),
     )
@@ -340,7 +336,10 @@ def test_build_manifest_captures_input_sources(simple_config):
     global_extractor = TAGRelationExtractor(llm, emb, simple_config.phase3)
     phases = [
         Phase1Runner(
-            simple_config.phase1, llm=llm, embedding_model=emb, graph_store=projection_graph
+            simple_config.phase1,
+            llm=llm,
+            embedding_model=emb,
+            graph_store=projection_graph,
         ),
         Phase2Runner(
             simple_config.phase2,
@@ -392,7 +391,7 @@ def test_build_manifest_captures_input_sources(simple_config):
     test_path = Path(__file__).parent / "doc.md"
     test_path.touch()
     try:
-        manifest = pipeline._build_manifest(
+        manifest = pipeline.engine.build_manifest(
             run_id="test-run-3",
             pipeline_input=PipelineInput(source_paths=[str(test_path)]),
         )
@@ -439,7 +438,10 @@ def test_method_fingerprints_not_empty(simple_config):
     global_extractor = TAGRelationExtractor(llm, emb, simple_config.phase3)
     phases = [
         Phase1Runner(
-            simple_config.phase1, llm=llm, embedding_model=emb, graph_store=projection_graph
+            simple_config.phase1,
+            llm=llm,
+            embedding_model=emb,
+            graph_store=projection_graph,
         ),
         Phase2Runner(
             simple_config.phase2,
@@ -488,7 +490,7 @@ def test_method_fingerprints_not_empty(simple_config):
         checkpoint_store=checkpoint_store,
     )
 
-    manifest = pipeline._build_manifest(
+    manifest = pipeline.engine.build_manifest(
         run_id="test-run-4",
         pipeline_input=PipelineInput(source_paths=["/path/doc.md"]),
     )

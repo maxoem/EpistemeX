@@ -74,7 +74,9 @@ from episteme_pipeline.runs.observability import run_observability_context
 
 _SOURCE_ROOT = Path(__file__).resolve().parents[1]
 
-DEFAULT_SOURCE_PATHS: list[str] = [str(_SOURCE_ROOT / "examples" / "text" / "teachers_expectancies.md")]
+DEFAULT_SOURCE_PATHS: list[str] = [
+    str(_SOURCE_ROOT / "examples" / "text" / "teachers_expectancies.md")
+]
 
 
 async def run_pipeline(
@@ -118,12 +120,14 @@ if __name__ == "__main__":
 
     # Setup the decoupled event emitter and Rich progress observer
     emitter = SimpleEventEmitter()
-    
+
     try:
         langfuse_observer = LangfuseObserver()
         emitter.register_observer(langfuse_observer)
     except RuntimeError:
-        logging.warning("Langfuse is not installed. Pipeline will run without Langfuse observability.")
+        logging.warning(  # noqa: LOG015 baseline
+            "Langfuse is not installed. Pipeline will run without Langfuse observability."
+        )
 
     with RichProgressObserver(third_party_log_level=logging.WARNING) as observer:
         logging.basicConfig(
@@ -134,6 +138,7 @@ if __name__ == "__main__":
         )
         emitter.register_observer(observer)
         from uuid import uuid4
+
         session_id = os.getenv("LANGFUSE_SESSION_ID") or f"kg-session-{uuid4().hex[:8]}"
         with run_observability_context(
             name="full_pipeline_run",
@@ -141,5 +146,3 @@ if __name__ == "__main__":
             tags=["example", "knowledge_graph"],
         ):
             asyncio.run(run_pipeline(event_emitter=emitter, run_id=session_id))
-
-

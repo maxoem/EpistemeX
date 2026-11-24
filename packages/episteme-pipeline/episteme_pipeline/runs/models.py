@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,6 +26,7 @@ class RunPhaseRecord(BaseModel):
 
     phase_name: str
     phase_ordinal: int = Field(alias="ordinal")
+    phase_key: str | None = None
     status: RunStatus = RunStatus.PLANNED
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -35,6 +37,7 @@ class RunPhaseRecord(BaseModel):
     input_artifact_ids: list[str] = Field(default_factory=list)
     output_artifact_ids: list[str] = Field(default_factory=list)
     artifact_ids: list[str] = Field(default_factory=list)
+    refinement_pass: int = Field(default=0, ge=0)
     notes: dict[str, str] = Field(default_factory=dict)
 
 
@@ -47,6 +50,8 @@ class RunManifest(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     source_fingerprint: str | None = None
+    document_fingerprints: dict[str, str] = Field(default_factory=dict)
+    curation_ledger_fingerprint: str | None = None
     input_fingerprint: str | None = None
     input_fingerprint_inputs: dict[str, object] = Field(default_factory=dict)
     config_fingerprint: str | None = None
@@ -59,6 +64,10 @@ class RunManifest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     parent_run_id: str | None = None
     decision_metrics: dict[str, object] | None = None
+    invalidation_reason: str | None = None
+    refinement_pass: int = Field(default=0, ge=0)
+    refinement_lineage_fingerprint: str | None = None
+    observer_telemetry: dict[str, Any] = Field(default_factory=dict)
 
 
 class ResumePoint(BaseModel):
@@ -100,6 +109,7 @@ class RunReport(BaseModel):
     invalidated_phase_ordinals: list[int] = Field(default_factory=list)
     invalidation_reason: str | None = None
     artifact_entries: list[ArtifactReportEntry] = Field(default_factory=list)
+    observer_telemetry: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExecutionResult(BaseModel):

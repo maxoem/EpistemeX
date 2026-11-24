@@ -256,16 +256,17 @@ classify each ADU and identify all support and attack relations between them.
 
 ### Instructions
 1. For each <ACn> tag, assign exactly one component type.
-2. Identify all local support and attack relations between ADUs.
+2. Identify all local support, attack, backing, and undercutting relations between ADUs (including optional conjunctive `premise_ids` when multiple premises must hold jointly to support/attack a target, and optional `id` / `undercuts_relation_id` when a relation backs or undercuts a specific inference rather than a node).
 3. Determine which of the available entities are explicitly mentioned or primarily discussed in each ADU.
 4. For each component, determine its Epistemic Status (Synthetisch or Analytisch) and Scope/Type (Essentieller Allsatz, Existenzsatz, Statistischer/probabilistischer Allsatz, Lokalisierter Existenzsatz, or Lokalisierter Allsatz).
-5. Output strictly valid JSON. No text outside the JSON.
-6. Validate: the number of classified components must equal the number of input AC tags.
+5. Classify each component's `intensional_mode` ("asserted" = committed by author, "attributed" = opponent/prior thinker view, "suppositional" = Reductio ad absurdum / counterfactual premise, "historical" = archival background) and set `attributed_to` when attributed.
+6. Output strictly valid JSON. No text outside the JSON.
+7. Validate: the number of classified components must equal the number of input AC tags.
 
 ### Output Schema
 {{
-  "components": [{{"id": "<ACn>", "component_type": "<type>", "text": "<original span>", "plausibility": <float 0-1>, "entity_ids": ["<entity_id>"], "epistemic_status": "<Synthetisch|Analytisch>", "scope_type": "<Essentieller Allsatz|Existenzsatz|Statistischer/probabilistischer Allsatz|Lokalisierter Existenzsatz|Lokalisierter Allsatz>"}}],
-  "relations":  [{{"source_id": "<ACn>", "relation": "<relation_type>", "target_id": "<ACm>", "confidence": <float 0-1>, "weight": <float 0-1>}}]
+  "components": [{{"id": "<ACn>", "component_type": "<type>", "text": "<original span>", "plausibility": <float 0-1>, "entity_ids": ["<entity_id>"], "epistemic_status": "<Synthetisch|Analytisch>", "scope_type": "<Essentieller Allsatz|Existenzsatz|Statistischer/probabilistischer Allsatz|Lokalisierter Existenzsatz|Lokalisierter Allsatz>", "intensional_mode": "<asserted|attributed|suppositional|historical>", "attributed_to": "<agent_name_or_null>"}}],
+  "relations":  [{{"id": "<optional_relation_id>", "source_id": "<ACn>", "premise_ids": ["<ACn>", "..."], "relation": "<relation_type>", "target_id": "<ACm>", "undercuts_relation_id": "<optional_target_relation_id>", "confidence": <float 0-1>, "weight": <float 0-1>}}]
 }}
 
 ### Input Text (with ADU markup)
@@ -288,8 +289,8 @@ Analyze the following text with pre-identified Argumentative Discourse Units (AD
 ### Instructions
 1. For each <ACn> tag, discuss which component type it represents based on its content.
 2. Discuss which of the available entities are mentioned or discussed in each ADU.
-3. Analyze potential local support and attack relations between the ADUs.
-4. Analyze the Epistemic Status (Synthetisch vs. Analytisch) and Scope/Type (Essentieller Allsatz, Existenzsatz, Statistischer/probabilistischer Allsatz, Lokalisierter Existenzsatz, Lokalisierter Allsatz) for each component.
+3. Analyze potential local support, attack, backing, and undercutting relations between the ADUs, noting where multiple premises operate conjunctively (`premise_ids`) or where an ADU undercuts/backs an inference link (`undercuts_relation_id`).
+4. Analyze the Epistemic Status (Synthetisch vs. Analytisch) and Scope/Type (Essentieller Allsatz, Existenzsatz, Statistischer/probabilistischer Allsatz, Lokalisierter Existenzsatz, Lokalisierter Allsatz) for each component, plus its intensional_mode ("asserted", "attributed", "suppositional", or "historical") and attributed_to agent if attributed.
 5. Ensure every AC tag is discussed.
 Provide a detailed chain-of-thought reasoning step by step. Do NOT output JSON.
 
@@ -315,8 +316,8 @@ You are an expert data extractor. Convert the provided argumentation reasoning i
 
 ### Output Schema
 {{
-  "components": [{{"id": "<ACn>", "component_type": "<type>", "text": "<original span>", "plausibility": <float 0-1>, "entity_ids": ["<entity_id>"], "epistemic_status": "<Synthetisch|Analytisch>", "scope_type": "<Essentieller Allsatz|Existenzsatz|Statistischer/probabilistischer Allsatz|Lokalisierter Existenzsatz|Lokalisierter Allsatz>"}}],
-  "relations":  [{{"source_id": "<ACn>", "relation": "<relation_type>", "target_id": "<ACm>", "confidence": <float 0-1>, "weight": <float 0-1>}}]
+  "components": [{{"id": "<ACn>", "component_type": "<type>", "text": "<original span>", "plausibility": <float 0-1>, "entity_ids": ["<entity_id>"], "epistemic_status": "<Synthetisch|Analytisch>", "scope_type": "<Essentieller Allsatz|Existenzsatz|Statistischer/probabilistischer Allsatz|Lokalisierter Existenzsatz|Lokalisierter Allsatz>", "intensional_mode": "<asserted|attributed|suppositional|historical>", "attributed_to": "<agent_name_or_null>"}}],
+  "relations":  [{{"id": "<optional_relation_id>", "source_id": "<ACn>", "premise_ids": ["<ACn>", "..."], "relation": "<relation_type>", "target_id": "<ACm>", "undercuts_relation_id": "<optional_target_relation_id>", "confidence": <float 0-1>, "weight": <float 0-1>}}]
 }}
 """
 
@@ -530,6 +531,28 @@ DECISION_ACC_CRITERIA = {
     ),
 }
 
+DECISION_INTENSIONAL_MODE_QUESTION = """\
+What is the intensional epistemic mode and attribution status of the following argumentative unit?
+"""
+
+DECISION_INTENSIONAL_MODE_CRITERIA = {
+    "asserted": (
+        "A claim directly endorsed or asserted as true in the author's own primary voice."
+    ),
+    "attributed": (
+        "A position, thesis, or objection attributed to another thinker, interlocutor, "
+        "opponent, or school of thought rather than endorsed by the author."
+    ),
+    "suppositional": (
+        "A hypothetical, counterfactual, or Reductio ad absurdum assumption entertained "
+        "only provisionally for the sake of argument or derivation."
+    ),
+    "historical": (
+        "Background historical context, established mathematical or empirical tradition, "
+        "or general scholarly framing not tied to an unshared opponent position."
+    ),
+}
+
 DECISION_ARC_QUESTION = """\
 What argumentative or dialectical relation holds from the source proposition to the target proposition?
 """
@@ -616,3 +639,141 @@ DECISION_THEORY_FUSION_CRITERIA = {
     ),
 }
 
+# =============================================================================
+# HERMENEUTIC REFINEMENT PROMPTS (CLOSED-LOOP DEFICIT RESOLUTION)
+# =============================================================================
+
+CONCEPT_SPLIT_PROMPT = """\
+You are an expert in philosophical ontology, lexical semantics, and structuralist metatheory.
+A hub entity appears to conflate two or more incompatible theoretical senses across contexts.
+Partition ONLY the provided contexts of this entity into distinct conceptual senses.
+
+### Target Entity
+ID: {entity_id}
+Name: {entity_name}
+Type: {entity_label}
+Description: {entity_description}
+
+### Deficit Context
+Theory ID: {theory_id}
+Theory Lens: {theory_lens}
+Rationale: {rationale}
+
+### Conflicting Argument Atoms
+{entity_atoms}
+
+### Entity Source Chunks
+{source_chunks}
+
+### Instructions
+1. Identify at least 2 distinct conceptual senses present in the provided chunks: {allowed_chunk_ids}.
+2. Assign each sense a concise ``perspective`` label, a ``description``, and the exact subset of
+   ``chunk_ids`` from [{allowed_chunk_ids}] that belong to that sense.
+3. Do not invent chunk IDs outside [{allowed_chunk_ids}].
+4. Output strictly valid JSON matching the schema.
+"""
+
+PREMISE_RECOVERY_PROMPT = """\
+You are an expert in formal argumentation, philosophy of science, and structuralist metatheory.
+An argument component lacks explicit supporting premises or a bridging warrant (an enthymeme gap).
+Re-read ONLY the provided source chunk(s) through the supplied macro-theory lens and recover any
+implicit premises or bridging warrants implied by the prose.
+
+### Theory Context (Macro-Theory Lens)
+Theory ID: {theory_id}
+Theory Lens: {theory_lens}
+Deficit Rationale: {rationale}
+
+### Target Ungrounded Claim(s)
+{target_claims}
+
+### Existing Argument Components in Target Chunks
+{existing_atoms}
+
+### Scoped Entities
+{chunk_entities}
+
+### Allowed Component Types
+{component_types}
+
+### Allowed Argument Relation Types
+{argument_relation_types}
+
+### Source Chunk Text(s)
+{source_chunks}
+
+### Instructions
+1. Identify implicit premises, unstated auxiliary assumptions, or bridging warrants present or
+   presupposed in the source chunk(s) that directly support or attack the target claim(s).
+2. Ground each recovered premise in its exact ``source_chunk_id`` from [{target_chunk_ids}].
+3. Specify ``target_atom_id`` and ``relation_type`` (choosing from Allowed Argument Relation Types),
+   plus optional scoping fields (``scope_type``, ``epistemic_status``, ``intensional_mode``,
+   and ``attributed_to``) when the passage asserts counterfactual, historical, or attributed scope.
+4. Do not duplicate components already listed in Existing Argument Components.
+5. Output strictly valid JSON matching the schema.
+"""
+
+AXIOM_GROUNDING_PROMPT = """\
+You are an expert in empirical epistemology, scientific measurement extraction, and structuralist metatheory.
+A theoretical hypothesis or axiom lacks sufficient empirical grounding (an UNGROUNDED_AXIOM deficit).
+Inspect ONLY the provided targeted and immediate neighbor source chunks conditioned on the macro-theory
+lens to extract missed empirical observation units, quantitative measurements, and grounding entities.
+
+### Theory Lens (M_pp / M_p / M)
+Theory ID: {theory_id}
+Required Empirical Dimensions (M_pp): {required_dimensions}
+Postulated Theoretical Parameters (M_p): {parameter_names}
+Theory Lens Details: {theory_lens}
+Deficit Rationale: {rationale}
+
+### Target Ungrounded Axiom(s) / Hypothesis(es)
+{target_atoms}
+
+### Allowed Component Types
+{component_types}
+
+### Partition-B (Empirical Observation) Types
+{observation_component_types}
+
+### Allowed Argument Relation Types
+{argument_relation_types}
+
+### Scoped Source Chunks
+{source_chunks}
+
+### Instructions
+1. Extract concrete empirical observation propositions matching [{observation_component_types}]
+   from the provided chunks: [{allowed_chunk_ids}].
+2. Attach explicit ``measurements`` (``dimension``, ``value``, optional ``unit``) aligning with
+   the required empirical dimensions where present.
+3. Ground each observation in its exact ``source_chunk_id`` from [{allowed_chunk_ids}] and link
+   it to the target atom via ``target_atom_id`` and ``relation_type`` from Allowed Argument Relation Types.
+4. Optionally extract any missed domain entities within those chunks.
+5. Output strictly valid JSON matching the schema.
+"""
+
+DECISION_POLYSEMY_DISAMBIGUATION_QUESTION = """\
+Does the target concept exhibit genuinely distinct, incompatible lexical or theoretical senses across these passages, or do the passages express dialectical disagreement using the same univocal concept?
+"""
+
+DECISION_POLYSEMY_DISAMBIGUATION_CRITERIA = {
+    "TRUE_POLYSEMY_SPLIT": (
+        "The entity name denotes two or more distinct conceptual senses, definitions, or "
+        "referents across the provided passages and must be split into stratified conceptions."
+    ),
+    "UNIVOCAL_DISAGREEMENT": (
+        "The entity denotes a single shared concept about which authors make competing "
+        "affirmative and critical claims; keep the entity unified."
+    ),
+    "INSUFFICIENT_EVIDENCE": (
+        "The provided passages do not establish clear semantic divergence; keep the entity unified."
+    ),
+}
+
+DECISION_ENTHYMEME_RECOVERABILITY_QUESTION = """\
+Does the provided source context contain an implicit premise, unstated theoretical assumption, or bridging warrant that supports or critiques the target claim?
+"""
+
+DECISION_OBSERVATION_GROUNDING_QUESTION = """\
+Does the provided source passage contain an empirical observation, measurement, or experimental finding relevant to grounding the target theoretical hypothesis?
+"""

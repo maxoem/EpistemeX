@@ -28,8 +28,10 @@ enabling cross-document argument analysis and Theoriennetz (TF) community detect
 2. **Embedding**: Component texts are embedded concurrently via `embed_model.aget_text_embedding_batch()`.
 3. **Cosine Similarity**: A normalised similarity matrix is computed over all component pairs (numpy dot product on
    L2-normalised embeddings).
-4. **Connected Components (`_union_find_components`)**: Pairs above `Phase5Config.fusion_similarity_threshold` (default
-   0.85) are merged via union-find. Only clusters of size $\ge 2$ are retained.
+4. **Clique-Constrained Clustering (`clique_constrained_components`)**: Pairs above
+   `Phase5Config.fusion_similarity_threshold` (default 0.85) are merged via complete-linkage clique constraints
+   enforcing `min_internal_similarity` (default 0.75) and `max_diameter` bounds, mathematically preventing single-linkage
+   bridge chaining ($A \sim B \sim C$ where $A \not\sim C$). Only clusters of size $\ge 2$ are retained.
 5. **Cluster Output & Representative Election**: Each cluster is returned as a list of component IDs. The component with
    the highest mean similarity to cluster peers is elected as the cluster representative.
 6. **Calibrated Fusion Gating (`InterDocumentClusterVerifier`)**: When `Phase5Config.gating.enabled = True`, candidate

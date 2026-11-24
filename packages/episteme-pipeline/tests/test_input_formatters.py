@@ -12,7 +12,9 @@ from episteme_pipeline.prompts.input_formatters import (
 def test_format_subgraph_envelope_json() -> None:
     env_a = SubGraph(
         center_id="e1",
-        nodes=[L2Entity(id="e1", label="CONCEPT", name="Dog", description="A good boy")],
+        nodes=[
+            L2Entity(id="e1", label="CONCEPT", name="Dog", description="A good boy")
+        ],
         triples=[],
         depth=1,
     )
@@ -33,16 +35,16 @@ def test_format_subgraph_envelope_json() -> None:
 
     out = format_subgraph_envelope(env_a, env_b, strategy=InputFormatStrategy.JSON)
     data = json.loads(out)
-    
+
     assert "nodes" in data
     assert "edges" in data
     assert len(data["nodes"]) == 2
     assert len(data["edges"]) == 1
-    
+
     node_names = [n["name"] for n in data["nodes"]]
     assert "Dog" in node_names
     assert "Cat" in node_names
-    
+
     edge = data["edges"][0]
     assert edge["subject"] == "e1"
     assert edge["predicate"] == "CHASES"
@@ -72,6 +74,6 @@ def test_format_subgraph_envelope_text() -> None:
 def test_format_empty_envelope_json() -> None:
     env = SubGraph(center_id="e1", nodes=[], triples=[], depth=1)
     out = format_subgraph_envelope(env, env, strategy=InputFormatStrategy.JSON)
-    
+
     data = json.loads(out)
     assert data.get("message") == "No graph context available."

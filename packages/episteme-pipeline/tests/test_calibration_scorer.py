@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import networkx as nx
 import pytest
 from episteme_pipeline.contracts.domain import (
@@ -75,13 +77,43 @@ class TestCalibrationScorer:
         """Verify evaluate parses L2Triple predictions against reference triples."""
         scorer = CalibrationScorer(num_bins=5)
         pred_triples = [
-            L2Triple(subject_id="e1", predicate="causes", object_id="e2", confidence=0.9, scope="local"),
-            L2Triple(subject_id="e2", predicate="inhibits", object_id="e3", confidence=0.8, scope="local"),
-            L2Triple(subject_id="e3", predicate="hallucinated", object_id="e4", confidence=0.7, scope="local"),
+            L2Triple(
+                subject_id="e1",
+                predicate="causes",
+                object_id="e2",
+                confidence=0.9,
+                scope="local",
+            ),
+            L2Triple(
+                subject_id="e2",
+                predicate="inhibits",
+                object_id="e3",
+                confidence=0.8,
+                scope="local",
+            ),
+            L2Triple(
+                subject_id="e3",
+                predicate="hallucinated",
+                object_id="e4",
+                confidence=0.7,
+                scope="local",
+            ),
         ]
         gold_triples = [
-            L2Triple(subject_id="e1", predicate="causes", object_id="e2", confidence=1.0, scope="local"),
-            L2Triple(subject_id="e2", predicate="inhibits", object_id="e3", confidence=1.0, scope="local"),
+            L2Triple(
+                subject_id="e1",
+                predicate="causes",
+                object_id="e2",
+                confidence=1.0,
+                scope="local",
+            ),
+            L2Triple(
+                subject_id="e2",
+                predicate="inhibits",
+                object_id="e3",
+                confidence=1.0,
+                scope="local",
+            ),
         ]
 
         res = scorer.evaluate(pred_triples, gold_triples)
@@ -91,7 +123,9 @@ class TestCalibrationScorer:
 
     def test_evaluate_to_result_model(self):
         """Verify evaluate_to_result produces a compliant EvaluationResult."""
-        scorer = CalibrationScorer(num_bins=5, max_ece_threshold=0.20, max_brier_threshold=0.25)
+        scorer = CalibrationScorer(
+            num_bins=5, max_ece_threshold=0.20, max_brier_threshold=0.25
+        )
         preds = [(0.9, 1), (0.85, 1), (0.2, 0), (0.1, 0)]
         eval_result = scorer.evaluate_to_result(preds, None, run_id="test_run_cal")
 
@@ -154,8 +188,18 @@ class TestCalibrationScorer:
         scorer = CalibrationScorer(num_bins=5)
         pred_net = TheoryNet(
             atoms=[
-                TheoryAtom(id="a1", text="Atom 1", component_type="CLAIM", source_chunk_id="chunk_1"),
-                TheoryAtom(id="a2", text="Atom 2", component_type="PREMISE", source_chunk_id="chunk_1"),
+                TheoryAtom(
+                    id="a1",
+                    text="Atom 1",
+                    component_type="CLAIM",
+                    source_chunk_id="chunk_1",
+                ),
+                TheoryAtom(
+                    id="a2",
+                    text="Atom 2",
+                    component_type="PREMISE",
+                    source_chunk_id="chunk_1",
+                ),
             ],
             relations=[
                 TheoryRelation(
@@ -235,6 +279,7 @@ class TestCalibrationScorer:
 
     def test_custom_calibration_data_extractor_injection(self):
         """Verify CalibrationScorer accepts custom CalibrationDataExtractor implementation."""
+
         class CustomMockExtractor:
             """Mock extractor for testing port injection."""
 
@@ -257,7 +302,13 @@ class TestCalibrationScorer:
     def test_default_extractor_atoms_and_relations(self):
         """Verify DefaultCalibrationDataExtractor directly extracts typed atoms and relations."""
         extractor = DefaultCalibrationDataExtractor()
-        atom = TheoryAtom(id="atom_1", text="Test Atom", component_type="CLAIM", source_chunk_id="chunk_1", plausibility=0.85)
+        atom = TheoryAtom(
+            id="atom_1",
+            text="Test Atom",
+            component_type="CLAIM",
+            source_chunk_id="chunk_1",
+            equilibrium_strength=0.85,
+        )
         rel = TheoryRelation(
             source_id="atom_1",
             target_id="atom_2",

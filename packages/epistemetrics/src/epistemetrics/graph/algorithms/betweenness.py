@@ -64,7 +64,9 @@ def networkx_betweenness(
             weight=weight_property,
         )
         scores = {str(node): float(val) for node, val in raw_scores.items()}
-        return CentralityResult(scores=scores, algorithm="betweenness", backend="networkx")
+        return CentralityResult(
+            scores=scores, algorithm="betweenness", backend="networkx"
+        )
     except Exception as exc:
         raise AlgorithmError(f"NetworkX betweenness centrality failed: {exc}") from exc
 
@@ -131,7 +133,11 @@ def gds_betweenness(
             "score ORDER BY score DESC"
         )
         rows = client.execute_query(query, {"graph_name": graph_name, "config": config})
-        raw_scores = {str(row["node_id"]): float(row["score"]) for row in rows if row.get("node_id") is not None}
+        raw_scores = {
+            str(row["node_id"]): float(row["score"])
+            for row in rows
+            if row.get("node_id") is not None
+        }
 
         n = len(raw_scores)
         if normalized and n > 2:
@@ -140,7 +146,9 @@ def gds_betweenness(
         else:
             scores = raw_scores
 
-        return CentralityResult(scores=scores, algorithm="betweenness", backend="neo4j_gds")
+        return CentralityResult(
+            scores=scores, algorithm="betweenness", backend="neo4j_gds"
+        )
 
     if exec_mode == AlgorithmExecutionMode.WRITE:
         config["writeProperty"] = write_property or "betweenness"
@@ -218,7 +226,9 @@ def betweenness_centrality(
         except Exception as exc:
             if not fallback_to_networkx:
                 raise
-            logger.warning("GDS Betweenness execution failed (%s); falling back to NetworkX.", exc)
+            logger.warning(
+                "GDS Betweenness execution failed (%s); falling back to NetworkX.", exc
+            )
 
     logger.debug("Executing Betweenness Centrality via NetworkX.")
     return networkx_betweenness(

@@ -14,7 +14,7 @@ Known limitations, tracked separately and deliberately *not* addressed here:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -24,6 +24,9 @@ from episteme_pipeline.events.models import (
     EntityLinkingCandidatesRetrieved,
     EntityLinkingReranked,
     UnlinkableMentionError,
+)
+from episteme_pipeline.phases.phase2_entity_discovery.candidate_cache import (
+    CandidateEmbeddingCache,
 )
 from episteme_pipeline.protocols.extractors import (
     CrossEncoder,
@@ -35,6 +38,7 @@ from episteme_pipeline.protocols.extractors import (
     normalize_scores,
 )
 from episteme_pipeline.protocols.graph_store import GraphReader
+from episteme_pipeline.utils.similarity import cosine_similarity_matrix
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel, PreTrainedTokenizer
@@ -55,7 +59,11 @@ class EnvelopeBiEncoder:
     fine-tuning to be meaningful`.
     """
 
-    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2", trained_checkpoint: bool = False):
+    def __init__(
+        self,
+        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+        trained_checkpoint: bool = False,
+    ):
         if not trained_checkpoint:
             raise RuntimeError(
                 "EnvelopeBiEncoder is an experimental research branch (Option C from issue_l06). "
@@ -69,7 +77,7 @@ class EnvelopeBiEncoder:
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(model_name)
 
         # Add special tokens for epistemic bounding
-        special_tokens_dict = {'additional_special_tokens': ['[ENT]', '[\\ENT]']}
+        special_tokens_dict = {"additional_special_tokens": ["[ENT]", "[\\ENT]"]}
         self.tokenizer.add_special_tokens(special_tokens_dict)
 
         self.model: PreTrainedModel = AutoModel.from_pretrained(model_name)
@@ -84,11 +92,15 @@ class EnvelopeBiEncoder:
         For textual mention contexts containing `[ENT]`, pools exactly at that marker.
         For structural neighborhoods without `[ENT]`, falls back to `[CLS]` pooling.
         """
-        inputs = self.tokenizer(texts, padding=True, truncation=True, max_length=512, return_tensors="pt")
+        inputs = self.tokenizer(
+            texts, padding=True, truncation=True, max_length=512, return_tensors="pt"
+        )
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
         outputs = self.model(**inputs)
-        last_hidden_state = outputs.last_hidden_state  # [batch_size, seq_len, hidden_size]
+        last_hidden_state = (
+            outputs.last_hidden_state
+        )  # [batch_size, seq_len, hidden_size]
 
         batch_size = last_hidden_state.size(0)
         pooled_embeddings = []
@@ -96,7 +108,7 @@ class EnvelopeBiEncoder:
         ent_token_id = self.tokenizer.convert_tokens_to_ids("[ENT]")
 
         for i in range(batch_size):
-            input_ids = inputs['input_ids'][i]
+            input_ids = inputs["input_ids"][i]
             # Find index of [ENT] marker
             ent_indices = (input_ids == ent_token_id).nonzero(as_tuple=True)[0]
 
@@ -160,10 +172,7 @@ class DenseEntityLinker(EntityLinker):
         self.cross_encoder: CrossEncoder | None = cross_encoder
         self.tau = tau
         self.top_k = top_k
-        # Candidate envelope cache
-        # Key: entity.id
-        # Value: (bi-encoder_text, bi-encoder_vector)
-        self._candidate_cache: dict[str, tuple[str, list[float]]] = {}
+        self._candidate_cache = CandidateEmbeddingCache(self.embedding_model)
 
     def fingerprint(self) -> dict[str, Any]:
         """Return deterministic dense entity linker configuration.
@@ -181,41 +190,31 @@ class DenseEntityLinker(EntityLinker):
             "tau": self.tau,
             "top_k": self.top_k,
             "embedding_model": fingerprint_method(self.embedding_model),
-            "cross_encoder": fingerprint_method(self.cross_encoder) if self.cross_encoder else None,
+            "cross_encoder": fingerprint_method(self.cross_encoder)
+            if self.cross_encoder
+            else None,
         }
 
     @property
     def event_emitter(self) -> EventEmitter:
         from episteme_pipeline.events.context import get_event_emitter
+
         return get_event_emitter()
 
     @staticmethod
     def _canonical_entity_string(candidate: L2Entity) -> str:
         """Format candidate entity for bi-encoder embedding with explicit type grounding."""
-        return f"[{candidate.label}] {candidate.name}: {candidate.description or ''}"
+        return CandidateEmbeddingCache.canonical_entity_string(candidate)
 
-    async def _populate_candidate_cache(self, candidates: list[L2Entity], graph_store: GraphReader) -> None:
+    async def _populate_candidate_cache(
+        self, candidates: list[L2Entity], graph_store: GraphReader | None = None
+    ) -> None:
         """Pre-fetch basic texts and embeddings for new or stale candidates."""
-        stale_candidates = []
-        stale_basic_texts = []
-        for c in candidates:
-            basic_text = self._canonical_entity_string(c)
-            cached = self._candidate_cache.get(c.id)
-            if not cached or cached[0] != basic_text:
-                stale_candidates.append(c)
-                stale_basic_texts.append(basic_text)
-
-        if not stale_candidates:
-            return
-
-        fresh_vectors = await self.embedding_model.aget_text_embedding_batch(stale_basic_texts)
-        for c, b_text, vec in zip(stale_candidates, stale_basic_texts, fresh_vectors):
-            self._candidate_cache[c.id] = (b_text, vec)
+        await self._candidate_cache.populate(candidates)
 
     async def _candidate_embeddings(self, candidates: list[L2Entity]) -> torch.Tensor:
         """Return vectors from cache as float tensor."""
-        embs = [self._candidate_cache[c.id][1] for c in candidates]
-        return as_tensor(embs)
+        return self._candidate_cache.get_embeddings(candidates)
 
     async def link(
         self,
@@ -229,30 +228,31 @@ class DenseEntityLinker(EntityLinker):
         tau = self.tau if threshold is None else threshold
 
         if not mention.textual_envelope:
-            logger.warning(f"Mention {mention.name} lacks textual envelope. Raising UnlinkableMentionError.")
-            raise UnlinkableMentionError(f"Mention {mention.name} lacks textual envelope.")
+            logger.warning(
+                f"Mention {mention.name} lacks textual envelope. Raising UnlinkableMentionError."
+            )
+            raise UnlinkableMentionError(
+                f"Mention {mention.name} lacks textual envelope."
+            )
 
         # 1. Bi-Encoder: Cosine Similarity over L2-normalized embeddings
         T_n = f"[{mention.label}] {mention.textual_envelope}"
         raw_T_n_emb = await self.embedding_model.aget_text_embedding_batch([T_n])
         T_n_emb = as_tensor(raw_T_n_emb)[0]
-        # L2-normalize mention vector
-        T_n_emb = torch.nn.functional.normalize(T_n_emb, p=2, dim=0)
 
         candidates = await graph_store.get_entities()
         if not candidates:
             return None
 
         # Pre-fetch and cache vectors
-        await self._populate_candidate_cache(candidates, graph_store)
-        G_embs = await self._candidate_embeddings(candidates)
+        await self._candidate_cache.populate(candidates)
+        G_embs = self._candidate_cache.get_embeddings(candidates)
 
-        # L2-normalize candidate vectors
-        G_embs = torch.nn.functional.normalize(G_embs, p=2, dim=1)
-
-        # Cosine similarity (since both are normalized, dot product = cosine)
-        scores = torch.matmul(G_embs, T_n_emb)
-        top_k_indices = torch.topk(scores, min(effective_top_k, len(candidates))).indices
+        scores_arr = cosine_similarity_matrix(G_embs.numpy(), T_n_emb.numpy())
+        scores = torch.as_tensor(scores_arr)
+        top_k_indices = torch.topk(
+            scores, min(effective_top_k, len(candidates))
+        ).indices
 
         top_candidates = [candidates[i] for i in top_k_indices]
         top_scores = scores[top_k_indices].tolist()
@@ -266,7 +266,7 @@ class DenseEntityLinker(EntityLinker):
                 candidates=[
                     {"id": c.id, "name": c.name, "score": float(s)}
                     for c, s in zip(top_candidates, top_scores)
-                ]
+                ],
             )
         )
 
@@ -277,20 +277,34 @@ class DenseEntityLinker(EntityLinker):
         from episteme_pipeline.prompts.input_formatters import InputFormatStrategy
         from episteme_pipeline.utils import format_envelope
 
-        tasks = [graph_store.get_neighborhood(c.id, depth=1) for c in top_candidates]
-        subgraphs = await asyncio.gather(*tasks, return_exceptions=True)
+        if self.cross_encoder is not None:
+            tasks = [
+                graph_store.get_neighborhood(c.id, depth=1) for c in top_candidates
+            ]
+            subgraphs = await asyncio.gather(*tasks, return_exceptions=True)
 
-        empty_subgraph = SubGraph(center_id="", nodes=[], triples=[], depth=0)
-        top_G_structs = []
-        for c, sg in zip(top_candidates, subgraphs):
-            if isinstance(sg, Exception):
-                logger.warning(f"Failed to fetch neighborhood for cross-encoder reranking of {c.name}: {sg}")
-                sg = SubGraph(center_id=c.id, nodes=[c], triples=[], depth=1)
-            top_G_structs.append(format_envelope(sg, empty_subgraph, strategy=InputFormatStrategy.TEXT))
+            empty_subgraph = SubGraph(center_id="", nodes=[], triples=[], depth=0)
+            top_G_structs = []
+            for c, sg in zip(top_candidates, subgraphs):
+                if isinstance(sg, Exception):
+                    logger.warning(
+                        f"Failed to fetch neighborhood for cross-encoder reranking of {c.name}: {sg}"
+                    )
+                    sg = SubGraph(center_id=c.id, nodes=[c], triples=[], depth=1)
+                top_G_structs.append(
+                    format_envelope(
+                        sg, empty_subgraph, strategy=InputFormatStrategy.TEXT
+                    )
+                )
 
-        # [CLS] T_n [SEP] G_k_struct [SEP]
-        cross_inputs = [(T_n, G_k_struct) for G_k_struct in top_G_structs]
-        cross_scores = normalize_scores(self.cross_encoder.predict(cross_inputs))
+            # [CLS] T_n [SEP] G_k_struct [SEP]
+            cross_inputs = [(T_n, G_k_struct) for G_k_struct in top_G_structs]
+            raw_scores = await asyncio.to_thread(
+                self.cross_encoder.predict, cross_inputs
+            )
+            cross_scores = normalize_scores(raw_scores)
+        else:
+            cross_scores = [float(s) for s in top_scores]
 
         best_idx = argmax(cross_scores)
         best_score = cross_scores[best_idx]
@@ -313,9 +327,13 @@ class DenseEntityLinker(EntityLinker):
 
         # 3. Resolution Threshold
         if accepted:
-            logger.debug(f"DenseLinked {mention.name} -> {best_candidate.name} (Score: {best_score})")
+            logger.debug(
+                f"DenseLinked {mention.name} -> {best_candidate.name} (Score: {best_score})"
+            )
             return best_candidate
 
         # Pass to LLM Reasoner (returns None to mint novel node)
-        logger.debug(f"DenseLinker failed to cross threshold tau={tau} for {mention.name}. Max score: {best_score}")
+        logger.debug(
+            f"DenseLinker failed to cross threshold tau={tau} for {mention.name}. Max score: {best_score}"
+        )
         return None

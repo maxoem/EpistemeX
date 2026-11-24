@@ -72,7 +72,7 @@ async def export_neo4j_to_theory_graph(
                     confidence=tr.confidence or 1.0,
                     attributes={"scope": tr.scope, "layer": "L2"},
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.warning("Failed to extract L2 components from Neo4j: %s", exc)
 
     if include_l3:
@@ -94,7 +94,14 @@ async def export_neo4j_to_theory_graph(
                     confidence=atom.confidence or 1.0,
                     description=atom.text,
                     provenance=[atom.source_chunk_id] if atom.source_chunk_id else [],
-                    attributes={"plausibility": atom.plausibility, "layer": "L3"},
+                    attributes={
+                        "plausibility": (
+                            atom.equilibrium_strength
+                            if atom.equilibrium_strength is not None
+                            else atom.modal_prior
+                        ),
+                        "layer": "L3",
+                    },
                 )
 
             relations = await reader.get_all_theory_relations()
@@ -105,9 +112,13 @@ async def export_neo4j_to_theory_graph(
                     relation_type=em.RelationType.from_str(rel.relation_type),
                     confidence=rel.confidence or 1.0,
                     weight=rel.weight or 1.0,
+                    id=rel.id,
+                    premise_ids=rel.premise_ids,
+                    undercuts_relation_id=rel.undercuts_relation_id,
+                    inferential_force=rel.inferential_warrant,
                     attributes={"scope": rel.scope, "layer": "L3"},
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.warning("Failed to extract L3 components from Neo4j: %s", exc)
 
     return tg

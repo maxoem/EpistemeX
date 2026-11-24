@@ -34,7 +34,9 @@ def test_dynamics_progressive_research_program():
     t1.add_node("Aux_Harmonic", name="Spring Hooke", node_type=em.NodeType.HYPOTHESIS)
     t1.add_node("Paradigm_Orbits", name="Orbits", node_type=em.NodeType.PARADIGM)
     for i in range(5):
-        t1.add_node(f"Paradigm_Novel_{i}", name=f"Exp_{i}", node_type=em.NodeType.PARADIGM)
+        t1.add_node(
+            f"Paradigm_Novel_{i}", name=f"Exp_{i}", node_type=em.NodeType.PARADIGM
+        )
 
     result = evaluate_diachronic_dynamics([t0, t1])
 

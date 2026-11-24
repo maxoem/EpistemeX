@@ -1,48 +1,206 @@
-"""Distribution-free conformal prediction calibration engine (ISSUE-046).
+"""Distribution-free conformal prediction calibration engine (ISSUE-046, ISSUE-049).
 
 This module implements Split Conformal Prediction for categorical and structured
 decision engine outputs. It replaces brittle scalar thresholds with adaptive
 prediction sets guaranteeing finite-sample coverage 1 - alpha >= 0.95.
+Supports Mondrian (task- and language-stratified) calibration (Vovk et al. 2005).
 """
 
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import numpy as np
 
 from episteme_pipeline.protocols.decision import DecisionScore
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 
 
-class ConformalCalibrator:
-    """Split Conformal Prediction calibrator for classification distributions.
+class ConformalCalibrator(Fingerprintable):
+    """Mondrian Split Conformal Prediction calibrator for classification distributions.
 
     Computes distribution-free prediction sets C(X) subseteq Y guaranteeing
-    P(Y in C(X)) >= 1 - alpha over exchangeable state evaluations.
+    P(Y in C(X)) >= 1 - alpha over exchangeable state evaluations, stratified
+    by task and language (Mondrian Conformal Prediction, Vovk et al. 2005).
 
     Parameters
     ----------
     alpha : float, default 0.05
         Target significance error level (coverage guarantee 1 - alpha).
     q_hat : float or None, default None
-        Pre-computed non-conformity quantile cutoff. If None, calibration
+        Global pre-computed non-conformity quantile cutoff. If None, calibration
         is performed on empirical non-conformity scores via :meth:`calibrate`,
         or defaults to adaptive cumulative mass accumulation.
+    stratified_q_hat : dict or None, default None
+        Pre-computed stratified quantiles keyed by task_id or (task_id, language).
     """
 
-    def __init__(self, alpha: float = 0.05, q_hat: float | None = None) -> None:
+    def __init__(
+        self,
+        alpha: float = 0.05,
+        q_hat: float | None = None,
+        stratified_q_hat: dict[str, float] | dict[tuple[str, str], float] | None = None,
+        global_alpha: float | None = None,
+        risk_budget_weights: dict[str, float] | None = None,
+    ) -> None:
         self.alpha = alpha
         self.q_hat = q_hat
+        self.global_alpha = global_alpha
+        self.risk_budget_weights = risk_budget_weights or {}
+        self._stratified_q_hat: dict[tuple[str | None, str | None], float] = {}
+        self._stratified_meta: dict[tuple[str | None, str | None], dict[str, Any]] = {}
+        self._global_n_cal: int = 0
+        self._global_dataset_sha256: str = ""
+
+        if stratified_q_hat:
+            for k, v in stratified_q_hat.items():
+                if isinstance(k, tuple):
+                    self._stratified_q_hat[(k[0], k[1])] = v
+                else:
+                    self._stratified_q_hat[(str(k), None)] = v
+
+    @staticmethod
+    def allocate_risk_budget(
+        global_alpha: float,
+        weights: dict[str, float],
+    ) -> dict[str, float]:
+        """Allocate per-phase or per-task significance levels from a global risk budget.
+
+        Uses weighted union bound allocation:
+        :math:`\\alpha_m = \\alpha_{\\text{global}} \\cdot \\frac{w_m}{\\sum_k w_k}`
+        guaranteeing :math:`\\sum_{m=1}^M \\alpha_m \\le \\alpha_{\\text{global}}` and bounding
+        the family-wise error rate across sequential decision gates.
+
+        Parameters
+        ----------
+        global_alpha : float
+            Pipeline-level global significance risk budget.
+        weights : dict of str to float
+            Relative risk weights per phase or task.
+
+        Returns
+        -------
+        dict of str to float
+            Allocated significance level alpha_m per phase or task.
+
+        Raises
+        ------
+        ValueError
+            If total weight is non-positive.
+
+        References
+        ----------
+        .. [1] Angelopoulos, A. N., Bates, S., Candès, E. J., Jordan, M. I., &
+           Wainwright, M. J. (2022). Learn then test: Calibrating predictive
+           algorithms to achieve risk control.
+        .. [2] Vovk, V., Gammerman, A., & Shafer, G. (2005). Algorithmic Learning in a
+           Random World. Springer.
+        """
+        if not weights:
+            return {}
+        total_weight = sum(weights.values())
+        if total_weight <= 0.0:
+            raise ValueError(
+                f"Total risk budget weight must be strictly positive, got {total_weight}"
+            )
+        return {
+            stage: (global_alpha * (weight / total_weight))
+            for stage, weight in weights.items()
+        }
+
+    def get_allocated_alpha(
+        self,
+        stage: type[PhaseRunner[Any]] | PhaseRunner[Any] | str,
+    ) -> float:
+        """Return the allocated significance level for a given pipeline stage, runner class, or task.
+
+        Parameters
+        ----------
+        stage : type of PhaseRunner, PhaseRunner, or str
+            PhaseRunner subclass, instance, class name, ``phase_key``, or task identifier.
+
+        Returns
+        -------
+        float
+            Allocated alpha if global budget is configured, otherwise instance alpha.
+        """
+        if self.global_alpha is not None and self.risk_budget_weights:
+            try:
+                allocated = self.allocate_risk_budget(
+                    self.global_alpha, self.risk_budget_weights
+                )
+                for candidate in PhaseRunner.related_identifiers(stage):
+                    if candidate in allocated:
+                        return allocated[candidate]
+            except ValueError:
+                return self.alpha
+        return self.alpha
+
+    def _resolve_effective_alpha(
+        self,
+        alpha: float | None = None,
+        task_id: type[PhaseRunner[Any]] | PhaseRunner[Any] | str | None = None,
+    ) -> float:
+        """Resolve effective significance level from override, risk budget, or instance alpha."""
+        if alpha is not None:
+            return alpha
+        if task_id is not None:
+            return self.get_allocated_alpha(task_id)
+        return self.alpha
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic JSON-serializable calibration state representation.
+
+        Returns
+        -------
+        dict of str to Any
+            Deterministic dictionary containing Mondrian calibration metadata
+            and task-partitioned quantile cutoffs.
+        """
+        calibration_state: dict[str, Any] = {}
+        for (task, lang), q in sorted(
+            self._stratified_q_hat.items(),
+            key=lambda item: (item[0][0] or "", item[0][1] or ""),
+        ):
+            meta = self._stratified_meta.get((task, lang), {})
+            key = f"{task}_{lang}" if (task and lang) else (task or lang or "global")
+            entry: dict[str, Any] = {
+                "q_hat": q,
+                "n_cal": meta.get("n_cal", 0),
+                "dataset_sha256": meta.get("dataset_sha256", ""),
+            }
+            if "alpha" in meta:
+                entry["alpha"] = meta["alpha"]
+            calibration_state[key] = entry
+        if self.q_hat is not None and "global" not in calibration_state:
+            calibration_state["global"] = {
+                "q_hat": self.q_hat,
+                "n_cal": self._global_n_cal,
+                "dataset_sha256": self._global_dataset_sha256,
+            }
+        return {
+            "class": self.__class__.__name__,
+            "alpha": self.alpha,
+            "global_alpha": self.global_alpha,
+            "risk_budget_weights": dict(sorted(self.risk_budget_weights.items())),
+            "calibration_state": calibration_state,
+        }
 
     def calibrate(
         self,
         calibration_scores: list[float] | np.ndarray,
         alpha: float | None = None,
+        task_id: str | None = None,
+        language: str | None = None,
+        dataset_sha256: str | None = None,
     ) -> float:
         """Calibrate the non-conformity threshold on a held-out calibration split.
 
         Given non-conformity scores s_i = 1 - P_hat(y_true | x_i), computes the
-        empirical quantile at level ceil((n + 1)(1 - alpha)) / n.
+        empirical quantile at level ceil((n + 1)(1 - alpha)) / n, optionally
+        partitioned by task_id and language (Mondrian split).
 
         Parameters
         ----------
@@ -50,6 +208,12 @@ class ConformalCalibrator:
             Non-conformity scores s_i = 1 - P_hat(y_i | x_i) on calibration points.
         alpha : float or None, default None
             Optional override for the significance level.
+        task_id : str or None, optional
+            Task identifier to calibrate (e.g. 'p2_linking', 'p4_acc', 'p4_arc').
+        language : str or None, optional
+            Language identifier ('de', 'en').
+        dataset_sha256 : str or None, optional
+            SHA-256 fingerprint of the calibration dataset D_cal for provenance.
 
         Returns
         -------
@@ -62,9 +226,11 @@ class ConformalCalibrator:
             If calibration_scores is empty.
         """
         if len(calibration_scores) == 0:
-            raise ValueError("calibration_scores cannot be empty for conformal calibration.")
+            raise ValueError(
+                "calibration_scores cannot be empty for conformal calibration."
+            )
 
-        effective_alpha = alpha if alpha is not None else self.alpha
+        effective_alpha = self._resolve_effective_alpha(alpha, task_id)
         scores = np.sort(np.asarray(calibration_scores, dtype=np.float64))
         n = len(scores)
 
@@ -74,14 +240,76 @@ class ConformalCalibrator:
         else:
             q_val = float(scores[target_idx - 1])
 
-        self.q_hat = q_val
-        self.alpha = effective_alpha
+        if task_id is not None or language is not None:
+            norm_lang = language.lower() if language else None
+            self._stratified_q_hat[(task_id, norm_lang)] = q_val
+            self._stratified_meta[(task_id, norm_lang)] = {
+                "alpha": effective_alpha,
+                "n_cal": n,
+                "dataset_sha256": dataset_sha256 or "",
+            }
+        else:
+            self.q_hat = q_val
+            self._global_n_cal = n
+            self._global_dataset_sha256 = dataset_sha256 or ""
+            self.alpha = effective_alpha
+
         return q_val
+
+    def get_q_hat(
+        self,
+        task_id: type[PhaseRunner[Any]] | PhaseRunner[Any] | str | None = None,
+        language: str | None = None,
+    ) -> float | None:
+        """Lookup the calibrated non-conformity cutoff for a task/phase and language.
+
+        Resolution order:
+        1. Exact (task_id, language) or related PhaseRunner identifier with language
+        2. Task-only (task_id, None) or related PhaseRunner identifier
+        3. Language-only (None, language)
+        4. Global self.q_hat
+
+        Parameters
+        ----------
+        task_id : type of PhaseRunner, PhaseRunner, str, or None, optional
+            Task identifier, PhaseRunner class, class name, or ``phase_key``.
+        language : str or None, optional
+            Language code ('de', 'en').
+
+        Returns
+        -------
+        float or None
+            Calibrated quantile cutoff q_hat, or None if uncalibrated.
+        """
+        norm_lang = language.lower() if language else None
+        candidates = (
+            PhaseRunner.related_identifiers(task_id) if task_id is not None else (None,)
+        )
+
+        # 1. Exact match (or related PhaseRunner identifier with language)
+        for cand in candidates:
+            if (cand, norm_lang) in self._stratified_q_hat:
+                return self._stratified_q_hat[(cand, norm_lang)]
+
+        # 2. Task only (or related PhaseRunner identifier)
+        if task_id is not None:
+            for cand in candidates:
+                if (cand, None) in self._stratified_q_hat:
+                    return self._stratified_q_hat[(cand, None)]
+
+        # 3. Language only
+        if norm_lang is not None and (None, norm_lang) in self._stratified_q_hat:
+            return self._stratified_q_hat[(None, norm_lang)]
+
+        # 4. Global
+        return self.q_hat
 
     def predict_set(
         self,
         score: DecisionScore,
         alpha: float | None = None,
+        task_id: str | None = None,
+        language: str | None = None,
     ) -> list[str]:
         """Compute the conformal prediction set C(x) for a predicted distribution.
 
@@ -91,30 +319,47 @@ class ConformalCalibrator:
             A :class:`DecisionScore` contract instance.
         alpha : float or None, default None
             Optional significance level override.
+        task_id : str or None, optional
+            Task identifier for stratified calibration lookup.
+        language : str or None, optional
+            Language code for stratified calibration lookup.
 
         Returns
         -------
         list of str
             Subset of candidate labels included in the conformal prediction set C(X).
         """
-        effective_alpha = alpha if alpha is not None else self.alpha
+        effective_alpha = self._resolve_effective_alpha(alpha, task_id)
+        effective_q_hat = self.get_q_hat(task_id, language)
 
-        # If the engine already computed a prediction set under matching alpha, we can use it
-        if score.prediction_set is not None and self.q_hat is None:
+        # If the engine already computed a prediction set under matching default alpha
+        # and no calibrated quantile or custom/allocated alpha is active, reuse it.
+        if (
+            score.prediction_set is not None
+            and effective_q_hat is None
+            and alpha is None
+            and (task_id is None or effective_alpha == self.alpha)
+        ):
             return score.prediction_set
 
         probabilities = score.probabilities
         if not probabilities:
+            if score.prediction_set is not None:
+                return score.prediction_set
             if score.selected_option is not None:
                 return [str(score.selected_option)]
             return []
 
-        sorted_items = sorted(probabilities.items(), key=lambda item: item[1], reverse=True)
+        sorted_items = sorted(
+            probabilities.items(), key=lambda item: item[1], reverse=True
+        )
 
-        if self.q_hat is not None:
+        if effective_q_hat is not None:
             # Calibrated quantile: C(x) = { y in Y | P_hat(y|x) >= 1 - q_hat }
-            threshold = 1.0 - self.q_hat
-            prediction_set = [label for label, prob in sorted_items if prob >= threshold]
+            threshold = 1.0 - effective_q_hat
+            prediction_set = [
+                label for label, prob in sorted_items if prob >= threshold
+            ]
             # Guarantee at least the argmax if none strictly exceed due to rounding
             if not prediction_set and sorted_items:
                 prediction_set = [sorted_items[0][0]]

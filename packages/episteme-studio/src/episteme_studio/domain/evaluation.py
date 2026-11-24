@@ -295,7 +295,9 @@ class EvaluationReportDetail(EvaluationReportSummary):
         Graph schema and disjointness violations detected.
     """
 
-    results_by_level: dict[str, list[EvaluationLevelResult]] = Field(default_factory=dict)
+    results_by_level: dict[str, list[EvaluationLevelResult]] = Field(
+        default_factory=dict
+    )
     model_decomposition: list[ModelDecompositionEntry] = Field(default_factory=list)
     poset_detail: PosetEvaluationDetail | None = None
     polarity_detail: PolarityConcordanceDetail | None = None
@@ -443,7 +445,9 @@ class StructuralistSpecialization(BaseModel):
     """
 
     formal_framework: str = "bourbaki"
-    invariants: BourbakiInvariantsSummary = Field(default_factory=BourbakiInvariantsSummary)
+    invariants: BourbakiInvariantsSummary = Field(
+        default_factory=BourbakiInvariantsSummary
+    )
     poset_preview: PosetPreviewGraph = Field(default_factory=PosetPreviewGraph)
     bound_document_id: str | None = None
     bound_document_pages: int | None = None
@@ -467,7 +471,9 @@ class RetrievalSpecialization(BaseModel):
 
     query_count: int = 0
     query_categories: list[str] = Field(default_factory=list)
-    target_metrics: list[str] = Field(default_factory=lambda: ["mrr", "hits@1", "hits@10", "ndcg@10"])
+    target_metrics: list[str] = Field(
+        default_factory=lambda: ["mrr", "hits@1", "hits@10", "ndcg@10"]
+    )
     sample_queries: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -852,7 +858,9 @@ class EdgeAdjudicationItem(BaseModel):
         Timestamp of adjudication.
     """
 
-    adjudication_id: str = Field(default_factory=lambda: f"adj_{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}")
+    adjudication_id: str = Field(
+        default_factory=lambda: f"adj_{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}"
+    )
     predicted_edge: dict[str, Any]
     reference_edge: dict[str, Any] | None = None
     similarity_score: float = 0.0
@@ -1351,7 +1359,9 @@ class CalibrationReportDetail(BaseModel):
     is_well_calibrated: bool
     num_samples: int
     bins: list[CalibrationBinDetail] = Field(default_factory=list)
-    high_confidence_hallucinations: list[MiscalibratedAssertionItem] = Field(default_factory=list)
+    high_confidence_hallucinations: list[MiscalibratedAssertionItem] = Field(
+        default_factory=list
+    )
     chart_series: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -1630,7 +1640,9 @@ class NoiseRobustnessReportDetail(BaseModel):
     is_resilient: bool
     baseline_f1: float
     worst_case_f1: float
-    breakdown_by_perturbation: dict[str, list[PerturbationSweepPoint]] = Field(default_factory=dict)
+    breakdown_by_perturbation: dict[str, list[PerturbationSweepPoint]] = Field(
+        default_factory=dict
+    )
     chart_series: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -1652,7 +1664,10 @@ class StressTestRequest(BaseModel):
     run_id: str
     benchmark_id: str | None = None
     perturbation_types: list[PerturbationType] = Field(
-        default_factory=lambda: [PerturbationType.TYPO_INSERTION, PerturbationType.SYNONYM_REPLACEMENT]
+        default_factory=lambda: [
+            PerturbationType.TYPO_INSERTION,
+            PerturbationType.SYNONYM_REPLACEMENT,
+        ]
     )
     noise_levels: list[float] = Field(default_factory=lambda: [0.05, 0.10, 0.20])
 
@@ -1880,7 +1895,9 @@ class BorderlineDecisionItem(BaseModel):
     system_2_choice: str | None = None
     discrepancy: bool = False
     entropy: float = 0.0
-    adjudication_status: Literal["pending", "accepted", "corrected", "skipped"] = "pending"
+    adjudication_status: Literal["pending", "accepted", "corrected", "skipped"] = (
+        "pending"
+    )
     adjudicated_value: str | None = None
     curator_notes: str | None = None
 
@@ -1925,4 +1942,3 @@ class ActiveLearningExportResponse(BaseModel):
     export_path: str
     langfuse_synced: bool = False
     items: list[dict[str, Any]] = Field(default_factory=list)
-

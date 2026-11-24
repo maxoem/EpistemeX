@@ -59,7 +59,7 @@ def _format_entity_summary(
                 relations=rel_str,
                 neighborhood=rel_str,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
     return (
         f"Name: {entity.name}\n"
@@ -93,11 +93,38 @@ class BorderlinePairVerifier:
         confidence_threshold: float = 0.80,
         conformal_alpha: float = 0.05,
         prompt_bundle: StructuredPromptBundle | None = None,
+        calibrator: Any = None,
+        language: str | None = None,
     ) -> None:
         self.decision_engine = decision_engine
         self.confidence_threshold = confidence_threshold
         self.conformal_alpha = conformal_alpha
-        self.prompt_bundle = prompt_bundle
+        self.prompt_bundle = prompt_bundle or StructuredPromptBundle(
+            direct_template="",
+            decision_template=DECISION_BORDERLINE_MERGE_QUESTION,
+            decision_criteria=DECISION_BORDERLINE_MERGE_CRITERIA,
+            name="borderline_merge",
+        )
+        from episteme_pipeline.decision.observable import ObservableDecisionEngine
+
+        self.calibrator = (
+            calibrator
+            if calibrator is not None
+            else (
+                decision_engine.calibrator
+                if isinstance(decision_engine, ObservableDecisionEngine)
+                else None
+            )
+        )
+        self.language = (
+            language
+            if language is not None
+            else (
+                decision_engine.language
+                if isinstance(decision_engine, ObservableDecisionEngine)
+                else None
+            )
+        )
 
     @classmethod
     def from_config(
@@ -105,6 +132,8 @@ class BorderlinePairVerifier:
         config: Any,
         decision_engine: DecisionEngine,
         prompt_bundle: StructuredPromptBundle | None = None,
+        calibrator: Any = None,
+        language: str | None = None,
     ) -> BorderlinePairVerifier:
         """Construct BorderlinePairVerifier from configuration.
 
@@ -116,19 +145,58 @@ class BorderlinePairVerifier:
             Calibrated decision engine.
         prompt_bundle : StructuredPromptBundle or None, default None
             Optional explicit prompt bundle override.
+        calibrator : ConformalCalibrator or None, default None
+            Optional conformal prediction calibrator.
+        language : str or None, default None
+            Optional corpus language code ('de', 'en') for Mondrian calibration.
 
         Returns
         -------
         BorderlinePairVerifier
             Configured verifier instance.
         """
-        bundle = prompt_bundle or getattr(config, "borderline_merge_prompts", None)
+        bundle = prompt_bundle or config.borderline_merge_prompts
         return cls(
             decision_engine=decision_engine,
             confidence_threshold=config.confidence_threshold,
             conformal_alpha=config.conformal_alpha,
             prompt_bundle=bundle,
+            calibrator=calibrator,
+            language=language,
         )
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic borderline pair verifier configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier, thresholds, and decision engine fingerprint.
+        """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        return {
+            "class": self.__class__.__name__,
+            "confidence_threshold": self.confidence_threshold,
+            "conformal_alpha": self.conformal_alpha,
+            "language": self.language,
+            "prompt_bundle": (
+                self.prompt_bundle.fingerprint()
+                if isinstance(self.prompt_bundle, Fingerprintable)
+                else None
+            ),
+            "calibrator": (
+                self.calibrator.fingerprint()
+                if isinstance(self.calibrator, Fingerprintable)
+                else None
+            ),
+            "decision_engine": (
+                self.decision_engine.fingerprint()
+                if isinstance(self.decision_engine, Fingerprintable)
+                else fingerprint_method(self.decision_engine)
+            ),
+        }
 
     async def verify(
         self,
@@ -136,6 +204,7 @@ class BorderlinePairVerifier:
         entity_b: L2Entity,
         relation_signatures_a: set[str] | None = None,
         relation_signatures_b: set[str] | None = None,
+        language: str | None = None,
     ) -> tuple[str, float, list[str]]:
         """Verify whether candidate pair (entity_a, entity_b) should be merged.
 
@@ -149,6 +218,8 @@ class BorderlinePairVerifier:
             1-hop relation signatures for entity A.
         relation_signatures_b : set of str or None, default None
             1-hop relation signatures for entity B.
+        language : str or None, default None
+            Optional language override ('de', 'en') for Mondrian calibration.
 
         Returns
         -------
@@ -156,8 +227,12 @@ class BorderlinePairVerifier:
             Tuple of (selected_option, empirical_accuracy, prediction_set).
         """
         template = self.prompt_bundle.direct_template if self.prompt_bundle else None
-        summary_a = _format_entity_summary(entity_a, relation_signatures_a, template=template)
-        summary_b = _format_entity_summary(entity_b, relation_signatures_b, template=template)
+        summary_a = _format_entity_summary(
+            entity_a, relation_signatures_a, template=template
+        )
+        summary_b = _format_entity_summary(
+            entity_b, relation_signatures_b, template=template
+        )
 
         state = {
             "entity_a": summary_a,
@@ -182,12 +257,26 @@ class BorderlinePairVerifier:
             alpha=self.conformal_alpha,
         )
 
-        selected = str(score.selected_option) if score.selected_option is not None else "DISTINCT_SEPARATE"
-        pred_set = score.prediction_set or [selected]
+        selected = (
+            str(score.selected_option)
+            if score.selected_option is not None
+            else "DISTINCT_SEPARATE"
+        )
+        if self.calibrator is not None:
+            pred_set = self.calibrator.predict_set(
+                score,
+                alpha=self.conformal_alpha,
+                task_id="p3b_merge",
+                language=language or self.language,
+            )
+        else:
+            pred_set = score.prediction_set or [selected]
         emp_acc = score.empirical_accuracy
 
-        is_singleton_identical = (pred_set == ["IDENTICAL_MERGE"])
-        is_high_confidence = (selected == "IDENTICAL_MERGE" and emp_acc >= self.confidence_threshold)
+        is_singleton_identical = pred_set == ["IDENTICAL_MERGE"]
+        is_high_confidence = (
+            selected == "IDENTICAL_MERGE" and emp_acc >= self.confidence_threshold
+        )
         approved_merge = is_singleton_identical or is_high_confidence
 
         action_taken = "merge_approved" if approved_merge else "merge_aborted"
@@ -237,6 +326,31 @@ class CanonicalRepresentativeElector:
         self.decision_engine = decision_engine
         self.prompt_bundle = prompt_bundle
 
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic canonical representative elector configuration.
+
+        Returns
+        -------
+        dict of str to Any
+            Dictionary containing class identifier and decision engine fingerprint.
+        """
+        from episteme_pipeline.protocols.fingerprint import Fingerprintable
+        from episteme_pipeline.runs.fingerprints import fingerprint_method
+
+        de_fp = (
+            self.decision_engine.fingerprint()
+            if isinstance(self.decision_engine, Fingerprintable)
+            else (
+                fingerprint_method(self.decision_engine)
+                if self.decision_engine is not None
+                else None
+            )
+        )
+        return {
+            "class": self.__class__.__name__,
+            "decision_engine": de_fp,
+        }
+
     async def elect(self, cluster_entities: list[L2Entity]) -> L2Entity:
         """Elect the canonical representative from candidate cluster entities.
 
@@ -251,7 +365,9 @@ class CanonicalRepresentativeElector:
             The elected canonical representative entity.
         """
         if not cluster_entities:
-            raise ValueError("Cannot elect canonical representative from an empty cluster.")
+            raise ValueError(
+                "Cannot elect canonical representative from an empty cluster."
+            )
 
         if len(cluster_entities) == 1:
             return cluster_entities[0]
@@ -269,7 +385,11 @@ class CanonicalRepresentativeElector:
             state = {
                 "cluster_size": len(cluster_entities),
                 "candidates": [
-                    {"name": e.name, "occurrences": len(e.source_chunk_ids), "envelope": e.textual_envelope or ""}
+                    {
+                        "name": e.name,
+                        "occurrences": len(e.source_chunk_ids),
+                        "envelope": e.textual_envelope or "",
+                    }
                     for e in cluster_entities
                 ],
             }
@@ -287,15 +407,21 @@ class CanonicalRepresentativeElector:
                     options=options,
                 )
 
-                selected_key = str(score.selected_option) if score.selected_option is not None else None
+                selected_key = (
+                    str(score.selected_option)
+                    if score.selected_option is not None
+                    else None
+                )
                 if selected_key in id_to_entity:
                     return id_to_entity[selected_key]
 
                 for e in cluster_entities:
-                    if selected_key and (e.name.lower() == selected_key.lower() or e.id == selected_key):
+                    if selected_key and (
+                        e.name.lower() == selected_key.lower() or e.id == selected_key
+                    ):
                         return e
 
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 baseline
                 logger.warning(
                     "Canonical election via decision engine failed: %s; using heuristic fallback.",
                     exc,

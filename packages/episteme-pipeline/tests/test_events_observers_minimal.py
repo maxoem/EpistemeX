@@ -82,4 +82,3 @@ def test_jsonl_and_metrics_and_composite_isolation(tmp_path: Path) -> None:
 
     # Capture received all three events
     assert len(cap.events) == 3
-

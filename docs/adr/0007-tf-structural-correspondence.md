@@ -1,7 +1,12 @@
 # [0007] TF as Target Representation — Structural Correspondence Classification
 
-Status: Accepted  
+Status: Partially Superseded by [ADR-0011 (Addendum 2)](0011-declarative-graph-metrics-and-qbaf-semantics.md), [ADR-0020](0020-propositional-modal-strength-resolver.md), and [ADR-0022](0022-unified-stratified-epistemic-metamodel.md)  
 Supersedes: ADR-0006 (QBAF Weight Computation Deferred)
+
+> [!IMPORTANT]
+> **Supersession Scope**:
+> - **Superseded**: Section 1's deprecation of QBAF in favor of unweighted `TF` scalar ratios ($TF(a) = |S(a)| / (|S(a)| + |A(a)| + 1)$) and legacy `plausibility` propagation are superseded by the Continuous Dynamic QBAF (`D-QBAF`) gradual semantics in [ADR-0011 Addendum 2](0011-declarative-graph-metrics-and-qbaf-semantics.md), the Propositional Modal Strength Resolver ($\tau_0(a) \equiv M(\phi_a)$) in [ADR-0020](0020-propositional-modal-strength-resolver.md), and the Unified Stratified Epistemic Metamodel in [ADR-0022](0022-unified-stratified-epistemic-metamodel.md).
+> - **Active & Retained**: $\kappa$-Structural Correspondence (`structural_correspondence` on `TheoryRelation` edges) and the Sneed/Stegmüller/Balzer structuralist poset hierarchy remain active.
 
 ---
 
@@ -102,12 +107,14 @@ SC may optionally be re-run after Phase 4 to score L3 edges (SUPPORTS/ATTACKS be
 ArgumentComponent as an atom of type `CLAIM`, `MAJOR_CLAIM`, or `PREMISE`. This is enabled by including L3 atom-type
 pairs in `StructuralCorrespondenceConfig.pairs`.
 
-### 4. Evaluation remains post-construct
+### 4. Evaluation remains post-construct (complemented by inter-phase quality gates)
 
-The three evaluation dimensions — empirical content, internal coherence, external compatibility — are **not part of
-pipeline construction**. They are offline analyses run against the completed property graph. `structural_correspondence`
-scores stored on edges provide input data for coherence and compatibility evaluation, but the evaluation logic itself is
-outside the pipeline.
+The three full theory evaluation dimensions — empirical content, internal coherence, external compatibility — are
+offline analyses run against the completed property graph via `epistemetrics`. `structural_correspondence`
+scores stored on edges provide input data for coherence and compatibility evaluation, while during construction the
+`ArtifactExecutionEngine` evaluates lightweight inter-phase `EpistemicQualityGate` circuit breakers (`OntologyEntropyGate`,
+`PercolationQualityGate`, and `ConformalCalibrationGate`, see `ISSUE-058`) to detect ontological collapse, giant-component
+percolation, or conformal OOD spikes before downstream LLM compute is expended.
 
 ---
 

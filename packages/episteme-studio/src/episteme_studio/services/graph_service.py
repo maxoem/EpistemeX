@@ -152,7 +152,9 @@ class GraphService:
                 detail=f"Run '{run_id}' not found.",
                 instance=f"/api/runs/{run_id}/graph",
             )
-        return reader.get_graph(run_id, budget=active_budget, use_run_schema=use_run_schema)
+        return reader.get_graph(
+            run_id, budget=active_budget, use_run_schema=use_run_schema
+        )
 
     def get_evidence(self, run_id: str, node_id: str) -> EvidenceTrail:
         """Trace the evidence trail for a specific graph node.

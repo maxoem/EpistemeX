@@ -8,12 +8,6 @@ from episteme_pipeline.artifacts.execution import (
     Phase3ArtifactsView,
     Phase4ArtifactsView,
 )
-from episteme_pipeline.artifacts.mappers import (
-    map_phase1_output_to_artifacts,
-    map_phase2_output_to_artifacts,
-    map_phase3_output_to_artifacts,
-    map_phase4_output_to_artifacts,
-)
 from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.domain import TheoryAtom
@@ -28,18 +22,29 @@ from episteme_pipeline.contracts.phase_contracts import (
     Phase4Output,
 )
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
+
+from tests.helpers.artifact_mappers import (
+    map_phase1_output_to_artifacts,
+    map_phase2_output_to_artifacts,
+    map_phase3_output_to_artifacts,
+    map_phase4_output_to_artifacts,
+)
 
 
-class StubPhase:
-    def __init__(self, name: str) -> None:
+class StubPhase(PhaseRunner[object]):
+    def __init__(self, name: str, phase_key: str | None = None) -> None:
         self.name = name
+        self.phase_key = phase_key or name.lower().split(":")[0].replace(" ", "")
 
     async def run(self, input, context):
         return ArtifactCollection([])
 
 
 @pytest.mark.asyncio
-async def test_hydrate_previous_collection_builds_phase1_view(tmp_path: Path, graph_store):
+async def test_hydrate_previous_collection_builds_phase1_view(
+    tmp_path: Path, graph_store
+):
     config = PipelineConfig()
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
@@ -82,8 +87,10 @@ async def test_hydrate_previous_collection_builds_phase1_view(tmp_path: Path, gr
     ):
         await artifact_store.write_artifact(artifact)
 
-    pipeline._artifact_store = artifact_store
-    collection = await pipeline._hydrate_previous_collection(2, source_run_id="run-old")
+    pipeline.artifact_store = artifact_store
+    collection = await pipeline.engine.hydrate_previous_collection(
+        2, source_run_id="run-old"
+    )
 
     assert collection is not None
     view = Phase1ArtifactsView.from_collection(collection)
@@ -92,7 +99,9 @@ async def test_hydrate_previous_collection_builds_phase1_view(tmp_path: Path, gr
 
 
 @pytest.mark.asyncio
-async def test_hydrate_previous_collection_builds_phase2_view(tmp_path: Path, graph_store):
+async def test_hydrate_previous_collection_builds_phase2_view(
+    tmp_path: Path, graph_store
+):
     config = PipelineConfig()
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
@@ -112,15 +121,21 @@ async def test_hydrate_previous_collection_builds_phase2_view(tmp_path: Path, gr
     artifact_store = JsonArtifactStore(tmp_path / "artifacts")
     for artifact in map_phase2_output_to_artifacts(
         Phase2Output(
-            entities=[L2Entity(id="e1", label="PERSON", name="Kant", source_chunk_ids=["chunk-1"])],
+            entities=[
+                L2Entity(
+                    id="e1", label="PERSON", name="Kant", source_chunk_ids=["chunk-1"]
+                )
+            ],
             local_triples=[],
         ),
         run_id="run-old",
     ):
         await artifact_store.write_artifact(artifact)
 
-    pipeline._artifact_store = artifact_store
-    collection = await pipeline._hydrate_previous_collection(3, source_run_id="run-old")
+    pipeline.artifact_store = artifact_store
+    collection = await pipeline.engine.hydrate_previous_collection(
+        3, source_run_id="run-old"
+    )
 
     assert collection is not None
     view = Phase2ArtifactsView.from_collection(collection)
@@ -128,7 +143,9 @@ async def test_hydrate_previous_collection_builds_phase2_view(tmp_path: Path, gr
 
 
 @pytest.mark.asyncio
-async def test_hydrate_previous_collection_builds_phase3_view(tmp_path: Path, graph_store):
+async def test_hydrate_previous_collection_builds_phase3_view(
+    tmp_path: Path, graph_store
+):
     config = PipelineConfig()
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
@@ -164,8 +181,10 @@ async def test_hydrate_previous_collection_builds_phase3_view(tmp_path: Path, gr
     ):
         await artifact_store.write_artifact(artifact)
 
-    pipeline._artifact_store = artifact_store
-    collection = await pipeline._hydrate_previous_collection(4, source_run_id="run-old")
+    pipeline.artifact_store = artifact_store
+    collection = await pipeline.engine.hydrate_previous_collection(
+        4, source_run_id="run-old"
+    )
 
     assert collection is not None
     view = Phase3ArtifactsView.from_collection(collection)
@@ -173,7 +192,9 @@ async def test_hydrate_previous_collection_builds_phase3_view(tmp_path: Path, gr
 
 
 @pytest.mark.asyncio
-async def test_hydrate_previous_collection_builds_phase4_view(tmp_path: Path, graph_store):
+async def test_hydrate_previous_collection_builds_phase4_view(
+    tmp_path: Path, graph_store
+):
     config = PipelineConfig()
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
@@ -210,8 +231,10 @@ async def test_hydrate_previous_collection_builds_phase4_view(tmp_path: Path, gr
     ):
         await artifact_store.write_artifact(artifact)
 
-    pipeline._artifact_store = artifact_store
-    collection = await pipeline._hydrate_previous_collection(5, source_run_id="run-old")
+    pipeline.artifact_store = artifact_store
+    collection = await pipeline.engine.hydrate_previous_collection(
+        5, source_run_id="run-old"
+    )
 
     assert collection is not None
     view = Phase4ArtifactsView.from_collection(collection)

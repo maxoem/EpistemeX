@@ -89,10 +89,10 @@ def silence_noisy_loggers(
     else:
         try:
             import litellm  # type: ignore[import-not-found]
+
             _configure_litellm_flags(litellm, level)
         except (ImportError, AttributeError):
             pass
-
 
 
 def _configure_litellm_flags(litellm_module: Any, level: int) -> None:
@@ -103,12 +103,14 @@ def _configure_litellm_flags(litellm_module: Any, level: int) -> None:
         if level >= logging.WARNING:
             litellm_module.suppress_debug_info = True
             litellm_module.set_verbose = False
-            if hasattr(litellm_module, "_logging") and hasattr(litellm_module._logging, "_disable_debugging"):
+            if hasattr(litellm_module, "_logging") and hasattr(
+                litellm_module._logging, "_disable_debugging"
+            ):
                 litellm_module._logging._disable_debugging()
         else:
             litellm_module.suppress_debug_info = False
-            litellm_module.set_verbose = (level == logging.DEBUG)
-    except Exception:
+            litellm_module.set_verbose = level == logging.DEBUG
+    except Exception:  # noqa: BLE001, S110 baseline
         pass
 
 

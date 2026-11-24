@@ -73,7 +73,10 @@ class TestTheoryGraph:
         assert em.NodeType.from_str("axiom") == em.NodeType.AXIOM
         assert em.NodeType.from_str("PotentialModel") == em.NodeType.POTENTIAL_MODEL
         assert em.NodeType.from_str("actual_model") == em.NodeType.ACTUAL_MODEL
-        assert em.NodeType.from_str("PartialPotentialModel") == em.NodeType.PARTIAL_POTENTIAL_MODEL
+        assert (
+            em.NodeType.from_str("PartialPotentialModel")
+            == em.NodeType.PARTIAL_POTENTIAL_MODEL
+        )
         assert em.NodeType.from_str("GlobalConstraint") == em.NodeType.CONSTRAINT
         assert em.NodeType.from_str("ParadigmaticApplication") == em.NodeType.PARADIGM
         assert em.NodeType.from_str("unknown_xyz") == em.NodeType.CONCEPT
@@ -81,14 +84,28 @@ class TestTheoryGraph:
         # EpistemicStatus parsing
         assert em.EpistemicStatus.from_str("HARD_CORE") == em.EpistemicStatus.HARD_CORE
         assert em.EpistemicStatus.from_str("hard_core") == em.EpistemicStatus.HARD_CORE
-        assert em.EpistemicStatus.from_str("ProtectiveBelt") == em.EpistemicStatus.PROTECTIVE_BELT
-        assert em.EpistemicStatus.from_str("auxiliary") == em.EpistemicStatus.PROTECTIVE_BELT
-        assert em.EpistemicStatus.from_str("unknown_status") == em.EpistemicStatus.NEUTRAL
+        assert (
+            em.EpistemicStatus.from_str("ProtectiveBelt")
+            == em.EpistemicStatus.PROTECTIVE_BELT
+        )
+        assert (
+            em.EpistemicStatus.from_str("auxiliary")
+            == em.EpistemicStatus.PROTECTIVE_BELT
+        )
+        assert (
+            em.EpistemicStatus.from_str("unknown_status") == em.EpistemicStatus.NEUTRAL
+        )
 
         # RelationType parsing
         assert em.RelationType.from_str("EXPLAINS") == em.RelationType.EXPLAINS
-        assert em.RelationType.from_str("hasActualModel") == em.RelationType.HAS_ACTUAL_MODEL
-        assert em.RelationType.from_str("str:hasPotentialModel") == em.RelationType.HAS_POTENTIAL_MODEL
+        assert (
+            em.RelationType.from_str("hasActualModel")
+            == em.RelationType.HAS_ACTUAL_MODEL
+        )
+        assert (
+            em.RelationType.from_str("str:hasPotentialModel")
+            == em.RelationType.HAS_POTENTIAL_MODEL
+        )
         assert em.RelationType.from_str("specializes") == em.RelationType.SPECIALIZES
         assert em.RelationType.from_str("attacks") == em.RelationType.ATTACKS
         assert em.RelationType.ATTACKS.default_polarity == -1
@@ -114,8 +131,18 @@ class TestTheoryGraph:
 
     def test_networkx_interoperability(self):
         G = nx.MultiDiGraph()
-        G.add_node("n1", name="Element A", node_type="potential_model", epistemic_status="hard_core")
-        G.add_node("n2", name="Element B", node_type="actual_model", epistemic_status="hard_core")
+        G.add_node(
+            "n1",
+            name="Element A",
+            node_type="potential_model",
+            epistemic_status="hard_core",
+        )
+        G.add_node(
+            "n2",
+            name="Element B",
+            node_type="actual_model",
+            epistemic_status="hard_core",
+        )
         G.add_edge("n1", "n2", relation_type="has_actual_model", weight=2.0)
 
         tg = em.TheoryGraph.from_networkx(G, name="FromNX")
@@ -131,8 +158,18 @@ class TestTheoryGraph:
 
     def test_analyze_theory_graph_and_report(self):
         tg = em.TheoryGraph(name="SampleTheory")
-        tg.add_node("core1", name="Core Law", node_type=em.NodeType.AXIOM, epistemic_status=em.EpistemicStatus.HARD_CORE)
-        tg.add_node("aux1", name="Auxiliary Hypothesis", node_type=em.NodeType.HYPOTHESIS, epistemic_status=em.EpistemicStatus.PROTECTIVE_BELT)
+        tg.add_node(
+            "core1",
+            name="Core Law",
+            node_type=em.NodeType.AXIOM,
+            epistemic_status=em.EpistemicStatus.HARD_CORE,
+        )
+        tg.add_node(
+            "aux1",
+            name="Auxiliary Hypothesis",
+            node_type=em.NodeType.HYPOTHESIS,
+            epistemic_status=em.EpistemicStatus.PROTECTIVE_BELT,
+        )
         tg.add_node("obs1", name="Observation", node_type=em.NodeType.PHENOMENON)
         tg.add_edge("core1", "aux1", relation_type=em.RelationType.SPECIALIZES)
         tg.add_edge("aux1", "obs1", relation_type=em.RelationType.EXPLAINS)

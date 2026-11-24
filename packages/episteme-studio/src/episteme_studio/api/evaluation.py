@@ -50,8 +50,12 @@ router = APIRouter(prefix="/api/evaluation", tags=["evaluation"])
 
 @router.get("/reports", response_model=list[EvaluationReportSummary])
 async def list_evaluation_reports(
-    run_id: str | None = Query(None, description="Filter by participating run identifier"),
-    outcome: str | None = Query(None, description="Filter by evaluation outcome ('pass', 'fail', 'warning')"),
+    run_id: str | None = Query(
+        None, description="Filter by participating run identifier"
+    ),
+    outcome: str | None = Query(
+        None, description="Filter by evaluation outcome ('pass', 'fail', 'warning')"
+    ),
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> list[EvaluationReportSummary]:
     """List all available evaluation report summaries.
@@ -133,7 +137,9 @@ async def get_evaluation_report_markdown(
     return report.summary_markdown
 
 
-@router.post("/run", response_model=EvaluationReportDetail, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/run", response_model=EvaluationReportDetail, status_code=status.HTTP_201_CREATED
+)
 async def evaluate_run(
     request: EvaluateRunRequest,
     service: EvaluationService = Depends(get_evaluation_service),
@@ -159,7 +165,9 @@ async def evaluate_run(
     return await service.evaluate_run(request)
 
 
-@router.post("/manifest", response_model=EvaluationReportDetail, status_code=status.HTTP_200_OK)
+@router.post(
+    "/manifest", response_model=EvaluationReportDetail, status_code=status.HTTP_200_OK
+)
 async def evaluate_manifest(
     request: EvaluateManifestRequest,
     service: EvaluationService = Depends(get_evaluation_service),
@@ -222,7 +230,9 @@ async def list_benchmarks(
     return service.list_benchmarks()
 
 
-@router.get("/benchmarks/{benchmark_id}/preview", response_model=BenchmarkPreviewResponse)
+@router.get(
+    "/benchmarks/{benchmark_id}/preview", response_model=BenchmarkPreviewResponse
+)
 async def get_benchmark_preview(
     benchmark_id: str,
     limit: int = 50,
@@ -338,7 +348,11 @@ async def list_adjudications(
     return service.list_adjudications()
 
 
-@router.post("/jobs/manifest", response_model=EvaluationJobDescriptor, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/jobs/manifest",
+    response_model=EvaluationJobDescriptor,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def create_manifest_evaluation_job(
     request: EvaluateManifestRequest,
     broker: EventBroker = Depends(get_broker),
@@ -363,7 +377,11 @@ async def create_manifest_evaluation_job(
     return await service.start_evaluation_job(broker=broker, manifest_request=request)
 
 
-@router.post("/jobs/run", response_model=EvaluationJobDescriptor, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/jobs/run",
+    response_model=EvaluationJobDescriptor,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def create_run_evaluation_job(
     request: EvaluateRunRequest,
     broker: EventBroker = Depends(get_broker),
@@ -425,7 +443,9 @@ async def get_evaluation_job(
 async def stream_evaluation_job_telemetry(
     job_id: str,
     request: Request,
-    since: int | None = Query(None, description="Sequence number threshold to replay after"),
+    since: int | None = Query(
+        None, description="Sequence number threshold to replay after"
+    ),
     broker: EventBroker = Depends(get_broker),
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> EventSourceResponse:
@@ -508,11 +528,17 @@ async def cancel_evaluation_job(
 # =============================================================================
 
 
-@router.get("/reports/{evaluation_id}/graph-overlay", response_model=EvaluationGraphOverlay)
+@router.get(
+    "/reports/{evaluation_id}/graph-overlay", response_model=EvaluationGraphOverlay
+)
 async def get_evaluation_graph_overlay(
     evaluation_id: str,
-    include_ghosts: bool = Query(True, description="Whether to include synthesized ghost nodes for omissions"),
-    filter_status: str | None = Query(None, description="Optional alignment status filter"),
+    include_ghosts: bool = Query(
+        True, description="Whether to include synthesized ghost nodes for omissions"
+    ),
+    filter_status: str | None = Query(
+        None, description="Optional alignment status filter"
+    ),
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> EvaluationGraphOverlay:
     """Retrieve interactive graph canvas overlay projecting evaluation alignment and errors.
@@ -540,10 +566,15 @@ async def get_evaluation_graph_overlay(
     )
 
 
-@router.get("/reports/{evaluation_id}/adjudication-queue", response_model=AdjudicationQueueResponse)
+@router.get(
+    "/reports/{evaluation_id}/adjudication-queue",
+    response_model=AdjudicationQueueResponse,
+)
 async def get_adjudication_queue(
     evaluation_id: str,
-    status: str = Query("pending", description="Filter by status ('pending', 'adjudicated', 'all')"),
+    status: str = Query(
+        "pending", description="Filter by status ('pending', 'adjudicated', 'all')"
+    ),
     min_sim: float = Query(0.75, description="Minimum soft similarity threshold"),
     max_sim: float = Query(0.95, description="Maximum soft similarity threshold"),
     service: EvaluationService = Depends(get_evaluation_service),
@@ -576,7 +607,10 @@ async def get_adjudication_queue(
     )
 
 
-@router.post("/reports/{evaluation_id}/adjudicate-and-recalculate", response_model=AdjudicateAndRecalculateResponse)
+@router.post(
+    "/reports/{evaluation_id}/adjudicate-and-recalculate",
+    response_model=AdjudicateAndRecalculateResponse,
+)
 async def adjudicate_and_recalculate(
     evaluation_id: str,
     request: AdjudicateAndRecalculateRequest,
@@ -598,13 +632,19 @@ async def adjudicate_and_recalculate(
     AdjudicateAndRecalculateResponse
         Updated evaluation report and metric deltas.
     """
-    return service.adjudicate_and_recalculate(evaluation_id=evaluation_id, request=request)
+    return service.adjudicate_and_recalculate(
+        evaluation_id=evaluation_id, request=request
+    )
 
 
-@router.get("/reports/{evaluation_id}/calibration", response_model=CalibrationReportDetail)
+@router.get(
+    "/reports/{evaluation_id}/calibration", response_model=CalibrationReportDetail
+)
 async def get_calibration_report(
     evaluation_id: str,
-    min_confidence: float = Query(0.85, description="Threshold for highlighting overconfident assertions"),
+    min_confidence: float = Query(
+        0.85, description="Threshold for highlighting overconfident assertions"
+    ),
     limit: int = Query(50, description="Max miscalibrated assertions to return"),
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> CalibrationReportDetail:
@@ -633,7 +673,10 @@ async def get_calibration_report(
     )
 
 
-@router.get("/reports/{evaluation_id}/evidence/{component_id}", response_model=GroundingEvaluationDetail)
+@router.get(
+    "/reports/{evaluation_id}/evidence/{component_id}",
+    response_model=GroundingEvaluationDetail,
+)
 async def get_component_evidence(
     evaluation_id: str,
     component_id: str,
@@ -655,7 +698,9 @@ async def get_component_evidence(
     GroundingEvaluationDetail
         Multi-modal bounding boxes, verbatim text anchors, and IoU score.
     """
-    return service.get_evidence_detail(evaluation_id=evaluation_id, component_id=component_id)
+    return service.get_evidence_detail(
+        evaluation_id=evaluation_id, component_id=component_id
+    )
 
 
 @router.post("/leaderboard", response_model=LeaderboardResponse)
@@ -714,7 +759,11 @@ async def get_benchmark_leaderboard_get(
     )
 
 
-@router.post("/stress-test", response_model=NoiseRobustnessReportDetail, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/stress-test",
+    response_model=NoiseRobustnessReportDetail,
+    status_code=status.HTTP_201_CREATED,
+)
 async def execute_stress_test(
     request: StressTestRequest,
     service: EvaluationService = Depends(get_evaluation_service),
@@ -736,7 +785,9 @@ async def execute_stress_test(
     return service.execute_stress_test(request)
 
 
-@router.get("/reports/{evaluation_id}/robustness", response_model=NoiseRobustnessReportDetail)
+@router.get(
+    "/reports/{evaluation_id}/robustness", response_model=NoiseRobustnessReportDetail
+)
 async def get_robustness_report(
     evaluation_id: str,
     service: EvaluationService = Depends(get_evaluation_service),
@@ -758,10 +809,15 @@ async def get_robustness_report(
     return service.get_robustness_report(evaluation_id=evaluation_id)
 
 
-@router.get("/reports/{evaluation_id}/retrieval-diagnostics", response_model=RetrievalDiagnosticsResponse)
+@router.get(
+    "/reports/{evaluation_id}/retrieval-diagnostics",
+    response_model=RetrievalDiagnosticsResponse,
+)
 async def get_retrieval_diagnostics(
     evaluation_id: str,
-    failed_only: bool = Query(False, description="Whether to only return queries where first hit rank > 10"),
+    failed_only: bool = Query(
+        False, description="Whether to only return queries where first hit rank > 10"
+    ),
     limit: int = Query(100, description="Max queries to return"),
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> RetrievalDiagnosticsResponse:
@@ -813,7 +869,11 @@ async def validate_benchmark(
     return service.validate_benchmark(raw_content=raw_content)
 
 
-@router.post("/benchmarks", response_model=BenchmarkDescriptor, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/benchmarks",
+    response_model=BenchmarkDescriptor,
+    status_code=status.HTTP_201_CREATED,
+)
 async def register_benchmark(
     request: RegisterBenchmarkRequest,
     service: EvaluationService = Depends(get_evaluation_service),
@@ -838,7 +898,9 @@ async def register_benchmark(
 @router.get("/reports/{evaluation_id}/export")
 async def export_evaluation_report(
     evaluation_id: str,
-    format: str = Query("latex", description="Export format ('latex', 'csv', 'jsonld')"),
+    format: str = Query(
+        "latex", description="Export format ('latex', 'csv', 'jsonld')"
+    ),
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> Response:
     """Export publication-ready LaTeX tables, CSV summaries, or JSON-LD graph bundles.
@@ -857,5 +919,7 @@ async def export_evaluation_report(
     Response
         Exported text/data with appropriate MIME type.
     """
-    content, media_type = service.export_report(evaluation_id=evaluation_id, format=format)
+    content, media_type = service.export_report(
+        evaluation_id=evaluation_id, format=format
+    )
     return Response(content=content, media_type=media_type)

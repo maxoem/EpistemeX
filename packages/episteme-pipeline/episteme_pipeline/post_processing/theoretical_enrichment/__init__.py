@@ -28,7 +28,7 @@ from episteme_pipeline.post_processing.theoretical_enrichment.projectors import 
     CompositeTheoryProjector,
     GenericTheoryProjector,
     LLMTheoryProjector,
-    TheoryProjector,
+    TheoryProjector,  # noqa: F401 baseline
 )
 from episteme_pipeline.post_processing.theoretical_enrichment.runner import (
     TheoreticalEnrichmentRunner,

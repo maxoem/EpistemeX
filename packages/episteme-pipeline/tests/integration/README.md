@@ -34,11 +34,11 @@ FileNotFoundError: [Errno 2] No such file or directory: '.pipeline_runs/run-f122
 
 ## Key Verification Points
 
-✅ **Directory Creation**: `.pipeline_runs/` directory is created automatically  
-✅ **Empty Results Handling**: Works with 0 artifacts/entities found  
-✅ **Manifest Persistence**: Files are written and can be read back correctly  
-✅ **No FileNotFoundError**: The original error no longer occurs  
-✅ **NetworkX Compatibility**: Works with empty/partial NetworkX graphs  
+☼ **Directory Creation**: `.pipeline_runs/` directory is created automatically  
+☼ **Empty Results Handling**: Works with 0 artifacts/entities found  
+☼ **Manifest Persistence**: Files are written and can be read back correctly  
+☼ **No FileNotFoundError**: The original error no longer occurs  
+☼ **NetworkX Compatibility**: Works with empty/partial NetworkX graphs  
 
 ## Running Tests
 

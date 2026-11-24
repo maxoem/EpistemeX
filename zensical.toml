@@ -48,7 +48,8 @@ nav = [
             { "Inspecting Outputs" = "how_to/inspect_outputs.md" },
             { "Customizing Configuration" = "how_to/customize_config.md" },
             { "LLM Caching Strategies" = "how_to/use_llm_cache.md" },
-            { "Entity Gleanings" = "how_to/configure_entity_gleanings.md" }
+            { "Entity Gleanings" = "how_to/configure_entity_gleanings.md" },
+            { "Hermeneutic Refinement" = "how_to/configure_hermeneutic_refinement.md" }
         ] }
     ] },
 
@@ -67,7 +68,8 @@ nav = [
         ] },
         { "Post-Processing Engine" = [
             { "Post-Processing Architecture" = "workflow/post_processing/index.md" },
-            { "Theoretical Enrichment & Tenability" = "workflow/post_processing/theoretical_enrichment.md" }
+            { "Theoretical Enrichment & Tenability" = "workflow/post_processing/theoretical_enrichment.md" },
+            { "Deficit Graph Analysis & Refinement" = "workflow/post_processing/hermeneutic_refinement.md" }
         ] },
         { "Observability & Telemetry" = [
             { "Telemetry Architecture" = "observability/events.md" },
@@ -170,7 +172,8 @@ nav = [
             { "Invalidation & Resume Graph" = "architecture/invalidation_and_resume.md" },
             { "Constrained Decoding Engine" = "architecture/constrained_decoding.md" },
             { "Runtime & Complexity Analysis" = "architecture/runtime_analysis.md" },
-            { "Cross-Cutting Concerns" = "architecture/cross_cutting_concerns.md" }
+            { "Cross-Cutting Concerns" = "architecture/cross_cutting_concerns.md" },
+            { "Design Patterns & Standards" = "architecture/design_patterns_and_standards.md"}
         ] },
         { "Architecture Decision Records (ADRs)" = [
             { "ADR Overview & Register" = "adr/index.md" },
@@ -194,7 +197,11 @@ nav = [
             { "ADR 0017: Explicit Batch Contracts & Bulk I/O" = "adr/0017-explicit-batch-contracts-and-bulk-io.md" },
             { "ADR 0018: Core Decision Engine Architecture" = "adr/0018-decision-engine-architecture-and-contracts.md" },
             { "ADR 0019: Decision Engine Client Implementation" = "adr/0019-typesafe-jev-client-and-decision-observability.md" },
-            { "ADR 0020: Propositional Modal Strength Resolver" = "adr/0020-propositional-modal-strength-resolver.md" }
+            { "ADR 0020: Propositional Modal Strength Resolver" = "adr/0020-propositional-modal-strength-resolver.md" },
+            { "ADR 0021: Incremental Corpus Evolution & HITL Constraint Ledger" = "adr/0021-incremental-corpus-evolution-and-persistent-hitl-constraint-ledger.md" },
+            { "ADR 0022: Unified Stratified Epistemic Metamodel" = "adr/0022-unified-stratified-epistemic-metamodel.md" },
+            { "ADR 0023: Intensional Scoping & Conception Stratification" = "adr/0023-intensional-perspectival-scoping-and-conception-stratification.md" },
+            { "ADR 0024: Closed-Loop Hermeneutic Refinement" = "adr/0024-closed-loop-hermeneutic-refinement.md" }
         ] }
     ] },
 
@@ -210,7 +217,8 @@ nav = [
             { "Schema Taxonomies" = "reference/schema.md" },
             { "Core Protocols & Fingerprinting" = "reference/protocols.md" },
             { "Decision Engines" = "reference/decision.md" },
-            { "Phase Components" = "reference/phase-components.md" }
+            { "Phase Components" = "reference/phase-components.md" },
+            { "Refinement & Deficit Detection" = "reference/refinement.md" }
         ] },
         { "Domain Glossaries" = [
             { "Glossary" = "concepts/glossary.md" }

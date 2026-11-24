@@ -114,6 +114,7 @@ Where:
 - $\gamma: \mathcal{V}_{\text{L2}} \to [0, 1]$ assigns extraction confidence scores.
 - $\delta: \mathcal{E}_{\text{L2}} \to [0, 1] \times \mathcal{P} (L1)$ assigns relationship certainty paired with explicit evidentiary text
   snippets from $L1$.
+- **Referent-vs-Conception Stratification ([ADR 0023](../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)):** Each canonical node $e \in \mathcal{V}_{\text{L2}}$ serves as the shared *Referential Topic*, optionally carrying perspective-specific `EntityConception` facets and spherical dispersion `polysemy_variance` when mention envelopes diverge across theories or documents.
 
 ### Layer 3: Abstract Argumentation Framework ($L3$)
 
@@ -177,19 +178,21 @@ A foundational vulnerability in earlier theory graph implementations was conflat
 1. **The Pseudo-Decoupling Contradiction ($w = M \times P$):** Multiplying propositional modal strength $M(\phi)$ by perception classifier probability $P(\text{stance})$ into a single scalar edge weight algebraically coupled orthogonal dimensions. A deductive proof ($M = 1.0$) extracted with moderate confidence ($P = 0.5$) received $w = 0.5$, identical to a tentative conjecture ($M = 0.5$) extracted with certainty ($P = 1.0$).
 2. **Double-Penalization of Premise Uncertainty:** Placing modal strength on the edge penalized conjectural premises twice: once when computing the premise's own standing ($s_j \le 0.3$), and a second time by scaling the outgoing edge $w = 0.3 \times P$, yielding an artificial compounding penalty ($0.3 \times 0.3 = 0.09$).
 
-To resolve this, the dialectical theory graph layer is formalized as a **Decoupled Quantitative Bipolar Argumentation Framework (D-QBAF)**:
+To resolve this, the dialectical theory graph layer is formalized as a **Decoupled Quantitative Bipolar Argumentation Framework (D-QBAF)** lifted onto a **Bipartite Inference Hypergraph** (`ISSUE-055`):
 
-$$\mathcal{Q} = \langle \mathcal{A}, \mathcal{R}_{att}, \mathcal{R}_{sup}, \tau_0, \mathcal{I}, \mathcal{P}, \mathcal{C} \rangle$$
+$$\mathcal{Q} = \langle \mathcal{A}, \mathcal{W}, \mathcal{R}_{att}, \mathcal{R}_{sup}, \tau_0, \mathcal{I}, \mathcal{P}, \mathcal{C} \rangle$$
 
 where:
 1. $\mathcal{A} = \{a_1, a_2, \dots, a_n\}$ is a finite set of theoretical argument atoms, formally partitioned into empirical observations $B$ and theoretical hypotheses $A$ such that $\mathcal{A} = B \cup A$ and $B \cap A = \emptyset$ (Schurz, 2014).
-2. $\mathcal{R}_{att} \subseteq \mathcal{A} \times \mathcal{A}$ is a binary relation representing dialectical attack, rebuttal, or undercutting.
-3. $\mathcal{R}_{sup} \subseteq \mathcal{A} \times \mathcal{A}$ is a binary relation representing dialectical warrant, verification, or inductive support, with $\mathcal{R}_{att} \cap \mathcal{R}_{sup} = \emptyset$.
+2. $\mathcal{W} = \{w_1, \dots, w_m\}$ is the set of reified **Inference Warrants** (`:TheoryInference` nodes in Neo4j when $|\text{Prem}(w_k)| > 1$ or when targeted by meta-level backing/undercutting edges), each binding an ordered conjunctive premise set $\text{Prem}(w_k) \subseteq \mathcal{A}$ via `HAS_PREMISE` to a conclusion $a_i \in \mathcal{A}$ via `CONCLUDES`. Untagged unary, untargeted inferences reduce algebraically to pairwise $\mathcal{A} \times \mathcal{A}$ edges.
+3. $\mathcal{R}_{att} \subseteq (\mathcal{A} \cup \mathcal{W}) \times (\mathcal{A} \cup \mathcal{W})$ is the dialectical attack relation, partitioning into propositional rebuttal targeting claims $a_i \in \mathcal{A}$ and Pollockian **undercutting** (`UNDERCUTS`) targeting inference warrants $w_k \in \mathcal{W}$.
+4. $\mathcal{R}_{sup} \subseteq (\mathcal{A} \cup \mathcal{W}) \times (\mathcal{A} \cup \mathcal{W})$ is the dialectical support relation, partitioning into premise/evidential support and Toulmin **backing** (`BACKS`) targeting inference warrants $w_k \in \mathcal{W}$, with $\mathcal{R}_{att} \cap \mathcal{R}_{sup} = \emptyset$.
 4. $\tau_0: \mathcal{A} \to [0, 1]$ is the **intrinsic propositional base score function**, mapping each claim $a \in \mathcal{A}$ to the authorial modal certainty asserted in the text:
    $$\tau_0(a) \equiv M(\phi_a)$$
-5. $\mathcal{I}: \mathcal{R} \to [0, 1]$ is the **inferential warrant force function**, quantifying the conditional validity of the inferential link under Toulminian argument schemes (deductive entailment vs. empirical corroboration vs. defeasible analogy).
-6. $\mathcal{P}: \mathcal{R} \to [0, 1]$ is the **stance class probability function**, mapping an edge $r \in \mathcal{R}$ to the perception engine's softmax probability $P(\text{stance} \mid \text{text})$.
-7. $\mathcal{C}: \mathcal{R} \to [0, 1]$ is the **perception calibration confidence score**, representing the expected empirical precision under calibrated temperature buckets (e.g., Conformal Prediction / Jev).
+5. $\iota: \mathcal{A} \to \{\text{asserted}, \text{attributed}, \text{suppositional}, \text{historical}\}$ and optional $\alpha: \mathcal{A} \to \mathcal{V}_{\text{L2}} \cup \text{Agent}$ capture the claim's **intensional mode and epistemic attribution** ([ADR 0023](../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)), isolating *Reductio* (`suppositional`) premises and opponent summaries (`attributed`) during perspective-filtered D-QBAF convergence ($\tau^*$).
+6. $\mathcal{I}: \mathcal{R} \to [0, 1]$ is the **inferential warrant force function**, quantifying the conditional validity of the inferential link under Toulminian argument schemes (deductive entailment vs. empirical corroboration vs. defeasible analogy).
+7. $\mathcal{P}: \mathcal{R} \to [0, 1]$ is the **stance class probability function**, mapping an edge $r \in \mathcal{R}$ to the perception engine's softmax probability $P(\text{stance} \mid \text{text})$.
+8. $\mathcal{C}: \mathcal{R} \to [0, 1]$ is the **perception calibration confidence score**, representing the expected empirical precision under calibrated temperature buckets (e.g., Conformal Prediction / Jev).
 
 ```
                       ONTOLOGICAL STRATIFICATION OF UNCERTAINTY
@@ -222,13 +225,23 @@ $$W_{ji} = \mathcal{I}(a_j \xrightarrow{r} a_i) \cdot \mathcal{F}(a_j \xrightarr
 
 ##### Continuous Quadratic Energy Dynamical System
 
-Let $\mathbf{s}(t) = (s_1(t), \dots, s_n(t))^T \in [0, 1]^n$ denote the justification degree vector. For any claim $a_i \in \mathcal{A}$, the net continuous energy $E_i(t) \in \mathbb{R}$ is:
+Let $\mathbf{s}(t) = (s_1(t), \dots, s_n(t))^T \in [0, 1]^n$ denote the justification degree vector over atoms $\mathcal{A}$, and let $s(w_k, t) \in [0, 1]$ denote the dynamic warrant validity of each reified inference $w_k \in \mathcal{W}$ (with intrinsic warrant prior $w_0(w_k) = \mathcal{I}(w_k)$ and gating factor $g_k = \mathcal{F}_{\text{gate}}(\mathcal{P}_k, \mathcal{C}_k) \cdot TS_{\text{edge}}(w_k)$). For each inference $w_k$ with conjunctive premise set $\text{Prem}(w_k) \subseteq \mathcal{A}$, premise activation is aggregated via a configurable triangular norm $\Phi_{\text{conj}}$:
 
-$$E_i(t) = \sum_{j:(a_j, a_i) \in \mathcal{R}_{sup}} W_{ji} \cdot s_j(t) - \sum_{k:(a_k, a_i) \in \mathcal{R}_{att}} W_{ki} \cdot s_k(t)$$
+$$\Phi_{\text{conj}}(\text{Prem}(w_k), t) = \begin{cases} \prod_{a_j \in \text{Prem}(w_k)} s_j(t) & \text{if } \text{t\_norm} = \text{product}, \\ \min_{a_j \in \text{Prem}(w_k)} s_j(t) & \text{if } \text{t\_norm} = \text{godel}. \end{cases}$$
 
-With rational impact function $h(x) = \frac{\max\{x, 0\}^2}{1 + \max\{x, 0\}^2}$, justification degrees evolve via the continuous autonomous ODE:
+For any claim $a_i \in \mathcal{A}$ and any reified warrant $w_k \in \mathcal{W}$, the net continuous energies $E_i(t), E_{w_k}(t) \in \mathbb{R}$ are:
+
+$$E_i(t) = \sum_{w_k \in \mathcal{W}_{sup}(a_i)} g_k \cdot s(w_k, t) \cdot \Phi_{\text{conj}}(\text{Prem}(w_k), t) - \sum_{w_r \in \mathcal{W}_{att}(a_i)} g_r \cdot s(w_r, t) \cdot \Phi_{\text{conj}}(\text{Prem}(w_r), t)$$
+
+$$E_{w_k}(t) = \sum_{b \in \text{Backs}(w_k)} W_{b, w_k} \cdot \Phi_{\text{conj}}(\text{Prem}(b), t) - \sum_{u \in \text{Undercuts}(w_k)} W_{u, w_k} \cdot \Phi_{\text{conj}}(\text{Prem}(u), t)$$
+
+With rational impact function $h(x) = \frac{\max\{x, 0\}^2}{1 + \max\{x, 0\}^2}$, atom justification degrees and warrant validities co-evolve via the coupled continuous autonomous ODE:
 
 $$\frac{ds_i}{dt} = w(i) - s_i(t) + (1 - w(i)) \cdot h(E_i(t)) - w(i) \cdot h(-E_i(t))$$
+
+$$\frac{ds(w_k)}{dt} = w_0(w_k) - s(w_k, t) + (1 - w_0(w_k)) \cdot h(E_{w_k}(t)) - w_0(w_k) \cdot h(-E_{w_k}(t))$$
+
+When $|\text{Prem}(w_k)| = 1$ and $\text{Backs}(w_k) = \text{Undercuts}(w_k) = \emptyset$, $E_{w_k}(t) = 0 \implies s(w_k, t) \equiv \mathcal{I}(w_k)$ and $\Phi_{\text{conj}}(\{a_j\}, t) = s_j(t)$, reducing identically to pairwise $W_{ji} \cdot s_j(t)$ dynamics. Conversely, falsifying any single premise in a conjunctive derivation ($\exists a_j \in \text{Prem}(w_k) : s_j = 0$) drives $\Phi_{\text{conj}} = 0$, and strong Pollockian undercutting drives $s(w_k, t) \to 0$ without forcing conclusion $a_i$ below its prior $\tau_0(a_i)$.
 
 initialized at $s_i(0) = w(i) = \tau_0(a_i)$.
 

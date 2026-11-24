@@ -69,6 +69,7 @@ The documentation is organized into six foundational pillars designed to serve r
     System-wide engineering trade-offs, dual-store graph projection, cache invalidation state machines, and **18 Architecture Decision Records (ADRs)**.
 
     - [Architecture Overview](architecture/overview.md){ data-preview }
+    - [Design Patterns & Standards](architecture/design_patterns_and_standards.md){ data-preview }
     - [Artifact & Run Model](architecture/artifact_run_model.md){ data-preview }
     - [Invalidation & Resume](architecture/invalidation_and_resume.md){ data-preview }
     - [Runtime & Complexity Analysis](architecture/runtime_analysis.md){ data-preview }

@@ -126,8 +126,7 @@ class CalibrationResult(BaseModel):
 
 @runtime_checkable
 class CalibrationDataExtractor(Protocol):
-    """Port defining data extraction interface for calibration scoring.
-    """
+    """Port defining data extraction interface for calibration scoring."""
 
     def extract_predictions(self, data: Any) -> list[tuple[str, float]]:
         """Extract canonical prediction keys and associated confidence probabilities.
@@ -194,11 +193,11 @@ class DefaultCalibrationDataExtractor:
                 data.calibrated_confidence
                 if data.calibrated_confidence is not None
                 else (
-                    data.empirical_accuracy
-                    if data.empirical_accuracy is not None
+                    data.perception_empirical_acc
+                    if data.perception_empirical_acc is not None
                     else (
-                        data.class_probability
-                        if data.class_probability is not None
+                        data.perception_stance_prob
+                        if data.perception_stance_prob is not None
                         else data.confidence
                     )
                 )
@@ -208,13 +207,21 @@ class DefaultCalibrationDataExtractor:
 
         if isinstance(data, TheoryAtom):
             key = f"{data.id}::{data.component_type}".lower()
-            conf = data.plausibility if data.plausibility is not None else data.confidence
+            conf = (
+                data.equilibrium_strength
+                if data.equilibrium_strength is not None
+                else (
+                    data.confidence if data.confidence is not None else data.modal_prior
+                )
+            )
             items.append((key, float(conf if conf is not None else 1.0)))
             return items
 
         if isinstance(data, L2Triple):
             key = f"{data.subject_id}::{data.predicate}::{data.object_id}".lower()
-            items.append((key, float(data.confidence if data.confidence is not None else 1.0)))
+            items.append(
+                (key, float(data.confidence if data.confidence is not None else 1.0))
+            )
             return items
 
         # Epistemetrics typed domain models
@@ -234,7 +241,9 @@ class DefaultCalibrationDataExtractor:
 
         if isinstance(data, TheoryNode):
             key = str(data.id).lower()
-            items.append((key, float(data.confidence if data.confidence is not None else 1.0)))
+            items.append(
+                (key, float(data.confidence if data.confidence is not None else 1.0))
+            )
             return items
 
         if isinstance(data, (L2Entity, L1Chunk)):
@@ -274,7 +283,9 @@ class DefaultCalibrationDataExtractor:
                 key = f"{data['subject_id']}::{data['predicate']}::{data['object_id']}".lower()
                 conf = float(data.get("confidence", 1.0) or 1.0)
                 items.append((key, conf))
-            elif "source_id" in data and "relation_type" in data and "target_id" in data:
+            elif (
+                "source_id" in data and "relation_type" in data and "target_id" in data
+            ):
                 key = f"{data['source_id']}::{data['relation_type']}::{data['target_id']}".lower()
                 conf = float(
                     data.get("calibrated_confidence")
@@ -322,7 +333,9 @@ class DefaultCalibrationDataExtractor:
 
         # Typed Domain Contracts
         if isinstance(data, TheoryRelation):
-            keys.add(f"{data.source_id}::{data.relation_type}::{data.target_id}".lower())
+            keys.add(
+                f"{data.source_id}::{data.relation_type}::{data.target_id}".lower()
+            )
             return keys
 
         if isinstance(data, TheoryAtom):
@@ -367,11 +380,19 @@ class DefaultCalibrationDataExtractor:
         # Dictionary representation
         if isinstance(data, dict):
             if "subject_id" in data and "predicate" in data and "object_id" in data:
-                keys.add(f"{data['subject_id']}::{data['predicate']}::{data['object_id']}".lower())
-            elif "source_id" in data and "relation_type" in data and "target_id" in data:
-                keys.add(f"{data['source_id']}::{data['relation_type']}::{data['target_id']}".lower())
+                keys.add(
+                    f"{data['subject_id']}::{data['predicate']}::{data['object_id']}".lower()
+                )
+            elif (
+                "source_id" in data and "relation_type" in data and "target_id" in data
+            ):
+                keys.add(
+                    f"{data['source_id']}::{data['relation_type']}::{data['target_id']}".lower()
+                )
             elif "source" in data and "relation_type" in data and "target" in data:
-                keys.add(f"{data['source']}::{data['relation_type']}::{data['target']}".lower())
+                keys.add(
+                    f"{data['source']}::{data['relation_type']}::{data['target']}".lower()
+                )
             elif "id" in data:
                 keys.add(str(data["id"]).lower())
 

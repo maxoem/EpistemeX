@@ -63,9 +63,7 @@ class DynamicsEvaluationResult(BaseModel):
     delta_auxiliary: int = Field(
         default=0, description="Increase in auxiliary hypotheses."
     )
-    anomalies_count: int = Field(
-        default=0, description="Count of empirical anomalies."
-    )
+    anomalies_count: int = Field(default=0, description="Count of empirical anomalies.")
     delta_empirical_content: int = Field(
         default=0, description="Increase in novel empirical content."
     )
@@ -100,8 +98,8 @@ class DynamicsEvaluationResult(BaseModel):
         str
             GitHub-flavored Markdown report.
         """
-        status_prog = "✅ PROGRESSIVE" if self.is_progressive else "❌ DEGENERATING"
-        status_core = "✅ INVARIANT" if self.core_invariant else "❌ CORE MUTATED"
+        status_prog = "☼ PROGRESSIVE" if self.is_progressive else "❌ DEGENERATING"
+        status_core = "☼ INVARIANT" if self.core_invariant else "❌ CORE MUTATED"
 
         lines = [
             "# Diachronic Dynamics & Lakatosian Degeneration Report",
@@ -122,7 +120,11 @@ class DynamicsEvaluationResult(BaseModel):
             lines.append("| Auxiliary Node ID | Immunization Index ($II$) | Stance |")
             lines.append("| :--- | :---: | :--- |")
             for nid, score in self.node_immunization_scores.items():
-                stance = "Ad-Hoc Immunization ❌" if score >= 0.8 else "Progressive Expansion ✅"
+                stance = (
+                    "Ad-Hoc Immunization ❌"
+                    if score >= 0.8
+                    else "Progressive Expansion ☼"
+                )
                 lines.append(f"| `{nid}` | {score:.4f} | {stance} |")
 
         if self.violated_invariance:
@@ -178,15 +180,28 @@ def _extract_snapshot_components(
         for nid, node in snapshot.nodes.items():
             nt = node.node_type
             es = node.epistemic_status
-            axiom_str = str(node.attributes.get("formalAxiom") or node.attributes.get("formal_axiom") or node.name or nid)
+            axiom_str = str(
+                node.attributes.get("formalAxiom")
+                or node.attributes.get("formal_axiom")
+                or node.name
+                or nid
+            )
 
-            if es == EpistemicStatus.HARD_CORE or nt in {NodeType.AXIOM, NodeType.ACTUAL_MODEL}:
+            if es == EpistemicStatus.HARD_CORE or nt in {
+                NodeType.AXIOM,
+                NodeType.ACTUAL_MODEL,
+            }:
                 core_axioms[nid] = axiom_str
             elif es == EpistemicStatus.PROTECTIVE_BELT or nt == NodeType.HYPOTHESIS:
                 auxiliary.add(nid)
             elif es == EpistemicStatus.ANOMALOUS:
                 anomalies.add(nid)
-            elif nt in {NodeType.PARADIGM, NodeType.PHENOMENON, NodeType.EVIDENCE, NodeType.CLAIM}:
+            elif nt in {
+                NodeType.PARADIGM,
+                NodeType.PHENOMENON,
+                NodeType.EVIDENCE,
+                NodeType.CLAIM,
+            }:
                 empirical.add(nid)
 
         return core_axioms, auxiliary, anomalies, empirical
@@ -197,15 +212,25 @@ def _extract_snapshot_components(
             node_id = str(nid)
             nt_str = str(data.get("node_type", data.get("type", ""))).lower()
             es_str = str(data.get("epistemic_status", "")).lower()
-            axiom_str = str(data.get("formalAxiom", data.get("formal_axiom", data.get("name", node_id))))
+            axiom_str = str(
+                data.get(
+                    "formalAxiom", data.get("formal_axiom", data.get("name", node_id))
+                )
+            )
 
             if "hard_core" in es_str or "axiom" in nt_str or "actual_model" in nt_str:
                 core_axioms[node_id] = axiom_str
-            elif "protective_belt" in es_str or "hypothesis" in nt_str or "auxiliary" in nt_str:
+            elif (
+                "protective_belt" in es_str
+                or "hypothesis" in nt_str
+                or "auxiliary" in nt_str
+            ):
                 auxiliary.add(node_id)
             elif "anomal" in es_str or "anomaly" in nt_str:
                 anomalies.add(node_id)
-            elif any(k in nt_str for k in ["paradigm", "phenomenon", "evidence", "claim"]):
+            elif any(
+                k in nt_str for k in ["paradigm", "phenomenon", "evidence", "claim"]
+            ):
                 empirical.add(node_id)
 
         return core_axioms, auxiliary, anomalies, empirical
@@ -338,7 +363,9 @@ def evaluate_diachronic_dynamics(
 
     for t in range(len(snapshots) - 1):
         _, aux_prev, anom_prev, emp_prev = _extract_snapshot_components(snapshots[t])
-        _, aux_curr, anom_curr, emp_curr = _extract_snapshot_components(snapshots[t + 1])
+        _, aux_curr, anom_curr, emp_curr = _extract_snapshot_components(
+            snapshots[t + 1]
+        )
 
         # New auxiliary nodes introduced in this step
         added_aux = aux_curr - aux_prev

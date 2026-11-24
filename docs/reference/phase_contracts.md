@@ -22,6 +22,20 @@ Standard input structure for pipeline execution.
       show_root_heading: false
       show_root_toc_entry: false
 
+### EpistemicCurationLedger
+
+Persistent Human-in-the-Loop (HITL) curation ledger for expert constraints and relation overrides.
+
+::: episteme_pipeline.contracts.phase_contracts.EpistemicCurationLedger
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+::: episteme_pipeline.contracts.phase_contracts.RelationOverride
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
 ## Phase 1: Data Foundation
 
 Handles document parsing and chunking operations.
@@ -139,6 +153,34 @@ Standardized views of phase outputs for downstream consumption.
 ### Phase 4 Artifacts
 
 ::: episteme_pipeline.artifacts.execution.Phase4ArtifactsView
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+### Epistemic Deficit & Refinement View
+
+::: episteme_pipeline.artifacts.execution.EpistemicDeficitArtifactsView
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+---
+
+## Closed-Loop Refinement Contracts
+
+Domain objects emitted by `TheoryNetDeficitDetector` and refinement handlers (`episteme_pipeline/contracts/domain.py`).
+
+::: episteme_pipeline.contracts.domain.EpistemicDeficitKind
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+::: episteme_pipeline.contracts.domain.EpistemicDeficit
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+::: episteme_pipeline.contracts.domain.RefinementDelta
     options:
       show_root_heading: false
       show_root_toc_entry: false

@@ -131,7 +131,14 @@ class ConfigAdapter:
                     raise InvalidConfigPatchError(
                         f"Unknown configuration path '{key_path}' (invalid segment '{part}')."
                     )
-                if part == "decision_engine" and target.get(part) is None or part == "phase_gates" and target.get(part) is None or part == "modal_resolver" and target.get(part) is None:
+                if (
+                    part == "decision_engine"
+                    and target.get(part) is None
+                    or part == "phase_gates"
+                    and target.get(part) is None
+                    or part == "modal_resolver"
+                    and target.get(part) is None
+                ):
                     target[part] = {}
                 target = target[part]
 

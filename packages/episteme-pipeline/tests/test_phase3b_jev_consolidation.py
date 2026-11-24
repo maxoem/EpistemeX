@@ -34,7 +34,11 @@ async def test_verify_borderline_pair_approved_when_singleton_identical():
     engine.register_choice_response(
         question_pattern="ontological relationship",
         selected_option="IDENTICAL_MERGE",
-        probabilities={"IDENTICAL_MERGE": 0.96, "HIERARCHICAL_SUBSUMPTION": 0.03, "DISTINCT_SEPARATE": 0.01},
+        probabilities={
+            "IDENTICAL_MERGE": 0.96,
+            "HIERARCHICAL_SUBSUMPTION": 0.03,
+            "DISTINCT_SEPARATE": 0.01,
+        },
         empirical_accuracy=0.94,
         prediction_set=["IDENTICAL_MERGE"],
     )
@@ -59,7 +63,9 @@ async def test_verify_borderline_pair_approved_when_singleton_identical():
     assert pred_set == ["IDENTICAL_MERGE"]
     assert emp_acc == 0.94
 
-    gating_events = [e for e in collector.events if isinstance(e, DecisionGatingTriggered)]
+    gating_events = [
+        e for e in collector.events if isinstance(e, DecisionGatingTriggered)
+    ]
     assert len(gating_events) == 1
     assert gating_events[0].gate_name == "borderline_merge_gate"
     assert gating_events[0].action_taken == "merge_approved"
@@ -72,7 +78,11 @@ async def test_verify_borderline_pair_aborts_hierarchical_subsumption():
     engine.register_choice_response(
         question_pattern="ontological relationship",
         selected_option="HIERARCHICAL_SUBSUMPTION",
-        probabilities={"IDENTICAL_MERGE": 0.10, "HIERARCHICAL_SUBSUMPTION": 0.85, "DISTINCT_SEPARATE": 0.05},
+        probabilities={
+            "IDENTICAL_MERGE": 0.10,
+            "HIERARCHICAL_SUBSUMPTION": 0.85,
+            "DISTINCT_SEPARATE": 0.05,
+        },
         empirical_accuracy=0.89,
         prediction_set=["HIERARCHICAL_SUBSUMPTION"],
     )
@@ -92,7 +102,9 @@ async def test_verify_borderline_pair_aborts_hierarchical_subsumption():
     )
 
     assert selected == "HIERARCHICAL_SUBSUMPTION"
-    gating_events = [e for e in collector.events if isinstance(e, DecisionGatingTriggered)]
+    gating_events = [
+        e for e in collector.events if isinstance(e, DecisionGatingTriggered)
+    ]
     assert len(gating_events) == 1
     assert gating_events[0].action_taken == "merge_aborted"
 
@@ -104,9 +116,16 @@ async def test_verify_borderline_pair_aborts_on_ambiguous_prediction_set():
     engine.register_choice_response(
         question_pattern="ontological relationship",
         selected_option="IDENTICAL_MERGE",
-        probabilities={"IDENTICAL_MERGE": 0.60, "HIERARCHICAL_SUBSUMPTION": 0.35, "DISTINCT_SEPARATE": 0.05},
+        probabilities={
+            "IDENTICAL_MERGE": 0.60,
+            "HIERARCHICAL_SUBSUMPTION": 0.35,
+            "DISTINCT_SEPARATE": 0.05,
+        },
         empirical_accuracy=0.70,
-        prediction_set=["IDENTICAL_MERGE", "HIERARCHICAL_SUBSUMPTION"],  # Ambiguous multi-label set
+        prediction_set=[
+            "IDENTICAL_MERGE",
+            "HIERARCHICAL_SUBSUMPTION",
+        ],  # Ambiguous multi-label set
     )
 
     emitter = SimpleEventEmitter()
@@ -126,7 +145,9 @@ async def test_verify_borderline_pair_aborts_on_ambiguous_prediction_set():
 
     assert len(pred_set) == 2
     # Because pred_set is not singleton and emp_acc (0.70) < threshold (0.80), merge is aborted
-    gating_events = [e for e in collector.events if isinstance(e, DecisionGatingTriggered)]
+    gating_events = [
+        e for e in collector.events if isinstance(e, DecisionGatingTriggered)
+    ]
     assert len(gating_events) == 1
     assert gating_events[0].action_taken == "merge_aborted"
 
@@ -141,9 +162,18 @@ async def test_elect_canonical_representative():
     )
 
     entities = [
-        L2Entity(id="e1", name="Kantian Imperative", label="Concept", source_chunk_ids=["c1"]),
-        L2Entity(id="e2", name="Categorical Imperative", label="Concept", source_chunk_ids=["c2"]),
-        L2Entity(id="e3", name="CI Principle", label="Concept", source_chunk_ids=["c3"]),
+        L2Entity(
+            id="e1", name="Kantian Imperative", label="Concept", source_chunk_ids=["c1"]
+        ),
+        L2Entity(
+            id="e2",
+            name="Categorical Imperative",
+            label="Concept",
+            source_chunk_ids=["c2"],
+        ),
+        L2Entity(
+            id="e3", name="CI Principle", label="Concept", source_chunk_ids=["c3"]
+        ),
     ]
 
     canonical = await elect_canonical_representative(entities, engine)
@@ -172,8 +202,18 @@ async def test_latent_consolidation_with_borderline_gating():
     ]
 
     graph_store = AsyncMock()
-    e1 = L2Entity(id="e1", name="Categorical Imperative", label="Concept", source_chunk_ids=["c1", "c2"])
-    e2 = L2Entity(id="e2", name="Kantian categorical imperative", label="Concept", source_chunk_ids=["c1"])
+    e1 = L2Entity(
+        id="e1",
+        name="Categorical Imperative",
+        label="Concept",
+        source_chunk_ids=["c1", "c2"],
+    )
+    e2 = L2Entity(
+        id="e2",
+        name="Kantian categorical imperative",
+        label="Concept",
+        source_chunk_ids=["c1"],
+    )
     graph_store.get_entities.return_value = [e1, e2]
 
     # Structural overlap
@@ -256,6 +296,7 @@ async def test_elect_canonical_representative_uses_prompt_bundle():
         L2Entity(id="e2", name="Eudaimonia", label="Concept", source_chunk_ids=["c2"]),
     ]
 
-    canonical = await elect_canonical_representative(entities, engine, prompt_bundle=custom_bundle)
+    canonical = await elect_canonical_representative(
+        entities, engine, prompt_bundle=custom_bundle
+    )
     assert canonical.name == "Eudaimonia"
-

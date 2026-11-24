@@ -40,7 +40,9 @@ def test_adaptive_routes_to_gds_when_available() -> None:
     gds_engine = Neo4jGDSAlgorithmsEngine(client=client)
     gds_engine.has_projection = MagicMock(return_value=True)  # type: ignore[assignment]
     gds_engine.page_rank = MagicMock(  # type: ignore[assignment]
-        return_value=CentralityResult(scores={"A": 1.0}, algorithm="pagerank", backend="neo4j_gds")
+        return_value=CentralityResult(
+            scores={"A": 1.0}, algorithm="pagerank", backend="neo4j_gds"
+        )
     )
 
     adaptive = AdaptiveAlgorithmsEngine(neo4j_engine=gds_engine, prefer_neo4j=True)

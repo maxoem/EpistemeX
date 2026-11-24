@@ -35,53 +35,57 @@ and [ADR 0002](../../adr/0002-tag-reranker-global-relation-extraction.md):
   hops of contextual neighborhood (adjacent chunk nodes and connected entities).
 - **Context Synthesis**: Merges and deduplicates envelopes for $e_A$ and $e_B$ into a compact textual representation.
 
-### 3. Cross-Encoder Precision Reranking
+### 3. Cross-Encoder / System 1 Precision Reranking & Pair Gating
 
-- **Joint-Attention Scoring**: Evaluates candidate pairs and their contextual envelopes through `RelationReranker`
-  (Cross-Encoder), allowing deep cross-referencing between concept contexts.
+- **System 1 Binary Pair Gating (`use_jev_pair_gating`)**: Optionally filters candidate pairs via calibrated Jev `Noul` gating (`pair_gating_threshold`, `pair_gating_audit_rate`) before retrieving heavy graph envelopes.
+- **Joint-Attention Scoring (`RelationReranker` Strategy)**: Evaluates candidate pairs and their contextual envelopes through `CrossEncoder` or `JevRelationReranker` (`use_jev_reranker`), allowing deep cross-referencing between concept contexts.
 - **Threshold Filtering**: Only candidate pairs scoring above `reranker_threshold` proceed to LLM decoding.
 
-### 4. LLM Relation Decoding
+### 4. LLM Relation Decoding & Within-Phase Checkpointing (`ADR-0016`)
 
 - **Constrained Classification**: Structured prediction (`astructured_predict`) against `GlobalRelationOutput`.
-- **Schema Validation**: Validates extracted predicates against `SchemaConfig.relation_types` (unknown relations are
-  dropped).
-- **Graph Commit**: Commits global triples with `scope="global"` and `source_chunk_id=None`.
+- **Schema & Confidence Validation**: Validates extracted predicates against `SchemaConfig.relation_types` and `global_relation_confidence_threshold`.
+- **Atomic Batch Checkpointing (`PhaseCheckpointStore`)**: Candidate pairs are filtered via `filter_unprocessed_items` (`:PhaseItem`) and committed atomically per batch via `commit_phase_batch`, enabling crash-safe mid-phase resumption.
 
 ## Workflow
 
 ```mermaid
 flowchart TD
-    A[Layer 2 Entities] --> B[DenseRetrievalGlobalRelationExtractor<br>MIPS Vector Similarity]
-    B --> C[Candidate Pairs above dense_similarity_threshold]
-    C --> D[Retrieve TAG Subgraph Envelopes<br>depth = subgraph_depth]
-    D --> E[RelationReranker<br>Cross-Encoder Joint Attention]
-    E --> F{Reranker Score >= reranker_threshold?}
-    F -->|Yes| G[LLM Structured Triple Decoding]
-    F -->|No| H[Discard Pair]
-    G --> I{Predicate in SchemaConfig?}
-    I -->|Yes| J[Graph Commit: Global Triple<br>scope='global']
-    I -->|No| H
+    A[Layer 2 Entities] --> B[DenseRetrievalGlobalRelationExtractor<br>MIPS Vector Similarity + Optional Jev Pair Gate]
+    B --> B2[Filter Unprocessed Pairs<br>PhaseCheckpointStore :PhaseItem]
+    B2 --> C[Retrieve TAG Subgraph Envelopes<br>depth = subgraph_depth]
+    C --> D[RelationReranker<br>Cross-Encoder / Jev Reranker]
+    D --> E{Reranker Score >= reranker_threshold?}
+    E -->|Yes| F[LLM Structured Triple Decoding]
+    E -->|No| H[Discard Pair]
+    F --> G{Predicate in SchemaConfig &<br>Confidence >= Threshold?}
+    G -->|Yes| J[Atomic Batch Commit<br>Global Triple + :PhaseItem Checkpoint]
+    G -->|No| H
 ```
 
 ## Implementation Details
 
 - [`pipeline_explanation.md`](pipeline_explanation.md) - Detailed implementation walkthrough
+- [Design Patterns, Clean Code & Architectural Standards](../../architecture/design_patterns_and_standards.md) - Unit-of-Work batch checkpointing and Calibrated Cascade standards
 
 ## Configuration
 
-Configuration is managed via `Phase3Config` in `pipeline/config.py`:
+Configuration is managed via `Phase3Config` in `episteme_pipeline/config.py`:
 
 | Parameter                              | Type                         | Default        | Description                                                                  |
 |:---------------------------------------|:-----------------------------|:---------------|:-----------------------------------------------------------------------------|
-| `batch_size`                           | `int`                        | `50`           | Number of candidate pairs processed per LLM batch.                           |
+| `batch_size`                           | `int`                        | `50`           | Number of candidate pairs processed per checkpointed batch.                  |
 | `dense_similarity_threshold`           | `float`                      | `0.5`          | Minimum cosine similarity between entity embeddings to form candidate pairs. |
-| `reranker_threshold`                   | `float`                      | `0.6`          | Minimum Cross-Encoder score required to pass candidates to LLM decoding.     |
+| `reranker_threshold`                   | `float`                      | `0.6`          | Minimum reranker score required to pass candidates to LLM decoding.          |
 | `global_relation_confidence_threshold` | `float`                      | `0.7`          | Minimum confidence score required for committed global relations.            |
 | `max_candidates_per_entity_pair`       | `int`                        | `200`          | Maximum candidate partners permitted per entity hub.                         |
 | `subgraph_depth`                       | `int`                        | `2`            | Hops of TAG neighborhood context retrieved per entity envelope.              |
 | `global_relation_decoding_strategy`    | `StructuredDecodingStrategy` | `NL_TO_FORMAT` | Structured decoding strategy.                                                |
 | `trace_dense_retrieval`                | `bool`                       | `True`         | Whether to emit telemetry events for candidate generation and reranking.     |
+| `use_jev_reranker`                     | `bool`                       | `False`        | Whether to use calibrated Jev System 1 reranking instead of Cross-Encoder.   |
+| `use_jev_pair_gating`                  | `bool`                       | `False`        | Whether to pre-filter candidate pairs with Jev binary `Noul` gating.         |
+| `pair_gating_threshold`                | `float`                      | `0.75`         | Empirical accuracy threshold for Jev pair gating.                            |
+| `pair_gating_audit_rate`               | `float`                      | `0.02`         | Stochastic audit rate for false-negative pair gating evaluation.             |
 
 ## Phase Contract
 
@@ -106,6 +110,5 @@ Configuration is managed via `Phase3Config` in `pipeline/config.py`:
 ## Related
 
 - **Theory**: [Epistemic Grounding & Dense Alignment](../../concepts/dense_alignment.md)
--
-**ADR**: [ADR 0002: TAG Reranker Global Relation Extraction](../../adr/0002-tag-reranker-global-relation-extraction.md)
+- **ADRs**: [ADR 0002: TAG Reranker Global Relation Extraction](../../adr/0002-tag-reranker-global-relation-extraction.md) | [ADR 0016: Phase 3 Within-Phase Checkpointing](../../adr/0016-phase-3-within-phase-checkpointing-and-atomicity.md)
 - **Next Phase**: [Phase 3b: Latent Graph Consolidation](../3b_consolidation/)

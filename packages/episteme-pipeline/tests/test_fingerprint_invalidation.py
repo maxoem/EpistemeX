@@ -8,14 +8,16 @@ from episteme_pipeline.artifacts.execution import (
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.fingerprints import fingerprint_existing_sources
 from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 
 
-class StubPhase:
-    def __init__(self, name: str, fingerprint: str):
+class StubPhase(PhaseRunner[object]):
+    def __init__(self, name: str, fingerprint: str, phase_key: str | None = None):
         self.name = name
         self.fingerprint = fingerprint
+        self.phase_key = phase_key or name.lower().split(":")[0].replace(" ", "")
 
     async def run(self, input, context: ArtifactExecutionContext):
         return ArtifactCollection([])
@@ -47,7 +49,7 @@ async def test_choose_reuse_source_detects_phase_config_change(
         run_id="run-old",
         status=RunStatus.COMPLETED,
         input_fingerprint="same-input",
-        phase_config_fingerprints={"phase_1": "same", "phase_2": "old"},
+        phase_config_fingerprints={"phase1": "same", "phase2": "old"},
         input_fingerprint_inputs={
             "source_paths": [str(source)],
             "metadata": {},
@@ -66,8 +68,8 @@ async def test_choose_reuse_source_detects_phase_config_change(
             ),
         ],
     )
-    pipeline._manifest_store.write_manifest(prior)
-    pipeline._build_manifest = lambda *, run_id, pipeline_input: RunManifest(
+    pipeline.manifest_store.write_manifest(prior)
+    pipeline.engine.build_manifest = lambda *, run_id, pipeline_input: RunManifest(
         run_id=run_id,
         status=RunStatus.RUNNING,
         input_fingerprint="same-input",
@@ -76,12 +78,15 @@ async def test_choose_reuse_source_detects_phase_config_change(
             "metadata": {},
             "source_fingerprint": fingerprint_existing_sources([str(source)]),
         },
-        phase_config_fingerprints={"phase_1": "same", "phase_2": "new"},
+        phase_config_fingerprints={"phase1": "same", "phase2": "new"},
     )
-    pipeline._phase_config_fingerprints = lambda: {1: "same", 2: "new"}
+    pipeline.engine.phase_config_fingerprints = lambda: {
+        "phase1": "same",
+        "phase2": "new",
+    }
 
-    decision = await pipeline._choose_reuse_source(
-        pipeline._build_manifest(
+    decision = await pipeline.engine.choose_reuse_source(
+        pipeline.engine.build_manifest(
             run_id="run-new", pipeline_input=PipelineInput(source_paths=[str(source)])
         )
     )
@@ -111,7 +116,7 @@ async def test_choose_reuse_source_detects_source_change(tmp_path: Path, graph_s
         run_id="run-old",
         status=RunStatus.COMPLETED,
         input_fingerprint="old-input",
-        phase_config_fingerprints={"phase_1": "same"},
+        phase_config_fingerprints={"phase1": "same"},
         input_fingerprint_inputs={
             "source_paths": [str(source)],
             "metadata": {},
@@ -125,8 +130,8 @@ async def test_choose_reuse_source_detects_source_change(tmp_path: Path, graph_s
             )
         ],
     )
-    pipeline._manifest_store.write_manifest(prior)
-    pipeline._build_manifest = lambda *, run_id, pipeline_input: RunManifest(
+    pipeline.manifest_store.write_manifest(prior)
+    pipeline.engine.build_manifest = lambda *, run_id, pipeline_input: RunManifest(
         run_id=run_id,
         status=RunStatus.RUNNING,
         input_fingerprint="new-input",
@@ -135,11 +140,11 @@ async def test_choose_reuse_source_detects_source_change(tmp_path: Path, graph_s
             "metadata": {},
             "source_fingerprint": fingerprint_existing_sources([str(source)]),
         },
-        phase_config_fingerprints={"phase_1": "same"},
+        phase_config_fingerprints={"phase1": "same"},
     )
 
-    decision = await pipeline._choose_reuse_source(
-        pipeline._build_manifest(
+    decision = await pipeline.engine.choose_reuse_source(
+        pipeline.engine.build_manifest(
             run_id="run-new", pipeline_input=PipelineInput(source_paths=[str(source)])
         )
     )

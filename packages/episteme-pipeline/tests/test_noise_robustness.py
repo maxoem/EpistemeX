@@ -22,7 +22,9 @@ class TestNoisePerturbations:
 
     def test_apply_typo_noise(self):
         """Verify adversarial character mutations."""
-        text = "Epistemic theories require rigorous formal proof and empirical validation."
+        text = (
+            "Epistemic theories require rigorous formal proof and empirical validation."
+        )
         noisy = apply_typo_noise(text, typo_rate=1.0, seed=42)
         assert noisy != text
         # Word count should remain identical
@@ -48,7 +50,7 @@ class TestNoisePerturbations:
         """Verify edge dropout on NetworkX DiGraphs."""
         g = nx.DiGraph()
         for i in range(10):
-            g.add_edge(f"n{i}", f"n{i+1}", label="RELATES_TO")
+            g.add_edge(f"n{i}", f"n{i + 1}", label="RELATES_TO")
         assert g.number_of_edges() == 10
 
         perturbed = apply_graph_perturbation(g, drop_rate=0.30, seed=42)
@@ -77,15 +79,43 @@ class TestNoiseRobustnessStrategy:
     async def test_evaluate_noise_robustness(self):
         """Verify evaluation of clean vs perturbed predictions."""
         gold_triples = [
-            L2Triple(subject_id="e1", predicate="causes", object_id="e2", confidence=1.0, scope="local"),
-            L2Triple(subject_id="e2", predicate="inhibits", object_id="e3", confidence=1.0, scope="local"),
-            L2Triple(subject_id="e3", predicate="activates", object_id="e4", confidence=1.0, scope="local"),
-            L2Triple(subject_id="e4", predicate="binds", object_id="e5", confidence=1.0, scope="local"),
+            L2Triple(
+                subject_id="e1",
+                predicate="causes",
+                object_id="e2",
+                confidence=1.0,
+                scope="local",
+            ),
+            L2Triple(
+                subject_id="e2",
+                predicate="inhibits",
+                object_id="e3",
+                confidence=1.0,
+                scope="local",
+            ),
+            L2Triple(
+                subject_id="e3",
+                predicate="activates",
+                object_id="e4",
+                confidence=1.0,
+                scope="local",
+            ),
+            L2Triple(
+                subject_id="e4",
+                predicate="binds",
+                object_id="e5",
+                confidence=1.0,
+                scope="local",
+            ),
         ]
         pred_triples = list(gold_triples)
 
-        strategy = NoiseRobustnessStrategy(drop_rate=0.5, seed=42, max_rdf_threshold=0.6)
-        results = await strategy.evaluate(pred_triples, gold_triples, run_id="stress_run")
+        strategy = NoiseRobustnessStrategy(
+            drop_rate=0.5, seed=42, max_rdf_threshold=0.6
+        )
+        results = await strategy.evaluate(
+            pred_triples, gold_triples, run_id="stress_run"
+        )
 
         assert len(results) == 1
         res = results[0]

@@ -17,20 +17,6 @@ from episteme_pipeline.events.models import (
 
 logger = logging.getLogger(__name__)
 
-import unicodedata
-
-
-def _normalize_string(text: str) -> str:
-    """Normalize typography, dashes, and whitespace for robust matching."""
-    # Handle Unicode NFKC (Normalizes ligatures, full-width chars, etc.)
-    text = unicodedata.normalize("NFKC", text)
-    text = text.replace("„", '"').replace("“", '"').replace("”", '"').replace("«", '"').replace("»", '"')
-    text = text.replace("–", "-").replace("—", "-")
-    text = text.replace("…", "...")
-    # Condense whitespace
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip()
-
 
 class MentionContextInjector(Protocol):
     def inject(
@@ -69,7 +55,9 @@ class DefaultMentionContextInjector(MentionContextInjector):
             max_chars = kwargs["max_length"]
 
         emitter = get_event_emitter()
-        emitter.emit(EnvelopeInjectionAttempted(mention_name=mention_name, chunk_id=chunk_id))
+        emitter.emit(
+            EnvelopeInjectionAttempted(mention_name=mention_name, chunk_id=chunk_id)
+        )
 
         search_str = mention_quote or mention_name
         start_idx = chunk_text.find(search_str) if search_str else -1
@@ -78,9 +66,9 @@ class DefaultMentionContextInjector(MentionContextInjector):
         if start_idx == -1 and search_str:
             pattern = re.escape(search_str)
             pattern = re.sub(r'\\?["„“”«»]', r'["„“”«»]', pattern)
-            pattern = re.sub(r'\\?[-–—]', r'[-–—]', pattern)
-            pattern = re.sub(r'\\\s+', r'\\s+', pattern)
-            pattern = re.sub(r'\\?\.\.\.|\\?…', r'(?:\\.\\.\\.|…)', pattern)
+            pattern = re.sub(r"\\?[-–—]", r"[-–—]", pattern)
+            pattern = re.sub(r"\\\s+", r"\\s+", pattern)
+            pattern = re.sub(r"\\?\.\.\.|\\?…", r"(?:\\.\\.\\.|…)", pattern)
             match = re.search(pattern, chunk_text)
             if match:
                 start_idx = match.start()
@@ -93,9 +81,9 @@ class DefaultMentionContextInjector(MentionContextInjector):
             if start_idx == -1:
                 pattern = re.escape(search_str)
                 pattern = re.sub(r'\\?["„“”«»]', r'["„“”«»]', pattern)
-                pattern = re.sub(r'\\?[-–—]', r'[-–—]', pattern)
-                pattern = re.sub(r'\\\s+', r'\\s+', pattern)
-                pattern = re.sub(r'\\?\.\.\.|\\?…', r'(?:\\.\\.\\.|…)', pattern)
+                pattern = re.sub(r"\\?[-–—]", r"[-–—]", pattern)
+                pattern = re.sub(r"\\\s+", r"\\s+", pattern)
+                pattern = re.sub(r"\\?\.\.\.|\\?…", r"(?:\\.\\.\\.|…)", pattern)
                 match = re.search(pattern, chunk_text)
                 if match:
                     start_idx = match.start()
@@ -106,12 +94,14 @@ class DefaultMentionContextInjector(MentionContextInjector):
                 f"Envelope injection failed for {mention_name} "
                 f"(quote: {mention_quote[:30] if mention_quote else ''}...) in chunk {chunk_id}"
             )
-            emitter.emit(EnvelopeInjectionFailed(
-                mention_name=mention_name,
-                mention_quote=mention_quote or "",
-                chunk_id=chunk_id,
-                reason="Quote and name both failed to match chunk text."
-            ))
+            emitter.emit(
+                EnvelopeInjectionFailed(
+                    mention_name=mention_name,
+                    mention_quote=mention_quote or "",
+                    chunk_id=chunk_id,
+                    reason="Quote and name both failed to match chunk text.",
+                )
+            )
             return None
 
         end_idx = start_idx + len(search_str)

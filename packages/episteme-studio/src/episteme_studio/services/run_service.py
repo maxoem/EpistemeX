@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC
-from typing import TYPE_CHECKING
+import logging
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from episteme_studio.adapters.artifact_reader import ArtifactReader, ArtifactStoreError
 from episteme_studio.api.errors import StudioProblemException
@@ -18,6 +19,8 @@ from episteme_studio.runtime.registry import RunRegistry
 
 if TYPE_CHECKING:
     from episteme_studio.settings import StudioSettings
+
+logger = logging.getLogger(__name__)
 
 
 class RunService:
@@ -113,7 +116,7 @@ class RunService:
                 and not handle.process.is_alive()
             ):
                 handle.status = RunStatus.FAILED
-                handle.completed_at = datetime.now(timezone.utc)
+                handle.completed_at = datetime.now(UTC)
             summary = handle.to_summary()
             disk_map[handle.run_id] = summary
 
@@ -159,7 +162,7 @@ class RunService:
                     dp = disk_phases_by_ord.get(p.phase_ordinal)
                     if dp and dp.status in (RunStatus.COMPLETED, RunStatus.FAILED):
                         detail.phase_records[i] = dp
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         return detail
@@ -321,7 +324,7 @@ class RunService:
         try:
             pid_str = pid_file.read_text(encoding="utf-8").strip()
             pid = int(pid_str)
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             pid_file.unlink(missing_ok=True)
             return
 
@@ -384,7 +387,7 @@ class RunService:
         disk_summary = None
         try:
             disk_summary = self.reader.abort_run(run_id)
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             disk_summary = None
 
         # 4. If neither memory nor disk had this run, raise 404
@@ -487,7 +490,9 @@ class RunService:
 
         has_pk = bool(active_pk.strip())
         has_sk = bool(active_sk.strip())
-        trace_hex = hashlib.md5(run_id.encode("utf-8")).hexdigest() if run_id else ""
+        trace_hex = (
+            hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:32] if run_id else ""
+        )
 
         if not (has_pk and has_sk):
             return {
@@ -506,7 +511,8 @@ class RunService:
             client = Langfuse(
                 public_key=active_pk, secret_key=active_sk, host=active_host
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
+            logger.warning("Failed to initialize Langfuse client: %s", exc)
             return {
                 "configured": True,
                 "connected": False,
@@ -514,7 +520,7 @@ class RunService:
                 "trace_id": trace_hex,
                 "count": 0,
                 "observations": [],
-                "message": f"Failed to initialize Langfuse client: {exc}",
+                "message": "Failed to initialize Langfuse client. Check server logs and Langfuse configuration.",
             }
 
         candidate_ids = [run_id]
@@ -537,13 +543,14 @@ class RunService:
                 )
                 if res_session and res_session.data:
                     raw_records.extend(res_session.data)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
-        # 2. Query by trace_id (md5 hashes and raw candidate IDs)
+        # 2. Query by trace_id (sha256 trace hashes and raw candidate IDs)
         if not raw_records:
             trace_candidates = [
-                hashlib.md5(cid.encode("utf-8")).hexdigest() for cid in candidate_ids
+                hashlib.sha256(cid.encode("utf-8")).hexdigest()[:32]
+                for cid in candidate_ids
             ] + candidate_ids
             for tid in trace_candidates:
                 if raw_records:
@@ -556,7 +563,7 @@ class RunService:
                     )
                     if res_trace and res_trace.data:
                         raw_records.extend(res_trace.data)
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 baseline
                     pass
 
         seen = set()
@@ -582,7 +589,7 @@ class RunService:
             if lat is None and start_t and end_t:
                 try:
                     lat = (end_t - start_t).total_seconds()
-                except Exception:
+                except Exception:  # noqa: BLE001 baseline
                     lat = 0.0
 
             level_val = d.get("level")

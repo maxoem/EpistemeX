@@ -131,7 +131,7 @@ def fingerprint_method(method_obj: Any) -> str | None:
                     {"class": method_obj.__class__.__name__, "fingerprint": value}
                 )
         except Exception as ex:
-            logger.exception(ex)
+            logger.exception(ex)  # noqa: TRY401 baseline
 
     fingerprint_data: dict[str, Any] = {"class": method_obj.__class__.__name__}
     model_name = getattr(method_obj, "model_name", None)
@@ -170,6 +170,10 @@ def fingerprint_method(method_obj: Any) -> str | None:
     n = getattr(method_obj, "n", None)
     if n is not None and _is_fully_serializable(n):
         fingerprint_data["n"] = n
+
+    seed = getattr(method_obj, "seed", None)
+    if seed is not None and _is_fully_serializable(seed):
+        fingerprint_data["seed"] = seed
 
     # Embedding-specific parameters
     dimensions = getattr(method_obj, "dimensions", None)
@@ -240,11 +244,128 @@ def fingerprint_structural_anchor(anchor: Any | None) -> str | None:
     if anchor is None:
         return None
 
-    dumped = (
-        anchor.model_dump(mode="json")
-        if hasattr(anchor, "model_dump")
-        else getattr(anchor, "__dict__", str(anchor))
-    )
+    from pydantic import BaseModel
+
+    if isinstance(anchor, BaseModel):
+        dumped = anchor.model_dump(mode="json")
+    else:
+        dumped = str(anchor)
     return stable_fingerprint(dumped)
 
 
+def compute_document_fingerprints(source_paths: list[str]) -> dict[str, str]:
+    """
+    Compute individual deterministic SHA-256 content fingerprints per document.
+
+    Parameters
+    ----------
+    source_paths : list[str]
+        File paths to the source documents.
+
+    Returns
+    -------
+    dict[str, str]
+        Mapping from document identifiers and source paths to their
+        hexadecimal SHA-256 content hashes.
+    """
+    from episteme_pipeline.phases.phase1_foundation.provenance import (
+        canonical_source,
+        doc_id,
+    )
+
+    fps: dict[str, str] = {}
+    for source_path in sorted(source_paths):
+        path = Path(source_path)
+        if path.exists():
+            try:
+                content_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+            except (OSError, PermissionError):
+                content_hash = ""
+        else:
+            content_hash = "missing"
+        d_id = doc_id(path)
+        fps[d_id] = content_hash
+        canon = canonical_source(path)
+        fps[canon] = content_hash
+        fps[str(source_path)] = content_hash
+    return fps
+
+
+def fingerprint_curation_ledger(ledger: Any | None) -> str | None:
+    """
+    Compute a deterministic SHA-256 fingerprint for an EpistemicCurationLedger.
+
+    Parameters
+    ----------
+    ledger : EpistemicCurationLedger | None
+        Target curation ledger instance to hash.
+
+    Returns
+    -------
+    str | None
+        Deterministic hexadecimal SHA-256 fingerprint string, or None if ledger is None.
+    """
+    if ledger is None:
+        return None
+
+    from pydantic import BaseModel
+
+    if isinstance(ledger, BaseModel):
+        dumped = ledger.model_dump(mode="json")
+        if isinstance(dumped, dict):
+            for pair_key in ("must_link_entities", "cannot_link_entities"):
+                raw_pairs = dumped.get(pair_key)
+                if isinstance(raw_pairs, list):
+                    dumped[pair_key] = sorted(
+                        sorted(str(item) for item in pair)
+                        if isinstance(pair, (list, tuple))
+                        else [str(pair)]
+                        for pair in raw_pairs
+                    )
+    else:
+        dumped = str(ledger)
+    return stable_fingerprint(dumped)
+
+
+def is_phase_unchanged(
+    manifest: Any,
+    prior_manifest: Any,
+    phase_key: str,
+    phase_name: str,
+) -> bool:
+    """
+    Check if a phase's configuration and method fingerprints are identical to prior run.
+
+    Parameters
+    ----------
+    manifest : RunManifest
+        Current run manifest containing phase config and method fingerprints.
+    prior_manifest : RunManifest
+        Prior run manifest to compare against.
+    phase_key : str
+        Unique phase machine key (e.g. 'phase1', 'phase4').
+    phase_name : str
+        Canonical phase name (e.g. 'Phase 1: Data Foundation').
+
+    Returns
+    -------
+    bool
+        True if the phase's config and all associated method fingerprints are unchanged.
+    """
+    if manifest.phase_config_fingerprints.get(
+        phase_key
+    ) != prior_manifest.phase_config_fingerprints.get(phase_key):
+        return False
+    for k, v in manifest.method_fingerprints.items():
+        if (
+            (k.startswith(f"{phase_name}.") or k.startswith(f"{phase_key}."))  # noqa: PIE810 baseline
+            and prior_manifest.method_fingerprints.get(k) != v
+        ):
+            return False
+    for k, v in prior_manifest.method_fingerprints.items():
+        if (
+            (k.startswith(f"{phase_name}.") or k.startswith(f"{phase_key}."))  # noqa: PIE810 baseline
+            and manifest.method_fingerprints.get(k) != v
+        ):
+            return False
+    return True

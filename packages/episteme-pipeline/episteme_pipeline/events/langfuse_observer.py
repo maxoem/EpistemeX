@@ -21,6 +21,7 @@ from .models import (
     EntityLinkingCandidatesRetrieved,
     EntityLinkingReranked,
     EntityMaturationSynthesized,
+    EpistemicDeficitDetected,
     EvaluationCompleted,
     EvaluationScoreLogged,
     FusionDecisionMade,
@@ -28,8 +29,15 @@ from .models import (
     LLMGenerationCompleted,
     LLMRelationDecoded,
     PhaseCompleted,
+    PhaseFailed,
+    PhaseReused,
     PipelineEvent,
+    RefinementCycleCompleted,
+    RefinementCycleStarted,
     RerankerScoreAssigned,
+    RunCompleted,
+    RunFailed,
+    RunStarted,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,13 +90,33 @@ class LangfuseObserver(EventObserver):
             The event to convert to a Langfuse observation.
         """
         try:
-            trace_id, _parent_observation_id, trace_context_arg = self._resolve_trace_context(event)
+            trace_id, _parent_observation_id, trace_context_arg = (
+                self._resolve_trace_context(event)
+            )
 
-            if isinstance(event, (ComponentStarted, ComponentCompleted, PhaseCompleted)):
+            if isinstance(
+                event,
+                (
+                    ComponentStarted,
+                    ComponentCompleted,
+                    PhaseCompleted,
+                    PhaseReused,
+                    PhaseFailed,
+                    RunStarted,
+                    RunCompleted,
+                    RunFailed,
+                    RefinementCycleStarted,
+                    RefinementCycleCompleted,
+                ),
+            ):
                 self._handle_lifecycle_event(event, trace_context_arg)
-            elif isinstance(event, (LLMGenerationCompleted, EmbeddingGenerationCompleted)):
+            elif isinstance(
+                event, (LLMGenerationCompleted, EmbeddingGenerationCompleted)
+            ):
                 self._handle_generation_event(event, trace_context_arg)
-            elif isinstance(event, (DecisionEvaluationCompleted, DecisionGatingTriggered)):
+            elif isinstance(
+                event, (DecisionEvaluationCompleted, DecisionGatingTriggered)
+            ):
                 self._handle_decision_event(event, trace_context_arg)
             elif isinstance(event, (EvaluationCompleted, EvaluationScoreLogged)):
                 self._handle_evaluation_event(event, trace_id, trace_context_arg)
@@ -99,6 +127,7 @@ class LangfuseObserver(EventObserver):
                 self._handle_domain_event(event, trace_context_arg)
         except Exception as e:
             logger.warning(f"Failed to log event to Langfuse: {e}")
+            raise
 
     def _resolve_trace_context(
         self, event: PipelineEvent
@@ -124,7 +153,8 @@ class LangfuseObserver(EventObserver):
 
         if not trace_id and event.run_id:
             import hashlib
-            trace_id = hashlib.md5(event.run_id.encode("utf-8")).hexdigest()
+
+            trace_id = hashlib.sha256(event.run_id.encode("utf-8")).hexdigest()[:32]
 
         trace_context: dict[str, str] = {}
         if trace_id:
@@ -132,11 +162,26 @@ class LangfuseObserver(EventObserver):
         if parent_observation_id:
             trace_context["parent_span_id"] = parent_observation_id
 
-        return trace_id, parent_observation_id, (trace_context if trace_context else None)
+        return (
+            trace_id,
+            parent_observation_id,
+            (trace_context if trace_context else None),
+        )
 
     def _handle_lifecycle_event(
         self,
-        event: ComponentStarted | ComponentCompleted | PhaseCompleted,
+        event: (
+            ComponentStarted
+            | ComponentCompleted
+            | PhaseCompleted
+            | PhaseReused
+            | PhaseFailed
+            | RunStarted
+            | RunCompleted
+            | RunFailed
+            | RefinementCycleStarted
+            | RefinementCycleCompleted
+        ),
         trace_context: dict[str, str] | None,
     ) -> None:
         """Handle component and phase lifecycle events."""
@@ -145,7 +190,9 @@ class LangfuseObserver(EventObserver):
                 as_type="span",
                 name=f"component.{event.component_name}",
                 trace_context=trace_context,
-                input={"description": event.input_description} if event.input_description else None,
+                input={"description": event.input_description}
+                if event.input_description
+                else None,
             )
             self.active_spans[event.component_name] = observation
 
@@ -153,12 +200,17 @@ class LangfuseObserver(EventObserver):
             span_key = event.component_name
             if span_key in self.active_spans:
                 observation = self.active_spans.pop(span_key)
+                output_payload: dict[str, Any] = {
+                    "duration_seconds": event.duration_seconds,
+                    "success": event.success,
+                    "description": event.output_description,
+                }
+                if event.error_message:
+                    output_payload["error"] = event.error_message
                 observation.update(
-                    output={
-                        "duration_seconds": event.duration_seconds,
-                        "success": event.success,
-                        "description": event.output_description,
-                    }
+                    level="ERROR" if not event.success else "DEFAULT",
+                    status_message=event.error_message if not event.success else None,
+                    output=output_payload,
                 )
                 observation.end()
 
@@ -173,6 +225,106 @@ class LangfuseObserver(EventObserver):
                     "success": event.success,
                     "error": event.error_message,
                 },
+                level="ERROR" if not event.success else "DEFAULT",
+                status_message=event.error_message if not event.success else None,
+            )
+            observation.end()
+
+        elif isinstance(event, PhaseReused):
+            observation = self.client.start_observation(
+                as_type="span",
+                name=f"phase.{event.phase_name}.reused",
+                trace_context=trace_context,
+                input={"source_run_id": event.source_run_id, "reused": True},
+                output={"artifact_count": event.artifact_count, "reused": True},
+            )
+            observation.end()
+
+        elif isinstance(event, PhaseFailed):
+            observation = self.client.start_observation(
+                as_type="span",
+                name=f"phase.{event.phase_name}.failed",
+                trace_context=trace_context,
+                input={"error_type": event.error_type},
+                output={
+                    "error": event.error_message,
+                    "duration_seconds": event.duration_seconds,
+                },
+                level="ERROR",
+                status_message=event.error_message,
+            )
+            observation.end()
+
+        elif isinstance(event, RunStarted):
+            observation = self.client.start_observation(
+                as_type="span",
+                name="run.started",
+                trace_context=trace_context,
+                input={
+                    "parent_run_id": event.parent_run_id,
+                    "reused_phase_ordinals": event.reused_phase_ordinals,
+                    "invalidated_phase_ordinals": event.invalidated_phase_ordinals,
+                    "invalidation_reason": event.invalidation_reason,
+                },
+            )
+            observation.end()
+
+        elif isinstance(event, RunCompleted):
+            observation = self.client.start_observation(
+                as_type="span",
+                name="run.completed",
+                trace_context=trace_context,
+                output={
+                    "duration_seconds": event.duration_seconds,
+                    "total_artifacts": event.total_artifacts,
+                },
+            )
+            observation.end()
+
+        elif isinstance(event, RunFailed):
+            observation = self.client.start_observation(
+                as_type="span",
+                name="run.failed",
+                trace_context=trace_context,
+                input={"error_type": event.error_type},
+                output={
+                    "error": event.error_message,
+                    "duration_seconds": event.duration_seconds,
+                },
+                level="ERROR",
+                status_message=event.error_message,
+            )
+            observation.end()
+
+        elif isinstance(event, RefinementCycleStarted):
+            observation = self.client.start_observation(
+                as_type="span",
+                name="refinement.cycle.started",
+                trace_context=trace_context,
+                input={
+                    "refinement_pass": event.refinement_pass,
+                    "deficit_count": event.deficit_count,
+                    "deficit_ids": event.deficit_ids,
+                    "target_chunk_ids": event.target_chunk_ids,
+                    "target_entity_ids": event.target_entity_ids,
+                },
+            )
+            observation.end()
+
+        elif isinstance(event, RefinementCycleCompleted):
+            observation = self.client.start_observation(
+                as_type="span",
+                name="refinement.cycle.completed",
+                trace_context=trace_context,
+                input={"refinement_pass": event.refinement_pass},
+                output={
+                    "resolved_deficit_count": event.resolved_deficit_count,
+                    "remaining_deficit_count": event.remaining_deficit_count,
+                    "resolved_deficit_ids": event.resolved_deficit_ids,
+                    "delta_artifact_count": event.delta_artifact_count,
+                    "duration_seconds": event.duration_seconds,
+                    "converged": event.converged,
+                },
             )
             observation.end()
 
@@ -183,7 +335,9 @@ class LangfuseObserver(EventObserver):
     ) -> None:
         """Handle LLM and embedding generation events."""
         if isinstance(event, LLMGenerationCompleted):
-            total_tokens = event.total_tokens or (event.prompt_tokens + event.completion_tokens)
+            total_tokens = event.total_tokens or (
+                event.prompt_tokens + event.completion_tokens
+            )
             observation = self.client.start_observation(
                 as_type="generation",
                 name=f"llm.{event.operation}",
@@ -191,7 +345,9 @@ class LangfuseObserver(EventObserver):
                 model=event.model_name,
                 model_parameters=event.model_parameters or {},
                 input=event.prompt,
-                output=event.output_json if event.output_json is not None else event.output_text,
+                output=event.output_json
+                if event.output_json is not None
+                else event.output_text,
                 usage_details={
                     "input": event.prompt_tokens,
                     "output": event.completion_tokens,
@@ -251,9 +407,8 @@ class LangfuseObserver(EventObserver):
         """
         if isinstance(event, DecisionEvaluationCompleted):
             is_active_learning = (
-                (event.prediction_set is not None and len(event.prediction_set) > 1)
-                or (0.40 <= event.class_probability <= 0.60)
-            )
+                event.prediction_set is not None and len(event.prediction_set) > 1
+            ) or (0.40 <= event.class_probability <= 0.60)
 
             observation = self.client.start_observation(
                 as_type="generation",
@@ -291,7 +446,6 @@ class LangfuseObserver(EventObserver):
                 ),
             )
             observation.end()
-
 
         elif isinstance(event, DecisionGatingTriggered):
             observation = self.client.start_observation(
@@ -435,7 +589,10 @@ class LangfuseObserver(EventObserver):
                 as_type="span",
                 name="phase2.linking.candidates",
                 trace_context=trace_context,
-                input={"mention_id": event.mention_id, "mention_name": event.mention_name},
+                input={
+                    "mention_id": event.mention_id,
+                    "mention_name": event.mention_name,
+                },
                 output={
                     "candidate_count": event.candidate_count,
                     "candidates": event.candidates[:10],
@@ -494,6 +651,35 @@ class LangfuseObserver(EventObserver):
                 },
             )
             observation.end()
+
+        elif isinstance(event, EpistemicDeficitDetected):
+            observation = self.client.start_observation(
+                as_type="span",
+                name="refinement.deficit.detected",
+                trace_context=trace_context,
+                input=_drop_none(
+                    {
+                        "deficit_id": event.deficit_id,
+                        "deficit_kind": event.deficit_kind,
+                        "theory_id": event.theory_id,
+                        "refinement_pass": event.refinement_pass,
+                    }
+                ),
+                output={
+                    "severity": event.severity,
+                    "target_chunk_ids": event.target_chunk_ids,
+                    "target_entity_ids": event.target_entity_ids,
+                    "target_atom_ids": event.target_atom_ids,
+                    "target_relation_ids": event.target_relation_ids,
+                    "rationale": event.rationale,
+                },
+            )
+            observation.end()
+
+    def flush(self) -> None:
+        """Flush pending spans and observations to Langfuse backend."""
+        if hasattr(self.client, "flush") and callable(self.client.flush):
+            self.client.flush()
 
 
 def _drop_none(payload: dict[str, object | None]) -> dict[str, object]:

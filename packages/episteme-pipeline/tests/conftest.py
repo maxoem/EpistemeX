@@ -5,6 +5,7 @@ Shared test fixtures and in-memory graph store for pipeline unit tests.
 from __future__ import annotations
 
 import os
+from typing import Any
 
 # Ensure Hugging Face, Transformers, and Tiktoken operate in offline mode during unit tests
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -22,8 +23,15 @@ from episteme_pipeline.contracts.phase_contracts import (
     SearchResult,
     SubGraph,
 )
+from episteme_pipeline.graph.theory_graph_mapper import (
+    theory_relation_to_graph_properties,
+)
 from episteme_pipeline.protocols.graph_store import ProcessingGraph
-from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
+from episteme_pipeline.schema.default_schema import (
+    DEFAULT_SCHEMA,
+    SchemaConfig,
+    StructuralRelationType,
+)
 
 # ---------------------------------------------------------------------------
 # In-memory GraphStore (no Neo4j required)
@@ -41,6 +49,7 @@ class InMemoryGraphStore(ProcessingGraph):
         self._relations: list[tuple[str, str, str, dict]] = []
         self._processed: dict[str, set[str]] = {}  # chunk_id -> set of phase tags
         self._processed_items: dict[str, dict[str, PhaseItemRecord]] = {}
+        self._chunk_snapshots: dict[tuple[str, str], dict[str, Any]] = {}
 
     async def get_chunks(self, filters=None, limit=None) -> list[L1Chunk]:
         chunks = list(self._chunks.values())
@@ -57,7 +66,9 @@ class InMemoryGraphStore(ProcessingGraph):
     async def get_neighborhood(self, node_id: str, depth: int = 1) -> SubGraph:
         return SubGraph(center_id=node_id, nodes=[], triples=[], depth=depth)
 
-    async def vector_search(self, embedding, top_k, node_label=None, run_id=None) -> list[SearchResult]:
+    async def vector_search(
+        self, embedding, top_k, node_label=None, run_id=None
+    ) -> list[SearchResult]:
         return []
 
     async def upsert_node(
@@ -89,12 +100,54 @@ class InMemoryGraphStore(ProcessingGraph):
         # Chapters are not modelled as nodes here.
         return {"chunks": len(dead), "chapters": 0}
 
-    async def upsert_relation(self, from_id, relation_type, to_id, properties=None) -> None:
+    async def prune_retired_entities(self, entity_ids: list[str]) -> int:
+        """Delete retired entity records and incident edges from the fixture store."""
+        target_ids = {eid for eid in entity_ids if eid}
+        if not target_ids:
+            return 0
+        removed = 0
+        for eid in target_ids:
+            if eid in self._entities:
+                del self._entities[eid]
+                removed += 1
+        self._triples = [
+            t
+            for t in self._triples
+            if t.subject_id not in target_ids and t.object_id not in target_ids
+        ]
+        self._relations = [
+            r
+            for r in self._relations
+            if r[0] not in target_ids and r[2] not in target_ids
+        ]
+        return removed
+
+    async def prune_retired_mentions(self, mentions: list[tuple[str, str]]) -> int:
+        """Delete retired ``EXTRACTED_FROM`` edges from the fixture store."""
+        target_mentions = {(eid, cid) for eid, cid in mentions if eid and cid}
+        if not target_mentions:
+            return 0
+        before = len(self._relations)
+        self._relations = [
+            r
+            for r in self._relations
+            if not (
+                r[1] == StructuralRelationType.EXTRACTED_FROM
+                and (r[0], r[2]) in target_mentions
+            )
+        ]
+        return before - len(self._relations)
+
+    async def upsert_relation(
+        self, from_id, relation_type, to_id, properties=None
+    ) -> None:
         self._relations.append((from_id, relation_type, to_id, properties or {}))
 
     async def upsert_relations(self, relations: list[dict]) -> None:
         for r in relations:
-            await self.upsert_relation(r["from_id"], r["relation_type"], r["to_id"], r.get("properties"))
+            await self.upsert_relation(
+                r["from_id"], r["relation_type"], r["to_id"], r.get("properties")
+            )
 
     async def upsert_chunk(self, chunk: L1Chunk) -> None:
         self._chunks[chunk.id] = chunk
@@ -128,7 +181,14 @@ class InMemoryGraphStore(ProcessingGraph):
             await self.upsert_argument_component(c)
 
     async def upsert_theory_relation(self, relation: TheoryRelation) -> None:
-        self._relations.append((relation.source_id, relation.relation_type, relation.target_id, relation.to_graph_properties()))
+        self._relations.append(
+            (
+                relation.source_id,
+                relation.relation_type,
+                relation.target_id,
+                theory_relation_to_graph_properties(relation),
+            )
+        )
 
     async def upsert_theory_relations(self, relations: list[TheoryRelation]) -> None:
         for r in relations:
@@ -140,8 +200,15 @@ class InMemoryGraphStore(ProcessingGraph):
     async def get_all_entity_triples(self) -> list[L2Triple]:
         return self._triples
 
-    async def upsert_community(self, community_id: str, level: int, entity_ids: list[str]) -> None:
-        self._relations.extend([(entity_id, "IN_COMMUNITY", community_id, {"level": level}) for entity_id in entity_ids])
+    async def upsert_community(
+        self, community_id: str, level: int, entity_ids: list[str]
+    ) -> None:
+        self._relations.extend(
+            [
+                (entity_id, "IN_COMMUNITY", community_id, {"level": level})
+                for entity_id in entity_ids
+            ]
+        )
 
     async def upsert_communities(self, communities: list[dict]) -> None:
         for c in communities:
@@ -156,7 +223,8 @@ class InMemoryGraphStore(ProcessingGraph):
 
     async def get_unprocessed_chunks(self, phase: str, limit=None) -> list[L1Chunk]:
         unprocessed = [
-            c for c in self._chunks.values()
+            c
+            for c in self._chunks.values()
             if phase not in self._processed.get(c.id, set())
         ]
         if limit:
@@ -180,8 +248,27 @@ class InMemoryGraphStore(ProcessingGraph):
         for item in items:
             phase_items[item.key] = item
 
+    async def commit_phase_items(
+        self, phase: str, items: list[PhaseItemRecord]
+    ) -> None:
+        phase_items = self._processed_items.setdefault(phase, {})
+        for record in items:
+            phase_items[record.key] = record
+
+    async def save_chunk_state_snapshot(
+        self, phase: str, chunk_id: str, snapshot: dict
+    ) -> None:
+        self._chunk_snapshots[(phase, chunk_id)] = dict(snapshot)
+
+    async def get_chunk_state_snapshot(self, phase: str, chunk_id: str) -> dict | None:
+        snapshot = self._chunk_snapshots.get((phase, chunk_id))
+        return dict(snapshot) if snapshot is not None else None
+
     async def clear_phase_checkpoints(self, phase: str) -> None:
         self._processed_items.pop(phase, None)
+        keys_to_del = [k for k in self._chunk_snapshots if k[0] == phase]
+        for k in keys_to_del:
+            del self._chunk_snapshots[k]
 
     async def find_entities_by_name(self, name: str, label=None) -> list[L2Entity]:
         name_lower = name.strip().lower()
@@ -201,7 +288,9 @@ class InMemoryGraphStore(ProcessingGraph):
         return [
             rel[3].get("textual_envelope")
             for rel in self._relations
-            if rel[0] == entity_id and rel[1] == "EXTRACTED_FROM" and rel[3].get("textual_envelope")
+            if rel[0] == entity_id
+            and rel[1] == "EXTRACTED_FROM"
+            and rel[3].get("textual_envelope")
         ]
 
     async def get_all_theory_relations(self) -> list[TheoryRelation]:
@@ -210,12 +299,13 @@ class InMemoryGraphStore(ProcessingGraph):
     async def get_chunk_entities(self, chunk_id: str) -> list[L2Entity]:
         return []
 
-    async def upsert_argument_component(self, component: TheoryAtom) -> None:
+    async def upsert_argument_component(self, component: TheoryAtom) -> None:  # noqa: F811 baseline
         await self.upsert_theory_atom(component)
 
-    async def upsert_argument_components(self, components: list[TheoryAtom]) -> None:
+    async def upsert_argument_components(self, components: list[TheoryAtom]) -> None:  # noqa: F811 baseline
         for c in components:
             await self.upsert_argument_component(c)
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -252,8 +342,28 @@ def sample_chunk() -> L1Chunk:
 @pytest.fixture
 def sample_entities() -> list[L2Entity]:
     return [
-        L2Entity(id="entity_kant", label="PERSON", name="Kant", source_chunk_ids=["chunk_0001"]),
-        L2Entity(id="entity_hegel", label="PERSON", name="Hegel", source_chunk_ids=["chunk_0001"]),
-        L2Entity(id="entity_space", label="KONZEPT", name="space", source_chunk_ids=["chunk_0001"]),
-        L2Entity(id="entity_time", label="KONZEPT", name="time", source_chunk_ids=["chunk_0002"]),
+        L2Entity(
+            id="entity_kant",
+            label="PERSON",
+            name="Kant",
+            source_chunk_ids=["chunk_0001"],
+        ),
+        L2Entity(
+            id="entity_hegel",
+            label="PERSON",
+            name="Hegel",
+            source_chunk_ids=["chunk_0001"],
+        ),
+        L2Entity(
+            id="entity_space",
+            label="KONZEPT",
+            name="space",
+            source_chunk_ids=["chunk_0001"],
+        ),
+        L2Entity(
+            id="entity_time",
+            label="KONZEPT",
+            name="time",
+            source_chunk_ids=["chunk_0002"],
+        ),
     ]

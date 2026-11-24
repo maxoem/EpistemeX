@@ -84,7 +84,7 @@ async def test_upsert_argument_components_default_omits_empty_maps() -> None:
         component_type="EMPIRICAL_OBSERVATION",
         source_chunk_id="chk_1",
         confidence=0.9,
-        plausibility=0.85,
+        equilibrium_strength=0.85,
         entity_ids=["e1", "e2"],
     )
 
@@ -107,7 +107,7 @@ async def test_upsert_argument_components_default_omits_empty_maps() -> None:
     assert props["component_type"] == "EMPIRICAL_OBSERVATION"
     assert props["source_chunk_id"] == "chk_1"
     assert props["confidence"] == 0.9
-    assert props["plausibility"] == 0.85
+    assert props["equilibrium_strength"] == 0.85
     assert props["entity_ids"] == ["e1", "e2"]
 
 
@@ -133,7 +133,7 @@ async def test_upsert_argument_components_serializes_complex_fields() -> None:
         component_type="TheoreticalHypothesis",
         source_chunk_id="chk_2",
         confidence=0.95,
-        plausibility=0.9,
+        equilibrium_strength=0.9,
         entity_ids=["e1"],
         parameters={"DopamineDepletion": 0.8, "scale": 1.2},
         measurements=[Measurement(dimension="dopamine", value=0.7, unit="ratio")],
@@ -241,20 +241,24 @@ async def test_get_theory_atoms_deserialization() -> None:
         "component_type": "TheoreticalHypothesis",
         "source_chunk_id": "chk_10",
         "confidence": 0.88,
-        "plausibility": 0.82,
+        "equilibrium_strength": 0.82,
         "epistemic_status": "Synthetisch",
         "scope_type": "Essentieller Allsatz",
         "entity_ids": ["ent_1", "ent_2"],
         "parameters": json.dumps({"Dopamine": 0.5}),
-        "measurements": json.dumps([{"dimension": "flow", "value": 1.2, "unit": "ml/s"}]),
-        "tenability": json.dumps({
-            "local_score": 0.95,
-            "edge_scores": {},
-            "aggregated_score": 0.95,
-            "is_tenable": True,
-            "tightest_blur": 0.02,
-            "anomalies": [],
-        }),
+        "measurements": json.dumps(
+            [{"dimension": "flow", "value": 1.2, "unit": "ml/s"}]
+        ),
+        "tenability": json.dumps(
+            {
+                "local_score": 0.95,
+                "edge_scores": {},
+                "aggregated_score": 0.95,
+                "is_tenable": True,
+                "tightest_blur": 0.02,
+                "anomalies": [],
+            }
+        ),
     }
 
     reader = _MockReader([mock_row])
@@ -395,7 +399,7 @@ async def test_get_all_theory_relations_includes_tenability() -> None:
             return None
 
         async def run(self, query: str, **params) -> _MockResult:
-            assert "r.tenability as tenability" in query
+            assert "r.edge_tenability as edge_tenability" in query
             return _MockResult(self._data)
 
     class _MockReader(_Neo4jReadMixin):
@@ -412,12 +416,12 @@ async def test_get_all_theory_relations_includes_tenability() -> None:
         "confidence": 0.9,
         "scope": "local",
         "weight": 0.7,
-        "tenability": 0.85,
+        "edge_tenability": 0.85,
     }
     reader = _MockReader([row])
     rels = await reader.get_all_theory_relations()
     assert len(rels) == 1
-    assert rels[0].tenability == 0.85
+    assert rels[0].edge_tenability == 0.85
 
 
 @pytest.mark.asyncio
@@ -457,4 +461,3 @@ async def test_item_checkpoints_sanitize_phase_identifier() -> None:
 
     with pytest.raises(ValueError, match="Unsafe Cypher phase identifier"):
         await store.clear_phase_checkpoints(unsafe)
-

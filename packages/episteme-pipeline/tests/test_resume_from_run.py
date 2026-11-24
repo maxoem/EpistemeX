@@ -8,19 +8,23 @@ from episteme_pipeline.artifacts.execution import (
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
 from episteme_pipeline.pipeline import Pipeline
+from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 
 
-class StubPhase:
-    def __init__(self, name: str):
+class StubPhase(PhaseRunner[object]):
+    def __init__(self, name: str, phase_key: str | None = None):
         self.name = name
+        self.phase_key = phase_key or name.lower().split(":")[0].replace(" ", "")
 
     async def run(self, input, context: ArtifactExecutionContext):
         return ArtifactCollection([])
 
 
 @pytest.mark.asyncio
-async def test_resume_from_run_persists_new_execution_result(tmp_path: Path, graph_store):
+async def test_resume_from_run_persists_new_execution_result(
+    tmp_path: Path, graph_store
+):
     config = PipelineConfig()
     config.execution.persist_run_manifests = True
     config.execution.runs_dir = str(tmp_path / "runs")
@@ -42,15 +46,29 @@ async def test_resume_from_run_persists_new_execution_result(tmp_path: Path, gra
         run_id="run-old",
         status=RunStatus.COMPLETED,
         input_fingerprint="same-input",
-        phase_config_fingerprints={"phase_1": "same-phase", "phase_2": "same-phase", "phase_3": "same-phase"},
+        phase_config_fingerprints={
+            "phase1": "same-phase",
+            "phase2": "same-phase",
+            "phase3": "same-phase",
+        },
         phase_records=[
-            RunPhaseRecord(phase_name="Phase 1: Data Foundation", ordinal=1, status=RunStatus.COMPLETED),
-            RunPhaseRecord(phase_name="Phase 2: Entity & Local Relation Discovery", ordinal=2, status=RunStatus.COMPLETED),
+            RunPhaseRecord(
+                phase_name="Phase 1: Data Foundation",
+                ordinal=1,
+                status=RunStatus.COMPLETED,
+            ),
+            RunPhaseRecord(
+                phase_name="Phase 2: Entity & Local Relation Discovery",
+                ordinal=2,
+                status=RunStatus.COMPLETED,
+            ),
         ],
     )
-    pipeline._manifest_store.write_manifest(prior)
+    pipeline.manifest_store.write_manifest(prior)
 
-    execution = await pipeline.resume_from_run("run-old", PipelineInput(source_paths=["docs/example.md"]))
+    execution = await pipeline.resume_from_run(
+        "run-old", PipelineInput(source_paths=["docs/example.md"])
+    )
 
     assert execution.report.status == RunStatus.COMPLETED
     assert len(list((tmp_path / "runs").glob("*.json"))) >= 2

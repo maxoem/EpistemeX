@@ -14,7 +14,7 @@ from tests.conftest import InMemoryGraphStore
 async def test_leiden_clustering_fuses_graph_into_communities():
     # Setup graph store with some entities and relations
     store = InMemoryGraphStore()
-    
+
     entities = [
         L2Entity(id="e1", label="CONCEPT", name="Concept 1"),
         L2Entity(id="e2", label="CONCEPT", name="Concept 2"),
@@ -22,17 +22,31 @@ async def test_leiden_clustering_fuses_graph_into_communities():
     ]
     for e in entities:
         await store.upsert_entity(e)
-        
+
     triples = [
-        L2Triple(subject_id="e1", predicate="RELATED_TO", object_id="e2", confidence=1.0, scope="global", source_chunk_id="global"),
-        L2Triple(subject_id="e2", predicate="RELATED_TO", object_id="e3", confidence=1.0, scope="global", source_chunk_id="global"),
+        L2Triple(
+            subject_id="e1",
+            predicate="RELATED_TO",
+            object_id="e2",
+            confidence=1.0,
+            scope="global",
+            source_chunk_id="global",
+        ),
+        L2Triple(
+            subject_id="e2",
+            predicate="RELATED_TO",
+            object_id="e3",
+            confidence=1.0,
+            scope="global",
+            source_chunk_id="global",
+        ),
     ]
     for t in triples:
         await store.upsert_triple(t)
-        
+
     clustering = LeidenTheoryClustering(max_cluster_size=10)
     await clustering.fuse(store)
-    
+
     # Verify that relations now include IN_COMMUNITY links
     in_comm_relations = [r for r in store._relations if r[1] == "IN_COMMUNITY"]
     assert len(in_comm_relations) > 0
