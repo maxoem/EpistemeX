@@ -110,6 +110,11 @@ from episteme_studio.domain.evaluation import (
     StressTestRequest,
     StructuralistSpecialization,
 )
+from episteme_studio.security import (
+    resolve_path_within_roots,
+    resolve_safe_child,
+    validate_safe_identifier,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +167,24 @@ class EvaluationAdapter:
             Path(manifests_dir) if manifests_dir else _DEFAULT_EVAL_MANIFESTS_DIR
         )
         self.include_fixtures = include_fixtures
+
+    def _allowed_eval_roots(self) -> list[Path]:
+        """Return trusted filesystem root directories for evaluation paths.
+
+        Returns
+        -------
+        list of Path
+            Root directories permitted for gold standards, manifests, and reports.
+        """
+        return [
+            self.eval_data_dir,
+            self.manifests_dir,
+            self.reports_dir,
+            self.reports_dir.parent,
+            _PIPELINE_ROOT,
+            _PIPELINE_ROOT.parent.parent / "datasets",
+            Path.cwd(),
+        ]
 
     def discover_benchmarks(self) -> list[BenchmarkDescriptor]:
         """Discover registered gold-standard benchmarks available on filesystem.
@@ -955,7 +978,9 @@ class EvaluationAdapter:
                 if q_cand.is_file():
                     target_queries = str(q_cand)
 
-        target_gold_path = Path(target_gold)
+        target_gold_path = resolve_path_within_roots(
+            target_gold, self._allowed_eval_roots()
+        )
         if not target_gold_path.is_file():
             raise FileNotFoundError(
                 f"Gold standard benchmark not found at: {target_gold}"
@@ -984,9 +1009,14 @@ class EvaluationAdapter:
 
         # 5. Optional Extrinsic Retrieval Scoring
         retrieval_detail: RetrievalEvaluationDetail | None = None
-        if target_queries and Path(target_queries).is_file():
+        target_queries_path = (
+            resolve_path_within_roots(target_queries, self._allowed_eval_roots())
+            if target_queries
+            else None
+        )
+        if target_queries_path and target_queries_path.is_file():
             try:
-                with open(target_queries, "r", encoding="utf-8") as qf:  # noqa: ASYNC230 baseline
+                with open(target_queries_path, "r", encoding="utf-8") as qf:  # noqa: ASYNC230 baseline
                     q_data = yaml.safe_load(qf) or {}
                 queries = q_data.get("queries", [])
                 if queries:
@@ -1115,7 +1145,7 @@ class EvaluationAdapter:
         EvaluationReportDetail
             Parsed domain report detail.
         """
-        path = Path(manifest_path)
+        path = resolve_path_within_roots(manifest_path, self._allowed_eval_roots())
         if not path.is_file():
             raise FileNotFoundError(f"Manifest not found: {path}")
 
@@ -1878,19 +1908,22 @@ class EvaluationAdapter:
         exported_path: str | None = None
         target_dest = request.export_dataset_path or request.gold_standard_path
         if target_dest:
-            dest_file = Path(target_dest)
+            dest_file = resolve_path_within_roots(
+                target_dest, self._allowed_eval_roots()
+            )
             dest_file.parent.mkdir(parents=True, exist_ok=True)
 
             gold_data: dict[str, Any] = {}
-            if (
-                request.gold_standard_path
-                and Path(request.gold_standard_path).is_file()
-            ):
-                try:
-                    with open(request.gold_standard_path, "r", encoding="utf-8") as gf:
-                        gold_data = json.load(gf)
-                except Exception:  # noqa: BLE001 baseline
-                    gold_data = {}
+            if request.gold_standard_path:
+                gold_path = resolve_path_within_roots(
+                    request.gold_standard_path, self._allowed_eval_roots()
+                )
+                if gold_path.is_file():
+                    try:
+                        with open(gold_path, "r", encoding="utf-8") as gf:
+                            gold_data = json.load(gf)
+                    except Exception:  # noqa: BLE001 baseline
+                        gold_data = {}
 
             if "@graph" not in gold_data or not isinstance(gold_data["@graph"], list):
                 gold_data = {
@@ -2504,8 +2537,9 @@ class EvaluationAdapter:
         report.key_metrics["pfs"] = new_pfs
 
         # Persist updated report
-        rep_json = self.reports_dir / f"report_{evaluation_id}.json"
-        rep_md = self.reports_dir / f"report_{evaluation_id}.md"
+        safe_eval_id = validate_safe_identifier(evaluation_id, "evaluation_id")
+        rep_json = resolve_safe_child(self.reports_dir, f"report_{safe_eval_id}.json")
+        rep_md = resolve_safe_child(self.reports_dir, f"report_{safe_eval_id}.md")
         with open(rep_json, "w", encoding="utf-8") as f:
             json.dump(report.model_dump(mode="json"), f, indent=2)
 
@@ -3088,7 +3122,10 @@ class EvaluationAdapter:
         )
 
         # Persist report
-        out_path = self.reports_dir / f"robustness_{request.run_id}.json"
+        safe_run_id = validate_safe_identifier(request.run_id, "run_id")
+        out_path = resolve_safe_child(
+            self.reports_dir, f"robustness_{safe_run_id}.json"
+        )
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(result.model_dump(mode="json"), f, indent=2)
 
@@ -3561,22 +3598,31 @@ class EvaluationAdapter:
             Registered benchmark descriptor.
         """
         self.eval_data_dir.mkdir(parents=True, exist_ok=True)
-        gold_file = self.eval_data_dir / f"{request.id}.jsonld"
+        safe_id = validate_safe_identifier(request.id, "benchmark_id")
+        gold_file = resolve_safe_child(self.eval_data_dir, f"{safe_id}.jsonld")
 
         # Determine if string is raw JSON or path
         content = request.gold_standard_jsonld
-        if Path(content).is_file():
-            content = Path(content).read_text(encoding="utf-8")
+        if "\n" not in content and not content.lstrip().startswith("{"):
+            cand = resolve_path_within_roots(content, self._allowed_eval_roots())
+            if cand.is_file():
+                content = cand.read_text(encoding="utf-8")
 
         with open(gold_file, "w", encoding="utf-8") as f:
             f.write(content)
 
         queries_file: Path | None = None
         if request.queries_yaml:
-            queries_file = self.eval_data_dir / f"{request.id}_queries.yaml"
+            queries_file = resolve_safe_child(
+                self.eval_data_dir, f"{safe_id}_queries.yaml"
+            )
             q_content = request.queries_yaml
-            if Path(q_content).is_file():
-                q_content = Path(q_content).read_text(encoding="utf-8")
+            if "\n" not in q_content and not q_content.lstrip().startswith("{"):
+                q_cand = resolve_path_within_roots(
+                    q_content, self._allowed_eval_roots()
+                )
+                if q_cand.is_file():
+                    q_content = q_cand.read_text(encoding="utf-8")
             with open(queries_file, "w", encoding="utf-8") as f:
                 f.write(q_content)
 

@@ -29,6 +29,7 @@ from episteme_studio.domain.runs import (
     RunStatus,
     RunSummary,
 )
+from episteme_studio.security import resolve_safe_child, validate_safe_identifier
 
 
 class ArtifactStoreError(Exception):
@@ -933,17 +934,19 @@ class ArtifactReader:
             tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
             tmp.replace(manifest_path)
         else:
-            manifest_path = self.runs_dir / f"{run_id}.json"
-            run_dir = self.runs_dir / run_id
+            safe_run_id = validate_safe_identifier(run_id, "run_id")
+            manifest_path = resolve_safe_child(self.runs_dir, f"{safe_run_id}.json")
+            run_dir = resolve_safe_child(self.runs_dir, safe_run_id)
             if not run_dir.is_dir():
                 for r_dir in self.extra_runs_dirs:
-                    if (r_dir / run_id).is_dir():
-                        run_dir = r_dir / run_id
-                        manifest_path = r_dir / f"{run_id}.json"
+                    cand_run_dir = resolve_safe_child(r_dir, safe_run_id)
+                    if cand_run_dir.is_dir():
+                        run_dir = cand_run_dir
+                        manifest_path = resolve_safe_child(r_dir, f"{safe_run_id}.json")
                         break
             if run_dir.is_dir():
                 data = {
-                    "run_id": run_id,
+                    "run_id": safe_run_id,
                     "pipeline_version": "0.1.0",
                     "schema_version": "v1",
                     "status": "aborted",

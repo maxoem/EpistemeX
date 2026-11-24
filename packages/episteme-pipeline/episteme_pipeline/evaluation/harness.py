@@ -307,7 +307,38 @@ class EvaluationHarness(EvaluationHarnessProtocol):
             elif isinstance(s_val, dict):
                 manifest_schema = SchemaConfig(**s_val)
             elif isinstance(s_val, str):
-                s_path = Path(s_val) if Path(s_val).is_file() else path.parent / s_val
+                parent_real = os.path.realpath(str(path.parent))
+                cwd_real = os.path.realpath(os.getcwd())
+                allowed_roots = [parent_real, cwd_real]
+
+                def _within_allowed(resolved: str) -> bool:
+                    return any(
+                        resolved == root or resolved.startswith(root + os.sep)
+                        for root in allowed_roots
+                    )
+
+                if os.path.isabs(s_val):
+                    cand_real = os.path.realpath(s_val)
+                    if not _within_allowed(cand_real):
+                        raise ValueError(
+                            f"Manifest schema path '{s_val}' escapes allowed directories."
+                        )
+                    s_path = Path(cand_real)
+                else:
+                    rel_real = os.path.realpath(os.path.join(parent_real, s_val))
+                    cwd_cand_real = os.path.realpath(os.path.join(cwd_real, s_val))
+                    if not _within_allowed(rel_real) or not _within_allowed(
+                        cwd_cand_real
+                    ):
+                        raise ValueError(
+                            f"Manifest schema path '{s_val}' escapes allowed directories."
+                        )
+                    s_path = (
+                        Path(cwd_cand_real)
+                        if Path(cwd_cand_real).is_file()
+                        else Path(rel_real)
+                    )
+
                 if s_path.is_file():
                     with open(s_path, "r", encoding="utf-8") as sf:  # noqa: ASYNC230 baseline
                         manifest_schema = SchemaConfig(**yaml.safe_load(sf))

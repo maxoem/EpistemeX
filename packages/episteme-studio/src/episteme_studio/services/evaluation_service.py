@@ -53,6 +53,7 @@ from episteme_studio.domain.evaluation import (
 )
 from episteme_studio.domain.events import StudioEvent
 from episteme_studio.runtime.broker import EventBroker
+from episteme_studio.security import resolve_safe_child, validate_safe_identifier
 from episteme_studio.settings import StudioSettings
 
 
@@ -108,7 +109,8 @@ class EvaluationService:
             Job descriptor to serialize and persist.
         """
         try:
-            target_file = self._jobs_dir / f"{desc.job_id}.json"
+            safe_job_id = validate_safe_identifier(desc.job_id, "job_id")
+            target_file = resolve_safe_child(self._jobs_dir, f"{safe_job_id}.json")
             target_file.write_text(desc.model_dump_json(indent=2), encoding="utf-8")
         except Exception as e:  # noqa: BLE001 baseline
             logger.warning("Failed to persist evaluation job %s: %s", desc.job_id, e)
@@ -383,7 +385,11 @@ class EvaluationService:
         if job_id in self._jobs:
             return self._jobs[job_id]
 
-        target_file = self._jobs_dir / f"{job_id}.json"
+        try:
+            safe_job_id = validate_safe_identifier(job_id, "job_id")
+            target_file = resolve_safe_child(self._jobs_dir, f"{safe_job_id}.json")
+        except ValueError:
+            return None
         if target_file.is_file():
             try:
                 desc = EvaluationJobDescriptor.model_validate_json(
@@ -980,8 +986,10 @@ class EvaluationService:
         import json
         from pathlib import Path
 
-        decisions_file = Path(".pipeline_runs") / run_id / "decisions.jsonl"
-        adjudications_file = Path(".pipeline_runs") / run_id / "adjudications.json"
+        safe_run_id = validate_safe_identifier(run_id, "run_id")
+        run_dir = resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
+        decisions_file = resolve_safe_child(run_dir, "decisions.jsonl")
+        adjudications_file = resolve_safe_child(run_dir, "adjudications.json")
 
         adjudications: dict[str, dict[str, Any]] = {}
         if adjudications_file.is_file():
@@ -1138,7 +1146,9 @@ class EvaluationService:
         import json
         from pathlib import Path
 
-        adjudications_file = Path(".pipeline_runs") / run_id / "adjudications.json"
+        safe_run_id = validate_safe_identifier(run_id, "run_id")
+        run_dir = resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
+        adjudications_file = resolve_safe_child(run_dir, "adjudications.json")
         adjudications_file.parent.mkdir(parents=True, exist_ok=True)
 
         adjudications: dict[str, dict[str, Any]] = {}
@@ -1232,9 +1242,10 @@ class EvaluationService:
                 }
             )
 
-        export_dir = Path(".pipeline_runs") / run_id
+        safe_run_id = validate_safe_identifier(run_id, "run_id")
+        export_dir = resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
         export_dir.mkdir(parents=True, exist_ok=True)
-        export_path = export_dir / "active_learning_export.jsonl"
+        export_path = resolve_safe_child(export_dir, "active_learning_export.jsonl")
 
         with export_path.open("w", encoding="utf-8") as f:
             for rec in curated_records:
