@@ -8,6 +8,8 @@ from typing import Any
 import networkx as nx
 import numpy as np
 
+from episteme_pipeline.utils.similarity import l2_normalize
+
 
 class GraphBERTScoreEvaluator:
     """Computes Graph BERTScore (GM-GBS) between two directed graphs.
@@ -36,8 +38,8 @@ class GraphBERTScoreEvaluator:
 
     def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
         """Calculate pairwise cosine similarity between two matrices of vectors."""
-        a_norm = a / np.linalg.norm(a, axis=1, keepdims=True)
-        b_norm = b / np.linalg.norm(b, axis=1, keepdims=True)
+        a_norm = l2_normalize(a)
+        b_norm = l2_normalize(b)
         return np.dot(a_norm, b_norm.T)
 
     def compute_matches(

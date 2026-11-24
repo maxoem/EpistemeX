@@ -32,6 +32,8 @@ from episteme_pipeline.utils.graph_algorithms import (
 from episteme_pipeline.utils.similarity import (
     cosine_similarity_matrix,
     csls_similarity_matrix,
+    dynamic_k_effective,
+    z_score_normalize,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,11 @@ class LatentGraphConsolidation(InstanceFusion):
         conformal_merge_alpha: float = 0.05,
         use_csls: bool = True,
         csls_k_nearest: int = 10,
+        use_adaptive_k: bool = True,
+        adaptive_k_gamma: float = 2.0,
+        adaptive_k_min: int = 2,
+        max_candidates_per_entity: int = 50,
+        z_score_threshold: float | None = None,
         min_internal_similarity: float = 0.70,
         max_diameter: float | None = None,
     ) -> None:
@@ -90,6 +97,11 @@ class LatentGraphConsolidation(InstanceFusion):
         self.conformal_merge_alpha = conformal_merge_alpha
         self.use_csls = use_csls
         self.csls_k_nearest = csls_k_nearest
+        self.use_adaptive_k = use_adaptive_k
+        self.adaptive_k_gamma = adaptive_k_gamma
+        self.adaptive_k_min = adaptive_k_min
+        self.max_candidates_per_entity = max_candidates_per_entity
+        self.z_score_threshold = z_score_threshold
         self.min_internal_similarity = min_internal_similarity
         self.max_diameter = max_diameter
 
@@ -128,6 +140,11 @@ class LatentGraphConsolidation(InstanceFusion):
             "borderline_similarity_upper": self.borderline_similarity_upper,
             "use_csls": self.use_csls,
             "csls_k_nearest": self.csls_k_nearest,
+            "use_adaptive_k": self.use_adaptive_k,
+            "adaptive_k_gamma": self.adaptive_k_gamma,
+            "adaptive_k_min": self.adaptive_k_min,
+            "max_candidates_per_entity": self.max_candidates_per_entity,
+            "z_score_threshold": self.z_score_threshold,
             "min_internal_similarity": self.min_internal_similarity,
             "max_diameter": self.max_diameter,
             "merge_confidence_threshold": self.merge_confidence_threshold,
@@ -197,6 +214,11 @@ class LatentGraphConsolidation(InstanceFusion):
             conformal_merge_alpha=config.verification.conformal_alpha,
             use_csls=config.use_csls,
             csls_k_nearest=config.csls_k_nearest,
+            use_adaptive_k=config.use_adaptive_k,
+            adaptive_k_gamma=config.adaptive_k_gamma,
+            adaptive_k_min=config.adaptive_k_min,
+            max_candidates_per_entity=config.max_candidates_per_entity,
+            z_score_threshold=config.z_score_threshold,
             min_internal_similarity=config.min_internal_similarity,
             max_diameter=config.max_diameter,
         )
@@ -301,69 +323,103 @@ class LatentGraphConsolidation(InstanceFusion):
         n = len(entities)
         edges = []
 
+        if self.use_adaptive_k:
+            k_eff = dynamic_k_effective(
+                n=n,
+                k_min=self.adaptive_k_min,
+                k_max=self.max_candidates_per_entity,
+                gamma=self.adaptive_k_gamma,
+            )
+        else:
+            k_eff = self.max_candidates_per_entity
+
+        z_scores = (
+            z_score_normalize(candidate_sim_matrix, symmetric=True)
+            if self.z_score_threshold is not None
+            else None
+        )
+
         definite_threshold = (
             self.borderline_similarity_upper
             if self.verifier is not None
             else self.dense_similarity_threshold
         )
 
+        i_indices, j_indices = np.triu_indices(n, k=1)
+        similarities = candidate_sim_matrix[i_indices, j_indices]
+        sorted_idx = np.argsort(similarities)[::-1]
+        partner_count: dict[int, int] = defaultdict(int)
+
         # 2. Find candidates passing definite threshold or borderline verification
-        for i in range(n):
-            for j in range(i + 1, n):
-                # EpistemicCurationLedger: Hard cannot-link constraint
-                if curation_ledger is not None and curation_ledger.is_cannot_link(
-                    entities[i].id, entities[j].id, entities[i].name, entities[j].name
-                ):
+        for idx in sorted_idx:
+            i = int(i_indices[idx])
+            j = int(j_indices[idx])
+
+            # EpistemicCurationLedger: Hard cannot-link constraint
+            if curation_ledger is not None and curation_ledger.is_cannot_link(
+                entities[i].id, entities[j].id, entities[i].name, entities[j].name
+            ):
+                constraint_sim_matrix[i, j] = -1.0
+                constraint_sim_matrix[j, i] = -1.0
+                candidate_sim_matrix[i, j] = -1.0
+                candidate_sim_matrix[j, i] = -1.0
+                continue
+
+            # EpistemicCurationLedger: Hard must-link constraint
+            if curation_ledger is not None and curation_ledger.is_must_link(
+                entities[i].id, entities[j].id, entities[i].name, entities[j].name
+            ):
+                constraint_sim_matrix[i, j] = 1.0
+                constraint_sim_matrix[j, i] = 1.0
+                candidate_sim_matrix[i, j] = 1.0
+                candidate_sim_matrix[j, i] = 1.0
+                edges.append((i, j))
+                continue
+
+            # Only compare entities of the same label
+            if entities[i].label != entities[j].label:
+                continue
+
+            if self.z_score_threshold is not None and z_scores is not None:
+                if float(z_scores[i, j]) < self.z_score_threshold:
+                    continue
+
+            if partner_count[i] >= k_eff or partner_count[j] >= k_eff:
+                continue
+
+            sim = float(candidate_sim_matrix[i, j])
+
+            if sim >= definite_threshold:
+                partner_count[i] += 1
+                partner_count[j] += 1
+                rel_i = await self._get_relations_for_entity(entities[i].id, graph_store)
+                rel_j = await self._get_relations_for_entity(entities[j].id, graph_store)
+                if self._jaccard(rel_i, rel_j) >= self.relation_overlap_threshold:
+                    edges.append((i, j))
+            elif self.verifier is not None and sim >= self.borderline_similarity_lower:
+                partner_count[i] += 1
+                partner_count[j] += 1
+                rel_i = await self._get_relations_for_entity(entities[i].id, graph_store)
+                rel_j = await self._get_relations_for_entity(entities[j].id, graph_store)
+                selected, emp_acc, pred_set = await self.verifier.verify(
+                    entities[i],
+                    entities[j],
+                    relation_signatures_a=rel_i,
+                    relation_signatures_b=rel_j,
+                )
+                is_singleton = (pred_set == ["IDENTICAL_MERGE"])
+                is_high_conf = (
+                    selected == "IDENTICAL_MERGE"
+                    and emp_acc >= self.verifier.confidence_threshold
+                    and len(pred_set) <= 1
+                )
+                if is_singleton or is_high_conf:
+                    edges.append((i, j))
+                else:
                     constraint_sim_matrix[i, j] = -1.0
                     constraint_sim_matrix[j, i] = -1.0
                     candidate_sim_matrix[i, j] = -1.0
                     candidate_sim_matrix[j, i] = -1.0
-                    continue
-
-                # EpistemicCurationLedger: Hard must-link constraint
-                if curation_ledger is not None and curation_ledger.is_must_link(
-                    entities[i].id, entities[j].id, entities[i].name, entities[j].name
-                ):
-                    constraint_sim_matrix[i, j] = 1.0
-                    constraint_sim_matrix[j, i] = 1.0
-                    candidate_sim_matrix[i, j] = 1.0
-                    candidate_sim_matrix[j, i] = 1.0
-                    edges.append((i, j))
-                    continue
-
-                # Only compare entities of the same label
-                if entities[i].label != entities[j].label:
-                    continue
-
-                sim = float(candidate_sim_matrix[i, j])
-
-                if sim >= definite_threshold:
-                    rel_i = await self._get_relations_for_entity(entities[i].id, graph_store)
-                    rel_j = await self._get_relations_for_entity(entities[j].id, graph_store)
-                    if self._jaccard(rel_i, rel_j) >= self.relation_overlap_threshold:
-                        edges.append((i, j))
-                elif self.verifier is not None and sim >= self.borderline_similarity_lower:
-                    rel_i = await self._get_relations_for_entity(entities[i].id, graph_store)
-                    rel_j = await self._get_relations_for_entity(entities[j].id, graph_store)
-                    selected, emp_acc, pred_set = await self.verifier.verify(
-                        entities[i],
-                        entities[j],
-                        relation_signatures_a=rel_i,
-                        relation_signatures_b=rel_j,
-                    )
-                    is_singleton = (pred_set == ["IDENTICAL_MERGE"])
-                    is_high_conf = (
-                        selected == "IDENTICAL_MERGE"
-                        and emp_acc >= self.verifier.confidence_threshold
-                        and len(pred_set) <= 1
-                    )
-                    if is_singleton or is_high_conf:
-                        edges.append((i, j))
-                    else:
-                        constraint_sim_matrix[i, j] = -1.0
-                        constraint_sim_matrix[j, i] = -1.0
-                        candidate_sim_matrix[i, j] = -1.0
-                        candidate_sim_matrix[j, i] = -1.0
 
         # 4. Cluster connected components with clique constraints on raw cosine matrix
         #    to prevent single-linkage chaining and enforce rejected pair prohibitions

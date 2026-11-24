@@ -12,12 +12,85 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable, Sequence
 from itertools import batched
 import logging
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
+
+from pydantic import BaseModel
 
 from episteme_pipeline.contracts.domain import PhaseItemRecord
-from episteme_pipeline.protocols.graph_store import PhaseCheckpointStore
+from episteme_pipeline.protocols.graph_store import (
+    NoOpCheckpointStore,
+    PhaseCheckpointStore,
+)
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class CheckpointOutputCodec[OutT](Protocol):
+    """Bidirectional JSON-dict codec for checkpointing and recovering item outputs.
+
+    Encapsulates serialization/deserialization so :class:`CheckpointedBatchExecutor`
+    and :class:`CheckpointedStreamExecutor` handle mid-phase crash recovery without
+    duplicating persistence logic inside domain phase runners.
+    """
+
+    def serialize(self, output: OutT) -> dict[str, Any]:
+        """Serialize a domain output into a JSON-compatible dictionary."""
+        ...
+
+    def deserialize(self, payload: dict[str, Any]) -> OutT:
+        """Reconstruct a domain output from a persisted payload dictionary."""
+        ...
+
+
+class PydanticOutputCodec[ModelT: BaseModel]:
+    """Generic :class:`CheckpointOutputCodec` for Pydantic :class:`BaseModel` outputs.
+
+    Parameters
+    ----------
+    model_type : type of ModelT
+        Pydantic model class to serialize via ``model_dump(mode="json")`` and
+        reconstruct via ``model_validate``.
+    """
+
+    def __init__(self, model_type: type[ModelT]) -> None:
+        self._model_type = model_type
+
+    def serialize(self, output: ModelT) -> dict[str, Any]:
+        """Serialize ``output`` using Pydantic JSON mode."""
+        return output.model_dump(mode="json")
+
+    def deserialize(self, payload: dict[str, Any]) -> ModelT:
+        """Validate and reconstruct ``ModelT`` from ``payload``."""
+        return self._model_type.model_validate(payload)
+
+
+class CallableOutputCodec[OutT]:
+    """Functional :class:`CheckpointOutputCodec` backed by explicit callables.
+
+    Parameters
+    ----------
+    serializer : Callable[[OutT], dict[str, Any]]
+        Function turning a domain output into a JSON-serializable dict.
+    deserializer : Callable[[dict[str, Any]], OutT]
+        Function reconstructing the domain output from a stored dict.
+    """
+
+    def __init__(
+        self,
+        serializer: Callable[[OutT], dict[str, Any]],
+        deserializer: Callable[[dict[str, Any]], OutT],
+    ) -> None:
+        self._serializer = serializer
+        self._deserializer = deserializer
+
+    def serialize(self, output: OutT) -> dict[str, Any]:
+        """Serialize ``output`` via the configured serializer callable."""
+        return self._serializer(output)
+
+    def deserialize(self, payload: dict[str, Any]) -> OutT:
+        """Deserialize ``payload`` via the configured deserializer callable."""
+        return self._deserializer(payload)
 
 
 class SystematicBatchFailureError(RuntimeError):
@@ -116,13 +189,16 @@ class CheckpointedBatchExecutor[ItemT, OutT]:
             ]
             | None
         ) = None,
+        output_codec: CheckpointOutputCodec[OutT] | None = None,
     ) -> None:
         if (process_batch_fn is None) == (process_item_fn is None):
             raise ValueError(
                 "Exactly one of process_batch_fn or process_item_fn must be provided."
             )
 
-        self.checkpoint_store = checkpoint_store
+        self.checkpoint_store: PhaseCheckpointStore = (
+            checkpoint_store if checkpoint_store is not None else NoOpCheckpointStore()
+        )
         self.phase_tag = phase_tag
         self.batch_size = max(1, batch_size)
         self.item_key_fn = item_key_fn
@@ -131,6 +207,21 @@ class CheckpointedBatchExecutor[ItemT, OutT]:
         self.on_batch_complete = on_batch_complete
         self.guard_systematic_failure = guard_systematic_failure
         self.custom_commit_fn = custom_commit_fn
+        self.output_codec = output_codec
+
+    async def _recover_prior_outputs(self, skipped_keys: list[str]) -> list[OutT]:
+        """Deserialize previously checkpointed outputs for ``skipped_keys``."""
+        if not skipped_keys or self.output_codec is None:
+            return []
+        prior_payloads = await self.checkpoint_store.get_checkpoint_payloads(
+            self.phase_tag
+        )
+        recovered: list[OutT] = []
+        for key in skipped_keys:
+            raw = prior_payloads.get(key)
+            if raw is not None:
+                recovered.append(self.output_codec.deserialize(raw))
+        return recovered
 
     async def execute(
         self,
@@ -149,7 +240,8 @@ class CheckpointedBatchExecutor[ItemT, OutT]:
         Returns
         -------
         BatchExecutionResult of OutT
-            Execution result container with accumulated outputs and item records.
+            Execution result container with recovered + newly accumulated outputs
+            and item records.
 
         Raises
         ------
@@ -161,28 +253,26 @@ class CheckpointedBatchExecutor[ItemT, OutT]:
                 outputs=[], records=[], succeeded_count=0, failed_count=0
             )
 
-        if self.checkpoint_store is not None:
-            all_keys = [self.item_key_fn(item) for item in items]
-            pending_keys = set(
-                await self.checkpoint_store.filter_unprocessed_items(
-                    all_keys, self.phase_tag
-                )
+        all_keys = [self.item_key_fn(item) for item in items]
+        pending_keys = set(
+            await self.checkpoint_store.filter_unprocessed_items(
+                all_keys, self.phase_tag
             )
-            pending_items = [
-                item for item in items if self.item_key_fn(item) in pending_keys
-            ]
-            skipped_count = len(items) - len(pending_items)
-            if skipped_count > 0 and on_batch_advance is not None:
-                on_batch_advance(skipped_count)
-        else:
-            pending_items = list(items)
+        )
+        pending_items = [
+            item for item in items if self.item_key_fn(item) in pending_keys
+        ]
+        skipped_keys = [key for key in all_keys if key not in pending_keys]
+        if skipped_keys and on_batch_advance is not None:
+            on_batch_advance(len(skipped_keys))
+
+        all_outputs: list[OutT] = await self._recover_prior_outputs(skipped_keys)
 
         if not pending_items:
             return BatchExecutionResult(
-                outputs=[], records=[], succeeded_count=0, failed_count=0
+                outputs=all_outputs, records=[], succeeded_count=0, failed_count=0
             )
 
-        all_outputs: list[OutT] = []
         all_records: list[PhaseItemRecord] = []
         succeeded_total = 0
         failed_total = 0
@@ -190,6 +280,7 @@ class CheckpointedBatchExecutor[ItemT, OutT]:
         for batch_tuple in batched(pending_items, self.batch_size):
             pending_batch = list(batch_tuple)
             first_exception: Exception | None = None
+            batch_payloads: dict[str, dict[str, Any]] = {}
 
             if self.process_batch_fn is not None:
                 batch_outputs, batch_records = await self.process_batch_fn(
@@ -199,6 +290,10 @@ class CheckpointedBatchExecutor[ItemT, OutT]:
                 assert self.process_item_fn is not None
                 tasks = [self.process_item_fn(item) for item in pending_batch]
                 raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                for res in raw_results:
+                    if isinstance(res, BaseException) and not isinstance(res, Exception):
+                        raise res
 
                 batch_outputs = []
                 batch_records = []
@@ -222,6 +317,8 @@ class CheckpointedBatchExecutor[ItemT, OutT]:
                         )
                         if res is not None:
                             batch_outputs.append(res)
+                            if self.output_codec is not None:
+                                batch_payloads[key] = self.output_codec.serialize(res)
 
             failed_records = [r for r in batch_records if r.status == "failed"]
 
@@ -244,7 +341,11 @@ class CheckpointedBatchExecutor[ItemT, OutT]:
             all_outputs.extend(batch_outputs)
             all_records.extend(batch_records)
 
-            # Unit-of-Work invariant: persist domain outputs BEFORE committing item checkpoints
+            # Unit-of-Work invariant: persist domain outputs & payloads BEFORE committing item checkpoints
+            if batch_payloads:
+                await self.checkpoint_store.save_checkpoint_payloads(
+                    self.phase_tag, batch_payloads
+                )
             if self.on_batch_complete is not None:
                 await self.on_batch_complete(batch_outputs, batch_records)
 
@@ -252,7 +353,7 @@ class CheckpointedBatchExecutor[ItemT, OutT]:
                 await self.custom_commit_fn(
                     self.phase_tag, batch_outputs, batch_records
                 )
-            elif self.checkpoint_store is not None and batch_records:
+            elif batch_records:
                 await self.checkpoint_store.commit_phase_items(
                     self.phase_tag, batch_records
                 )
@@ -303,14 +404,17 @@ class CheckpointedStreamExecutor[StreamKeyT, ItemT, StateT, OutT]:
     process_item_fn : Callable[[ItemT, StateT], Awaitable[OutT]]
         Sequential step processor evaluating ``item`` against ``state`` and updating ``state``.
     persist_item_fn : Callable[[ItemT, OutT], Awaitable[None]] or None, default None
-        Unit-of-work persistence callback invoked after ``process_item_fn`` succeeds and
-        before saving the state snapshot.
+        Unit-of-work persistence callback invoked after saving the state snapshot
+        and checkpoint payload.
     max_concurrent_streams : int, default 4
         Maximum number of streams evaluated concurrently.
     first_batch_size : int, default 10
         Window size for the initial systematic failure guard.
     guard_systematic_failure : bool, default True
         Whether to abort when the initial ``first_batch_size`` items fail identically.
+    output_codec : CheckpointOutputCodec[OutT] or None, default None
+        Optional codec used to persist each item's output before marking it processed
+        and to recover already-completed items from ``checkpoint_store`` on restart.
     """
 
     def __init__(
@@ -329,8 +433,11 @@ class CheckpointedStreamExecutor[StreamKeyT, ItemT, StateT, OutT]:
         max_concurrent_streams: int = 4,
         first_batch_size: int = 10,
         guard_systematic_failure: bool = True,
+        output_codec: CheckpointOutputCodec[OutT] | None = None,
     ) -> None:
-        self.checkpoint_store = checkpoint_store
+        self.checkpoint_store: PhaseCheckpointStore = (
+            checkpoint_store if checkpoint_store is not None else NoOpCheckpointStore()
+        )
         self.phase_tag = phase_tag
         self.item_key_fn = item_key_fn
         self.stream_key_fn = stream_key_fn
@@ -343,6 +450,33 @@ class CheckpointedStreamExecutor[StreamKeyT, ItemT, StateT, OutT]:
         self.max_concurrent_streams = max(1, max_concurrent_streams)
         self.first_batch_size = max(1, first_batch_size)
         self.guard_systematic_failure = guard_systematic_failure
+        self.output_codec = output_codec
+
+    async def _recover_prior_outputs(
+        self,
+        pending_items: Sequence[ItemT],
+        all_items: Sequence[ItemT] | None,
+    ) -> list[OutT]:
+        """Deserialize previously checkpointed outputs for items omitted from ``pending_items``."""
+        if self.output_codec is None or not all_items:
+            return []
+        pending_keys = {self.item_key_fn(item) for item in pending_items}
+        skipped_keys = [
+            self.item_key_fn(item)
+            for item in all_items
+            if self.item_key_fn(item) not in pending_keys
+        ]
+        if not skipped_keys:
+            return []
+        prior_payloads = await self.checkpoint_store.get_checkpoint_payloads(
+            self.phase_tag
+        )
+        recovered: list[OutT] = []
+        for key in skipped_keys:
+            raw = prior_payloads.get(key)
+            if raw is not None:
+                recovered.append(self.output_codec.deserialize(raw))
+        return recovered
 
     async def execute(
         self,
@@ -350,6 +484,7 @@ class CheckpointedStreamExecutor[StreamKeyT, ItemT, StateT, OutT]:
         *,
         all_items: Sequence[ItemT] | None = None,
         on_item_advance: Callable[[int], None] | None = None,
+        on_recovered: Callable[[list[OutT]], None] | None = None,
     ) -> BatchExecutionResult[OutT]:
         """Execute partitioned sequential streams concurrently.
 
@@ -359,14 +494,19 @@ class CheckpointedStreamExecutor[StreamKeyT, ItemT, StateT, OutT]:
             Unprocessed items remaining for this phase.
         all_items : Sequence of ItemT or None, optional
             Complete sequence of items (including already processed ones) used to locate
-            the predecessor item when restoring state snapshots mid-stream.
+            the predecessor item when restoring state snapshots mid-stream and to recover
+            pre-crash outputs when ``output_codec`` is configured.
         on_item_advance : Callable[[int], None] or None, optional
             Progress callback invoked as each item completes.
+        on_recovered : Callable[[list[OutT]], None] or None, optional
+            Optional callback invoked with recovered pre-crash outputs before pending
+            streams start executing (e.g. to seed in-memory readers/linkers).
 
         Returns
         -------
         BatchExecutionResult of OutT
-            Aggregated outputs, item checkpoint records, and completion counts.
+            Aggregated outputs (recovered + newly processed), item checkpoint
+            records, and completion counts.
 
         Raises
         ------
@@ -374,9 +514,12 @@ class CheckpointedStreamExecutor[StreamKeyT, ItemT, StateT, OutT]:
             If the first ``min(len(pending_items), first_batch_size)`` items fail with
             the same exception type and zero items have succeeded.
         """
+        recovered_outputs = await self._recover_prior_outputs(pending_items, all_items)
+        if recovered_outputs and on_recovered is not None:
+            on_recovered(recovered_outputs)
         if not pending_items:
             return BatchExecutionResult(
-                outputs=[], records=[], succeeded_count=0, failed_count=0
+                outputs=recovered_outputs, records=[], succeeded_count=0, failed_count=0
             )
 
         stream_pending_map: dict[StreamKeyT, list[ItemT]] = defaultdict(list)
@@ -407,7 +550,7 @@ class CheckpointedStreamExecutor[StreamKeyT, ItemT, StateT, OutT]:
                 stream_all = stream_all_map[stream_key]
 
                 # Mid-stream crash recovery from predecessor snapshot
-                if self.checkpoint_store is not None and stream_all and stream_pending:
+                if stream_all and stream_pending:
                     first_pending_key = self.item_key_fn(stream_pending[0])
                     first_idx = next(
                         (
@@ -466,13 +609,16 @@ class CheckpointedStreamExecutor[StreamKeyT, ItemT, StateT, OutT]:
                                 ) from first_exc
                         continue
 
+                    await self.checkpoint_store.save_chunk_state_snapshot(
+                        self.phase_tag, key, self.snapshot_state_fn(state)
+                    )
+                    if self.output_codec is not None:
+                        await self.checkpoint_store.save_checkpoint_payloads(
+                            self.phase_tag, {key: self.output_codec.serialize(output)}
+                        )
+
                     if self.persist_item_fn is not None:
                         await self.persist_item_fn(item, output)
-
-                    if self.checkpoint_store is not None:
-                        await self.checkpoint_store.save_chunk_state_snapshot(
-                            self.phase_tag, key, self.snapshot_state_fn(state)
-                        )
 
                     succeeded_total += 1
                     stream_outputs.append(output)
@@ -488,7 +634,7 @@ class CheckpointedStreamExecutor[StreamKeyT, ItemT, StateT, OutT]:
             *(_run_single_stream(k) for k in stream_keys)
         )
 
-        all_outputs: list[OutT] = []
+        all_outputs: list[OutT] = list(recovered_outputs)
         all_records: list[PhaseItemRecord] = []
         for s_outputs, s_records in stream_results:
             all_outputs.extend(s_outputs)

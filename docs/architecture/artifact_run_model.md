@@ -195,7 +195,7 @@ Every view tracks the exact list of `consumed_artifact_ids` read during `from_co
 ### In-Memory `ArtifactSubgraphReader` & `FileSystemCheckpointStore`
 
 - **`ArtifactSubgraphReader` (`GraphReader`)**: Every `EpistemicStateView` exposes `view.to_graph_reader()`, returning a deterministic in-memory `GraphReader` backed by the view's canonical entities, chunks, triples, mention envelopes, and theory atoms. Phase runners (`Phase2`, `Phase3`, `Phase3b`, `Phase4Maturation`, `Phase4`, `Phase5`, `Phase6`, `TheoreticalEnrichment`) execute 1-hop/k-hop neighborhood queries, vector similarity searches, and entity lookups 100% offline against `ArtifactSubgraphReader` with zero Neo4j dependency.
-- **`FileSystemCheckpointStore` (`PhaseCheckpointStore`)**: Default append-only JSONL Write-Ahead Log (WAL) under `<artifacts_dir>/_checkpoints/` scoped by `(phase_key, lineage_fingerprint)`. Isolates intra-phase batch checkpoints and committed Phase 3 triples across concurrent or alternating runs with different LLM/config parameters.
+- **`FileSystemCheckpointStore` (`PhaseCheckpointStore`)**: Default atomic JSON checkpoint store (`.json.tmp` write + atomic `Path.replace`) under `<artifacts_dir>/_checkpoints/` scoped by `(phase_key, lineage_fingerprint)`. Isolates intra-phase batch checkpoints, short-term memory snapshots, and committed Phase 3 triples across concurrent or alternating runs with different LLM/config parameters.
 
 ### Runner Interface
 
@@ -220,7 +220,7 @@ Located in `episteme_pipeline/projection/artifact_projector.py` and `episteme_pi
 Execution is strictly decoupled from graph storage:
 
 1. **Zero direct runner writes to `projection_graph`**: Phase runners never receive `projection_graph`; all target graph mutations flow exclusively through `ArtifactGraphProjector`.
-2. **Batched Topological Projection (`project_collection`)**: When `config.execution.project_artifacts_to_graph` is enabled, the orchestrator calls `await self._projector.project_collection(collection, batch_size=500)`. `ArtifactGraphProjector` deduplicates envelopes by `identity_key` (`latest_only=True`) and projects them in topological order (**Nodes before Edges**: `DOCUMENT`, `CHUNK`, `LINKED_ENTITY`, `THEORY_ATOM` first; `ENTITY_MENTION`, `LOCAL_RELATION`, `GLOBAL_RELATION`, `CANONICALIZATION`, `THEORY_RELATION`, `FUSION_DECISION`, `THEORETICAL_ENRICHMENT` second) using batched `GraphWriter` bulk calls (`upsert_chunks`, `upsert_entities`, `upsert_relations`, `upsert_triples`, `upsert_argument_components`, `upsert_theory_relations`, `upsert_communities`).
+2. **Batched Topological Projection (`project_collection`)**: When `config.execution.project_artifacts_to_graph` is enabled, the orchestrator calls `await self._projector.project_collection(collection, batch_size=500)`. `ArtifactGraphProjector` deduplicates envelopes by `identity_key` (`latest_only=True`) and projects them in topological order (**Nodes before Edges**: `DOCUMENT`, `CHUNK`, `LINKED_ENTITY`, `THEORY_ATOM`, and reified `:TheoryInference` nodes first; `ENTITY_MENTION`, `LOCAL_RELATION`, `GLOBAL_RELATION`, `CANONICALIZATION`, and `THEORY_RELATION` edges second) using batched `GraphWriter` bulk calls (`upsert_nodes`, `upsert_chunks`, `upsert_entities`, `upsert_relations`, `upsert_triples`, `upsert_argument_components`, `upsert_theory_relations`).
 3. **Hydration Re-Projection**: When a run reuses upstream phases from a parent run and targets a `projection_graph`, the hydrated `initial_previous_collection` is bulk-projected before downstream phases execute.
 4. **Dual Projection Streams**:
    - **Property Graph Projection** (`ArtifactGraphProjector`): Projects artifact envelopes into concrete Neo4j nodes and relationships in topological batches.
@@ -232,17 +232,17 @@ Execution is strictly decoupled from graph storage:
 
 | Artifact Payload | Graph Mutation Target | Labels / Rel Types | Properties & Metadata |
 |:---|:---|:---|:---|
-| `DocumentArtifact` | Node + Edges | `:Document`, `:Chapter`, `:NEXT_CHUNK` | `document_id`, `title`, `source_path`, hierarchical chapter spine |
-| `ChunkArtifact` | Node (Batched) | `:Chunk` | `chunk_id`, `text`, `document_id`, `sequence_index`, `token_count` |
-| `EntityMentionArtifact` | Edge (Batched) | `(:Entity)-[:EXTRACTED_FROM]->(:Chunk)` | `entity_type`, `surface_form`, `textual_envelope` |
-| `LinkedEntityArtifact` | Node (Batched) | `:<entity_type>` / `:Entity` | `entity_id`, `name`, `description`, `textual_envelope`, `is_mature`, `confidence` |
+| `DocumentArtifact` | Node (Batched via `upsert_nodes`) | `:Document` | `document_id`, `title`, `source_path`, `toc_structure`, `document_summary`, `global_thesis` |
+| `ChunkArtifact` | Node (Batched) | `:Chunk` | `chunk_id`, `text`, `document_id`, `chapter_id`, `sequence_index`, `token_count`, `embedding` |
+| `EntityMentionArtifact` | Edge (Batched) | `(:Entity)-[:EXTRACTED_FROM]->(:Chunk)` | `entity_type`, `surface_form`, `textual_envelope`, `confidence` |
+| `LinkedEntityArtifact` | Node (Batched) | `:<entity_type>` / `:Entity` | `entity_id`, `name`, `description`, `textual_envelope`, `is_mature`, `confidence`, `conceptions` |
 | `LocalRelationArtifact` | Edge (Batched) | `(:Entity)-[:<PREDICATE> {scope: "local"}]->(:Entity)` | `confidence`, `source_chunk_id` |
 | `GlobalRelationArtifact` | Edge (Batched) | `(:Entity)-[:<PREDICATE> {scope: "global"}]->(:Entity)` | `confidence`, `supporting_chunk_ids` |
-| `TheoryAtomArtifact` | Node + Edges (Batched) | `:<component_type>` / `:TheoryAtom`, `:EXTRACTED_FROM`, `:MENTIONS` | `component_id`, `text`, `plausibility`, `epistemic_status`, `scope_type`, `tenability` |
-| `TheoryRelationArtifact` | Edge (Batched) | `(:TheoryAtom)-[:<REL_TYPE>]->(:TheoryAtom)` | `scope`, `confidence`, `weight`, `tenability` |
+| `TheoryAtomArtifact` | Node (Batched) | `:TheoryAtom` | `component_id`, `text`, `component_type`, `modal_prior`, `local_tenability`, `equilibrium_strength`, `parameters`, `measurements`, `tenability` |
+| `TheoryRelationArtifact` | Edge / Reified Node + Edges (Batched) | `(:TheoryAtom)-[:<REL_TYPE>]->(:TheoryAtom)` or `:TheoryInference` with `:HAS_PREMISE` / `:CONCLUDES` | `scope`, `confidence`, `weight`, `edge_tenability`, `t_norm` |
 | `CanonicalizationArtifact` | Edge (Batched) | `(:Entity)-[:SAME_AS]->(:Entity)` | `confidence: 1.0`, `source: "phase3b_consolidation"` |
-| `FusionDecisionArtifact` | Node/Edge (Batched) | `:Community` / `(:TheoryAtom)-[:EQUIVALENT_FUSION]->(:TheoryAtom)` | Community memberships and equivalence fusion links |
-| `TheoreticalEnrichmentArtifact` | Node + Edges | `:Theory`, `:HAS_THEORY_ELEMENT`, `:GOVERNED_BY` | Postulated theoretical parameters, local/edge tenabilities |
+| `FusionDecisionArtifact` | Explicit No-Op (View-Canonicalized) | — | Equivalence cluster decisions applied directly by `Phase4ArtifactsView` / `Phase5ArtifactsView` |
+| `TheoreticalEnrichmentArtifact` | Edge Metadata Patch | — | Updates `edge_tenability` on projected `TheoryRelation` items before batch flush (enriched atom parameters/tenability are emitted via updated `TheoryAtomArtifact` envelopes) |
 | `EpistemicDeficitArtifact` | Explicit No-Op | — | Audit/coordination signal (`project_to_graph` and `collect_for_projection` are explicit no-ops) |
 
 ---

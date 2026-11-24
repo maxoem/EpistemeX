@@ -70,6 +70,7 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
                     "processed_items": dict(raw.get("processed_items", {})),
                     "committed_triples": list(raw.get("committed_triples", [])),
                     "chunk_snapshots": dict(raw.get("chunk_snapshots", {})),
+                    "checkpoint_payloads": dict(raw.get("checkpoint_payloads", {})),
                 }
                 self._cache[phase] = state
                 return state
@@ -81,6 +82,7 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
             "processed_items": {},
             "committed_triples": [],
             "chunk_snapshots": {},
+            "checkpoint_payloads": {},
         }
         self._cache[phase] = state
         return state
@@ -94,6 +96,7 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
             "processed_items": state["processed_items"],
             "committed_triples": state["committed_triples"],
             "chunk_snapshots": state.get("chunk_snapshots", {}),
+            "checkpoint_payloads": state.get("checkpoint_payloads", {}),
         }
         tmp_path = path.with_suffix(".json.tmp")
         tmp_path.write_text(json.dumps(serializable, indent=2), encoding="utf-8")
@@ -284,6 +287,45 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
         return [
             L2Triple.model_validate(raw) for raw in state["committed_triples"]
         ]
+
+    async def save_checkpoint_payloads(
+        self, phase: str, payloads: dict[str, dict[str, Any]]
+    ) -> None:
+        """Persist intermediate JSON-serializable item outputs for mid-phase crash recovery.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier (optionally scoped by lineage fingerprint).
+        payloads : dict of str to dict of str to Any
+            Mapping from item key to serialized output payload.
+        """
+        if not payloads:
+            return
+        state = self._load_phase_state(phase)
+        store_payloads = state.setdefault("checkpoint_payloads", {})
+        for k, v in payloads.items():
+            store_payloads[k] = dict(v)
+        self._save_phase_state(phase, state)
+
+    async def get_checkpoint_payloads(
+        self, phase: str
+    ) -> dict[str, dict[str, Any]]:
+        """Retrieve all persisted intermediate item outputs for ``phase``.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier (optionally scoped by lineage fingerprint).
+
+        Returns
+        -------
+        dict of str to dict of str to Any
+            Mapping from item key to serialized output payload.
+        """
+        state = self._load_phase_state(phase)
+        raw = state.get("checkpoint_payloads", {})
+        return {k: dict(v) for k, v in raw.items()}
 
     async def clear_phase_checkpoints(self, phase: str) -> None:
         """Delete all checkpoints recorded for ``phase``.

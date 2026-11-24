@@ -232,6 +232,7 @@ class PipelineFactory(Fingerprintable):
         llm: Any,
         embedding_model: EmbeddingModel | None,
         decision_engine: DecisionEngine | None,
+        checkpoint_store: PhaseCheckpointStore | None = None,
     ) -> Any:
         """Construct the default Phase 4 / refinement ``ARCClassifier`` strategy."""
         from episteme_pipeline.phases.phase4_argument_mining.arc_classifier import (
@@ -258,6 +259,7 @@ class PipelineFactory(Fingerprintable):
             adaptive_k_gamma=p4_cfg.arc_adaptive_k_gamma,
             adaptive_k_min=p4_cfg.arc_adaptive_k_min,
             z_score_threshold=p4_cfg.arc_z_score_threshold,
+            checkpoint_store=checkpoint_store,
         )
         if decision_engine is not None:
             return CascadingARCClassifier(
@@ -268,6 +270,13 @@ class PipelineFactory(Fingerprintable):
                     confidence_threshold=p4_cfg.arc_confidence_threshold,
                     max_candidates_per_component=p4_cfg.arc_max_candidates_per_component,
                     conformal_alpha=p4_cfg.conformal_alpha,
+                    use_priority_rank=p4_cfg.arc_use_priority_rank,
+                    use_csls=p4_cfg.arc_use_csls,
+                    csls_k_nearest=p4_cfg.arc_csls_k_nearest,
+                    use_adaptive_k=p4_cfg.arc_use_adaptive_k,
+                    adaptive_k_gamma=p4_cfg.arc_adaptive_k_gamma,
+                    adaptive_k_min=p4_cfg.arc_adaptive_k_min,
+                    z_score_threshold=p4_cfg.arc_z_score_threshold,
                 ),
                 llm_classifier=default_tag_arc,
                 config=p4_cfg,
@@ -656,6 +665,7 @@ class PipelineFactory(Fingerprintable):
                 config=config.theoretical_enrichment,
                 schema=config.graph_schema,
                 graph_store=None,
+                checkpoint_store=resolved_checkpoint_store,
                 llm=llm,
                 theorynet_projector=shared_projector,
             )
@@ -680,6 +690,7 @@ class PipelineFactory(Fingerprintable):
             llm=llm,
             embedding_model=normalized_embedding,
             decision_engine=decision_engine,
+            checkpoint_store=resolved_checkpoint_store,
         )
 
         if config.refinement.max_refinement_cycles > 0:
@@ -892,6 +903,7 @@ class PipelineFactory(Fingerprintable):
                 config.phase4_maturation,
                 llm=components.llm,
                 graph_store=None,
+                checkpoint_store=components.checkpoint_store,
                 embedding_model=components.embedding_model,
             ),
             Phase4Runner(
@@ -940,6 +952,7 @@ class PipelineFactory(Fingerprintable):
                         config=config.theoretical_enrichment,
                         schema=config.graph_schema,
                         graph_store=None,
+                        checkpoint_store=components.checkpoint_store,
                         llm=components.llm,
                         theorynet_projector=enrichment_projector,
                     )

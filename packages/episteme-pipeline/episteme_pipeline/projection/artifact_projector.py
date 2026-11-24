@@ -248,8 +248,12 @@ class ProjectionBatch(ProjectionBatchAccumulator):
         # ------------------------------------------------------------------
         # Pass 1: Nodes (Documents -> Chunks -> Entities -> TheoryAtoms -> TheoryInferences)
         # ------------------------------------------------------------------
-        for doc in self.documents:
-            await doc.project_to_graph(graph_store)
+        doc_nodes = [
+            {"id": doc.document_id, "props": doc.to_node_properties()}
+            for doc in self.documents
+        ]
+        for doc_batch in batched(doc_nodes, effective_batch):
+            await graph_store.upsert_nodes("Document", list(doc_batch))
 
         for chunk_batch in batched(self.chunks, effective_batch):
             await graph_store.upsert_chunks(list(chunk_batch))
@@ -260,23 +264,22 @@ class ProjectionBatch(ProjectionBatchAccumulator):
         for atom_batch in batched(self.theory_atoms, effective_batch):
             await graph_store.upsert_argument_components(list(atom_batch))
 
-        for rel in reified_rels:
-            await graph_store.upsert_node(
-                "TheoryInference",
-                rel.relation_id,
-                theory_inference_node_properties(
+        inference_nodes = [
+            {
+                "id": rel.relation_id,
+                "props": theory_inference_node_properties(
                     rel,
                     schema=eff_schema,
                     t_norm=eff_t_norm,
                 ),
-            )
-
+            }
+            for rel in reified_rels
+        ]
         for stub_id in sorted(targeted_rel_ids - reified_ids):
-            await graph_store.upsert_node(
-                "TheoryInference",
-                stub_id,
-                {"id": stub_id},
-            )
+            inference_nodes.append({"id": stub_id, "props": {"id": stub_id}})
+
+        for inf_batch in batched(inference_nodes, effective_batch):
+            await graph_store.upsert_nodes("TheoryInference", list(inf_batch))
 
         # ------------------------------------------------------------------
         # Pass 2: Edges (Mentions/Canonicalizations -> Triples -> Reified Hyperedges -> TheoryRelations)

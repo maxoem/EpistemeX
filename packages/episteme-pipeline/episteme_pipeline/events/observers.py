@@ -349,3 +349,11 @@ class CompositeObserver(EventObserver):
             "events_delivered": dict(self.events_delivered),
             "observer_errors": {k: list(v) for k, v in self.observer_errors.items()},
         }
+
+    def reset_observer_telemetry(self) -> None:
+        """Reset delivery and error counters for all child observers."""
+        self.events_delivered.clear()
+        self.observer_errors.clear()
+        for observer in self.observers:
+            if isinstance(observer, CompositeObserver):
+                observer.reset_observer_telemetry()

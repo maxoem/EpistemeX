@@ -282,6 +282,11 @@ class Phase3bConfig(BaseModel):
     relation_overlap_threshold: float = 0.8
     use_csls: bool = True
     csls_k_nearest: int = 10
+    use_adaptive_k: bool = True
+    adaptive_k_gamma: float = 2.0
+    adaptive_k_min: int = 2
+    max_candidates_per_entity: int = 50
+    z_score_threshold: float | None = None
     min_internal_similarity: float = 0.70
     max_diameter: float | None = None
     verification: ConsolidationVerificationConfig = Field(default_factory=ConsolidationVerificationConfig)

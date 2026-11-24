@@ -35,6 +35,7 @@ from episteme_pipeline.protocols.decision import (
     DecisionScore,
     ensure_decision_question,
 )
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 logger = logging.getLogger(__name__)
 
@@ -1047,7 +1048,7 @@ class AutoDecisionEngine:
         """
         inner_fp = (
             self._inner.fingerprint()
-            if hasattr(self._inner, "fingerprint") and callable(self._inner.fingerprint)
+            if isinstance(self._inner, Fingerprintable)
             else {"class": self._inner.__class__.__name__}
         )
         return {

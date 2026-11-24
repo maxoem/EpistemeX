@@ -9,6 +9,7 @@ graph projection (ISSUE-046), and symmetric lifecycle event emission (ISSUE-052)
 from __future__ import annotations
 
 import logging
+import warnings
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -38,12 +39,12 @@ from episteme_pipeline.events import (
     ComponentStarted,
     ContextualEventEmitter,
     EventEmitter,
-    EventObserver,
     NoOpEventEmitter,
     PhaseCompleted,
     PhaseFailed,
     PhaseReused,
     QualityGateEvaluated,
+    ResettableTelemetry,
     RunCompleted,
     RunFailed,
     RunStarted,
@@ -59,6 +60,7 @@ from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.protocols.quality_gate import (
     QualityGateResult,
     QualityGateViolationError,
+    QualityGateWarning,
 )
 from episteme_pipeline.protocols.refinement import (
     HermeneuticRefinementCoordinator,
@@ -105,70 +107,6 @@ def _artifact_kind_str(kind: Any) -> str:
     if isinstance(kind, Enum):
         return str(kind.value)
     return str(kind)
-
-
-class _GateEventSpy(EventEmitter):
-    """Contextual event emitter spy tracking QualityGateEvaluated emissions.
-
-    Wraps an underlying :class:`~episteme_pipeline.events.EventEmitter` to detect
-    whether a quality gate published a :class:`~episteme_pipeline.events.QualityGateEvaluated`
-    event during evaluation, enabling symmetric lifecycle emission without duplication.
-
-    Parameters
-    ----------
-    inner : EventEmitter or None
-        Underlying event emitter to delegate event dispatch and observer management to.
-    """
-
-    def __init__(self, inner: EventEmitter | None) -> None:
-        self._inner = inner or NoOpEventEmitter()
-        self.emitted_gate_event = False
-
-    def emit(self, event: Any) -> None:
-        """Emit an event to the inner emitter, flagging QualityGateEvaluated occurrences.
-
-        Parameters
-        ----------
-        event : Any
-            Pipeline event to emit.
-        """
-        if isinstance(event, QualityGateEvaluated):
-            self.emitted_gate_event = True
-        self._inner.emit(event)
-
-    def register_observer(self, observer: EventObserver) -> None:
-        """Register an observer with the inner event emitter.
-
-        Parameters
-        ----------
-        observer : EventObserver
-            The observer to register.
-        """
-        self._inner.register_observer(observer)
-
-    def unregister_observer(self, observer: EventObserver) -> None:
-        """Unregister an observer from the inner event emitter.
-
-        Parameters
-        ----------
-        observer : EventObserver
-            The observer to unregister.
-        """
-        self._inner.unregister_observer(observer)
-
-    def flush(self) -> None:
-        """Flush pending events or spans across all registered observers."""
-        self._inner.flush()
-
-    def get_observer_telemetry(self) -> dict[str, Any]:
-        """Collect telemetry metadata across all registered observers.
-
-        Returns
-        -------
-        dict of str to Any
-            Observer telemetry metrics.
-        """
-        return self._inner.get_observer_telemetry()
 
 
 class ArtifactExecutionEngine:
@@ -830,47 +768,21 @@ class ArtifactExecutionEngine:
         if not gates:
             return []
 
-        class _GateEventSpy(EventEmitter):
-            """Contextual spy tracking whether a gate emitted QualityGateEvaluated."""
-
-            def __init__(self, inner: EventEmitter | None) -> None:
-                self._inner = inner or NoOpEventEmitter()
-                self.emitted_gate_event = False
-
-            def emit(self, event: Any) -> None:
-                if isinstance(event, QualityGateEvaluated):
-                    self.emitted_gate_event = True
-                self._inner.emit(event)
-
-            def register_observer(self, observer: Any) -> None:
-                self._inner.register_observer(observer)
-
-            def unregister_observer(self, observer: Any) -> None:
-                self._inner.unregister_observer(observer)
-
-            def flush(self) -> None:
-                self._inner.flush()
-
-            def get_observer_telemetry(self) -> dict[str, Any]:
-                return self._inner.get_observer_telemetry()
-
         results: list[QualityGateResult] = []
         for gate in gates:
-            spy = _GateEventSpy(phase_emitter)
             try:
-                with use_event_emitter(spy):
-                    gate_result = gate.evaluate(
-                        entry.phase_key,
-                        phase_collection,
-                        cumulative_collection,
-                        context,
-                    )
+                gate_result = gate.evaluate(
+                    entry.phase_key,
+                    phase_collection,
+                    cumulative_collection,
+                    context,
+                )
             except QualityGateViolationError as qg_exc:
                 if record is not None:
                     record.notes[f"quality_gate.{qg_exc.result.gate_name}"] = (
                         qg_exc.result.message
                     )
-                if not spy.emitted_gate_event and phase_emitter is not None:
+                if phase_emitter is not None:
                     phase_emitter.emit(
                         QualityGateEvaluated(
                             gate_name=qg_exc.result.gate_name,
@@ -889,7 +801,7 @@ class ArtifactExecutionEngine:
                 record.notes[f"quality_gate.{gate_result.gate_name}"] = (
                     gate_result.message
                 )
-            if not spy.emitted_gate_event and phase_emitter is not None:
+            if phase_emitter is not None:
                 phase_emitter.emit(
                     QualityGateEvaluated(
                         gate_name=gate_result.gate_name,
@@ -902,8 +814,14 @@ class ArtifactExecutionEngine:
                         run_id=context.run_id,
                     )
                 )
-            if not gate_result.passed and gate_result.severity == "halt":
-                raise QualityGateViolationError(gate_result)
+            if not gate_result.passed:
+                if gate_result.severity == "halt":
+                    raise QualityGateViolationError(gate_result)
+                warnings.warn(
+                    gate_result.message,
+                    QualityGateWarning,
+                    stacklevel=2,
+                )
             results.append(gate_result)
 
         return results
@@ -940,6 +858,9 @@ class ArtifactExecutionEngine:
         ExecutionResult
             Final manifest and run report.
         """
+        if isinstance(self.event_emitter, ResettableTelemetry):
+            self.event_emitter.reset_observer_telemetry()
+
         if self.config.execution.persist_run_manifests:
             self.manifest_store.write_manifest(manifest)
 
@@ -1155,6 +1076,14 @@ class ArtifactExecutionEngine:
                 )
                 if isinstance(chk_store, PhaseCheckpointStore):
                     await chk_store.clear_phase_checkpoints(entry.phase_key)
+                    await chk_store.clear_phase_checkpoints(
+                        f"{entry.phase_key}:{lineage_fp}"
+                    )
+                    if entry.phase_key == "phase4":
+                        await chk_store.clear_phase_checkpoints("phase4_arc")
+                        await chk_store.clear_phase_checkpoints(
+                            f"phase4_arc:{lineage_fp}"
+                        )
 
             record = records_by_ordinal.get(ordinal)
             if record is not None:
@@ -1206,6 +1135,16 @@ class ArtifactExecutionEngine:
                         record=record,
                         phase_emitter=phase_emitter,
                     )
+                    if self.config.execution.should_persist_artifacts(
+                        entry.phase_key
+                    ):
+                        for art in collection.artifacts:
+                            await self.artifact_store.write_artifact(art)
+
+                    if self.config.execution.project_artifacts_to_graph:
+                        await self.projector.project_collection(
+                            collection, batch_size=500
+                        )
             except Exception as exc:
                 logger.exception("Phase %s failed", phase_name)
                 fail_time = datetime.now(UTC)
@@ -1272,16 +1211,10 @@ class ArtifactExecutionEngine:
                 report.observer_telemetry = (
                     self.event_emitter.get_observer_telemetry()
                 )
+                manifest.observer_telemetry = report.observer_telemetry
                 if self.config.execution.persist_run_manifests:
                     self.manifest_store.write_manifest(manifest)
                 raise
-
-            if self.config.execution.should_persist_artifacts(entry.phase_key):
-                for art in collection.artifacts:
-                    await self.artifact_store.write_artifact(art)
-
-            if self.config.execution.project_artifacts_to_graph:
-                await self.projector.project_collection(collection, batch_size=500)
 
             produced_ids = [a.artifact_id for a in collection.artifacts]
             if record is not None:
@@ -1369,6 +1302,7 @@ class ArtifactExecutionEngine:
         )
         self.event_emitter.flush()
         report.observer_telemetry = self.event_emitter.get_observer_telemetry()
+        manifest.observer_telemetry = report.observer_telemetry
 
         if self.config.execution.persist_run_manifests:
             self.manifest_store.write_manifest(manifest)
@@ -1591,6 +1525,30 @@ class ArtifactExecutionEngine:
                     refine_context,
                     config=self.config.refinement,
                 )
+                forward_ids = {
+                    art.artifact_id for art in forward_collection.history
+                }
+                new_refinement_artifacts = [
+                    art
+                    for art in refined_collection.history
+                    if art.artifact_id not in forward_ids
+                ]
+                if self.config.execution.should_persist_artifacts("refinement"):
+                    for art in new_refinement_artifacts:
+                        await self.artifact_store.write_artifact(art)
+
+                latest_new_artifacts = [
+                    art
+                    for art in refined_collection.latest_by_identity.values()
+                    if art.artifact_id not in forward_ids
+                ]
+                if (
+                    self.config.execution.project_artifacts_to_graph
+                    and latest_new_artifacts
+                ):
+                    await self.projector.project_collection(
+                        ArtifactCollection(latest_new_artifacts), batch_size=500
+                    )
         except Exception as exc:
             logger.exception("Hermeneutic refinement loop failed")
             fail_time = datetime.now(UTC)
@@ -1617,6 +1575,7 @@ class ArtifactExecutionEngine:
             report.observer_telemetry = (
                 self.event_emitter.get_observer_telemetry()
             )
+            manifest.observer_telemetry = report.observer_telemetry
             if self.config.execution.persist_run_manifests:
                 self.manifest_store.write_manifest(manifest)
             raise
@@ -1627,29 +1586,6 @@ class ArtifactExecutionEngine:
                 rec.input_fingerprint = refine_lineage_fp
         report.phase_records = list(manifest.phase_records)
         report.manifest = manifest
-
-        forward_ids = {art.artifact_id for art in forward_collection.history}
-        new_refinement_artifacts = [
-            art
-            for art in refined_collection.history
-            if art.artifact_id not in forward_ids
-        ]
-        if self.config.execution.should_persist_artifacts("refinement"):
-            for art in new_refinement_artifacts:
-                await self.artifact_store.write_artifact(art)
-
-        latest_new_artifacts = [
-            art
-            for art in refined_collection.latest_by_identity.values()
-            if art.artifact_id not in forward_ids
-        ]
-        if (
-            self.config.execution.project_artifacts_to_graph
-            and latest_new_artifacts
-        ):
-            await self.projector.project_collection(
-                ArtifactCollection(latest_new_artifacts), batch_size=500
-            )
 
         self._record_new_artifacts_in_report(report, new_refinement_artifacts)
         return refined_collection
@@ -2316,6 +2252,7 @@ class ArtifactExecutionEngine:
             invalidated_phase_ordinals=invalidated_phase_ordinals,
             invalidation_reason=manifest.invalidation_reason,
             artifact_entries=entries,
+            observer_telemetry=dict(manifest.observer_telemetry),
         )
 
     @staticmethod

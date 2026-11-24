@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from episteme_pipeline.contracts.domain import TheoryAtom, TheoryRelation
+from episteme_pipeline.protocols.fingerprint import Fingerprintable
 
 
 class InducedTheoryLaw(BaseModel):
@@ -259,7 +260,7 @@ class EmpiricalCluster:
         return dims
 
 
-class TheoryRegistry:
+class TheoryRegistry(Fingerprintable):
     """Registry holding active Theory-Element definitions.
 
     Parameters
@@ -275,6 +276,38 @@ class TheoryRegistry:
         if seed_theories:
             for theory in seed_theories:
                 self.register(theory)
+
+    def fingerprint(self) -> dict[str, Any]:
+        """Return deterministic fingerprint of all registered Theory-Element definitions.
+
+        Returns
+        -------
+        dict of str to Any
+            JSON-serializable registry identity and sorted theory definitions.
+        """
+        return {
+            "class": self.__class__.__name__,
+            "theories": [
+                {
+                    "theory_id": t.theory_id,
+                    "name": t.name,
+                    "required_dimensions": sorted(t.required_dimensions),
+                    "parameter_names": sorted(t.parameter_names),
+                    "max_admissible_blur": t.max_admissible_blur,
+                    "claimant_hypothesis_ids": sorted(t.claimant_hypothesis_ids),
+                    "laws": [
+                        {
+                            "law_id": law.law_id,
+                            "description": law.description,
+                            "formula_expression": law.formula_expression,
+                            "involved_parameters": sorted(law.involved_parameters),
+                        }
+                        for law in t.laws
+                    ],
+                }
+                for _, t in sorted(self._theories.items())
+            ],
+        }
 
     def register(self, theory: TheoryElementDefinition) -> None:
         """Register a new Theory-Element definition.

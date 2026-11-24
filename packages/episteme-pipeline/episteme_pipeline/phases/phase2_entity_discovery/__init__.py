@@ -79,11 +79,13 @@ from episteme_pipeline.protocols.extractors import (
 from episteme_pipeline.protocols.graph_store import (
     GraphReader,
     GraphWriter,
+    NoOpCheckpointStore,
     PhaseCheckpointStore,
     ProcessingGraph,
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runtime.batch_executor import (
+    CallableOutputCodec,
     CheckpointedStreamExecutor,
     SystematicBatchFailureError,
 )
@@ -231,6 +233,16 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         self._stream_memory_managers: dict[
             tuple[str, str], EpisodicWorkingMemoryManager
         ] = {}
+        self._checkpoint_store: PhaseCheckpointStore = (
+            graph_store
+            if isinstance(graph_store, PhaseCheckpointStore)
+            else NoOpCheckpointStore()
+        )
+
+    @property
+    def checkpoint_store(self) -> PhaseCheckpointStore:
+        """Return the active checkpoint store for within-phase stream checkpointing."""
+        return self._checkpoint_store
 
     def _get_stream_memory_manager(
         self,
@@ -239,14 +251,9 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
     ) -> EpisodicWorkingMemoryManager:
         """Retrieve or fork an episodic working memory manager scoped to ``stream_key``."""
         if stream_key not in self._stream_memory_managers:
-            if not self._stream_memory_managers:
-                if anchor is not None and self.working_memory_manager.anchor is None:
-                    self.working_memory_manager.anchor = anchor
-                self._stream_memory_managers[stream_key] = self.working_memory_manager
-            else:
-                self._stream_memory_managers[stream_key] = (
-                    self.working_memory_manager.fork(anchor=anchor)
-                )
+            self._stream_memory_managers[stream_key] = (
+                self.working_memory_manager.fork(anchor=anchor)
+            )
         return self._stream_memory_managers[stream_key]
 
     async def run(
@@ -297,11 +304,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         all_entities: list[L2Entity] = []
         all_triples: list[L2Triple] = []
         mention_envelopes: dict[tuple[str, str], str] = {}
-        checkpoint_store = (
-            self.graph_store
-            if isinstance(self.graph_store, PhaseCheckpointStore)
-            else None
-        )
+        checkpoint_store = self.checkpoint_store
 
         if isinstance(context, ArtifactExecutionContext):
             hydration = context.hydrator(self.phase_key, self.name).hydrate_phase2(chunks)
@@ -312,24 +315,35 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             for ent in hydration.entities:
                 reader.register_entity(ent)
 
-        if not chunks and not all_entities and not all_triples:
-            return ArtifactCollection([])
+        chunk_codec = CallableOutputCodec[_ChunkDiscoveryStepOutput](
+            serializer=lambda out: {
+                "chunk_id": out[2],
+                "entities": [
+                    {"entity": entity.model_dump(mode="json"), "envelope": env}
+                    for entity, env in out[0]
+                ],
+                "triples": [t.model_dump(mode="json") for t in out[1]],
+            },
+            deserializer=lambda raw: (
+                [
+                    (L2Entity.model_validate(item["entity"]), item.get("envelope"))
+                    for item in raw.get("entities", [])
+                ],
+                [L2Triple.model_validate(t) for t in raw.get("triples", [])],
+                str(raw.get("chunk_id", "")),
+            ),
+        )
 
-        if not chunks:
-            deduped_entities, deduped_triples, rewritten_envelopes = (
-                self._deduplicate_entities(
-                    all_entities,
-                    curation_ledger=curation_ledger,
-                    triples=all_triples,
-                    mention_envelopes=mention_envelopes,
-                )
-            )
-            return self._build_artifacts(
-                deduped_entities,
-                deduped_triples,
-                rewritten_envelopes,
-                context.run_id,
-            )
+        def _register_recovered_outputs(
+            recovered: list[_ChunkDiscoveryStepOutput],
+        ) -> None:
+            for resolved_entities, triples, chunk_id in recovered:
+                for ent, env in resolved_entities:
+                    all_entities.append(ent)
+                    reader.register_entity(ent)
+                    if env:
+                        mention_envelopes[(ent.id, chunk_id)] = env
+                all_triples.extend(triples)
 
         async def _process_chunk_step(
             chunk: L1Chunk, memory_mgr: EpisodicWorkingMemoryManager
@@ -416,6 +430,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                 snapshot_state_fn=lambda mgr: mgr.snapshot_state(),
                 process_item_fn=_process_chunk_step,
                 persist_item_fn=_persist_chunk_step,
+                output_codec=chunk_codec,
                 max_concurrent_streams=self.config.max_concurrent_chapters,
                 first_batch_size=self.config.batch_size,
                 guard_systematic_failure=True,
@@ -425,11 +440,15 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                     chunks,
                     all_items=input.chunks,
                     on_item_advance=advance,
+                    on_recovered=_register_recovered_outputs,
                 )
             except SystematicBatchFailureError as exc:
                 raise SystematicChunkFailure(
                     str(exc).replace("items", "chunks")
                 ) from exc
+
+        if not chunks and not all_entities and not all_triples:
+            return ArtifactCollection([])
 
         deduped_entities, deduped_triples, rewritten_envelopes = (
             self._deduplicate_entities(

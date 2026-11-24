@@ -1,11 +1,12 @@
 """
 LLMADUSegmenter — default ADUSegmenter implementation.
 
-Uses LlamaIndex astructured_predict to identify Argumentative Discourse Units
-and wrap them in <ACn>...</ACn> markup tags. On parsing failure the segmenter
-returns (chunk_text, []) — no ADUs found — and logs a warning.
-The chunk is still marked as processed to avoid infinite retry of non-argumentative
-chunks (e.g. bibliography sections, tables of contents).
+Uses structured LLM decoding to identify Argumentative Discourse Units and wrap
+them in ``<ACn>...</ACn>`` markup tags. Legitimately non-argumentative chunks
+(e.g., bibliographies or tables of contents) return ``(chunk_text, [])`` and are
+checkpointed normally, whereas LLM or parsing exceptions propagate to
+``Phase4Runner``'s ``CheckpointedBatchExecutor`` for quarantine or systematic
+failure detection.
 """
 
 from __future__ import annotations

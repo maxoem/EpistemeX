@@ -52,13 +52,21 @@ from episteme_pipeline.post_processing.theoretical_enrichment.projectors import 
 from episteme_pipeline.post_processing.theoretical_enrichment.solvers import (
     TenabilitySolver,
 )
-from episteme_pipeline.protocols.graph_store import PhaseCheckpointStore, ProjectionGraph
+from episteme_pipeline.protocols.graph_store import (
+    GraphWriter,
+    NoOpCheckpointStore,
+    PhaseCheckpointStore,
+    ProjectionGraph,
+)
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.protocols.refinement import (
     EpistemicDeficitDetector,
     ensure_deficit_detector,
 )
-from episteme_pipeline.runtime.batch_executor import CheckpointedBatchExecutor
+from episteme_pipeline.runtime.batch_executor import (
+    CallableOutputCodec,
+    CheckpointedBatchExecutor,
+)
 from episteme_pipeline.schema.default_schema import SchemaConfig
 
 logger = logging.getLogger(__name__)
@@ -140,7 +148,8 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         self,
         config: TheoreticalEnrichmentConfig | None = None,
         schema: SchemaConfig | None = None,
-        graph_store: ProjectionGraph | None = None,
+        graph_store: ProjectionGraph | PhaseCheckpointStore | None = None,
+        checkpoint_store: PhaseCheckpointStore | None = None,
         registry: TheoryRegistry | None = None,
         projector: TheoryProjector | None = None,
         solver: TenabilitySolver | None = None,
@@ -154,6 +163,15 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         self.config = config or TheoreticalEnrichmentConfig()
         self.schema = schema or SchemaConfig()
         self.graph_store = graph_store
+        self._checkpoint_store: PhaseCheckpointStore = (
+            checkpoint_store
+            if checkpoint_store is not None
+            else (
+                graph_store
+                if isinstance(graph_store, PhaseCheckpointStore)
+                else NoOpCheckpointStore()
+            )
+        )
         self.registry = registry or TheoryRegistry()
         self.llm: StructuredLLM | None = ensure_structured_llm(llm) if llm is not None else None
         self.theorynet_projector: TheoryNetProjector = (
@@ -190,6 +208,11 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             weight_local=self.config.weight_local,
             weight_edge=self.config.weight_edge,
         )
+
+    @property
+    def checkpoint_store(self) -> PhaseCheckpointStore:
+        """Return the active checkpoint store for within-phase batch checkpointing."""
+        return self._checkpoint_store
 
 
     def _resolve_curated_inputs(
@@ -336,24 +359,14 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             )
 
         # -------------------------------------------------------------
-        # -------------------------------------------------------------
         # Step 2: Domain-Specific Projections (Phi_spec) & Local Tenability (TS_local)
         # Pass 1: Project parameters and evaluate local tenability for all (cluster, theory) pairs
         # -------------------------------------------------------------
-        cluster_theory_params: dict[tuple[str, str], dict[str, Any]] = {}
-        cluster_local_results: dict[tuple[str, str], tuple[float, float, list[str]]] = {}
-
-        checkpoint_store = (
-            self.graph_store
-            if isinstance(self.graph_store, PhaseCheckpointStore)
-            else None
-        )
         effective_phase = (
             f"{self.phase_key}:{context.lineage_fingerprint}"
             if context and context.lineage_fingerprint
             else self.phase_key
         )
-
         eval_items: list[tuple[EmpiricalCluster, str]] = [
             (cluster, theory_id)
             for cluster in clusters
@@ -378,15 +391,34 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                 (ts_local, delta_star, local_anomalies),
             )
 
+        enrichment_codec = CallableOutputCodec[
+            tuple[str, str, dict[str, Any], tuple[float, float, list[str]]]
+        ](
+            serializer=lambda out: {
+                "cluster_id": out[0],
+                "theory_id": out[1],
+                "params": out[2],
+                "local_res": [out[3][0], out[3][1], list(out[3][2])],
+            },
+            deserializer=lambda raw: (
+                str(raw["cluster_id"]),
+                str(raw["theory_id"]),
+                dict(raw["params"]),
+                (
+                    float(raw["local_res"][0]),
+                    float(raw["local_res"][1]),
+                    list(raw["local_res"][2]),
+                ),
+            ),
+        )
+
         async def _on_enrichment_batch(
             batch_results: list[
                 tuple[str, str, dict[str, Any], tuple[float, float, list[str]]]
             ],
-            records: list[PhaseItemRecord],
+            _records: list[PhaseItemRecord],
         ) -> None:
             for cluster_id, theory_id, params, local_res in batch_results:
-                cluster_theory_params[(cluster_id, theory_id)] = params
-                cluster_local_results[(cluster_id, theory_id)] = local_res
                 self.event_emitter.emit(
                     TheoreticalParametersProjected(
                         run_id=context.run_id,
@@ -396,7 +428,7 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
                         parameters=params,
                     )
                 )
-                ts_local, delta_star, local_anomalies = local_res
+                ts_local, _delta_star, local_anomalies = local_res
                 for anom in local_anomalies:
                     self.event_emitter.emit(
                         TenabilityAnomalyDetected(
@@ -413,15 +445,22 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
             tuple[EmpiricalCluster, str],
             tuple[str, str, dict[str, Any], tuple[float, float, list[str]]],
         ](
-            checkpoint_store=checkpoint_store,
+            checkpoint_store=self.checkpoint_store,
             phase_tag=effective_phase,
             batch_size=10,
             item_key_fn=lambda it: f"enrichment::{it[0].cluster_id}::{it[1]}",
             process_item_fn=_eval_cluster_theory,
+            output_codec=enrichment_codec,
             on_batch_complete=_on_enrichment_batch,
-            guard_systematic_failure=False,
+            guard_systematic_failure=True,
         )
-        await executor.execute(eval_items)
+        batch_result = await executor.execute(eval_items)
+        cluster_theory_params: dict[tuple[str, str], dict[str, Any]] = {
+            (cid, tid): params for cid, tid, params, _ in batch_result.outputs
+        }
+        cluster_local_results: dict[tuple[str, str], tuple[float, float, list[str]]] = {
+            (cid, tid): local_res for cid, tid, _, local_res in batch_result.outputs
+        }
 
         # -------------------------------------------------------------
         # Step 4: Edge Tenability & Aggregated Consistency (TS_edge, GL)
@@ -722,7 +761,10 @@ class TheoreticalEnrichmentRunner(PhaseRunner[Phase4ArtifactsView]):
         # -------------------------------------------------------------
         # Step 5: Graph Persistence
         # -------------------------------------------------------------
-        if self.graph_store:
+        if self.graph_store is not None and not (
+            isinstance(self.graph_store, PhaseCheckpointStore)
+            and not isinstance(self.graph_store, GraphWriter)
+        ):
             from itertools import batched
 
             if atoms_to_update:

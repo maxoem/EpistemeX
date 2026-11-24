@@ -225,6 +225,7 @@ class StubARCClassifier:
         graph_store: Any,
         global_extractor: Any,
         schema: Any,
+        lineage_fingerprint: str | None = None,
     ) -> list[TheoryRelation]:
         if len(local_components) >= 2:
             return [

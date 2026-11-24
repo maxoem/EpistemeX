@@ -50,11 +50,15 @@ from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.graph_store import (
     GraphReader,
     GraphWriter,
+    NoOpCheckpointStore,
     PhaseCheckpointStore,
     ProcessingGraph,
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
-from episteme_pipeline.runtime.batch_executor import CheckpointedBatchExecutor
+from episteme_pipeline.runtime.batch_executor import (
+    CheckpointedBatchExecutor,
+    PydanticOutputCodec,
+)
 from episteme_pipeline.utils.similarity import cosine_similarity_matrix, l2_normalize
 
 logger = logging.getLogger(__name__)
@@ -460,13 +464,23 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
         config: Phase4EntityMaturationConfig,
         *,
         llm: Any,
-        graph_store: ProcessingGraph | GraphReader | None = None,
+        graph_store: ProcessingGraph | GraphReader | PhaseCheckpointStore | None = None,
+        checkpoint_store: PhaseCheckpointStore | None = None,
         embedding_model: EmbeddingModel | None = None,
         conception_clusterer: ConceptionClustererProtocol | None = None,
     ) -> None:
         self.config = config
         self.llm = ensure_structured_llm(llm)
         self.graph_store = graph_store
+        self._checkpoint_store: PhaseCheckpointStore = (
+            checkpoint_store
+            if checkpoint_store is not None
+            else (
+                graph_store
+                if isinstance(graph_store, PhaseCheckpointStore)
+                else NoOpCheckpointStore()
+            )
+        )
         self.embedding_model: EmbeddingModel = (
             embedding_model or _default_embedding_model()
         )
@@ -489,6 +503,46 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
             )
         )
 
+    @property
+    def checkpoint_store(self) -> PhaseCheckpointStore:
+        """Return the active checkpoint store for within-phase batch checkpointing."""
+        return self._checkpoint_store
+
+    def _build_matured_artifact(
+        self,
+        matured_entity: L2Entity,
+        context: ArtifactExecutionContext,
+    ) -> Any:
+        """Construct a :class:`LinkedEntityArtifact` envelope for ``matured_entity``."""
+        from episteme_pipeline.artifacts.builders import build_linked_entity_artifact
+
+        mention_ids = [
+            f"artifact::mention::{matured_entity.id}::{cid}"
+            for cid in matured_entity.source_chunk_ids
+        ]
+        prev_collection = context.previous if context is not None else None
+        prev_entity_env = (
+            prev_collection.latest_by_identity.get(
+                f"linked_entity::{matured_entity.id}"
+            )
+            if prev_collection is not None
+            else None
+        )
+        prev_entity_art_id = (
+            prev_entity_env.artifact_id
+            if prev_entity_env is not None
+            else f"artifact::{matured_entity.id}"
+        )
+        return build_linked_entity_artifact(
+            matured_entity,
+            mention_ids,
+            run_id=context.run_id,
+            phase_name=self.name,
+            method="Phase4EntityMaturationRunner",
+            upstream_artifact_ids=[prev_entity_art_id, *mention_ids],
+            phase_tag=self.phase_key,
+        )
+
     async def run(
         self, input: Phase3ArtifactsView, context: ArtifactExecutionContext
     ) -> ArtifactCollection:
@@ -507,7 +561,6 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
             Collection of matured :class:`LinkedEntityArtifact` envelopes.
         """
         logger.info("Starting Entity Maturation batch synthesis...")
-        from episteme_pipeline.artifacts.builders import build_linked_entity_artifact
 
         if input.entities:
             all_entities = list(input.entities)
@@ -517,21 +570,11 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
             all_entities = []
 
         immature_entities = [e for e in all_entities if not e.is_mature]
-
         logger.info(
             f"Found {len(immature_entities)} immature entities out of {len(all_entities)} total."
         )
 
-        matured_artifacts = []
         chunk_to_doc = {c.id: c.source_doc_id for c in input.chunks}
-
-        progress_task = f"Phase 4 Maturation: {len(immature_entities)} entities"
-        batch_size = self.config.batch_size
-        checkpoint_store = (
-            self.graph_store
-            if isinstance(self.graph_store, PhaseCheckpointStore)
-            else None
-        )
         effective_phase = (
             f"{self.phase_key}:{context.lineage_fingerprint}"
             if context and context.lineage_fingerprint
@@ -549,64 +592,33 @@ class Phase4EntityMaturationRunner(PhaseRunner[Phase3ArtifactsView]):
 
         async def _on_maturation_batch(
             batch_entities: list[L2Entity],
-            records: list[PhaseItemRecord],
+            _records: list[PhaseItemRecord],
         ) -> None:
-            prev_collection = context.previous if context is not None else None
-            for matured_entity in batch_entities:
-                mention_ids = [
-                    f"artifact::mention::{matured_entity.id}::{cid}"
-                    for cid in matured_entity.source_chunk_ids
-                ]
-                prev_entity_env = (
-                    prev_collection.latest_by_identity.get(
-                        f"linked_entity::{matured_entity.id}"
-                    )
-                    if prev_collection is not None
-                    else None
-                )
-                prev_entity_art_id = (
-                    prev_entity_env.artifact_id
-                    if prev_entity_env is not None
-                    else f"artifact::{matured_entity.id}"
-                )
-                matured_artifacts.append(
-                    build_linked_entity_artifact(
-                        matured_entity,
-                        mention_ids,
-                        run_id=context.run_id,
-                        phase_name=self.name,
-                        method="Phase4EntityMaturationRunner",
-                        upstream_artifact_ids=[
-                            prev_entity_art_id,
-                            *mention_ids,
-                        ],
-                        phase_tag=self.phase_key,
-                    )
-                )
-
             if batch_entities and isinstance(self.graph_store, GraphWriter):
                 for sub_batch in batched(batch_entities, 500):
                     await self.graph_store.upsert_entities(list(sub_batch))
 
+        progress_task = f"Phase 4 Maturation: {len(immature_entities)} entities"
         with self.progress_scope(
             progress_task,
             total_items=len(immature_entities),
             description="Entity Maturation",
         ) as advance:
             executor = CheckpointedBatchExecutor[L2Entity, L2Entity](
-                checkpoint_store=checkpoint_store,
+                checkpoint_store=self.checkpoint_store,
                 phase_tag=effective_phase,
-                batch_size=batch_size,
+                batch_size=self.config.batch_size,
                 item_key_fn=lambda e: f"maturation::{e.id}",
                 process_item_fn=_maturation_item,
+                output_codec=PydanticOutputCodec(L2Entity),
                 on_batch_complete=_on_maturation_batch,
-                guard_systematic_failure=False,
+                guard_systematic_failure=True,
             )
-            await executor.execute(immature_entities, on_batch_advance=advance)
+            result = await executor.execute(immature_entities, on_batch_advance=advance)
 
-        if matured_artifacts:
-            return ArtifactCollection(matured_artifacts)
-        return ArtifactCollection([])
+        return ArtifactCollection(
+            [self._build_matured_artifact(entity, context) for entity in result.outputs]
+        )
 
     @staticmethod
     def _align_envelopes(

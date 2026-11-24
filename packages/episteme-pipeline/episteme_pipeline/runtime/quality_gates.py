@@ -26,7 +26,6 @@ References
 from __future__ import annotations
 
 import math
-import warnings
 from typing import TYPE_CHECKING, Any, Literal
 
 from episteme_pipeline.artifacts.execution import (
@@ -46,20 +45,16 @@ from episteme_pipeline.artifacts.models import (
 )
 from episteme_pipeline.config import PipelineConfig, QualityGatesConfig
 from episteme_pipeline.decision.observable import ObservableDecisionEngine
-from episteme_pipeline.events.context import get_event_emitter
-from episteme_pipeline.events.models import QualityGateEvaluated
 from episteme_pipeline.protocols.quality_gate import (
     EpistemicQualityGate,
     QualityGateResult,
-    QualityGateViolationError,
-    QualityGateWarning,
 )
 
 if TYPE_CHECKING:
     from episteme_pipeline.protocols.decision import DecisionEngine
 
 
-def _finalize_gate_evaluation(
+def _build_gate_result(
     *,
     gate_name: str,
     phase_key: str,
@@ -68,7 +63,7 @@ def _finalize_gate_evaluation(
     metrics: dict[str, float],
     message: str,
 ) -> QualityGateResult:
-    """Emit telemetry event and apply violation policy for a quality gate check.
+    """Build a pure :class:`QualityGateResult` domain outcome contract without side effects.
 
     Parameters
     ----------
@@ -88,19 +83,14 @@ def _finalize_gate_evaluation(
     Returns
     -------
     QualityGateResult
-        Evaluation outcome contract.
-
-    Raises
-    ------
-    QualityGateViolationError
-        If ``passed`` is False and ``on_violation == "raise"``.
+        Pure evaluation outcome contract.
     """
     severity: Literal["pass", "warn", "halt"] = (
         "pass"
         if passed
         else ("halt" if on_violation == "raise" else "warn")
     )
-    result = QualityGateResult(
+    return QualityGateResult(
         gate_name=gate_name,
         phase_key=phase_key,
         passed=passed,
@@ -108,22 +98,6 @@ def _finalize_gate_evaluation(
         metrics=metrics,
         message=message,
     )
-    get_event_emitter().emit(
-        QualityGateEvaluated(
-            gate_name=gate_name,
-            phase_key=phase_key,
-            passed=passed,
-            severity=severity,
-            metrics=dict(metrics),
-            message=message,
-            phase=phase_key,
-        )
-    )
-    if not passed:
-        if on_violation == "raise":
-            raise QualityGateViolationError(result)
-        warnings.warn(message, QualityGateWarning, stacklevel=3)
-    return result
 
 
 class OntologyEntropyGate:
@@ -342,7 +316,7 @@ class OntologyEntropyGate:
             if passed
             else f"OntologyEntropyGate violation after '{phase_key}': {'; '.join(reasons)}."
         )
-        return _finalize_gate_evaluation(
+        return _build_gate_result(
             gate_name=self.name,
             phase_key=phase_key,
             passed=passed,
@@ -552,6 +526,12 @@ class PercolationQualityGate:
         l2_pop_sz, l2_max_sz, l2_merges, l2_ratio = _eval_layer(
             l2_population, l2_alias
         )
+        l3_eligible = l3_pop_sz >= self.min_population and l3_merges > 0
+        l2_eligible = l2_pop_sz >= self.min_population and l2_merges > 0
+        if l2_eligible and not l3_eligible:
+            return l2_pop_sz, l2_max_sz, l2_merges
+        if l3_eligible and not l2_eligible:
+            return l3_pop_sz, l3_max_sz, l3_merges
         if l2_merges > 0 and l2_ratio > l3_ratio:
             return l2_pop_sz, l2_max_sz, l2_merges
         return l3_pop_sz, l3_max_sz, l3_merges
@@ -624,7 +604,7 @@ class PercolationQualityGate:
                 f"({cluster_fraction:.3f}) exceeds rho_max={self.max_cluster_fraction:.3f}."
             )
 
-        return _finalize_gate_evaluation(
+        return _build_gate_result(
             gate_name=self.name,
             phase_key=phase_key,
             passed=passed,
@@ -658,7 +638,7 @@ class ConformalCalibrationGate:
         from which phase-level recorded prediction sets are harvested.
     target_phases : frozenset of str, optional
         Phase keys after which this gate is evaluated (defaults to
-        ``{"phase3", "phase4"}``).
+        ``{"phase2", "phase3", "phase3b", "phase4", "phase5"}``).
     """
 
     def __init__(
@@ -670,7 +650,9 @@ class ConformalCalibrationGate:
         min_samples: int = 1,
         on_violation: Literal["warn", "raise"] = "warn",
         decision_engine: DecisionEngine | None = None,
-        target_phases: frozenset[str] = frozenset({"phase3", "phase4"}),
+        target_phases: frozenset[str] = frozenset(
+            {"phase2", "phase3", "phase3b", "phase4", "phase5"}
+        ),
     ) -> None:
         self.max_empty_rate = max_empty_rate
         self.max_ambiguous_rate = max_ambiguous_rate
@@ -768,7 +750,8 @@ class ConformalCalibrationGate:
         Parameters
         ----------
         phase_key : str
-            Completed phase key ('phase3' or 'phase4').
+            Completed phase key (e.g. ``'phase2'``, ``'phase3'``, ``'phase3b'``,
+            ``'phase4'``, or ``'phase5'``).
         phase_collection : ArtifactCollection
             Artifacts emitted by ``phase_key``.
         cumulative_collection : ArtifactCollection
@@ -793,7 +776,7 @@ class ConformalCalibrationGate:
                 "singleton_rate": 0.0,
                 "ood_rate": 0.0,
             }
-            return _finalize_gate_evaluation(
+            return _build_gate_result(
                 gate_name=self.name,
                 phase_key=phase_key,
                 passed=True,
@@ -846,7 +829,7 @@ class ConformalCalibrationGate:
             if passed
             else f"ConformalCalibrationGate violation after '{phase_key}': {'; '.join(reasons)}."
         )
-        return _finalize_gate_evaluation(
+        return _build_gate_result(
             gate_name=self.name,
             phase_key=phase_key,
             passed=passed,

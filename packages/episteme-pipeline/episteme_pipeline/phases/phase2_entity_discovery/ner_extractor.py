@@ -5,8 +5,11 @@ Uses LlamaIndex's astructured_predict to call the LLM with a typed Pydantic
 output schema. The NER prompt (from pipeline/prompts/default_prompts.py) is
 injected with {entity_types} and {relation_types} from SchemaConfig at runtime.
 
-On parsing failure (malformed LLM output) the extractor logs and returns empty
-lists — the chunk is NOT marked as processed so it will be retried on re-run.
+On LLM or structured-decoding failure the extractor lets the exception propagate
+so ``Phase2Runner``'s ``CheckpointedStreamExecutor`` leaves the chunk unprocessed
+for retry and triggers ``SystematicChunkFailure`` if an entire initial batch fails
+systematically. Chunks that legitimately contain no entities return empty lists
+and are checkpointed normally.
 
 CoT strategy (from docs/workflow/2_entity_discovery/prompting.md):
   The prompt instructs the model to first identify logical connectives and

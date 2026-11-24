@@ -96,7 +96,6 @@ def _filter_valid_local_relations(
         retained = next_retained
 from episteme_pipeline.decision.gleaning import GleaningStoppingOracle, JevGleaningGate
 from episteme_pipeline.decision.modal_resolver import HybridModalResolver
-from episteme_pipeline.phases.chunk_selection import select_pending_chunks
 from episteme_pipeline.phases.phase2_entity_discovery import SystematicChunkFailure
 from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import (
     LLMACCClassifier,
@@ -123,6 +122,7 @@ from episteme_pipeline.protocols.extractors import GlobalRelationExtractor
 from episteme_pipeline.protocols.graph_store import (
     GraphReader,
     GraphWriter,
+    NoOpCheckpointStore,
     PhaseCheckpointStore,
     ProcessingGraph,
 )
@@ -132,6 +132,7 @@ from episteme_pipeline.protocols.modality import (
 )
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runtime.batch_executor import (
+    CallableOutputCodec,
     CheckpointedBatchExecutor,
     SystematicBatchFailureError,
 )
@@ -268,6 +269,16 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             adaptive_k_gamma=config.arc_adaptive_k_gamma,
             adaptive_k_min=config.arc_adaptive_k_min,
             z_score_threshold=config.arc_z_score_threshold,
+            checkpoint_store=(
+                graph_store
+                if isinstance(graph_store, PhaseCheckpointStore)
+                else NoOpCheckpointStore()
+            ),
+        )
+        self._checkpoint_store: PhaseCheckpointStore = (
+            graph_store
+            if isinstance(graph_store, PhaseCheckpointStore)
+            else NoOpCheckpointStore()
         )
         self.arc_classifier: ARCClassifier = arc_classifier or (
             CascadingARCClassifier(
@@ -278,6 +289,13 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                     confidence_threshold=config.arc_confidence_threshold,
                     max_candidates_per_component=config.arc_max_candidates_per_component,
                     conformal_alpha=config.conformal_alpha,
+                    use_priority_rank=config.arc_use_priority_rank,
+                    use_csls=config.arc_use_csls,
+                    csls_k_nearest=config.arc_csls_k_nearest,
+                    use_adaptive_k=config.arc_use_adaptive_k,
+                    adaptive_k_gamma=config.arc_adaptive_k_gamma,
+                    adaptive_k_min=config.arc_adaptive_k_min,
+                    z_score_threshold=config.arc_z_score_threshold,
                 ),
                 llm_classifier=default_tag_arc,
                 config=self.config,
@@ -290,6 +308,11 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
     def gleaning_gate(self) -> GleaningStoppingOracle:
         return self.stopping_oracle
 
+    @property
+    def checkpoint_store(self) -> PhaseCheckpointStore:
+        """Return the active checkpoint store for within-phase batch checkpointing."""
+        return self._checkpoint_store
+
     async def run(
         self, input: Phase3ArtifactsView, context: ArtifactExecutionContext
     ) -> ArtifactCollection:
@@ -298,9 +321,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             if context and context.lineage_fingerprint
             else _PHASE_TAG
         )
-        chunks = await select_pending_chunks(
-            self.graph_store, effective_phase, input.chunks
-        )
+        chunks = list(input.chunks)
 
         reader = input.to_graph_reader()
         use_artifact_reader = bool(
@@ -327,7 +348,6 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             all_components = []
         all_local_relations: list[TheoryRelation] = []
 
-        import asyncio
         from itertools import batched
         if isinstance(context, ArtifactExecutionContext):
             hydration = context.hydrator(self.phase_key, self.name).hydrate_phase4(chunks)
@@ -339,10 +359,23 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             for rel in hydration.local_relations:
                 reader.register_theory_relation(rel)
 
-        checkpoint_store = (
-            self.graph_store
-            if isinstance(self.graph_store, PhaseCheckpointStore)
-            else None
+        checkpoint_store = self.checkpoint_store
+        chunk_codec = CallableOutputCodec[
+            tuple[list[TheoryAtom], list[TheoryRelation], str]
+        ](
+            serializer=lambda out: {
+                "chunk_id": out[2],
+                "components": [c.model_dump(mode="json") for c in out[0]],
+                "local_relations": [r.model_dump(mode="json") for r in out[1]],
+            },
+            deserializer=lambda raw: (
+                [TheoryAtom.model_validate(a) for a in raw.get("components", [])],
+                [
+                    TheoryRelation.model_validate(r)
+                    for r in raw.get("local_relations", [])
+                ],
+                str(raw.get("chunk_id", "")),
+            ),
         )
 
         async def _process_chunk_item(
@@ -354,7 +387,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
 
         async def _on_chunk_batch_complete(
             batch_results: list[tuple[list[TheoryAtom], list[TheoryRelation], str]],
-            records: list[PhaseItemRecord],
+            _records: list[PhaseItemRecord],
         ) -> None:
             new_components = []
             new_local_relations = []
@@ -367,7 +400,6 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 processed_chunk_ids.append(c_id)
 
                 for component in components:
-                    reader.register_theory_atom(component)
                     relations_to_upsert.append(
                         {
                             "from_id": component.id,
@@ -385,11 +417,6 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                                 "properties": {"confidence": 1.0},
                             }
                         )
-                for local_rel in local_rels:
-                    reader.register_theory_relation(local_rel)
-
-            all_components.extend(new_components)
-            all_local_relations.extend(new_local_relations)
 
             # Batch persist local findings when a direct GraphWriter is configured
             if isinstance(self.graph_store, GraphWriter):
@@ -397,16 +424,14 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                     await self.graph_store.upsert_argument_components(
                         list(comp_batch)
                     )
-
                 for rel_batch in batched(new_local_relations, 500):
                     await self.graph_store.upsert_theory_relations(list(rel_batch))
-
                 for rel_batch in batched(relations_to_upsert, 500):
                     await self.graph_store.upsert_relations(list(rel_batch))
 
-            if self.graph_store is not None and processed_chunk_ids:
+            if processed_chunk_ids:
                 for processed_batch in batched(processed_chunk_ids, 500):
-                    await self.graph_store.mark_chunks_processed(
+                    await checkpoint_store.mark_chunks_processed(
                         list(processed_batch), effective_phase
                     )
 
@@ -417,23 +442,33 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                 total_items=len(chunks),
                 description="Chunk ADU Extraction",
             ) as advance:
-                batch_size = self.config.batch_size
                 executor = CheckpointedBatchExecutor[
                     L1Chunk, tuple[list[TheoryAtom], list[TheoryRelation], str]
                 ](
                     checkpoint_store=checkpoint_store,
                     phase_tag=effective_phase,
-                    batch_size=batch_size,
+                    batch_size=self.config.batch_size,
                     item_key_fn=lambda ch: ch.id,
                     process_item_fn=_process_chunk_item,
+                    output_codec=chunk_codec,
                     on_batch_complete=_on_chunk_batch_complete,
                     guard_systematic_failure=True,
                 )
                 try:
-                    await executor.execute(chunks, on_batch_advance=advance)
+                    chunk_exec_res = await executor.execute(
+                        chunks, on_batch_advance=advance
+                    )
                 except SystematicBatchFailureError as exc:
                     msg = str(exc).replace("items", "chunks")
                     raise SystematicChunkFailure(msg) from exc
+
+                for components, local_rels, _c_id in chunk_exec_res.outputs:
+                    all_components.extend(components)
+                    all_local_relations.extend(local_rels)
+                    for comp in components:
+                        reader.register_theory_atom(comp)
+                    for lrel in local_rels:
+                        reader.register_theory_relation(lrel)
 
         # Deduplicate all_components by id to avoid duplicating artifacts or ARC calls
         seen_ids = set()
@@ -459,6 +494,11 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                     graph_store=active_reader,
                     global_extractor=self.global_extractor,
                     schema=self.schema,
+                    lineage_fingerprint=(
+                        context.lineage_fingerprint
+                        if context is not None
+                        else None
+                    ),
                 )
                 advance_arc(1)
 

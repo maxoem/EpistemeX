@@ -312,11 +312,13 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
                 self.event_emitter.emit(ProgressAdvanced(task_name=progress_task, advance=1))
                 return res
 
-        tasks = [
-            _extract_with_sem(candidate) for candidate in candidates
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
+        try:
+            tasks = [
+                _extract_with_sem(candidate) for candidate in candidates
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        finally:
+            self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
 
         triples: list[L2Triple] = []
         for candidate, result in zip(candidates, results):

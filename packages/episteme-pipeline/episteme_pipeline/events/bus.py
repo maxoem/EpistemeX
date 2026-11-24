@@ -72,6 +72,15 @@ class EventEmitter(Protocol):
 
 
 @runtime_checkable
+class ResettableTelemetry(Protocol):
+    """Protocol for emitters or observers whose delivery/error counters can be reset."""
+
+    def reset_observer_telemetry(self) -> None:
+        """Reset observer delivery and error counters for a new run."""
+        ...
+
+
+@runtime_checkable
 class EventObserver(Protocol):
     """Protocol for event observers.
     
@@ -149,6 +158,9 @@ class NoOpEventEmitter(EventEmitter):
             Empty events_delivered and observer_errors mappings.
         """
         return {"events_delivered": {}, "observer_errors": {}}
+
+    def reset_observer_telemetry(self) -> None:
+        """No-op reset."""
 
 
 class SimpleEventEmitter(EventEmitter):
@@ -254,6 +266,14 @@ class SimpleEventEmitter(EventEmitter):
             "observer_errors": errors,
         }
 
+    def reset_observer_telemetry(self) -> None:
+        """Reset delivery and error counters across this emitter and composite observers."""
+        self.events_delivered.clear()
+        self.observer_errors.clear()
+        for observer in self._observers:
+            if isinstance(observer, ResettableTelemetry):
+                observer.reset_observer_telemetry()
+
 
 class ContextualEventEmitter(EventEmitter):
     """EventEmitter that injects default metadata (e.g., run_id, phase).
@@ -305,3 +325,8 @@ class ContextualEventEmitter(EventEmitter):
         if isinstance(self.base, EventEmitter):
             return self.base.get_observer_telemetry()
         return {"events_delivered": {}, "observer_errors": {}}
+
+    def reset_observer_telemetry(self) -> None:
+        """Reset observer telemetry counters on the underlying base emitter."""
+        if isinstance(self.base, ResettableTelemetry):
+            self.base.reset_observer_telemetry()

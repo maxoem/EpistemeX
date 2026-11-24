@@ -65,6 +65,7 @@ from episteme_pipeline.protocols.fingerprint import Fingerprintable
 from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.protocols.quality_gate import (
     EpistemicQualityGate,
+    QualityGateResult,
     QualityGateViolationError,
     QualityGateWarning,
     ensure_quality_gate,
@@ -217,7 +218,7 @@ def test_quality_gates_implement_protocols_and_fingerprintable() -> None:
 
 
 def test_ontology_entropy_gate_passes_on_diverse_types() -> None:
-    """Verify OntologyEntropyGate passes when entity types have sufficient entropy."""
+    """Verify OntologyEntropyGate passes purely without side effects on diverse types."""
     bus = SimpleEventEmitter()
     obs = _RecordingObserver()
     bus.register_observer(obs)
@@ -250,13 +251,12 @@ def test_ontology_entropy_gate_passes_on_diverse_types() -> None:
     assert result.metrics["dominant_type_ratio"] == pytest.approx(2.0 / 6.0)
     assert result.metrics["entity_density"] == pytest.approx(3.0)
 
-    gate_events = [e for e in obs.events if isinstance(e, QualityGateEvaluated)]
-    assert len(gate_events) == 1
-    assert gate_events[0].passed is True
+    # Pure evaluator must NOT emit events directly; ArtifactExecutionEngine owns emission.
+    assert [e for e in obs.events if isinstance(e, QualityGateEvaluated)] == []
 
 
 def test_ontology_entropy_gate_detects_type_collapse_warn_and_raise() -> None:
-    """Verify OntologyEntropyGate detects >90% single-type ontological collapse."""
+    """Verify OntologyEntropyGate detects >90% single-type collapse purely with warn/halt severity."""
     chunks = [_make_chunk_env("c1")]
     # 10 entities: 10 assigned to single fallback type 'Concept' -> H = 0.0, ratio = 1.0
     entities = [_make_linked_entity_env(f"e{i}", "Concept") for i in range(10)]
@@ -269,10 +269,10 @@ def test_ontology_entropy_gate_detects_type_collapse_warn_and_raise() -> None:
         min_entities=5,
         on_violation="warn",
     )
-    with pytest.warns(QualityGateWarning, match="OntologyEntropyGate violation"):
-        res = warn_gate.evaluate("phase2", phase_col, cum_col)
+    res = warn_gate.evaluate("phase2", phase_col, cum_col)
     assert res.passed is False
     assert res.severity == "warn"
+    assert "OntologyEntropyGate violation" in res.message
     assert res.metrics["shannon_entropy"] == 0.0
     assert res.metrics["dominant_type_ratio"] == 1.0
 
@@ -282,10 +282,11 @@ def test_ontology_entropy_gate_detects_type_collapse_warn_and_raise() -> None:
         min_entities=5,
         on_violation="raise",
     )
-    with pytest.raises(QualityGateViolationError) as exc_info:
-        halt_gate.evaluate("phase2", phase_col, cum_col)
-    assert exc_info.value.result.gate_name == "ontology_entropy_gate"
-    assert exc_info.value.result.severity == "halt"
+    res_halt = halt_gate.evaluate("phase2", phase_col, cum_col)
+    assert res_halt.passed is False
+    assert res_halt.gate_name == "ontology_entropy_gate"
+    assert res_halt.severity == "halt"
+    assert "OntologyEntropyGate violation" in res_halt.message
 
 
 def test_ontology_entropy_gate_detects_zero_density_on_non_empty_chunks() -> None:
@@ -298,8 +299,10 @@ def test_ontology_entropy_gate_detects_zero_density_on_non_empty_chunks() -> Non
         require_nonzero_density=True,
         on_violation="raise",
     )
-    with pytest.raises(QualityGateViolationError, match="zero entity density"):
-        gate.evaluate("phase2", empty_phase_col, cum_col)
+    res = gate.evaluate("phase2", empty_phase_col, cum_col)
+    assert res.passed is False
+    assert res.severity == "halt"
+    assert "zero entity density" in res.message
 
 
 def test_ontology_entropy_gate_falls_back_to_entity_mentions() -> None:
@@ -368,12 +371,15 @@ def test_percolation_gate_phase3b_balanced_vs_giant_component() -> None:
         )
         for i in range(1, 7)
     ]
-    with pytest.raises(QualityGateViolationError, match="exceeds rho_max"):
-        gate.evaluate(
-            "phase3b",
-            ArtifactCollection(giant_canons),
-            ArtifactCollection(entities + giant_canons),
-        )
+    res_fail = gate.evaluate(
+        "phase3b",
+        ArtifactCollection(giant_canons),
+        ArtifactCollection(entities + giant_canons),
+    )
+    assert res_fail.passed is False
+    assert res_fail.severity == "halt"
+    assert "exceeds rho_max" in res_fail.message
+    assert res_fail.metrics["max_cluster_fraction"] == pytest.approx(0.70)
 
 
 def test_percolation_gate_phase5_fusion_collapse() -> None:
@@ -405,22 +411,73 @@ def test_percolation_gate_phase5_fusion_collapse() -> None:
         min_population=4,
         on_violation="raise",
     )
-    with pytest.raises(QualityGateViolationError) as exc_info:
-        gate.evaluate(
-            "phase5",
-            ArtifactCollection([fusion_env]),
-            ArtifactCollection(atoms + [fusion_env]),
+    res_fail = gate.evaluate(
+        "phase5",
+        ArtifactCollection([fusion_env]),
+        ArtifactCollection(atoms + [fusion_env]),
+    )
+    assert res_fail.passed is False
+    assert res_fail.severity == "halt"
+    assert res_fail.metrics["max_cluster_fraction"] == pytest.approx(0.75)
+
+
+def test_percolation_gate_phase5_respects_min_population_for_l2_vs_l3() -> None:
+    """Verify a sub-threshold L3 population does not mask a violating L2 population."""
+    # L2 has 8 entities (>= min_population=4) with 6 merged into one cluster (0.75 > 0.50)
+    entities = [_make_linked_entity_env(f"e{i}", "Concept") for i in range(8)]
+    l2_fusion = build_fusion_cluster_artifact(
+        [f"e{i}" for i in range(6)],
+        True,
+        run_id="run-test",
+        phase_name="Phase 5: Argument Web & Fusion",
+        method="test_fusion",
+    )
+    # L3 has only 2 atoms (< min_population=4), both merged -> raw ratio 1.0,
+    # which previously masked L2 and then skipped the entire gate!
+    atoms = [
+        build_theory_atom_artifact(
+            TheoryAtom(
+                id=f"atom_{i}",
+                component_type="claim",
+                text=f"Claim {i}",
+                source_chunk_id="c1",
+            ),
+            run_id="run-test",
+            phase_name="Phase 4: Argument Mining",
+            method="test_acc",
         )
-    assert exc_info.value.result.metrics["max_cluster_fraction"] == pytest.approx(0.75)
+        for i in range(2)
+    ]
+    l3_fusion = build_fusion_cluster_artifact(
+        ["atom_0", "atom_1"],
+        True,
+        run_id="run-test",
+        phase_name="Phase 5: Argument Web & Fusion",
+        method="test_fusion",
+    )
+    gate = PercolationQualityGate(
+        max_cluster_fraction=0.50,
+        min_population=4,
+        on_violation="raise",
+    )
+    res = gate.evaluate(
+        "phase5",
+        ArtifactCollection([l2_fusion, l3_fusion]),
+        ArtifactCollection(entities + atoms + [l2_fusion, l3_fusion]),
+    )
+    assert res.passed is False
+    assert res.severity == "halt"
+    assert res.metrics["population_size"] == 8.0
+    assert res.metrics["max_cluster_fraction"] == pytest.approx(0.75)
 
 
 # ---------------------------------------------------------------------------
-# 4. ConformalCalibrationGate Tests (Post-Phase 3 & Phase 4)
+# 4. ConformalCalibrationGate Tests (Post-Phase 2, 3, 3b, 4 & 5)
 # ---------------------------------------------------------------------------
 
 
 def test_conformal_calibration_gate_healthy_vs_ood_spikes() -> None:
-    """Verify ConformalCalibrationGate detects empty and ambiguous prediction set spikes."""
+    """Verify ConformalCalibrationGate detects empty and ambiguous prediction set spikes purely."""
     def _make_rel_with_ps(idx: int, prediction_set: list[str]) -> Any:
         triple = L2Triple(
             subject_id=f"s_{idx}",
@@ -450,6 +507,7 @@ def test_conformal_calibration_gate_healthy_vs_ood_spikes() -> None:
         max_ood_rate=0.50,
         on_violation="raise",
     )
+    assert {"phase2", "phase3b", "phase4", "phase5"}.issubset(gate.target_phases)
     res_ok = gate.evaluate(
         "phase3",
         ArtifactCollection(healthy_envs),
@@ -463,12 +521,14 @@ def test_conformal_calibration_gate_healthy_vs_ood_spikes() -> None:
         _make_rel_with_ps(i, [] if i < 5 else ["SUPPORTS"])
         for i in range(10)
     ]
-    with pytest.raises(QualityGateViolationError, match="empty prediction set rate"):
-        gate.evaluate(
-            "phase3",
-            ArtifactCollection(empty_spike_envs),
-            ArtifactCollection(empty_spike_envs),
-        )
+    res_empty = gate.evaluate(
+        "phase3",
+        ArtifactCollection(empty_spike_envs),
+        ArtifactCollection(empty_spike_envs),
+    )
+    assert res_empty.passed is False
+    assert res_empty.severity == "halt"
+    assert "empty prediction set rate" in res_empty.message
 
     # 3. Ambiguous set spike with warn mode: 8 multi-label sets out of 10 (0.80 > 0.70)
     ambiguous_envs = [
@@ -484,14 +544,14 @@ def test_conformal_calibration_gate_healthy_vs_ood_spikes() -> None:
         max_ood_rate=0.70,
         on_violation="warn",
     )
-    with pytest.warns(QualityGateWarning, match="ambiguous prediction set rate"):
-        res_warn = warn_gate.evaluate(
-            "phase4",
-            ArtifactCollection(ambiguous_envs),
-            ArtifactCollection(ambiguous_envs),
-        )
+    res_warn = warn_gate.evaluate(
+        "phase4",
+        ArtifactCollection(ambiguous_envs),
+        ArtifactCollection(ambiguous_envs),
+    )
     assert res_warn.passed is False
     assert res_warn.severity == "warn"
+    assert "ambiguous prediction set rate" in res_warn.message
 
 
 @pytest.mark.asyncio
@@ -517,8 +577,10 @@ async def test_conformal_calibration_gate_harvests_observable_decision_engine() 
         decision_engine=obs_engine,
         on_violation="raise",
     )
-    with pytest.raises(QualityGateViolationError, match="empty prediction set rate"):
-        gate.evaluate("phase3", ArtifactCollection([]), ArtifactCollection([]))
+    res_fail = gate.evaluate("phase2", ArtifactCollection([]), ArtifactCollection([]))
+    assert res_fail.passed is False
+    assert res_fail.severity == "halt"
+    assert "empty prediction set rate" in res_fail.message
 
     # Buffer is consumed after evaluation so subsequent phases start fresh
     assert len(obs_engine.recorded_prediction_sets) == 0
@@ -579,7 +641,19 @@ def test_workflow_dag_topology_and_cycle_detection() -> None:
     assert dag.gates_for_phase("phase2a") == (gate,)
     assert dag.gates_for_phase("phase2b") == ()
 
-    # Cyclic dependency detection
+    # Full-node dependency resolution even when phases are passed out of order
+    reordered_dag = WorkflowDAG(
+        phases=[p_join, p2_branch_b, p2_branch_a, p1],
+        quality_gates=[gate],
+        task="comparative_alignment",
+    )
+    assert reordered_dag.dependencies() == deps
+    reordered_topo = [node.phase_key for node in reordered_dag.topological_order()]
+    assert reordered_topo[0] == "phase1"
+    assert reordered_topo[-1] == "phase_join"
+    assert set(reordered_topo[1:3]) == {"phase2a", "phase2b"}
+
+    # Eager cyclic dependency detection on construction
     c1 = _StubPhaseRunner(
         name="Cycle 1",
         phase_key="c1",
@@ -590,9 +664,8 @@ def test_workflow_dag_topology_and_cycle_detection() -> None:
         phase_key="c2",
         dependencies=frozenset({"c1"}),
     )
-    cyclic_dag = WorkflowDAG(phases=[c1, c2])
     with pytest.raises(ValueError, match="Cycle detected"):
-        cyclic_dag.topological_order()
+        WorkflowDAG(phases=[c1, c2])
 
 
 # ---------------------------------------------------------------------------
@@ -627,11 +700,99 @@ def test_pipeline_delegates_to_factory_workflow_and_execution_engine(
     assert isinstance(pipeline.engine, ArtifactExecutionEngine)
     assert isinstance(pipeline, Fingerprintable)
     assert len(pipeline.quality_gates) == 3
-    assert len(pipeline.workflow.gates_for_phase("phase2")) == 1
-    assert len(pipeline.workflow.gates_for_phase("phase3b")) == 1
-    assert len(pipeline.workflow.gates_for_phase("phase5")) == 1
+    # ConformalCalibrationGate covers phase2, phase3, phase3b, phase4, phase5 by default
+    assert len(pipeline.workflow.gates_for_phase("phase2")) == 2
+    assert len(pipeline.workflow.gates_for_phase("phase3b")) == 2
+    assert len(pipeline.workflow.gates_for_phase("phase5")) == 2
     assert len(pipeline.workflow.gates_for_phase("phase3")) == 1
     assert len(pipeline.workflow.gates_for_phase("phase4")) == 1
+
+
+def test_execution_engine_emits_warning_and_event_uniformly_for_custom_and_builtin_gates(
+    tmp_path: Path,
+) -> None:
+    """Verify evaluate_phase_quality_gates emits QualityGateWarning and QualityGateEvaluated uniformly."""
+
+    class _CustomWarnGate:
+        name = "custom_pure_warn_gate"
+        target_phases = frozenset({"phase2"})
+
+        def evaluate(
+            self,
+            phase_key: str,
+            phase_collection: ArtifactCollection,
+            cumulative_collection: ArtifactCollection,
+            context: ArtifactExecutionContext | None = None,
+        ) -> QualityGateResult:
+            return QualityGateResult(
+                gate_name=self.name,
+                phase_key=phase_key,
+                passed=False,
+                severity="warn",
+                metrics={"custom_score": 0.1},
+                message="Custom pure gate warning.",
+            )
+
+        def fingerprint(self) -> dict[str, Any]:
+            return {"class": "_CustomWarnGate"}
+
+    config = PipelineConfig(quality_gates=QualityGatesConfig(enabled=True, on_violation="warn"))
+    config.execution.runs_dir = str(tmp_path / "runs")
+    config.execution.artifacts_dir = str(tmp_path / "artifacts")
+
+    p2 = _StubPhaseRunner(
+        name="Phase 2",
+        phase_key="phase2",
+        writes_kinds=frozenset({ArtifactKind.LINKED_ENTITY}),
+    )
+    builtin_warn = OntologyEntropyGate(
+        min_entropy=0.5,
+        max_dominant_type_ratio=0.8,
+        min_entities=5,
+        on_violation="warn",
+    )
+    custom_warn = _CustomWarnGate()
+    bus = SimpleEventEmitter()
+    obs = _RecordingObserver()
+    bus.register_observer(obs)
+
+    workflow = WorkflowDAG(phases=[p2], quality_gates=[builtin_warn, custom_warn])
+    engine = ArtifactExecutionEngine(
+        workflow=workflow,
+        config=config,
+        event_emitter=bus,
+    )
+
+    chunks = [_make_chunk_env("c1")]
+    collapsed = [_make_linked_entity_env(f"e{i}", "Concept") for i in range(6)]
+    node = workflow.get_node("phase2")
+    assert node is not None
+    ctx = ArtifactExecutionContext(
+        run_id="run-warn-test",
+        manifest=MagicMock(),
+        pipeline_input=PipelineInput(source_paths=[]),
+    )
+    with pytest.warns(QualityGateWarning) as warning_records:
+        results = engine.evaluate_phase_quality_gates(
+            entry=node,
+            phase_collection=ArtifactCollection(collapsed),
+            cumulative_collection=ArtifactCollection(chunks + collapsed),
+            context=ctx,
+            phase_emitter=bus,
+        )
+
+    assert len(results) == 2
+    assert all(not r.passed and r.severity == "warn" for r in results)
+    # Both built-in AND custom pure gate emit QualityGateWarning via engine
+    warning_messages = [str(w.message) for w in warning_records]
+    assert any("OntologyEntropyGate violation" in m for m in warning_messages)
+    assert any("Custom pure gate warning." in m for m in warning_messages)
+    # Exactly one QualityGateEvaluated event per gate
+    gate_events = [e for e in obs.events if isinstance(e, QualityGateEvaluated)]
+    assert [e.gate_name for e in gate_events] == [
+        "ontology_entropy_gate",
+        "custom_pure_warn_gate",
+    ]
 
 
 @pytest.mark.asyncio

@@ -77,7 +77,7 @@ Following review of commit `2982acd`, the macro-level separation into `PipelineF
 
 ## 5. Acceptance Criteria
 
-- [ ] `EpistemicQualityGate` protocol is evaluated purely after each phase in `ArtifactExecutionEngine`, with centralized `QualityGateEvaluated` emission, warning/halt policy enforcement, and gate fingerprint invalidation.
-- [ ] `OntologyEntropyGate`, `PercolationQualityGate`, and `ConformalCalibrationGate` accurately evaluate phase-scoped artifacts and calibrated `ObservableDecisionEngine` prediction sets without cross-phase buffer contamination or L2/L3 denominator mixing.
-- [ ] `WorkflowDAG` validates acyclicity eagerly and `ArtifactExecutionEngine` executes in topological order with branch-isolated upstream `ArtifactCollection` and `lineage_fingerprint` scoping.
-- [ ] `Pipeline` is a thin, zero-legacy facade delegating `run`, `run_from_phase`, `resume_from_run`, `get_run_report`, `get_run_artifacts`, and `diff_artifacts` to `ArtifactExecutionEngine`, with zero `try/except AttributeError` duck-typing in `WorkflowDAG`.
+- [x] `EpistemicQualityGate` protocol is evaluated purely after each phase in `ArtifactExecutionEngine`, with centralized `QualityGateEvaluated` emission, warning/halt policy enforcement, and gate fingerprint invalidation.
+- [x] `OntologyEntropyGate`, `PercolationQualityGate`, and `ConformalCalibrationGate` accurately evaluate phase-scoped artifacts and calibrated `ObservableDecisionEngine` prediction sets without cross-phase buffer contamination or L2/L3 denominator mixing.
+- [x] `WorkflowDAG` validates acyclicity eagerly and `ArtifactExecutionEngine` executes in topological order with branch-isolated upstream `ArtifactCollection` and `lineage_fingerprint` scoping.
+- [x] `Pipeline` is a thin, zero-legacy facade delegating `run`, `run_from_phase`, `resume_from_run`, `get_run_report`, `get_run_artifacts`, and `diff_artifacts` to `ArtifactExecutionEngine`, with zero `try/except AttributeError` duck-typing in `WorkflowDAG`.

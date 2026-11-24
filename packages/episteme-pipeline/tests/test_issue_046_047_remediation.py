@@ -411,6 +411,7 @@ class OfflineARCClassifier(ARCClassifier):
         graph_store: Any,
         global_extractor: Any = None,
         schema: SchemaConfig | None = None,
+        lineage_fingerprint: str | None = None,
     ) -> list[TheoryRelation]:
         assert isinstance(graph_store, ArtifactSubgraphReader)
         return []

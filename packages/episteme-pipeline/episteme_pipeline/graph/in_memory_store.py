@@ -85,6 +85,7 @@ class InMemoryGraphStore(ProcessingGraph):
         self._processed_chunks: dict[str, set[str]] = {}  # chunk_id -> set of phase tags
         self._processed_items: dict[str, dict[str, PhaseItemRecord]] = {}
         self._chunk_snapshots: dict[tuple[str, str], dict[str, Any]] = {}
+        self._checkpoint_payloads: dict[str, dict[str, dict[str, Any]]] = {}
         self._nodes: dict[str, dict[str, Any]] = {}
         self._embeddings: dict[str, list[float]] = {}
         self._node_run_ids: dict[str, str] = {}
@@ -825,9 +826,27 @@ class InMemoryGraphStore(ProcessingGraph):
         snapshot = self._chunk_snapshots.get((phase, chunk_id))
         return dict(snapshot) if snapshot is not None else None
 
+    async def save_checkpoint_payloads(
+        self, phase: str, payloads: dict[str, dict[str, Any]]
+    ) -> None:
+        """Persist intermediate JSON-serializable item outputs in memory."""
+        if not payloads:
+            return
+        store = self._checkpoint_payloads.setdefault(phase, {})
+        for k, v in payloads.items():
+            store[k] = dict(v)
+
+    async def get_checkpoint_payloads(
+        self, phase: str
+    ) -> dict[str, dict[str, Any]]:
+        """Retrieve persisted intermediate item outputs from memory."""
+        raw = self._checkpoint_payloads.get(phase, {})
+        return {k: dict(v) for k, v in raw.items()}
+
     async def clear_phase_checkpoints(self, phase: str) -> None:
         if phase in self._processed_items:
             del self._processed_items[phase]
+        self._checkpoint_payloads.pop(phase, None)
         keys_to_del = [k for k in self._chunk_snapshots if k[0] == phase]
         for k in keys_to_del:
             del self._chunk_snapshots[k]

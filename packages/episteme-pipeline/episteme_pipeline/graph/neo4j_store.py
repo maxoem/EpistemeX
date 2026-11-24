@@ -70,6 +70,7 @@ _NON_ENTITY_LABELS = (
 )
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_PHASE_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z0-9_-]+)?$")
 
 
 def _cypher_identifier(value: str, *, kind: str) -> str:
@@ -94,6 +95,38 @@ def _cypher_identifier(value: str, *, kind: str) -> str:
             "and underscores not starting with a digit."
         )
     return normalised
+
+
+def _normalize_phase_key(phase: str, *, kind: str = "phase identifier") -> tuple[str, str]:
+    """Validate a phase identifier (including lineage-scoped ``phase:fp``) and return ``(phase_value, safe_prop_prefix)``.
+
+    Parameters
+    ----------
+    phase : str
+        Phase key, e.g. ``"phase2"`` or ``"phase2:a1b2c3d4"``.
+    kind : str, default "phase identifier"
+        Label used in validation error messages.
+
+    Returns
+    -------
+    tuple of (str, str)
+        ``(phase_value, safe_prop_prefix)`` where ``phase_value`` is the validated
+        key used as a Cypher parameter and ``safe_prop_prefix`` replaces ``:`` and
+        ``-`` with ``_`` for safe property name interpolation on ``:Chunk`` nodes.
+
+    Raises
+    ------
+    ValueError
+        If ``phase`` contains unsafe characters.
+    """
+    raw = str(phase)
+    if not _PHASE_KEY_RE.match(raw):
+        raise ValueError(
+            f"Unsafe Cypher {kind} {phase!r}: expected a phase identifier of letters, "
+            "digits, underscores, and an optional ':lineage_fingerprint' suffix."
+        )
+    safe_prefix = raw.replace(":", "__").replace("-", "_")
+    return raw, safe_prefix
 
 
 def _is_homogeneous_primitive_list(items: list | tuple) -> bool:
@@ -284,6 +317,57 @@ class _Neo4jWriteMixin:
                 await tx.run(
                     query, id=node_id, props=props, create_props=create_props
                 )
+                await tx.commit()
+
+    async def upsert_nodes(
+        self,
+        label: str,
+        nodes: list[dict],
+        *,
+        extra_labels: tuple[str, ...] = (),
+    ) -> None:
+        """Bulk-upsert a batch of nodes sharing ``label`` via Cypher ``UNWIND``.
+
+        Parameters
+        ----------
+        label : str
+            Primary node label.
+        nodes : list of dict
+            Items carrying ``"id"``, ``"props"`` (or ``"properties"``), and
+            optionally ``"create_props"``.
+        extra_labels : tuple of str, optional
+            Additional labels stamped on each node.
+        """
+        if not nodes:
+            return
+        primary = _cypher_identifier(label, kind="label")
+        extras = [
+            safe
+            for safe in (
+                _cypher_identifier(extra, kind="label") for extra in extra_labels
+            )
+            if safe != primary
+        ]
+        batch_data = []
+        for n in nodes:
+            node_id = str(n["id"])
+            raw_props = dict(n.get("props") or n.get("properties") or {})
+            raw_create = dict(n.get("create_props") or {})
+            batch_data.append({
+                "id": node_id,
+                "props": _writable_props({**raw_props, "id": node_id}),
+                "create_props": _writable_props(raw_create),
+            })
+
+        query = f"UNWIND $batch AS item MERGE (n:`{primary}` {{id: item.id}}) "
+        query += "ON CREATE SET n += item.create_props "
+        if extras:
+            query += "SET n" + "".join(f":`{extra}`" for extra in extras) + " "
+        query += "SET n += item.props"
+
+        async with self._session() as session:
+            async with await session.begin_transaction() as tx:
+                await tx.run(query, batch=batch_data)
                 await tx.commit()
 
     async def upsert_relations(
@@ -1194,7 +1278,8 @@ class _Neo4jCheckpointMixin:
     async def mark_chunks_processed(self, chunk_ids: list[str], phase: str) -> None:
         if not chunk_ids:
             return
-        prop_key = _cypher_identifier(f"{phase}_processed", kind="property name")
+        _, safe_prefix = _normalize_phase_key(phase, kind="property name")
+        prop_key = f"{safe_prefix}_processed"
         query = f"UNWIND $chunk_ids AS chunk_id MATCH (c:Chunk {{id: chunk_id}}) SET c.`{prop_key}` = true"
         async with self._session() as session:
             await session.run(query, chunk_ids=chunk_ids)
@@ -1203,6 +1288,7 @@ class _Neo4jCheckpointMixin:
         await self.mark_chunks_processed([chunk_id], phase)
 
     async def get_unprocessed_chunks(self, phase: str, limit: int | None = None) -> list[L1Chunk]:
+        _, safe_prefix = _normalize_phase_key(phase, kind="property name")
         limit_clause = f"LIMIT {limit}" if limit else ""
         query = (
             "MATCH (c:Chunk) WHERE coalesce(c[$prop_key], false) = false "
@@ -1211,7 +1297,7 @@ class _Neo4jCheckpointMixin:
             f"{limit_clause}"
         )
         async with self._session() as session:
-            result = await session.run(query, prop_key=f"{phase}_processed")
+            result = await session.run(query, prop_key=f"{safe_prefix}_processed")
             rows = await result.data()
         return [
             L1Chunk(
@@ -1230,7 +1316,7 @@ class _Neo4jCheckpointMixin:
     ) -> list[str]:
         if not item_keys:
             return []
-        phase_safe = _cypher_identifier(phase, kind="phase identifier")
+        phase_safe, _ = _normalize_phase_key(phase, kind="phase identifier")
         query = (
             "UNWIND $keys AS k "
             "WITH k "
@@ -1250,7 +1336,7 @@ class _Neo4jCheckpointMixin:
     ) -> None:
         if not triples and not items:
             return
-        phase_safe = _cypher_identifier(phase, kind="phase identifier")
+        phase_safe, _ = _normalize_phase_key(phase, kind="phase identifier")
 
         triples_by_rel: dict[str, list[dict]] = {}
         for t in triples:
@@ -1326,8 +1412,8 @@ class _Neo4jCheckpointMixin:
         """
         import json
 
-        phase_safe = _cypher_identifier(phase, kind="phase identifier")
-        prop_key = f"{phase_safe}_state_snapshot"
+        _, safe_prefix = _normalize_phase_key(phase, kind="phase identifier")
+        prop_key = f"{safe_prefix}_state_snapshot"
         snapshot_json = json.dumps(snapshot)
         query = f"MATCH (c:Chunk {{id: $chunk_id}}) SET c.`{prop_key}` = $snapshot_json"
         async with self._session() as session:
@@ -1352,8 +1438,8 @@ class _Neo4jCheckpointMixin:
         """
         import json
 
-        phase_safe = _cypher_identifier(phase, kind="phase identifier")
-        prop_key = f"{phase_safe}_state_snapshot"
+        _, safe_prefix = _normalize_phase_key(phase, kind="phase identifier")
+        prop_key = f"{safe_prefix}_state_snapshot"
         query = f"MATCH (c:Chunk {{id: $chunk_id}}) RETURN c.`{prop_key}` as snapshot"
         async with self._session() as session:
             result = await session.run(query, chunk_id=chunk_id)
@@ -1363,13 +1449,67 @@ class _Neo4jCheckpointMixin:
         return None
 
     async def clear_phase_checkpoints(self, phase: str) -> None:
-        phase_safe = _cypher_identifier(phase, kind="phase identifier")
-        prop_key = f"{phase_safe}_state_snapshot"
+        phase_safe, safe_prefix = _normalize_phase_key(phase, kind="phase identifier")
+        prop_snapshot = f"{safe_prefix}_state_snapshot"
+        prop_processed = f"{safe_prefix}_processed"
         query = "MATCH (p:PhaseItem {phase: $phase}) DELETE p"
-        query_chunk = f"MATCH (c:Chunk) REMOVE c.`{prop_key}`"
+        query_chunk = f"MATCH (c:Chunk) REMOVE c.`{prop_snapshot}`, c.`{prop_processed}`"
         async with self._session() as session:
             await session.run(query, phase=phase_safe)
             await session.run(query_chunk)
+
+    async def save_checkpoint_payloads(
+        self, phase: str, payloads: dict[str, dict[str, Any]]
+    ) -> None:
+        """Persist intermediate JSON-serializable item outputs onto ``:PhaseItem`` nodes."""
+        if not payloads:
+            return
+        import json
+
+        phase_safe, _ = _normalize_phase_key(phase, kind="phase identifier")
+        items_payload = [
+            {"key": k, "payload_json": json.dumps(v)}
+            for k, v in payloads.items()
+        ]
+        query = (
+            "UNWIND $items AS item "
+            "MERGE (p:PhaseItem {phase: $phase, key: item.key}) "
+            "SET p.payload_json = item.payload_json, "
+            "    p.updated_at = datetime() "
+        )
+        async with self._session() as session:
+            await session.run(query, phase=phase_safe, items=items_payload)
+
+    async def get_checkpoint_payloads(
+        self, phase: str
+    ) -> dict[str, dict[str, Any]]:
+        """Retrieve persisted intermediate item outputs from ``:PhaseItem`` nodes."""
+        import json
+
+        phase_safe, _ = _normalize_phase_key(phase, kind="phase identifier")
+        query = (
+            "MATCH (p:PhaseItem {phase: $phase}) "
+            "WHERE p.payload_json IS NOT NULL "
+            "RETURN p.key AS key, p.payload_json AS payload_json"
+        )
+        async with self._session() as session:
+            result = await session.run(query, phase=phase_safe)
+            rows = await result.data()
+        out: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            raw_json = row.get("payload_json")
+            if isinstance(raw_json, str):
+                try:
+                    loaded = json.loads(raw_json)
+                    if isinstance(loaded, dict):
+                        out[str(row["key"])] = loaded
+                except (ValueError, TypeError) as exc:
+                    logger.warning(
+                        "Failed to parse checkpoint payload JSON for key %s: %s",
+                        row.get("key"),
+                        exc,
+                    )
+        return out
 
 
 

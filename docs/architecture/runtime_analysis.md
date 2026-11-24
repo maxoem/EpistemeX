@@ -28,9 +28,9 @@ of each phase with respect to the size of the input document corpus and analyzes
 |:---|:---|:---|:---|:---|
 | **Phase 1: Foundation** | Chunking & Embedding | $O(N)$ | Embedding API | `chunk_size` |
 | **Phase 2: Entity Discovery** | NER & Entity Linking | $O(C) + O(E \log E)$ | LLM Structured Output | `top_k_linking_candidates` ($K=10$) |
-| **Phase 3: Global Relations** | Dense Cosine + Cross-Encoder | $O(E^2) + O(E \cdot K)$ | Cross-Encoder GPU / LLM | `max_candidates_per_entity_pair` ($K=200$) |
-| **Phase 3b: Consolidation** | Entity Cosine Similarity | $O(E^2)$ | In-memory Vector Math | `dense_similarity_threshold` ($0.85$) |
-| **Phase 4: Argument Mining** | ADU / ACC (Local) + ARC (Global) | $O(C) + O(A \cdot K)$ | LLM Structured Output | `arc_max_candidates_per_component` ($K=10$) |
+| **Phase 3: Global Relations** | CSLS + Adaptive $K_{\text{eff}}(E)$ + Cross-Encoder | $O(E^2) + O(E \cdot K_{\text{eff}}(E))$ | Cross-Encoder GPU / LLM | $K_{\text{eff}}(E) = \min(K_{\max}, \max(K_{\min}, \lceil \gamma\sqrt{E}\rceil))$ |
+| **Phase 3b: Consolidation** | CSLS Similarity + Adaptive $K_{\text{eff}}(E)$ | $O(E^2) + O(E \cdot K_{\text{eff}}(E))$ | In-memory Vector Math / Jev Verifier | `use_csls=True`, `z_score_threshold`, $K_{\text{eff}}(E)$ |
+| **Phase 4: Argument Mining** | ADU / ACC (Local) + ARC (Global) | $O(C) + O(A \cdot K_{\text{eff}}(A))$ | System 1 Jev Triage + LLM Fallback | $K_{\text{eff}}(A)$ (`arc_max_candidates_per_component`) |
 | **Phase 4: Maturation** | Centroid Text Synthesis | $O(E)$ | LLM Structured Output | `maturation_top_k` ($5$) |
 | **Phase 5: Fusion** | Community Leiden Detection | $O(V \log V)$ | Neo4j GDS / In-Memory Graph | Resolution parameters |
 | **Phase 6: TheoryNet** | Continuous D-QBAF Equilibrium | $O(\vert A\vert + \vert R\vert)$ (DAG) / $O(T_{\text{ODE}} \cdot (\vert A_{\text{cyc}}\vert + \vert R_{\text{cyc}}\vert))$ (Cyclic) | Closed-Form DAG / Adaptive ODE Solver | `rtol`, `atol`, `max_time` |
@@ -56,31 +56,28 @@ of each phase with respect to the size of the input document corpus and analyzes
 
 #### Phase 3: Global Relation Extraction
 
-This phase identifies relationships between entities globally across chunk boundaries using dense retrieval,
-cross-encoder reranking, and LLM decoding.
+This phase identifies relationships between entities globally across chunk boundaries using Cross-Domain Similarity Local Scaling (CSLS), adaptive candidate degree bounding $K_{\text{eff}}(E)$, cross-encoder / System 1 reranking, and LLM decoding.
 
-* **Dense Candidate Generation**: Computes embeddings for all $E$ entities and calculates an $E \times E$ cosine
-  similarity matrix. $O(E^2)$ similarity computations.
-* **Candidate Filtering**: Selects the top $K$ (`max_candidates_per_entity_pair`) similar partners per entity. Generates
-  bounded candidate pairs: $O(E \cdot K)$.
-* **Reranking**: A cross-encoder model evaluates each candidate pair. $O(E \cdot K)$ cross-encoder inferences.
-* **LLM Extraction**: Pairs scoring above `reranker_threshold` are sent to the LLM. Bounded by $O(E \cdot K)$ but
-  typically $O(E)$ in practice due to thresholding.
-* **Overall Complexity**: **$O(E^2)$** similarity + **$O(E \cdot K)$** cross-encoder/LLM calls.
+* **CSLS Candidate Generation**: Computes embeddings for all $E$ entities and calculates an $E \times E$ CSLS similarity matrix $\text{CSLS}(\mathbf{u}, \mathbf{v}) = 2\cos(\mathbf{u}, \mathbf{v}) - r_T(\mathbf{u}) - r_T(\mathbf{v})$, penalizing hub nodes and correcting for embedding anisotropy ($O(E^2)$ vectorized matrix operations).
+* **Adaptive Candidate Filtering ($K_{\text{eff}}(E)$ & Z-Score)**: Bounds the per-entity candidate degree to $K_{\text{eff}}(E) = \min(K_{\max}, \max(K_{\min}, \lceil \gamma\sqrt{E}\rceil))$ and optionally applies standardized z-score filtering (`z_score_threshold`), generating $O(E \cdot K_{\text{eff}}(E))$ candidate pairs.
+* **Reranking**: A cross-encoder or calibrated System 1 `JevRelationReranker` evaluates each candidate pair in $O(E \cdot K_{\text{eff}}(E))$ inferences.
+* **LLM Extraction**: Pairs scoring above `reranker_threshold` are sent to the LLM. Bounded by $O(E \cdot K_{\text{eff}}(E))$ and typically $O(E)$ in practice.
+* **Overall Complexity**: **$O(E^2)$** vectorized CSLS + **$O(E \cdot K_{\text{eff}}(E))$** cross-encoder/LLM calls.
 
 #### Phase 3b: Latent Consolidation
 
-* **Similarity Matrix**: Computes $O(E^2)$ cosine similarities between all entities.
-* **Overall Complexity**: **$O(E^2)$** vector comparisons.
+* **CSLS & Z-Score Similarity Matrix**: Computes $O(E^2)$ CSLS similarities (`use_csls=True`) and optional standardized z-scores (`z_score_normalize`) across all entities.
+* **Adaptive $K_{\text{eff}}(E)$ Candidate Pruning**: Evaluates 1-hop relation Jaccard overlap and borderline System 1 verification on at most $K_{\text{eff}}(E)$ top-ranked same-label partners per entity ($O(E \cdot K_{\text{eff}}(E))$), followed by clique-constrained connected components (`min_internal_similarity`, `max_diameter`).
+* **Overall Complexity**: **$O(E^2)$** vectorized similarity + **$O(E \cdot K_{\text{eff}}(E))$** structural/verifier checks.
 
 #### Phase 4: Argument Mining
 
-* **ADU Segmentation & ACC Classification**: Local to each chunk. $O(C)$ LLM calls.
+* **ADU Segmentation & ACC Classification**: Local to each chunk. $O(C)$ LLM / System 1 cascade calls.
 * **ARC (Global Argument Relations)**:
-    * Similar to Phase 3, computes dense similarities for all $A$ theory atoms: $O(A^2)$.
-    * Selects top $K$ (`arc_max_candidates_per_component`) partners per theory atom, yielding $O(A \cdot K)$ candidate pairs.
-    * Uses LLM structured prediction on *all* generated candidate pairs (no cross-encoder filter step). $O(A \cdot K)$ LLM calls.
-* **Overall Complexity**: **$O(C)$** local LLM calls + **$O(A \cdot K)$** global ARC LLM calls + $O(A^2)$ similarity checks.
+    * Computes CSLS similarities (`arc_use_csls=True`) for all $A$ theory atoms in $O(A^2)$ vectorized operations.
+    * Bounds candidate partners per atom using $K_{\text{eff}}(A) = \min(K_{\max}, \max(K_{\min}, \lceil \gamma\sqrt{A}\rceil))$ (`arc_use_adaptive_k=True`) and optional `arc_z_score_threshold`, yielding $O(A \cdot K_{\text{eff}}(A))$ candidate pairs.
+    * Routes candidate pairs through `CascadingARCClassifier` (System 1 `JevARCClassifier` conformal triage $\to$ System 2 `TAGARCClassifier` LLM fallback only for ambiguous or audited pairs).
+* **Overall Complexity**: **$O(C)$** local calls + **$O(A \cdot K_{\text{eff}}(A))$** global ARC evaluations + $O(A^2)$ vectorized similarity checks.
 
 #### Phase 4: Entity Maturation
 
@@ -119,26 +116,18 @@ candidates (top $K$), the heavy operations (Cross-Encoder inference and LLM deco
 For large document sets ($N \gg K$), this ensures the pipeline scales linearly with the input size rather than
 quadratically.
 
-### The "Small Input" Overhead (e.g., One-Page Documents)
+### Mitigating Small-Input Overhead & Embedding Anisotropy (`ISSUE-051`)
 
-For extremely small inputs (e.g., a single page or short excerpt), users may observe disproportionately long runtimes. This occurs
-because when $N$ is small, the number of entities $E$ and atoms $A$ is typically smaller than the $K$ bounding
-parameters (e.g., $K=200$ for Phase 3, $K=10$ for ARC).
+Historically, fixed degree caps (e.g., $K=200$ in Phase 3, $K=10$ in Phase 4 ARC) and raw cosine cutoffs (`0.5` or `0.85`) suffered from two pathologies:
+1. When $E < K$ or $A < K$ on small texts, static top-$K$ caps failed to prune the search space, degenerating into all-to-all $O(E^2)$ / $O(A^2)$ pair evaluations.
+2. High-dimensional transformer embeddings (`all-MiniLM-L6-v2`, `bge-m3`, `text-embedding-3-large`) exhibit narrow anisotropic cones and hubness, causing raw cosine similarities to cluster above fixed scalar thresholds.
 
-When $E < K$, the bounds do not prune the search space. The pipeline falls back to evaluating *every possible pair*
-($O(N^2)$). While $O(N^2)$ on small $N$ is theoretically trivial, the **constant factor** is extremely high:
-
-1. **Phase 3 Reranker**: An $O(E^2)$ pair evaluation means making hundreds of sequential or batched cross-encoder
-   inferences.
-2. **Phase 4 ARC**: Evaluates all $O(A^2)$ theory atom pairs directly using the LLM (since there is no reranker
-   filter). For just 15 theory atoms, this triggers ~100 LLM calls.
-
-Additionally, the dense similarity threshold (`dense_similarity_threshold: 0.5`) in Phase 3 is overly permissive for
-models like `all-MiniLM-L6-v2`, where cosine similarities are often naturally clustered above 0.5. As a result, almost
-all pairs bypass the dense filter, overwhelming the cross-encoder and LLM.
-
-**Conclusion**: The pipeline is highly optimized for asymptotic scaling on large datasets ($O(N \cdot K)$) but incurs notable
-constant-factor overheads on small texts due to unpruned all-to-all evaluations. Tuning $K$ dynamically based on corpus size mitigates this effect.
+Episteme resolves both pathologies across **Phase 3, Phase 3b, and Phase 4 ARC** (`TAGARCClassifier` and `JevARCClassifier`):
+1. **Cross-Domain Similarity Local Scaling (CSLS)**: Subtracts each node's mean $T$-nearest-neighbor cosine similarity $r_T(\mathbf{u})$, removing model-specific baseline anisotropy and penalizing hub vectors.
+2. **Dynamic Sub-Linear Candidate Degree $K_{\text{eff}}(n)$**: Scales the per-node candidate cap sub-linearly with population size $n \in \{E, A\}$:
+   $$K_{\text{eff}}(n) = \min\big(K_{\max},\; \max(K_{\min},\; \lceil \gamma \sqrt{n} \rceil)\big)$$
+   ensuring small excerpts evaluate $O(n^{1.5})$ candidates rather than all $O(n^2)$ pairs while large corpora remain capped at $O(n \cdot K_{\max})$.
+3. **Standardized Z-Score Pruning (`z_score_normalize`)**: Optional `z_score_threshold` filters candidate pairs against the empirical off-diagonal mean and standard deviation ($\mu + \tau_z \sigma$) of the similarity matrix.
 
 ---
 

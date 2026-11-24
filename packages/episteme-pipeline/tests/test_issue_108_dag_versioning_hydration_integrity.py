@@ -469,6 +469,7 @@ class _NoOpARCClassifier(ARCClassifier):
         graph_store: Any,
         global_extractor: Any = None,
         schema: SchemaConfig | None = None,
+        lineage_fingerprint: str | None = None,
     ) -> list[TheoryRelation]:
         """Return empty cross-chunk relation list."""
         return []

@@ -84,6 +84,7 @@ class ARCClassifier(Fingerprintable, ABC):
         graph_store: GraphReader,
         global_extractor: GlobalRelationExtractor | None = None,
         schema: SchemaConfig | None = None,
+        lineage_fingerprint: str | None = None,
     ) -> list[TheoryRelation]: ...
 
     async def classify_pairs(
@@ -92,6 +93,7 @@ class ARCClassifier(Fingerprintable, ABC):
         graph_store: GraphReader,
         schema: SchemaConfig | None = None,
         global_extractor: GlobalRelationExtractor | None = None,
+        lineage_fingerprint: str | None = None,
     ) -> list[TheoryRelation]:
         """Classify cross-chunk argument relations for specific candidate pairs.
 
@@ -105,6 +107,8 @@ class ARCClassifier(Fingerprintable, ABC):
             Schema taxonomy.
         global_extractor : GlobalRelationExtractor or None, default None
             Optional extractor for structural neighborhoods.
+        lineage_fingerprint : str or None, default None
+            Optional lineage fingerprint scoping within-phase checkpoints.
 
         Returns
         -------

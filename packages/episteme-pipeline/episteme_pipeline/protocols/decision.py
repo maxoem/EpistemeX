@@ -316,7 +316,7 @@ class DecisionEngine(Fingerprintable, Protocol):
 
 
 @runtime_checkable
-class GleaningStoppingOracle(Protocol):
+class GleaningStoppingOracle(Fingerprintable, Protocol):
     """Protocol for evaluating whether an iterative extraction pass should continue.
 
     Decouples the extraction Actor (generative LLM) from the stopping Critic

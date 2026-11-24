@@ -120,7 +120,7 @@ Pipeline execution is fully enclosed in symmetric start/end brackets with guaran
 - **Phase Lifecycle**: Every phase begins with `ComponentStarted`. Upon normal completion, `ComponentCompleted(success=True)` and `PhaseCompleted(success=True)` are emitted. Upon exception, `ComponentCompleted(success=False, error=...)`, `PhaseCompleted(success=False, error=...)`, and `PhaseFailed(...)` are guaranteed to fire before the exception propagates.
 - **Refinement Lifecycle (`ISSUE-053`)**: Top-down deficit detectors emit `EpistemicDeficitDetected`, and bounded outer refinement passes (`ClosedLoopRefinementCoordinator` inside `ArtifactExecutionEngine._run_refinement_stage()`) bracket each cycle with `RefinementCycleStarted` and `RefinementCycleCompleted`.
 - **Phase Reuse & Provenance**: Reused phases emit `PhaseReused(phase_name, source_run_id, artifact_count)` to establish end-to-end lineage across resumed runs.
-- **Flush Barrier**: Both `use_event_emitter` and `_run_observability_scope` invoke `emitter.flush()` inside guaranteed `finally:` blocks, ensuring that all buffered network spans (e.g., `LangfuseObserver`) and file buffers (e.g., `JsonlRunObserver`) are fully committed before process exit.
+- **Flush Barrier**: Both `use_event_emitter` and `ArtifactExecutionEngine.run_observability_scope` invoke `emitter.flush()` inside guaranteed `finally:` blocks, ensuring that all buffered network spans (e.g., `LangfuseObserver`) and file buffers (e.g., `JsonlRunObserver`) are fully committed before process exit.
 
 ### Side-Effect Only & Non-Blocking
 

@@ -20,6 +20,7 @@ from episteme_pipeline.decision.cascade import (
 )
 from episteme_pipeline.phases.phase4_argument_mining.pairing import (
     build_cross_chunk_candidate_pairs,
+    build_cross_chunk_embedding_pairs,
     stable_component_id,
 )
 from episteme_pipeline.prompts.default_prompts import (
@@ -32,7 +33,10 @@ from episteme_pipeline.prompts.default_prompts import (
 )
 from episteme_pipeline.prompts.input_formatters import format_arc_decision_pair_state
 from episteme_pipeline.prompts.models import StructuredPromptBundle
-from episteme_pipeline.protocols.argument_mining import ACCClassifier, ARCClassifier
+from episteme_pipeline.protocols.argument_mining import (
+    ACCClassifier,
+    ARCClassifier,
+)
 from episteme_pipeline.protocols.decision import (
     DecisionEngine,
     DecisionNoulResult,
@@ -47,6 +51,7 @@ from episteme_pipeline.protocols.graph_store import GraphReader
 from episteme_pipeline.protocols.modality import ModalStrengthResolver
 from episteme_pipeline.runs.fingerprints import fingerprint_method
 from episteme_pipeline.schema.default_schema import SchemaConfig
+from episteme_pipeline.utils.similarity import dynamic_k_effective
 
 logger = logging.getLogger(__name__)
 
@@ -563,6 +568,13 @@ class JevARCClassifier(ARCClassifier):
         max_candidates_per_component: int = 10,
         default_inferential_warrant: float = 1.0,
         conformal_alpha: float = 0.05,
+        use_priority_rank: bool = False,
+        use_csls: bool = True,
+        csls_k_nearest: int = 10,
+        use_adaptive_k: bool = True,
+        adaptive_k_gamma: float = 2.0,
+        adaptive_k_min: int = 2,
+        z_score_threshold: float | None = None,
     ) -> None:
         self.decision_engine = decision_engine
         self.prompts = prompts
@@ -572,6 +584,13 @@ class JevARCClassifier(ARCClassifier):
         self.max_candidates_per_component = max_candidates_per_component
         self.default_inferential_warrant = default_inferential_warrant
         self.conformal_alpha = conformal_alpha
+        self.use_priority_rank = use_priority_rank
+        self.use_csls = use_csls
+        self.csls_k_nearest = csls_k_nearest
+        self.use_adaptive_k = use_adaptive_k
+        self.adaptive_k_gamma = adaptive_k_gamma
+        self.adaptive_k_min = adaptive_k_min
+        self.z_score_threshold = z_score_threshold
 
         if prompts is not None:
             question = prompts.decision_template
@@ -611,6 +630,13 @@ class JevARCClassifier(ARCClassifier):
             "max_candidates_per_component": self.max_candidates_per_component,
             "default_inferential_warrant": self.default_inferential_warrant,
             "conformal_alpha": self.conformal_alpha,
+            "use_priority_rank": self.use_priority_rank,
+            "use_csls": self.use_csls,
+            "csls_k_nearest": self.csls_k_nearest,
+            "use_adaptive_k": self.use_adaptive_k,
+            "adaptive_k_gamma": self.adaptive_k_gamma,
+            "adaptive_k_min": self.adaptive_k_min,
+            "z_score_threshold": self.z_score_threshold,
             "decision_template": self.decision_template,
             "decision_engine": de_fp,
             "embedding_model": emb_fp,
@@ -990,6 +1016,9 @@ class JevARCClassifier(ARCClassifier):
         graph_store: GraphReader,
         schema: SchemaConfig | None = None,
         global_extractor: GlobalRelationExtractor | None = None,
+        *,
+        checkpoint_store: PhaseCheckpointStore | None = None,
+        lineage_fingerprint: str | None = None,
     ) -> list[TheoryRelation]:
         """Classify specific candidate component pairs using the decision engine.
 
@@ -1003,12 +1032,17 @@ class JevARCClassifier(ARCClassifier):
             Schema taxonomy. If None, defaults to ``SchemaConfig()``.
         global_extractor : GlobalRelationExtractor or None, optional
             Optional extractor for structural neighborhoods.
+        checkpoint_store : PhaseCheckpointStore or None, optional
+            Optional checkpoint store.
+        lineage_fingerprint : str or None, optional
+            Optional lineage fingerprint.
 
         Returns
         -------
         list of TheoryRelation
             Predicted argument relations for the specified pairs.
         """
+        del checkpoint_store, lineage_fingerprint
         confirmed, _ = await self.classify_pairs_with_triage(
             pairs=pairs,
             graph_store=graph_store,
@@ -1054,7 +1088,7 @@ class JevARCClassifier(ARCClassifier):
         """
         del local_relations
         effective_schema = schema or SchemaConfig()
-        pairs = self._get_cross_chunk_pairs(local_components, effective_schema)
+        pairs = await self._cross_chunk_pairs(local_components, effective_schema)
         return await self.classify_pairs_with_triage(
             pairs=pairs,
             graph_store=graph_store,
@@ -1071,6 +1105,7 @@ class JevARCClassifier(ARCClassifier):
         graph_store: GraphReader,
         global_extractor: GlobalRelationExtractor | None = None,
         schema: SchemaConfig | None = None,
+        lineage_fingerprint: str | None = None,
     ) -> list[TheoryRelation]:
         """Classify cross-chunk argument relations using the decision engine.
 
@@ -1086,12 +1121,15 @@ class JevARCClassifier(ARCClassifier):
             Optional extractor for structural contexts.
         schema : SchemaConfig | None, optional
             Schema taxonomy. If None, defaults to SchemaConfig().
+        lineage_fingerprint : str | None, optional
+            Optional lineage fingerprint.
 
         Returns
         -------
         list of TheoryRelation
             Predicted global cross-chunk argument relations.
         """
+        del lineage_fingerprint
         confirmed, _ = await self.classify_global_with_triage(
             local_components=local_components,
             local_relations=local_relations,
@@ -1105,9 +1143,39 @@ class JevARCClassifier(ARCClassifier):
     def _get_cross_chunk_pairs(
         self, components: list[TheoryAtom], schema: SchemaConfig
     ) -> list[tuple[TheoryAtom, TheoryAtom]]:
-        """Pair argument components across different source chunks."""
+        """Pair argument components across different source chunks by priority rank."""
+        k_eff = (
+            dynamic_k_effective(
+                n=len(components),
+                k_min=self.adaptive_k_min,
+                k_max=self.max_candidates_per_component,
+                gamma=self.adaptive_k_gamma,
+            )
+            if self.use_adaptive_k and len(components) >= 2
+            else self.max_candidates_per_component
+        )
         return build_cross_chunk_candidate_pairs(
-            components, schema, self.max_candidates_per_component
+            components, schema, k_eff
+        )
+
+    async def _cross_chunk_pairs(
+        self, components: list[TheoryAtom], schema: SchemaConfig
+    ) -> list[tuple[TheoryAtom, TheoryAtom]]:
+        """Generate cross-chunk candidate pairs via dense CSLS/cosine similarity or priority rank."""
+        if len(components) < 2:
+            return []
+        if self.use_priority_rank or self.embedding_model is None:
+            return self._get_cross_chunk_pairs(components, schema)
+        return await build_cross_chunk_embedding_pairs(
+            components,
+            self.embedding_model,
+            max_candidates_per_component=self.max_candidates_per_component,
+            use_csls=self.use_csls,
+            csls_k_nearest=self.csls_k_nearest,
+            use_adaptive_k=self.use_adaptive_k,
+            adaptive_k_gamma=self.adaptive_k_gamma,
+            adaptive_k_min=self.adaptive_k_min,
+            z_score_threshold=self.z_score_threshold,
         )
 
 
@@ -1176,6 +1244,7 @@ class CascadingARCClassifier(ARCClassifier):
         graph_store: GraphReader,
         schema: SchemaConfig | None = None,
         global_extractor: GlobalRelationExtractor | None = None,
+        lineage_fingerprint: str | None = None,
     ) -> list[TheoryRelation]:
         """Classify specific candidate pairs via per-item System 1 -> System 2 cascade.
 
@@ -1193,6 +1262,8 @@ class CascadingARCClassifier(ARCClassifier):
             Schema taxonomy. If None, defaults to ``SchemaConfig()``.
         global_extractor : GlobalRelationExtractor or None, optional
             Optional extractor for structural neighborhoods.
+        lineage_fingerprint : str or None, optional
+            Optional lineage fingerprint forwarded to ``llm_classifier``.
 
         Returns
         -------
@@ -1220,6 +1291,7 @@ class CascadingARCClassifier(ARCClassifier):
                 graph_store=graph_store,
                 schema=effective_schema,
                 global_extractor=global_extractor,
+                lineage_fingerprint=lineage_fingerprint,
             )
             rels_by_pair: dict[tuple[str, str], list[TheoryRelation]] = {}
             for rel in raw_fast:
@@ -1252,6 +1324,7 @@ class CascadingARCClassifier(ARCClassifier):
             graph_store=graph_store,
             schema=effective_schema,
             global_extractor=global_extractor,
+            lineage_fingerprint=lineage_fingerprint,
         )
 
         merged: dict[tuple[str, str], TheoryRelation] = {
@@ -1269,6 +1342,7 @@ class CascadingARCClassifier(ARCClassifier):
         graph_store: GraphReader,
         global_extractor: GlobalRelationExtractor | None = None,
         schema: SchemaConfig | None = None,
+        lineage_fingerprint: str | None = None,
     ) -> list[TheoryRelation]:
         """Classify cross-chunk argument relations using the cascade.
 
@@ -1284,6 +1358,8 @@ class CascadingARCClassifier(ARCClassifier):
             Optional extractor for structural neighborhoods.
         schema : SchemaConfig | None, optional
             Schema taxonomy. If None, defaults to SchemaConfig().
+        lineage_fingerprint : str | None, optional
+            Optional lineage fingerprint forwarded to ``llm_classifier``.
 
         Returns
         -------
@@ -1308,6 +1384,7 @@ class CascadingARCClassifier(ARCClassifier):
             graph_store=graph_store,
             schema=effective_schema,
             global_extractor=global_extractor,
+            lineage_fingerprint=lineage_fingerprint,
         )
 
         merged: dict[tuple[str, str], TheoryRelation] = {

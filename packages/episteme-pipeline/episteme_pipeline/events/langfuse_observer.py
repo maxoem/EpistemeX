@@ -121,6 +121,7 @@ class LangfuseObserver(EventObserver):
                 self._handle_domain_event(event, trace_context_arg)
         except Exception as e:
             logger.warning(f"Failed to log event to Langfuse: {e}")
+            raise
 
     def _resolve_trace_context(
         self, event: PipelineEvent

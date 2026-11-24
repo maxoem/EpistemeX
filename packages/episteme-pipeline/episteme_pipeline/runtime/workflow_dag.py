@@ -99,6 +99,7 @@ class WorkflowDAG(Fingerprintable):
             self._nodes: tuple[WorkflowNode, ...] = tuple(nodes)
         else:
             self._nodes = self._build_nodes(phases, self._quality_gates)
+        self.topological_order()
 
     @staticmethod
     def _build_nodes(

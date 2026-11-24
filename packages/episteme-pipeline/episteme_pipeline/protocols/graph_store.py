@@ -136,6 +136,39 @@ class GraphWriter(GraphHandle, ABC):
         """
         ...
 
+    async def upsert_nodes(
+        self,
+        label: str,
+        nodes: list[dict],
+        *,
+        extra_labels: tuple[str, ...] = (),
+    ) -> None:
+        """Bulk-upsert a batch of nodes sharing ``label``.
+
+        Parameters
+        ----------
+        label : str
+            Primary node label.
+        nodes : list of dict
+            Each item must carry ``"id"``, ``"props"`` (or ``"properties"``),
+            and optionally ``"create_props"``.
+        extra_labels : tuple of str, optional
+            Additional labels stamped on each node.
+        """
+        for node in nodes:
+            props = dict(node.get("props") or node.get("properties") or {})
+            create_props = node.get("create_props")
+            if extra_labels or create_props is not None:
+                await self.upsert_node(
+                    label,
+                    str(node["id"]),
+                    props,
+                    extra_labels=extra_labels,
+                    create_only_properties=create_props,
+                )
+            else:
+                await self.upsert_node(label, str(node["id"]), props)
+
     @abstractmethod
     async def prune_document_children(
         self,
@@ -375,6 +408,102 @@ class PhaseCheckpointStore(GraphHandle, ABC):
         """
         return []
 
+    async def save_checkpoint_payloads(
+        self, phase: str, payloads: dict[str, dict[str, Any]]
+    ) -> None:
+        """Persist intermediate JSON-serializable item outputs for mid-phase crash recovery.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier (optionally scoped by lineage fingerprint).
+        payloads : dict of str to dict of str to Any
+            Mapping from item key (e.g. chunk_id, entity_id, pair_key) to
+            serialized output payload.
+        """
+        return None
+
+    async def get_checkpoint_payloads(
+        self, phase: str
+    ) -> dict[str, dict[str, Any]]:
+        """Retrieve all persisted intermediate item outputs for ``phase``.
+
+        Parameters
+        ----------
+        phase : str
+            Phase identifier (optionally scoped by lineage fingerprint).
+
+        Returns
+        -------
+        dict of str to dict of str to Any
+            Mapping from item key to serialized output payload.
+        """
+        return {}
+
+
+class NoOpCheckpointStore(PhaseCheckpointStore):
+    """Null-object :class:`PhaseCheckpointStore` for ephemeral or non-checkpointed execution.
+
+    Treats all items as unprocessed and discards persisted checkpoints, allowing
+    phase runners and executors to operate uniformly through a single code path
+    without ``None`` branching.
+    """
+
+    async def close(self) -> None:
+        """No-op close hook."""
+        return None
+
+    async def mark_chunk_processed(self, chunk_id: str, phase: str) -> None:
+        """No-op chunk marker."""
+        return None
+
+    async def mark_chunks_processed(self, chunk_ids: list[str], phase: str) -> None:
+        """No-op batch chunk marker."""
+        return None
+
+    async def get_unprocessed_chunks(
+        self, phase: str, limit: int | None = None
+    ) -> list[L1Chunk]:
+        """Return empty list (no stored chunk corpus)."""
+        return []
+
+    async def filter_unprocessed_items(
+        self, item_keys: list[str], phase: str
+    ) -> list[str]:
+        """Return all candidate item keys as unprocessed."""
+        return list(item_keys)
+
+    async def commit_phase_batch(
+        self,
+        phase: str,
+        triples: list[L2Triple],
+        items: list[PhaseItemRecord],
+    ) -> None:
+        """No-op batch commit."""
+        return None
+
+    async def commit_phase_items(
+        self, phase: str, items: list[PhaseItemRecord]
+    ) -> None:
+        """No-op item commit."""
+        return None
+
+    async def save_chunk_state_snapshot(
+        self, phase: str, chunk_id: str, snapshot: dict[str, Any]
+    ) -> None:
+        """No-op state snapshot save."""
+        return None
+
+    async def get_chunk_state_snapshot(
+        self, phase: str, chunk_id: str
+    ) -> dict[str, Any] | None:
+        """Return ``None`` (no persisted snapshot)."""
+        return None
+
+    async def clear_phase_checkpoints(self, phase: str) -> None:
+        """No-op checkpoint clear."""
+        return None
+
 
 class EntityGraph(GraphReader, GraphWriter, ABC):
     """Entity-focused read/write operations."""
@@ -398,6 +527,7 @@ __all__ = [
     "GraphHandle",
     "GraphReader",
     "GraphWriter",
+    "NoOpCheckpointStore",
     "PhaseCheckpointStore",
     "ProcessingGraph",
     "ProjectionGraph",

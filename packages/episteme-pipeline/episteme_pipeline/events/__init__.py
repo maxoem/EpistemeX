@@ -9,6 +9,7 @@ from .bus import (
     EventEmitter,
     EventObserver,
     NoOpEventEmitter,
+    ResettableTelemetry,
     SimpleEventEmitter,
 )
 from .context import get_event_emitter, set_event_emitter, use_event_emitter
@@ -110,6 +111,7 @@ __all__ = [
     "RefinementCycleCompleted",
     "RefinementCycleStarted",
     "RerankerScoreAssigned",
+    "ResettableTelemetry",
     "RichProgressObserver",
     "RunCompleted",
     "RunFailed",

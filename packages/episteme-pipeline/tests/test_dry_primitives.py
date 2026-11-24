@@ -253,8 +253,9 @@ def test_zero_reflection_in_orchestration_and_phases() -> None:
 
     target_paths: list[Path] = [
         root_dir / "pipeline.py",
-        root_dir / "runtime" / "runner.py",
     ]
+    target_paths.extend((root_dir / "runtime").rglob("*.py"))
+    target_paths.extend((root_dir / "decision").rglob("*.py"))
     target_paths.extend((root_dir / "phases").rglob("*.py"))
     target_paths.extend((root_dir / "post_processing").rglob("*.py"))
 

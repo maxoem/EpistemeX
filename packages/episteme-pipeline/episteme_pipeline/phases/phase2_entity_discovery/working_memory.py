@@ -469,9 +469,12 @@ class EpisodicWorkingMemoryManager:
         Returns
         -------
         dict[str, Any]
-            Raw state snapshot dictionary.
+            Raw state snapshot dictionary including structural eviction coordinates.
         """
-        return self.state.get_raw_state()
+        raw = dict(self.state.get_raw_state())
+        raw["__eviction_last_section_path"] = self.eviction_handler._last_section_path
+        raw["__eviction_last_parent_header"] = self.eviction_handler._last_parent_header
+        return raw
 
     def restore_state(self, snapshot: dict[str, Any]) -> None:
         """
@@ -482,7 +485,16 @@ class EpisodicWorkingMemoryManager:
         snapshot : dict[str, Any]
             Raw state snapshot dictionary.
         """
-        self.state.load_raw_state(snapshot)
+        clean = dict(snapshot)
+        if "__eviction_last_section_path" in clean:
+            self.eviction_handler._last_section_path = clean.pop(
+                "__eviction_last_section_path"
+            )
+        if "__eviction_last_parent_header" in clean:
+            self.eviction_handler._last_parent_header = clean.pop(
+                "__eviction_last_parent_header"
+            )
+        self.state.load_raw_state(clean)
 
     def fork(
         self, anchor: GlobalStructuralAnchor | None = None
@@ -500,7 +512,7 @@ class EpisodicWorkingMemoryManager:
         EpisodicWorkingMemoryManager
             Isolated working memory manager instance sharing the state strategy.
         """
-        return EpisodicWorkingMemoryManager(
+        return type(self)(
             anchor=anchor if anchor is not None else self.anchor,
             state_strategy=self.state_strategy,
         )

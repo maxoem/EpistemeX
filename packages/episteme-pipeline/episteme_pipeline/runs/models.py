@@ -67,6 +67,7 @@ class RunManifest(BaseModel):
     invalidation_reason: str | None = None
     refinement_pass: int = Field(default=0, ge=0)
     refinement_lineage_fingerprint: str | None = None
+    observer_telemetry: dict[str, Any] = Field(default_factory=dict)
 
 
 class ResumePoint(BaseModel):
