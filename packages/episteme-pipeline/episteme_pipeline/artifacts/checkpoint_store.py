@@ -114,9 +114,7 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
         """
         await self.mark_chunks_processed([chunk_id], phase)
 
-    async def mark_chunks_processed(
-        self, chunk_ids: list[str], phase: str
-    ) -> None:
+    async def mark_chunks_processed(self, chunk_ids: list[str], phase: str) -> None:
         """Mark multiple chunks as processed for ``phase``.
 
         Parameters
@@ -269,7 +267,6 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
         res = snapshots.get(chunk_id)
         return dict(res) if res is not None else None
 
-
     async def get_committed_triples(self, phase: str) -> list[L2Triple]:
         """Return all :class:`L2Triple` instances committed for ``phase``.
 
@@ -284,9 +281,7 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
             Hydrated triples from prior batches of ``phase``.
         """
         state = self._load_phase_state(phase)
-        return [
-            L2Triple.model_validate(raw) for raw in state["committed_triples"]
-        ]
+        return [L2Triple.model_validate(raw) for raw in state["committed_triples"]]
 
     async def save_checkpoint_payloads(
         self, phase: str, payloads: dict[str, dict[str, Any]]
@@ -308,9 +303,7 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
             store_payloads[k] = dict(v)
         self._save_phase_state(phase, state)
 
-    async def get_checkpoint_payloads(
-        self, phase: str
-    ) -> dict[str, dict[str, Any]]:
+    async def get_checkpoint_payloads(self, phase: str) -> dict[str, dict[str, Any]]:
         """Retrieve all persisted intermediate item outputs for ``phase``.
 
         Parameters
@@ -342,4 +335,4 @@ class FileSystemCheckpointStore(PhaseCheckpointStore):
 
     async def close(self) -> None:
         """Close checkpoint store resources (no-op)."""
-        return None
+        return

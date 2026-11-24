@@ -35,7 +35,9 @@ class LLMACCClassifier(ACCClassifier):
     Accepts any LlamaIndex BaseLLM.
     """
 
-    def __init__(self, llm, prompts: Any = None, strategy: Any = "direct_constrained") -> None:
+    def __init__(
+        self, llm, prompts: Any = None, strategy: Any = "direct_constrained"
+    ) -> None:
         self.llm = ensure_structured_llm(llm)
         self.prompts = prompts
         self.strategy = strategy
@@ -51,7 +53,9 @@ class LLMACCClassifier(ACCClassifier):
         from episteme_pipeline.runs.fingerprints import fingerprint_method
 
         strategy_str = (
-            self.strategy.value if isinstance(self.strategy, Enum) else str(self.strategy)
+            self.strategy.value
+            if isinstance(self.strategy, Enum)
+            else str(self.strategy)
         )
         return {
             "class": self.__class__.__name__,
@@ -67,7 +71,11 @@ class LLMACCClassifier(ACCClassifier):
         schema: SchemaConfig,
         chunk_entities: list[L2Entity] | None = None,
     ) -> tuple[list[TheoryAtom], list[TheoryRelation]]:
-        chunk_entities_str = "\n".join([f"- {e.id}: {e.name} ({e.label})" for e in chunk_entities]) if chunk_entities else "None"
+        chunk_entities_str = (
+            "\n".join([f"- {e.id}: {e.name} ({e.label})" for e in chunk_entities])
+            if chunk_entities
+            else "None"
+        )
         raw: ACCOutput = await self.llm.predict_structured(
             ACCOutput,
             self.prompts,
@@ -149,7 +157,9 @@ class LLMACCClassifier(ACCClassifier):
 
                 source_id = mapped_premises[0]
                 premise_tuple = (
-                    tuple(mapped_premises) if len(mapped_premises) > 1 or r.premise_ids else ()
+                    tuple(mapped_premises)
+                    if len(mapped_premises) > 1 or r.premise_ids
+                    else ()
                 )
 
                 undercuts_rel_id: str | None = None

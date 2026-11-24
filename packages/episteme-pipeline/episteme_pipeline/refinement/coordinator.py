@@ -254,7 +254,10 @@ class ClosedLoopRefinementCoordinator:
     ) -> bool:
         """Check whether ``config`` and wired ports enable handling ``deficit_kind``."""
         if deficit_kind == EpistemicDeficitKind.ENTHYMEME_GAP:
-            if not config.enable_theory_guided_premise_recovery or self.premise_recoverer is None:
+            if (
+                not config.enable_theory_guided_premise_recovery
+                or self.premise_recoverer is None
+            ):
                 return False
             if isinstance(self.premise_recoverer, ConditionalRefinementHandler):
                 return self.premise_recoverer.is_available
@@ -291,9 +294,7 @@ class ClosedLoopRefinementCoordinator:
             seen_ids.add(deficit.deficit_id)
             filtered.append(deficit)
 
-        filtered.sort(
-            key=lambda d: (-d.severity, d.deficit_kind.value, d.deficit_id)
-        )
+        filtered.sort(key=lambda d: (-d.severity, d.deficit_kind.value, d.deficit_id))
         return filtered[: config.max_deficits_per_cycle]
 
     async def refine_deficit(
@@ -396,7 +397,9 @@ class ClosedLoopRefinementCoordinator:
                 )
                 clamped = max(0.0, min(1.0, float(resolved)))
                 if abs(clamped - atom.modal_prior) > 1e-6:
-                    updated_atoms.append(atom.model_copy(update={"modal_prior": clamped}))
+                    updated_atoms.append(
+                        atom.model_copy(update={"modal_prior": clamped})
+                    )
                     changed = True
                     continue
             updated_atoms.append(atom)
@@ -468,7 +471,9 @@ class ClosedLoopRefinementCoordinator:
             consumed_artifact_ids=full_view.consumed_artifact_ids,
         )
 
-        pass_manifest = context.manifest.model_copy(update={"refinement_pass": pass_idx})
+        pass_manifest = context.manifest.model_copy(
+            update={"refinement_pass": pass_idx}
+        )
         pass_lineage_fp = (
             f"{context.lineage_fingerprint}::refine_pass{pass_idx}"
             if context.lineage_fingerprint
@@ -492,11 +497,16 @@ class ClosedLoopRefinementCoordinator:
             payload = env.payload
             if isinstance(payload, TheoreticalEnrichmentArtifact):
                 ikey = env.identity_key or env.artifact_id
-                existing_enr_keys[(payload.theory_id, payload.cluster_id)] = (ikey, ikey)
+                existing_enr_keys[(payload.theory_id, payload.cluster_id)] = (
+                    ikey,
+                    ikey,
+                )
 
         prior_atoms_by_id = {a.id: a for a in all_atoms}
         prior_rels_by_key = {
-            canonical_relation_key(r.effective_premise_ids, r.target_id, r.relation_type): r
+            canonical_relation_key(
+                r.effective_premise_ids, r.target_id, r.relation_type
+            ): r
             for r in all_relations
         }
         emitted: list[ArtifactEnvelope[ArtifactPayload]] = []
@@ -521,9 +531,7 @@ class ClosedLoopRefinementCoordinator:
                     identity_key, base_id = existing_enr_keys[pair_key]
                     art_id = f"{base_id}::pass{pass_idx}"
                 else:
-                    identity_key = (
-                        f"theoretical_enrichment::{enr_payload.theory_id}::{enr_payload.cluster_id}"
-                    )
+                    identity_key = f"theoretical_enrichment::{enr_payload.theory_id}::{enr_payload.cluster_id}"
                     art_id = f"artifact::{identity_key}::pass{pass_idx}"
 
                 prov = ArtifactProvenance(
@@ -555,7 +563,9 @@ class ClosedLoopRefinementCoordinator:
                 domain_atom = env.payload.to_domain()
                 if domain_atom.id not in affected_component_atoms:
                     continue
-                if not theory_atom_changed(prior_atoms_by_id.get(domain_atom.id), domain_atom):
+                if not theory_atom_changed(
+                    prior_atoms_by_id.get(domain_atom.id), domain_atom
+                ):
                     continue
                 existing_in_pass = pass_envelopes_by_id.get(
                     f"artifact::{domain_atom.id}::pass{pass_idx}"
@@ -597,7 +607,9 @@ class ClosedLoopRefinementCoordinator:
                     domain_rel.target_id,
                     domain_rel.relation_type,
                 )
-                if not theory_relation_changed(prior_rels_by_key.get(r_key), domain_rel):
+                if not theory_relation_changed(
+                    prior_rels_by_key.get(r_key), domain_rel
+                ):
                     continue
                 existing_in_pass = pass_envelopes_by_id.get(
                     f"artifact::{domain_rel.relation_id}::pass{pass_idx}"
@@ -659,7 +671,9 @@ class ClosedLoopRefinementCoordinator:
             return []
 
         updated_view = Phase4ArtifactsView.from_collection(working_collection)
-        localized_view = slice_phase4_component_view(updated_view, affected_component_atoms)
+        localized_view = slice_phase4_component_view(
+            updated_view, affected_component_atoms
+        )
         prior_atoms = (
             localized_view.canonical_theory_atoms
             if localized_view.canonical_theory_atoms
@@ -672,7 +686,9 @@ class ClosedLoopRefinementCoordinator:
         )
         prior_atoms_by_id = {a.id: a for a in prior_atoms}
         prior_rels_by_key = {
-            canonical_relation_key(r.effective_premise_ids, r.target_id, r.relation_type): r
+            canonical_relation_key(
+                r.effective_premise_ids, r.target_id, r.relation_type
+            ): r
             for r in prior_rels
         }
 
@@ -997,7 +1013,9 @@ class ClosedLoopRefinementCoordinator:
                             working_collection, pass_envelopes_by_id
                         )
 
-            post_state = EpistemicDeficitArtifactsView.from_collection(working_collection)
+            post_state = EpistemicDeficitArtifactsView.from_collection(
+                working_collection
+            )
             next_detected = self.detector.detect_deficits(
                 post_state,
                 refinement_pass=pass_idx,
@@ -1019,7 +1037,9 @@ class ClosedLoopRefinementCoordinator:
 
             context.manifest.refinement_pass = pass_idx
             next_ordinal = (
-                max((r.phase_ordinal for r in context.manifest.phase_records), default=0)
+                max(
+                    (r.phase_ordinal for r in context.manifest.phase_records), default=0
+                )
                 + 1
             )
             pass_output_envelopes = [

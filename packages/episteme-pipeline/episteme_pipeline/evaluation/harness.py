@@ -211,15 +211,23 @@ class EvaluationHarness(EvaluationHarnessProtocol):
             for m in res.metrics:
                 metrics_dict[m.name] = m.value
 
-        summary_text = "\n\n".join(r.notes.get("markdown_report", "") for r in stage_results)
+        summary_text = "\n\n".join(
+            r.notes.get("markdown_report", "") for r in stage_results
+        )
         primary_ref = (
             stage_results[0].dataset_ref
             if stage_results and stage_results[0].dataset_ref
-            else (dataset_ref or (str(gold) if isinstance(gold, (str, Path)) else "in_memory_gold"))
+            else (
+                dataset_ref
+                or (str(gold) if isinstance(gold, (str, Path)) else "in_memory_gold")
+            )
         )
         overall_outcome = (
             "success"
-            if all(r.outcome in (EvaluationOutcome.PASS, EvaluationOutcome.WARNING) for r in stage_results)
+            if all(
+                r.outcome in (EvaluationOutcome.PASS, EvaluationOutcome.WARNING)
+                for r in stage_results
+            )
             else "failure"
         )
 
@@ -273,14 +281,20 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         if not path.is_file():
             raise FileNotFoundError(f"Manifest not found: {path}")
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:  # noqa: ASYNC230 baseline
             manifest: dict[str, Any] = yaml.safe_load(f)
 
         run_id = str(manifest.get("run_id", "unknown_run"))
         corpus_cfg = manifest.get("corpus", {})
         dataset_type = corpus_cfg.get("dataset_type", "structuralist")
-        strategy_name = manifest.get("strategy") or corpus_cfg.get("strategy") or manifest.get("evaluator")
-        builder_ref = manifest.get("pipeline_builder") or corpus_cfg.get("pipeline_builder")
+        strategy_name = (
+            manifest.get("strategy")
+            or corpus_cfg.get("strategy")
+            or manifest.get("evaluator")
+        )
+        builder_ref = manifest.get("pipeline_builder") or corpus_cfg.get(
+            "pipeline_builder"
+        )
         gold_path = corpus_cfg.get("gold_standard_path")
         limit = corpus_cfg.get("limit", 10)
 
@@ -295,7 +309,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
             elif isinstance(s_val, str):
                 s_path = Path(s_val) if Path(s_val).is_file() else path.parent / s_val
                 if s_path.is_file():
-                    with open(s_path, "r", encoding="utf-8") as sf:
+                    with open(s_path, "r", encoding="utf-8") as sf:  # noqa: ASYNC230 baseline
                         manifest_schema = SchemaConfig(**yaml.safe_load(sf))
 
         # Resolve evaluation strategy
@@ -315,7 +329,9 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         artifacts: ArtifactCollection | None = None
 
         if build_graph:
-            logger.info("Executing pipeline for evaluation using manifest: %s", manifest_path)
+            logger.info(
+                "Executing pipeline for evaluation using manifest: %s", manifest_path
+            )
             pipeline = self._build_pipeline_for_dataset(
                 dataset_type=dataset_type,
                 strategy=strat,
@@ -329,7 +345,9 @@ class EvaluationHarness(EvaluationHarnessProtocol):
                     if fname.endswith(".txt"):
                         input_sources.append(os.path.join(texts_dir, fname))
 
-            exec_result = await pipeline.run(PipelineInput(source_paths=input_sources[:limit]))
+            exec_result = await pipeline.run(
+                PipelineInput(source_paths=input_sources[:limit])
+            )
             artifacts = getattr(exec_result, "artifacts", None)
 
         # Intrinsic scoring via resolved strategy
@@ -366,7 +384,9 @@ class EvaluationHarness(EvaluationHarnessProtocol):
             # Extrinsic retrieval evaluation
             queries_path = corpus_cfg.get("queries_path")
             if not queries_path and gold_path:
-                cand_path = Path(gold_path).parent / f"{Path(gold_path).stem}_queries.yaml"
+                cand_path = (
+                    Path(gold_path).parent / f"{Path(gold_path).stem}_queries.yaml"
+                )
                 if cand_path.is_file():
                     queries_path = str(cand_path)
                 else:
@@ -374,32 +394,42 @@ class EvaluationHarness(EvaluationHarnessProtocol):
                     if cand_path.is_file():
                         queries_path = str(cand_path)
                     else:
-                        cand_path = Path(__file__).parent / "data" / "stnb_cpm_queries.yaml"
+                        cand_path = (
+                            Path(__file__).parent / "data" / "stnb_cpm_queries.yaml"
+                        )
                         if cand_path.is_file() and dataset_type == "structuralist":
                             queries_path = str(cand_path)
 
             if queries_path and os.path.isfile(queries_path):
-                with open(queries_path, "r", encoding="utf-8") as qf:
+                with open(queries_path, "r", encoding="utf-8") as qf:  # noqa: ASYNC230 baseline
                     q_data = yaml.safe_load(qf)
                 queries = q_data.get("queries", [])
                 if queries:
-                    retrieval_eval = self.retrieval_scorer or ExtrinsicRetrievalEvaluator(
-                        graph_reader=self.graph_store
+                    retrieval_eval = (
+                        self.retrieval_scorer
+                        or ExtrinsicRetrievalEvaluator(graph_reader=self.graph_store)
                     )
                     # Ensure graph store has the target nodes indexed for search
                     if hasattr(self.graph_store, "index_for_search"):
                         if artifacts is not None:
                             self.graph_store.index_for_search(artifacts, run_id=run_id)
                         elif predicted_target is not None:
-                            self.graph_store.index_for_search(predicted_target, run_id=run_id)
+                            self.graph_store.index_for_search(
+                                predicted_target, run_id=run_id
+                            )
                         elif gold_path:
                             self.graph_store.index_for_search(gold_path, run_id=run_id)
                     elif hasattr(self.graph_store, "index_theory_graph"):
                         if artifacts is not None:
                             tg = artifact_collection_to_theory_graph(artifacts)
                             self.graph_store.index_theory_graph(tg, run_id=run_id)
-                        elif hasattr(predicted_target, "atoms") and predicted_target.atoms:
-                            self.graph_store.index_theory_graph(predicted_target, run_id=run_id)
+                        elif (
+                            hasattr(predicted_target, "atoms")
+                            and predicted_target.atoms
+                        ):
+                            self.graph_store.index_theory_graph(
+                                predicted_target, run_id=run_id
+                            )
 
                     retrieval_metrics = await retrieval_eval.evaluate_batch(
                         queries, top_k=10, run_id=run_id
@@ -412,13 +442,28 @@ class EvaluationHarness(EvaluationHarnessProtocol):
                         dataset_ref=str(queries_path),
                         dataset_type=DatasetType.GOLD,
                         metrics=[
-                            EvaluationMetric(name="mrr", value=retrieval_metrics.get("MRR", 0.0)),
-                            EvaluationMetric(name="hits@1", value=retrieval_metrics.get("Hits@1", 0.0)),
-                            EvaluationMetric(name="hits@3", value=retrieval_metrics.get("Hits@3", 0.0)),
-                            EvaluationMetric(name="hits@10", value=retrieval_metrics.get("Hits@10", 0.0)),
-                            EvaluationMetric(name="ndcg", value=retrieval_metrics.get("nDCG", 0.0)),
+                            EvaluationMetric(
+                                name="mrr", value=retrieval_metrics.get("MRR", 0.0)
+                            ),
+                            EvaluationMetric(
+                                name="hits@1",
+                                value=retrieval_metrics.get("Hits@1", 0.0),
+                            ),
+                            EvaluationMetric(
+                                name="hits@3",
+                                value=retrieval_metrics.get("Hits@3", 0.0),
+                            ),
+                            EvaluationMetric(
+                                name="hits@10",
+                                value=retrieval_metrics.get("Hits@10", 0.0),
+                            ),
+                            EvaluationMetric(
+                                name="ndcg", value=retrieval_metrics.get("nDCG", 0.0)
+                            ),
                         ],
-                        outcome=EvaluationOutcome.PASS if retrieval_metrics.get("MRR", 0.0) > 0.0 else EvaluationOutcome.WARNING,
+                        outcome=EvaluationOutcome.PASS
+                        if retrieval_metrics.get("MRR", 0.0) > 0.0
+                        else EvaluationOutcome.WARNING,
                         notes={
                             "category": "extrinsic_retrieval",
                             "markdown_report": (
@@ -467,12 +512,18 @@ class EvaluationHarness(EvaluationHarnessProtocol):
         baseline_run_id = f"baseline_{baseline_name}_{run_id}" if baseline_name else ""
 
         if baseline_name in ("text_rag", "naive_kg", "zero_shot"):
-            logger.info("Executing comparative baseline '%s' (run_id: %s)", baseline_name, baseline_run_id)
+            logger.info(
+                "Executing comparative baseline '%s' (run_id: %s)",
+                baseline_name,
+                baseline_run_id,
+            )
 
             texts_dir = corpus_cfg.get("texts_dir")
             queries_path = corpus_cfg.get("queries_path")
             if not queries_path and gold_path:
-                cand_path = Path(gold_path).parent / f"{Path(gold_path).stem}_queries.yaml"
+                cand_path = (
+                    Path(gold_path).parent / f"{Path(gold_path).stem}_queries.yaml"
+                )
                 if cand_path.is_file():
                     queries_path = str(cand_path)
                 else:
@@ -480,7 +531,9 @@ class EvaluationHarness(EvaluationHarnessProtocol):
                     if cand_path.is_file():
                         queries_path = str(cand_path)
                     else:
-                        cand_path = Path(__file__).parent / "data" / "stnb_cpm_queries.yaml"
+                        cand_path = (
+                            Path(__file__).parent / "data" / "stnb_cpm_queries.yaml"
+                        )
                         if cand_path.is_file() and dataset_type == "structuralist":
                             queries_path = str(cand_path)
 
@@ -552,7 +605,12 @@ class EvaluationHarness(EvaluationHarnessProtocol):
                 f"- **ΔMRR:** {delta_mrr:+.4f} (Pipeline: {metrics_all.get('mrr', 0.0):.4f} vs Baseline: {baseline_metrics.get('mrr', 0.0):.4f})\n"
                 f"- **Token Cost:** Pipeline ${cost_p:.4f} vs Baseline ${cost_b:.4f} (Δ ${delta_cost:+.4f})\n"
                 f"- **Latency:** Pipeline {lat_p:.4f}s vs Baseline {lat_b:.4f}s (Δ {delta_lat:+.4f}s)\n\n"
-                + format_comparison_markdown(pairwise_comparisons, title=f"Side-by-Side Metrics ({baseline_name})", name_a="Baseline", name_b="Pipeline")
+                + format_comparison_markdown(
+                    pairwise_comparisons,
+                    title=f"Side-by-Side Metrics ({baseline_name})",
+                    name_a="Baseline",
+                    name_b="Pipeline",
+                )
             )
 
             EvaluationComparison(
@@ -568,12 +626,18 @@ class EvaluationHarness(EvaluationHarnessProtocol):
 
         report = EvaluationReport(
             evaluation_id=f"eval_{run_id}",
-            run_ids=[run_id] + ([baseline_run_id] if baseline_name in ("text_rag", "naive_kg", "zero_shot") else []),
+            run_ids=[run_id]
+            + (
+                [baseline_run_id]
+                if baseline_name in ("text_rag", "naive_kg", "zero_shot")
+                else []
+            ),
             dataset_ref=str(gold_path) if gold_path else "manifest_corpus",
             dataset_type=DatasetType.GOLD,
             results_by_level=results_by_level,
             pairwise_comparisons=pairwise_comparisons,
-            summary="\n\n".join(r.notes.get("markdown_report", "") for r in all_results) + highlights_md,
+            summary="\n\n".join(r.notes.get("markdown_report", "") for r in all_results)
+            + highlights_md,
         )
 
         self._persist_reports(report, manifest_path=str(manifest_path))
@@ -620,7 +684,9 @@ class EvaluationHarness(EvaluationHarnessProtocol):
 
         # 2. Strategy's own build_pipeline method if implemented
         if strategy is not None and hasattr(strategy, "build_pipeline"):
-            return strategy.build_pipeline(event_emitter=self.event_emitter, in_memory=True)
+            return strategy.build_pipeline(
+                event_emitter=self.event_emitter, in_memory=True
+            )
 
         # 3. Lookup builder by dataset_type in registry
         try:
@@ -630,7 +696,9 @@ class EvaluationHarness(EvaluationHarnessProtocol):
             pass
 
         # 4. Default fallback: Level 4 TheoryNet pipeline
-        return build_l4_theorynet_eval_pipeline(event_emitter=self.event_emitter, in_memory=True)
+        return build_l4_theorynet_eval_pipeline(
+            event_emitter=self.event_emitter, in_memory=True
+        )
 
     async def _run_validation(self) -> list[dict[str, Any]]:
         validator = GraphValidator(self.graph_store)
@@ -642,7 +710,7 @@ class EvaluationHarness(EvaluationHarnessProtocol):
                 violations.append({"rule_name": "transitive_disjointness", **v})
             for v in await validator.check_type_constraints():
                 violations.append({"rule_name": "type_constraints", **v})
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 baseline
             logger.debug("Validation check skipped or failed: %s", e)
 
         for v in violations:

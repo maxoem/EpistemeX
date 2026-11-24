@@ -6,8 +6,8 @@ cross-chunk candidate pairing logic shared across ACC and ARC classifiers.
 
 from __future__ import annotations
 
-from collections import defaultdict
 import hashlib
+from collections import defaultdict
 from typing import Any
 
 import numpy as np
@@ -181,7 +181,7 @@ async def build_cross_chunk_embedding_pairs(
         if a.source_chunk_id == b.source_chunk_id:
             continue
 
-        if z_score_threshold is not None and z_scores is not None:
+        if z_score_threshold is not None and z_scores is not None:  # noqa: SIM102 baseline
             if z_scores[i, j] < z_score_threshold:
                 continue
 

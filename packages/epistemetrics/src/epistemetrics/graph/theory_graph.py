@@ -299,7 +299,9 @@ class TheoryGraph:
         known_edge_ids = {e.id for e in self._edges if e.id}
 
         if effective_source and effective_source not in self._nodes:
-            self.add_node(effective_source, name=effective_source, node_type=NodeType.CONCEPT)
+            self.add_node(
+                effective_source, name=effective_source, node_type=NodeType.CONCEPT
+            )
         for prem_id in norm_premises:
             if prem_id not in self._nodes:
                 self.add_node(prem_id, name=prem_id, node_type=NodeType.CONCEPT)
@@ -325,7 +327,9 @@ class TheoryGraph:
             else:
                 eff_w = float(weight)
 
-        resolved_warrant = 0.75 if inferential_force is None else float(inferential_force)
+        resolved_warrant = (
+            0.75 if inferential_force is None else float(inferential_force)
+        )
 
         edge = TheoryEdge(
             source=effective_source,
@@ -512,7 +516,9 @@ class TheoryGraph:
             tg.add_node(
                 node_id=n["id"],
                 name=n.get("name", n["id"]),
-                node_type=NodeType.from_str(n.get("node_type", n.get("type", "concept"))),
+                node_type=NodeType.from_str(
+                    n.get("node_type", n.get("type", "concept"))
+                ),
                 epistemic_status=EpistemicStatus.from_str(
                     n.get("epistemic_status", "neutral")
                 ),
@@ -579,7 +585,9 @@ class TheoryGraph:
                 node_id=str(n),
                 name=str(data.get("name", data.get("label", n))),
                 node_type=NodeType.from_str(
-                    data.get("node_type", data.get("type", data.get("label", "concept")))
+                    data.get(
+                        "node_type", data.get("type", data.get("label", "concept"))
+                    )
                 ),
                 epistemic_status=EpistemicStatus.from_str(
                     data.get("epistemic_status", "neutral")
@@ -607,7 +615,10 @@ class TheoryGraph:
                     source=str(u),
                     target=str(v),
                     relation_type=RelationType.from_str(
-                        data.get("relation_type", data.get("type", data.get("label", "explains")))
+                        data.get(
+                            "relation_type",
+                            data.get("type", data.get("label", "explains")),
+                        )
                     ),
                     confidence=float(data.get("confidence", 1.0)),
                     weight=float(data.get("weight", 1.0)),
@@ -623,7 +634,10 @@ class TheoryGraph:
                     source=str(u),
                     target=str(v),
                     relation_type=RelationType.from_str(
-                        data.get("relation_type", data.get("type", data.get("label", "explains")))
+                        data.get(
+                            "relation_type",
+                            data.get("type", data.get("label", "explains")),
+                        )
                     ),
                     confidence=float(data.get("confidence", 1.0)),
                     weight=float(data.get("weight", 1.0)),

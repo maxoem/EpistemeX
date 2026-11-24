@@ -61,9 +61,7 @@ def networkx_wcc(graph: Any) -> PartitionResult:
         components.sort(key=lambda s: (-len(s), min(s) if s else ""))
 
         node_to_partition = {
-            node_id: idx
-            for idx, comp in enumerate(components)
-            for node_id in comp
+            node_id: idx for idx, comp in enumerate(components) for node_id in comp
         }
 
         return PartitionResult(
@@ -73,7 +71,9 @@ def networkx_wcc(graph: Any) -> PartitionResult:
             backend="networkx",
         )
     except Exception as exc:
-        raise AlgorithmError(f"NetworkX weakly connected components failed: {exc}") from exc
+        raise AlgorithmError(
+            f"NetworkX weakly connected components failed: {exc}"
+        ) from exc
 
 
 def gds_wcc(
@@ -140,9 +140,7 @@ def gds_wcc(
         partitions.sort(key=lambda s: (-len(s), min(s) if s else ""))
 
         node_to_partition = {
-            node_id: idx
-            for idx, comp in enumerate(partitions)
-            for node_id in comp
+            node_id: idx for idx, comp in enumerate(partitions) for node_id in comp
         }
 
         return PartitionResult(
@@ -216,7 +214,9 @@ def weakly_connected_components(
         except Exception as exc:
             if not fallback_to_networkx:
                 raise
-            logger.warning("GDS WCC execution failed (%s); falling back to NetworkX.", exc)
+            logger.warning(
+                "GDS WCC execution failed (%s); falling back to NetworkX.", exc
+            )
 
     logger.debug("Executing WCC via NetworkX.")
     return networkx_wcc(graph)

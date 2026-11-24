@@ -27,10 +27,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from episteme_pipeline.artifacts.builders import (
-    build_argument_component_artifact,
-    build_argument_relation_artifact,
     build_chunk_artifact,
     build_document_artifact,
     build_entity_mention_artifact,
@@ -83,7 +80,6 @@ from episteme_pipeline.contracts.domain import (
     L2Entity,
     L2Triple,
     Measurement,
-    RefinementDelta,
     TenabilityResult,
     TheoryAtom,
     TheoryRelation,
@@ -98,7 +94,9 @@ from episteme_pipeline.graph.in_memory_store import InMemoryGraphStore
 from episteme_pipeline.phases.phase1_foundation import Phase1Runner
 from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
 from episteme_pipeline.phases.phase3_global_relations import Phase3Runner
-from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
+from episteme_pipeline.phases.phase3b_consolidation import (
+    Phase3bLatentConsolidationRunner,
+)
 from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
 from episteme_pipeline.phases.phase4_entity_maturation import (
     EntitySynthesisOutput,
@@ -139,7 +137,6 @@ from episteme_pipeline.refinement.axiom_grounder import (
     RecoveredMeasurement,
     RecoveredObservationAtom,
 )
-from episteme_pipeline.runs.fingerprints import fingerprint_curation_ledger
 from episteme_pipeline.runs.models import RunStatus
 from episteme_pipeline.runtime.pipeline_factory import PipelineFactory
 from episteme_pipeline.runtime.workflow_dag import WorkflowDAG
@@ -581,7 +578,9 @@ def _build_full_test_pipeline(
             dense_similarity_threshold=0.80,
             relation_overlap_threshold=0.50,
         ),
-        phase4_maturation=Phase4EntityMaturationConfig(maturation_top_k=maturation_top_k),
+        phase4_maturation=Phase4EntityMaturationConfig(
+            maturation_top_k=maturation_top_k
+        ),
         phase4=Phase4Config(batch_size=5),
         phase5=Phase5Config(
             argument_clustering_enabled=True,
@@ -651,9 +650,8 @@ def _build_full_test_pipeline(
 def test_theoretical_enrichment_dag_wiring_and_view_contracts() -> None:
     """Verify DAG inference for Phase 4 canonicalization and Enrichment -> Phase 5/6."""
     assert ArtifactKind.CANONICALIZATION in Phase4Runner.reads_kinds
-    assert (
-        TheoreticalEnrichmentArtifactsView.allowed_kinds
-        == (ArtifactKind.THEORETICAL_ENRICHMENT,)
+    assert TheoreticalEnrichmentArtifactsView.allowed_kinds == (
+        ArtifactKind.THEORETICAL_ENRICHMENT,
     )
     assert TheoreticalEnrichmentRunner.dependencies is None
     assert ArtifactKind.FUSION_DECISION in TheoreticalEnrichmentRunner.reads_kinds
@@ -805,7 +803,9 @@ async def test_forward_pass_disk_versioning_provenance_dag_and_partial_reuse(
     assert "artifact::atom_claim_1::theoretical_enrichment.json" in run1_files
 
     raw_p2_env = json.loads(
-        (tmp_path / "artifacts" / "run-version-1" / "artifact::e_kant_canonical.json").read_text()
+        (
+            tmp_path / "artifacts" / "run-version-1" / "artifact::e_kant_canonical.json"
+        ).read_text()
     )
     raw_mat_env = json.loads(
         (
@@ -836,9 +836,7 @@ async def test_forward_pass_disk_versioning_provenance_dag_and_partial_reuse(
     )
 
     # Partial reuse #1: change phase4_maturation config -> reuse phases 1..3b without losing Phase 2 entities
-    pipe2 = _build_full_test_pipeline(
-        tmp_path, tag="run1", maturation_top_k=5
-    )
+    pipe2 = _build_full_test_pipeline(tmp_path, tag="run1", maturation_top_k=5)
     res2 = await pipe2.run(
         PipelineInput(source_paths=[str(doc_path)]),
         run_id="run-version-2",
@@ -878,7 +876,16 @@ async def test_forward_pass_disk_versioning_provenance_dag_and_partial_reuse(
     )
     assert res3.manifest.status == RunStatus.COMPLETED
     recs3 = {r.phase_key: r for r in res3.manifest.phase_records}
-    for key in ("phase1", "phase2", "phase3", "phase3b", "phase4_maturation", "phase4", "phase5", "phase6"):
+    for key in (
+        "phase1",
+        "phase2",
+        "phase3",
+        "phase3b",
+        "phase4_maturation",
+        "phase4",
+        "phase5",
+        "phase6",
+    ):
         assert recs3[key].reused is True
     assert recs3["theoretical_enrichment"].reused is False
     assert len(enrichment3.recorded_views) == 1
@@ -978,8 +985,12 @@ async def test_orchestrated_incremental_corpus_and_curation_ledger_edit_invalida
     """Verify ΔD hydrates unchanged docs while curation ledger edits invalidate hydration."""
     doc1 = tmp_path / "doc1.md"
     doc2 = tmp_path / "doc2.md"
-    doc1.write_text("# Doc 1\nAlpha proposition on foundational axioms.\n", encoding="utf-8")
-    doc2.write_text("# Doc 2\nGamma proposition on observational tests.\n", encoding="utf-8")
+    doc1.write_text(
+        "# Doc 1\nAlpha proposition on foundational axioms.\n", encoding="utf-8"
+    )
+    doc2.write_text(
+        "# Doc 2\nGamma proposition on observational tests.\n", encoding="utf-8"
+    )
 
     cfg = PipelineConfig(
         phase1=Phase1Config(chunk_size=128, chunk_overlap=0),
@@ -1005,7 +1016,9 @@ async def test_orchestrated_incremental_corpus_and_curation_ledger_edit_invalida
         ) -> L2Entity | None:
             """Return ``e_alpha_1`` when linking ``e_alpha_2`` to test ``cannot_link``."""
             if mention.id == "e_alpha_2" and graph_store is not None:
-                existing = [e for e in await graph_store.get_entities() if e.id == "e_alpha_1"]
+                existing = [
+                    e for e in await graph_store.get_entities() if e.id == "e_alpha_1"
+                ]
                 if existing:
                     return existing[0]
             return None
@@ -1087,7 +1100,9 @@ async def test_orchestrated_incremental_corpus_and_curation_ledger_edit_invalida
     assert len(ner2.called_chunk_texts) == 1
     assert "Gamma proposition" in ner2.called_chunk_texts[0]
     assert ("e_alpha_1", "e_alpha_2") not in gext2.extracted_pairs
-    run2_col = ArtifactCollection(await pipe2.artifact_store.list_run_artifacts("run-inc-2"))
+    run2_col = ArtifactCollection(
+        await pipe2.artifact_store.list_run_artifacts("run-inc-2")
+    )
     run2_ent_ids = {
         e.payload.entity_id
         for e in run2_col.of_kind(ArtifactKind.LINKED_ENTITY, latest_only=True)
@@ -1123,8 +1138,18 @@ async def test_orchestrated_incremental_corpus_and_curation_ledger_edit_invalida
         prior_manifest=res2.manifest,
         prior_artifacts=run2_col,
     )
-    assert hydrator_check_ctx.hydrator("phase2", "Phase 2: Entity & Local Relation Discovery").can_hydrate is False
-    assert hydrator_check_ctx.hydrator("phase3", "Phase 3: Global Relation Extraction").can_hydrate is False
+    assert (
+        hydrator_check_ctx.hydrator(
+            "phase2", "Phase 2: Entity & Local Relation Discovery"
+        ).can_hydrate
+        is False
+    )
+    assert (
+        hydrator_check_ctx.hydrator(
+            "phase3", "Phase 3: Global Relation Extraction"
+        ).can_hydrate
+        is False
+    )
 
     res3 = await pipe3.run(
         inp3,
@@ -1134,7 +1159,9 @@ async def test_orchestrated_incremental_corpus_and_curation_ledger_edit_invalida
     assert res3.manifest.status == RunStatus.COMPLETED
     assert len(ner3.called_chunk_texts) == 2
     assert ("e_alpha_1", "e_alpha_2") in gext3.extracted_pairs
-    run3_col = ArtifactCollection(await pipe3.artifact_store.list_run_artifacts("run-inc-3"))
+    run3_col = ArtifactCollection(
+        await pipe3.artifact_store.list_run_artifacts("run-inc-3")
+    )
     global_pairs_run3 = {
         tuple(sorted((r.payload.subject_entity_id, r.payload.object_entity_id)))
         for r in run3_col.of_kind(ArtifactKind.GLOBAL_RELATION, latest_only=True)
@@ -1162,7 +1189,13 @@ async def test_allow_phase_reuse_false_and_allow_artifact_hydration_false_disabl
         dependencies=(),
         builder=lambda _inp, ctx: [
             build_document_artifact(
-                L1Document(id="d1", title="D1", source_path="d1.md", chapter_count=1, chunk_count=1),
+                L1Document(
+                    id="d1",
+                    title="D1",
+                    source_path="d1.md",
+                    chapter_count=1,
+                    chunk_count=1,
+                ),
                 run_id=ctx.run_id,
                 phase_name="Phase 1: Data Foundation",
                 method="stub",
@@ -1192,7 +1225,9 @@ async def test_allow_phase_reuse_false_and_allow_artifact_hydration_false_disabl
         builder=runner1._builder,
     )
     pipe2 = Pipeline(phases=[runner2], config=cfg2)
-    m2 = pipe2.engine.build_manifest(run_id="run-flag-2", pipeline_input=PipelineInput(source_paths=[]))
+    m2 = pipe2.engine.build_manifest(
+        run_id="run-flag-2", pipeline_input=PipelineInput(source_paths=[])
+    )
     dec2 = await pipe2.engine.choose_reuse_source(m2)
     assert dec2.resume_point.run_id is None
     assert dec2.reused_phase_ordinals == []
@@ -1415,7 +1450,9 @@ def test_relation_override_polarity_honored_in_triples_and_theory_relations() ->
 
 
 @pytest.mark.asyncio
-async def test_phase2_must_link_rewrites_triples_and_mention_envelopes_without_dangling_ids() -> None:
+async def test_phase2_must_link_rewrites_triples_and_mention_envelopes_without_dangling_ids() -> (
+    None
+):
     """Verify ``Phase2Runner._deduplicate_entities`` and ``run()`` leave zero dangling IDs."""
     e1 = L2Entity(
         id="e1",
@@ -1482,7 +1519,11 @@ async def test_phase2_must_link_rewrites_triples_and_mention_envelopes_without_d
             anchor: Any = None,
         ) -> tuple[list[L2Entity], list[L2Triple], dict | None, bool, str | None]:
             return (
-                [e1.model_copy(), e2.model_copy(), e3.model_copy(update={"source_chunk_ids": [chunk_id]})],
+                [
+                    e1.model_copy(),
+                    e2.model_copy(),
+                    e3.model_copy(update={"source_chunk_ids": [chunk_id]}),
+                ],
                 [
                     L2Triple(
                         subject_id="e2",
@@ -1522,12 +1563,16 @@ async def test_phase2_must_link_rewrites_triples_and_mention_envelopes_without_d
     )
     ctx = ArtifactExecutionContext(
         run_id="r-ml",
-        manifest=__import__("episteme_pipeline.runs.models", fromlist=["RunManifest"]).RunManifest(run_id="r-ml"),
+        manifest=__import__(
+            "episteme_pipeline.runs.models", fromlist=["RunManifest"]
+        ).RunManifest(run_id="r-ml"),
         pipeline_input=PipelineInput(source_paths=[], curation_ledger=ledger),
         previous=col_in,
     )
     out = await p2.run(
-        __import__("episteme_pipeline.artifacts.execution", fromlist=["Phase1ArtifactsView"]).Phase1ArtifactsView.from_collection(col_in),
+        __import__(
+            "episteme_pipeline.artifacts.execution", fromlist=["Phase1ArtifactsView"]
+        ).Phase1ArtifactsView.from_collection(col_in),
         ctx,
     )
     for rel_env in out.of_kind(ArtifactKind.LOCAL_RELATION):
@@ -1672,13 +1717,23 @@ async def test_retired_split_entities_and_mentions_pruned_from_projection_graph(
         dependencies=(),
         builder=lambda _inp, ctx: [
             build_document_artifact(
-                L1Document(id="doc_a", title="Doc A", source_path="doc_a.md", chapter_count=1, chunk_count=2),
+                L1Document(
+                    id="doc_a",
+                    title="Doc A",
+                    source_path="doc_a.md",
+                    chapter_count=1,
+                    chunk_count=2,
+                ),
                 run_id=ctx.run_id,
                 phase_name="Phase 1: Ingestion",
                 method="stub",
             ),
-            build_chunk_artifact(c1, run_id=ctx.run_id, phase_name="Phase 1: Ingestion", method="stub"),
-            build_chunk_artifact(c2, run_id=ctx.run_id, phase_name="Phase 1: Ingestion", method="stub"),
+            build_chunk_artifact(
+                c1, run_id=ctx.run_id, phase_name="Phase 1: Ingestion", method="stub"
+            ),
+            build_chunk_artifact(
+                c2, run_id=ctx.run_id, phase_name="Phase 1: Ingestion", method="stub"
+            ),
         ],
     )
     p2 = _StaticPhaseRunner(
@@ -1686,18 +1741,31 @@ async def test_retired_split_entities_and_mentions_pruned_from_projection_graph(
         phase_key="phase2",
         input_view=EpistemicStateView,
         reads_kinds=frozenset({ArtifactKind.CHUNK}),
-        writes_kinds=frozenset({ArtifactKind.LINKED_ENTITY, ArtifactKind.ENTITY_MENTION}),
+        writes_kinds=frozenset(
+            {ArtifactKind.LINKED_ENTITY, ArtifactKind.ENTITY_MENTION}
+        ),
         dependencies=("phase1",),
         builder=lambda _inp, ctx: [
             build_entity_mention_artifact(
-                ent_action, "chunk_a1", run_id=ctx.run_id, phase_name="Phase 2: Entities", method="stub"
+                ent_action,
+                "chunk_a1",
+                run_id=ctx.run_id,
+                phase_name="Phase 2: Entities",
+                method="stub",
             ),
             build_entity_mention_artifact(
-                ent_action, "chunk_a2", run_id=ctx.run_id, phase_name="Phase 2: Entities", method="stub"
+                ent_action,
+                "chunk_a2",
+                run_id=ctx.run_id,
+                phase_name="Phase 2: Entities",
+                method="stub",
             ),
             build_linked_entity_artifact(
                 ent_action,
-                ["artifact::mention::ent_action::chunk_a1", "artifact::mention::ent_action::chunk_a2"],
+                [
+                    "artifact::mention::ent_action::chunk_a1",
+                    "artifact::mention::ent_action::chunk_a2",
+                ],
                 run_id=ctx.run_id,
                 phase_name="Phase 2: Entities",
                 method="stub",
@@ -1709,12 +1777,29 @@ async def test_retired_split_entities_and_mentions_pruned_from_projection_graph(
         phase_key="phase6",
         input_view=EpistemicStateView,
         reads_kinds=frozenset({ArtifactKind.CHUNK, ArtifactKind.LINKED_ENTITY}),
-        writes_kinds=frozenset({ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}),
+        writes_kinds=frozenset(
+            {ArtifactKind.THEORY_ATOM, ArtifactKind.THEORY_RELATION}
+        ),
         dependencies=("phase2",),
         builder=lambda _inp, ctx: [
-            build_theory_atom_artifact(a_causal, run_id=ctx.run_id, phase_name="Phase 6: TheoryNet", method="stub"),
-            build_theory_atom_artifact(a_deontic, run_id=ctx.run_id, phase_name="Phase 6: TheoryNet", method="stub"),
-            build_theory_relation_artifact(rel_conflict, run_id=ctx.run_id, phase_name="Phase 6: TheoryNet", method="stub"),
+            build_theory_atom_artifact(
+                a_causal,
+                run_id=ctx.run_id,
+                phase_name="Phase 6: TheoryNet",
+                method="stub",
+            ),
+            build_theory_atom_artifact(
+                a_deontic,
+                run_id=ctx.run_id,
+                phase_name="Phase 6: TheoryNet",
+                method="stub",
+            ),
+            build_theory_relation_artifact(
+                rel_conflict,
+                run_id=ctx.run_id,
+                phase_name="Phase 6: TheoryNet",
+                method="stub",
+            ),
         ],
     )
 
@@ -1728,7 +1813,9 @@ async def test_retired_split_entities_and_mentions_pruned_from_projection_graph(
         r["from_id"] == "ent_action" and r["relation_type"] == "EXTRACTED_FROM"
         for r in mem_graph._generic_relations
     )
-    split_ids = [eid for eid in mem_graph._entities if eid.startswith("ent_action__sense_")]
+    split_ids = [
+        eid for eid in mem_graph._entities if eid.startswith("ent_action__sense_")
+    ]
     assert len(split_ids) == 2
     for sid in split_ids:
         assert any(
@@ -1757,7 +1844,12 @@ async def test_standalone_refinement_wires_premise_recoverer_and_handles_missing
     assert isinstance(det_llm, TheoryNetDeficitDetector)
     assert isinstance(coord_llm.premise_recoverer, LLMTheoryGuidedPremiseRecoverer)
     assert coord_llm.premise_recoverer.llm is not None
-    assert coord_llm._is_handler_enabled(EpistemicDeficitKind.ENTHYMEME_GAP, cfg.refinement) is True
+    assert (
+        coord_llm._is_handler_enabled(
+            EpistemicDeficitKind.ENTHYMEME_GAP, cfg.refinement
+        )
+        is True
+    )
 
     # Auto-discovery from Pipeline phases without getattr/hasattr
     p_llm = Phase3Runner(
@@ -1768,7 +1860,9 @@ async def test_standalone_refinement_wires_premise_recoverer_and_handles_missing
         global_extractor=_OfflineGlobalExtractor(),
     )
     standalone_pipe = Pipeline(phases=[p_llm], config=cfg)
-    assert isinstance(standalone_pipe.refinement_coordinator, ClosedLoopRefinementCoordinator)
+    assert isinstance(
+        standalone_pipe.refinement_coordinator, ClosedLoopRefinementCoordinator
+    )
     assert isinstance(
         standalone_pipe.refinement_coordinator.premise_recoverer,
         LLMTheoryGuidedPremiseRecoverer,
@@ -1780,7 +1874,9 @@ async def test_standalone_refinement_wires_premise_recoverer_and_handles_missing
     assert isinstance(coord_no_llm.premise_recoverer, LLMTheoryGuidedPremiseRecoverer)
     assert coord_no_llm.premise_recoverer.llm is None
     assert (
-        coord_no_llm._is_handler_enabled(EpistemicDeficitKind.ENTHYMEME_GAP, cfg.refinement)
+        coord_no_llm._is_handler_enabled(
+            EpistemicDeficitKind.ENTHYMEME_GAP, cfg.refinement
+        )
         is False
     )
 
@@ -1826,7 +1922,9 @@ async def test_standalone_refinement_wires_premise_recoverer_and_handles_missing
     )
     ctx = ArtifactExecutionContext(
         run_id="r-no-llm",
-        manifest=__import__("episteme_pipeline.runs.models", fromlist=["RunManifest"]).RunManifest(run_id="r-no-llm"),
+        manifest=__import__(
+            "episteme_pipeline.runs.models", fromlist=["RunManifest"]
+        ).RunManifest(run_id="r-no-llm"),
         pipeline_input=PipelineInput(source_paths=[]),
     )
     out = await coord_no_llm.refine(col, ctx)
@@ -1895,7 +1993,12 @@ async def test_orchestrated_refinement_reuse_on_identical_run_and_invalidation_o
                 writes_kinds=frozenset({ArtifactKind.CHUNK}),
                 dependencies=(),
                 builder=lambda _i, ctx: [
-                    build_chunk_artifact(chunk, run_id=ctx.run_id, phase_name="Phase 1: Ingestion", method="stub")
+                    build_chunk_artifact(
+                        chunk,
+                        run_id=ctx.run_id,
+                        phase_name="Phase 1: Ingestion",
+                        method="stub",
+                    )
                 ],
             ),
             _StaticPhaseRunner(
@@ -1907,7 +2010,10 @@ async def test_orchestrated_refinement_reuse_on_identical_run_and_invalidation_o
                 dependencies=("phase1",),
                 builder=lambda _i, ctx: [
                     build_theory_atom_artifact(
-                        ungrounded, run_id=ctx.run_id, phase_name="Phase 6: TheoryNet", method="stub"
+                        ungrounded,
+                        run_id=ctx.run_id,
+                        phase_name="Phase 6: TheoryNet",
+                        method="stub",
                     )
                 ],
             ),
@@ -1962,7 +2068,9 @@ async def test_orchestrated_refinement_reuse_on_identical_run_and_invalidation_o
             ),
         )
         coord = _CountingCoordinator(
-            detector=TheoryNetDeficitDetector(config=cfg.refinement, schema=DEFAULT_SCHEMA),
+            detector=TheoryNetDeficitDetector(
+                config=cfg.refinement, schema=DEFAULT_SCHEMA
+            ),
             axiom_grounder=TheoryGuidedAxiomGrounder(
                 ner_extractor=_SimpleNER(),
                 llm=llm_stub,
@@ -2043,7 +2151,9 @@ async def test_orchestrated_refinement_reuse_on_identical_run_and_invalidation_o
 # ---------------------------------------------------------------------------
 
 
-def test_document_codec_preserves_metadata_types_and_local_relation_codec_preserves_none_chunk() -> None:
+def test_document_codec_preserves_metadata_types_and_local_relation_codec_preserves_none_chunk() -> (
+    None
+):
     """Verify exact metadata type preservation in DocumentCodec and None chunk in LocalRelationCodec."""
     doc = L1Document(
         id="doc-meta",

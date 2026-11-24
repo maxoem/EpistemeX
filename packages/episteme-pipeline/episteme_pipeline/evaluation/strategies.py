@@ -140,13 +140,16 @@ class StructuralistStrategy:
         min_pfs = ctx.get("min_pfs", self.model_scorer.min_pfs)
         sim_threshold = ctx.get("sim_threshold", self.model_scorer.sim_threshold)
 
-        scorer = ModelScorer(min_mcc=min_mcc, min_pfs=min_pfs, sim_threshold=sim_threshold)
+        scorer = ModelScorer(
+            min_mcc=min_mcc, min_pfs=min_pfs, sim_threshold=sim_threshold
+        )
         stage_res = scorer.evaluate_to_result(
             predicted=predicted,
             gold=gold_target,
             run_id=run_id,
             phase_name=ctx.get("phase_name", "Phase 6: TheoryNet Projection"),
-            dataset_ref=dataset_ref or (str(gold) if isinstance(gold, (str, Path)) else "in_memory_gold"),
+            dataset_ref=dataset_ref
+            or (str(gold) if isinstance(gold, (str, Path)) else "in_memory_gold"),
         )
         return [stage_res]
 
@@ -176,7 +179,9 @@ class StructuralistStrategy:
             build_l4_theorynet_eval_pipeline,
         )
 
-        return build_l4_theorynet_eval_pipeline(event_emitter=event_emitter, in_memory=in_memory, **kwargs)
+        return build_l4_theorynet_eval_pipeline(
+            event_emitter=event_emitter, in_memory=in_memory, **kwargs
+        )
 
 
 class ExtractionStrategy:
@@ -260,7 +265,9 @@ class ExtractionStrategy:
                 pred_triples.append(
                     L2Triple(
                         subject_id=str(u),
-                        predicate=str(edata.get("label", edata.get("relation", "related_to"))),
+                        predicate=str(
+                            edata.get("label", edata.get("relation", "related_to"))
+                        ),
                         object_id=str(v),
                         confidence=float(edata.get("confidence", 1.0)),
                         scope=str(edata.get("scope", "local")),
@@ -299,7 +306,9 @@ class ExtractionStrategy:
                 gold_triples.append(
                     L2Triple(
                         subject_id=str(u),
-                        predicate=str(edata.get("label", edata.get("relation", "related_to"))),
+                        predicate=str(
+                            edata.get("label", edata.get("relation", "related_to"))
+                        ),
                         object_id=str(v),
                         confidence=float(edata.get("confidence", 1.0)),
                         scope=str(edata.get("scope", "local")),
@@ -307,7 +316,11 @@ class ExtractionStrategy:
                 )
 
         # 3. Compute Entity Extraction Metrics
-        norm = (lambda s: s.strip()) if self.match_case_sensitive else (lambda s: s.strip().lower())
+        norm = (
+            (lambda s: s.strip())
+            if self.match_case_sensitive
+            else (lambda s: s.strip().lower())
+        )
         pred_ent_names = {norm(e.name) for e in pred_entities if e.name}
         gold_ent_names = {norm(e.name) for e in gold_entities if e.name}
 
@@ -315,27 +328,51 @@ class ExtractionStrategy:
         len(pred_ent_names - gold_ent_names)
         len(gold_ent_names - pred_ent_names)
 
-        ent_prec = tp_ent / len(pred_ent_names) if pred_ent_names else (1.0 if not gold_ent_names else 0.0)
+        ent_prec = (
+            tp_ent / len(pred_ent_names)
+            if pred_ent_names
+            else (1.0 if not gold_ent_names else 0.0)
+        )
         ent_rec = tp_ent / len(gold_ent_names) if gold_ent_names else 1.0
-        ent_f1 = (2 * ent_prec * ent_rec) / (ent_prec + ent_rec) if (ent_prec + ent_rec) > 0 else 0.0
+        ent_f1 = (
+            (2 * ent_prec * ent_rec) / (ent_prec + ent_rec)
+            if (ent_prec + ent_rec) > 0
+            else 0.0
+        )
 
         # 4. Compute Relation Extraction Metrics
         pred_ent_id_to_name = {e.id: norm(e.name or e.id) for e in pred_entities}
         gold_ent_id_to_name = {e.id: norm(e.name or e.id) for e in gold_entities}
 
         pred_rel_tuples = {
-            (pred_ent_id_to_name.get(t.subject_id, norm(t.subject_id)), norm(t.predicate), pred_ent_id_to_name.get(t.object_id, norm(t.object_id)))
+            (
+                pred_ent_id_to_name.get(t.subject_id, norm(t.subject_id)),
+                norm(t.predicate),
+                pred_ent_id_to_name.get(t.object_id, norm(t.object_id)),
+            )
             for t in pred_triples
         }
         gold_rel_tuples = {
-            (gold_ent_id_to_name.get(t.subject_id, norm(t.subject_id)), norm(t.predicate), gold_ent_id_to_name.get(t.object_id, norm(t.object_id)))
+            (
+                gold_ent_id_to_name.get(t.subject_id, norm(t.subject_id)),
+                norm(t.predicate),
+                gold_ent_id_to_name.get(t.object_id, norm(t.object_id)),
+            )
             for t in gold_triples
         }
 
         tp_rel = len(pred_rel_tuples & gold_rel_tuples)
-        rel_prec = tp_rel / len(pred_rel_tuples) if pred_rel_tuples else (1.0 if not gold_rel_tuples else 0.0)
+        rel_prec = (
+            tp_rel / len(pred_rel_tuples)
+            if pred_rel_tuples
+            else (1.0 if not gold_rel_tuples else 0.0)
+        )
         rel_rec = tp_rel / len(gold_rel_tuples) if gold_rel_tuples else 1.0
-        rel_f1 = (2 * rel_prec * rel_rec) / (rel_prec + rel_rec) if (rel_prec + rel_rec) > 0 else 0.0
+        rel_f1 = (
+            (2 * rel_prec * rel_rec) / (rel_prec + rel_rec)
+            if (rel_prec + rel_rec) > 0
+            else 0.0
+        )
 
         # 5. Compute Graph Edit Rates (OEP)
         pred_graph = l2_triples_to_digraph(pred_entities, pred_triples)
@@ -363,23 +400,41 @@ class ExtractionStrategy:
         if schema and getattr(schema, "relation_polarities", None):
             pred_pair_pols: dict[tuple[str, str], set[int]] = {}
             for t in pred_triples:
-                pair = (pred_ent_id_to_name.get(t.subject_id, norm(t.subject_id)), pred_ent_id_to_name.get(t.object_id, norm(t.object_id)))
-                pol = schema.relation_polarities.get(t.predicate, schema.relation_polarities.get(t.predicate.upper(), 0))
+                pair = (
+                    pred_ent_id_to_name.get(t.subject_id, norm(t.subject_id)),
+                    pred_ent_id_to_name.get(t.object_id, norm(t.object_id)),
+                )
+                pol = schema.relation_polarities.get(
+                    t.predicate, schema.relation_polarities.get(t.predicate.upper(), 0)
+                )
                 pred_pair_pols.setdefault(pair, set()).add(pol)
 
             gold_pair_pols: dict[tuple[str, str], set[int]] = {}
             for t in gold_triples:
-                pair = (gold_ent_id_to_name.get(t.subject_id, norm(t.subject_id)), gold_ent_id_to_name.get(t.object_id, norm(t.object_id)))
-                pol = schema.relation_polarities.get(t.predicate, schema.relation_polarities.get(t.predicate.upper(), 0))
+                pair = (
+                    gold_ent_id_to_name.get(t.subject_id, norm(t.subject_id)),
+                    gold_ent_id_to_name.get(t.object_id, norm(t.object_id)),
+                )
+                pol = schema.relation_polarities.get(
+                    t.predicate, schema.relation_polarities.get(t.predicate.upper(), 0)
+                )
                 gold_pair_pols.setdefault(pair, set()).add(pol)
 
             shared_pairs = set(pred_pair_pols.keys()) & set(gold_pair_pols.keys())
             if shared_pairs:
-                correct_pols = sum(1 for pair in shared_pairs if pred_pair_pols[pair] & gold_pair_pols[pair])
+                correct_pols = sum(
+                    1
+                    for pair in shared_pairs
+                    if pred_pair_pols[pair] & gold_pair_pols[pair]
+                )
                 conflicts = sum(
                     1
                     for pair in shared_pairs
-                    if any((pp > 0 and gp < 0) or (pp < 0 and gp > 0) for pp in pred_pair_pols[pair] for gp in gold_pair_pols[pair])
+                    if any(
+                        (pp > 0 and gp < 0) or (pp < 0 and gp > 0)
+                        for pp in pred_pair_pols[pair]
+                        for gp in gold_pair_pols[pair]
+                    )
                 )
                 polarity_accuracy = round(correct_pols / len(shared_pairs), 4)
                 polarity_conflict_rate = round(conflicts / len(shared_pairs), 4)
@@ -402,7 +457,9 @@ class ExtractionStrategy:
             EvaluationMetric(name="hallucination_rate", value=hallucination_rate),
             EvaluationMetric(name="omission_rate", value=omission_rate),
             EvaluationMetric(name="polarity_accuracy", value=polarity_accuracy),
-            EvaluationMetric(name="polarity_conflict_rate", value=polarity_conflict_rate),
+            EvaluationMetric(
+                name="polarity_conflict_rate", value=polarity_conflict_rate
+            ),
         ]
 
         markdown_report = (
@@ -454,7 +511,9 @@ class ExtractionStrategy:
         """
         from episteme_pipeline.evaluation.pipelines import build_l2_eval_pipeline
 
-        return build_l2_eval_pipeline(event_emitter=event_emitter, in_memory=in_memory, **kwargs)
+        return build_l2_eval_pipeline(
+            event_emitter=event_emitter, in_memory=in_memory, **kwargs
+        )
 
 
 class ArgumentationStrategy:
@@ -535,12 +594,22 @@ class ArgumentationStrategy:
         gold_texts = {a.text.strip().lower() for a in gold_atoms if a.text}
 
         tp_adu = len(pred_texts & gold_texts)
-        prec_adu = tp_adu / len(pred_texts) if pred_texts else (1.0 if not gold_texts else 0.0)
+        prec_adu = (
+            tp_adu / len(pred_texts) if pred_texts else (1.0 if not gold_texts else 0.0)
+        )
         rec_adu = tp_adu / len(gold_texts) if gold_texts else 1.0
-        f1_adu = (2 * prec_adu * rec_adu) / (prec_adu + rec_adu) if (prec_adu + rec_adu) > 0 else 0.0
+        f1_adu = (
+            (2 * prec_adu * rec_adu) / (prec_adu + rec_adu)
+            if (prec_adu + rec_adu) > 0
+            else 0.0
+        )
 
-        pred_atom_id_to_text = {a.id: a.text.strip().lower() for a in pred_atoms if a.text}
-        gold_atom_id_to_text = {a.id: a.text.strip().lower() for a in gold_atoms if a.text}
+        pred_atom_id_to_text = {
+            a.id: a.text.strip().lower() for a in pred_atoms if a.text
+        }
+        gold_atom_id_to_text = {
+            a.id: a.text.strip().lower() for a in gold_atoms if a.text
+        }
 
         pred_rels = {
             (
@@ -560,9 +629,15 @@ class ArgumentationStrategy:
         }
 
         tp_rel = len(pred_rels & gold_rels)
-        prec_rel = tp_rel / len(pred_rels) if pred_rels else (1.0 if not gold_rels else 0.0)
+        prec_rel = (
+            tp_rel / len(pred_rels) if pred_rels else (1.0 if not gold_rels else 0.0)
+        )
         rec_rel = tp_rel / len(gold_rels) if gold_rels else 1.0
-        f1_rel = (2 * prec_rel * rec_rel) / (prec_rel + rec_rel) if (prec_rel + rec_rel) > 0 else 0.0
+        f1_rel = (
+            (2 * prec_rel * rec_rel) / (prec_rel + rec_rel)
+            if (prec_rel + rec_rel) > 0
+            else 0.0
+        )
 
         # Compute Polarity Concordance
         schema = ctx.get("schema") or self.schema
@@ -573,23 +648,37 @@ class ArgumentationStrategy:
             for r in pred_relations:
                 src = pred_atom_id_to_text.get(r.source_id, r.source_id.lower())
                 tgt = pred_atom_id_to_text.get(r.target_id, r.target_id.lower())
-                p = schema.relation_polarities.get(r.relation_type, schema.relation_polarities.get(r.relation_type.upper(), 0))
+                p = schema.relation_polarities.get(
+                    r.relation_type,
+                    schema.relation_polarities.get(r.relation_type.upper(), 0),
+                )
                 pred_pair_pols.setdefault((src, tgt), set()).add(p)
 
             gold_pair_pols: dict[tuple[str, str], set[int]] = {}
             for r in gold_relations:
                 src = gold_atom_id_to_text.get(r.source_id, r.source_id.lower())
                 tgt = gold_atom_id_to_text.get(r.target_id, r.target_id.lower())
-                p = schema.relation_polarities.get(r.relation_type, schema.relation_polarities.get(r.relation_type.upper(), 0))
+                p = schema.relation_polarities.get(
+                    r.relation_type,
+                    schema.relation_polarities.get(r.relation_type.upper(), 0),
+                )
                 gold_pair_pols.setdefault((src, tgt), set()).add(p)
 
             shared_pairs = set(pred_pair_pols.keys()) & set(gold_pair_pols.keys())
             if shared_pairs:
-                correct_pols = sum(1 for pair in shared_pairs if pred_pair_pols[pair] & gold_pair_pols[pair])
+                correct_pols = sum(
+                    1
+                    for pair in shared_pairs
+                    if pred_pair_pols[pair] & gold_pair_pols[pair]
+                )
                 conflicts = sum(
                     1
                     for pair in shared_pairs
-                    if any((pp > 0 and gp < 0) or (pp < 0 and gp > 0) for pp in pred_pair_pols[pair] for gp in gold_pair_pols[pair])
+                    if any(
+                        (pp > 0 and gp < 0) or (pp < 0 and gp > 0)
+                        for pp in pred_pair_pols[pair]
+                        for gp in gold_pair_pols[pair]
+                    )
                 )
                 polarity_accuracy = round(correct_pols / len(shared_pairs), 4)
                 polarity_conflict_rate = round(conflicts / len(shared_pairs), 4)
@@ -607,9 +696,13 @@ class ArgumentationStrategy:
             EvaluationMetric(name="arc_recall", value=rec_rel),
             EvaluationMetric(name="arc_f1", value=f1_rel),
             EvaluationMetric(name="polarity_accuracy", value=polarity_accuracy),
-            EvaluationMetric(name="polarity_conflict_rate", value=polarity_conflict_rate),
+            EvaluationMetric(
+                name="polarity_conflict_rate", value=polarity_conflict_rate
+            ),
             EvaluationMetric(name="ece", value=round(cal_res.ece, 4), unit="ratio"),
-            EvaluationMetric(name="brier_score", value=round(cal_res.brier_score, 4), unit="score"),
+            EvaluationMetric(
+                name="brier_score", value=round(cal_res.brier_score, 4), unit="score"
+            ),
             EvaluationMetric(name="mce", value=round(cal_res.mce, 4), unit="ratio"),
         ]
 
@@ -632,7 +725,9 @@ class ArgumentationStrategy:
             dataset_ref=dataset_ref or "in_memory_argumentation",
             dataset_type=DatasetType.GOLD,
             metrics=metrics,
-            outcome=EvaluationOutcome.PASS if f1_adu >= 0.5 else EvaluationOutcome.WARNING,
+            outcome=EvaluationOutcome.PASS
+            if f1_adu >= 0.5
+            else EvaluationOutcome.WARNING,
             notes={
                 "category": "argumentation_mining",
                 "markdown_report": markdown_report,
@@ -665,7 +760,10 @@ class ArgumentationStrategy:
         """
         from episteme_pipeline.evaluation.pipelines import build_l3_eval_pipeline
 
-        return build_l3_eval_pipeline(event_emitter=event_emitter, in_memory=in_memory, **kwargs)
+        return build_l3_eval_pipeline(
+            event_emitter=event_emitter, in_memory=in_memory, **kwargs
+        )
+
 
 def apply_typo_noise(text: str, typo_rate: float = 0.05, seed: int = 42) -> str:
     """Introduce adversarial character-level typographical mutations into source text.
@@ -688,6 +786,7 @@ def apply_typo_noise(text: str, typo_rate: float = 0.05, seed: int = 42) -> str:
         return text
 
     import random
+
     rng = random.Random(seed)
     words = text.split(" ")
     perturbed_words = []
@@ -730,6 +829,7 @@ def apply_sentence_shuffling(text: str, seed: int = 42) -> str:
 
     import random
     import re
+
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
     if len(sentences) <= 1:
         return text
@@ -765,6 +865,7 @@ def apply_entity_synonym_swaps(
         return text
 
     import re
+
     result = text
     for canon, syn in synonyms.items():
         pattern = re.compile(rf"\b{re.escape(canon)}\b", flags=re.IGNORECASE)
@@ -794,6 +895,7 @@ def apply_graph_perturbation(
         Perturbed graph with dropped edges.
     """
     import random
+
     rng = random.Random(seed)
     perturbed = graph.copy()
     edges = list(perturbed.edges())
@@ -823,7 +925,7 @@ def compute_rdf(f1_clean: float, f1_perturbed: float) -> float:
         Degradation factor (0.0 means perfectly robust, 1.0 means complete collapse).
     """
     if f1_clean <= 0.0:
-        return 0.0 if f1_perturbed <= 0.0 else 0.0
+        return 0.0 if f1_perturbed <= 0.0 else 0.0  # noqa: RUF034 baseline
     rdf = 1.0 - (f1_perturbed / f1_clean)
     return float(max(-1.0, min(1.0, rdf)))
 
@@ -895,24 +997,34 @@ class NoiseRobustnessStrategy:
             Evaluation results containing clean metrics, perturbed metrics, and RDF.
         """
         ctx = context or {}
-        strat = self.base_strategy or default_registry.infer(predicted=predicted, gold=gold)
+        strat = self.base_strategy or default_registry.infer(
+            predicted=predicted, gold=gold
+        )
 
         # 1. Clean evaluation
         clean_results = await strat.evaluate(predicted, gold, run_id, context=ctx)
         f1_clean = 0.0
         if clean_results and clean_results[0].metrics:
             m_dict = {m.name: m.value for m in clean_results[0].metrics}
-            f1_clean = m_dict.get("relation_f1", m_dict.get("f1", m_dict.get("mcc", clean_results[0].metrics[0].value)))
+            f1_clean = m_dict.get(
+                "relation_f1",
+                m_dict.get("f1", m_dict.get("mcc", clean_results[0].metrics[0].value)),
+            )
 
         # 2. Generate perturbed representation
         perturbed_pred = self._perturb_representation(predicted)
 
         # 3. Perturbed evaluation
-        pert_results = await strat.evaluate(perturbed_pred, gold, f"{run_id}_perturbed", context=ctx)
+        pert_results = await strat.evaluate(
+            perturbed_pred, gold, f"{run_id}_perturbed", context=ctx
+        )
         f1_pert = 0.0
         if pert_results and pert_results[0].metrics:
             m_dict = {m.name: m.value for m in pert_results[0].metrics}
-            f1_pert = m_dict.get("relation_f1", m_dict.get("f1", m_dict.get("mcc", pert_results[0].metrics[0].value)))
+            f1_pert = m_dict.get(
+                "relation_f1",
+                m_dict.get("f1", m_dict.get("mcc", pert_results[0].metrics[0].value)),
+            )
 
         # 4. Compute RDF
         rdf = compute_rdf(f1_clean, f1_pert)
@@ -975,21 +1087,35 @@ class NoiseRobustnessStrategy:
     def _perturb_representation(self, pred: Any) -> Any:
         """Apply noise perturbations to predicted domain objects."""
         if isinstance(pred, nx.DiGraph):
-            return apply_graph_perturbation(pred, drop_rate=self.drop_rate, seed=self.seed)
+            return apply_graph_perturbation(
+                pred, drop_rate=self.drop_rate, seed=self.seed
+            )
 
         if isinstance(pred, TheoryNet):
             import random
+
             rng = random.Random(self.seed)
             perturbed_atoms = [
-                atom.model_copy(update={"text": apply_typo_noise(atom.text, typo_rate=self.typo_rate, seed=self.seed)})
+                atom.model_copy(
+                    update={
+                        "text": apply_typo_noise(
+                            atom.text, typo_rate=self.typo_rate, seed=self.seed
+                        )
+                    }
+                )
                 for atom in pred.atoms
             ]
             num_rels = int(len(pred.relations) * (1.0 - self.drop_rate))
-            perturbed_rels = rng.sample(pred.relations, max(1, num_rels)) if pred.relations and num_rels > 0 else []
+            perturbed_rels = (
+                rng.sample(pred.relations, max(1, num_rels))
+                if pred.relations and num_rels > 0
+                else []
+            )
             return TheoryNet(atoms=perturbed_atoms, relations=perturbed_rels)
 
         if isinstance(pred, list):
             import random
+
             rng = random.Random(self.seed)
             num_keep = max(1, int(len(pred) * (1.0 - self.drop_rate)))
             return rng.sample(pred, min(num_keep, len(pred))) if pred else []
@@ -1002,7 +1128,12 @@ class StrategyRegistry:
 
     def __init__(self) -> None:
         """Initialize the strategy registry with standard built-in strategies."""
-        self._strategies: dict[str, type[EvaluationStrategy] | Callable[[], EvaluationStrategy] | EvaluationStrategy] = {}
+        self._strategies: dict[
+            str,
+            type[EvaluationStrategy]
+            | Callable[[], EvaluationStrategy]
+            | EvaluationStrategy,
+        ] = {}
         self._pipeline_builders: dict[str, Callable[..., Any]] = {}
         self._register_defaults()
 
@@ -1035,7 +1166,9 @@ class StrategyRegistry:
             build_l4_theorynet_eval_pipeline,
         )
 
-        self.register_pipeline_builder("structuralist", build_l4_theorynet_eval_pipeline)
+        self.register_pipeline_builder(
+            "structuralist", build_l4_theorynet_eval_pipeline
+        )
         self.register_pipeline_builder("stnb", build_l4_theorynet_eval_pipeline)
         self.register_pipeline_builder("theorynet", build_l4_theorynet_eval_pipeline)
         self.register_pipeline_builder("l4", build_l4_theorynet_eval_pipeline)
@@ -1101,12 +1234,16 @@ class StrategyRegistry:
         # Support dynamic import: 'my_module:build_pipeline' or 'my_module.build_pipeline'
         if ":" in name or "." in name:
             try:
-                mod_path, fn_name = name.split(":", 1) if ":" in name else name.rsplit(".", 1)
+                mod_path, fn_name = (
+                    name.split(":", 1) if ":" in name else name.rsplit(".", 1)
+                )
                 mod = importlib.import_module(mod_path)
                 fn = getattr(mod, fn_name)
                 return fn
             except Exception as e:
-                raise ValueError(f"Failed to dynamically import pipeline builder '{name}': {e}") from e
+                raise ValueError(
+                    f"Failed to dynamically import pipeline builder '{name}': {e}"
+                ) from e
 
         raise ValueError(
             f"Unknown pipeline builder: '{name}'. Available registered builders: {list(self._pipeline_builders.keys())}"
@@ -1115,7 +1252,9 @@ class StrategyRegistry:
     def register(
         self,
         name: str,
-        strategy: type[EvaluationStrategy] | Callable[[], EvaluationStrategy] | EvaluationStrategy,
+        strategy: type[EvaluationStrategy]
+        | Callable[[], EvaluationStrategy]
+        | EvaluationStrategy,
     ) -> None:
         """Register a strategy by name.
 
@@ -1156,12 +1295,16 @@ class StrategyRegistry:
         # Support dynamic import: 'my_module:MyStrategy' or 'my_module.MyStrategy'
         if ":" in name or "." in name:
             try:
-                mod_path, cls_name = name.split(":", 1) if ":" in name else name.rsplit(".", 1)
+                mod_path, cls_name = (
+                    name.split(":", 1) if ":" in name else name.rsplit(".", 1)
+                )
                 mod = importlib.import_module(mod_path)
                 cls = getattr(mod, cls_name)
                 return cls()
             except Exception as e:
-                raise ValueError(f"Failed to dynamically import evaluation strategy '{name}': {e}") from e
+                raise ValueError(
+                    f"Failed to dynamically import evaluation strategy '{name}': {e}"
+                ) from e
 
         raise ValueError(
             f"Unknown evaluation strategy: '{name}'. Available registered strategies: {list(self._strategies.keys())}"
@@ -1192,7 +1335,12 @@ class StrategyRegistry:
         # 1. Match dataset_type if provided
         if dataset_type:
             dt_clean = dataset_type.lower().strip()
-            if dt_clean in ("stress_test", "robustness", "perturbation", "noise_robustness"):
+            if dt_clean in (
+                "stress_test",
+                "robustness",
+                "perturbation",
+                "noise_robustness",
+            ):
                 return self.get("robustness")
             if dt_clean in self._strategies:
                 return self.get(dt_clean)

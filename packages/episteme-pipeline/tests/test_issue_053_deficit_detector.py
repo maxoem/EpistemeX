@@ -24,7 +24,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from episteme_pipeline.artifacts.builders import (
     build_epistemic_deficit_artifact,
     build_theory_atom_artifact,
@@ -100,7 +99,9 @@ class _RecordingObserver:
         """No-op flush."""
 
 
-def _make_context(run_id: str = "run-det", refinement_pass: int = 0) -> ArtifactExecutionContext:
+def _make_context(
+    run_id: str = "run-det", refinement_pass: int = 0
+) -> ArtifactExecutionContext:
     """Create a deterministic execution context for tests."""
     return ArtifactExecutionContext(
         run_id=run_id,
@@ -125,8 +126,13 @@ def test_views_hydrate_theoretical_enrichments_and_preserve_forward_kinds() -> N
         assert ArtifactKind.EPISTEMIC_DEFICIT not in forward_view._allowed_kinds
         assert ArtifactKind.EPISTEMIC_DEFICIT not in forward_view.allowed_kinds
 
-    assert ArtifactKind.THEORETICAL_ENRICHMENT in EpistemicDeficitArtifactsView._allowed_kinds
-    assert ArtifactKind.EPISTEMIC_DEFICIT in EpistemicDeficitArtifactsView._allowed_kinds
+    assert (
+        ArtifactKind.THEORETICAL_ENRICHMENT
+        in EpistemicDeficitArtifactsView._allowed_kinds
+    )
+    assert (
+        ArtifactKind.EPISTEMIC_DEFICIT in EpistemicDeficitArtifactsView._allowed_kinds
+    )
 
     atom = TheoryAtom(
         id="hyp_1",
@@ -164,7 +170,9 @@ def test_views_hydrate_theoretical_enrichments_and_preserve_forward_kinds() -> N
     )
     collection = ArtifactCollection(
         [
-            build_theory_atom_artifact(atom, run_id="run-v", phase_name="P4", method="acc"),
+            build_theory_atom_artifact(
+                atom, run_id="run-v", phase_name="P4", method="acc"
+            ),
             enr_env,
             build_epistemic_deficit_artifact(
                 deficit, run_id="run-v", phase_name="TE", method="det"
@@ -191,11 +199,31 @@ def test_views_hydrate_theoretical_enrichments_and_preserve_forward_kinds() -> N
 def test_detect_enthymeme_gap_via_pagerank_and_z1_grounding() -> None:
     """Verify ENTHYMEME_GAP catches unsupported and Z1-disconnected A-atoms."""
     chunks = [
-        L1Chunk(id="c1", text="Obs chunk", source_doc_id="doc1", sequence_index=0, token_count=5),
-        L1Chunk(id="c2", text="Hub chunk", source_doc_id="doc1", sequence_index=1, token_count=5),
-        L1Chunk(id="c3", text="Tail chunk", source_doc_id="doc1", sequence_index=2, token_count=5),
+        L1Chunk(
+            id="c1",
+            text="Obs chunk",
+            source_doc_id="doc1",
+            sequence_index=0,
+            token_count=5,
+        ),
+        L1Chunk(
+            id="c2",
+            text="Hub chunk",
+            source_doc_id="doc1",
+            sequence_index=1,
+            token_count=5,
+        ),
+        L1Chunk(
+            id="c3",
+            text="Tail chunk",
+            source_doc_id="doc1",
+            sequence_index=2,
+            token_count=5,
+        ),
     ]
-    ent = L2Entity(id="ent_cog", label="Concept", name="Cognition", source_chunk_ids=["c2"])
+    ent = L2Entity(
+        id="ent_cog", label="Concept", name="Cognition", source_chunk_ids=["c2"]
+    )
 
     obs = TheoryAtom(
         id="obs_1",
@@ -276,7 +304,9 @@ def test_detect_enthymeme_gap_via_pagerank_and_z1_grounding() -> None:
 
     detector = TheoryNetDeficitDetector()
     deficits = detector.detect_deficits(state, context=_make_context())
-    enthymemes = [d for d in deficits if d.deficit_kind == EpistemicDeficitKind.ENTHYMEME_GAP]
+    enthymemes = [
+        d for d in deficits if d.deficit_kind == EpistemicDeficitKind.ENTHYMEME_GAP
+    ]
     by_atom = {d.target_atom_ids[0]: d for d in enthymemes}
 
     assert "hyp_grounded" not in by_atom
@@ -483,11 +513,27 @@ def test_detect_polysemy_collision_via_low_ts_edge_without_entities() -> None:
         controversy_volatility=0.05,
         local_tenability=0.95,
     )
-    obs_a = TheoryAtom(id="obs_a", text="Obs A", component_type="ObservationUnit", source_chunk_id="c1")
-    obs_b = TheoryAtom(id="obs_b", text="Obs B", component_type="ObservationUnit", source_chunk_id="c2")
+    obs_a = TheoryAtom(
+        id="obs_a", text="Obs A", component_type="ObservationUnit", source_chunk_id="c1"
+    )
+    obs_b = TheoryAtom(
+        id="obs_b", text="Obs B", component_type="ObservationUnit", source_chunk_id="c2"
+    )
     rels = [
-        TheoryRelation(source_id="obs_a", target_id="atom_a", relation_type="SUPPORTS", confidence=0.9, scope="local"),
-        TheoryRelation(source_id="obs_b", target_id="atom_b", relation_type="SUPPORTS", confidence=0.9, scope="local"),
+        TheoryRelation(
+            source_id="obs_a",
+            target_id="atom_a",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
+        ),
+        TheoryRelation(
+            source_id="obs_b",
+            target_id="atom_b",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
+        ),
         TheoryRelation(
             source_id="atom_a",
             target_id="atom_b",
@@ -596,8 +642,20 @@ def test_detect_ungrounded_axiom_across_enrichment_local_ts_and_missing_b() -> N
     )
 
     rels = [
-        TheoryRelation(source_id="obs_c1", target_id="hyp_enr", relation_type="SUPPORTS", confidence=0.9, scope="local"),
-        TheoryRelation(source_id="obs_c2", target_id="hyp_atom_low", relation_type="SUPPORTS", confidence=0.9, scope="local"),
+        TheoryRelation(
+            source_id="obs_c1",
+            target_id="hyp_enr",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
+        ),
+        TheoryRelation(
+            source_id="obs_c2",
+            target_id="hyp_atom_low",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
+        ),
     ]
     enr_bad = TheoreticalEnrichmentArtifact(
         enrichment_id="enr-bad",
@@ -623,7 +681,9 @@ def test_detect_ungrounded_axiom_across_enrichment_local_ts_and_missing_b() -> N
         aggregated_tenability=0.62,
         admissible_blur_delta=0.05,
         is_tenable=True,
-        anomalies=["Constraint edge 'CONSTRAINS' between a and b is untenable (TS_edge = 0.300, delta_C = 0.700)"],
+        anomalies=[
+            "Constraint edge 'CONSTRAINS' between a and b is untenable (TS_edge = 0.300, delta_C = 0.700)"
+        ],
     )
 
     state = EpistemicDeficitArtifactsView(
@@ -664,9 +724,27 @@ def test_detect_ungrounded_axiom_across_enrichment_local_ts_and_missing_b() -> N
 def test_detector_determinism_ranking_capping_events_and_fingerprint() -> None:
     """Verify deterministic ordering, capping, pass stamping, events, and fingerprint."""
     atoms = [
-        TheoryAtom(id="a_low", text="Low prior", component_type="TheoreticalHypothesis", source_chunk_id="c1", modal_prior=0.4),
-        TheoryAtom(id="a_mid", text="Mid prior", component_type="TheoreticalHypothesis", source_chunk_id="c2", local_tenability=0.35),
-        TheoryAtom(id="a_high", text="High sev", component_type="TheoreticalHypothesis", source_chunk_id="c3", local_tenability=0.05),
+        TheoryAtom(
+            id="a_low",
+            text="Low prior",
+            component_type="TheoreticalHypothesis",
+            source_chunk_id="c1",
+            modal_prior=0.4,
+        ),
+        TheoryAtom(
+            id="a_mid",
+            text="Mid prior",
+            component_type="TheoreticalHypothesis",
+            source_chunk_id="c2",
+            local_tenability=0.35,
+        ),
+        TheoryAtom(
+            id="a_high",
+            text="High sev",
+            component_type="TheoreticalHypothesis",
+            source_chunk_id="c3",
+            local_tenability=0.05,
+        ),
     ]
     state_a = EpistemicDeficitArtifactsView(theory_atoms=atoms)
     state_b = EpistemicDeficitArtifactsView(theory_atoms=list(reversed(atoms)))
@@ -696,7 +774,9 @@ def test_detector_determinism_ranking_capping_events_and_fingerprint() -> None:
     assert all(d.refinement_pass == 2 for d in res_a)
 
     # 2 events from res_a + 2 events from res_b
-    detected_events = [e for e in recorder.events if isinstance(e, EpistemicDeficitDetected)]
+    detected_events = [
+        e for e in recorder.events if isinstance(e, EpistemicDeficitDetected)
+    ]
     assert len(detected_events) == 4
     assert detected_events[0].run_id == "run-rank-cap"
     assert detected_events[0].refinement_pass == 2
@@ -814,7 +894,9 @@ async def test_phase6_runner_emits_deficit_artifacts_when_detector_configured() 
 
 
 @pytest.mark.asyncio
-async def test_theoretical_enrichment_runner_emits_deficit_artifacts_after_reconvergence() -> None:
+async def test_theoretical_enrichment_runner_emits_deficit_artifacts_after_reconvergence() -> (
+    None
+):
     """Verify TheoreticalEnrichmentRunner invokes deficit_detector after Step 4.5."""
     with pytest.raises(TypeError, match="EpistemicDeficitDetector"):
         TheoreticalEnrichmentRunner(deficit_detector=object())
@@ -854,9 +936,27 @@ async def test_theoretical_enrichment_runner_emits_deficit_artifacts_after_recon
         modal_prior=0.80,
     )
     rels = [
-        TheoryRelation(source_id="obs_1", target_id="hyp_1", relation_type="SUPPORTS", confidence=0.9, scope="local"),
-        TheoryRelation(source_id="obs_2", target_id="hyp_2", relation_type="SUPPORTS", confidence=0.9, scope="local"),
-        TheoryRelation(source_id="hyp_1", target_id="hyp_2", relation_type="CONSTRAINS", confidence=0.9, scope="global"),
+        TheoryRelation(
+            source_id="obs_1",
+            target_id="hyp_1",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
+        ),
+        TheoryRelation(
+            source_id="obs_2",
+            target_id="hyp_2",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
+        ),
+        TheoryRelation(
+            source_id="hyp_1",
+            target_id="hyp_2",
+            relation_type="CONSTRAINS",
+            confidence=0.9,
+            scope="global",
+        ),
     ]
 
     strict_law = TheoryLaw(
@@ -874,12 +974,16 @@ async def test_theoretical_enrichment_runner_emits_deficit_artifacts_after_recon
         claimant_hypothesis_ids=["hyp_1", "hyp_2"],
     )
     registry = TheoryRegistry(seed_theories=[theory_def])
-    view = Phase4ArtifactsView(theory_atoms=[obs_1, hyp_1, obs_2, hyp_2], theory_relations=rels)
+    view = Phase4ArtifactsView(
+        theory_atoms=[obs_1, hyp_1, obs_2, hyp_2], theory_relations=rels
+    )
     ctx = _make_context(run_id="run-te-det", refinement_pass=1)
 
     # Without detector: zero EpistemicDeficitArtifacts
     runner_plain = TheoreticalEnrichmentRunner(
-        config=TheoreticalEnrichmentConfig(enabled=True, induce_theories=False, tenability_threshold=0.5),
+        config=TheoreticalEnrichmentConfig(
+            enabled=True, induce_theories=False, tenability_threshold=0.5
+        ),
         schema=DEFAULT_SCHEMA,
         registry=registry,
         projector=GenericTheoryProjector(),
@@ -890,7 +994,9 @@ async def test_theoretical_enrichment_runner_emits_deficit_artifacts_after_recon
     # With detector: discovers component & emits EpistemicDeficitArtifacts
     detector = TheoryNetDeficitDetector()
     runner_det = TheoreticalEnrichmentRunner(
-        config=TheoreticalEnrichmentConfig(enabled=True, induce_theories=False, tenability_threshold=0.5),
+        config=TheoreticalEnrichmentConfig(
+            enabled=True, induce_theories=False, tenability_threshold=0.5
+        ),
         schema=DEFAULT_SCHEMA,
         registry=registry,
         projector=GenericTheoryProjector(),
@@ -937,9 +1043,11 @@ def test_step2_zero_reflection_and_docstrings() -> None:
     for py_file in files_to_audit:
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):  # noqa: SIM102 baseline
                 if node.func.id in {"getattr", "hasattr"}:
-                    violations.append(f"{py_file.name}:{node.lineno} calls {node.func.id}")
+                    violations.append(
+                        f"{py_file.name}:{node.lineno} calls {node.func.id}"
+                    )
 
     assert not violations, "Forbidden getattr/hasattr calls:\n" + "\n".join(violations)
 

@@ -186,7 +186,9 @@ def format_comparison_markdown(
     for c in comparisons:
         sign = "+" if c.delta > 0 else ""
         delta_str = f"{sign}{c.delta:.4f}"
-        winner_label = name_b if c.winner == "b" else (name_a if c.winner == "a" else "Tie")
+        winner_label = (
+            name_b if c.winner == "b" else (name_a if c.winner == "a" else "Tie")
+        )
         lines.append(
             f"| `{c.metric_name}` | {c.value_a:.4f} | {c.value_b:.4f} | {delta_str} | {winner_label} |"
         )

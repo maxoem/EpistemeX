@@ -135,7 +135,10 @@ def test_build_manifest_captures_source_fingerprint(simple_config):
     global_extractor = TAGRelationExtractor(llm, emb, simple_config.phase3)
     phases = [
         Phase1Runner(
-            simple_config.phase1, llm=llm, embedding_model=emb, graph_store=projection_graph
+            simple_config.phase1,
+            llm=llm,
+            embedding_model=emb,
+            graph_store=projection_graph,
         ),
         Phase2Runner(
             simple_config.phase2,
@@ -231,7 +234,10 @@ def test_build_manifest_captures_config_snapshot(simple_config):
     global_extractor = TAGRelationExtractor(llm, emb, simple_config.phase3)
     phases = [
         Phase1Runner(
-            simple_config.phase1, llm=llm, embedding_model=emb, graph_store=projection_graph
+            simple_config.phase1,
+            llm=llm,
+            embedding_model=emb,
+            graph_store=projection_graph,
         ),
         Phase2Runner(
             simple_config.phase2,
@@ -330,7 +336,10 @@ def test_build_manifest_captures_input_sources(simple_config):
     global_extractor = TAGRelationExtractor(llm, emb, simple_config.phase3)
     phases = [
         Phase1Runner(
-            simple_config.phase1, llm=llm, embedding_model=emb, graph_store=projection_graph
+            simple_config.phase1,
+            llm=llm,
+            embedding_model=emb,
+            graph_store=projection_graph,
         ),
         Phase2Runner(
             simple_config.phase2,
@@ -429,7 +438,10 @@ def test_method_fingerprints_not_empty(simple_config):
     global_extractor = TAGRelationExtractor(llm, emb, simple_config.phase3)
     phases = [
         Phase1Runner(
-            simple_config.phase1, llm=llm, embedding_model=emb, graph_store=projection_graph
+            simple_config.phase1,
+            llm=llm,
+            embedding_model=emb,
+            graph_store=projection_graph,
         ),
         Phase2Runner(
             simple_config.phase2,

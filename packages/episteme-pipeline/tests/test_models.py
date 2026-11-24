@@ -22,25 +22,39 @@ class TestNERExtractionOutput:
     def test_validate_references_keeps_valid_triples(self):
         entities = [
             ExtractedEntity(id="e1", label="PERSON", name="Kant", mention_quote="Kant"),
-            ExtractedEntity(id="e2", label="KONZEPT", name="space", mention_quote="space"),
+            ExtractedEntity(
+                id="e2", label="KONZEPT", name="space", mention_quote="space"
+            ),
         ]
-        triples = [ExtractedTriple(subject_id="e1", predicate="IMPLIZIERT", object_id="e2")]
+        triples = [
+            ExtractedTriple(subject_id="e1", predicate="IMPLIZIERT", object_id="e2")
+        ]
         output = NERExtractionOutput(entities=entities, triples=triples)
         validated = output.validate_references()
         assert len(validated.triples) == 1
 
     def test_validate_references_drops_orphan_triples(self):
-        entities = [ExtractedEntity(id="e1", label="PERSON", name="Kant", mention_quote="Kant")]
+        entities = [
+            ExtractedEntity(id="e1", label="PERSON", name="Kant", mention_quote="Kant")
+        ]
         triples = [
-            ExtractedTriple(subject_id="e1", predicate="IMPLIZIERT", object_id="e99"),  # e99 missing
+            ExtractedTriple(
+                subject_id="e1", predicate="IMPLIZIERT", object_id="e99"
+            ),  # e99 missing
         ]
         output = NERExtractionOutput(entities=entities, triples=triples)
         validated = output.validate_references()
         assert len(validated.triples) == 0
 
     def test_validate_references_drops_triple_with_missing_subject(self):
-        entities = [ExtractedEntity(id="e2", label="KONZEPT", name="space", mention_quote="space")]
-        triples = [ExtractedTriple(subject_id="e99", predicate="IMPLIZIERT", object_id="e2")]
+        entities = [
+            ExtractedEntity(
+                id="e2", label="KONZEPT", name="space", mention_quote="space"
+            )
+        ]
+        triples = [
+            ExtractedTriple(subject_id="e99", predicate="IMPLIZIERT", object_id="e2")
+        ]
         output = NERExtractionOutput(entities=entities, triples=triples)
         validated = output.validate_references()
         assert len(validated.triples) == 0
@@ -52,19 +66,25 @@ class TestNERExtractionOutput:
         assert validated.triples == []
 
     def test_confidence_clamped_below_zero(self):
-        t = ExtractedTriple(subject_id="e1", predicate="X", object_id="e2", confidence=-1.0)
+        t = ExtractedTriple(
+            subject_id="e1", predicate="X", object_id="e2", confidence=-1.0
+        )
         assert t.confidence == 0.0
 
     def test_confidence_clamped_above_one(self):
-        t = ExtractedTriple(subject_id="e1", predicate="X", object_id="e2", confidence=5.0)
+        t = ExtractedTriple(
+            subject_id="e1", predicate="X", object_id="e2", confidence=5.0
+        )
         assert t.confidence == 1.0
 
     def test_entity_name_stripped(self):
-        e = ExtractedEntity(id="e1", label="PERSON", name="  Kant  ", mention_quote="Kant")
+        e = ExtractedEntity(
+            id="e1", label="PERSON", name="  Kant  ", mention_quote="Kant"
+        )
         assert e.name == "Kant"
 
     def test_entity_empty_name_raises(self):
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 baseline
             ExtractedEntity(id="e1", label="PERSON", name="   ", mention_quote="Kant")
 
 
@@ -76,17 +96,31 @@ class TestNERExtractionOutput:
 class TestACCOutput:
     def test_validate_references_keeps_valid_relations(self):
         components = [
-            ExtractedComponent(id="AC1", component_type="ANTECEDENT", text="Space is a priori."),
-            ExtractedComponent(id="AC2", component_type="EMPIRICAL_OBSERVATION", text="Kant said so."),
+            ExtractedComponent(
+                id="AC1", component_type="ANTECEDENT", text="Space is a priori."
+            ),
+            ExtractedComponent(
+                id="AC2", component_type="EMPIRICAL_OBSERVATION", text="Kant said so."
+            ),
         ]
-        relations = [ExtractedTheoryRelation(source_id="AC2", relation="SUPPORTS", target_id="AC1")]
+        relations = [
+            ExtractedTheoryRelation(
+                source_id="AC2", relation="SUPPORTS", target_id="AC1"
+            )
+        ]
         output = ACCOutput(components=components, relations=relations)
         validated = output.validate_references()
         assert len(validated.relations) == 1
 
     def test_validate_references_drops_orphan_relations(self):
-        components = [ExtractedComponent(id="AC1", component_type="ANTECEDENT", text="Claim.")]
-        relations = [ExtractedTheoryRelation(source_id="AC1", relation="SUPPORTS", target_id="AC99")]
+        components = [
+            ExtractedComponent(id="AC1", component_type="ANTECEDENT", text="Claim.")
+        ]
+        relations = [
+            ExtractedTheoryRelation(
+                source_id="AC1", relation="SUPPORTS", target_id="AC99"
+            )
+        ]
         output = ACCOutput(components=components, relations=relations)
         validated = output.validate_references()
         assert len(validated.relations) == 0
@@ -102,12 +136,14 @@ class TestACCOutput:
         assert c.text == "hello"
 
     def test_extracted_component_empty_text_raises(self):
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 baseline
             ExtractedComponent(id="AC1", component_type="ANTECEDENT", text="  ")
 
     def test_extracted_argument_relation_accepts_any_string(self):
         # After the schema-decoupling fix, relation is str — no Literal constraint
-        r = ExtractedTheoryRelation(source_id="AC1", relation="CUSTOM_REL", target_id="AC2")
+        r = ExtractedTheoryRelation(
+            source_id="AC1", relation="CUSTOM_REL", target_id="AC2"
+        )
         assert r.relation == "CUSTOM_REL"
 
     def test_arc_relation_output_accepts_any_string(self):

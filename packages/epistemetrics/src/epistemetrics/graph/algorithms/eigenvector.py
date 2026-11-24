@@ -80,9 +80,13 @@ def networkx_eigenvector(
             weight=weight_property,
         )
         scores = {str(node): float(val) for node, val in raw_scores.items()}
-        return CentralityResult(scores=scores, algorithm="eigenvector", backend="networkx")
+        return CentralityResult(
+            scores=scores, algorithm="eigenvector", backend="networkx"
+        )
     except (nx.PowerIterationFailedConvergence, nx.NetworkXError):
-        logger.debug("NetworkX power iteration eigenvector failed; using numpy solver fallback.")
+        logger.debug(
+            "NetworkX power iteration eigenvector failed; using numpy solver fallback."
+        )
         try:
             raw_scores = nx.eigenvector_centrality_numpy(
                 calc_graph,
@@ -91,7 +95,9 @@ def networkx_eigenvector(
                 tol=tolerance,
             )
             scores = {str(node): float(val) for node, val in raw_scores.items()}
-            return CentralityResult(scores=scores, algorithm="eigenvector", backend="networkx")
+            return CentralityResult(
+                scores=scores, algorithm="eigenvector", backend="networkx"
+            )
         except Exception as inner_exc:
             raise AlgorithmConvergenceError(
                 f"Eigenvector centrality failed to converge: {inner_exc}"
@@ -165,8 +171,14 @@ def gds_eigenvector(
             "score ORDER BY score DESC"
         )
         rows = client.execute_query(query, {"graph_name": graph_name, "config": config})
-        scores = {str(row["node_id"]): float(row["score"]) for row in rows if row.get("node_id") is not None}
-        return CentralityResult(scores=scores, algorithm="eigenvector", backend="neo4j_gds")
+        scores = {
+            str(row["node_id"]): float(row["score"])
+            for row in rows
+            if row.get("node_id") is not None
+        }
+        return CentralityResult(
+            scores=scores, algorithm="eigenvector", backend="neo4j_gds"
+        )
 
     if exec_mode == AlgorithmExecutionMode.WRITE:
         config["writeProperty"] = write_property or "eigenvector"
@@ -248,7 +260,9 @@ def eigenvector_centrality(
         except Exception as exc:
             if not fallback_to_networkx:
                 raise
-            logger.warning("GDS Eigenvector execution failed (%s); falling back to NetworkX.", exc)
+            logger.warning(
+                "GDS Eigenvector execution failed (%s); falling back to NetworkX.", exc
+            )
 
     logger.debug("Executing Eigenvector Centrality via NetworkX.")
     return networkx_eigenvector(

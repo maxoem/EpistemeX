@@ -15,43 +15,28 @@ import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import numpy as np
 import pytest
-
 from episteme_pipeline.artifacts.execution import (
-    ArtifactCollection,
     ArtifactExecutionContext,
     Phase1ArtifactsView,
 )
 from episteme_pipeline.config import (
-    Phase1Config,
     Phase2Config,
     Phase3Config,
 )
 from episteme_pipeline.contracts.domain import (
     CandidatePair,
-    GlobalStructuralAnchor,
     L1Chunk,
-    L1Document,
     L2Entity,
-    L2Triple,
     SubGraph,
 )
-from episteme_pipeline.contracts.phase_contracts import (
-    PipelineInput,
-)
-from episteme_pipeline.events.bus import EventEmitter
 from episteme_pipeline.events.models import CandidateRejectedByThreshold
-from episteme_pipeline.phases.phase1_foundation import Phase1Runner
 from episteme_pipeline.phases.phase1_foundation.chunker import (
-    RawChunk,
     _count_tokens,
     chunk_document,
 )
 from episteme_pipeline.phases.phase1_foundation.toc_parser import (
     AutoToCParser,
-    LaTeXToCParser,
-    MarkdownToCParser,
 )
 from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
 from episteme_pipeline.phases.phase2_entity_discovery.sota_entity_linker import (
@@ -65,7 +50,6 @@ from episteme_pipeline.phases.phase3_global_relations.dense_retrieval_extractor 
 )
 from episteme_pipeline.phases.phase3_global_relations.models import GlobalRelationOutput
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
-
 
 # ---------------------------------------------------------------------------
 # Defect 1: LaTeX ToC Parser on Converted Markdown
@@ -95,8 +79,10 @@ def test_latex_toc_parser_does_not_intercept_converted_markdown() -> None:
 def test_latex_toc_parser_still_handles_raw_latex() -> None:
     """Verify LaTeXToCParser handles raw LaTeX section commands when present."""
     raw_latex = (
-        r"\documentclass{article}" "\n"
-        r"\section{Transcendental Analytic}" "\n"
+        r"\documentclass{article}"
+        "\n"
+        r"\section{Transcendental Analytic}"
+        "\n"
         r"\subsection{Deduction of the Pure Concepts of Understanding}"
     )
     toc_parser = AutoToCParser()
@@ -143,7 +129,13 @@ async def test_working_memory_deterministic_sequence_and_entity_dedup() -> None:
     processed_order: list[int] = []
 
     class MockMemoryManager(EpisodicWorkingMemoryManager):
-        def process_step(self, chunk, state_delta, semantic_boundary_detected=False, transitional_summary=None):
+        def process_step(
+            self,
+            chunk,
+            state_delta,
+            semantic_boundary_detected=False,
+            transitional_summary=None,
+        ):
             processed_order.append(chunk.sequence_index)
             return super().process_step(
                 chunk=chunk,
@@ -188,12 +180,32 @@ async def test_working_memory_deterministic_sequence_and_entity_dedup() -> None:
         working_memory_manager=memory_mgr,
     )
 
-    chunk0 = L1Chunk(id="c0", text="Intro text", source_doc_id="doc1", sequence_index=0, token_count=10)
-    chunk1 = L1Chunk(id="c1", text="Middle text", source_doc_id="doc1", sequence_index=1, token_count=10)
-    chunk2 = L1Chunk(id="c2", text="Conclusion text", source_doc_id="doc1", sequence_index=2, token_count=10)
+    chunk0 = L1Chunk(
+        id="c0",
+        text="Intro text",
+        source_doc_id="doc1",
+        sequence_index=0,
+        token_count=10,
+    )
+    chunk1 = L1Chunk(
+        id="c1",
+        text="Middle text",
+        source_doc_id="doc1",
+        sequence_index=1,
+        token_count=10,
+    )
+    chunk2 = L1Chunk(
+        id="c2",
+        text="Conclusion text",
+        source_doc_id="doc1",
+        sequence_index=2,
+        token_count=10,
+    )
 
     artifacts_view = Phase1ArtifactsView(documents=[], chunks=[chunk1, chunk0, chunk2])
-    ctx = ArtifactExecutionContext(run_id="run_test", manifest=None, pipeline_input=None)
+    ctx = ArtifactExecutionContext(
+        run_id="run_test", manifest=None, pipeline_input=None
+    )
 
     collection = await runner.run(artifacts_view, ctx)
 
@@ -201,11 +213,21 @@ async def test_working_memory_deterministic_sequence_and_entity_dedup() -> None:
     assert processed_order == [0, 1, 2]
 
     # 2. Duplicate entity "concept_synthetic" must emit exactly ONE LinkedEntityArtifact
-    concept_linked = [a for a in collection.artifacts if a.artifact_id == "artifact::concept_synthetic"]
+    concept_linked = [
+        a
+        for a in collection.artifacts
+        if a.artifact_id == "artifact::concept_synthetic"
+    ]
     assert len(concept_linked) == 1
     # Check that mention_ids merged all three chunks
-    expected_mentions = {f"artifact::mention::concept_synthetic::{c}" for c in ["c0", "c1", "c2"]}
-    assert set(concept_linked[0].payload.mention_ids) == {f"mention::concept_synthetic::{c}" for c in ["c0", "c1", "c2"]} or set(concept_linked[0].payload.mention_ids) == expected_mentions
+    expected_mentions = {
+        f"artifact::mention::concept_synthetic::{c}" for c in ["c0", "c1", "c2"]
+    }
+    assert (
+        set(concept_linked[0].payload.mention_ids)
+        == {f"mention::concept_synthetic::{c}" for c in ["c0", "c1", "c2"]}
+        or set(concept_linked[0].payload.mention_ids) == expected_mentions
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -234,12 +256,13 @@ async def test_dense_entity_linker_null_cross_encoder_fallback() -> None:
     graph_store.get_entities.return_value = [candidate1, candidate2]
 
     # Populate candidate cache embeddings
-    with patch.object(
-        linker._candidate_cache, "get_embeddings"
-    ) as mock_get_embs:
+    with patch.object(linker._candidate_cache, "get_embeddings") as mock_get_embs:
         import torch
+
         # Candidate 1 has cosine sim 1.0, Candidate 2 has cosine sim 0.0
-        mock_get_embs.return_value = torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float32)
+        mock_get_embs.return_value = torch.tensor(
+            [[1.0, 0.0], [0.0, 1.0]], dtype=torch.float32
+        )
 
         mention = L2Entity(
             id="m1",
@@ -280,7 +303,9 @@ async def test_dense_retrieval_extractor_confidence_filtering() -> None:
     entity_b = L2Entity(id="eb", name="Effect", label="Concept")
     candidate_low = CandidatePair(score=0.8, entity_a=entity_a, entity_b=entity_b)
     graph_store = AsyncMock()
-    graph_store.get_neighborhood.return_value = SubGraph(center_id="c", nodes=[], triples=[], depth=1)
+    graph_store.get_neighborhood.return_value = SubGraph(
+        center_id="c", nodes=[], triples=[], depth=1
+    )
 
     # Case 1: Confidence 0.50 < 0.75 -> Discarded
     structured_llm.predict_structured.return_value = GlobalRelationOutput(
@@ -289,10 +314,13 @@ async def test_dense_retrieval_extractor_confidence_filtering() -> None:
         direction="A_to_B",
     )
     with patch.object(extractor.event_emitter, "emit") as mock_emit:
-        res_rejected = await extractor._extract_pair(candidate_low, graph_store, DEFAULT_SCHEMA)
+        res_rejected = await extractor._extract_pair(
+            candidate_low, graph_store, DEFAULT_SCHEMA
+        )
         assert res_rejected is None
         emitted_rejections = [
-            call.args[0] for call in mock_emit.call_args_list
+            call.args[0]
+            for call in mock_emit.call_args_list
             if isinstance(call.args[0], CandidateRejectedByThreshold)
         ]
         assert len(emitted_rejections) == 1
@@ -307,9 +335,9 @@ async def test_dense_retrieval_extractor_confidence_filtering() -> None:
         confidence=0.85,
         direction="A_to_B",
     )
-    res_accepted = await extractor._extract_pair(candidate_high, graph_store, DEFAULT_SCHEMA)
+    res_accepted = await extractor._extract_pair(
+        candidate_high, graph_store, DEFAULT_SCHEMA
+    )
     assert res_accepted is not None
     assert res_accepted.predicate == "IMPLIES"
     assert res_accepted.confidence == 0.85
-
-

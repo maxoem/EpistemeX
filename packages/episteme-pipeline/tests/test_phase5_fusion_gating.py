@@ -45,7 +45,11 @@ def test_conformal_calibrator_predict_set_and_triage():
         selected_option="EQUIVALENT_FUSION",
         class_probability=0.85,
         empirical_accuracy=0.90,
-        probabilities={"EQUIVALENT_FUSION": 0.85, "COMPETING_THEORIES": 0.10, "DISTINCT_APPLICATIONS": 0.05},
+        probabilities={
+            "EQUIVALENT_FUSION": 0.85,
+            "COMPETING_THEORIES": 0.10,
+            "DISTINCT_APPLICATIONS": 0.05,
+        },
     )
 
     pred_set_1 = calibrator.predict_set(score_unambiguous)
@@ -57,7 +61,11 @@ def test_conformal_calibrator_predict_set_and_triage():
         selected_option="EQUIVALENT_FUSION",
         class_probability=0.45,
         empirical_accuracy=0.60,
-        probabilities={"EQUIVALENT_FUSION": 0.45, "COMPETING_THEORIES": 0.40, "DISTINCT_APPLICATIONS": 0.15},
+        probabilities={
+            "EQUIVALENT_FUSION": 0.45,
+            "COMPETING_THEORIES": 0.40,
+            "DISTINCT_APPLICATIONS": 0.15,
+        },
     )
 
     pred_set_2 = calibrator.predict_set(score_ambiguous)
@@ -110,7 +118,11 @@ async def test_verify_inter_document_cluster_confirms_equivalent_fusion():
     engine.register_choice_response(
         question_pattern="semantically equivalent for knowledge graph fusion",
         selected_option="EQUIVALENT_FUSION",
-        probabilities={"EQUIVALENT_FUSION": 0.92, "COMPETING_THEORIES": 0.05, "DISTINCT_APPLICATIONS": 0.03},
+        probabilities={
+            "EQUIVALENT_FUSION": 0.92,
+            "COMPETING_THEORIES": 0.05,
+            "DISTINCT_APPLICATIONS": 0.03,
+        },
         empirical_accuracy=0.91,
         prediction_set=["EQUIVALENT_FUSION"],
     )
@@ -121,8 +133,18 @@ async def test_verify_inter_document_cluster_confirms_equivalent_fusion():
     set_event_emitter(emitter)
 
     nodes = [
-        TheoryAtom(id="a1", text="All knowledge begins with experience.", component_type="CLAIM", source_chunk_id="c1"),
-        TheoryAtom(id="a2", text="Cognition originates from empirical input.", component_type="CLAIM", source_chunk_id="c2"),
+        TheoryAtom(
+            id="a1",
+            text="All knowledge begins with experience.",
+            component_type="CLAIM",
+            source_chunk_id="c1",
+        ),
+        TheoryAtom(
+            id="a2",
+            text="Cognition originates from empirical input.",
+            component_type="CLAIM",
+            source_chunk_id="c2",
+        ),
     ]
 
     is_confirmed, emp_acc, pred_set = await verify_inter_document_cluster(
@@ -136,7 +158,9 @@ async def test_verify_inter_document_cluster_confirms_equivalent_fusion():
     assert pred_set == ["EQUIVALENT_FUSION"]
     assert emp_acc == 0.91
 
-    gating_events = [e for e in collector.events if isinstance(e, DecisionGatingTriggered)]
+    gating_events = [
+        e for e in collector.events if isinstance(e, DecisionGatingTriggered)
+    ]
     assert len(gating_events) == 1
     assert gating_events[0].gate_name == "fusion_gate"
     assert gating_events[0].action_taken == "fast_exit"
@@ -149,7 +173,11 @@ async def test_verify_inter_document_cluster_rejects_competing_theories():
     engine.register_choice_response(
         question_pattern="semantically equivalent for knowledge graph fusion",
         selected_option="COMPETING_THEORIES",
-        probabilities={"EQUIVALENT_FUSION": 0.05, "COMPETING_THEORIES": 0.90, "DISTINCT_APPLICATIONS": 0.05},
+        probabilities={
+            "EQUIVALENT_FUSION": 0.05,
+            "COMPETING_THEORIES": 0.90,
+            "DISTINCT_APPLICATIONS": 0.05,
+        },
         empirical_accuracy=0.88,
         prediction_set=["COMPETING_THEORIES"],
     )
@@ -160,8 +188,18 @@ async def test_verify_inter_document_cluster_rejects_competing_theories():
     set_event_emitter(emitter)
 
     nodes = [
-        TheoryAtom(id="a1", text="Rationalism: ideas are innate.", component_type="CLAIM", source_chunk_id="c1"),
-        TheoryAtom(id="a2", text="Empiricism: mind is a blank slate.", component_type="CLAIM", source_chunk_id="c2"),
+        TheoryAtom(
+            id="a1",
+            text="Rationalism: ideas are innate.",
+            component_type="CLAIM",
+            source_chunk_id="c1",
+        ),
+        TheoryAtom(
+            id="a2",
+            text="Empiricism: mind is a blank slate.",
+            component_type="CLAIM",
+            source_chunk_id="c2",
+        ),
     ]
 
     is_confirmed, _, pred_set = await verify_inter_document_cluster(
@@ -171,7 +209,9 @@ async def test_verify_inter_document_cluster_rejects_competing_theories():
 
     assert is_confirmed is False
     assert "COMPETING_THEORIES" in pred_set
-    gating_events = [e for e in collector.events if isinstance(e, DecisionGatingTriggered)]
+    gating_events = [
+        e for e in collector.events if isinstance(e, DecisionGatingTriggered)
+    ]
     assert len(gating_events) == 1
     assert gating_events[0].action_taken == "rejected"
 
@@ -183,7 +223,11 @@ async def test_verify_inter_document_cluster_routes_to_active_learning_on_multi_
     engine.register_choice_response(
         question_pattern="semantically equivalent for knowledge graph fusion",
         selected_option="EQUIVALENT_FUSION",
-        probabilities={"EQUIVALENT_FUSION": 0.52, "COMPETING_THEORIES": 0.44, "DISTINCT_APPLICATIONS": 0.04},
+        probabilities={
+            "EQUIVALENT_FUSION": 0.52,
+            "COMPETING_THEORIES": 0.44,
+            "DISTINCT_APPLICATIONS": 0.04,
+        },
         empirical_accuracy=0.62,
         prediction_set=["EQUIVALENT_FUSION", "COMPETING_THEORIES"],
     )
@@ -194,8 +238,18 @@ async def test_verify_inter_document_cluster_routes_to_active_learning_on_multi_
     set_event_emitter(emitter)
 
     nodes = [
-        TheoryAtom(id="a1", text="Pragmatic truth assertion", component_type="CLAIM", source_chunk_id="c1"),
-        TheoryAtom(id="a2", text="Coherence truth assertion", component_type="CLAIM", source_chunk_id="c2"),
+        TheoryAtom(
+            id="a1",
+            text="Pragmatic truth assertion",
+            component_type="CLAIM",
+            source_chunk_id="c1",
+        ),
+        TheoryAtom(
+            id="a2",
+            text="Coherence truth assertion",
+            component_type="CLAIM",
+            source_chunk_id="c2",
+        ),
     ]
 
     is_confirmed, _, pred_set = await verify_inter_document_cluster(
@@ -206,7 +260,9 @@ async def test_verify_inter_document_cluster_routes_to_active_learning_on_multi_
 
     assert is_confirmed is False
     assert len(pred_set) == 2
-    gating_events = [e for e in collector.events if isinstance(e, DecisionGatingTriggered)]
+    gating_events = [
+        e for e in collector.events if isinstance(e, DecisionGatingTriggered)
+    ]
     assert len(gating_events) == 1
     assert gating_events[0].action_taken == "active_learning"
 
@@ -238,8 +294,12 @@ async def test_phase5_runner_gates_spurious_clusters():
     clustering_mock.cluster.return_value = [["a1", "a2"]]
 
     graph_store = AsyncMock()
-    a1 = TheoryAtom(id="a1", text="Theory X", component_type="CLAIM", source_chunk_id="c1")
-    a2 = TheoryAtom(id="a2", text="Theory Y", component_type="CLAIM", source_chunk_id="c2")
+    a1 = TheoryAtom(
+        id="a1", text="Theory X", component_type="CLAIM", source_chunk_id="c1"
+    )
+    a2 = TheoryAtom(
+        id="a2", text="Theory Y", component_type="CLAIM", source_chunk_id="c2"
+    )
     graph_store.get_theory_atoms.return_value = [a1, a2]
 
     runner = Phase5ArgumentWebRunner(
@@ -256,7 +316,9 @@ async def test_phase5_runner_gates_spurious_clusters():
         pipeline_input=PipelineInput(source_paths=[]),
     )
 
-    artifacts = await runner.run(Phase4ArtifactsView(theory_atoms=[], theory_relations=[]), context)
+    artifacts = await runner.run(
+        Phase4ArtifactsView(theory_atoms=[], theory_relations=[]), context
+    )
     # The cluster ["a1", "a2"] was rejected by the gate, so 0 fusion artifacts emitted!
     assert len(artifacts.artifacts) == 0
 
@@ -289,8 +351,12 @@ async def test_inter_document_cluster_verifier_never_approves_rejected_cluster_o
         audit_rate=1.0,  # 100% audit rate
     )
 
-    a1 = TheoryAtom(id="a1", text="Theory X", component_type="CLAIM", source_chunk_id="c1")
-    a2 = TheoryAtom(id="a2", text="Theory Y", component_type="CLAIM", source_chunk_id="c2")
+    a1 = TheoryAtom(
+        id="a1", text="Theory X", component_type="CLAIM", source_chunk_id="c1"
+    )
+    a2 = TheoryAtom(
+        id="a2", text="Theory Y", component_type="CLAIM", source_chunk_id="c2"
+    )
 
     should_fuse = await verifier.should_fuse([a1, a2])
 
@@ -299,7 +365,9 @@ async def test_inter_document_cluster_verifier_never_approves_rejected_cluster_o
 
     # But stochastic audit event should have been emitted
     audit_events = [
-        e for e in collector.events
-        if isinstance(e, DecisionGatingTriggered) and e.action_taken == "stochastic_audit"
+        e
+        for e in collector.events
+        if isinstance(e, DecisionGatingTriggered)
+        and e.action_taken == "stochastic_audit"
     ]
     assert len(audit_events) == 1

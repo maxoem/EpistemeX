@@ -65,6 +65,7 @@ class StructuredLLM(StructuredPredictable, Protocol):
 # Decoding Strategy Handlers (Strategy Pattern)
 # ----------------------------------------------------------------------
 
+
 class BaseOutputDecodingStrategyHandler(ABC):
     """Abstract Strategy interface for structured output decoding."""
 
@@ -108,8 +109,14 @@ class DirectDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
         llm_kwargs: dict[str, Any] | None = None,
         **prompt_args: Any,
     ) -> ModelT:
-        prompt = _as_prompt_template(getattr(prompt_bundle, "direct_template", prompt_bundle))
-        rendered_prompt = prompt.format(llm=adapter.base_llm, **prompt_args) if hasattr(prompt, "format") else str(prompt).format(**prompt_args)
+        prompt = _as_prompt_template(
+            getattr(prompt_bundle, "direct_template", prompt_bundle)
+        )
+        rendered_prompt = (
+            prompt.format(llm=adapter.base_llm, **prompt_args)
+            if hasattr(prompt, "format")
+            else str(prompt).format(**prompt_args)
+        )
         start_time = time.time()
 
         try:
@@ -120,9 +127,17 @@ class DirectDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
                 **prompt_args,
             )
             duration = time.time() - start_time
-            model_name = LLMResponseMetadataExtractor.extract_model_name(adapter.base_llm)
-            model_params = LLMResponseMetadataExtractor.extract_model_parameters(adapter.base_llm)
-            out_text = result.model_dump_json() if hasattr(result, "model_dump_json") else str(result)
+            model_name = LLMResponseMetadataExtractor.extract_model_name(
+                adapter.base_llm
+            )
+            model_params = LLMResponseMetadataExtractor.extract_model_parameters(
+                adapter.base_llm
+            )
+            out_text = (
+                result.model_dump_json()
+                if hasattr(result, "model_dump_json")
+                else str(result)
+            )
             out_json = result.model_dump() if hasattr(result, "model_dump") else None
             usage = LLMResponseMetadataExtractor.extract_usage(
                 result, prompt_text=str(rendered_prompt), output_text=out_text
@@ -217,7 +232,9 @@ class TriggerTokenDecodingStrategyHandler(BaseOutputDecodingStrategyHandler):
         llm_kwargs: dict[str, Any] | None = None,
         **prompt_args: Any,
     ) -> ModelT:
-        logger.info("TRIGGER_TOKEN strategy requested; executing constrained direct decoding on local model.")
+        logger.info(
+            "TRIGGER_TOKEN strategy requested; executing constrained direct decoding on local model."
+        )
         direct_handler = DirectDecodingStrategyHandler()
         return await direct_handler.decode(
             adapter,
@@ -301,7 +318,7 @@ async def execute_nl_to_format[ModelT: BaseModel](
         reasoning_text = await llm.predict_text(
             reasoning_target, llm_kwargs, **prompt_args
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 baseline
         logger.warning(
             "Reasoning pass for %s failed (%s: %s); falling back to DIRECT.",
             output_cls.__name__,
@@ -365,7 +382,9 @@ class LlamaIndexStructuredLLMAdapter:
         )
         duration = time.time() - start_time
         model_name = LLMResponseMetadataExtractor.extract_model_name(self.base_llm)
-        model_params = LLMResponseMetadataExtractor.extract_model_parameters(self.base_llm)
+        model_params = LLMResponseMetadataExtractor.extract_model_parameters(
+            self.base_llm
+        )
         out_text = getattr(response, "text", str(response))
         usage = LLMResponseMetadataExtractor.extract_usage(
             response, prompt_text=str(rendered_prompt), output_text=out_text
@@ -411,7 +430,12 @@ class LlamaIndexStructuredLLMAdapter:
             strategy_key, DECODING_STRATEGY_HANDLERS["direct_constrained"]
         )
         return await handler.decode(
-            self, output_cls, prompt_bundle, fallback_behavior, llm_kwargs, **prompt_args
+            self,
+            output_cls,
+            prompt_bundle,
+            fallback_behavior,
+            llm_kwargs,
+            **prompt_args,
         )
 
     async def _fallback_complete(
@@ -422,14 +446,20 @@ class LlamaIndexStructuredLLMAdapter:
     ) -> str:
         """Run a raw completion fallback after strict structured parsing fails."""
         start_time = time.time()
-        rendered_prompt = prompt.format(llm=self.base_llm, **prompt_args) if hasattr(prompt, "format") else str(prompt).format(**prompt_args)
+        rendered_prompt = (
+            prompt.format(llm=self.base_llm, **prompt_args)
+            if hasattr(prompt, "format")
+            else str(prompt).format(**prompt_args)
+        )
         response = await self.base_llm.acomplete(
             rendered_prompt,
             **(llm_kwargs or {}),
         )
         duration = time.time() - start_time
         model_name = LLMResponseMetadataExtractor.extract_model_name(self.base_llm)
-        model_params = LLMResponseMetadataExtractor.extract_model_parameters(self.base_llm)
+        model_params = LLMResponseMetadataExtractor.extract_model_parameters(
+            self.base_llm
+        )
         out_text = getattr(response, "text", str(response))
         usage = LLMResponseMetadataExtractor.extract_usage(
             response, prompt_text=str(rendered_prompt), output_text=out_text
@@ -459,7 +489,6 @@ class LlamaIndexStructuredLLMAdapter:
             )
         )
         return out_text
-
 
     def _recover_from_exception(
         self,
@@ -491,7 +520,7 @@ class LlamaIndexStructuredLLMAdapter:
         try:
             sanitized = sanitize_structured_output(raw_text)
             parsed = output_cls.model_validate(sanitized.value)
-        except Exception as parse_exc:
+        except Exception as parse_exc:  # noqa: BLE001 baseline
             raise StructuredPredictionError(
                 f"Structured prediction recovery failed via {recovery_source}: "
                 f"{type(parse_exc).__name__}: {parse_exc}"
@@ -507,7 +536,9 @@ class LlamaIndexStructuredLLMAdapter:
         return parsed
 
 
-def ensure_structured_llm(llm: Any | None, use_cache: bool = True) -> StructuredLLM | None:
+def ensure_structured_llm(
+    llm: Any | None, use_cache: bool = True
+) -> StructuredLLM | None:
     """Return an owned structured-output adapter for an LLM facade.
 
     Parameters
@@ -586,7 +617,9 @@ def sanitize_structured_output(text: str) -> SanitizedStructuredOutput:
         Parsed JSON plus deterministic normalization metadata.
     """
     stripped = text.strip()
-    start_indexes = [idx for idx in (stripped.find("{"), stripped.find("[")) if idx >= 0]
+    start_indexes = [
+        idx for idx in (stripped.find("{"), stripped.find("[")) if idx >= 0
+    ]
     if not start_indexes:
         raise ValueError("No JSON object or array found in LLM response")
 

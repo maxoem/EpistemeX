@@ -304,7 +304,9 @@ class ScoreQuestionStrategy:
             idx = min(round(raw_answer), len(levels) - 1)
             selected = levels[idx]
             probs = {
-                str(lvl): 0.8 if lvl == selected else round(0.20 / max(1, len(levels) - 1), 4)
+                str(lvl): 0.8
+                if lvl == selected
+                else round(0.20 / max(1, len(levels) - 1), 4)
                 for lvl in levels
             }
         elif isinstance(raw_answer, dict):
@@ -418,7 +420,9 @@ class ChoiceQuestionStrategy:
             probs = {raw_answer: 1.0}
             selected = raw_answer
         else:
-            opt_list = list(options.keys()) if isinstance(options, dict) else list(options)
+            opt_list = (
+                list(options.keys()) if isinstance(options, dict) else list(options)
+            )
             selected = opt_list[0] if opt_list else "UNKNOWN"
             probs = {selected: 0.85}
 

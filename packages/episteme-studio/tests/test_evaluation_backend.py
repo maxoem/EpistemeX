@@ -167,23 +167,79 @@ class TestEvaluationAdapter:
 
         # Seed CPM theory atoms as on-disk artifact envelopes
         atoms_data = [
-            {"id": "str:T_CPM_Base", "text": "Classical Particle Mechanics Base", "component_type": "theory_element"},
-            {"id": "str:T_CPM_Grav", "text": "Gravitation Specialization", "component_type": "theory_element"},
-            {"id": "str:M_CPM_Newton1", "text": "Law 1", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Newton2", "text": "Law 2", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Newton3", "text": "Law 3", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Grav", "text": "Law Grav", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Hooke", "text": "Law Hooke", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Free", "text": "Law Free", "component_type": "actual_model"},
+            {
+                "id": "str:T_CPM_Base",
+                "text": "Classical Particle Mechanics Base",
+                "component_type": "theory_element",
+            },
+            {
+                "id": "str:T_CPM_Grav",
+                "text": "Gravitation Specialization",
+                "component_type": "theory_element",
+            },
+            {
+                "id": "str:M_CPM_Newton1",
+                "text": "Law 1",
+                "component_type": "actual_model",
+            },
+            {
+                "id": "str:M_CPM_Newton2",
+                "text": "Law 2",
+                "component_type": "actual_model",
+            },
+            {
+                "id": "str:M_CPM_Newton3",
+                "text": "Law 3",
+                "component_type": "actual_model",
+            },
+            {
+                "id": "str:M_CPM_Grav",
+                "text": "Law Grav",
+                "component_type": "actual_model",
+            },
+            {
+                "id": "str:M_CPM_Hooke",
+                "text": "Law Hooke",
+                "component_type": "actual_model",
+            },
+            {
+                "id": "str:M_CPM_Free",
+                "text": "Law Free",
+                "component_type": "actual_model",
+            },
             {"id": "str:Mp_CPM", "text": "Mp CPM", "component_type": "potential_model"},
-            {"id": "str:Mp_Grav", "text": "Mp Grav", "component_type": "potential_model"},
-            {"id": "str:Mp_Harmonic", "text": "Mp Harmonic", "component_type": "potential_model"},
-            {"id": "str:Mpp_CPM", "text": "Mpp CPM", "component_type": "partial_potential_model"},
+            {
+                "id": "str:Mp_Grav",
+                "text": "Mp Grav",
+                "component_type": "potential_model",
+            },
+            {
+                "id": "str:Mp_Harmonic",
+                "text": "Mp Harmonic",
+                "component_type": "potential_model",
+            },
+            {
+                "id": "str:Mpp_CPM",
+                "text": "Mpp CPM",
+                "component_type": "partial_potential_model",
+            },
             {"id": "str:GC_Mass", "text": "GC Mass", "component_type": "constraint"},
             {"id": "str:GC_Force", "text": "GC Force", "component_type": "constraint"},
-            {"id": "str:I0_PlanetaryOrbits", "text": "Planetary Orbits", "component_type": "paradigm"},
-            {"id": "str:I0_TerrestrialFreeFall", "text": "Free Fall", "component_type": "paradigm"},
-            {"id": "str:I0_HarmonicSpring", "text": "Harmonic Spring", "component_type": "paradigm"},
+            {
+                "id": "str:I0_PlanetaryOrbits",
+                "text": "Planetary Orbits",
+                "component_type": "paradigm",
+            },
+            {
+                "id": "str:I0_TerrestrialFreeFall",
+                "text": "Free Fall",
+                "component_type": "paradigm",
+            },
+            {
+                "id": "str:I0_HarmonicSpring",
+                "text": "Harmonic Spring",
+                "component_type": "paradigm",
+            },
         ]
         for atom in atoms_data:
             envelope = {
@@ -191,7 +247,9 @@ class TestEvaluationAdapter:
                 "kind": "theory_atom",
                 "payload": atom,
             }
-            (run_art_dir / f"{envelope['artifact_id']}.json").write_text(json.dumps(envelope), encoding="utf-8")
+            (run_art_dir / f"{envelope['artifact_id']}.json").write_text(
+                json.dumps(envelope), encoding="utf-8"
+            )
 
         # Relation envelope
         rel_env = {
@@ -203,7 +261,9 @@ class TestEvaluationAdapter:
                 "relation_type": "specializes",
             },
         }
-        (run_art_dir / "art_rel_grav_base.json").write_text(json.dumps(rel_env), encoding="utf-8")
+        (run_art_dir / "art_rel_grav_base.json").write_text(
+            json.dumps(rel_env), encoding="utf-8"
+        )
 
         # Manifest
         manifest = {
@@ -259,15 +319,22 @@ class TestEvaluationAPI:
                         "run_id": "test_api_run",
                         "evaluation_level": "stage",
                         "phase_name": "TheoryNet Verification",
-                        "metrics": [{"name": "mcc", "value": 1.0}, {"name": "aor", "value": 0.0}],
+                        "metrics": [
+                            {"name": "mcc", "value": 1.0},
+                            {"name": "aor", "value": 0.0},
+                        ],
                         "outcome": "pass",
                     }
                 ]
             },
             "summary": "# API Test Evaluation Report\n- **Status:** PASS",
         }
-        (settings.reports_dir / "report_test_api_run.json").write_text(json.dumps(report_data), encoding="utf-8")
-        (settings.reports_dir / "report_test_api_run.md").write_text(report_data["summary"], encoding="utf-8")
+        (settings.reports_dir / "report_test_api_run.json").write_text(
+            json.dumps(report_data), encoding="utf-8"
+        )
+        (settings.reports_dir / "report_test_api_run.md").write_text(
+            report_data["summary"], encoding="utf-8"
+        )
 
         app = create_app(settings)
         return TestClient(app)
@@ -302,7 +369,9 @@ class TestEvaluationAPI:
         assert "splits" in cpm
 
         # Test preview endpoint for structuralist benchmark
-        prev_resp = client.get("/api/evaluation/benchmarks/stnb_cpm_pilot/preview?limit=10")
+        prev_resp = client.get(
+            "/api/evaluation/benchmarks/stnb_cpm_pilot/preview?limit=10"
+        )
         assert prev_resp.status_code == 200
         prev_data = prev_resp.json()
         assert prev_data["benchmark_id"] == "stnb_cpm_pilot"
@@ -310,7 +379,9 @@ class TestEvaluationAPI:
         assert len(prev_data["columns"]) > 0
 
         # Test preview endpoint 404 for unknown benchmark
-        unknown_resp = client.get("/api/evaluation/benchmarks/non_existent_bm_123/preview")
+        unknown_resp = client.get(
+            "/api/evaluation/benchmarks/non_existent_bm_123/preview"
+        )
         assert unknown_resp.status_code == 404
 
         man_resp = client.get("/api/evaluation/manifests")
@@ -341,7 +412,9 @@ class TestEvaluationAPI:
 
     def test_filter_reports(self, client: TestClient):
         """Verify filtering evaluation reports by run_id and outcome status."""
-        resp_match = client.get("/api/evaluation/reports?run_id=test_api_run&outcome=pass")
+        resp_match = client.get(
+            "/api/evaluation/reports?run_id=test_api_run&outcome=pass"
+        )
         assert resp_match.status_code == 200
         assert len(resp_match.json()) == 1
 
@@ -364,7 +437,10 @@ class TestEvaluationAPI:
                         "run_id": "cmp_run_a",
                         "evaluation_level": "stage",
                         "phase_name": "Test",
-                        "metrics": [{"name": "f1", "value": 0.80}, {"name": "precision", "value": 0.85}],
+                        "metrics": [
+                            {"name": "f1", "value": 0.80},
+                            {"name": "precision", "value": 0.85},
+                        ],
                         "outcome": "pass",
                     }
                 ]
@@ -381,15 +457,22 @@ class TestEvaluationAPI:
                         "run_id": "cmp_run_b",
                         "evaluation_level": "stage",
                         "phase_name": "Test",
-                        "metrics": [{"name": "f1", "value": 0.90}, {"name": "precision", "value": 0.82}],
+                        "metrics": [
+                            {"name": "f1", "value": 0.90},
+                            {"name": "precision", "value": 0.82},
+                        ],
                         "outcome": "pass",
                     }
                 ]
             },
             "summary": "# Run B",
         }
-        (settings.reports_dir / "report_cmp_run_a.json").write_text(json.dumps(rep_a), encoding="utf-8")
-        (settings.reports_dir / "report_cmp_run_b.json").write_text(json.dumps(rep_b), encoding="utf-8")
+        (settings.reports_dir / "report_cmp_run_a.json").write_text(
+            json.dumps(rep_a), encoding="utf-8"
+        )
+        (settings.reports_dir / "report_cmp_run_b.json").write_text(
+            json.dumps(rep_b), encoding="utf-8"
+        )
 
         resp = client.post(
             "/api/evaluation/compare",
@@ -400,7 +483,9 @@ class TestEvaluationAPI:
         assert comp_data["run_id_a"] == "cmp_run_a"
         assert comp_data["run_id_b"] == "cmp_run_b"
         assert len(comp_data["deltas"]) >= 2
-        f1_delta = next((d for d in comp_data["deltas"] if d["metric_name"] == "f1"), None)
+        f1_delta = next(
+            (d for d in comp_data["deltas"] if d["metric_name"] == "f1"), None
+        )
         assert f1_delta is not None
         assert f1_delta["value_baseline"] == 0.80
         assert f1_delta["value_pipeline"] == 0.90
@@ -416,27 +501,77 @@ class TestEvaluationAPI:
 
         # Seed CPM theory atoms
         atoms = [
-            {"id": "str:T_CPM_Base", "text": "Base", "component_type": "theory_element"},
-            {"id": "str:T_CPM_Grav", "text": "Grav", "component_type": "theory_element"},
-            {"id": "str:M_CPM_Newton1", "text": "Newton 1", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Newton2", "text": "Newton 2", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Newton3", "text": "Newton 3", "component_type": "actual_model"},
+            {
+                "id": "str:T_CPM_Base",
+                "text": "Base",
+                "component_type": "theory_element",
+            },
+            {
+                "id": "str:T_CPM_Grav",
+                "text": "Grav",
+                "component_type": "theory_element",
+            },
+            {
+                "id": "str:M_CPM_Newton1",
+                "text": "Newton 1",
+                "component_type": "actual_model",
+            },
+            {
+                "id": "str:M_CPM_Newton2",
+                "text": "Newton 2",
+                "component_type": "actual_model",
+            },
+            {
+                "id": "str:M_CPM_Newton3",
+                "text": "Newton 3",
+                "component_type": "actual_model",
+            },
             {"id": "str:M_CPM_Grav", "text": "Grav", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Hooke", "text": "Hooke", "component_type": "actual_model"},
+            {
+                "id": "str:M_CPM_Hooke",
+                "text": "Hooke",
+                "component_type": "actual_model",
+            },
             {"id": "str:M_CPM_Free", "text": "Free", "component_type": "actual_model"},
             {"id": "str:Mp_CPM", "text": "Mp", "component_type": "potential_model"},
             {"id": "str:Mp_Grav", "text": "Mp", "component_type": "potential_model"},
-            {"id": "str:Mp_Harmonic", "text": "Mp", "component_type": "potential_model"},
-            {"id": "str:Mpp_CPM", "text": "Mpp", "component_type": "partial_potential_model"},
+            {
+                "id": "str:Mp_Harmonic",
+                "text": "Mp",
+                "component_type": "potential_model",
+            },
+            {
+                "id": "str:Mpp_CPM",
+                "text": "Mpp",
+                "component_type": "partial_potential_model",
+            },
             {"id": "str:GC_Mass", "text": "GC Mass", "component_type": "constraint"},
             {"id": "str:GC_Force", "text": "GC Force", "component_type": "constraint"},
-            {"id": "str:I0_PlanetaryOrbits", "text": "Planets", "component_type": "paradigm"},
-            {"id": "str:I0_TerrestrialFreeFall", "text": "Fall", "component_type": "paradigm"},
-            {"id": "str:I0_HarmonicSpring", "text": "Spring", "component_type": "paradigm"},
+            {
+                "id": "str:I0_PlanetaryOrbits",
+                "text": "Planets",
+                "component_type": "paradigm",
+            },
+            {
+                "id": "str:I0_TerrestrialFreeFall",
+                "text": "Fall",
+                "component_type": "paradigm",
+            },
+            {
+                "id": "str:I0_HarmonicSpring",
+                "text": "Spring",
+                "component_type": "paradigm",
+            },
         ]
         for atom in atoms:
-            env = {"artifact_id": f"art_{atom['id'].replace(':', '_')}", "kind": "theory_atom", "payload": atom}
-            (run_art_dir / f"{env['artifact_id']}.json").write_text(json.dumps(env), encoding="utf-8")
+            env = {
+                "artifact_id": f"art_{atom['id'].replace(':', '_')}",
+                "kind": "theory_atom",
+                "payload": atom,
+            }
+            (run_art_dir / f"{env['artifact_id']}.json").write_text(
+                json.dumps(env), encoding="utf-8"
+            )
 
         rel_env = {
             "artifact_id": "art_rel_grav_base",
@@ -447,10 +582,18 @@ class TestEvaluationAPI:
                 "relation_type": "specializes",
             },
         }
-        (run_art_dir / "art_rel_grav_base.json").write_text(json.dumps(rel_env), encoding="utf-8")
+        (run_art_dir / "art_rel_grav_base.json").write_text(
+            json.dumps(rel_env), encoding="utf-8"
+        )
 
-        manifest = {"run_id": run_id, "created_at": "2026-09-26T12:00:00Z", "status": "completed"}
-        (settings.runs_dir / f"{run_id}.json").write_text(json.dumps(manifest), encoding="utf-8")
+        manifest = {
+            "run_id": run_id,
+            "created_at": "2026-09-26T12:00:00Z",
+            "status": "completed",
+        }
+        (settings.runs_dir / f"{run_id}.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
 
         resp = client.post(
             "/api/evaluation/run",
@@ -488,13 +631,22 @@ class TestEvaluationAPI:
                 "core_axioms": {"str:T_CPM_Base": "F = m*a"},
                 "auxiliary_hypotheses": ["str:M_CPM_Aux1"],
                 "anomalies": [],
-                "empirical_content": ["str:I0_PlanetaryOrbits", "str:I0_TerrestrialFreeFall", "str:I0_HarmonicSpring"],
+                "empirical_content": [
+                    "str:I0_PlanetaryOrbits",
+                    "str:I0_TerrestrialFreeFall",
+                    "str:I0_HarmonicSpring",
+                ],
             },
             {
                 "core_axioms": {"str:T_CPM_Base": "F = m*a"},
                 "auxiliary_hypotheses": ["str:M_CPM_Aux1"],
                 "anomalies": [],
-                "empirical_content": ["str:I0_PlanetaryOrbits", "str:I0_TerrestrialFreeFall", "str:I0_HarmonicSpring", "str:I0_Tides"],
+                "empirical_content": [
+                    "str:I0_PlanetaryOrbits",
+                    "str:I0_TerrestrialFreeFall",
+                    "str:I0_HarmonicSpring",
+                    "str:I0_Tides",
+                ],
             },
         ]
 
@@ -527,7 +679,10 @@ class TestEvaluationAPI:
         """
         snapshots = [
             {
-                "core_axioms": {"str:T_CPM_Base": "F = m*a", "str:T_CPM_Grav": "F_g = G*m1*m2/r^2"},
+                "core_axioms": {
+                    "str:T_CPM_Base": "F = m*a",
+                    "str:T_CPM_Grav": "F_g = G*m1*m2/r^2",
+                },
                 "auxiliary_hypotheses": [],
                 "anomalies": [],
                 "empirical_content": ["str:I0_PlanetaryOrbits"],
@@ -552,7 +707,9 @@ class TestEvaluationAPI:
         data = resp.json()
         assert data["core_invariant"] is False
         assert len(data["violated_invariance"]) >= 1
-        assert any(v["node_id"] == "str:T_CPM_Grav" for v in data["violated_invariance"])
+        assert any(
+            v["node_id"] == "str:T_CPM_Grav" for v in data["violated_invariance"]
+        )
 
     def test_record_and_list_adjudications_endpoint(self, client: TestClient):
         """Verify POST and GET /api/evaluation/adjudications.
@@ -565,7 +722,11 @@ class TestEvaluationAPI:
         items = [
             {
                 "adjudication_id": "adj_test_01",
-                "predicted_edge": {"source": "str:T_Grav", "predicate": "specializes", "target": "str:T_Base"},
+                "predicted_edge": {
+                    "source": "str:T_Grav",
+                    "predicate": "specializes",
+                    "target": "str:T_Base",
+                },
                 "decision": "true_positive",
                 "similarity_score": 0.95,
                 "rationale": "Correct theoretical specialization.",
@@ -573,7 +734,11 @@ class TestEvaluationAPI:
             },
             {
                 "adjudication_id": "adj_test_02",
-                "predicted_edge": {"source": "str:T_Hooke", "predicate": "sub_model_of", "target": "str:T_Base"},
+                "predicted_edge": {
+                    "source": "str:T_Hooke",
+                    "predicate": "sub_model_of",
+                    "target": "str:T_Base",
+                },
                 "decision": "schema_alias",
                 "alias_target": "str:specializes",
                 "similarity_score": 0.82,
@@ -582,7 +747,11 @@ class TestEvaluationAPI:
             },
             {
                 "adjudication_id": "adj_test_03",
-                "predicted_edge": {"source": "str:T_Hooke", "predicate": "contradicts", "target": "str:T_Grav"},
+                "predicted_edge": {
+                    "source": "str:T_Hooke",
+                    "predicate": "contradicts",
+                    "target": "str:T_Grav",
+                },
                 "decision": "false_positive",
                 "similarity_score": 0.40,
                 "rationale": "Spurious hallucinated relation.",
@@ -608,7 +777,9 @@ class TestEvaluationAPI:
         assert decisions["adj_test_02"] == "schema_alias"
         assert decisions["adj_test_03"] == "false_positive"
 
-    def test_adjudication_export_curated_gold_standard(self, client: TestClient, tmp_path: Path):
+    def test_adjudication_export_curated_gold_standard(
+        self, client: TestClient, tmp_path: Path
+    ):
         """Verify adjudications export and merge into a curated JSON-LD dataset.
 
         Parameters
@@ -622,7 +793,11 @@ class TestEvaluationAPI:
         items = [
             {
                 "adjudication_id": "adj_gold_01",
-                "predicted_edge": {"source": "str:T_CPM_Grav", "predicate": "specializes", "target": "str:T_CPM_Base"},
+                "predicted_edge": {
+                    "source": "str:T_CPM_Grav",
+                    "predicate": "specializes",
+                    "target": "str:T_CPM_Base",
+                },
                 "decision": "true_positive",
             },
             {
@@ -692,27 +867,89 @@ class TestEvaluationAPI:
         run_art_dir.mkdir(parents=True, exist_ok=True)
 
         atoms = [
-            {"id": "str:T_CPM_Base", "text": "Base", "component_type": "theory_element"},
-            {"id": "str:T_CPM_Grav", "text": "Grav", "component_type": "theory_element"},
-            {"id": "str:M_CPM_Newton1", "text": "Law 1", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Newton2", "text": "Law 2", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Newton3", "text": "Law 3", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Grav", "text": "Grav Law", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Hooke", "text": "Hooke Law", "component_type": "actual_model"},
-            {"id": "str:M_CPM_Free", "text": "Free Law", "component_type": "actual_model"},
+            {
+                "id": "str:T_CPM_Base",
+                "text": "Base",
+                "component_type": "theory_element",
+            },
+            {
+                "id": "str:T_CPM_Grav",
+                "text": "Grav",
+                "component_type": "theory_element",
+            },
+            {
+                "id": "str:M_CPM_Newton1",
+                "text": "Law 1",
+                "component_type": "actual_model",
+            },
+            {
+                "id": "str:M_CPM_Newton2",
+                "text": "Law 2",
+                "component_type": "actual_model",
+            },
+            {
+                "id": "str:M_CPM_Newton3",
+                "text": "Law 3",
+                "component_type": "actual_model",
+            },
+            {
+                "id": "str:M_CPM_Grav",
+                "text": "Grav Law",
+                "component_type": "actual_model",
+            },
+            {
+                "id": "str:M_CPM_Hooke",
+                "text": "Hooke Law",
+                "component_type": "actual_model",
+            },
+            {
+                "id": "str:M_CPM_Free",
+                "text": "Free Law",
+                "component_type": "actual_model",
+            },
             {"id": "str:Mp_CPM", "text": "Mp CPM", "component_type": "potential_model"},
-            {"id": "str:Mp_Grav", "text": "Mp Grav", "component_type": "potential_model"},
-            {"id": "str:Mp_Harmonic", "text": "Mp Harmonic", "component_type": "potential_model"},
-            {"id": "str:Mpp_CPM", "text": "Mpp CPM", "component_type": "partial_potential_model"},
+            {
+                "id": "str:Mp_Grav",
+                "text": "Mp Grav",
+                "component_type": "potential_model",
+            },
+            {
+                "id": "str:Mp_Harmonic",
+                "text": "Mp Harmonic",
+                "component_type": "potential_model",
+            },
+            {
+                "id": "str:Mpp_CPM",
+                "text": "Mpp CPM",
+                "component_type": "partial_potential_model",
+            },
             {"id": "str:GC_Mass", "text": "GC Mass", "component_type": "constraint"},
             {"id": "str:GC_Force", "text": "GC Force", "component_type": "constraint"},
-            {"id": "str:I0_PlanetaryOrbits", "text": "Planets", "component_type": "paradigm"},
-            {"id": "str:I0_TerrestrialFreeFall", "text": "Fall", "component_type": "paradigm"},
-            {"id": "str:I0_HarmonicSpring", "text": "Spring", "component_type": "paradigm"},
+            {
+                "id": "str:I0_PlanetaryOrbits",
+                "text": "Planets",
+                "component_type": "paradigm",
+            },
+            {
+                "id": "str:I0_TerrestrialFreeFall",
+                "text": "Fall",
+                "component_type": "paradigm",
+            },
+            {
+                "id": "str:I0_HarmonicSpring",
+                "text": "Spring",
+                "component_type": "paradigm",
+            },
         ]
         for atom in atoms:
-            env = {"artifact_id": f"art_{atom['id'].replace(':', '_')}", "kind": "theory_atom", "payload": atom}
-            (run_art_dir / f"{env['artifact_id']}.json").write_text(json.dumps(env), encoding="utf-8")
+            env = {
+                "artifact_id": f"art_{atom['id'].replace(':', '_')}",
+                "kind": "theory_atom",
+                "payload": atom,
+            }
+            (run_art_dir / f"{env['artifact_id']}.json").write_text(
+                json.dumps(env), encoding="utf-8"
+            )
 
         rel_env = {
             "artifact_id": "art_rel_grav_base",
@@ -723,13 +960,23 @@ class TestEvaluationAPI:
                 "relation_type": "specializes",
             },
         }
-        (run_art_dir / "art_rel_grav_base.json").write_text(json.dumps(rel_env), encoding="utf-8")
+        (run_art_dir / "art_rel_grav_base.json").write_text(
+            json.dumps(rel_env), encoding="utf-8"
+        )
 
-        manifest = {"run_id": run_id, "created_at": "2026-09-26T12:00:00Z", "status": "completed"}
-        (settings.runs_dir / f"{run_id}.json").write_text(json.dumps(manifest), encoding="utf-8")
+        manifest = {
+            "run_id": run_id,
+            "created_at": "2026-09-26T12:00:00Z",
+            "status": "completed",
+        }
+        (settings.runs_dir / f"{run_id}.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
 
         app = create_app(settings)
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as ac:
             post_resp = await ac.post(
                 "/api/evaluation/jobs/run",
                 json={
@@ -752,7 +999,9 @@ class TestEvaluationAPI:
                 status_val = get_resp.json()["status"]
                 if status_val == "completed":
                     break
-                assert status_val != "failed", f"Job failed: {get_resp.json().get('error')}"
+                assert status_val != "failed", (
+                    f"Job failed: {get_resp.json().get('error')}"
+                )
 
             final_resp = await ac.get(f"/api/evaluation/jobs/{job_id}")
             final_data = final_resp.json()
@@ -821,18 +1070,20 @@ class TestEvaluationAPI:
         )
         broker.close_run(job_id)
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            async with ac.stream("GET", f"/api/evaluation/jobs/{job_id}/stream") as resp:
-                assert resp.status_code == 200
-                assert "text/event-stream" in resp.headers.get("content-type", "")
-                chunks: list[str] = []
-                async for line in resp.aiter_lines():
-                    if line.startswith("data:"):
-                        chunks.append(line)
+        async with (
+            AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac,
+            ac.stream("GET", f"/api/evaluation/jobs/{job_id}/stream") as resp,
+        ):
+            assert resp.status_code == 200
+            assert "text/event-stream" in resp.headers.get("content-type", "")
+            chunks: list[str] = []
+            async for line in resp.aiter_lines():
+                if line.startswith("data:"):
+                    chunks.append(line)
 
-                assert len(chunks) == 3
-                assert any("evaluation.job.started" in c for c in chunks)
-                assert any("evaluation.job.completed" in c for c in chunks)
+            assert len(chunks) == 3
+            assert any("evaluation.job.started" in c for c in chunks)
+            assert any("evaluation.job.completed" in c for c in chunks)
 
     @pytest.mark.asyncio
     async def test_cancel_evaluation_job_lifecycle(self, tmp_path: Path):
@@ -960,9 +1211,17 @@ class TestEvaluationWorkbenchEndpoints:
             "dataset_ref": "stnb_cpm_pilot",
             "dataset_type": "gold",
             "outcome": "pass",
-            "key_metrics": {"f1": 0.88, "mcc": 1.0, "pfs": 0.85, "mrr": 0.80, "ece": 0.04},
+            "key_metrics": {
+                "f1": 0.88,
+                "mcc": 1.0,
+                "pfs": 0.85,
+                "mrr": 0.80,
+                "ece": 0.04,
+            },
             "omitted_components": ["str:CPM_Axiom_3_ActionReaction"],
-            "violations": [{"type": "disjointness", "node_id": "pred:Unverified_Kinematic_Claim"}],
+            "violations": [
+                {"type": "disjointness", "node_id": "pred:Unverified_Kinematic_Claim"}
+            ],
             "model_decomposition": [
                 {
                     "class_name": "actual_models",
@@ -975,8 +1234,12 @@ class TestEvaluationWorkbenchEndpoints:
             ],
             "summary_markdown": "## Bench Test Report\n- F1: 0.88",
         }
-        (reports_dir / f"report_{eval_id}.json").write_text(json.dumps(report_data), encoding="utf-8")
-        (reports_dir / f"report_{eval_id}.md").write_text(report_data["summary_markdown"], encoding="utf-8")
+        (reports_dir / f"report_{eval_id}.json").write_text(
+            json.dumps(report_data), encoding="utf-8"
+        )
+        (reports_dir / f"report_{eval_id}.md").write_text(
+            report_data["summary_markdown"], encoding="utf-8"
+        )
 
         settings = StudioSettings(
             runs_dir=runs_dir,
@@ -985,7 +1248,12 @@ class TestEvaluationWorkbenchEndpoints:
         )
         app = create_app(settings)
         client = TestClient(app)
-        return {"client": client, "eval_id": eval_id, "reports_dir": reports_dir, "run_id": "run_bench_test_01"}
+        return {
+            "client": client,
+            "eval_id": eval_id,
+            "reports_dir": reports_dir,
+            "run_id": "run_bench_test_01",
+        }
 
     def test_graph_overlay_endpoints(self, test_env):
         """Verify graph canvas overlay endpoint returns classified nodes and ghost nodes (ISSUE-026)."""
@@ -994,7 +1262,9 @@ class TestEvaluationWorkbenchEndpoints:
         run_id = test_env["run_id"]
 
         # Test evaluation report overlay
-        resp = client.get(f"/api/evaluation/reports/{eval_id}/graph-overlay?include_ghosts=true")
+        resp = client.get(
+            f"/api/evaluation/reports/{eval_id}/graph-overlay?include_ghosts=true"
+        )
         assert resp.status_code == 200
         overlay = resp.json()
         assert overlay["evaluation_id"] == eval_id
@@ -1016,7 +1286,9 @@ class TestEvaluationWorkbenchEndpoints:
         eval_id = test_env["eval_id"]
 
         # Get queue
-        resp = client.get(f"/api/evaluation/reports/{eval_id}/adjudication-queue?status=pending")
+        resp = client.get(
+            f"/api/evaluation/reports/{eval_id}/adjudication-queue?status=pending"
+        )
         assert resp.status_code == 200
         queue = resp.json()
         assert queue["evaluation_id"] == eval_id
@@ -1159,11 +1431,19 @@ class TestEvaluationWorkbenchEndpoints:
             {
                 "@graph": [
                     {"@id": "str:Root", "rdfs:label": "Root Law"},
-                    {"@id": "str:SubLaw", "rdfs:label": "Specialized Law", "source": "str:Root", "target": "str:SubLaw", "relation": "SPECIALIZES_TO"},
+                    {
+                        "@id": "str:SubLaw",
+                        "rdfs:label": "Specialized Law",
+                        "source": "str:Root",
+                        "target": "str:SubLaw",
+                        "relation": "SPECIALIZES_TO",
+                    },
                 ]
             }
         )
-        resp_valid = client.post("/api/evaluation/benchmarks/validate", json={"content": valid_jsonld})
+        resp_valid = client.post(
+            "/api/evaluation/benchmarks/validate", json={"content": valid_jsonld}
+        )
         assert resp_valid.status_code == 200
         val_res = resp_valid.json()
         assert val_res["is_valid"] is True
@@ -1178,7 +1458,9 @@ class TestEvaluationWorkbenchEndpoints:
                 ]
             }
         )
-        resp_cyclic = client.post("/api/evaluation/benchmarks/validate", json={"content": cyclic_jsonld})
+        resp_cyclic = client.post(
+            "/api/evaluation/benchmarks/validate", json={"content": cyclic_jsonld}
+        )
         assert resp_cyclic.status_code == 200
         cyclic_res = resp_cyclic.json()
         assert cyclic_res["is_valid"] is False
@@ -1198,7 +1480,9 @@ class TestEvaluationWorkbenchEndpoints:
             assert reg_resp.status_code == 201
             assert reg_resp.json()["id"] == "quantum_mechanics_pilot"
         finally:
-            bench_path = Path("packages/episteme-pipeline/episteme_pipeline/evaluation/data/quantum_mechanics_pilot.jsonld")
+            bench_path = Path(
+                "packages/episteme-pipeline/episteme_pipeline/evaluation/data/quantum_mechanics_pilot.jsonld"
+            )
             if bench_path.is_file():
                 bench_path.unlink()
 
@@ -1221,7 +1505,9 @@ class TestEvaluationWorkbenchEndpoints:
         assert "metric,value" in resp_csv.text
 
         # JSON-LD export
-        resp_json = client.get(f"/api/evaluation/reports/{eval_id}/export?format=jsonld")
+        resp_json = client.get(
+            f"/api/evaluation/reports/{eval_id}/export?format=jsonld"
+        )
         assert resp_json.status_code == 200
         assert "application/ld+json" in resp_json.headers.get("content-type", "")
         parsed = json.loads(resp_json.text)
@@ -1303,7 +1589,9 @@ class TestStudioDemoModeEvaluation:
 
     def test_topological_canvas_overlay(self, demo_client: TestClient):
         """Verify graph canvas overlay includes true positives, dialectical attacks, and summary counts."""
-        resp = demo_client.get("/api/evaluation/reports/eval_run-demo-festinger1959/graph-overlay")
+        resp = demo_client.get(
+            "/api/evaluation/reports/eval_run-demo-festinger1959/graph-overlay"
+        )
         assert resp.status_code == 200
         overlay = resp.json()
 
@@ -1323,7 +1611,9 @@ class TestStudioDemoModeEvaluation:
 
     def test_hitl_adjudication_desk(self, demo_client: TestClient):
         """Verify borderline candidate review queue and dynamic recalculation for Festinger."""
-        queue_resp = demo_client.get("/api/evaluation/reports/eval_run-demo-festinger1959/adjudication-queue")
+        queue_resp = demo_client.get(
+            "/api/evaluation/reports/eval_run-demo-festinger1959/adjudication-queue"
+        )
         assert queue_resp.status_code == 200
         queue = queue_resp.json()
         assert queue["total_candidates"] >= 3
@@ -1353,7 +1643,9 @@ class TestStudioDemoModeEvaluation:
 
     def test_calibration_lab(self, demo_client: TestClient):
         """Verify calibration report, reliability bins, and overconfidence errors."""
-        calib_resp = demo_client.get("/api/evaluation/reports/eval_run-demo-festinger1959/calibration")
+        calib_resp = demo_client.get(
+            "/api/evaluation/reports/eval_run-demo-festinger1959/calibration"
+        )
         assert calib_resp.status_code == 200
         calib = calib_resp.json()
 
@@ -1386,7 +1678,9 @@ class TestStudioDemoModeEvaluation:
 
     def test_competency_retrieval_diagnostics(self, demo_client: TestClient):
         """Verify 6 competency queries breakdown and ranking metrics."""
-        diag_resp = demo_client.get("/api/evaluation/reports/eval_run-demo-festinger1959/retrieval-diagnostics")
+        diag_resp = demo_client.get(
+            "/api/evaluation/reports/eval_run-demo-festinger1959/retrieval-diagnostics"
+        )
         assert diag_resp.status_code == 200
         diag = diag_resp.json()
 
@@ -1399,7 +1693,9 @@ class TestStudioDemoModeEvaluation:
 
     def test_noise_robustness_stress_test(self, demo_client: TestClient):
         """Verify noise robustness report retrieval and stress test execution."""
-        rob_resp = demo_client.get("/api/evaluation/reports/eval_run-demo-festinger1959/robustness")
+        rob_resp = demo_client.get(
+            "/api/evaluation/reports/eval_run-demo-festinger1959/robustness"
+        )
         assert rob_resp.status_code == 200
         rob = rob_resp.json()
 
@@ -1435,6 +1731,3 @@ class TestStudioDemoModeEvaluation:
         assert len(board["entries"]) >= 2
         assert len(board["pareto_frontier"]) >= 1
         assert "Multi-Run Benchmark Leaderboard" in board["summary_markdown"]
-
-
-

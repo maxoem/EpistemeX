@@ -40,7 +40,9 @@ ENV_VAR_MAPPINGS: dict[str, str] = {
     "models.thinking_level": "LLM_THINKING_LEVEL",
 }
 
-SECRET_KEY_PATTERN = re.compile(r"(key|secret|password|token|credential)", re.IGNORECASE)
+SECRET_KEY_PATTERN = re.compile(
+    r"(key|secret|password|token|credential)", re.IGNORECASE
+)
 
 PROFILES: dict[str, dict[str, Any]] = {
     "default": {},
@@ -197,8 +199,10 @@ class ConfigService:
         # Reconstruct base config: use parent config snapshot if available, else env + profile
         if parent_manifest and parent_manifest.get("config_snapshot"):
             try:
-                base_cfg = PipelineConfig.model_validate(parent_manifest["config_snapshot"])
-            except Exception:
+                base_cfg = PipelineConfig.model_validate(
+                    parent_manifest["config_snapshot"]
+                )
+            except Exception:  # noqa: BLE001 baseline
                 base_cfg = self.adapter.get_config_from_env()
         else:
             base_cfg = self.adapter.get_config_from_env()
@@ -247,7 +251,9 @@ class ConfigService:
                     if anchor_fp is not None
                     else source_fp
                 )
-                prior_input_fp = parent_manifest.get("input_fingerprint") or parent_manifest.get("source_fingerprint")
+                prior_input_fp = parent_manifest.get(
+                    "input_fingerprint"
+                ) or parent_manifest.get("source_fingerprint")
                 if prior_input_fp and input_fp != prior_input_fp:
                     earliest_invalid = 1
                     reason = "source-changed"
@@ -257,13 +263,19 @@ class ConfigService:
             prior_phase_fps = parent_manifest.get("phase_config_fingerprints", {})
             for ordinal in range(1, 9):
                 key = f"phase_{ordinal}"
-                prior_fp = prior_phase_fps.get(key) or prior_phase_fps.get(str(ordinal)) or fps_before.get(ordinal)
+                prior_fp = (
+                    prior_phase_fps.get(key)
+                    or prior_phase_fps.get(str(ordinal))
+                    or fps_before.get(ordinal)
+                )
                 after_fp = fps_after.get(ordinal)
                 if prior_fp != after_fp:
                     changed_fps[key] = (prior_fp, after_fp)
 
             has_schema_changes = any(k.startswith("graph_schema.") for k in patch)
-            if has_schema_changes and (earliest_invalid is None or earliest_invalid > 2):
+            if has_schema_changes and (
+                earliest_invalid is None or earliest_invalid > 2
+            ):
                 earliest_invalid = 2
                 changed_fps["graph_schema"] = (None, "modified")
 
@@ -271,7 +283,9 @@ class ConfigService:
                 phase_keys = [k for k in changed_fps if k.startswith("phase_")]
                 if phase_keys:
                     earliest_invalid = min(int(k.split("_")[1]) for k in phase_keys)
-                    phase_name = PHASE_INDEX_TO_NAME.get(earliest_invalid, f"Phase {earliest_invalid}")
+                    phase_name = PHASE_INDEX_TO_NAME.get(
+                        earliest_invalid, f"Phase {earliest_invalid}"
+                    )
                     reason = f"config-changed:{phase_name}"
 
             if earliest_invalid is None:
@@ -285,7 +299,9 @@ class ConfigService:
 
             invalidated = [i for i in range(1, 9) if i >= earliest_invalid]
             reused = [i for i in range(1, 9) if i < earliest_invalid]
-            estimated_loss = sum(DEFAULT_PHASE_ARTIFACT_ESTIMATES.get(i, 2) for i in invalidated)
+            estimated_loss = sum(
+                DEFAULT_PHASE_ARTIFACT_ESTIMATES.get(i, 2) for i in invalidated
+            )
 
             return InvalidationPreview(
                 invalidated_phases=invalidated,
@@ -315,9 +331,7 @@ class ConfigService:
 
         # Find the earliest invalidated phase (schema changes affect Phase 2 onwards)
         if changed_fps:
-            earliest_invalid = min(
-                int(key.split("_")[1]) for key in changed_fps
-            )
+            earliest_invalid = min(int(key.split("_")[1]) for key in changed_fps)
             if has_schema_changes and earliest_invalid > 2:
                 earliest_invalid = 2
         else:
@@ -326,9 +340,13 @@ class ConfigService:
 
         invalidated = [i for i in range(1, 9) if i >= earliest_invalid]
         reused = [i for i in range(1, 9) if i < earliest_invalid]
-        phase_name = PHASE_INDEX_TO_NAME.get(earliest_invalid, f"Phase {earliest_invalid}")
+        phase_name = PHASE_INDEX_TO_NAME.get(
+            earliest_invalid, f"Phase {earliest_invalid}"
+        )
         reason = f"config-changed:{phase_name}"
-        estimated_loss = sum(DEFAULT_PHASE_ARTIFACT_ESTIMATES.get(i, 2) for i in invalidated)
+        estimated_loss = sum(
+            DEFAULT_PHASE_ARTIFACT_ESTIMATES.get(i, 2) for i in invalidated
+        )
 
         return InvalidationPreview(
             invalidated_phases=invalidated,
@@ -387,6 +405,7 @@ class ConfigService:
                 lf_client = None
                 if public_key and secret_key:
                     from langfuse import Langfuse
+
                     active_host = (
                         host
                         or get_env_var("EPISTEME_STUDIO_LANGFUSE_HOST")
@@ -394,8 +413,12 @@ class ConfigService:
                         or get_env_var("LANGFUSE_BASE_URL")
                         or "http://localhost:3000"
                     )
-                    lf_client = Langfuse(public_key=public_key, secret_key=secret_key, host=active_host)
-                lf_provider = LangfusePromptProvider(client=lf_client, auto_create_missing=False)
+                    lf_client = Langfuse(
+                        public_key=public_key, secret_key=secret_key, host=active_host
+                    )
+                lf_provider = LangfusePromptProvider(
+                    client=lf_client, auto_create_missing=False
+                )
                 # Test connectivity
                 if lf_provider.client is None:
                     warning = "Langfuse client unconfigured or unreachable; fell back to default prompt templates."
@@ -403,7 +426,7 @@ class ConfigService:
                     provider_instance = DefaultPromptProvider()
                 else:
                     provider_instance = lf_provider
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 baseline
                 warning = f"Langfuse connection failed: {exc}; fell back to default prompt templates."
                 active_provider = "default"
                 provider_instance = DefaultPromptProvider()
@@ -428,7 +451,7 @@ class ConfigService:
                     gleaning_template=bundle.gleaning_template,
                     metadata=bundle.metadata or {},
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 baseline
                 # Fallback to default bundle for this specific prompt
                 def_bundle = DefaultPromptProvider().get_bundle(name)
                 bundles[name] = ResolvedPromptItem(
@@ -478,7 +501,11 @@ class ConfigService:
                 continue
             for ext in ("*.md", "*.txt", "*.json", "*.tex", "*.bib"):
                 for p in sdir.glob(ext):
-                    if p.name.startswith((".", "_")) or p.name in ("README.md", "SPEC.md", "CONTRACT.md"):
+                    if p.name.startswith((".", "_")) or p.name in (
+                        "README.md",
+                        "SPEC.md",
+                        "CONTRACT.md",
+                    ):
                         continue
                     rel_str = str(p)
                     if rel_str not in seen_paths:
@@ -569,8 +596,10 @@ class ConfigService:
             parent_manifest = self.reader.get_manifest(parent_run_id)
             if parent_manifest and parent_manifest.get("config_snapshot"):
                 try:
-                    base_cfg = PipelineConfig.model_validate(parent_manifest["config_snapshot"])
-                except Exception:
+                    base_cfg = PipelineConfig.model_validate(
+                        parent_manifest["config_snapshot"]
+                    )
+                except Exception:  # noqa: BLE001 baseline
                     base_cfg = self.adapter.get_config_from_env()
             else:
                 base_cfg = self.adapter.get_config_from_env()
@@ -616,13 +645,25 @@ class ConfigService:
             or get_env_var("LANGFUSE_BASE_URL")
             or "http://localhost:3000"
         )
-        active_pk = public_key if public_key is not None else (get_env_var("LANGFUSE_PUBLIC_KEY") or "")
-        active_sk = secret_key if secret_key is not None else (get_env_var("LANGFUSE_SECRET_KEY") or "")
+        active_pk = (
+            public_key
+            if public_key is not None
+            else (get_env_var("LANGFUSE_PUBLIC_KEY") or "")
+        )
+        active_sk = (
+            secret_key
+            if secret_key is not None
+            else (get_env_var("LANGFUSE_SECRET_KEY") or "")
+        )
 
         has_pk = bool(active_pk.strip())
         has_sk = bool(active_sk.strip())
         configured = has_pk and has_sk
-        pk_preview = f"{active_pk[:7]}...{active_pk[-4:]}" if len(active_pk) > 12 else ("pk-lf-***" if has_pk else None)
+        pk_preview = (
+            f"{active_pk[:7]}...{active_pk[-4:]}"
+            if len(active_pk) > 12
+            else ("pk-lf-***" if has_pk else None)
+        )
 
         connected = False
         message = None
@@ -630,6 +671,7 @@ class ConfigService:
         if configured:
             try:
                 from langfuse import Langfuse
+
                 client = Langfuse(
                     public_key=active_pk,
                     secret_key=active_sk,
@@ -637,11 +679,15 @@ class ConfigService:
                 )
                 if hasattr(client, "auth_check"):
                     connected = bool(client.auth_check())
-                    message = f"Authenticated with {active_host}" if connected else f"Authentication check returned False for {active_host}"
+                    message = (
+                        f"Authenticated with {active_host}"
+                        if connected
+                        else f"Authentication check returned False for {active_host}"
+                    )
                 else:
                     connected = True
                     message = f"Client initialized against {active_host}"
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 baseline
                 connected = False
                 message = f"Connection failed to {active_host}: {exc}"
         else:

@@ -24,6 +24,7 @@ from episteme_studio.adapters.neo4j_reader import Neo4jReader
 from episteme_studio.domain.errors import ProblemDetail
 from episteme_studio.domain.graph import GraphView
 from episteme_studio.domain.metrics import (
+    AffectedEdgeDetail,
     AffectedNodeDetail,
     MetricDescriptor,
     MetricResult,
@@ -137,7 +138,7 @@ class MetricService:
             available = await self._neo4j_reader.check_gds_availability(timeout=1.5)
             self._gds_cached_status = available
             return available
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             self._gds_cached_status = False
             return False
 
@@ -201,7 +202,9 @@ class MetricService:
                 ),
                 scope=MetricScope.GLOBAL,
                 available=has_gds,
-                unavailable_reason=None if has_gds else "Neo4j GDS plugin is not installed in the active Neo4j instance.",
+                unavailable_reason=None
+                if has_gds
+                else "Neo4j GDS plugin is not installed in the active Neo4j instance.",
                 engine="gds",
                 param_schema={
                     "type": "object",
@@ -326,7 +329,9 @@ class MetricService:
                 ),
                 scope=MetricScope.GLOBAL,
                 available=has_gds,
-                unavailable_reason=None if has_gds else "Neo4j GDS plugin is not installed in the active Neo4j instance.",
+                unavailable_reason=None
+                if has_gds
+                else "Neo4j GDS plugin is not installed in the active Neo4j instance.",
                 engine="gds",
                 param_schema={
                     "type": "object",
@@ -572,17 +577,30 @@ class MetricService:
                         warnings=warnings,
                         computed_at=end,
                     )
-                except Exception as exc:
-                    logger.warning("GDS PageRank execution failed, falling back to igraph: %s", exc)
-                    warnings.append("Executed via in-memory igraph fallback (GDS execution error)")
+                except Exception as exc:  # noqa: BLE001 baseline
+                    logger.warning(
+                        "GDS PageRank execution failed, falling back to igraph: %s", exc
+                    )
+                    warnings.append(
+                        "Executed via in-memory igraph fallback (GDS execution error)"
+                    )
 
             # Fallback to epistemetrics
-            if not any("Executed via in-memory epistemetrics fallback" in w for w in warnings):
-                warnings.append("Executed via in-memory epistemetrics fallback (Neo4j GDS not detected)")
+            if not any(
+                "Executed via in-memory epistemetrics fallback" in w for w in warnings
+            ):
+                warnings.append(
+                    "Executed via in-memory epistemetrics fallback (Neo4j GDS not detected)"
+                )
 
             pr_res = run_epistemetrics_pagerank(
                 graph_view,
-                params={"damping": damping, "max_iterations": max_iterations, "tolerance": tolerance, **opts},
+                params={
+                    "damping": damping,
+                    "max_iterations": max_iterations,
+                    "tolerance": tolerance,
+                    **opts,
+                },
             )
             end = datetime.now(UTC)
             scores = pr_res.scores
@@ -622,7 +640,9 @@ class MetricService:
             overlay = compute_degree(graph_view, params=opts)
             end = datetime.now(UTC)
             scores = {
-                nid: float(val) for nid, val in overlay.node_values.items() if val is not None
+                nid: float(val)
+                for nid, val in overlay.node_values.items()
+                if val is not None
             }
             vals = list(scores.values()) if scores else [0.0]
             affected_nodes = {
@@ -819,7 +839,9 @@ class MetricService:
                         execution_id=exec_id,
                         metric_id=metric_id,
                         scope=MetricScope.GLOBAL,
-                        result_value=summary.get("community_count", len(set(communities.values()))),
+                        result_value=summary.get(
+                            "community_count", len(set(communities.values()))
+                        ),
                         graph_revision=graph_view.graph_version,
                         duration_ms=max(1, int((end - start).total_seconds() * 1000)),
                         summary=summary,
@@ -828,18 +850,28 @@ class MetricService:
                         warnings=warnings,
                         computed_at=end,
                     )
-                except Exception as exc:
-                    logger.warning("GDS Leiden execution failed, falling back to igraph: %s", exc)
-                    warnings.append("Executed via in-memory igraph fallback (GDS execution error)")
+                except Exception as exc:  # noqa: BLE001 baseline
+                    logger.warning(
+                        "GDS Leiden execution failed, falling back to igraph: %s", exc
+                    )
+                    warnings.append(
+                        "Executed via in-memory igraph fallback (GDS execution error)"
+                    )
 
             # Fallback to igraph
             if not any("Executed via in-memory igraph fallback" in w for w in warnings):
-                warnings.append("Executed via in-memory igraph fallback (Neo4j GDS not detected)")
+                warnings.append(
+                    "Executed via in-memory igraph fallback (Neo4j GDS not detected)"
+                )
 
-            overlay = compute_leiden(graph_view, params={"gamma": gamma, "max_levels": max_levels, **opts})
+            overlay = compute_leiden(
+                graph_view, params={"gamma": gamma, "max_levels": max_levels, **opts}
+            )
             end = datetime.now(UTC)
             communities = {
-                nid: str(val) for nid, val in overlay.node_values.items() if val is not None
+                nid: str(val)
+                for nid, val in overlay.node_values.items()
+                if val is not None
             }
             unique_comms = sorted(set(communities.values()))
             summary = {
@@ -883,7 +915,9 @@ class MetricService:
             )
             end = datetime.now(UTC)
             scores = {
-                nid: float(val) for nid, val in overlay.node_values.items() if val is not None
+                nid: float(val)
+                for nid, val in overlay.node_values.items()
+                if val is not None
             }
             vals = list(scores.values()) if scores else [1.0]
             mean_val = round(sum(vals) / len(vals), 4) if vals else 1.0
@@ -922,7 +956,10 @@ class MetricService:
                             polarity=edge_obj.polarity or 0,
                             hop_distance=1,
                             contribution=round(e_val, 4),
-                            metadata={"tenability": round(e_val, 4), "type": edge_obj.type},
+                            metadata={
+                                "tenability": round(e_val, 4),
+                                "type": edge_obj.type,
+                            },
                         )
                     )
 

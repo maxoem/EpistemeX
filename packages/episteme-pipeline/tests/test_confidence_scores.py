@@ -18,15 +18,32 @@ def test_domain_models_confidence_attributes():
     assert entity2.confidence == 0.92
 
     # Test TheoryAtom with and without confidence
-    comp1 = TheoryAtom(id="ac1", text="Premise text", component_type="EMPIRICAL_OBSERVATION", source_chunk_id="c1")
+    comp1 = TheoryAtom(
+        id="ac1",
+        text="Premise text",
+        component_type="EMPIRICAL_OBSERVATION",
+        source_chunk_id="c1",
+    )
     assert comp1.confidence is None
 
-    comp2 = TheoryAtom(id="ac2", text="Claim text", component_type="ANTECEDENT", source_chunk_id="c1", confidence=0.88)
+    comp2 = TheoryAtom(
+        id="ac2",
+        text="Claim text",
+        component_type="ANTECEDENT",
+        source_chunk_id="c1",
+        confidence=0.88,
+    )
     assert comp2.confidence == 0.88
 
 
 def test_artifact_models_and_builders_confidence():
-    comp = TheoryAtom(id="ac1", text="Premise text", component_type="EMPIRICAL_OBSERVATION", source_chunk_id="c1", confidence=0.95)
+    comp = TheoryAtom(
+        id="ac1",
+        text="Premise text",
+        component_type="EMPIRICAL_OBSERVATION",
+        source_chunk_id="c1",
+        confidence=0.95,
+    )
     artifact = build_argument_component_artifact(
         comp, run_id="run-1", phase_name="phase4", method="test"
     )
@@ -41,7 +58,9 @@ def test_phase_configs_confidence_threshold_defaults():
     assert p2_cfg.local_relation_confidence_threshold == 0.0
     assert p2_cfg.linking_confidence_threshold == 0.85
 
-    p2_custom = Phase2Config(linking_confidence_threshold=0.9, ner_confidence_threshold=0.8)
+    p2_custom = Phase2Config(
+        linking_confidence_threshold=0.9, ner_confidence_threshold=0.8
+    )
     assert p2_custom.linking_confidence_threshold == 0.9
     assert p2_custom.ner_confidence_threshold == 0.8
 
@@ -58,7 +77,9 @@ def test_phase_configs_confidence_threshold_defaults():
     assert p4_cfg.acc_confidence_threshold == 0.0
     assert p4_cfg.arc_confidence_threshold == 0.65
 
-    p4_custom = Phase4Config(acc_confidence_threshold=0.75, adu_confidence_threshold=0.8)
+    p4_custom = Phase4Config(
+        acc_confidence_threshold=0.75, adu_confidence_threshold=0.8
+    )
     assert p4_custom.acc_confidence_threshold == 0.75
     assert p4_custom.adu_confidence_threshold == 0.8
 
@@ -72,18 +93,29 @@ async def test_phase2_runner_confidence_filtering():
 
     graph_store = AsyncMock()
     graph_store.find_entities_by_name.return_value = []
-    
+
     mock_extractor = AsyncMock()
     e1 = L2Entity(id="e1", label="CONCEPT", name="Entity Low", confidence=0.4)
     e2 = L2Entity(id="e2", label="CONCEPT", name="Entity High", confidence=0.9)
-    t1 = L2Triple(subject_id="e1", predicate="RELATES", object_id="e2", confidence=0.3, scope="local")
-    t2 = L2Triple(subject_id="e2", predicate="RELATES", object_id="e1", confidence=0.85, scope="local")
+    t1 = L2Triple(
+        subject_id="e1",
+        predicate="RELATES",
+        object_id="e2",
+        confidence=0.3,
+        scope="local",
+    )
+    t2 = L2Triple(
+        subject_id="e2",
+        predicate="RELATES",
+        object_id="e1",
+        confidence=0.85,
+        scope="local",
+    )
 
     mock_extractor.extract.return_value = ([e1, e2], [t1, t2], None, False, None)
 
     cfg = Phase2Config(
-        ner_confidence_threshold=0.5,
-        local_relation_confidence_threshold=0.5
+        ner_confidence_threshold=0.5, local_relation_confidence_threshold=0.5
     )
     runner = Phase2Runner(
         config=cfg,
@@ -94,8 +126,14 @@ async def test_phase2_runner_confidence_filtering():
         ner_extractor=mock_extractor,
     )
 
-    chunk = L1Chunk(id="c1", text="Sample text", source_doc_id="d1", sequence_index=0, token_count=10)
-    
+    chunk = L1Chunk(
+        id="c1",
+        text="Sample text",
+        source_doc_id="d1",
+        sequence_index=0,
+        token_count=10,
+    )
+
     # Run _process_chunk
     res_entities, triples, *_ = await runner._process_chunk(chunk)
     entities = [e for e, _ in res_entities]
@@ -117,8 +155,20 @@ async def test_phase4_runner_acc_confidence_filtering():
 
     cfg = Phase4Config(acc_confidence_threshold=0.7)
 
-    c1 = TheoryAtom(id="ac1", text="Low confidence claim", component_type="ANTECEDENT", source_chunk_id="chk1", confidence=0.5)
-    c2 = TheoryAtom(id="ac2", text="High confidence premise", component_type="EMPIRICAL_OBSERVATION", source_chunk_id="chk1", confidence=0.9)
+    c1 = TheoryAtom(
+        id="ac1",
+        text="Low confidence claim",
+        component_type="ANTECEDENT",
+        source_chunk_id="chk1",
+        confidence=0.5,
+    )
+    c2 = TheoryAtom(
+        id="ac2",
+        text="High confidence premise",
+        component_type="EMPIRICAL_OBSERVATION",
+        source_chunk_id="chk1",
+        confidence=0.9,
+    )
 
     mock_segmenter = AsyncMock()
     mock_segmenter.segment.return_value = ("<AC1>text</AC1>", ["ac1", "ac2"])

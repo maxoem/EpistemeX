@@ -74,4 +74,3 @@ class InvalidConfigPatchError(StudioDomainError):
     """Raised when a configuration patch contains invalid keys or fails validation."""
 
     status_code: int = 422
-

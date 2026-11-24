@@ -246,15 +246,19 @@ async def test_get_theory_atoms_deserialization() -> None:
         "scope_type": "Essentieller Allsatz",
         "entity_ids": ["ent_1", "ent_2"],
         "parameters": json.dumps({"Dopamine": 0.5}),
-        "measurements": json.dumps([{"dimension": "flow", "value": 1.2, "unit": "ml/s"}]),
-        "tenability": json.dumps({
-            "local_score": 0.95,
-            "edge_scores": {},
-            "aggregated_score": 0.95,
-            "is_tenable": True,
-            "tightest_blur": 0.02,
-            "anomalies": [],
-        }),
+        "measurements": json.dumps(
+            [{"dimension": "flow", "value": 1.2, "unit": "ml/s"}]
+        ),
+        "tenability": json.dumps(
+            {
+                "local_score": 0.95,
+                "edge_scores": {},
+                "aggregated_score": 0.95,
+                "is_tenable": True,
+                "tightest_blur": 0.02,
+                "anomalies": [],
+            }
+        ),
     }
 
     reader = _MockReader([mock_row])
@@ -457,4 +461,3 @@ async def test_item_checkpoints_sanitize_phase_identifier() -> None:
 
     with pytest.raises(ValueError, match="Unsafe Cypher phase identifier"):
         await store.clear_phase_checkpoints(unsafe)
-

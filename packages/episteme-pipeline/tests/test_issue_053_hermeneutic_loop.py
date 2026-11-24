@@ -35,7 +35,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from episteme_pipeline.artifacts.builders import (
     build_chunk_artifact,
     build_document_artifact,
@@ -130,9 +129,7 @@ from episteme_pipeline.runs.models import RunManifest, RunStatus
 from episteme_pipeline.runtime.pipeline_factory import PipelineFactory
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
 
-PACKAGE_ROOT = (
-    Path(__file__).resolve().parent.parent / "episteme_pipeline"
-)
+PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "episteme_pipeline"
 
 
 class _ListObserver:
@@ -202,9 +199,7 @@ class _StubEmbeddingModel:
             return [0.0, 0.0, 1.0]
         return [0.7, 0.7, 0.0]
 
-    async def aget_text_embedding_batch(
-        self, texts: list[str]
-    ) -> list[list[float]]:
+    async def aget_text_embedding_batch(self, texts: list[str]) -> list[list[float]]:
         return [await self.aget_text_embedding(t) for t in texts]
 
 
@@ -327,17 +322,13 @@ class _RecordingProjectionGraph(ProjectionGraph):
     async def upsert_argument_component(self, component: TheoryAtom) -> None:
         self.atom_batches.append([component.id])
 
-    async def upsert_argument_components(
-        self, components: list[TheoryAtom]
-    ) -> None:
+    async def upsert_argument_components(self, components: list[TheoryAtom]) -> None:
         self.atom_batches.append([c.id for c in components])
 
     async def upsert_theory_relation(self, relation: TheoryRelation) -> None:
         self.theory_rel_batches.append([relation.relation_id])
 
-    async def upsert_theory_relations(
-        self, relations: list[TheoryRelation]
-    ) -> None:
+    async def upsert_theory_relations(self, relations: list[TheoryRelation]) -> None:
         self.theory_rel_batches.append([r.relation_id for r in relations])
 
     async def upsert_community(
@@ -418,7 +409,9 @@ def _make_config(
 def _build_two_subgraph_forward_phases() -> list[PhaseRunner[Any]]:
     """Build deterministic forward PhaseRunner stubs with Doc A deficits and clean Doc B."""
 
-    def build_l1(_input: Any, ctx: ArtifactExecutionContext) -> list[ArtifactEnvelope[Any]]:
+    def build_l1(
+        _input: Any, ctx: ArtifactExecutionContext
+    ) -> list[ArtifactEnvelope[Any]]:
         doc_a = L1Document(
             id="doc_a",
             title="Agency and Deliberation",
@@ -503,7 +496,9 @@ def _build_two_subgraph_forward_phases() -> list[PhaseRunner[Any]]:
             ],
         ]
 
-    def build_l2(_input: Any, ctx: ArtifactExecutionContext) -> list[ArtifactEnvelope[Any]]:
+    def build_l2(
+        _input: Any, ctx: ArtifactExecutionContext
+    ) -> list[ArtifactEnvelope[Any]]:
         ent_action = L2Entity(
             id="ent_action",
             label="Concept",
@@ -582,7 +577,9 @@ def _build_two_subgraph_forward_phases() -> list[PhaseRunner[Any]]:
             ),
         ]
 
-    def build_l4(_input: Any, ctx: ArtifactExecutionContext) -> list[ArtifactEnvelope[Any]]:
+    def build_l4(
+        _input: Any, ctx: ArtifactExecutionContext
+    ) -> list[ArtifactEnvelope[Any]]:
         # 1) ENTHYMEME_GAP: ac_claim_a has outgoing ENTAILS -> ac_downstream_a, 0 incoming SUPPORTS
         ac_claim_a = TheoryAtom(
             id="ac_claim_a",
@@ -600,7 +597,9 @@ def _build_two_subgraph_forward_phases() -> list[PhaseRunner[Any]]:
             text="Behavioral agency indicators vary across deliberation conditions.",
             component_type="ObservationUnit",
             source_chunk_id="chunk_a2",
-            measurements=[Measurement(dimension="choice_latency", value=0.45, unit="s")],
+            measurements=[
+                Measurement(dimension="choice_latency", value=0.45, unit="s")
+            ],
             local_tenability=0.90,
         )
         ac_downstream_a = TheoryAtom(
@@ -620,7 +619,9 @@ def _build_two_subgraph_forward_phases() -> list[PhaseRunner[Any]]:
             text="Kinematic latency stays constant for reflex arcs.",
             component_type="ObservationUnit",
             source_chunk_id="chunk_a1",
-            measurements=[Measurement(dimension="reflex_latency", value=0.12, unit="s")],
+            measurements=[
+                Measurement(dimension="reflex_latency", value=0.12, unit="s")
+            ],
             local_tenability=0.90,
         )
         obs_a2 = TheoryAtom(
@@ -693,9 +694,7 @@ def _build_two_subgraph_forward_phases() -> list[PhaseRunner[Any]]:
             component_type="ObservationUnit",
             source_chunk_id="chunk_b1",
             entity_ids=["ent_conservation"],
-            measurements=[
-                Measurement(dimension="energy_drift", value=0.0, unit="J")
-            ],
+            measurements=[Measurement(dimension="energy_drift", value=0.0, unit="J")],
             confidence=0.95,
             modal_prior=0.95,
             local_tenability=0.95,
@@ -890,8 +889,7 @@ async def test_subgraph_reader_vector_search_returns_valid_search_results() -> N
     assert results[1].score == pytest.approx(0.0)
     assert await reader.vector_search([1.0, 0.0, 0.0], top_k=0) == []
     assert (
-        await reader.vector_search([1.0, 0.0, 0.0], top_k=2, node_label="Entity")
-        == []
+        await reader.vector_search([1.0, 0.0, 0.0], top_k=2, node_label="Entity") == []
     )
 
 
@@ -1141,21 +1139,23 @@ async def test_zero_max_cycles_feed_forward_parity_and_phase_reuse(
     cfg_pass1 = _make_config(shared_dir, max_cycles=1, project_to_graph=False)
     phases_run2 = _build_two_subgraph_forward_phases()
     recovered_llm = _StubStructuredLLM(
-        lambda output_cls, _args: PremiseRecoveryOutput(
-            recovered_premises=[
-                RecoveredImplicitPremise(
-                    local_id="P_bridge",
-                    text="Autonomous agency is an irreducible normative category.",
-                    component_type="ObservationUnit",
-                    source_chunk_id="chunk_a2",
-                    target_atom_id="ac_claim_a",
-                    relation_type="SUPPORTS",
-                    confidence=0.9,
-                )
-            ]
+        lambda output_cls, _args: (
+            PremiseRecoveryOutput(
+                recovered_premises=[
+                    RecoveredImplicitPremise(
+                        local_id="P_bridge",
+                        text="Autonomous agency is an irreducible normative category.",
+                        component_type="ObservationUnit",
+                        source_chunk_id="chunk_a2",
+                        target_atom_id="ac_claim_a",
+                        relation_type="SUPPORTS",
+                        confidence=0.9,
+                    )
+                ]
+            )
+            if output_cls is PremiseRecoveryOutput
+            else output_cls()
         )
-        if output_cls is PremiseRecoveryOutput
-        else output_cls()
     )
     coord_active = ClosedLoopRefinementCoordinator(
         detector=TheoryNetDeficitDetector(),
@@ -1169,15 +1169,15 @@ async def test_zero_max_cycles_feed_forward_parity_and_phase_reuse(
         refinement_coordinator=coord_active,
     )
     res2 = await pipe2.run(
-        PipelineInput(source_paths=[]), run_id="run_refine_after_zero", parent_run_id="run_zero"
+        PipelineInput(source_paths=[]),
+        run_id="run_refine_after_zero",
+        parent_run_id="run_zero",
     )
 
     assert all(p.run_count == 0 for p in phases_run2)
     assert res2.manifest.refinement_pass == 1
     assert any(r.phase_key == "refinement" for r in res2.manifest.phase_records)
-    assert any(
-        isinstance(ev, RefinementCycleCompleted) for ev in captured_events
-    )
+    assert any(isinstance(ev, RefinementCycleCompleted) for ev in captured_events)
 
 
 # ---------------------------------------------------------------------------
@@ -1330,9 +1330,7 @@ async def test_end_to_end_closed_loop_refinement_and_localization(
     topsorted = ArtifactDependencyGraph.from_artifacts(persisted).topsort()
     assert len(topsorted) > 0
 
-    deficit_envs = [
-        e for e in persisted if e.kind == ArtifactKind.EPISTEMIC_DEFICIT
-    ]
+    deficit_envs = [e for e in persisted if e.kind == ArtifactKind.EPISTEMIC_DEFICIT]
     detected_kinds = {
         e.payload.deficit_kind
         for e in deficit_envs
@@ -1348,12 +1346,8 @@ async def test_end_to_end_closed_loop_refinement_and_localization(
     # Refined artifacts exist at pass 1 with deficit_id lineage
     pass1_envs = [e for e in persisted if e.provenance.refinement_pass == 1]
     assert len(pass1_envs) >= 4
-    assert any(
-        e.kind == ArtifactKind.THEORY_ATOM for e in pass1_envs
-    )
-    assert any(
-        e.kind == ArtifactKind.THEORY_RELATION for e in pass1_envs
-    )
+    assert any(e.kind == ArtifactKind.THEORY_ATOM for e in pass1_envs)
+    assert any(e.kind == ArtifactKind.THEORY_RELATION for e in pass1_envs)
     assert any(e.provenance.deficit_id is not None for e in pass1_envs)
 
     # Verify recovered grounding observation + premise atoms + split entities appear at pass 1
@@ -1365,7 +1359,9 @@ async def test_end_to_end_closed_loop_refinement_and_localization(
     )
     # ac_claim_a reconverged in TheoryNet after receiving recovered premise support
     assert (
-        full_collection.latest_by_identity["argument_component::ac_claim_a"].provenance.refinement_pass
+        full_collection.latest_by_identity[
+            "argument_component::ac_claim_a"
+        ].provenance.refinement_pass
         == 1
     )
     assert atoms_by_id["ac_claim_a"].equilibrium_strength is not None
@@ -1378,7 +1374,9 @@ async def test_end_to_end_closed_loop_refinement_and_localization(
     ]
     assert {e.provenance.refinement_pass for e in claim_history} == {0, 1}
     assert (
-        full_collection.latest_by_identity["argument_component::ac_claim_a"].provenance.refinement_pass
+        full_collection.latest_by_identity[
+            "argument_component::ac_claim_a"
+        ].provenance.refinement_pass
         == 1
     )
 
@@ -1538,7 +1536,9 @@ async def test_early_convergence_cycle_cap_priority_flags_and_signature_guard(
             ]
         return []
 
-    def emit_premise(deficit: EpistemicDeficit, _state: Any, _ctx: Any) -> RefinementDelta:
+    def emit_premise(
+        deficit: EpistemicDeficit, _state: Any, _ctx: Any
+    ) -> RefinementDelta:
         return RefinementDelta(
             theory_atoms=[
                 TheoryAtom(
@@ -1558,7 +1558,9 @@ async def test_early_convergence_cycle_cap_priority_flags_and_signature_guard(
     )
     manifest = RunManifest(run_id="r_ctrl")
     ctx = ArtifactExecutionContext(
-        run_id="r_ctrl", manifest=manifest, pipeline_input=PipelineInput(source_paths=[])
+        run_id="r_ctrl",
+        manifest=manifest,
+        pipeline_input=PipelineInput(source_paths=[]),
     )
     events: list[Any] = []
     emitter = SimpleEventEmitter()
@@ -1610,7 +1612,9 @@ async def test_early_convergence_cycle_cap_priority_flags_and_signature_guard(
     )
     manifest_cap = RunManifest(run_id="r_cap")
     ctx_cap = ArtifactExecutionContext(
-        run_id="r_cap", manifest=manifest_cap, pipeline_input=PipelineInput(source_paths=[])
+        run_id="r_cap",
+        manifest=manifest_cap,
+        pipeline_input=PipelineInput(source_paths=[]),
     )
     await coord_cap.refine(base_coll, ctx_cap)
 
@@ -1633,7 +1637,9 @@ async def test_early_convergence_cycle_cap_priority_flags_and_signature_guard(
     )
     manifest_dup = RunManifest(run_id="r_dup")
     ctx_dup = ArtifactExecutionContext(
-        run_id="r_dup", manifest=manifest_dup, pipeline_input=PipelineInput(source_paths=[])
+        run_id="r_dup",
+        manifest=manifest_dup,
+        pipeline_input=PipelineInput(source_paths=[]),
     )
     await coord_dup.refine(base_coll, ctx_dup)
     assert manifest_dup.refinement_pass == 1
@@ -1864,7 +1870,11 @@ async def test_multicycle_two_passes_stabilizes_without_cascading_splits(
         for env in persisted
         if env.kind == ArtifactKind.LINKED_ENTITY
     ]
-    assert not any("__sense_" in eid.split("__sense_", 1)[1] for eid in entity_ids if "__sense_" in eid)
+    assert not any(
+        "__sense_" in eid.split("__sense_", 1)[1]
+        for eid in entity_ids
+        if "__sense_" in eid
+    )
     assert "ent_action__sense_1" in entity_ids
     assert "ent_action__sense_2" in entity_ids
 
@@ -1891,8 +1901,20 @@ async def test_multicycle_two_passes_stabilizes_without_cascading_splits(
     )
     direct_state = EpistemicStateView(
         chunks=[
-            L1Chunk(id="chunk_a1", source_doc_id="doc_a", sequence_index=0, token_count=3, text="Physical"),
-            L1Chunk(id="chunk_a2", source_doc_id="doc_a", sequence_index=1, token_count=3, text="Normative"),
+            L1Chunk(
+                id="chunk_a1",
+                source_doc_id="doc_a",
+                sequence_index=0,
+                token_count=3,
+                text="Physical",
+            ),
+            L1Chunk(
+                id="chunk_a2",
+                source_doc_id="doc_a",
+                sequence_index=1,
+                token_count=3,
+                text="Normative",
+            ),
         ],
         entities=[single_sense_ent],
         theory_atoms=[atom_own, atom_partner],
@@ -2001,9 +2023,13 @@ def test_pipeline_factory_and_for_task_wiring(tmp_path: Path) -> None:
     # Standalone Pipeline auto-wires deterministic coordinator when max_refinement_cycles > 0
     standalone = Pipeline(
         phases=_build_two_subgraph_forward_phases(),
-        config=_make_config(tmp_path / "standalone", max_cycles=1, project_to_graph=False),
+        config=_make_config(
+            tmp_path / "standalone", max_cycles=1, project_to_graph=False
+        ),
     )
-    assert isinstance(standalone.refinement_coordinator, ClosedLoopRefinementCoordinator)
+    assert isinstance(
+        standalone.refinement_coordinator, ClosedLoopRefinementCoordinator
+    )
 
     # Disabled refinement leaves coordinator unset on factory resolution
     cfg_off = _make_config(tmp_path / "off", max_cycles=0, project_to_graph=False)

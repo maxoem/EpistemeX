@@ -135,7 +135,9 @@ class PremiseRecoveryOutput(BaseModel):
     recovered_premises: list[RecoveredImplicitPremise] = Field(default_factory=list)
 
 
-def _stable_recovered_id(deficit_id: str, chunk_id: str, local_id: str, text: str) -> str:
+def _stable_recovered_id(
+    deficit_id: str, chunk_id: str, local_id: str, text: str
+) -> str:
     """Compute a deterministic identifier for a recovered implicit premise atom."""
     payload = f"{deficit_id}:{chunk_id}:{local_id}:{text.strip()}"
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:14]
@@ -227,7 +229,9 @@ class LLMTheoryGuidedPremiseRecoverer:
             JSON-serializable snapshot of prompt, threshold, and sub-components.
         """
         strategy_str = (
-            self.strategy.value if isinstance(self.strategy, Enum) else str(self.strategy)
+            self.strategy.value
+            if isinstance(self.strategy, Enum)
+            else str(self.strategy)
         )
         return {
             "class": self.__class__.__name__,
@@ -353,7 +357,9 @@ class LLMTheoryGuidedPremiseRecoverer:
                     *(a.source_chunk_id for a in target_atoms),
                 ]
             )
-            available_chunk_ids = [cid for cid in target_chunk_ids if cid in chunks_by_id]
+            available_chunk_ids = [
+                cid for cid in target_chunk_ids if cid in chunks_by_id
+            ]
             if not available_chunk_ids or not target_atoms:
                 outcome.output_description = "no_target_chunks_or_atoms"
                 return RefinementDelta(refinement_pass=next_pass)
@@ -470,7 +476,9 @@ class LLMTheoryGuidedPremiseRecoverer:
                 atom_id = _stable_recovered_id(
                     deficit.deficit_id, chunk_id, cand.local_id, text
                 )
-                chunk_text = chunks_by_id[chunk_id].text if chunk_id in chunks_by_id else ""
+                chunk_text = (
+                    chunks_by_id[chunk_id].text if chunk_id in chunks_by_id else ""
+                )
 
                 # Resolve entity links via EntityLinker / scoped entities.
                 linked_entity_ids = entity_ids_matching_text(text, scoped_entities)
@@ -593,9 +601,7 @@ class LLMTheoryGuidedPremiseRecoverer:
                             recovered_relations.append(arc_rel)
 
             resolved_ids = (
-                [deficit.deficit_id]
-                if (recovered_atoms or recovered_relations)
-                else []
+                [deficit.deficit_id] if (recovered_atoms or recovered_relations) else []
             )
             outcome.output_description = (
                 f"atoms={len(recovered_atoms)}, relations={len(recovered_relations)}, "

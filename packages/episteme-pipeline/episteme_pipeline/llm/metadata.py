@@ -33,7 +33,9 @@ class TokenUsage:
 class TokenUsageExtractorProtocol(Protocol):
     """Protocol for extracting token counts and metadata from LLM responses."""
 
-    def extract_usage(self, response: Any, prompt_text: str | None = None) -> TokenUsage:
+    def extract_usage(
+        self, response: Any, prompt_text: str | None = None
+    ) -> TokenUsage:
         """Extract token usage counts from a response object or fallback text.
 
         Parameters
@@ -128,9 +130,12 @@ class LLMResponseMetadataExtractor:
         if isinstance(response, dict):
             if "usage" in response and isinstance(response["usage"], dict):
                 return cls._from_dict(response["usage"])
-            if "prompt_tokens" in response or "completion_tokens" in response or "input_tokens" in response:
+            if (
+                "prompt_tokens" in response
+                or "completion_tokens" in response
+                or "input_tokens" in response
+            ):
                 return cls._from_dict(response)
-
 
         # 2. LlamaIndex CompletionResponse / ChatResponse additional_kwargs or raw
         additional_kwargs = getattr(response, "additional_kwargs", None)
@@ -166,7 +171,9 @@ class LLMResponseMetadataExtractor:
     @staticmethod
     def _from_dict(d: dict[str, Any]) -> TokenUsage:
         prompt_tokens = int(d.get("prompt_tokens") or d.get("input_tokens") or 0)
-        completion_tokens = int(d.get("completion_tokens") or d.get("output_tokens") or 0)
+        completion_tokens = int(
+            d.get("completion_tokens") or d.get("output_tokens") or 0
+        )
         total_tokens = int(d.get("total_tokens") or (prompt_tokens + completion_tokens))
         return TokenUsage(
             prompt_tokens=prompt_tokens,
@@ -176,9 +183,17 @@ class LLMResponseMetadataExtractor:
 
     @staticmethod
     def _from_obj(obj: Any) -> TokenUsage:
-        prompt_tokens = int(getattr(obj, "prompt_tokens", 0) or getattr(obj, "input_tokens", 0) or 0)
-        completion_tokens = int(getattr(obj, "completion_tokens", 0) or getattr(obj, "output_tokens", 0) or 0)
-        total_tokens = int(getattr(obj, "total_tokens", 0) or (prompt_tokens + completion_tokens))
+        prompt_tokens = int(
+            getattr(obj, "prompt_tokens", 0) or getattr(obj, "input_tokens", 0) or 0
+        )
+        completion_tokens = int(
+            getattr(obj, "completion_tokens", 0)
+            or getattr(obj, "output_tokens", 0)
+            or 0
+        )
+        total_tokens = int(
+            getattr(obj, "total_tokens", 0) or (prompt_tokens + completion_tokens)
+        )
         return TokenUsage(
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -195,13 +210,18 @@ class LLMResponseMetadataExtractor:
             return None
         if cls._encoding is None:
             import os
-            if os.environ.get("TIKTOKEN_OFFLINE") == "1" or os.environ.get("HF_HUB_OFFLINE") == "1":
+
+            if (
+                os.environ.get("TIKTOKEN_OFFLINE") == "1"
+                or os.environ.get("HF_HUB_OFFLINE") == "1"
+            ):
                 cls._encoding_failed = True
                 return None
             try:
                 import tiktoken
+
                 cls._encoding = tiktoken.get_encoding("cl100k_base")
-            except Exception:
+            except Exception:  # noqa: BLE001 baseline
                 cls._encoding_failed = True
                 return None
         return cls._encoding
@@ -226,7 +246,7 @@ class LLMResponseMetadataExtractor:
         if enc is not None:
             try:
                 return len(enc.encode(text))
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
         return max(1, len(text) // 4)
 
@@ -241,4 +261,3 @@ class LLMResponseMetadataExtractor:
             completion_tokens=c_tokens,
             total_tokens=p_tokens + c_tokens,
         )
-

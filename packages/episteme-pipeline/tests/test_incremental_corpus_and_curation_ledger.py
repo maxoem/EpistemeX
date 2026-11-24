@@ -13,13 +13,11 @@ Verifies:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
-import pytest
-
 from unittest.mock import AsyncMock
 
+import pytest
 from episteme_pipeline.artifacts.builders import (
     build_argument_component_artifact,
     build_argument_relation_artifact,
@@ -43,10 +41,8 @@ from episteme_pipeline.config import (
     Phase1Config,
     Phase2Config,
     Phase3Config,
-    Phase3bConfig,
     Phase4Config,
     Phase6Config,
-    PipelineConfig,
 )
 from episteme_pipeline.contracts.domain import (
     CandidatePair,
@@ -56,7 +52,6 @@ from episteme_pipeline.contracts.domain import (
     L2Triple,
     PhaseItemRecord,
     TheoryAtom,
-    TheoryNet,
     TheoryRelation,
 )
 from episteme_pipeline.contracts.phase_contracts import (
@@ -68,30 +63,27 @@ from episteme_pipeline.phases.phase1_foundation import Phase1Runner
 from episteme_pipeline.phases.phase1_foundation.provenance import doc_id
 from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
 from episteme_pipeline.phases.phase3_global_relations import Phase3Runner
-from episteme_pipeline.phases.phase3b_consolidation import Phase3bLatentConsolidationRunner
-from episteme_pipeline.phases.phase3b_consolidation.consolidation import LatentGraphConsolidation
+from episteme_pipeline.phases.phase3b_consolidation.consolidation import (
+    LatentGraphConsolidation,
+)
 from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
 from episteme_pipeline.phases.phase6_theorynet.runner import Phase6Runner
-from episteme_pipeline.pipeline import Pipeline
 from episteme_pipeline.protocols.extractors import (
     EmbeddingModel,
     EntityLinker,
     GlobalRelationExtractor,
     NERExtractor,
 )
-from episteme_pipeline.protocols.graph_store import FusionGraph
 from episteme_pipeline.runs.fingerprints import (
     compute_document_fingerprints,
-    fingerprint_curation_ledger,
-    is_phase_unchanged,
 )
-from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
+from episteme_pipeline.runs.models import RunManifest, RunStatus
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
-
 
 # ---------------------------------------------------------------------------
 # Test Mocks & Stubs
 # ---------------------------------------------------------------------------
+
 
 class StubNERExtractor(NERExtractor):
     """Stub NER extractor recording invocations."""
@@ -257,7 +249,10 @@ class StubGlobalRelationExtractor(GlobalRelationExtractor):
         return []
 
     async def extract_pairs(
-        self, candidate_pairs: list[CandidatePair], graph_store: Any, schema: SchemaConfig
+        self,
+        candidate_pairs: list[CandidatePair],
+        graph_store: Any,
+        schema: SchemaConfig,
     ) -> tuple[list[L2Triple], list[PhaseItemRecord]]:
         triples = [
             L2Triple(
@@ -281,6 +276,7 @@ class StubGlobalRelationExtractor(GlobalRelationExtractor):
 # ---------------------------------------------------------------------------
 # Unit Tests
 # ---------------------------------------------------------------------------
+
 
 def test_document_fingerprints_computation(tmp_path: Path) -> None:
     """Test compute_document_fingerprints produces stable SHA-256 hashes per document."""
@@ -373,12 +369,36 @@ async def test_phase1_incremental_corpus_hydration(tmp_path: Path) -> None:
     doc_fps = compute_document_fingerprints([str(doc1)])
 
     # Construct prior artifacts for doc1
-    prior_doc = L1Document(id=d_id1, title="Foundation", source_path=str(doc1), chapter_count=1, chunk_count=1)
-    prior_chunk = L1Chunk(id=f"chk_{d_id1}_0", text="Foundational philosophy.", source_doc_id=d_id1, sequence_index=0, token_count=3)
-    prior_collection = ArtifactCollection([
-        build_document_artifact(prior_doc, run_id="run-prior", phase_name="Phase 1: Data Foundation", method="m"),
-        build_chunk_artifact(prior_chunk, run_id="run-prior", phase_name="Phase 1: Data Foundation", method="m"),
-    ])
+    prior_doc = L1Document(
+        id=d_id1,
+        title="Foundation",
+        source_path=str(doc1),
+        chapter_count=1,
+        chunk_count=1,
+    )
+    prior_chunk = L1Chunk(
+        id=f"chk_{d_id1}_0",
+        text="Foundational philosophy.",
+        source_doc_id=d_id1,
+        sequence_index=0,
+        token_count=3,
+    )
+    prior_collection = ArtifactCollection(
+        [
+            build_document_artifact(
+                prior_doc,
+                run_id="run-prior",
+                phase_name="Phase 1: Data Foundation",
+                method="m",
+            ),
+            build_chunk_artifact(
+                prior_chunk,
+                run_id="run-prior",
+                phase_name="Phase 1: Data Foundation",
+                method="m",
+            ),
+        ]
+    )
 
     prior_manifest = RunManifest(
         run_id="run-prior",
@@ -414,7 +434,11 @@ async def test_phase1_incremental_corpus_hydration(tmp_path: Path) -> None:
     assert len(docs) == 2
     assert len(chunks) == 2
     # The artifact for doc1 was hydrated and tagged with current run_id
-    doc1_art = next(a for a in output.of_kind(ArtifactKind.DOCUMENT) if a.payload.document_id == d_id1)
+    doc1_art = next(
+        a
+        for a in output.of_kind(ArtifactKind.DOCUMENT)
+        if a.payload.document_id == d_id1
+    )
     assert doc1_art.run_id == "run-current"
 
 
@@ -422,27 +446,55 @@ async def test_phase1_incremental_corpus_hydration(tmp_path: Path) -> None:
 async def test_phase2_incremental_hydration_and_curation_constraints() -> None:
     """Verify Phase 2 hydrates unchanged chunk mentions and enforces cannot-link / must-link constraints."""
     # Chunk 1 (unchanged doc) and Chunk 2 (new document)
-    chunk1 = L1Chunk(id="c1", text="Kant on space", source_doc_id="doc_unchanged", sequence_index=0, token_count=3)
-    chunk2 = L1Chunk(id="c2", text="Leibniz on monads", source_doc_id="doc_new", sequence_index=1, token_count=3)
+    chunk1 = L1Chunk(
+        id="c1",
+        text="Kant on space",
+        source_doc_id="doc_unchanged",
+        sequence_index=0,
+        token_count=3,
+    )
+    chunk2 = L1Chunk(
+        id="c2",
+        text="Leibniz on monads",
+        source_doc_id="doc_new",
+        sequence_index=1,
+        token_count=3,
+    )
 
-    prior_ent = L2Entity(id="e_kant", label="Concept", name="Kant", source_chunk_ids=["c1"])
-    prior_collection = ArtifactCollection([
-        build_entity_mention_artifact(prior_ent, "c1", run_id="run-prior", phase_name="Phase 2: Entity & Local Relation Discovery", method="m"),
-        build_linked_entity_artifact(prior_ent, ["artifact::mention::e_kant::c1"], run_id="run-prior", phase_name="Phase 2: Entity & Local Relation Discovery", method="m"),
-        build_local_relation_artifact(
-            L2Triple(
-                subject_id="e_kant",
-                predicate="FOUNDED",
-                object_id="e_idealism",
-                source_chunk_id="c1",
-                confidence=0.9,
-                scope="local",
+    prior_ent = L2Entity(
+        id="e_kant", label="Concept", name="Kant", source_chunk_ids=["c1"]
+    )
+    prior_collection = ArtifactCollection(
+        [
+            build_entity_mention_artifact(
+                prior_ent,
+                "c1",
+                run_id="run-prior",
+                phase_name="Phase 2: Entity & Local Relation Discovery",
+                method="m",
             ),
-            run_id="run-prior",
-            phase_name="Phase 2: Entity & Local Relation Discovery",
-            method="m",
-        ),
-    ])
+            build_linked_entity_artifact(
+                prior_ent,
+                ["artifact::mention::e_kant::c1"],
+                run_id="run-prior",
+                phase_name="Phase 2: Entity & Local Relation Discovery",
+                method="m",
+            ),
+            build_local_relation_artifact(
+                L2Triple(
+                    subject_id="e_kant",
+                    predicate="FOUNDED",
+                    object_id="e_idealism",
+                    source_chunk_id="c1",
+                    confidence=0.9,
+                    scope="local",
+                ),
+                run_id="run-prior",
+                phase_name="Phase 2: Entity & Local Relation Discovery",
+                method="m",
+            ),
+        ]
+    )
 
     prior_manifest = RunManifest(
         run_id="run-prior",
@@ -488,7 +540,9 @@ async def test_phase2_incremental_hydration_and_curation_constraints() -> None:
     # c1 was hydrated, so stub_ner was called ONLY on c2!
     assert stub_ner.extracted_chunk_ids == ["c2"]
 
-    entities = [a.payload.to_domain() for a in output.of_kind(ArtifactKind.LINKED_ENTITY)]
+    entities = [
+        a.payload.to_domain() for a in output.of_kind(ArtifactKind.LINKED_ENTITY)
+    ]
     # Due to cannot-link constraint, e_c2 was NOT merged into e_kant
     entity_ids = {e.id for e in entities}
     assert "e_kant" in entity_ids
@@ -508,7 +562,9 @@ async def test_phase2_incremental_hydration_and_curation_constraints() -> None:
         prior_manifest=prior_manifest,
     )
     output_must = await runner.run(view, ctx_must)
-    entities_must = [a.payload.to_domain() for a in output_must.of_kind(ArtifactKind.LINKED_ENTITY)]
+    entities_must = [
+        a.payload.to_domain() for a in output_must.of_kind(ArtifactKind.LINKED_ENTITY)
+    ]
     assert len(entities_must) == 1
     assert entities_must[0].id == "e_kant"
     assert set(entities_must[0].source_chunk_ids) == {"c1", "c2"}
@@ -517,13 +573,23 @@ async def test_phase2_incremental_hydration_and_curation_constraints() -> None:
 @pytest.mark.asyncio
 async def test_phase3b_latent_consolidation_curation_constraints() -> None:
     """Verify Phase 3b Latent Graph Consolidation respects cannot-link and must-link constraints."""
-    e1 = L2Entity(id="e_kant1", label="Concept", name="Kant", textual_envelope="Kant's philosophy")
-    e2 = L2Entity(id="e_kant2", label="Concept", name="Immanuel Kant", textual_envelope="Kant's philosophy")
+    e1 = L2Entity(
+        id="e_kant1", label="Concept", name="Kant", textual_envelope="Kant's philosophy"
+    )
+    e2 = L2Entity(
+        id="e_kant2",
+        label="Concept",
+        name="Immanuel Kant",
+        textual_envelope="Kant's philosophy",
+    )
 
     from episteme_pipeline.contracts.domain import SubGraph
+
     reader = AsyncMock()
     reader.get_entities = AsyncMock(return_value=[e1, e2])
-    reader.get_neighborhood = AsyncMock(return_value=SubGraph(center_id="e_kant1", depth=1, nodes=[], triples=[]))
+    reader.get_neighborhood = AsyncMock(
+        return_value=SubGraph(center_id="e_kant1", depth=1, nodes=[], triples=[])
+    )
 
     consolidation = LatentGraphConsolidation(
         embedding_model=StubEmbeddingModel(),
@@ -536,7 +602,9 @@ async def test_phase3b_latent_consolidation_curation_constraints() -> None:
     assert len(normal_map) == 1
 
     # 2. Cannot-link constraint blocks the merge
-    ledger_cannot = EpistemicCurationLedger(cannot_link_entities={("e_kant1", "e_kant2")})
+    ledger_cannot = EpistemicCurationLedger(
+        cannot_link_entities={("e_kant1", "e_kant2")}
+    )
     cannot_map = await consolidation.fuse(reader, curation_ledger=ledger_cannot)
     assert cannot_map == {}
 
@@ -554,8 +622,12 @@ async def test_phase3b_latent_consolidation_curation_constraints() -> None:
 @pytest.mark.asyncio
 async def test_phase3_and_phase4_relation_overrides() -> None:
     """Verify Phase 3 and Phase 4 enforce relation overrides and suppress rejected relations."""
-    e1 = L2Entity(id="e1", label="Concept", name="Premise Concept", source_chunk_ids=["c1"])
-    e2 = L2Entity(id="e2", label="Concept", name="Conclusion Concept", source_chunk_ids=["c1"])
+    e1 = L2Entity(
+        id="e1", label="Concept", name="Premise Concept", source_chunk_ids=["c1"]
+    )
+    e2 = L2Entity(
+        id="e2", label="Concept", name="Conclusion Concept", source_chunk_ids=["c1"]
+    )
 
     # Phase 3 with REJECTED override
     ledger_p3 = EpistemicCurationLedger(
@@ -612,14 +684,30 @@ async def test_phase3_and_phase4_relation_overrides() -> None:
     )
     p4_view = Phase3ArtifactsView(
         chunks=[
-            L1Chunk(id="c1", text="Text 1", source_doc_id="d1", sequence_index=0, token_count=2),
-            L1Chunk(id="c2", text="Text 2", source_doc_id="d1", sequence_index=1, token_count=2),
+            L1Chunk(
+                id="c1",
+                text="Text 1",
+                source_doc_id="d1",
+                sequence_index=0,
+                token_count=2,
+            ),
+            L1Chunk(
+                id="c2",
+                text="Text 2",
+                source_doc_id="d1",
+                sequence_index=1,
+                token_count=2,
+            ),
         ],
         documents=[],
     )
     p4_out = await p4_runner.run(p4_view, p4_ctx)
-    p4_rels = [a.payload.to_domain() for a in p4_out.of_kind(ArtifactKind.THEORY_RELATION)]
-    rel_c1_c2 = next(r for r in p4_rels if r.from_id == "atom_c1" and r.to_id == "atom_c2")
+    p4_rels = [
+        a.payload.to_domain() for a in p4_out.of_kind(ArtifactKind.THEORY_RELATION)
+    ]
+    rel_c1_c2 = next(
+        r for r in p4_rels if r.from_id == "atom_c1" and r.to_id == "atom_c2"
+    )
     assert rel_c1_c2.relation_type == "SUPPORTS"
     assert rel_c1_c2.confidence == 0.99
 
@@ -642,24 +730,36 @@ async def test_phase6_modality_overrides() -> None:
         scope="local",
     )
 
-    ledger = EpistemicCurationLedger(modality_overrides={"atom_synthetic_apriori": 0.95})
+    ledger = EpistemicCurationLedger(
+        modality_overrides={"atom_synthetic_apriori": 0.95}
+    )
     ctx = ArtifactExecutionContext(
         run_id="run-p6",
         manifest=RunManifest(run_id="run-p6"),
         pipeline_input=PipelineInput(source_paths=["kant.md"], curation_ledger=ledger),
     )
 
-    collection = ArtifactCollection([
-        build_argument_component_artifact(atom, run_id="run-p6", phase_name="P4", method="m"),
-        build_argument_relation_artifact(rel, run_id="run-p6", phase_name="P4", method="m"),
-    ])
+    collection = ArtifactCollection(
+        [
+            build_argument_component_artifact(
+                atom, run_id="run-p6", phase_name="P4", method="m"
+            ),
+            build_argument_relation_artifact(
+                rel, run_id="run-p6", phase_name="P4", method="m"
+            ),
+        ]
+    )
     p4_view = Phase4ArtifactsView.from_collection(collection)
 
-    p6_runner = Phase6Runner(config=Phase6Config(), schema=DEFAULT_SCHEMA, graph_store=None)
+    p6_runner = Phase6Runner(
+        config=Phase6Config(), schema=DEFAULT_SCHEMA, graph_store=None
+    )
     output = await p6_runner.run(p4_view, ctx)
 
     projected_atoms = [a.payload for a in output.of_kind(ArtifactKind.THEORY_ATOM)]
-    projected_target = next(a for a in projected_atoms if a.component_id == "atom_synthetic_apriori")
+    projected_target = next(
+        a for a in projected_atoms if a.component_id == "atom_synthetic_apriori"
+    )
     assert projected_target.modal_prior == 0.95
 
 
@@ -668,8 +768,20 @@ async def test_phase3_and_phase4_incremental_delta_hydration() -> None:
     """Verify Phase 3 delta-frontier filtering and Phase 4 unchanged-chunk hydration."""
     from episteme_pipeline.artifacts.builders import build_global_relation_artifact
 
-    c1 = L1Chunk(id="c1", text="Doc 1 text", source_doc_id="doc_unchanged", sequence_index=0, token_count=3)
-    c2 = L1Chunk(id="c2", text="Doc 2 text", source_doc_id="doc_new", sequence_index=0, token_count=3)
+    c1 = L1Chunk(
+        id="c1",
+        text="Doc 1 text",
+        source_doc_id="doc_unchanged",
+        sequence_index=0,
+        token_count=3,
+    )
+    c2 = L1Chunk(
+        id="c2",
+        text="Doc 2 text",
+        source_doc_id="doc_new",
+        sequence_index=0,
+        token_count=3,
+    )
 
     e1 = L2Entity(id="e1", label="Concept", name="E1", source_chunk_ids=["c1"])
     e2 = L2Entity(id="e2", label="Concept", name="E2", source_chunk_ids=["c1"])
@@ -689,21 +801,23 @@ async def test_phase3_and_phase4_incremental_delta_hydration() -> None:
         source_chunk_id="c1",
         modal_prior=0.7,
     )
-    prior_collection = ArtifactCollection([
-        build_global_relation_artifact(
-            prior_global_triple,
-            {"PRIOR_REL": 1},
-            run_id="run-prior",
-            phase_name="Phase 3: Global Relation Extraction",
-            method="m",
-        ),
-        build_argument_component_artifact(
-            prior_atom,
-            run_id="run-prior",
-            phase_name="Phase 4: Argument Mining",
-            method="m",
-        ),
-    ])
+    prior_collection = ArtifactCollection(
+        [
+            build_global_relation_artifact(
+                prior_global_triple,
+                {"PRIOR_REL": 1},
+                run_id="run-prior",
+                phase_name="Phase 3: Global Relation Extraction",
+                method="m",
+            ),
+            build_argument_component_artifact(
+                prior_atom,
+                run_id="run-prior",
+                phase_name="Phase 4: Argument Mining",
+                method="m",
+            ),
+        ]
+    )
 
     prior_manifest = RunManifest(
         run_id="run-prior",
@@ -730,17 +844,26 @@ async def test_phase3_and_phase4_incremental_delta_hydration() -> None:
         def __init__(self) -> None:
             self.extracted_pairs: list[tuple[str, str]] = []
 
-        async def candidate_pairs(self, entities: list[L2Entity]) -> list[CandidatePair]:
+        async def candidate_pairs(
+            self, entities: list[L2Entity]
+        ) -> list[CandidatePair]:
             pairs: list[CandidatePair] = []
             for i in range(len(entities)):
                 for j in range(i + 1, len(entities)):
-                    pairs.append(CandidatePair(entity_a=entities[i], entity_b=entities[j]))
+                    pairs.append(
+                        CandidatePair(entity_a=entities[i], entity_b=entities[j])
+                    )
             return pairs
 
         async def extract_pairs(
-            self, candidate_pairs: list[CandidatePair], graph_store: Any, schema: SchemaConfig
+            self,
+            candidate_pairs: list[CandidatePair],
+            graph_store: Any,
+            schema: SchemaConfig,
         ) -> tuple[list[L2Triple], list[PhaseItemRecord]]:
-            self.extracted_pairs.extend((c.entity_a.id, c.entity_b.id) for c in candidate_pairs)
+            self.extracted_pairs.extend(
+                (c.entity_a.id, c.entity_b.id) for c in candidate_pairs
+            )
             triples = [
                 L2Triple(
                     subject_id=c.entity_a.id,
@@ -751,7 +874,9 @@ async def test_phase3_and_phase4_incremental_delta_hydration() -> None:
                 )
                 for c in candidate_pairs
             ]
-            records = [PhaseItemRecord(key=c.key, status="completed") for c in candidate_pairs]
+            records = [
+                PhaseItemRecord(key=c.key, status="completed") for c in candidate_pairs
+            ]
             return triples, records
 
         def fingerprint(self) -> dict[str, Any]:
@@ -765,14 +890,21 @@ async def test_phase3_and_phase4_incremental_delta_hydration() -> None:
         embedding_model=StubEmbeddingModel(),
         global_extractor=extractor,
     )
-    p2_view = Phase2ArtifactsView(chunks=[c1, c2], entities=[e1, e2, e3], local_triples=[])
+    p2_view = Phase2ArtifactsView(
+        chunks=[c1, c2], entities=[e1, e2, e3], local_triples=[]
+    )
     p3_out = await p3_runner.run(p2_view, ctx)
 
     # (e1, e2) is in E_prior x E_prior so it was NOT re-evaluated; only pairs involving e3 were evaluated!
     assert ("e1", "e2") not in extractor.extracted_pairs
     assert set(extractor.extracted_pairs) == {("e1", "e3"), ("e2", "e3")}
-    global_triples = [a.payload.to_domain() for a in p3_out.of_kind(ArtifactKind.GLOBAL_RELATION)]
-    assert any(t.subject_id == "e1" and t.object_id == "e2" and t.predicate == "PRIOR_REL" for t in global_triples)
+    global_triples = [
+        a.payload.to_domain() for a in p3_out.of_kind(ArtifactKind.GLOBAL_RELATION)
+    ]
+    assert any(
+        t.subject_id == "e1" and t.object_id == "e2" and t.predicate == "PRIOR_REL"
+        for t in global_triples
+    )
 
     # Phase 4 incremental chunk hydration: c1 is skipped by ADUSegmenter, only c2 is segmented
     stub_segmenter = StubADUSegmenter()
@@ -795,13 +927,29 @@ async def test_phase3_and_phase4_incremental_delta_hydration() -> None:
 @pytest.mark.asyncio
 async def test_phase3_multi_chunk_lost_evidence_invalidation() -> None:
     """Verify that an entity losing evidence from a modified chunk is not marked prior-only in Phase 3."""
-    chunk_a = L1Chunk(id="chunk_a", text="Doc A text", source_doc_id="doc_unchanged", sequence_index=0, token_count=3)
-    chunk_b_v2 = L1Chunk(id="chunk_b_v2", text="Doc B v2 text", source_doc_id="doc_modified", sequence_index=0, token_count=3)
+    chunk_a = L1Chunk(
+        id="chunk_a",
+        text="Doc A text",
+        source_doc_id="doc_unchanged",
+        sequence_index=0,
+        token_count=3,
+    )
+    chunk_b_v2 = L1Chunk(
+        id="chunk_b_v2",
+        text="Doc B v2 text",
+        source_doc_id="doc_modified",
+        sequence_index=0,
+        token_count=3,
+    )
 
     # Prior entity e1 was supported by both chunk_a (unchanged) and chunk_b_v1 (modified)
-    prior_e1 = L2Entity(id="e1", label="Concept", name="E1", source_chunk_ids=["chunk_a", "chunk_b_v1"])
+    prior_e1 = L2Entity(
+        id="e1", label="Concept", name="E1", source_chunk_ids=["chunk_a", "chunk_b_v1"]
+    )
     # Prior entity e2 was supported exclusively by chunk_a
-    prior_e2 = L2Entity(id="e2", label="Concept", name="E2", source_chunk_ids=["chunk_a"])
+    prior_e2 = L2Entity(
+        id="e2", label="Concept", name="E2", source_chunk_ids=["chunk_a"]
+    )
 
     prior_triple = L2Triple(
         subject_id="e1",
@@ -811,17 +959,23 @@ async def test_phase3_multi_chunk_lost_evidence_invalidation() -> None:
         scope="global",
     )
 
-    prior_collection = ArtifactCollection([
-        build_linked_entity_artifact(prior_e1, [], run_id="run-prior", phase_name="P2", method="m"),
-        build_linked_entity_artifact(prior_e2, [], run_id="run-prior", phase_name="P2", method="m"),
-        build_global_relation_artifact(
-            prior_triple,
-            {"PRIOR_REL": 1},
-            run_id="run-prior",
-            phase_name="Phase 3: Global Relation Extraction",
-            method="m",
-        ),
-    ])
+    prior_collection = ArtifactCollection(
+        [
+            build_linked_entity_artifact(
+                prior_e1, [], run_id="run-prior", phase_name="P2", method="m"
+            ),
+            build_linked_entity_artifact(
+                prior_e2, [], run_id="run-prior", phase_name="P2", method="m"
+            ),
+            build_global_relation_artifact(
+                prior_triple,
+                {"PRIOR_REL": 1},
+                run_id="run-prior",
+                phase_name="Phase 3: Global Relation Extraction",
+                method="m",
+            ),
+        ]
+    )
 
     prior_manifest = RunManifest(
         run_id="run-prior",
@@ -845,20 +999,31 @@ async def test_phase3_multi_chunk_lost_evidence_invalidation() -> None:
     )
 
     # In current run, e1 lost mentions in modified Doc B, so it only has chunk_a
-    current_e1 = L2Entity(id="e1", label="Concept", name="E1", source_chunk_ids=["chunk_a"])
-    current_e2 = L2Entity(id="e2", label="Concept", name="E2", source_chunk_ids=["chunk_a"])
+    current_e1 = L2Entity(
+        id="e1", label="Concept", name="E1", source_chunk_ids=["chunk_a"]
+    )
+    current_e2 = L2Entity(
+        id="e2", label="Concept", name="E2", source_chunk_ids=["chunk_a"]
+    )
 
     class RecordingGlobalExtractor(GlobalRelationExtractor):
         def __init__(self) -> None:
             self.extracted_pairs: list[tuple[str, str]] = []
 
-        async def candidate_pairs(self, entities: list[L2Entity]) -> list[CandidatePair]:
+        async def candidate_pairs(
+            self, entities: list[L2Entity]
+        ) -> list[CandidatePair]:
             return [CandidatePair(entity_a=entities[0], entity_b=entities[1])]
 
         async def extract_pairs(
-            self, candidate_pairs: list[CandidatePair], graph_store: Any, schema: SchemaConfig
+            self,
+            candidate_pairs: list[CandidatePair],
+            graph_store: Any,
+            schema: SchemaConfig,
         ) -> tuple[list[L2Triple], list[PhaseItemRecord]]:
-            self.extracted_pairs.extend((c.entity_a.id, c.entity_b.id) for c in candidate_pairs)
+            self.extracted_pairs.extend(
+                (c.entity_a.id, c.entity_b.id) for c in candidate_pairs
+            )
             triples = [
                 L2Triple(
                     subject_id=c.entity_a.id,
@@ -869,7 +1034,9 @@ async def test_phase3_multi_chunk_lost_evidence_invalidation() -> None:
                 )
                 for c in candidate_pairs
             ]
-            records = [PhaseItemRecord(key=c.key, status="completed") for c in candidate_pairs]
+            records = [
+                PhaseItemRecord(key=c.key, status="completed") for c in candidate_pairs
+            ]
             return triples, records
 
         def fingerprint(self) -> dict[str, Any]:
@@ -883,7 +1050,11 @@ async def test_phase3_multi_chunk_lost_evidence_invalidation() -> None:
         embedding_model=StubEmbeddingModel(),
         global_extractor=extractor,
     )
-    p2_view = Phase2ArtifactsView(chunks=[chunk_a, chunk_b_v2], entities=[current_e1, current_e2], local_triples=[])
+    p2_view = Phase2ArtifactsView(
+        chunks=[chunk_a, chunk_b_v2],
+        entities=[current_e1, current_e2],
+        local_triples=[],
+    )
     await p3_runner.run(p2_view, ctx)
 
     # Because e1 lost chunk_b_v1, e1 is NOT prior-only. (e1, e2) MUST be re-extracted!
@@ -892,9 +1063,27 @@ async def test_phase3_multi_chunk_lost_evidence_invalidation() -> None:
 
 def test_curation_ledger_multi_predicate_override_collision() -> None:
     """Verify that multiple predicate edges between the same pair collapse to a single overridden triple."""
-    t1 = L2Triple(subject_id="E1", predicate="RELATES_TO", object_id="E2", confidence=0.8, scope="global")
-    t2 = L2Triple(subject_id="E1", predicate="MENTIONS", object_id="E2", confidence=0.7, scope="global")
-    t3 = L2Triple(subject_id="E2", predicate="PART_OF", object_id="E3", confidence=0.9, scope="global")
+    t1 = L2Triple(
+        subject_id="E1",
+        predicate="RELATES_TO",
+        object_id="E2",
+        confidence=0.8,
+        scope="global",
+    )
+    t2 = L2Triple(
+        subject_id="E1",
+        predicate="MENTIONS",
+        object_id="E2",
+        confidence=0.7,
+        scope="global",
+    )
+    t3 = L2Triple(
+        subject_id="E2",
+        predicate="PART_OF",
+        object_id="E3",
+        confidence=0.9,
+        scope="global",
+    )
 
     ledger = EpistemicCurationLedger(
         relation_overrides={
@@ -907,15 +1096,21 @@ def test_curation_ledger_multi_predicate_override_collision() -> None:
         }
     )
 
-    filtered = ledger.apply_to_triples([t1, t2, t3], valid_entity_ids={"E1", "E2", "E3"})
+    filtered = ledger.apply_to_triples(
+        [t1, t2, t3], valid_entity_ids={"E1", "E2", "E3"}
+    )
 
     assert len(filtered) == 2
-    e1_e2_triples = [t for t in filtered if t.subject_id == "E1" and t.object_id == "E2"]
+    e1_e2_triples = [
+        t for t in filtered if t.subject_id == "E1" and t.object_id == "E2"
+    ]
     assert len(e1_e2_triples) == 1
     assert e1_e2_triples[0].predicate == "SUPPORTS"
     assert e1_e2_triples[0].confidence == 0.99
 
-    e2_e3_triples = [t for t in filtered if t.subject_id == "E2" and t.object_id == "E3"]
+    e2_e3_triples = [
+        t for t in filtered if t.subject_id == "E2" and t.object_id == "E3"
+    ]
     assert len(e2_e3_triples) == 1
     assert e2_e3_triples[0].predicate == "PART_OF"
     assert e2_e3_triples[0].confidence == 0.9
@@ -957,5 +1152,3 @@ def test_curation_ledger_theory_relation_revalidation() -> None:
     assert updated.weight_support is None
     assert updated.weight_attack is None
     assert "inferential_warrant" not in updated.model_fields_set
-
-

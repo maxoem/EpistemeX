@@ -144,7 +144,9 @@ class DecisionEngineSettings(BaseModel):
         Granular per-phase gating toggles.
     """
 
-    provider: Literal["none", "laya", "transformers", "mock", "mlx", "onnx", "stub", "auto"] = "laya"
+    provider: Literal[
+        "none", "laya", "transformers", "mock", "mlx", "onnx", "stub", "auto"
+    ] = "laya"
     device: Literal["auto", "mlx", "cuda", "cpu", "mps"] = "auto"
     model_checkpoint: str = "aac6fef/laya-mlx"
     endpoint_url: str | None = None
@@ -351,7 +353,9 @@ class EngineSettings(BaseModel):
     schema_config: dict[str, Any] = Field(default_factory=dict)
     predicate_aliases: dict[str, Any] = Field(default_factory=dict)
     models: EngineModelConfig = Field(default_factory=EngineModelConfig)
-    decision_engine: DecisionEngineSettings = Field(default_factory=DecisionEngineSettings)
+    decision_engine: DecisionEngineSettings = Field(
+        default_factory=DecisionEngineSettings
+    )
     modal_resolver: ModalResolverSettings = Field(default_factory=ModalResolverSettings)
     updated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 

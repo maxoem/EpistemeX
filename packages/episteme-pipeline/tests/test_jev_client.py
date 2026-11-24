@@ -99,7 +99,9 @@ async def test_mock_jev_decision_engine_choice() -> None:
     engine = MockJevDecisionEngine(conformal_alpha=0.05)
 
     # Default choice selects first option with conformal set
-    res = await engine.evaluate_choice("state block", "Select category", ["CLAIM", "PREMISE"])
+    res = await engine.evaluate_choice(
+        "state block", "Select category", ["CLAIM", "PREMISE"]
+    )
     assert isinstance(res, DecisionScore)
     assert res.selected_option == "CLAIM"
     assert res.class_probability == 0.85
@@ -116,7 +118,9 @@ async def test_mock_jev_decision_engine_choice() -> None:
         empirical_accuracy=0.94,
         prediction_set=["SUPPORT"],
     )
-    res_reg = await engine.evaluate_choice("state", "What is the argument stance?", ["SUPPORT", "ATTACK"])
+    res_reg = await engine.evaluate_choice(
+        "state", "What is the argument stance?", ["SUPPORT", "ATTACK"]
+    )
     assert res_reg.selected_option == "SUPPORT"
     assert res_reg.class_probability == 0.92
     assert res_reg.empirical_accuracy == 0.94
@@ -129,7 +133,9 @@ async def test_mock_jev_decision_engine_score_and_batch() -> None:
     engine = MockJevDecisionEngine()
 
     # Score evaluation
-    score_res = await engine.evaluate_score("some argument", "Rate strength", [1, 2, 3, 4, 5])
+    score_res = await engine.evaluate_score(
+        "some argument", "Rate strength", [1, 2, 3, 4, 5]
+    )
     assert isinstance(score_res, DecisionScore)
     assert score_res.selected_option == 1
 
@@ -229,7 +235,11 @@ async def test_laya_decision_engine_with_mock_agent() -> None:
     batch_res = await engine.evaluate_batch(
         state="Test state",
         questions={
-            "choice_q": {"type": "choice", "instructions": "Q", "criteria": ["CLAIM", "PREMISE"]},
+            "choice_q": {
+                "type": "choice",
+                "instructions": "Q",
+                "criteria": ["CLAIM", "PREMISE"],
+            },
             "noul_q": {"type": "noul", "instructions": "Q2"},
         },
     )
@@ -283,6 +293,7 @@ async def test_laya_decision_engine_timeout_and_error_handling() -> None:
 
     def slow_predict(*args, **kwargs):
         import time
+
         time.sleep(0.05)
         return {"answers": {}}
 
@@ -302,7 +313,7 @@ async def test_laya_decision_engine_timeout_and_error_handling() -> None:
 def test_laya_decision_engine_missing_mlx_package() -> None:
     """Verify informative DecisionEngineError if laya-mlx is not importable."""
     engine = LayaDecisionEngine()
-    with patch.dict("sys.modules", {"laya_mlx": None}):
+    with patch.dict("sys.modules", {"laya_mlx": None}):  # noqa: SIM117 baseline
         with pytest.raises(DecisionEngineError, match="laya-mlx is not installed"):
             engine._get_agent()
 
@@ -344,7 +355,9 @@ async def test_transformers_decision_engine_with_mock_model() -> None:
     mock_output_base = MagicMock(spec=["last_hidden_state"])
     mock_output_base.last_hidden_state = torch.tensor([[[2.0, 0.0]], [[0.5, 0.0]]])
     mock_model.return_value = mock_output_base
-    choice_base = await engine.evaluate_choice("state block", "Which category?", ["A", "B"])
+    choice_base = await engine.evaluate_choice(
+        "state block", "Which category?", ["A", "B"]
+    )
     assert choice_base.selected_option == "A"
 
 
@@ -355,11 +368,39 @@ async def test_auto_decision_engine_dispatch_and_batch() -> None:
 
     mock_inner = MagicMock()
     mock_inner.name = "MockBackend"
-    mock_inner.evaluate_noul = AsyncMock(return_value=DecisionNoulResult(probability=0.9, empirical_accuracy=0.9, passed=True))
-    mock_inner.evaluate_choice = AsyncMock(return_value=DecisionScore(selected_option="A", class_probability=0.9, empirical_accuracy=0.9, probabilities={"A": 0.9}))
-    mock_inner.evaluate_score = AsyncMock(return_value=DecisionScore(selected_option=1, class_probability=0.8, empirical_accuracy=0.8, probabilities={"1": 0.8}))
-    mock_inner.evaluate_batch = AsyncMock(return_value={"q1": DecisionNoulResult(probability=0.9, empirical_accuracy=0.9, passed=True)})
-    mock_inner.evaluate = AsyncMock(return_value=DecisionNoulResult(probability=0.9, empirical_accuracy=0.9, passed=True))
+    mock_inner.evaluate_noul = AsyncMock(
+        return_value=DecisionNoulResult(
+            probability=0.9, empirical_accuracy=0.9, passed=True
+        )
+    )
+    mock_inner.evaluate_choice = AsyncMock(
+        return_value=DecisionScore(
+            selected_option="A",
+            class_probability=0.9,
+            empirical_accuracy=0.9,
+            probabilities={"A": 0.9},
+        )
+    )
+    mock_inner.evaluate_score = AsyncMock(
+        return_value=DecisionScore(
+            selected_option=1,
+            class_probability=0.8,
+            empirical_accuracy=0.8,
+            probabilities={"1": 0.8},
+        )
+    )
+    mock_inner.evaluate_batch = AsyncMock(
+        return_value={
+            "q1": DecisionNoulResult(
+                probability=0.9, empirical_accuracy=0.9, passed=True
+            )
+        }
+    )
+    mock_inner.evaluate = AsyncMock(
+        return_value=DecisionNoulResult(
+            probability=0.9, empirical_accuracy=0.9, passed=True
+        )
+    )
 
     auto_engine = AutoDecisionEngine(checkpoint="aac6fef/laya-mlx")
     auto_engine._inner = mock_inner
@@ -375,10 +416,14 @@ async def test_auto_decision_engine_dispatch_and_batch() -> None:
     res_score = await auto_engine.evaluate_score("state", "question", [1, 2, 3])
     assert res_score.selected_option == 1
 
-    res_eval = await auto_engine.evaluate("state", {"type": "noul", "instructions": "test"})
+    res_eval = await auto_engine.evaluate(
+        "state", {"type": "noul", "instructions": "test"}
+    )
     assert res_eval.passed is True
 
-    res_batch = await auto_engine.evaluate_batch("state", {"q1": {"type": "noul", "instructions": "test"}})
+    res_batch = await auto_engine.evaluate_batch(
+        "state", {"q1": {"type": "noul", "instructions": "test"}}
+    )
     assert "q1" in res_batch
 
 
@@ -386,7 +431,10 @@ def test_auto_decision_engine_transformers_fallback_kwargs_mapping() -> None:
     """Verify AutoDecisionEngine handles checkpoint mapping without keyword collision."""
     from episteme_pipeline.decision.jev_client import AutoDecisionEngine
 
-    with patch("platform.system", return_value="Linux"), patch("platform.machine", return_value="x86_64"):
+    with (
+        patch("platform.system", return_value="Linux"),
+        patch("platform.machine", return_value="x86_64"),
+    ):
         # Passing checkpoint should not raise TypeError when delegating to TransformersDecisionEngine
         engine = AutoDecisionEngine(
             checkpoint="aac6fef/laya-mlx",
@@ -421,12 +469,19 @@ def test_resolve_decision_engine() -> None:
     assert resolved_mock.default_confidence_threshold == 0.92
 
     # Auto provider
-    cfg_auto = DecisionEngineConfig(provider="auto", model_checkpoint="aac6fef/laya-mlx")
+    cfg_auto = DecisionEngineConfig(
+        provider="auto", model_checkpoint="aac6fef/laya-mlx"
+    )
     resolved_auto = resolve_decision_engine(cfg_auto)
-    assert isinstance(resolved_auto, (AutoDecisionEngine, LayaDecisionEngine, TransformersDecisionEngine))
+    assert isinstance(
+        resolved_auto,
+        (AutoDecisionEngine, LayaDecisionEngine, TransformersDecisionEngine),
+    )
 
     # Transformers provider
-    cfg_tf = DecisionEngineConfig(provider="transformers", model_checkpoint="convaiinnovations/laya")
+    cfg_tf = DecisionEngineConfig(
+        provider="transformers", model_checkpoint="convaiinnovations/laya"
+    )
     resolved_tf = resolve_decision_engine(cfg_tf)
     assert isinstance(resolved_tf, TransformersDecisionEngine)
 
@@ -434,5 +489,3 @@ def test_resolve_decision_engine() -> None:
     dict_cfg = {"provider": "laya", "model_checkpoint": "aac6fef/laya-mlx"}
     resolved_dict = resolve_decision_engine(dict_cfg, fallback_to_mock=True)
     assert isinstance(resolved_dict, (LayaDecisionEngine, MockJevDecisionEngine))
-
-

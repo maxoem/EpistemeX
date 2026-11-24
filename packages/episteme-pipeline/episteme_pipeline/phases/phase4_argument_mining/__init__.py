@@ -27,7 +27,7 @@ See: docs/workflow/4_argument_mining/
 from __future__ import annotations
 
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 from episteme_pipeline.artifacts.builders import (
     build_argument_component_artifact,
@@ -42,6 +42,7 @@ from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.config import Phase4Config
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
+    PhaseItemRecord,
     TheoryAtom,
     TheoryRelation,
 )
@@ -94,6 +95,8 @@ def _filter_valid_local_relations(
         if len(next_retained) == len(retained):
             return next_retained
         retained = next_retained
+
+
 from episteme_pipeline.decision.gleaning import GleaningStoppingOracle, JevGleaningGate
 from episteme_pipeline.decision.modal_resolver import HybridModalResolver
 from episteme_pipeline.phases.phase2_entity_discovery import SystematicChunkFailure
@@ -339,9 +342,8 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             )
         )
 
-        if (
-            isinstance(self.graph_store, GraphReader)
-            and not (context and context.lineage_fingerprint)
+        if isinstance(self.graph_store, GraphReader) and not (
+            context and context.lineage_fingerprint
         ):
             all_components: list[TheoryAtom] = await self.graph_store.get_theory_atoms()
         else:
@@ -349,8 +351,11 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         all_local_relations: list[TheoryRelation] = []
 
         from itertools import batched
+
         if isinstance(context, ArtifactExecutionContext):
-            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase4(chunks)
+            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase4(
+                chunks
+            )
             chunks = hydration.delta_chunks
             all_components.extend(hydration.components)
             all_local_relations.extend(hydration.local_relations)
@@ -381,9 +386,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         async def _process_chunk_item(
             chunk: L1Chunk,
         ) -> tuple[list[TheoryAtom], list[TheoryRelation], str]:
-            return await self._process_chunk(
-                chunk.id, chunk.text, reader=active_reader
-            )
+            return await self._process_chunk(chunk.id, chunk.text, reader=active_reader)
 
         async def _on_chunk_batch_complete(
             batch_results: list[tuple[list[TheoryAtom], list[TheoryRelation], str]],
@@ -421,9 +424,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
             # Batch persist local findings when a direct GraphWriter is configured
             if isinstance(self.graph_store, GraphWriter):
                 for comp_batch in batched(new_components, 500):
-                    await self.graph_store.upsert_argument_components(
-                        list(comp_batch)
-                    )
+                    await self.graph_store.upsert_argument_components(list(comp_batch))
                 for rel_batch in batched(new_local_relations, 500):
                     await self.graph_store.upsert_theory_relations(list(rel_batch))
                 for rel_batch in batched(relations_to_upsert, 500):
@@ -495,9 +496,7 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
                     global_extractor=self.global_extractor,
                     schema=self.schema,
                     lineage_fingerprint=(
-                        context.lineage_fingerprint
-                        if context is not None
-                        else None
+                        context.lineage_fingerprint if context is not None else None
                     ),
                 )
                 advance_arc(1)
@@ -586,8 +585,10 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
 
         if self.config.acc_confidence_threshold > 0.0:
             valid_component_ids = {
-                c.id for c in components
-                if c.confidence is None or c.confidence >= self.config.acc_confidence_threshold
+                c.id
+                for c in components
+                if c.confidence is None
+                or c.confidence >= self.config.acc_confidence_threshold
             }
             components = [c for c in components if c.id in valid_component_ids]
             local_relations = _filter_valid_local_relations(
@@ -649,7 +650,9 @@ class Phase4Runner(PhaseRunner[Phase3ArtifactsView]):
         if self.modal_resolver:
             for c in components:
                 if "modal_prior" not in c.model_fields_set and c.resolver_type is None:
-                    resolved_mod = await self.modal_resolver.resolve_modality(c, context=chunk_text)
+                    resolved_mod = await self.modal_resolver.resolve_modality(
+                        c, context=chunk_text
+                    )
                     c.modal_prior = resolved_mod
 
         return components, local_relations, chunk_id

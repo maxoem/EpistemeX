@@ -258,7 +258,9 @@ class ConceptionClusterer(Fingerprintable):
             for c in range(k):
                 mask = new_labels == c
                 if np.any(mask):
-                    updated.append(l2_normalize(np.mean(normed[mask], axis=0, keepdims=True))[0])
+                    updated.append(
+                        l2_normalize(np.mean(normed[mask], axis=0, keepdims=True))[0]
+                    )
                 else:
                     updated.append(centroids[c])
             centroids = np.vstack(updated)
@@ -370,8 +372,12 @@ class ConceptionClusterer(Fingerprintable):
         # Unsupervised geometric stratification fallback.
         if n == 2:
             return variance, [
-                self._build_cluster("concept_cluster_1", [0], envelopes, normed, chunk_ids),
-                self._build_cluster("concept_cluster_2", [1], envelopes, normed, chunk_ids),
+                self._build_cluster(
+                    "concept_cluster_1", [0], envelopes, normed, chunk_ids
+                ),
+                self._build_cluster(
+                    "concept_cluster_2", [1], envelopes, normed, chunk_ids
+                ),
             ]
 
         max_k = min(self.max_conceptions, n - 1)

@@ -46,7 +46,9 @@ from episteme_pipeline.graph.theory_graph_mapper import (
     theory_relation_from_graph_properties,
     theory_relation_to_graph_properties,
 )
-from episteme_pipeline.phases.phase4_argument_mining import _filter_valid_local_relations
+from episteme_pipeline.phases.phase4_argument_mining import (
+    _filter_valid_local_relations,
+)
 from episteme_pipeline.phases.phase4_argument_mining.acc_classifier import (
     LLMACCClassifier,
 )
@@ -77,7 +79,9 @@ class _RecordingObserver(EventObserver):
         self.events.append(event)
 
 
-def _atom(atom_id: str, text: str = "claim", modal: float = 0.85, ctype: str = "Premise") -> TheoryAtom:
+def _atom(
+    atom_id: str, text: str = "claim", modal: float = 0.85, ctype: str = "Premise"
+) -> TheoryAtom:
     return TheoryAtom(
         id=atom_id,
         text=text,
@@ -169,10 +173,18 @@ class TestPhase4AndPhase5Resolution:
     """Verify local Phase 4 extraction remapping and Phase 5 canonical merging."""
 
     def test_acc_output_validates_conjunctive_premises_and_undercuts(self) -> None:
-        comp1 = ExtractedComponent(id="AC1", component_type="EmpiricalStatement", text="Premise 1")
-        comp2 = ExtractedComponent(id="AC2", component_type="ObservationUnit", text="Premise 2")
-        comp3 = ExtractedComponent(id="AC3", component_type="TheoreticalHypothesis", text="Conclusion")
-        comp_u = ExtractedComponent(id="AC4", component_type="ObservationUnit", text="Undercutter")
+        comp1 = ExtractedComponent(
+            id="AC1", component_type="EmpiricalStatement", text="Premise 1"
+        )
+        comp2 = ExtractedComponent(
+            id="AC2", component_type="ObservationUnit", text="Premise 2"
+        )
+        comp3 = ExtractedComponent(
+            id="AC3", component_type="TheoreticalHypothesis", text="Conclusion"
+        )
+        comp_u = ExtractedComponent(
+            id="AC4", component_type="ObservationUnit", text="Undercutter"
+        )
 
         good = ACCOutput(
             components=[comp1, comp2, comp3, comp_u],
@@ -228,13 +240,31 @@ class TestPhase4AndPhase5Resolution:
         assert with_missing_prem.validate_references().relations == []
 
     @pytest.mark.asyncio
-    async def test_llm_acc_classifier_resolves_local_hyperedges_and_undercutters(self) -> None:
+    async def test_llm_acc_classifier_resolves_local_hyperedges_and_undercutters(
+        self,
+    ) -> None:
         acc_output = ACCOutput(
             components=[
-                ExtractedComponent(id="AC1", component_type="TheoreticalHypothesis", text="Universal law L."),
-                ExtractedComponent(id="AC2", component_type="ObservationUnit", text="Boundary condition B."),
-                ExtractedComponent(id="AC3", component_type="EmpiricalStatement", text="Derived consequence C."),
-                ExtractedComponent(id="AC4", component_type="ObservationUnit", text="Instrument calibration failure U."),
+                ExtractedComponent(
+                    id="AC1",
+                    component_type="TheoreticalHypothesis",
+                    text="Universal law L.",
+                ),
+                ExtractedComponent(
+                    id="AC2",
+                    component_type="ObservationUnit",
+                    text="Boundary condition B.",
+                ),
+                ExtractedComponent(
+                    id="AC3",
+                    component_type="EmpiricalStatement",
+                    text="Derived consequence C.",
+                ),
+                ExtractedComponent(
+                    id="AC4",
+                    component_type="ObservationUnit",
+                    text="Instrument calibration failure U.",
+                ),
             ],
             relations=[
                 ExtractedTheoryRelation(
@@ -281,7 +311,9 @@ class TestPhase4AndPhase5Resolution:
         assert und_rel.undercuts_relation_id == conj_rel.relation_id
         assert und_rel.target_id == conj_rel.relation_id
 
-    def test_phase5_canonical_resolution_remaps_premises_and_undercut_targets(self) -> None:
+    def test_phase5_canonical_resolution_remaps_premises_and_undercut_targets(
+        self,
+    ) -> None:
         a1_canon = _atom("canon_a1", "Law")
         a1 = _atom("raw_a1", "Law")
         a2 = _atom("raw_a2", "Condition")
@@ -339,7 +371,9 @@ class TestArtifactGraphProjectorBipartiteReification:
     """Verify :TheoryInference node materialization, bipartite edges, events, and fingerprints."""
 
     @pytest.mark.asyncio
-    async def test_project_collection_reifies_conjunctive_and_targeted_inferences(self) -> None:
+    async def test_project_collection_reifies_conjunctive_and_targeted_inferences(
+        self,
+    ) -> None:
         store = InMemoryGraphStore()
         atoms = [
             _atom("a_law", "Law"),
@@ -392,10 +426,14 @@ class TestArtifactGraphProjectorBipartiteReification:
         )
 
         envelopes = [
-            build_theory_atom_artifact(a, run_id="r1", phase_name="phase4", method="test")
+            build_theory_atom_artifact(
+                a, run_id="r1", phase_name="phase4", method="test"
+            )
             for a in atoms
         ] + [
-            build_theory_relation_artifact(r, run_id="r1", phase_name="phase4", method="test")
+            build_theory_relation_artifact(
+                r, run_id="r1", phase_name="phase4", method="test"
+            )
             for r in (conj_rel, targeted_unary, undercut_rel, back_rel, plain_unary)
         ]
         collection = ArtifactCollection(envelopes)
@@ -439,7 +477,9 @@ class TestArtifactGraphProjectorBipartiteReification:
             for r in await store.get_all_theory_relations()
         )
         # Event emitter recorded successful ArtifactProjected event
-        projected_events = [e for e in recorder.events if isinstance(e, ArtifactProjected)]
+        projected_events = [
+            e for e in recorder.events if isinstance(e, ArtifactProjected)
+        ]
         assert len(projected_events) == 1
         assert projected_events[0].success is True
 
@@ -471,11 +511,16 @@ class TestArtifactGraphProjectorBipartiteReification:
             await projector.project(env)
 
         assert store._nodes["inf_single"]["label"] == "TheoryInference"
-        triples = {(e["from_id"], e["relation_type"], e["to_id"]) for e in store._generic_relations}
+        triples = {
+            (e["from_id"], e["relation_type"], e["to_id"])
+            for e in store._generic_relations
+        }
         assert ("p1", "HAS_PREMISE", "inf_single") in triples
         assert ("p2", "HAS_PREMISE", "inf_single") in triples
         assert ("inf_single", "CONCLUDES", "c1") in triples
-        assert any(isinstance(e, ArtifactProjected) and e.success for e in recorder.events)
+        assert any(
+            isinstance(e, ArtifactProjected) and e.success for e in recorder.events
+        )
 
 
 class TestPhase6TheoryNetProjectorHypergraph:
@@ -485,9 +530,21 @@ class TestPhase6TheoryNetProjectorHypergraph:
         atoms = [
             _atom("law", "Universal law", modal=0.9, ctype="CoreAxiom"),
             _atom("cond_true", "Present condition", modal=0.5, ctype="ObservationUnit"),
-            _atom("cond_false", "Falsified condition", modal=0.0, ctype="ObservationUnit"),
-            _atom("conc_active", "Supported conclusion", modal=0.2, ctype="EmpiricalStatement"),
-            _atom("conc_falsified", "Blocked conclusion", modal=0.2, ctype="EmpiricalStatement"),
+            _atom(
+                "cond_false", "Falsified condition", modal=0.0, ctype="ObservationUnit"
+            ),
+            _atom(
+                "conc_active",
+                "Supported conclusion",
+                modal=0.2,
+                ctype="EmpiricalStatement",
+            ),
+            _atom(
+                "conc_falsified",
+                "Blocked conclusion",
+                modal=0.2,
+                ctype="EmpiricalStatement",
+            ),
             _atom("undercutter", "Methodological defeater", modal=1.0, ctype="Claim"),
         ]
         rels = [
@@ -573,7 +630,9 @@ class TestSingleEnvelopeAndStoreRoundTrip:
         atoms = [_atom("p1"), _atom("p2"), _atom("c1"), _atom("b1"), _atom("u1")]
         for atom in atoms:
             await projector.project(
-                build_theory_atom_artifact(atom, run_id="r1", phase_name="p4", method="m")
+                build_theory_atom_artifact(
+                    atom, run_id="r1", phase_name="p4", method="m"
+                )
             )
 
         rels = [
@@ -619,14 +678,23 @@ class TestSingleEnvelopeAndStoreRoundTrip:
         ]
         for rel in rels:
             await projector.project(
-                build_theory_relation_artifact(rel, run_id="r1", phase_name="p4", method="m")
+                build_theory_relation_artifact(
+                    rel, run_id="r1", phase_name="p4", method="m"
+                )
             )
 
         recovered = await store.get_all_theory_relations()
         assert len(recovered) == 5
 
         by_sig = {
-            (r.id, r.source_id, r.premise_ids, r.relation_type, r.target_id, r.undercuts_relation_id): r
+            (
+                r.id,
+                r.source_id,
+                r.premise_ids,
+                r.relation_type,
+                r.target_id,
+                r.undercuts_relation_id,
+            ): r
             for r in recovered
         }
         # Auto-ID conjunctive relation preserves id=None and t_norm metadata without leaking IDs
@@ -777,15 +845,28 @@ class TestPhase4AndEnrichmentHypergraphPreservation:
 
         # Put second-order modifiers BEFORE their targets to ensure order-independent fixed-point
         retained = _filter_valid_local_relations(
-            [r_und_drop_2, r_und_keep_2, r_und_drop_1, r_und_keep_1, r_bad_conj, r_valid_conj],
+            [
+                r_und_drop_2,
+                r_und_keep_2,
+                r_und_drop_1,
+                r_und_keep_1,
+                r_bad_conj,
+                r_valid_conj,
+            ],
             valid_atoms,
         )
         retained_ids = [r.relation_id for r in retained]
         assert retained_ids == ["u_rel_2", "u_rel_1", "inf_keep"]
 
-    def test_enrichment_rel_key_distinguishes_conjunctive_and_modifier_variants(self) -> None:
+    def test_enrichment_rel_key_distinguishes_conjunctive_and_modifier_variants(
+        self,
+    ) -> None:
         pairwise = TheoryRelation(
-            source_id="p1", target_id="c1", relation_type="SUPPORTS", confidence=0.9, scope="local"
+            source_id="p1",
+            target_id="c1",
+            relation_type="SUPPORTS",
+            confidence=0.9,
+            scope="local",
         )
         conj_a = TheoryRelation(
             source_id="p1",
@@ -821,5 +902,7 @@ class TestPhase4AndEnrichmentHypergraphPreservation:
         )
 
         assert _enrichment_rel_key(pairwise) == "p1->SUPPORTS->c1"
-        keys = {_enrichment_rel_key(r) for r in (pairwise, conj_a, conj_b, und_a, und_b)}
+        keys = {
+            _enrichment_rel_key(r) for r in (pairwise, conj_a, conj_b, und_a, und_b)
+        }
         assert len(keys) == 5

@@ -7,11 +7,9 @@ and component wiring for deterministic fingerprinting.
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
-
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
@@ -25,16 +23,9 @@ from episteme_pipeline.config import (
 )
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
-    L1Document,
-    L2Entity,
-    L2Triple,
-    TheoryAtom,
-    TheoryRelation,
 )
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
-from episteme_pipeline.events.context import get_event_emitter
 from episteme_pipeline.events.models import (
-    BaseEvent,
     ProgressAdvanced,
     ProgressCompleted,
     ProgressStarted,
@@ -77,7 +68,11 @@ class DummyRunner(PhaseRunner[None]):
 
 def test_progress_scope_symmetric_completion_on_exception() -> None:
     """Verify progress_scope guarantees ProgressCompleted is emitted even on exception."""
-    from episteme_pipeline.events import PipelineEvent, SimpleEventEmitter, use_event_emitter
+    from episteme_pipeline.events import (
+        PipelineEvent,
+        SimpleEventEmitter,
+        use_event_emitter,
+    )
 
     emitter = SimpleEventEmitter()
     captured: list[PipelineEvent] = []
@@ -90,9 +85,11 @@ def test_progress_scope_symmetric_completion_on_exception() -> None:
 
     runner = DummyRunner()
 
-    with pytest.raises(ZeroDivisionError):
+    with pytest.raises(ZeroDivisionError):  # noqa: SIM117 baseline
         with use_event_emitter(emitter):
-            with runner.progress_scope("task-test", total_items=10, description="Testing Scope") as advance:
+            with runner.progress_scope(
+                "task-test", total_items=10, description="Testing Scope"
+            ) as advance:
                 advance(3)
                 _ = 1 / 0
 
@@ -114,7 +111,9 @@ def test_progress_scope_symmetric_completion_on_exception() -> None:
 async def test_llm_ner_extractor_propagates_exceptions() -> None:
     """Verify LLMNERExtractor does not swallow exceptions into empty lists."""
     mock_llm = AsyncMock()
-    mock_llm.predict_structured = AsyncMock(side_effect=RuntimeError("NER LLM Connection Timeout"))
+    mock_llm.predict_structured = AsyncMock(
+        side_effect=RuntimeError("NER LLM Connection Timeout")
+    )
 
     extractor = LLMNERExtractor(
         llm=mock_llm,
@@ -133,7 +132,9 @@ async def test_llm_ner_extractor_propagates_exceptions() -> None:
 async def test_llm_adu_segmenter_propagates_exceptions() -> None:
     """Verify LLMADUSegmenter does not swallow exceptions into empty results."""
     mock_llm = AsyncMock()
-    mock_llm.predict_structured = AsyncMock(side_effect=RuntimeError("ADU Rate Limit Exceeded"))
+    mock_llm.predict_structured = AsyncMock(
+        side_effect=RuntimeError("ADU Rate Limit Exceeded")
+    )
 
     segmenter = LLMADUSegmenter(
         llm=mock_llm,
@@ -151,7 +152,9 @@ async def test_llm_adu_segmenter_propagates_exceptions() -> None:
 async def test_llm_acc_classifier_propagates_exceptions() -> None:
     """Verify LLMACCClassifier does not swallow exceptions into empty results."""
     mock_llm = AsyncMock()
-    mock_llm.predict_structured = AsyncMock(side_effect=RuntimeError("ACC Tokenizer Crash"))
+    mock_llm.predict_structured = AsyncMock(
+        side_effect=RuntimeError("ACC Tokenizer Crash")
+    )
 
     classifier = LLMACCClassifier(
         llm=mock_llm,
@@ -210,7 +213,9 @@ async def test_phase2_guard_systematic_failure_on_first_batch() -> None:
 
     view = Phase1ArtifactsView(documents=[], chunks=chunks)
 
-    with pytest.raises(SystematicChunkFailure, match="All 2 chunks of the first batch failed"):
+    with pytest.raises(
+        SystematicChunkFailure, match="All 2 chunks of the first batch failed"
+    ):
         await runner.run(view, context)
 
 
@@ -257,9 +262,13 @@ async def test_phase4_guard_systematic_failure_on_first_batch() -> None:
         pipeline_input=PipelineInput(source_paths=[]),
     )
 
-    view = Phase3ArtifactsView(global_triples=[], relation_type_distribution={}, chunks=chunks)
+    view = Phase3ArtifactsView(
+        global_triples=[], relation_type_distribution={}, chunks=chunks
+    )
 
-    with pytest.raises(SystematicChunkFailure, match="All 2 chunks of the first batch failed"):
+    with pytest.raises(
+        SystematicChunkFailure, match="All 2 chunks of the first batch failed"
+    ):
         await runner.run(view, context)
 
 
@@ -334,7 +343,7 @@ def test_phase1_runner_has_no_llm_attribute() -> None:
 
     # find_components must not find any LLM component on Phase 1
     components = runner.components()
-    for name, comp in components.items():
+    for name, comp in components.items():  # noqa: PERF102 baseline
         assert "llm" not in name.lower()
 
 

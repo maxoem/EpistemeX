@@ -63,4 +63,3 @@ async def test_disables_phase_reuse_and_hydration(tmp_path: Path, graph_store):
     # Expect no reused phases and full invalidation when reuse is disabled
     assert result2.report.reused_phase_ordinals == []
     assert result2.report.invalidated_phase_ordinals == [1, 2]
-

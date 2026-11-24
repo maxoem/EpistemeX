@@ -152,16 +152,25 @@ class TestExtrinsicRetrievalEvaluator:
     async def test_batch_evaluation_averaging(self):
         """Verify evaluate_batch computes macro averages across multiple queries."""
         mock_results = [
-            SearchResult(node_id="q1_target", score=0.9, node_label="Law", node_name="Q1"),
-            SearchResult(node_id="other", score=0.8, node_label="Law", node_name="Other"),
-            SearchResult(node_id="q2_target", score=0.7, node_label="Law", node_name="Q2"),
+            SearchResult(
+                node_id="q1_target", score=0.9, node_label="Law", node_name="Q1"
+            ),
+            SearchResult(
+                node_id="other", score=0.8, node_label="Law", node_name="Other"
+            ),
+            SearchResult(
+                node_id="q2_target", score=0.7, node_label="Law", node_name="Q2"
+            ),
         ]
         reader = MockGraphReader(mock_results)
         evaluator = ExtrinsicRetrievalEvaluator(graph_reader=reader)
 
         batch_queries = [
             {"query": "Query 1", "gold_target_ids": ["q1_target"]},  # Rank 1 -> MRR 1.0
-            {"query": "Query 2", "gold_target_ids": ["q2_target"]},  # Rank 3 -> MRR 1/3 ~ 0.333
+            {
+                "query": "Query 2",
+                "gold_target_ids": ["q2_target"],
+            },  # Rank 3 -> MRR 1/3 ~ 0.333
         ]
 
         summary = await evaluator.evaluate_batch(batch_queries, top_k=5)

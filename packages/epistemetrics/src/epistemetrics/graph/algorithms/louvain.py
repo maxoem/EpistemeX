@@ -83,9 +83,7 @@ def networkx_louvain(
         communities.sort(key=lambda s: (-len(s), min(s) if s else ""))
 
         node_to_partition = {
-            node_id: idx
-            for idx, comp in enumerate(communities)
-            for node_id in comp
+            node_id: idx for idx, comp in enumerate(communities) for node_id in comp
         }
 
         return PartitionResult(
@@ -95,7 +93,9 @@ def networkx_louvain(
             backend="networkx",
         )
     except Exception as exc:
-        raise AlgorithmError(f"NetworkX Louvain community detection failed: {exc}") from exc
+        raise AlgorithmError(
+            f"NetworkX Louvain community detection failed: {exc}"
+        ) from exc
 
 
 def gds_louvain(
@@ -176,9 +176,7 @@ def gds_louvain(
         partitions.sort(key=lambda s: (-len(s), min(s) if s else ""))
 
         node_to_partition = {
-            node_id: idx
-            for idx, comp in enumerate(partitions)
-            for node_id in comp
+            node_id: idx for idx, comp in enumerate(partitions) for node_id in comp
         }
 
         return PartitionResult(
@@ -268,7 +266,9 @@ def louvain_communities(
         except Exception as exc:
             if not fallback_to_networkx:
                 raise
-            logger.warning("GDS Louvain execution failed (%s); falling back to NetworkX.", exc)
+            logger.warning(
+                "GDS Louvain execution failed (%s); falling back to NetworkX.", exc
+            )
 
     logger.debug("Executing Louvain via NetworkX.")
     return networkx_louvain(

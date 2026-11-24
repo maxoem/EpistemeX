@@ -3,7 +3,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-
 from episteme_pipeline.contracts.domain import (
     L1Chunk,
     L2Entity,
@@ -47,9 +46,7 @@ class GraphReader(GraphHandle, ABC):
     async def get_all_entity_triples(self) -> list[L2Triple]: ...
 
     @abstractmethod
-    async def get_neighborhood(
-        self, node_id: str, depth: int = 1
-    ) -> SubGraph:
+    async def get_neighborhood(self, node_id: str, depth: int = 1) -> SubGraph:
         """Return a depth-limited structural neighborhood around a node.
 
         Parameters
@@ -196,9 +193,7 @@ class GraphWriter(GraphHandle, ABC):
     ) -> None: ...
 
     @abstractmethod
-    async def upsert_relations(
-        self, relations: list[dict]
-    ) -> None: ...
+    async def upsert_relations(self, relations: list[dict]) -> None: ...
 
     @abstractmethod
     async def upsert_chunk(self, chunk: L1Chunk) -> None: ...
@@ -219,19 +214,15 @@ class GraphWriter(GraphHandle, ABC):
     async def upsert_triples(self, triples: list[L2Triple]) -> None: ...
 
     @abstractmethod
-    async def upsert_argument_component(
-        self, component: TheoryAtom
-    ) -> None: ...
-    
+    async def upsert_argument_component(self, component: TheoryAtom) -> None: ...
+
     @abstractmethod
     async def upsert_argument_components(
         self, components: list[TheoryAtom]
     ) -> None: ...
 
     @abstractmethod
-    async def upsert_theory_relation(
-        self, relation: TheoryRelation
-    ) -> None: ...
+    async def upsert_theory_relation(self, relation: TheoryRelation) -> None: ...
 
     @abstractmethod
     async def upsert_theory_relations(
@@ -239,7 +230,9 @@ class GraphWriter(GraphHandle, ABC):
     ) -> None: ...
 
     @abstractmethod
-    async def upsert_community(self, community_id: str, level: int, entity_ids: list[str]) -> None: ...
+    async def upsert_community(
+        self, community_id: str, level: int, entity_ids: list[str]
+    ) -> None: ...
 
     @abstractmethod
     async def upsert_communities(self, communities: list[dict]) -> None: ...
@@ -259,9 +252,7 @@ class GraphWriter(GraphHandle, ABC):
         """
         return 0
 
-    async def prune_retired_mentions(
-        self, mentions: list[tuple[str, str]]
-    ) -> int:
+    async def prune_retired_mentions(self, mentions: list[tuple[str, str]]) -> int:
         """Delete retired ``EXTRACTED_FROM`` mention edges from the projection graph.
 
         Parameters
@@ -280,7 +271,7 @@ class GraphWriter(GraphHandle, ABC):
 class PhaseCheckpointStore(GraphHandle, ABC):
     @abstractmethod
     async def mark_chunk_processed(self, chunk_id: str, phase: str) -> None: ...
-    
+
     @abstractmethod
     async def mark_chunks_processed(self, chunk_ids: list[str], phase: str) -> None: ...
 
@@ -392,7 +383,6 @@ class PhaseCheckpointStore(GraphHandle, ABC):
         """
         ...
 
-
     async def get_committed_triples(self, phase: str) -> list[L2Triple]:
         """Return triples committed across prior batches for ``phase``.
 
@@ -421,11 +411,9 @@ class PhaseCheckpointStore(GraphHandle, ABC):
             Mapping from item key (e.g. chunk_id, entity_id, pair_key) to
             serialized output payload.
         """
-        return None
+        return
 
-    async def get_checkpoint_payloads(
-        self, phase: str
-    ) -> dict[str, dict[str, Any]]:
+    async def get_checkpoint_payloads(self, phase: str) -> dict[str, dict[str, Any]]:
         """Retrieve all persisted intermediate item outputs for ``phase``.
 
         Parameters
@@ -451,15 +439,15 @@ class NoOpCheckpointStore(PhaseCheckpointStore):
 
     async def close(self) -> None:
         """No-op close hook."""
-        return None
+        return
 
     async def mark_chunk_processed(self, chunk_id: str, phase: str) -> None:
         """No-op chunk marker."""
-        return None
+        return
 
     async def mark_chunks_processed(self, chunk_ids: list[str], phase: str) -> None:
         """No-op batch chunk marker."""
-        return None
+        return
 
     async def get_unprocessed_chunks(
         self, phase: str, limit: int | None = None
@@ -480,19 +468,19 @@ class NoOpCheckpointStore(PhaseCheckpointStore):
         items: list[PhaseItemRecord],
     ) -> None:
         """No-op batch commit."""
-        return None
+        return
 
     async def commit_phase_items(
         self, phase: str, items: list[PhaseItemRecord]
     ) -> None:
         """No-op item commit."""
-        return None
+        return
 
     async def save_chunk_state_snapshot(
         self, phase: str, chunk_id: str, snapshot: dict[str, Any]
     ) -> None:
         """No-op state snapshot save."""
-        return None
+        return
 
     async def get_chunk_state_snapshot(
         self, phase: str, chunk_id: str
@@ -502,7 +490,7 @@ class NoOpCheckpointStore(PhaseCheckpointStore):
 
     async def clear_phase_checkpoints(self, phase: str) -> None:
         """No-op checkpoint clear."""
-        return None
+        return
 
 
 class EntityGraph(GraphReader, GraphWriter, ABC):

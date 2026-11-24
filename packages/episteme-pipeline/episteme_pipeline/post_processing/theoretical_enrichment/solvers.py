@@ -30,7 +30,7 @@ class SafeFormulaEvaluator:
     eval() function, preventing code injection and syntax crashes.
     """
 
-    _ALLOWED_CALLS = {
+    _ALLOWED_CALLS = {  # noqa: RUF012 baseline
         "abs": abs,
         "min": min,
         "max": max,
@@ -58,15 +58,21 @@ class SafeFormulaEvaluator:
 
         try:
             tree = ast.parse(expression.strip(), mode="eval")
-            param_lower = {k.lower(): float(v) for k, v in parameters.items() if isinstance(v, (int, float))}
+            param_lower = {
+                k.lower(): float(v)
+                for k, v in parameters.items()
+                if isinstance(v, (int, float))
+            }
             val = cls._eval_node(tree.body, param_lower, parameters)
             return abs(float(val))
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 baseline
             logger.warning("SafeFormulaEvaluator failed on '%s': %s", expression, err)
             return 1.0
 
     @classmethod
-    def _eval_node(cls, node: ast.AST, param_lower: dict[str, float], raw_params: dict[str, Any]) -> float:
+    def _eval_node(
+        cls, node: ast.AST, param_lower: dict[str, float], raw_params: dict[str, Any]
+    ) -> float:
         if isinstance(node, ast.Constant):
             if isinstance(node.value, (int, float)):
                 return float(node.value)
@@ -100,13 +106,15 @@ class SafeFormulaEvaluator:
             if isinstance(node.op, ast.Div):
                 return left / right if right != 0.0 else 1.0
             if isinstance(node.op, ast.Pow):
-                return left ** right
+                return left**right
             raise ValueError(f"Unsupported binary operator: {type(node.op)}")
 
         if isinstance(node, ast.Call):
             func_name = node.func.id if isinstance(node.func, ast.Name) else None
             if func_name in cls._ALLOWED_CALLS:
-                args = [cls._eval_node(arg, param_lower, raw_params) for arg in node.args]
+                args = [
+                    cls._eval_node(arg, param_lower, raw_params) for arg in node.args
+                ]
                 return float(cls._ALLOWED_CALLS[func_name](*args))
             raise ValueError(f"Unsupported function call: {func_name}")
 
@@ -252,8 +260,12 @@ class TenabilitySolver(Fingerprintable):
                 deltas.append(diff)
 
         if not shared_keys:
-            num_source = [float(v) for v in source_params.values() if isinstance(v, (int, float))]
-            num_target = [float(v) for v in target_params.values() if isinstance(v, (int, float))]
+            num_source = [
+                float(v) for v in source_params.values() if isinstance(v, (int, float))
+            ]
+            num_target = [
+                float(v) for v in target_params.values() if isinstance(v, (int, float))
+            ]
             if num_source and num_target:
                 for s, t in zip(num_source, num_target):
                     deltas.append(abs(s - t))
@@ -297,11 +309,7 @@ class TenabilitySolver(Fingerprintable):
         TenabilityResult
             Complete aggregated result.
         """
-        avg_edge = (
-            sum(edge_scores.values()) / len(edge_scores)
-            if edge_scores
-            else 1.0
-        )
+        avg_edge = sum(edge_scores.values()) / len(edge_scores) if edge_scores else 1.0
 
         aggregated = round(
             (self.weight_local * local_score) + (self.weight_edge * avg_edge), 3

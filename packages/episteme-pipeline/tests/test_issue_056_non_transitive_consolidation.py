@@ -37,11 +37,13 @@ def test_clique_constrained_components_blocks_bridge_chaining():
     """Verify clique_constrained_components prevents bridge chaining A ~ B ~ C when A !~ C."""
     # 3 nodes: 0, 1, 2
     # Pair similarities: (0, 1) = 0.90, (1, 2) = 0.88, (0, 2) = 0.30
-    sim_matrix = np.array([
-        [1.00, 0.90, 0.30],
-        [0.90, 1.00, 0.88],
-        [0.30, 0.88, 1.00],
-    ])
+    sim_matrix = np.array(
+        [
+            [1.00, 0.90, 0.30],
+            [0.90, 1.00, 0.88],
+            [0.30, 0.88, 1.00],
+        ]
+    )
     edges = [(0, 1), (1, 2)]
 
     # Unconstrained Union-Find merges all 3 into a single giant component [0, 1, 2]
@@ -67,7 +69,9 @@ async def test_phase3b_consolidation_enforces_clique_constraints():
     # Entities: e0 (Kant), e1 (Bridge), e2 (Hume)
     # e0 ~ e1 (0.90), e1 ~ e2 (0.89), but e0 !~ e2 (0.20)
     e0 = L2Entity(id="e0", name="Kant", label="Person", source_chunk_ids=["c1"])
-    e1 = L2Entity(id="e1", name="Bridge Thinker", label="Person", source_chunk_ids=["c1"])
+    e1 = L2Entity(
+        id="e1", name="Bridge Thinker", label="Person", source_chunk_ids=["c1"]
+    )
     e2 = L2Entity(id="e2", name="Hume", label="Person", source_chunk_ids=["c1"])
 
     store = AsyncMock()
@@ -93,10 +97,7 @@ async def test_phase3b_consolidation_enforces_clique_constraints():
 
     raw_sim = cosine_similarity_matrix(np.array([v0, v1, v2]))
     threshold_edges = [
-        (i, j)
-        for i in range(3)
-        for j in range(i + 1, 3)
-        if raw_sim[i, j] >= 0.85
+        (i, j) for i in range(3) for j in range(i + 1, 3) if raw_sim[i, j] >= 0.85
     ]
     assert threshold_edges == [(0, 1), (1, 2)]
     assert union_find_components(3, threshold_edges) == [[0, 1, 2]]
@@ -124,9 +125,15 @@ async def test_phase3b_consolidation_enforces_clique_constraints():
 async def test_phase5_argument_clustering_enforces_clique_constraints():
     """Verify EmbeddingArgumentClustering enforces min_internal_similarity during cluster formation."""
     # 3 TheoryAtoms: a0, a1, a2
-    a0 = TheoryAtom(id="a0", text="Claim A", component_type="CLAIM", source_chunk_id="c1")
-    a1 = TheoryAtom(id="a1", text="Claim B", component_type="CLAIM", source_chunk_id="c2")
-    a2 = TheoryAtom(id="a2", text="Claim C", component_type="CLAIM", source_chunk_id="c3")
+    a0 = TheoryAtom(
+        id="a0", text="Claim A", component_type="CLAIM", source_chunk_id="c1"
+    )
+    a1 = TheoryAtom(
+        id="a1", text="Claim B", component_type="CLAIM", source_chunk_id="c2"
+    )
+    a2 = TheoryAtom(
+        id="a2", text="Claim C", component_type="CLAIM", source_chunk_id="c3"
+    )
 
     store = AsyncMock()
     store.get_theory_atoms.return_value = [a0, a1, a2]
@@ -184,7 +191,9 @@ def test_decision_engine_config_global_alpha_budget_allocation():
 
     assert np.isclose(config.get_allocated_alpha("phase3b_consolidation"), 0.005)
     # Unweighted phase falls back to default conformal_alpha
-    assert np.isclose(config.get_allocated_alpha("unknown_phase"), config.conformal_alpha)
+    assert np.isclose(
+        config.get_allocated_alpha("unknown_phase"), config.conformal_alpha
+    )
 
 
 def test_conformal_calibrator_allocate_risk_budget():
@@ -196,7 +205,9 @@ def test_conformal_calibrator_allocate_risk_budget():
         "p5": 1.0,
     }
     # Total weight = 4.0, global_alpha = 0.08
-    allocated = ConformalCalibrator.allocate_risk_budget(global_alpha=0.08, weights=weights)
+    allocated = ConformalCalibrator.allocate_risk_budget(
+        global_alpha=0.08, weights=weights
+    )
 
     assert np.isclose(sum(allocated.values()), 0.08)
     assert np.isclose(allocated["p2"], 0.08 * (1.0 / 4.0))  # 0.02
@@ -205,7 +216,9 @@ def test_conformal_calibrator_allocate_risk_budget():
 
     # Error handling on invalid weights
     with pytest.raises(ValueError, match="strictly positive"):
-        ConformalCalibrator.allocate_risk_budget(global_alpha=0.05, weights={"p1": 0.0, "p2": -1.0})
+        ConformalCalibrator.allocate_risk_budget(
+            global_alpha=0.05, weights={"p1": 0.0, "p2": -1.0}
+        )
 
 
 def test_conformal_calibrator_instance_allocated_alpha_lookup():
@@ -325,6 +338,7 @@ def test_decision_question_from_bundle_without_reflection():
 def test_pipeline_for_task_wires_calibrator_with_global_alpha_and_syncs():
     """Verify Pipeline.for_task wires ConformalCalibrator with global_alpha and syncs phase alphas."""
     from unittest.mock import MagicMock
+
     from episteme_pipeline.config import PipelineConfig
     from episteme_pipeline.pipeline import Pipeline
     from episteme_pipeline.protocols.decision import DecisionEngine
@@ -369,7 +383,9 @@ def test_pipeline_for_task_wires_calibrator_with_global_alpha_and_syncs():
     assert obs_engine is not None
     assert obs_engine.calibrator is not None
     assert obs_engine.calibrator.global_alpha == 0.04
-    assert np.isclose(obs_engine.calibrator.get_allocated_alpha("phase3b_consolidation"), 0.01)
+    assert np.isclose(
+        obs_engine.calibrator.get_allocated_alpha("phase3b_consolidation"), 0.01
+    )
 
     # Check that phase configs were synced
     assert np.isclose(pipeline.config.phase2.conformal_linking_alpha, 0.01)
@@ -383,11 +399,13 @@ def test_clique_constrained_components_max_diameter():
     # 3 nodes: 0, 1, 2
     # sim(0, 1) = 0.95, sim(1, 2) = 0.85, sim(0, 2) = 0.75
     # Distances: d(0, 1) = 0.05, d(1, 2) = 0.15, d(0, 2) = 0.25
-    sim_matrix = np.array([
-        [1.00, 0.95, 0.75],
-        [0.95, 1.00, 0.85],
-        [0.75, 0.85, 1.00],
-    ])
+    sim_matrix = np.array(
+        [
+            [1.00, 0.95, 0.75],
+            [0.95, 1.00, 0.85],
+            [0.75, 0.85, 1.00],
+        ]
+    )
     edges = [(0, 1), (1, 2), (0, 2)]
 
     # With max_diameter=0.20, merging {0, 1} and {2} is blocked because d(0, 2) = 0.25 > 0.20
@@ -419,12 +437,16 @@ def test_clique_constrained_components_deterministic_ordering_and_edge_cases():
 
     # Self-loops and out-of-bounds edges are safely ignored
     dirty_edges = [(0, 0), (1, 1), (0, 1), (5, 9)]
-    sim_pair = np.array([
-        [1.0, 0.9, 0.1],
-        [0.9, 1.0, 0.1],
-        [0.1, 0.1, 1.0],
-    ])
-    comps = clique_constrained_components(3, dirty_edges, sim_pair, min_internal_similarity=0.8)
+    sim_pair = np.array(
+        [
+            [1.0, 0.9, 0.1],
+            [0.9, 1.0, 0.1],
+            [0.1, 0.1, 1.0],
+        ]
+    )
+    comps = clique_constrained_components(
+        3, dirty_edges, sim_pair, min_internal_similarity=0.8
+    )
     assert comps == [[0, 1], [2]]
 
 
@@ -456,5 +478,3 @@ def test_decision_engine_config_fallback_on_invalid_weights():
     alphas = config.allocate_phase_alphas()
     assert alphas["p1"] == 0.05
     assert alphas["p2"] == 0.05
-
-

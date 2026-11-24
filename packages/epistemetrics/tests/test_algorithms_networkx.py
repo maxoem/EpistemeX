@@ -14,16 +14,20 @@ def sample_digraph() -> nx.DiGraph:
     """Create a sample directed graph for centrality and component tests."""
     g = nx.DiGraph()
     # Component 1: 0 -> 1 -> 2 -> 0, 1 -> 3
-    g.add_edges_from([
-        ("0", "1"),
-        ("1", "2"),
-        ("2", "0"),
-        ("1", "3"),
-    ])
+    g.add_edges_from(
+        [
+            ("0", "1"),
+            ("1", "2"),
+            ("2", "0"),
+            ("1", "3"),
+        ]
+    )
     # Component 2: 4 -> 5
-    g.add_edges_from([
-        ("4", "5"),
-    ])
+    g.add_edges_from(
+        [
+            ("4", "5"),
+        ]
+    )
     return g
 
 

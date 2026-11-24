@@ -75,15 +75,25 @@ class TestStrategyRegistry:
         """Verify inference respects dataset_type string."""
         registry = StrategyRegistry()
         assert isinstance(registry.infer(dataset_type="scierc"), ExtractionStrategy)
-        assert isinstance(registry.infer(dataset_type="arg_microtexts"), ArgumentationStrategy)
-        assert isinstance(registry.infer(dataset_type="structuralist"), StructuralistStrategy)
+        assert isinstance(
+            registry.infer(dataset_type="arg_microtexts"), ArgumentationStrategy
+        )
+        assert isinstance(
+            registry.infer(dataset_type="structuralist"), StructuralistStrategy
+        )
 
     def test_strategy_inference_by_gold_filename(self):
         """Verify inference inspects gold path when dataset_type is omitted."""
         registry = StrategyRegistry()
-        assert isinstance(registry.infer(gold="data/scierc_test.json"), ExtractionStrategy)
-        assert isinstance(registry.infer(gold="data/stnb_cpm_pilot.jsonld"), StructuralistStrategy)
-        assert isinstance(registry.infer(gold="data/arg_microtexts.json"), ArgumentationStrategy)
+        assert isinstance(
+            registry.infer(gold="data/scierc_test.json"), ExtractionStrategy
+        )
+        assert isinstance(
+            registry.infer(gold="data/stnb_cpm_pilot.jsonld"), StructuralistStrategy
+        )
+        assert isinstance(
+            registry.infer(gold="data/arg_microtexts.json"), ArgumentationStrategy
+        )
 
     def test_strategy_inference_by_predicted_artifacts(self):
         """Verify inference detects L2 vs L4 artifact views."""
@@ -134,7 +144,13 @@ class TestExtractionStrategy:
         predicted = [
             L2Entity(id="e1", name="Force", label="PhysicsConcept"),
             L2Entity(id="e2", name="Mass", label="PhysicsConcept"),
-            L2Triple(subject_id="e1", predicate="proportional_to", object_id="e2", confidence=1.0, scope="local"),
+            L2Triple(
+                subject_id="e1",
+                predicate="proportional_to",
+                object_id="e2",
+                confidence=1.0,
+                scope="local",
+            ),
         ]
 
         gold = {
@@ -144,11 +160,19 @@ class TestExtractionStrategy:
                 L2Entity(id="g3", name="Acceleration", label="PhysicsConcept"),
             ],
             "l2_triples": [
-                L2Triple(subject_id="g1", predicate="proportional_to", object_id="g2", confidence=1.0, scope="local"),
+                L2Triple(
+                    subject_id="g1",
+                    predicate="proportional_to",
+                    object_id="g2",
+                    confidence=1.0,
+                    scope="local",
+                ),
             ],
         }
 
-        results = await strategy.evaluate(predicted=predicted, gold=gold, run_id="run_ext_test")
+        results = await strategy.evaluate(
+            predicted=predicted, gold=gold, run_id="run_ext_test"
+        )
         assert len(results) == 1
         res = results[0]
         assert res.evaluation_level == EvaluationLevel.STAGE
@@ -179,7 +203,13 @@ class TestExtractionStrategy:
         predicted = [
             L2Entity(id="e1", name="Hypothesis", label="Concept"),
             L2Entity(id="e2", name="Evidence", label="Concept"),
-            L2Triple(subject_id="e1", predicate="SUPPORTS", object_id="e2", confidence=1.0, scope="local"),
+            L2Triple(
+                subject_id="e1",
+                predicate="SUPPORTS",
+                object_id="e2",
+                confidence=1.0,
+                scope="local",
+            ),
         ]
 
         # Gold standard says: Hypothesis REFUTES Evidence (-1)
@@ -189,11 +219,19 @@ class TestExtractionStrategy:
                 L2Entity(id="g2", name="Evidence", label="Concept"),
             ],
             "l2_triples": [
-                L2Triple(subject_id="g1", predicate="REFUTES", object_id="g2", confidence=1.0, scope="local"),
+                L2Triple(
+                    subject_id="g1",
+                    predicate="REFUTES",
+                    object_id="g2",
+                    confidence=1.0,
+                    scope="local",
+                ),
             ],
         }
 
-        results = await strategy.evaluate(predicted=predicted, gold=gold, run_id="run_pol_conflict")
+        results = await strategy.evaluate(
+            predicted=predicted, gold=gold, run_id="run_pol_conflict"
+        )
         metrics = {m.name: m.value for m in results[0].metrics}
 
         assert metrics["polarity_accuracy"] == 0.0
@@ -209,22 +247,56 @@ class TestArgumentationStrategy:
         strategy = ArgumentationStrategy()
 
         predicted = [
-            TheoryAtom(id="a1", text="Public transit should be subsidized", component_type="CLAIM", source_chunk_id="c1"),
-            TheoryAtom(id="a2", text="It reduces carbon emissions", component_type="PREMISE", source_chunk_id="c1"),
-            TheoryRelation(source_id="a2", target_id="a1", relation_type="SUPPORT", confidence=1.0, scope="global"),
+            TheoryAtom(
+                id="a1",
+                text="Public transit should be subsidized",
+                component_type="CLAIM",
+                source_chunk_id="c1",
+            ),
+            TheoryAtom(
+                id="a2",
+                text="It reduces carbon emissions",
+                component_type="PREMISE",
+                source_chunk_id="c1",
+            ),
+            TheoryRelation(
+                source_id="a2",
+                target_id="a1",
+                relation_type="SUPPORT",
+                confidence=1.0,
+                scope="global",
+            ),
         ]
 
         gold = {
             "l3_atoms": [
-                TheoryAtom(id="g1", text="Public transit should be subsidized", component_type="CLAIM", source_chunk_id="c1"),
-                TheoryAtom(id="g2", text="It reduces carbon emissions", component_type="PREMISE", source_chunk_id="c1"),
+                TheoryAtom(
+                    id="g1",
+                    text="Public transit should be subsidized",
+                    component_type="CLAIM",
+                    source_chunk_id="c1",
+                ),
+                TheoryAtom(
+                    id="g2",
+                    text="It reduces carbon emissions",
+                    component_type="PREMISE",
+                    source_chunk_id="c1",
+                ),
             ],
             "l3_relations": [
-                TheoryRelation(source_id="g2", target_id="g1", relation_type="SUPPORT", confidence=1.0, scope="global"),
+                TheoryRelation(
+                    source_id="g2",
+                    target_id="g1",
+                    relation_type="SUPPORT",
+                    confidence=1.0,
+                    scope="global",
+                ),
             ],
         }
 
-        results = await strategy.evaluate(predicted=predicted, gold=gold, run_id="run_arg_test")
+        results = await strategy.evaluate(
+            predicted=predicted, gold=gold, run_id="run_arg_test"
+        )
         assert len(results) == 1
         metrics = {m.name: m.value for m in results[0].metrics}
 
@@ -240,22 +312,56 @@ class TestArgumentationStrategy:
         strategy = ArgumentationStrategy(schema=DEFAULT_SCHEMA)
 
         predicted = [
-            TheoryAtom(id="a1", text="Premise A", component_type="ObservationUnit", source_chunk_id="c1"),
-            TheoryAtom(id="a2", text="Conclusion B", component_type="TheoreticalHypothesis", source_chunk_id="c1"),
-            TheoryRelation(source_id="a1", target_id="a2", relation_type="SUPPORTS_ARG", confidence=1.0, scope="local"),
+            TheoryAtom(
+                id="a1",
+                text="Premise A",
+                component_type="ObservationUnit",
+                source_chunk_id="c1",
+            ),
+            TheoryAtom(
+                id="a2",
+                text="Conclusion B",
+                component_type="TheoreticalHypothesis",
+                source_chunk_id="c1",
+            ),
+            TheoryRelation(
+                source_id="a1",
+                target_id="a2",
+                relation_type="SUPPORTS_ARG",
+                confidence=1.0,
+                scope="local",
+            ),
         ]
         gold = {
             "l3_atoms": [
-                TheoryAtom(id="a1", text="Premise A", component_type="ObservationUnit", source_chunk_id="c1"),
-                TheoryAtom(id="a2", text="Conclusion B", component_type="TheoreticalHypothesis", source_chunk_id="c1"),
+                TheoryAtom(
+                    id="a1",
+                    text="Premise A",
+                    component_type="ObservationUnit",
+                    source_chunk_id="c1",
+                ),
+                TheoryAtom(
+                    id="a2",
+                    text="Conclusion B",
+                    component_type="TheoreticalHypothesis",
+                    source_chunk_id="c1",
+                ),
             ],
             "l3_relations": [
                 # Gold has COHERES_WITH (+1 polarity), predicted has SUPPORTS_ARG (+1 polarity)
-                TheoryRelation(source_id="a1", target_id="a2", relation_type="COHERES_WITH", confidence=1.0, scope="local"),
+                TheoryRelation(
+                    source_id="a1",
+                    target_id="a2",
+                    relation_type="COHERES_WITH",
+                    confidence=1.0,
+                    scope="local",
+                ),
             ],
         }
 
-        results = await strategy.evaluate(predicted=predicted, gold=gold, run_id="run_arg_pol")
+        results = await strategy.evaluate(
+            predicted=predicted, gold=gold, run_id="run_arg_pol"
+        )
         metrics = {m.name: m.value for m in results[0].metrics}
 
         assert metrics["polarity_accuracy"] == 1.0
@@ -302,7 +408,9 @@ class TestInMemoryStoreSearchIndexing:
         assert indexed_count == 2
 
         # Verify both chunk and entity are searchable via vector_search
-        results = asyncio.run(store.vector_search(query_text="gravity", top_k=5, run_id="run_idx"))
+        results = asyncio.run(
+            store.vector_search(query_text="gravity", top_k=5, run_id="run_idx")
+        )
         assert len(results) >= 2
         result_ids = {r.node_id for r in results}
         assert "chunk_principia_1" in result_ids
@@ -320,7 +428,13 @@ class TestHarnessAgnosticExecution:
         predicted = [
             L2Entity(id="e1", name="Newton", label="Scientist"),
             L2Entity(id="e2", name="Calculus", label="Field"),
-            L2Triple(subject_id="e1", predicate="developed", object_id="e2", confidence=1.0, scope="local"),
+            L2Triple(
+                subject_id="e1",
+                predicate="developed",
+                object_id="e2",
+                confidence=1.0,
+                scope="local",
+            ),
         ]
         gold = {
             "l2_entities": [
@@ -328,7 +442,13 @@ class TestHarnessAgnosticExecution:
                 L2Entity(id="g2", name="Calculus", label="Field"),
             ],
             "l2_triples": [
-                L2Triple(subject_id="g1", predicate="developed", object_id="g2", confidence=1.0, scope="local"),
+                L2Triple(
+                    subject_id="g1",
+                    predicate="developed",
+                    object_id="g2",
+                    confidence=1.0,
+                    scope="local",
+                ),
             ],
         }
 
@@ -353,11 +473,21 @@ class TestHarnessAgnosticExecution:
         harness = EvaluationHarness()
 
         predicted = [
-            TheoryAtom(id="a1", text="Premise A", component_type="PREMISE", source_chunk_id="c1"),
+            TheoryAtom(
+                id="a1",
+                text="Premise A",
+                component_type="PREMISE",
+                source_chunk_id="c1",
+            ),
         ]
         gold = {
             "l3_atoms": [
-                TheoryAtom(id="a1", text="Premise A", component_type="PREMISE", source_chunk_id="c1"),
+                TheoryAtom(
+                    id="a1",
+                    text="Premise A",
+                    component_type="PREMISE",
+                    source_chunk_id="c1",
+                ),
             ],
             "l3_relations": [],
         }
@@ -384,6 +514,7 @@ class TestHarnessAgnosticExecution:
             "relations": [[[0, 1, 3, 4, "USED-FOR"]]],
         }
         import json
+
         gold_file.write_text(json.dumps(gold_data) + "\n", encoding="utf-8")
 
         # 2. Create manifest targeting mock SciERC
@@ -396,18 +527,30 @@ class TestHarnessAgnosticExecution:
                 "limit": 1,
             },
         }
-        with open(manifest_file, "w", encoding="utf-8") as f:
+        with open(manifest_file, "w", encoding="utf-8") as f:  # noqa: ASYNC230 baseline
             yaml.safe_dump(manifest_data, f)
 
         # 3. Create harness and populate in-memory store with mock predicted entities
         harness = EvaluationHarness(reports_dir=tmp_path / "reports")
-        await harness.graph_store.upsert_entity(L2Entity(id="ent_0", name="Deep learning", label="Method"))
-        await harness.graph_store.upsert_entity(L2Entity(id="ent_1", name="vision models", label="Task"))
+        await harness.graph_store.upsert_entity(
+            L2Entity(id="ent_0", name="Deep learning", label="Method")
+        )
+        await harness.graph_store.upsert_entity(
+            L2Entity(id="ent_1", name="vision models", label="Task")
+        )
         await harness.graph_store.upsert_triple(
-            L2Triple(subject_id="ent_0", predicate="USED-FOR", object_id="ent_1", confidence=1.0, scope="local")
+            L2Triple(
+                subject_id="ent_0",
+                predicate="USED-FOR",
+                object_id="ent_1",
+                confidence=1.0,
+                scope="local",
+            )
         )
 
-        report = await harness.evaluate_manifest(manifest_path=manifest_file, build_graph=False)
+        report = await harness.evaluate_manifest(
+            manifest_path=manifest_file, build_graph=False
+        )
         assert report.evaluation_id == "eval_test_scierc_manifest"
         stage_res = report.results_by_level[str(EvaluationLevel.STAGE)][0]
         metrics = {m.name: m.value for m in stage_res.metrics}
@@ -431,7 +574,9 @@ class TestHarnessAgnosticExecution:
 
         # Custom pipeline builder registration
         mock_pipeline = object()
-        registry.register_pipeline_builder("custom_domain", lambda **kwargs: mock_pipeline)
+        registry.register_pipeline_builder(
+            "custom_domain", lambda **kwargs: mock_pipeline
+        )
         resolved = registry.get_pipeline_builder("custom_domain")
         assert resolved() is mock_pipeline
 

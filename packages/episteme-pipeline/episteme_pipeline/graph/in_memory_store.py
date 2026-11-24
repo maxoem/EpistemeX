@@ -82,17 +82,18 @@ class InMemoryGraphStore(ProcessingGraph):
         self._theory_atoms: dict[str, TheoryAtom] = {}
         self._theory_relations: list[TheoryRelation] = []
         self._generic_relations: list[dict[str, Any]] = []
-        self._processed_chunks: dict[str, set[str]] = {}  # chunk_id -> set of phase tags
+        self._processed_chunks: dict[
+            str, set[str]
+        ] = {}  # chunk_id -> set of phase tags
         self._processed_items: dict[str, dict[str, PhaseItemRecord]] = {}
         self._chunk_snapshots: dict[tuple[str, str], dict[str, Any]] = {}
         self._checkpoint_payloads: dict[str, dict[str, dict[str, Any]]] = {}
         self._nodes: dict[str, dict[str, Any]] = {}
         self._embeddings: dict[str, list[float]] = {}
         self._node_run_ids: dict[str, str] = {}
-        self._argument_relation_types: set[str] = (
-            set(DEFAULT_SCHEMA.argument_relation_types)
-            | set(DEFAULT_SCHEMA.relation_polarities.keys())
-        )
+        self._argument_relation_types: set[str] = set(
+            DEFAULT_SCHEMA.argument_relation_types
+        ) | set(DEFAULT_SCHEMA.relation_polarities.keys())
 
     async def close(self) -> None:
         """Close handle (no-op for in-memory)."""
@@ -119,11 +120,11 @@ class InMemoryGraphStore(ProcessingGraph):
         return list(self._triples)
 
     async def get_neighborhood(self, node_id: str, depth: int = 1) -> SubGraph:
-        neighbor_nodes = [
-            e for e in self._entities.values() if e.id != node_id
-        ][:10]
+        neighbor_nodes = [e for e in self._entities.values() if e.id != node_id][:10]
         neighbor_triples = [
-            t for t in self._triples if t.subject_id == node_id or t.object_id == node_id
+            t
+            for t in self._triples
+            if t.subject_id == node_id or t.object_id == node_id
         ]
         return SubGraph(
             center_id=node_id,
@@ -194,13 +195,17 @@ class InMemoryGraphStore(ProcessingGraph):
 
         # Filter by run_id if specified
         if run_id:
-            candidates = {k: v for k, v in candidates.items() if v.get("run_id") == run_id}
+            candidates = {
+                k: v for k, v in candidates.items() if v.get("run_id") == run_id
+            }
 
         # Filter by node_label if specified
         if node_label:
             nl_lower = node_label.lower()
             candidates = {
-                k: v for k, v in candidates.items() if nl_lower in v["node_label"].lower()
+                k: v
+                for k, v in candidates.items()
+                if nl_lower in v["node_label"].lower()
             }
 
         scored_results: list[SearchResult] = []
@@ -391,7 +396,9 @@ class InMemoryGraphStore(ProcessingGraph):
                         target_id=str(v),
                         relation_type=rel_str,
                         confidence=float(edata.get("confidence", 1.0)),
-                        scope=scope_val if scope_val in ("local", "global") else "global",
+                        scope=scope_val
+                        if scope_val in ("local", "global")
+                        else "global",
                     )
                 )
             return indexed_count
@@ -415,7 +422,9 @@ class InMemoryGraphStore(ProcessingGraph):
                     id=node_id,
                     text=node.description or node.name,
                     component_type=str(node.node_type),
-                    source_chunk_id=node.provenance[0] if node.provenance else f"chunk_{node_id}",
+                    source_chunk_id=node.provenance[0]
+                    if node.provenance
+                    else f"chunk_{node_id}",
                     confidence=node.confidence,
                 )
                 indexed_count += 1
@@ -428,7 +437,9 @@ class InMemoryGraphStore(ProcessingGraph):
                         target_id=str(edge.target),
                         relation_type=str(edge.relation_type),
                         confidence=edge.confidence,
-                        scope=edge_scope if edge_scope in ("local", "global") else "global",
+                        scope=edge_scope
+                        if edge_scope in ("local", "global")
+                        else "global",
                     )
                 )
             return indexed_count
@@ -485,7 +496,7 @@ class InMemoryGraphStore(ProcessingGraph):
         name_lower = name.lower()
         matches = []
         for ent in self._entities.values():
-            if ent.name and ent.name.lower() == name_lower:
+            if ent.name and ent.name.lower() == name_lower:  # noqa: SIM102 baseline
                 if label is None or ent.label == label:
                     matches.append(ent)
         return matches
@@ -498,9 +509,7 @@ class InMemoryGraphStore(ProcessingGraph):
 
     async def get_chunk_entities(self, chunk_id: str) -> list[L2Entity]:
         return [
-            e
-            for e in self._entities.values()
-            if chunk_id in (e.source_chunk_ids or [])
+            e for e in self._entities.values() if chunk_id in (e.source_chunk_ids or [])
         ]
 
     async def upsert_node(
@@ -578,14 +587,11 @@ class InMemoryGraphStore(ProcessingGraph):
         self._generic_relations = [
             r
             for r in self._generic_relations
-            if r.get("from_id") not in target_ids
-            and r.get("to_id") not in target_ids
+            if r.get("from_id") not in target_ids and r.get("to_id") not in target_ids
         ]
         return removed
 
-    async def prune_retired_mentions(
-        self, mentions: list[tuple[str, str]]
-    ) -> int:
+    async def prune_retired_mentions(self, mentions: list[tuple[str, str]]) -> int:
         """Delete retired ``EXTRACTED_FROM`` mention edges from the in-memory store.
 
         Parameters
@@ -664,12 +670,14 @@ class InMemoryGraphStore(ProcessingGraph):
             Domain relation instance.
         """
         self._theory_relations.append(relation)
-        self._generic_relations.append({
-            "from_id": relation.source_id,
-            "relation_type": relation.relation_type,
-            "to_id": relation.target_id,
-            "properties": theory_relation_to_graph_properties(relation),
-        })
+        self._generic_relations.append(
+            {
+                "from_id": relation.source_id,
+                "relation_type": relation.relation_type,
+                "to_id": relation.target_id,
+                "properties": theory_relation_to_graph_properties(relation),
+            }
+        )
 
     async def upsert_theory_relations(self, relations: list[TheoryRelation]) -> None:
         """Upsert a batch of TheoryRelation domain instances.
@@ -715,9 +723,7 @@ class InMemoryGraphStore(ProcessingGraph):
     async def upsert_argument_component(self, component: TheoryAtom) -> None:
         self._theory_atoms[component.id] = component
 
-    async def upsert_argument_components(
-        self, components: list[TheoryAtom]
-    ) -> None:
+    async def upsert_argument_components(self, components: list[TheoryAtom]) -> None:
         for comp in components:
             await self.upsert_argument_component(comp)
 
@@ -836,9 +842,7 @@ class InMemoryGraphStore(ProcessingGraph):
         for k, v in payloads.items():
             store[k] = dict(v)
 
-    async def get_checkpoint_payloads(
-        self, phase: str
-    ) -> dict[str, dict[str, Any]]:
+    async def get_checkpoint_payloads(self, phase: str) -> dict[str, dict[str, Any]]:
         """Retrieve persisted intermediate item outputs from memory."""
         raw = self._checkpoint_payloads.get(phase, {})
         return {k: dict(v) for k, v in raw.items()}
@@ -852,4 +856,3 @@ class InMemoryGraphStore(ProcessingGraph):
             del self._chunk_snapshots[k]
         for tags in self._processed_chunks.values():
             tags.discard(phase)
-

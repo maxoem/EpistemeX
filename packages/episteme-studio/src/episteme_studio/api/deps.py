@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import Depends, Request
 
@@ -11,6 +11,10 @@ from episteme_studio.runtime.executor import PipelineExecutor
 from episteme_studio.runtime.registry import RunRegistry
 from episteme_studio.services.run_service import RunService
 from episteme_studio.settings import StudioSettings
+
+if TYPE_CHECKING:
+    from episteme_studio.adapters.neo4j_reader import Neo4jReader
+    from episteme_studio.services.graph_service import GraphService
 
 
 def get_settings(request: Request) -> StudioSettings:
@@ -182,7 +186,10 @@ def get_overlay_service(request: Request) -> Any:
     """
     from episteme_studio.services.overlay_service import OverlayService
 
-    if not hasattr(request.app.state, "overlay_service") or request.app.state.overlay_service is None:
+    if (
+        not hasattr(request.app.state, "overlay_service")
+        or request.app.state.overlay_service is None
+    ):
         request.app.state.overlay_service = OverlayService()
     return cast(OverlayService, request.app.state.overlay_service)
 
@@ -208,7 +215,10 @@ def get_config_service(
     from episteme_studio.adapters.artifact_reader import ArtifactReader
     from episteme_studio.services.config_service import ConfigService
 
-    if not hasattr(request.app.state, "config_service") or request.app.state.config_service is None:
+    if (
+        not hasattr(request.app.state, "config_service")
+        or request.app.state.config_service is None
+    ):
         reader = ArtifactReader(
             runs_dir=settings.runs_dir,
             artifacts_dir=settings.artifacts_dir,
@@ -234,7 +244,10 @@ def get_metric_service(request: Request) -> Any:
     from episteme_studio.adapters.neo4j_reader import Neo4jReader
     from episteme_studio.services.metric_service import MetricService
 
-    if not hasattr(request.app.state, "metric_service") or request.app.state.metric_service is None:
+    if (
+        not hasattr(request.app.state, "metric_service")
+        or request.app.state.metric_service is None
+    ):
         driver = getattr(request.app.state, "neo4j_driver", None)
         settings = get_settings(request)
         reader = (
@@ -278,7 +291,10 @@ def get_engine_settings_service(
     from episteme_studio.adapters.engine_storage import FileEngineSettingsStorage
     from episteme_studio.services.engine_settings_service import EngineSettingsService
 
-    if not hasattr(request.app.state, "engine_settings_service") or request.app.state.engine_settings_service is None:
+    if (
+        not hasattr(request.app.state, "engine_settings_service")
+        or request.app.state.engine_settings_service is None
+    ):
         reader = ArtifactReader(
             runs_dir=settings.runs_dir,
             artifacts_dir=settings.artifacts_dir,
@@ -318,7 +334,9 @@ def get_evaluation_service(
     """
     from episteme_studio.services.evaluation_service import EvaluationService
 
-    if not hasattr(request.app.state, "evaluation_service") or request.app.state.evaluation_service is None:
+    if (
+        not hasattr(request.app.state, "evaluation_service")
+        or request.app.state.evaluation_service is None
+    ):
         request.app.state.evaluation_service = EvaluationService.from_settings(settings)
     return request.app.state.evaluation_service
-

@@ -31,7 +31,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from episteme_pipeline.artifacts.builders import (
     build_argument_component_artifact,
     build_argument_relation_artifact,
@@ -48,10 +47,8 @@ from episteme_pipeline.artifacts.checkpoint_store import FileSystemCheckpointSto
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
-    Phase1ArtifactsView,
     Phase2ArtifactsView,
     Phase3ArtifactsView,
-    Phase4ArtifactsView,
     Phase5ArtifactsView,
 )
 from episteme_pipeline.artifacts.invalidate import ArtifactDependencyGraph
@@ -80,17 +77,12 @@ from episteme_pipeline.contracts.domain import (
     TheoryRelation,
 )
 from episteme_pipeline.contracts.phase_contracts import PipelineInput
-from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
 from episteme_pipeline.phases.phase3_global_relations import Phase3Runner
-from episteme_pipeline.phases.phase3b_consolidation import (
-    Phase3bLatentConsolidationRunner,
-)
 from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
 from episteme_pipeline.phases.phase4_entity_maturation import (
     EntitySynthesisOutput,
     Phase4EntityMaturationRunner,
 )
-from episteme_pipeline.phases.phase5_fusion.argument_web import Phase5ArgumentWebRunner
 from episteme_pipeline.phases.phase6_theorynet import Phase6Runner
 from episteme_pipeline.pipeline import Pipeline
 from episteme_pipeline.post_processing.theoretical_enrichment import (
@@ -117,7 +109,6 @@ from episteme_pipeline.protocols.extractors import (
 from episteme_pipeline.protocols.graph_store import ProjectionGraph
 from episteme_pipeline.runs.models import RunManifest
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA, SchemaConfig
-
 
 # ---------------------------------------------------------------------------
 # Deterministic Fakes & Recording Spies
@@ -280,7 +271,11 @@ class NoOpEntityLinker(EntityLinker):
     """Leaves extracted entity IDs unmerged in Phase 2 so Phase 3b can consolidate them."""
 
     async def link(
-        self, mention: L2Entity, graph_store: Any, top_k: int = 10, threshold: float = 0.85
+        self,
+        mention: L2Entity,
+        graph_store: Any,
+        top_k: int = 10,
+        threshold: float = 0.85,
     ) -> L2Entity | None:
         # Verify graph_store passed to linker is an ArtifactSubgraphReader
         assert isinstance(graph_store, ArtifactSubgraphReader)
@@ -304,7 +299,11 @@ class OfflineGlobalExtractor(GlobalRelationExtractor):
         # Verify neighborhood lookup works on the in-memory reader
         sub = await graph_store.get_neighborhood(pair.entity_a.id, depth=1)
         assert sub.center_id == pair.entity_a.id
-        if self.fail_on_second_pair_once and len(self.evaluated_pairs) == 2 and not self._failed_once:
+        if (
+            self.fail_on_second_pair_once
+            and len(self.evaluated_pairs) == 2
+            and not self._failed_once
+        ):
             self._failed_once = True
             raise RuntimeError("Simulated crash after batch 1")
         return L2Triple(
@@ -506,7 +505,9 @@ class RecordingProjectionGraph(ProjectionGraph):
 # ---------------------------------------------------------------------------
 
 
-def test_artifact_collection_of_kind_deduplicates_by_identity_key_last_write_wins() -> None:
+def test_artifact_collection_of_kind_deduplicates_by_identity_key_last_write_wins() -> (
+    None
+):
     """ArtifactCollection.of_kind(*kinds, latest_only=True) deduplicates by identity_key."""
     raw_entity = L2Entity(
         id="ent_kant",
@@ -551,7 +552,10 @@ def test_artifact_collection_of_kind_deduplicates_by_identity_key_last_write_win
     latest = collection.of_kind(ArtifactKind.LINKED_ENTITY)
     assert len(latest) == 1
     assert latest[0].payload.is_mature is True
-    assert latest[0].payload.description == "Matured synthesized description across all chunks"
+    assert (
+        latest[0].payload.description
+        == "Matured synthesized description across all chunks"
+    )
 
     # Also verify ArtifactDependencyGraph does not create a self-loop cycle when two
     # envelopes share the same identity_key
@@ -560,7 +564,9 @@ def test_artifact_collection_of_kind_deduplicates_by_identity_key_last_write_win
     assert dag.topsort() == ["linked_entity::ent_kant"]
 
 
-def test_phase2_and_phase3_views_apply_canonicalization_to_entities_and_triples() -> None:
+def test_phase2_and_phase3_views_apply_canonicalization_to_entities_and_triples() -> (
+    None
+):
     """Phase2ArtifactsView and Phase3ArtifactsView canonicalize entities and triples."""
     e_canon = L2Entity(
         id="e_kant",
@@ -597,9 +603,15 @@ def test_phase2_and_phase3_views_apply_canonicalization_to_entities_and_triples(
         phase_name="P2",
         method="m",
     )
-    le1 = build_linked_entity_artifact(e_canon, [m1.artifact_id], run_id="r1", phase_name="P2", method="m")
-    le2 = build_linked_entity_artifact(e_dup, [m2.artifact_id], run_id="r1", phase_name="P2", method="m")
-    le3 = build_linked_entity_artifact(e_space, [], run_id="r1", phase_name="P2", method="m")
+    le1 = build_linked_entity_artifact(
+        e_canon, [m1.artifact_id], run_id="r1", phase_name="P2", method="m"
+    )
+    le2 = build_linked_entity_artifact(
+        e_dup, [m2.artifact_id], run_id="r1", phase_name="P2", method="m"
+    )
+    le3 = build_linked_entity_artifact(
+        e_space, [], run_id="r1", phase_name="P2", method="m"
+    )
 
     # Local triple using duplicate ID + self-loop triple between e_kant_alias and e_kant
     local_t1 = build_local_relation_artifact(
@@ -713,9 +725,15 @@ async def test_phase4_maturation_reads_envelopes_from_view_offline_and_updates_d
         phase_name="P2",
         method="m",
     )
-    le1 = build_linked_entity_artifact(e_canon, [m1.artifact_id], run_id="r1", phase_name="P2", method="m")
-    le2 = build_linked_entity_artifact(e_dup, [m2.artifact_id], run_id="r1", phase_name="P2", method="m")
-    canon = build_canonicalization_artifact("e_kant_dup", "e_kant", run_id="r1", phase_name="P3b", method="m")
+    le1 = build_linked_entity_artifact(
+        e_canon, [m1.artifact_id], run_id="r1", phase_name="P2", method="m"
+    )
+    le2 = build_linked_entity_artifact(
+        e_dup, [m2.artifact_id], run_id="r1", phase_name="P2", method="m"
+    )
+    canon = build_canonicalization_artifact(
+        "e_kant_dup", "e_kant", run_id="r1", phase_name="P3b", method="m"
+    )
 
     upstream_collection = ArtifactCollection([m1, m2, le1, le2, canon])
     p3_view = Phase3ArtifactsView.from_collection(upstream_collection)
@@ -742,16 +760,22 @@ async def test_phase4_maturation_reads_envelopes_from_view_offline_and_updates_d
     assert "Envelope from chunk 2" in llm_spy.envelopes_seen["Immanuel Kant"]
 
     # Downstream Phase3ArtifactsView (consumed by Phase 4 Argument Mining) sees the matured entity
-    combined = ArtifactCollection(upstream_collection.artifacts + maturation_out.artifacts)
+    combined = ArtifactCollection(
+        upstream_collection.artifacts + maturation_out.artifacts
+    )
     downstream_view = Phase3ArtifactsView.from_collection(combined)
     assert len(downstream_view.entities) == 1
     assert downstream_view.entities[0].id == "e_kant"
     assert downstream_view.entities[0].is_mature is True
-    assert "[maturation] Synthesized mature description" in (downstream_view.entities[0].description or "")
+    assert "[maturation] Synthesized mature description" in (
+        downstream_view.entities[0].description or ""
+    )
 
 
 @pytest.mark.asyncio
-async def test_phase5_cluster_merges_propagate_to_phase6_and_theoretical_enrichment() -> None:
+async def test_phase5_cluster_merges_propagate_to_phase6_and_theoretical_enrichment() -> (
+    None
+):
     """Phase 5 FusionDecisionArtifact cluster merges propagate into Phase 6 and TheoreticalEnrichment."""
     a1 = TheoryAtom(
         id="atom_canon",
@@ -786,10 +810,18 @@ async def test_phase5_cluster_merges_propagate_to_phase6_and_theoretical_enrichm
         scope="local",
     )
 
-    art_a1 = build_argument_component_artifact(a1, run_id="r1", phase_name="P4", method="m")
-    art_a2 = build_argument_component_artifact(a2, run_id="r1", phase_name="P4", method="m")
-    art_obs = build_argument_component_artifact(obs, run_id="r1", phase_name="P4", method="m")
-    art_rel = build_argument_relation_artifact(rel, run_id="r1", phase_name="P4", method="m")
+    art_a1 = build_argument_component_artifact(
+        a1, run_id="r1", phase_name="P4", method="m"
+    )
+    art_a2 = build_argument_component_artifact(
+        a2, run_id="r1", phase_name="P4", method="m"
+    )
+    art_obs = build_argument_component_artifact(
+        obs, run_id="r1", phase_name="P4", method="m"
+    )
+    art_rel = build_argument_relation_artifact(
+        rel, run_id="r1", phase_name="P4", method="m"
+    )
     art_fusion = build_fusion_cluster_artifact(
         ["atom_canon", "atom_merged"],
         theory_fusion_applied=True,
@@ -815,7 +847,9 @@ async def test_phase5_cluster_merges_propagate_to_phase6_and_theoretical_enrichm
     )
 
     # Phase 6 runs without graph_store and emits TheoryAtomArtifact / TheoryRelationArtifact over canonical L3
-    p6_runner = Phase6Runner(config=Phase6Config(), schema=DEFAULT_SCHEMA, graph_store=None)
+    p6_runner = Phase6Runner(
+        config=Phase6Config(), schema=DEFAULT_SCHEMA, graph_store=None
+    )
     p6_out = await p6_runner.run(p5_view, ctx)
     p6_atoms = [a.payload for a in p6_out.of_kind(ArtifactKind.THEORY_ATOM)]
     p6_rels = [a.payload for a in p6_out.of_kind(ArtifactKind.THEORY_RELATION)]
@@ -860,7 +894,13 @@ async def test_phase5_cluster_merges_propagate_to_phase6_and_theoretical_enrichm
 @pytest.mark.asyncio
 async def test_artifact_graph_projector_batches_in_topological_order() -> None:
     """ArtifactGraphProjector.project_collection() projects Nodes before Edges in batches."""
-    doc = L1Document(id="doc_1", title="Critique", source_path="critique.md", chapter_count=1, chunk_count=1)
+    doc = L1Document(
+        id="doc_1",
+        title="Critique",
+        source_path="critique.md",
+        chapter_count=1,
+        chunk_count=1,
+    )
     chunk = L1Chunk(
         id="chunk_1",
         text="Kant discussed space.",
@@ -869,8 +909,12 @@ async def test_artifact_graph_projector_batches_in_topological_order() -> None:
         sequence_index=0,
         token_count=4,
     )
-    e1 = L2Entity(id="e_kant", label="Person", name="Immanuel Kant", source_chunk_ids=["chunk_1"])
-    e2 = L2Entity(id="e_space", label="Concept", name="Space", source_chunk_ids=["chunk_1"])
+    e1 = L2Entity(
+        id="e_kant", label="Person", name="Immanuel Kant", source_chunk_ids=["chunk_1"]
+    )
+    e2 = L2Entity(
+        id="e_space", label="Concept", name="Space", source_chunk_ids=["chunk_1"]
+    )
     t_local = L2Triple(
         subject_id="e_kant",
         predicate="DEFINES",
@@ -896,10 +940,18 @@ async def test_artifact_graph_projector_batches_in_topological_order() -> None:
 
     # Intentionally scramble artifact order: edges before nodes!
     scrambled_artifacts = [
-        build_argument_relation_artifact(t_rel, run_id="r1", phase_name="P4", method="m"),
-        build_local_relation_artifact(t_local, run_id="r1", phase_name="P2", method="m"),
-        build_entity_mention_artifact(e1, "chunk_1", run_id="r1", phase_name="P2", method="m"),
-        build_argument_component_artifact(atom, run_id="r1", phase_name="P4", method="m"),
+        build_argument_relation_artifact(
+            t_rel, run_id="r1", phase_name="P4", method="m"
+        ),
+        build_local_relation_artifact(
+            t_local, run_id="r1", phase_name="P2", method="m"
+        ),
+        build_entity_mention_artifact(
+            e1, "chunk_1", run_id="r1", phase_name="P2", method="m"
+        ),
+        build_argument_component_artifact(
+            atom, run_id="r1", phase_name="P4", method="m"
+        ),
         build_linked_entity_artifact(e1, [], run_id="r1", phase_name="P2", method="m"),
         build_linked_entity_artifact(e2, [], run_id="r1", phase_name="P2", method="m"),
         build_chunk_artifact(chunk, run_id="r1", phase_name="P1", method="m"),
@@ -908,7 +960,9 @@ async def test_artifact_graph_projector_batches_in_topological_order() -> None:
 
     spy_graph = RecordingProjectionGraph()
     projector = ArtifactGraphProjector(spy_graph)
-    await projector.project_collection(ArtifactCollection(scrambled_artifacts), batch_size=500)
+    await projector.project_collection(
+        ArtifactCollection(scrambled_artifacts), batch_size=500
+    )
 
     call_names = [name for name, _ in spy_graph.calls]
     # Node upserts (upsert_node, upsert_chunks, upsert_entities, upsert_argument_components)
@@ -916,7 +970,13 @@ async def test_artifact_graph_projector_batches_in_topological_order() -> None:
     last_node_idx = max(
         idx
         for idx, name in enumerate(call_names)
-        if name in {"upsert_node", "upsert_chunks", "upsert_entities", "upsert_argument_components"}
+        if name
+        in {
+            "upsert_node",
+            "upsert_chunks",
+            "upsert_entities",
+            "upsert_argument_components",
+        }
     )
     first_edge_idx = min(
         idx
@@ -937,11 +997,22 @@ async def test_phase3_crash_resume_recovers_committed_triples_from_checkpoint_st
         L2Entity(id="e2", label="Concept", name="Space", source_chunk_ids=["c1"]),
         L2Entity(id="e3", label="Concept", name="Time", source_chunk_ids=["c1"]),
     ]
-    chunk = L1Chunk(id="c1", text="Kant on space and time.", source_doc_id="d1", sequence_index=0, token_count=5)
+    chunk = L1Chunk(
+        id="c1",
+        text="Kant on space and time.",
+        source_doc_id="d1",
+        sequence_index=0,
+        token_count=5,
+    )
     col = ArtifactCollection(
         [
             build_chunk_artifact(chunk, run_id="r1", phase_name="P1", method="m"),
-            *[build_linked_entity_artifact(e, [], run_id="r1", phase_name="P2", method="m") for e in entities],
+            *[
+                build_linked_entity_artifact(
+                    e, [], run_id="r1", phase_name="P2", method="m"
+                )
+                for e in entities
+            ],
         ]
     )
     view = Phase2ArtifactsView.from_collection(col)
@@ -990,7 +1061,11 @@ async def test_full_pipeline_executes_offline_and_isolates_alternating_runs(
     runs_dir = tmp_path / "runs"
     artifacts_dir = tmp_path / "artifacts"
 
-    def build_test_pipeline(tag: str, projection_graph: RecordingProjectionGraph | None = None) -> tuple[Pipeline, OfflineNERExtractor, DeterministicMaturationLLM, OfflineACCClassifier]:
+    def build_test_pipeline(
+        tag: str, projection_graph: RecordingProjectionGraph | None = None
+    ) -> tuple[
+        Pipeline, OfflineNERExtractor, DeterministicMaturationLLM, OfflineACCClassifier
+    ]:
         cfg = PipelineConfig(
             phase1=Phase1Config(chunk_size=12, chunk_overlap=0),
             phase2=Phase2Config(batch_size=1),
@@ -1042,13 +1117,17 @@ async def test_full_pipeline_executes_offline_and_isolates_alternating_runs(
 
     # Run A (tag="runA") with RecordingProjectionGraph enabled
     spy_projection = RecordingProjectionGraph()
-    pipe_a, ner_a, llm_a, acc_a = build_test_pipeline("runA", projection_graph=spy_projection)
+    pipe_a, ner_a, llm_a, acc_a = build_test_pipeline(  # noqa: RUF059 baseline
+        "runA", projection_graph=spy_projection
+    )
 
     # Verify zero phase runner holds a reference to spy_projection
     for phase in pipe_a.phases:
         assert phase.graph_store is not spy_projection
 
-    res_a = await pipe_a.run(PipelineInput(source_paths=[str(doc_path)]), run_id="run-A")
+    res_a = await pipe_a.run(
+        PipelineInput(source_paths=[str(doc_path)]), run_id="run-A"
+    )
     assert res_a.manifest.status.value == "completed"
 
     # 1. Phase 3b consolidated e_kant_dup into e_kant_canonical, so Phase 4 Maturation
@@ -1069,14 +1148,20 @@ async def test_full_pipeline_executes_offline_and_isolates_alternating_runs(
     assert p1_record.input_artifact_ids == []
     assert set(p2_record.input_artifact_ids) == set(p1_record.output_artifact_ids)
     # Phase 4 Argument Mining consumes Phase 1 chunks + Phase 2/4-maturation entities + Phase 3 relations + Phase 3b canonicalizations
-    assert set(p1_record.output_artifact_ids).issubset(set(p4_record.input_artifact_ids))
+    assert set(p1_record.output_artifact_ids).issubset(
+        set(p4_record.input_artifact_ids)
+    )
     assert len(p4_record.input_artifact_ids) > len(p1_record.output_artifact_ids)
 
     # 4. Run B (tag="runB") with different LLM/extractor configuration executes without
     #    colliding with Run A's checkpoints or entity states
-    pipe_b, ner_b, llm_b, acc_b = build_test_pipeline("runB", projection_graph=None)
-    res_b = await pipe_b.run(PipelineInput(source_paths=[str(doc_path)]), run_id="run-B")
+    pipe_b, ner_b, llm_b, acc_b = build_test_pipeline("runB", projection_graph=None)  # noqa: RUF059 baseline
+    res_b = await pipe_b.run(
+        PipelineInput(source_paths=[str(doc_path)]), run_id="run-B"
+    )
     assert res_b.manifest.status.value == "completed"
-    assert len(ner_b.calls) >= 2  # Run B did not falsely skip chunks due to Run A's checkpoints
+    assert (
+        len(ner_b.calls) >= 2
+    )  # Run B did not falsely skip chunks due to Run A's checkpoints
     assert any("[runB]" in (e.description or "") for e in acc_b.seen_chunk_entities)
     assert all("[runA]" not in (e.description or "") for e in acc_b.seen_chunk_entities)

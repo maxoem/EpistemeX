@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from episteme_studio.adapters.engine_storage import (
     EngineSettingsStorage,
@@ -75,7 +75,7 @@ class EngineSettingsService:
                 "sentence-transformers/all-MiniLM-L6-v2", local_files_only=True
             )
             return self._offline_embedder
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.debug("Local offline embedder could not be loaded: %s", exc)
             return None
 
@@ -97,7 +97,10 @@ class EngineSettingsService:
             # Auto-migrate legacy Qwen or placeholder MLX checkpoints to canonical Jev/Laya model
             de = self._cached_settings.decision_engine
             needs_save = False
-            if "qwen" in str(de.model_checkpoint).lower() or de.model_checkpoint == "mlx-community/Qwen2.5-0.5B-Instruct-4bit":
+            if (
+                "qwen" in str(de.model_checkpoint).lower()
+                or de.model_checkpoint == "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
+            ):
                 de.model_checkpoint = "aac6fef/laya-mlx"
                 needs_save = True
             if de.provider == "mlx":
@@ -106,8 +109,11 @@ class EngineSettingsService:
             if needs_save:
                 try:
                     await self.storage.save(self._cached_settings)
-                except Exception as exc:
-                    logger.warning("Could not persist auto-migrated decision engine settings: %s", exc)
+                except Exception as exc:  # noqa: BLE001 baseline
+                    logger.warning(
+                        "Could not persist auto-migrated decision engine settings: %s",
+                        exc,
+                    )
         return self._cached_settings
 
     async def update_settings(self, patch: EngineSettingsPatch) -> EngineSettings:
@@ -186,7 +192,7 @@ class EngineSettingsService:
 
                 if metal.is_available():
                     vram_mb = round(float(metal.get_active_memory()) / (1024 * 1024), 2)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
         except ImportError:
             pass
@@ -211,7 +217,11 @@ class EngineSettingsService:
                 checkpoint_path = str(p.resolve())
             else:
                 hf_home = self.settings.hf_home
-                base = Path(hf_home).expanduser() if hf_home else Path("~/.cache/huggingface").expanduser()
+                base = (
+                    Path(hf_home).expanduser()
+                    if hf_home
+                    else Path("~/.cache/huggingface").expanduser()
+                )
                 hf_hub = base / "hub"
                 if hf_hub.is_dir():
                     repo_folder = "models--" + chk.replace("/", "--")
@@ -234,7 +244,11 @@ class EngineSettingsService:
 
         is_demo_mode = self.settings.demo_mode or self.settings.read_only
         display_provider = "stub (demo)" if is_demo_mode else provider
-        latency_val = 12.4 if is_demo_mode else (12.8 if (mlx_available or provider == "mock") else 45.2)
+        latency_val = (
+            12.4
+            if is_demo_mode
+            else (12.8 if (mlx_available or provider == "mock") else 45.2)
+        )
 
         return DecisionEngineStatusResponse(
             available=available or is_demo_mode,
@@ -307,7 +321,9 @@ class EngineSettingsService:
             ds = DecisionEngineSettings.model_validate(ds_data)
 
         # Normalize and sanitize request fields between protocol and UI playground shapes
-        raw_state = request.state if request.state is not None else (request.input_text or "")
+        raw_state = (
+            request.state if request.state is not None else (request.input_text or "")
+        )
         state_val = str(raw_state)[:10000] if isinstance(raw_state, str) else raw_state
         raw_question = (
             request.question
@@ -315,12 +331,18 @@ class EngineSettingsService:
             else (request.hypothesis_text or "Is the premise valid and sound?")
         )
         question_val = str(raw_question)[:2000]
-        options_val = request.options if request.options is not None else request.candidate_labels
+        options_val = (
+            request.options if request.options is not None else request.candidate_labels
+        )
         alpha = request.alpha if request.alpha is not None else ds.conformal_alpha
 
         # In read-only or demo mode, strictly enforce the lightweight deterministic offline simulation.
         # This prevents unbounded model weight downloads, VRAM/RAM exhaustion, or host incompatibility.
-        is_mock = ds.provider in ("mock", "stub", "none") or self.settings.demo_mode or self.settings.read_only
+        is_mock = (
+            ds.provider in ("mock", "stub", "none")
+            or self.settings.demo_mode
+            or self.settings.read_only
+        )
         real_executed = False
         warning_msg = None
         cache_key = f"{ds.provider}:{ds.model_checkpoint}:{ds.device}"
@@ -342,34 +364,55 @@ class EngineSettingsService:
                         prob = res_noul.probability
                         empirical_acc = res_noul.empirical_accuracy
                         selected = res_noul.passed
-                        conformal_set = [str(selected)] if empirical_acc >= (1.0 - alpha) else ["True", "False"]
+                        conformal_set = (
+                            [str(selected)]
+                            if empirical_acc >= (1.0 - alpha)
+                            else ["True", "False"]
+                        )
                         probabilities = {"true": prob, "false": round(1.0 - prob, 4)}
                         top_prob = prob
                         tokens_saved = 450
                         real_executed = True
                     elif request.primitive == "choice":
-                        opts_input = options_val or ["Axiom", "Definition", "Lemma", "Theorem", "Conjectured"]
-                        res_choice = await engine.evaluate_choice(state_val, question_val, opts_input, alpha=alpha)
+                        opts_input = options_val or [
+                            "Axiom",
+                            "Definition",
+                            "Lemma",
+                            "Theorem",
+                            "Conjectured",
+                        ]
+                        res_choice = await engine.evaluate_choice(
+                            state_val, question_val, opts_input, alpha=alpha
+                        )
                         selected = res_choice.selected_option
                         top_prob = res_choice.class_probability
                         empirical_acc = res_choice.empirical_accuracy
                         probabilities = res_choice.probabilities
-                        conformal_set = res_choice.prediction_set or ([str(selected)] if selected else [])
+                        conformal_set = res_choice.prediction_set or (
+                            [str(selected)] if selected else []
+                        )
                         tokens_saved = res_choice.tokens_saved_estimate or 620
                         real_executed = True
                     elif request.primitive == "score":
                         lvls_input = request.levels or [1, 2, 3, 4, 5]
-                        res_score = await engine.evaluate_score(state_val, question_val, lvls_input)
+                        res_score = await engine.evaluate_score(
+                            state_val, question_val, lvls_input
+                        )
                         selected = res_score.selected_option
                         top_prob = res_score.class_probability
                         empirical_acc = res_score.empirical_accuracy
                         probabilities = res_score.probabilities
-                        conformal_set = res_score.prediction_set or ([str(selected)] if selected else [])
+                        conformal_set = res_score.prediction_set or (
+                            [str(selected)] if selected else []
+                        )
                         tokens_saved = res_score.tokens_saved_estimate or 320
                         real_executed = True
 
-            except Exception as exc:
-                logger.info("Local decision engine execution unavailable; falling back to dynamic semantic simulation: %s", exc)
+            except Exception as exc:  # noqa: BLE001 baseline
+                logger.info(
+                    "Local decision engine execution unavailable; falling back to dynamic semantic simulation: %s",
+                    exc,
+                )
                 warning_msg = f"Native model inference unavailable ({type(exc).__name__}). Running dynamic semantic calibration."
                 real_executed = False
 
@@ -378,11 +421,23 @@ class EngineSettingsService:
             import numpy as np
             from episteme_pipeline.decision.mock import compute_conformal_prediction_set
 
-            embedder = None if (self.settings.demo_mode or self.settings.read_only) else self._get_offline_embedder()
-            base_tokens = (len(str(state_val)) // 4) + (len(str(question_val)) // 4) + 60
+            embedder = (
+                None
+                if (self.settings.demo_mode or self.settings.read_only)
+                else self._get_offline_embedder()
+            )
+            base_tokens = (
+                (len(str(state_val)) // 4) + (len(str(question_val)) // 4) + 60
+            )
 
             if request.primitive == "choice":
-                opts = options_val or ["Axiom", "Definition", "Lemma", "Theorem", "Conjectured"]
+                opts = options_val or [
+                    "Axiom",
+                    "Definition",
+                    "Lemma",
+                    "Theorem",
+                    "Conjectured",
+                ]
                 opts_list = list(opts.keys()) if isinstance(opts, dict) else list(opts)
                 if not opts_list:
                     opts_list = ["OPTION_A", "OPTION_B"]
@@ -395,7 +450,9 @@ class EngineSettingsService:
                     temp = 0.15
                     exp_sims = np.exp((sims - np.max(sims)) / temp)
                     probs_arr = exp_sims / np.sum(exp_sims)
-                    probabilities = {opt: round(float(p), 4) for opt, p in zip(opts_list, probs_arr)}
+                    probabilities = {
+                        opt: round(float(p), 4) for opt, p in zip(opts_list, probs_arr)
+                    }
                     best_idx = int(np.argmax(probs_arr))
                     selected = opts_list[best_idx]
                     top_prob = round(float(probs_arr[best_idx]), 4)
@@ -411,47 +468,83 @@ class EngineSettingsService:
 
             elif request.primitive == "noul":
                 if embedder is not None:
-                    state_emb = embedder.encode(str(state_val), normalize_embeddings=True)
-                    q_emb = embedder.encode(str(question_val), normalize_embeddings=True)
+                    state_emb = embedder.encode(
+                        str(state_val), normalize_embeddings=True
+                    )
+                    q_emb = embedder.encode(
+                        str(question_val), normalize_embeddings=True
+                    )
                     sim = float(np.dot(state_emb, q_emb))
                     # Sigmoid centering around semantic neutrality
                     prob = round(float(1.0 / (1.0 + np.exp(-5.0 * (sim - 0.20)))), 4)
                     prob = min(0.99, max(0.01, prob))
                     top_prob = prob
-                    empirical_acc = round(min(0.99, max(0.50, 0.50 + abs(prob - 0.50) * 1.1)), 4)
+                    empirical_acc = round(
+                        min(0.99, max(0.50, 0.50 + abs(prob - 0.50) * 1.1)), 4
+                    )
                 else:
                     q_lower = str(question_val).lower()
-                    prob = 0.94 if any(w in q_lower for w in ("relevant", "support", "valid", "true", "yes", "cohere")) else 0.88
+                    prob = (
+                        0.94
+                        if any(
+                            w in q_lower
+                            for w in (
+                                "relevant",
+                                "support",
+                                "valid",
+                                "true",
+                                "yes",
+                                "cohere",
+                            )
+                        )
+                        else 0.88
+                    )
                     top_prob = prob
                     empirical_acc = 0.96 if prob >= 0.90 else 0.82
 
                 selected = top_prob >= ds.fast_exit_threshold
                 probabilities = {"true": top_prob, "false": round(1.0 - top_prob, 4)}
-                conformal_set = [str(selected)] if empirical_acc >= (1.0 - alpha) else ["True", "False"]
+                conformal_set = (
+                    [str(selected)]
+                    if empirical_acc >= (1.0 - alpha)
+                    else ["True", "False"]
+                )
                 tokens_saved = base_tokens + 40
 
             elif request.primitive == "score":
                 lvls = request.levels or [1, 2, 3, 4, 5]
                 if embedder is not None:
-                    state_emb = embedder.encode(str(state_val), normalize_embeddings=True)
-                    q_emb = embedder.encode(str(question_val), normalize_embeddings=True)
+                    state_emb = embedder.encode(
+                        str(state_val), normalize_embeddings=True
+                    )
+                    q_emb = embedder.encode(
+                        str(question_val), normalize_embeddings=True
+                    )
                     sim = float(np.dot(state_emb, q_emb))
                     norm_score = (sim + 1.0) / 2.0
                     idx = round(norm_score * (len(lvls) - 1))
                     idx = min(max(0, idx), len(lvls) - 1)
                     selected = lvls[idx]
-                    probabilities = {str(lvl): round(1.0 / len(lvls), 3) for lvl in lvls}
+                    probabilities = {
+                        str(lvl): round(1.0 / len(lvls), 3) for lvl in lvls
+                    }
                     probabilities[str(selected)] = 0.82
                     norm = sum(probabilities.values())
-                    probabilities = {k: round(v / norm, 4) for k, v in probabilities.items()}
+                    probabilities = {
+                        k: round(v / norm, 4) for k, v in probabilities.items()
+                    }
                     top_prob = 0.82
                     empirical_acc = 0.89
                 else:
                     selected = lvls[-1] if len(lvls) > 2 else lvls[0]
-                    probabilities = {str(lvl): round(1.0 / len(lvls), 3) for lvl in lvls}
+                    probabilities = {
+                        str(lvl): round(1.0 / len(lvls), 3) for lvl in lvls
+                    }
                     probabilities[str(selected)] = 0.82
                     norm = sum(probabilities.values())
-                    probabilities = {k: round(v / norm, 4) for k, v in probabilities.items()}
+                    probabilities = {
+                        k: round(v / norm, 4) for k, v in probabilities.items()
+                    }
                     top_prob = 0.82
                     empirical_acc = 0.89
 
@@ -470,7 +563,11 @@ class EngineSettingsService:
             elapsed_ms = 12.4
 
         # Calibrated System 1 vs fast-exit routing tier
-        tier = "fast_exit" if empirical_acc >= ds.fast_exit_threshold else ("system1" if empirical_acc >= ds.uncertainty_threshold else "system2")
+        tier = (
+            "fast_exit"
+            if empirical_acc >= ds.fast_exit_threshold
+            else ("system1" if empirical_acc >= ds.uncertainty_threshold else "system2")
+        )
         backend_name = (
             ("laya_mlx" if ds.provider in ("laya", "mlx") else ds.provider)
             if real_executed
@@ -529,7 +626,7 @@ class EngineSettingsService:
                 from episteme_pipeline.schema.default_schema import SchemaConfig
 
                 schema = SchemaConfig.model_validate(schema_dict)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
         return SchemaMapper(
             schema=schema,
@@ -580,9 +677,7 @@ class EngineSettingsService:
         arg_rel_types = schema_dict.get("argument_relation_types", [])
 
         known_predicates = (
-            set(rel_types)
-            | set(arg_rel_types)
-            | set(settings.predicate_aliases.keys())
+            set(rel_types) | set(arg_rel_types) | set(settings.predicate_aliases.keys())
         )
 
         counts: dict[str, int] = {}
@@ -597,16 +692,22 @@ class EngineSettingsService:
                     graph = self.reader.get_graph(run_id, use_run_schema=False)
                     for edge in graph.edges:
                         pred = edge.type
-                        if pred and pred not in known_predicates and mapper.resolve_polarity(pred) is None:
+                        if (
+                            pred
+                            and pred not in known_predicates
+                            and mapper.resolve_polarity(pred) is None
+                        ):
                             counts[pred] = counts.get(pred, 0) + 1
                             sample_runs.setdefault(pred, set()).add(run_id)
-                except Exception:
+                except Exception:  # noqa: BLE001, S112 baseline
                     continue
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.warning("Failed to collect unmapped predicates across runs: %s", exc)
 
         results: list[UnmappedPredicateInfo] = []
-        for pred, count in sorted(counts.items(), key=lambda item: item[1], reverse=True):
+        for pred, count in sorted(
+            counts.items(), key=lambda item: item[1], reverse=True
+        ):
             results.append(
                 UnmappedPredicateInfo(
                     predicate=pred,

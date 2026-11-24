@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 _PRIMITIVE_TYPES = (int, float, str, bool, bytes, type(None), type)
 
+
 @runtime_checkable
 class Fingerprintable(Protocol):
     """Protocol for components that expose deterministic state for cache invalidation.
@@ -124,7 +125,11 @@ def find_components(
     if not isinstance(raw_dict, dict):
         return {}
 
-    attrs = {k: v for k, v in raw_dict.items() if isinstance(k, str) and not k.startswith("_")}
+    attrs = {
+        k: v
+        for k, v in raw_dict.items()
+        if isinstance(k, str) and not k.startswith("_")
+    }
 
     for name, value in attrs.items():
         if value is None:
@@ -142,13 +147,17 @@ def find_components(
                 sub_path = f"{full_path}[{i}]"
                 if is_component(item):
                     discovered[sub_path] = item
-                discovered.update(find_components(item, prefix=sub_path, visited=visited))
+                discovered.update(
+                    find_components(item, prefix=sub_path, visited=visited)
+                )
         elif isinstance(value, dict):
             for k, item in value.items():
                 if isinstance(k, str) and not k.startswith("_"):
                     sub_path = f"{full_path}.{k}"
                     if is_component(item, attr_name=k):
                         discovered[sub_path] = item
-                    discovered.update(find_components(item, prefix=sub_path, visited=visited))
+                    discovered.update(
+                        find_components(item, prefix=sub_path, visited=visited)
+                    )
 
     return discovered

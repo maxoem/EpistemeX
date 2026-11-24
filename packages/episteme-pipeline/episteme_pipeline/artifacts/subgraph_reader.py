@@ -124,9 +124,7 @@ class ArtifactSubgraphReader(GraphReader):
         )
 
     @classmethod
-    def from_collection(
-        cls, collection: ArtifactCollection
-    ) -> ArtifactSubgraphReader:
+    def from_collection(cls, collection: ArtifactCollection) -> ArtifactSubgraphReader:
         """Construct an :class:`ArtifactSubgraphReader` directly from an :class:`ArtifactCollection`.
 
         Parameters
@@ -144,9 +142,7 @@ class ArtifactSubgraphReader(GraphReader):
         view = Phase4ArtifactsView.from_collection(collection)
         return cls.from_view(view)
 
-    def register_entity(
-        self, entity: L2Entity, envelope: str | None = None
-    ) -> None:
+    def register_entity(self, entity: L2Entity, envelope: str | None = None) -> None:
         """Register or update an entity in the in-memory reader during intra-phase discovery.
 
         Parameters
@@ -583,4 +579,4 @@ class ArtifactSubgraphReader(GraphReader):
 
     async def close(self) -> None:
         """Close reader resources (no-op for in-memory reader)."""
-        return None
+        return

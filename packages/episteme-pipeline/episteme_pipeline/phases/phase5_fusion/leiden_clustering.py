@@ -46,7 +46,6 @@ def _extract_node_spec(node: Any, default_type: str) -> tuple[str, str]:
             return str(node), default_type
 
 
-
 def _extract_edge_spec(edge: Any) -> tuple[str, str, float] | None:
     """Extract edge endpoints and confidence weight without unsafe reflection."""
     if isinstance(edge, L2Triple):
@@ -105,7 +104,11 @@ class LeidenTheoryClustering(TheoryFusion):
         LeidenTheoryClustering
             Configured LeidenTheoryClustering instance.
         """
-        if cluster_verifier is None and config.gating.enabled and decision_engine is not None:
+        if (
+            cluster_verifier is None
+            and config.gating.enabled
+            and decision_engine is not None
+        ):
             from episteme_pipeline.phases.phase5_fusion.argument_clustering import (
                 InterDocumentClusterVerifier,
             )
@@ -145,24 +148,38 @@ class LeidenTheoryClustering(TheoryFusion):
 
     async def fuse(self, graph_store: FusionGraph) -> None:
         if self.cluster_layer in ("l2_entities", "both"):
-            logger.info("Phase 5: Fetching global entities and relations for Leiden clustering.")
+            logger.info(
+                "Phase 5: Fetching global entities and relations for Leiden clustering."
+            )
             entities = await graph_store.get_entities()
             triples = await graph_store.get_all_entity_triples()
             if entities and triples:
-                await self._run_leiden_for_nodes(graph_store, entities, triples, "L2Entity")
+                await self._run_leiden_for_nodes(
+                    graph_store, entities, triples, "L2Entity"
+                )
             else:
-                logger.info("Phase 5: Entity graph is empty, skipping Leiden clustering for L2Entities.")
+                logger.info(
+                    "Phase 5: Entity graph is empty, skipping Leiden clustering for L2Entities."
+                )
 
         if self.cluster_layer in ("theory_atoms", "both"):
-            logger.info("Phase 5: Fetching TheoryAtoms and TheoryRelations for Leiden clustering.")
+            logger.info(
+                "Phase 5: Fetching TheoryAtoms and TheoryRelations for Leiden clustering."
+            )
             atoms = await graph_store.get_theory_atoms()
             relations = await graph_store.get_all_theory_relations()
             if atoms and relations:
-                await self._run_leiden_for_nodes(graph_store, atoms, relations, "TheoryAtom")
+                await self._run_leiden_for_nodes(
+                    graph_store, atoms, relations, "TheoryAtom"
+                )
             else:
-                logger.info("Phase 5: Theory graph is empty, skipping Leiden clustering for TheoryAtoms.")
+                logger.info(
+                    "Phase 5: Theory graph is empty, skipping Leiden clustering for TheoryAtoms."
+                )
 
-    async def _run_leiden_for_nodes(self, graph_store: FusionGraph, nodes, edges, node_type: str) -> None:
+    async def _run_leiden_for_nodes(
+        self, graph_store: FusionGraph, nodes, edges, node_type: str
+    ) -> None:
         # Build NetworkX Graph
         G = nx.Graph()
 
@@ -206,7 +223,10 @@ class LeidenTheoryClustering(TheoryFusion):
         for p in partitions:
             communities_by_level[p.level][p.cluster].append(p.node)
 
-        logger.info("Phase 5: Leiden clustering found %d levels of hierarchy.", len(communities_by_level))
+        logger.info(
+            "Phase 5: Leiden clustering found %d levels of hierarchy.",
+            len(communities_by_level),
+        )
 
         # Upsert communities to Graph Store
         total_communities = 0
@@ -216,7 +236,9 @@ class LeidenTheoryClustering(TheoryFusion):
         for level, clusters in communities_by_level.items():
             for cluster_id, node_ids in clusters.items():
                 if self.cluster_verifier is not None and len(node_ids) > 1:
-                    cluster_nodes = [node_map[nid] for nid in node_ids if nid in node_map]
+                    cluster_nodes = [
+                        node_map[nid] for nid in node_ids if nid in node_map
+                    ]
                     if not await self.cluster_verifier.should_fuse(cluster_nodes):
                         logger.info(
                             "Phase 5: Leiden community %s (level %s) rejected by fusion gate",
@@ -226,11 +248,13 @@ class LeidenTheoryClustering(TheoryFusion):
                         continue
 
                 comm_id = f"community_{node_type.lower()}_{level}_{cluster_id}"
-                communities_to_upsert.append({
-                    "community_id": comm_id,
-                    "level": level,
-                    "entity_ids": node_ids,
-                })
+                communities_to_upsert.append(
+                    {
+                        "community_id": comm_id,
+                        "level": level,
+                        "entity_ids": node_ids,
+                    }
+                )
                 total_communities += 1
 
         if communities_to_upsert:
@@ -239,4 +263,6 @@ class LeidenTheoryClustering(TheoryFusion):
             for batch in batched(communities_to_upsert, 500):
                 await graph_store.upsert_communities(list(batch))
 
-        logger.info("Phase 5: Stored %d Community nodes for %s.", total_communities, node_type)
+        logger.info(
+            "Phase 5: Stored %d Community nodes for %s.", total_communities, node_type
+        )

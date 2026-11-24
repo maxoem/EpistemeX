@@ -22,7 +22,10 @@ from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 def test_extract_adu_text() -> None:
     """Verify ADU text span extraction from tagged text."""
     tagged = "Here is intro. <AC1>Kant argued for synthetic a priori judgments.</AC1> Followed by text."
-    assert _extract_adu_text(tagged, "AC1") == "Kant argued for synthetic a priori judgments."
+    assert (
+        _extract_adu_text(tagged, "AC1")
+        == "Kant argued for synthetic a priori judgments."
+    )
     assert _extract_adu_text(tagged, "AC2") == "[AC2]"
 
 
@@ -170,8 +173,12 @@ async def test_jev_arc_classifier_escalates_ambiguous_conformal_set() -> None:
     )
 
     classifier = JevARCClassifier(mock_engine, confidence_threshold=0.60)
-    atom_a = TheoryAtom(id="ac_a", text="Premise A", component_type="PREMISE", source_chunk_id="c1")
-    atom_b = TheoryAtom(id="ac_b", text="Claim B", component_type="CLAIM", source_chunk_id="c2")
+    atom_a = TheoryAtom(
+        id="ac_a", text="Premise A", component_type="PREMISE", source_chunk_id="c1"
+    )
+    atom_b = TheoryAtom(
+        id="ac_b", text="Claim B", component_type="CLAIM", source_chunk_id="c2"
+    )
 
     rels, escalated = await classifier.classify_global_with_triage(
         local_components=[atom_a, atom_b],
@@ -228,8 +235,12 @@ async def test_cascading_acc_classifier_fast_exit() -> None:
 @pytest.mark.asyncio
 async def test_cascading_arc_classifier_escalates_only_triaged_pairs() -> None:
     """Verify CascadingARCClassifier escalates only ambiguous or audited pairs to LLM."""
-    atom_a = TheoryAtom(id="ac_a", text="Premise A", component_type="PREMISE", source_chunk_id="c1")
-    atom_b = TheoryAtom(id="ac_b", text="Claim B", component_type="CLAIM", source_chunk_id="c2")
+    atom_a = TheoryAtom(
+        id="ac_a", text="Premise A", component_type="PREMISE", source_chunk_id="c1"
+    )
+    atom_b = TheoryAtom(
+        id="ac_b", text="Claim B", component_type="CLAIM", source_chunk_id="c2"
+    )
 
     fast_arc = MagicMock(spec=ARCClassifier)
     # fast_arc classifies and marks (atom_a, atom_b) as escalated
@@ -239,7 +250,11 @@ async def test_cascading_arc_classifier_escalates_only_triaged_pairs() -> None:
 
     llm_arc = MagicMock(spec=ARCClassifier)
     llm_rel = TheoryRelation(
-        source_id="ac_a", target_id="ac_b", relation_type="ATTACKS", confidence=0.85, scope="global"
+        source_id="ac_a",
+        target_id="ac_b",
+        relation_type="ATTACKS",
+        confidence=0.85,
+        scope="global",
     )
     llm_arc.classify_pairs = AsyncMock(return_value=[llm_rel])
 
@@ -263,16 +278,22 @@ async def test_cascading_arc_classifier_escalates_only_triaged_pairs() -> None:
 @pytest.mark.asyncio
 async def test_cascading_arc_classifier_fast_exit_without_llm() -> None:
     """Verify CascadingARCClassifier accepts fast relations and skips LLM when no pairs escalate."""
-    atom_a = TheoryAtom(id="ac_a", text="Premise A", component_type="PREMISE", source_chunk_id="c1")
-    atom_b = TheoryAtom(id="ac_b", text="Claim B", component_type="CLAIM", source_chunk_id="c2")
+    atom_a = TheoryAtom(
+        id="ac_a", text="Premise A", component_type="PREMISE", source_chunk_id="c1"
+    )
+    atom_b = TheoryAtom(
+        id="ac_b", text="Claim B", component_type="CLAIM", source_chunk_id="c2"
+    )
 
     fast_rel = TheoryRelation(
-        source_id="ac_a", target_id="ac_b", relation_type="SUPPORTS", confidence=0.92, scope="global"
+        source_id="ac_a",
+        target_id="ac_b",
+        relation_type="SUPPORTS",
+        confidence=0.92,
+        scope="global",
     )
     fast_arc = MagicMock(spec=ARCClassifier)
-    fast_arc.classify_global_with_triage = AsyncMock(
-        return_value=([fast_rel], [])
-    )
+    fast_arc.classify_global_with_triage = AsyncMock(return_value=([fast_rel], []))
 
     llm_arc = MagicMock(spec=ARCClassifier)
     llm_arc.classify_pairs = AsyncMock()
@@ -291,8 +312,6 @@ async def test_cascading_arc_classifier_fast_exit_without_llm() -> None:
     assert len(result) == 1
     assert result[0] is fast_rel
     assert not llm_arc.classify_pairs.called
-
-
 
 
 def test_jev_acc_classifier_prompt_handling() -> None:
@@ -314,8 +333,12 @@ def test_jev_acc_classifier_prompt_handling() -> None:
     assert acc_custom.decision_template == "Custom ACC question?"
 
     # 3. Missing/empty prompt raises ValueError
-    empty_bundle = StructuredPromptBundle(direct_template="Direct", decision_template="")
-    with pytest.raises(ValueError, match="No decision prompt configured for JevACCClassifier"):
+    empty_bundle = StructuredPromptBundle(
+        direct_template="Direct", decision_template=""
+    )
+    with pytest.raises(
+        ValueError, match="No decision prompt configured for JevACCClassifier"
+    ):
         JevACCClassifier(mock_engine, prompts=empty_bundle)
 
 
@@ -338,11 +361,13 @@ def test_jev_arc_classifier_prompt_handling() -> None:
     assert arc_custom.decision_template == "Custom ARC question?"
 
     # 3. Missing/empty prompt raises ValueError
-    empty_bundle = StructuredPromptBundle(direct_template="Direct", decision_template="")
-    with pytest.raises(ValueError, match="No decision prompt configured for JevARCClassifier"):
+    empty_bundle = StructuredPromptBundle(
+        direct_template="Direct", decision_template=""
+    )
+    with pytest.raises(
+        ValueError, match="No decision prompt configured for JevARCClassifier"
+    ):
         JevARCClassifier(mock_engine, prompts=empty_bundle)
-
-
 
 
 def test_phase4_runner_respects_user_overrides() -> None:
@@ -397,8 +422,12 @@ async def test_jev_arc_dynamic_schema() -> None:
     mock_engine.evaluate_choice = AsyncMock(side_effect=fake_evaluate_choice)
 
     classifier = JevARCClassifier(mock_engine, confidence_threshold=0.7)
-    atom_a = TheoryAtom(id="a", text="Premise", component_type="CLAIM", source_chunk_id="c1")
-    atom_b = TheoryAtom(id="b", text="Conclusion", component_type="CLAIM", source_chunk_id="c2")
+    atom_a = TheoryAtom(
+        id="a", text="Premise", component_type="CLAIM", source_chunk_id="c1"
+    )
+    atom_b = TheoryAtom(
+        id="b", text="Conclusion", component_type="CLAIM", source_chunk_id="c2"
+    )
 
     rels = await classifier.classify_pair(atom_a, atom_b, custom_schema)
 
@@ -433,14 +462,28 @@ async def test_jev_arc_multiplex_dynamic_schema() -> None:
 
     async def fake_evaluate_noul(state, question):
         evaluated_questions.append(question)
-        return DecisionNoulResult(passed=True, probability=0.90, empirical_accuracy=0.88)
+        return DecisionNoulResult(
+            passed=True, probability=0.90, empirical_accuracy=0.88
+        )
 
     mock_engine = MagicMock()
     mock_engine.evaluate_noul = AsyncMock(side_effect=fake_evaluate_noul)
 
-    classifier = JevARCClassifier(mock_engine, arc_mode="multiplex", confidence_threshold=0.7)
-    atom_a = TheoryAtom(id="a", text="Theory A", component_type="TheoreticalHypothesis", source_chunk_id="c1")
-    atom_b = TheoryAtom(id="b", text="Theory B", component_type="TheoreticalHypothesis", source_chunk_id="c2")
+    classifier = JevARCClassifier(
+        mock_engine, arc_mode="multiplex", confidence_threshold=0.7
+    )
+    atom_a = TheoryAtom(
+        id="a",
+        text="Theory A",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="c1",
+    )
+    atom_b = TheoryAtom(
+        id="b",
+        text="Theory B",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="c2",
+    )
 
     rels = await classifier.classify_pair(atom_a, atom_b, custom_schema)
 
@@ -468,9 +511,13 @@ def test_cascading_classifiers_direct_instantiation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_jev_acc_intensional_mode_and_cascading_escalation_on_attributed() -> None:
+async def test_jev_acc_intensional_mode_and_cascading_escalation_on_attributed() -> (
+    None
+):
     """Verify JevACCClassifier delegates intensional mode to DecisionEngine and escalates attributed claims to LLM."""
-    from episteme_pipeline.prompts.default_prompts import DECISION_INTENSIONAL_MODE_QUESTION
+    from episteme_pipeline.prompts.default_prompts import (
+        DECISION_INTENSIONAL_MODE_QUESTION,
+    )
 
     captured_questions: list[str] = []
 
@@ -598,5 +645,3 @@ def test_centralized_scope_input_formatters() -> None:
         "Source: Space is a priori.\n"
         "Target [mode=attributed, attributed_to=David Hume]: Causation is constant conjunction."
     )
-
-

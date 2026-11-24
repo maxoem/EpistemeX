@@ -34,9 +34,8 @@ from episteme_pipeline.protocols.graph_projection import (
     GraphProjectionProtocol,
     ProjectionBatchAccumulator,
 )
-from episteme_pipeline.schema.default_schema import StructuralRelationType
 from episteme_pipeline.protocols.graph_store import ProjectionGraph
-from episteme_pipeline.schema.default_schema import SchemaConfig
+from episteme_pipeline.schema.default_schema import SchemaConfig, StructuralRelationType
 
 if TYPE_CHECKING:
     from episteme_pipeline.artifacts.execution import ArtifactCollection

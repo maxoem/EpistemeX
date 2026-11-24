@@ -9,10 +9,6 @@ from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
     ArtifactExecutionContext,
 )
-from tests.helpers.artifact_mappers import (
-    map_phase3_output_to_artifacts,
-    map_phase4_output_to_artifacts,
-)
 from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
 from episteme_pipeline.contracts.domain import (
@@ -34,6 +30,11 @@ from episteme_pipeline.runs.models import (
     RunManifest,
     RunPhaseRecord,
     RunStatus,
+)
+
+from tests.helpers.artifact_mappers import (
+    map_phase3_output_to_artifacts,
+    map_phase4_output_to_artifacts,
 )
 
 

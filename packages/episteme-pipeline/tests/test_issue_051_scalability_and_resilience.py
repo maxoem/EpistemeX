@@ -53,11 +53,13 @@ def test_working_memory_state_snapshot_roundtrip():
     """Verify bit-for-bit state restore across all WorkingMemoryState implementations."""
     # 1. JsonPatchWorkingMemoryState
     jp_state = JsonPatchWorkingMemoryState()
-    jp_state.update({
-        "active_entities": ["Kant", "Categorical Imperative"],
-        "unresolved_references": ["the former"],
-        "current_argument_branch": "deontological ethics",
-    })
+    jp_state.update(
+        {
+            "active_entities": ["Kant", "Categorical Imperative"],
+            "unresolved_references": ["the former"],
+            "current_argument_branch": "deontological ethics",
+        }
+    )
     raw_jp = jp_state.get_raw_state()
     restored_jp = JsonPatchWorkingMemoryState()
     restored_jp.load_raw_state(raw_jp)
@@ -66,11 +68,13 @@ def test_working_memory_state_snapshot_roundtrip():
 
     # 2. PydanticWorkingMemoryState
     pyd_state = PydanticWorkingMemoryState()
-    pyd_state.update({
-        "active_entities": ["e1", "e2"],
-        "unresolved_references": ["m1"],
-        "current_argument_branch": "analytic a priori",
-    })
+    pyd_state.update(
+        {
+            "active_entities": ["e1", "e2"],
+            "unresolved_references": ["m1"],
+            "current_argument_branch": "analytic a priori",
+        }
+    )
     raw_pyd = pyd_state.get_raw_state()
     restored_pyd = PydanticWorkingMemoryState()
     restored_pyd.load_raw_state(raw_pyd)
@@ -179,7 +183,9 @@ async def test_phase2_concurrent_chapter_streams():
         execution_order.append(chunk.id)
         # Yield to let concurrent tasks interleave
         await asyncio.sleep(0.01)
-        entity = L2Entity(id=f"e_{chunk.id}", name=f"Entity_{chunk.id}", label="Concept")
+        entity = L2Entity(
+            id=f"e_{chunk.id}", name=f"Entity_{chunk.id}", label="Concept"
+        )
         return [(entity, "envelope text")], [], chunk.id, {}, False, None
 
     runner._process_chunk = mock_process_chunk  # type: ignore[assignment]
@@ -197,7 +203,9 @@ async def test_phase2_concurrent_chapter_streams():
     assert execution_order.index("c2_1") < execution_order.index("c2_2")
 
     # Verify snapshots were saved in store for all chunks
-    s1_1 = await store.get_chunk_state_snapshot(f"phase2:{context.lineage_fingerprint}", "c1_1")
+    s1_1 = await store.get_chunk_state_snapshot(
+        f"phase2:{context.lineage_fingerprint}", "c1_1"
+    )
     assert s1_1 is not None
 
 
@@ -263,7 +271,9 @@ async def test_checkpointed_batch_executor_systematic_failure_guard():
         guard_systematic_failure=True,
     )
 
-    with pytest.raises(SystematicBatchFailureError, match="All 2 items of the first batch failed"):
+    with pytest.raises(
+        SystematicBatchFailureError, match="All 2 items of the first batch failed"
+    ):
         await executor.execute(items)
 
 
@@ -288,7 +298,9 @@ async def test_checkpointed_batch_executor_upfront_filter_and_uow_order():
     async def process_item(item: str) -> str:
         return f"out_{item}"
 
-    async def on_batch_complete(outputs: list[str], records: list[PhaseItemRecord]) -> None:
+    async def on_batch_complete(
+        outputs: list[str], records: list[PhaseItemRecord]
+    ) -> None:
         # Must run BEFORE item_2 and item_4 are committed to store
         unprocessed_during_hook = await store.filter_unprocessed_items(
             ["item_2", "item_4"], phase
@@ -311,7 +323,6 @@ async def test_checkpointed_batch_executor_upfront_filter_and_uow_order():
     # are packed into a SINGLE batch of size 2 rather than two fragmented batches of size 1
     assert call_log == ["persisted:2"]
     assert await store.filter_unprocessed_items(["item_2", "item_4"], phase) == []
-
 
 
 # ---------------------------------------------------------------------------
@@ -348,17 +359,20 @@ def test_csls_similarity_matrix_penalizes_hubs():
     assert np.allclose(csls, csls.T)
     # Hub off-diagonal similarity should be reduced relative to raw cosine
     from episteme_pipeline.utils.similarity import cosine_similarity_matrix
+
     cos = cosine_similarity_matrix(vectors)
     assert csls[0, 1] < cos[0, 1]
 
 
 def test_z_score_normalize():
     """Verify similarity standardization into zero mean and unit variance."""
-    mat = np.array([
-        [1.0, 0.9, 0.2],
-        [0.9, 1.0, 0.4],
-        [0.2, 0.4, 1.0],
-    ])
+    mat = np.array(
+        [
+            [1.0, 0.9, 0.2],
+            [0.9, 1.0, 0.4],
+            [0.2, 0.4, 1.0],
+        ]
+    )
     z = z_score_normalize(mat, symmetric=True)
     # Off-diagonal elements (0.9, 0.2, 0.4)
     off_diag = [z[0, 1], z[0, 2], z[1, 2]]
@@ -403,6 +417,7 @@ async def test_arc_classifier_dynamic_k_and_csls():
     # Dynamic K_eff(4) = min(2, max(1, 2 * 2)) = 2
     # Ensure no component is paired with more than 2 partners
     from collections import defaultdict
+
     counts = defaultdict(int)
     for a, b in pairs:
         counts[a.id] += 1
@@ -422,7 +437,6 @@ async def test_phase2_runner_mid_chapter_crash_resume_restores_stm_eviction_and_
 ):
     """Verify Phase2Runner mid-chapter crash resume restores STM, eviction state, stream isolation, and pre-crash artifacts."""
     from episteme_pipeline.artifacts.checkpoint_store import FileSystemCheckpointStore
-    from episteme_pipeline.artifacts.execution import ArtifactCollection
     from episteme_pipeline.artifacts.models import ArtifactKind
     from episteme_pipeline.artifacts.subgraph_reader import ArtifactSubgraphReader
     from episteme_pipeline.contracts.domain import L2Triple
@@ -513,7 +527,9 @@ async def test_phase2_runner_mid_chapter_crash_resume_restores_stm_eviction_and_
         await runner1.run(view, context)
 
     # First chapter stream must have been forked: runner's base manager stays untouched
-    assert runner1.working_memory_manager.snapshot_state().get("active_entities", []) == []
+    assert (
+        runner1.working_memory_manager.snapshot_state().get("active_entities", []) == []
+    )
 
     # Persisted snapshot must include EpisodicEvictionHandler state
     phase_tag = f"phase2:{context.lineage_fingerprint}"
@@ -573,8 +589,7 @@ async def test_phase2_runner_mid_chapter_crash_resume_restores_stm_eviction_and_
 
     # Returned ArtifactCollection must include recovered pre-crash entities & triples from c1
     linked_ids = {
-        env.payload.entity_id
-        for env in collection.of_kind(ArtifactKind.LINKED_ENTITY)
+        env.payload.entity_id for env in collection.of_kind(ArtifactKind.LINKED_ENTITY)
     }
     assert linked_ids == {"e_c1", "e_c2", "e_c3"}
     local_rels = collection.of_kind(ArtifactKind.LOCAL_RELATION)
@@ -642,9 +657,15 @@ async def test_arc_classifier_checkpointed_lineage_quarantine_and_systematic_gua
 
     chk_store = FileSystemCheckpointStore(tmp_path / "arc_checkpoints")
     atoms = [
-        TheoryAtom(id="a1", text="Premise 1", component_type="PREMISE", source_chunk_id="c1"),
-        TheoryAtom(id="a2", text="Claim 2", component_type="CLAIM", source_chunk_id="c2"),
-        TheoryAtom(id="a3", text="Claim 3", component_type="CLAIM", source_chunk_id="c3"),
+        TheoryAtom(
+            id="a1", text="Premise 1", component_type="PREMISE", source_chunk_id="c1"
+        ),
+        TheoryAtom(
+            id="a2", text="Claim 2", component_type="CLAIM", source_chunk_id="c2"
+        ),
+        TheoryAtom(
+            id="a3", text="Claim 3", component_type="CLAIM", source_chunk_id="c3"
+        ),
     ]
     pairs = [(atoms[0], atoms[1]), (atoms[0], atoms[2])]
 
@@ -727,7 +748,12 @@ async def test_phase3b_consolidation_adaptive_k_and_z_score_pruning():
 
     store = InMemoryGraphStore()
     entities = [
-        L2Entity(id=f"e{i}", name=f"Concept_{i}", label="Concept", textual_envelope=f"text {i}")
+        L2Entity(
+            id=f"e{i}",
+            name=f"Concept_{i}",
+            label="Concept",
+            textual_envelope=f"text {i}",
+        )
         for i in range(4)
     ]
     await store.upsert_entities(entities)
@@ -788,7 +814,12 @@ async def test_jev_arc_classifier_uses_csls_and_adaptive_k():
         [0.85, 0.3, 0.0],
     ]
     atoms = [
-        TheoryAtom(id=f"a{i}", text=f"Claim {i}", component_type="CLAIM", source_chunk_id=f"c{i}")
+        TheoryAtom(
+            id=f"a{i}",
+            text=f"Claim {i}",
+            component_type="CLAIM",
+            source_chunk_id=f"c{i}",
+        )
         for i in range(4)
     ]
 

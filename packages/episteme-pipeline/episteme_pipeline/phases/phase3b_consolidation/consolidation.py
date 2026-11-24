@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from episteme_pipeline.contracts.phase_contracts import EpistemicCurationLedger
@@ -119,7 +119,9 @@ class LatentGraphConsolidation(InstanceFusion):
         if canonical_elector is not None:
             self.canonical_elector = canonical_elector
         elif enable_jev_cluster_verification and decision_engine is not None:
-            self.canonical_elector = CanonicalRepresentativeElector(decision_engine=decision_engine)
+            self.canonical_elector = CanonicalRepresentativeElector(
+                decision_engine=decision_engine
+            )
         else:
             self.canonical_elector = CanonicalRepresentativeElector()
 
@@ -196,7 +198,9 @@ class LatentGraphConsolidation(InstanceFusion):
         verifier = None
         canonical_elector = None
         if config.verification.enabled and decision_engine is not None:
-            verifier = BorderlinePairVerifier.from_config(config.verification, decision_engine)
+            verifier = BorderlinePairVerifier.from_config(
+                config.verification, decision_engine
+            )
             canonical_elector = CanonicalRepresentativeElector(
                 decision_engine=decision_engine,
                 prompt_bundle=config.verification.canonical_election_prompts,
@@ -223,7 +227,9 @@ class LatentGraphConsolidation(InstanceFusion):
             max_diameter=config.max_diameter,
         )
 
-    async def _get_relations_for_entity(self, entity_id: str, graph_store: FusionGraph) -> set[str]:
+    async def _get_relations_for_entity(
+        self, entity_id: str, graph_store: FusionGraph
+    ) -> set[str]:
         """Fetch the relation signatures for a given entity.
 
         Parameters
@@ -241,7 +247,7 @@ class LatentGraphConsolidation(InstanceFusion):
         env = await graph_store.get_neighborhood(entity_id, depth=1)
         if not env.nodes and not env.triples:
             return set()
-        
+
         signatures = set()
         for t in env.triples:
             if t.subject_id == entity_id:
@@ -267,7 +273,7 @@ class LatentGraphConsolidation(InstanceFusion):
             both sets are empty.
         """
         if not set1 or not set2:
-            # If both are empty, Jaccard is mathematically 1.0, but semantically 
+            # If both are empty, Jaccard is mathematically 1.0, but semantically
             # we return 0.0 for graph merging (isolated nodes aren't automatically identical).
             return 0.0
         intersection = len(set1.intersection(set2))
@@ -299,7 +305,9 @@ class LatentGraphConsolidation(InstanceFusion):
             A dictionary mapping duplicate entity IDs to their canonical entity ID.
         """
         if self.embedding_model is None:
-            logger.warning("LatentGraphConsolidation: no embedding_model — returning empty map.")
+            logger.warning(
+                "LatentGraphConsolidation: no embedding_model — returning empty map."
+            )
             return {}
 
         entities = await graph_store.get_entities()
@@ -380,7 +388,7 @@ class LatentGraphConsolidation(InstanceFusion):
             if entities[i].label != entities[j].label:
                 continue
 
-            if self.z_score_threshold is not None and z_scores is not None:
+            if self.z_score_threshold is not None and z_scores is not None:  # noqa: SIM102 baseline
                 if float(z_scores[i, j]) < self.z_score_threshold:
                     continue
 
@@ -392,22 +400,30 @@ class LatentGraphConsolidation(InstanceFusion):
             if sim >= definite_threshold:
                 partner_count[i] += 1
                 partner_count[j] += 1
-                rel_i = await self._get_relations_for_entity(entities[i].id, graph_store)
-                rel_j = await self._get_relations_for_entity(entities[j].id, graph_store)
+                rel_i = await self._get_relations_for_entity(
+                    entities[i].id, graph_store
+                )
+                rel_j = await self._get_relations_for_entity(
+                    entities[j].id, graph_store
+                )
                 if self._jaccard(rel_i, rel_j) >= self.relation_overlap_threshold:
                     edges.append((i, j))
             elif self.verifier is not None and sim >= self.borderline_similarity_lower:
                 partner_count[i] += 1
                 partner_count[j] += 1
-                rel_i = await self._get_relations_for_entity(entities[i].id, graph_store)
-                rel_j = await self._get_relations_for_entity(entities[j].id, graph_store)
+                rel_i = await self._get_relations_for_entity(
+                    entities[i].id, graph_store
+                )
+                rel_j = await self._get_relations_for_entity(
+                    entities[j].id, graph_store
+                )
                 selected, emp_acc, pred_set = await self.verifier.verify(
                     entities[i],
                     entities[j],
                     relation_signatures_a=rel_i,
                     relation_signatures_b=rel_j,
                 )
-                is_singleton = (pred_set == ["IDENTICAL_MERGE"])
+                is_singleton = pred_set == ["IDENTICAL_MERGE"]
                 is_high_conf = (
                     selected == "IDENTICAL_MERGE"
                     and emp_acc >= self.verifier.confidence_threshold

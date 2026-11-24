@@ -107,7 +107,6 @@ def test_pipeline_input_accepts_structural_anchor() -> None:
     assert pipe_in.structural_anchor == anchor
 
 
-
 def test_fingerprint_structural_anchor_deterministic() -> None:
     """Verify fingerprint_structural_anchor behaves deterministically."""
     assert fingerprint_structural_anchor(None) is None
@@ -142,16 +141,22 @@ def test_manifest_invalidated_when_structural_anchor_changes(tmp_path: Path) -> 
     )
 
     input_no_anchor = PipelineInput(source_paths=[str(sample_doc)])
-    manifest1 = pipeline.engine.build_manifest(run_id="run-1", pipeline_input=input_no_anchor)
+    manifest1 = pipeline.engine.build_manifest(
+        run_id="run-1", pipeline_input=input_no_anchor
+    )
 
     input_with_anchor = PipelineInput(
         source_paths=[str(sample_doc)],
         structural_anchor=GlobalStructuralAnchor(global_thesis="New Thesis"),
     )
-    manifest2 = pipeline.engine.build_manifest(run_id="run-2", pipeline_input=input_with_anchor)
+    manifest2 = pipeline.engine.build_manifest(
+        run_id="run-2", pipeline_input=input_with_anchor
+    )
 
     assert manifest1.input_fingerprint != manifest2.input_fingerprint
-    assert manifest2.input_fingerprint_inputs["structural_anchor_fingerprint"] is not None
+    assert (
+        manifest2.input_fingerprint_inputs["structural_anchor_fingerprint"] is not None
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +168,9 @@ def test_manifest_invalidated_when_structural_anchor_changes(tmp_path: Path) -> 
 async def test_phase1_extracts_document_toc_anchor(tmp_path: Path) -> None:
     """Verify Phase 1 extracts auto-parsed ToC outline and commits it to Neo4j."""
     sample_doc = tmp_path / "kant.md"
-    sample_doc.write_text("# Chapter 1: Transcendental Aesthetic\nSpace and time.", encoding="utf-8")
+    sample_doc.write_text(
+        "# Chapter 1: Transcendental Aesthetic\nSpace and time.", encoding="utf-8"
+    )
 
     mock_graph_store = AsyncMock()
     runner = Phase1Runner(
@@ -183,15 +190,26 @@ async def test_phase1_extracts_document_toc_anchor(tmp_path: Path) -> None:
     collection = await runner.run(pipe_input, context)
 
     # Document artifact payload verification
-    doc_artifacts = [a for a in collection.artifacts if a.payload.__class__.__name__ == "DocumentArtifact"]
+    doc_artifacts = [
+        a
+        for a in collection.artifacts
+        if a.payload.__class__.__name__ == "DocumentArtifact"
+    ]
     assert len(doc_artifacts) == 1
     doc_payload: DocumentArtifact = doc_artifacts[0].payload
     assert doc_payload.structural_anchor is not None
     # Auto-parsed ToC outline must be preserved
-    assert any("Transcendental Aesthetic" in s for s in doc_payload.structural_anchor.toc_structure)
+    assert any(
+        "Transcendental Aesthetic" in s
+        for s in doc_payload.structural_anchor.toc_structure
+    )
 
     # Verify upsert_node on Document in Neo4j includes toc_structure
-    calls = [c for c in mock_graph_store.upsert_node.call_args_list if c.kwargs.get("label") == "Document"]
+    calls = [
+        c
+        for c in mock_graph_store.upsert_node.call_args_list
+        if c.kwargs.get("label") == "Document"
+    ]
     assert len(calls) >= 1
     doc_props = calls[0].kwargs["properties"]
     assert "Transcendental Aesthetic" in doc_props["toc_structure"]

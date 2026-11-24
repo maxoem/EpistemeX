@@ -93,7 +93,8 @@ class ResultTooLargeException(StudioProblemException):
             type="result-too-large",
             title="Result Too Large",
             status=413,
-            detail=detail or "Query result exceeded the maximum allowed row or element cap.",
+            detail=detail
+            or "Query result exceeded the maximum allowed row or element cap.",
         )
 
 
@@ -105,14 +106,17 @@ class OverlayNotImplementedException(StudioProblemException):
             type="overlay-not-implemented",
             title="Overlay Not Implemented",
             status=501,
-            detail=detail or "The requested overlay kind is reserved and not yet implemented.",
+            detail=detail
+            or "The requested overlay kind is reserved and not yet implemented.",
         )
 
 
 class InvalidConfigPatchException(StudioProblemException):
     """Raised when a configuration patch fails validation or contains invalid keys."""
 
-    def __init__(self, detail: str | None = None, extra: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, detail: str | None = None, extra: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(
             type="invalid-config-patch",
             title="Invalid Configuration Patch",
@@ -146,7 +150,6 @@ class BenchmarkNotFoundException(StudioProblemException):
         )
 
 
-
 def problem_json_response(problem: ProblemDetail) -> JSONResponse:
     """Serialize a ProblemDetail instance into an application/problem+json response.
 
@@ -167,7 +170,9 @@ def problem_json_response(problem: ProblemDetail) -> JSONResponse:
     )
 
 
-async def problem_exception_handler(request: Request, exc: StudioProblemException) -> Response:
+async def problem_exception_handler(
+    request: Request, exc: StudioProblemException
+) -> Response:
     """FastAPI exception handler for StudioProblemException.
 
     Parameters

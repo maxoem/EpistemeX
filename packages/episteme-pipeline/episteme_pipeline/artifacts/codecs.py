@@ -260,7 +260,9 @@ class LinkedEntityCodec:
             confidence=payload.confidence,
             text_anchor=payload.text_anchor,
             source_chunk_ids=uniq_chunk_ids,
-            conceptions=[EntityConception.model_validate(c) for c in payload.conceptions],
+            conceptions=[
+                EntityConception.model_validate(c) for c in payload.conceptions
+            ],
             polysemy_variance=payload.polysemy_variance,
         )
 

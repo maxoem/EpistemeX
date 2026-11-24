@@ -159,7 +159,9 @@ def clique_constrained_components(
                 node_to_cluster[m] = c_u
             del cluster_members[c_v]
 
-    return sorted([sorted(members) for members in cluster_members.values()], key=lambda c: c[0])
+    return sorted(
+        [sorted(members) for members in cluster_members.values()], key=lambda c: c[0]
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,7 +255,7 @@ def compute_z1_grounding(
         )
         premises = rel.effective_premise_ids
 
-        if pol > 0 and rel.target_id in in_support_degree:
+        if pol > 0 and rel.target_id in in_support_degree:  # noqa: SIM102 baseline
             if any(pid != rel.target_id for pid in premises):
                 in_support_degree[rel.target_id] += 1
 
@@ -286,5 +288,3 @@ def compute_z1_grounding(
         in_support_degree=in_support_degree,
         empirical_content_ratio=empirical_content,
     )
-
-

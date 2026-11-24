@@ -154,8 +154,10 @@ class DiskCachedStructuredLLM(StructuredLLM):
                     )
                 )
                 return text_result
-            except Exception as e:
-                logger.warning(f"Failed to read LLM cache at {cache_path}: {e}. Falling back to API.")
+            except Exception as e:  # noqa: BLE001 baseline
+                logger.warning(
+                    f"Failed to read LLM cache at {cache_path}: {e}. Falling back to API."
+                )
 
         logger.debug(f"LLM Cache MISS: {cache_path.name}")
         result = await self.base_llm.predict_text(
@@ -163,8 +165,10 @@ class DiskCachedStructuredLLM(StructuredLLM):
         )
 
         try:
-            cache_path.write_text(json.dumps({"text": result}, ensure_ascii=False), encoding="utf-8")
-        except Exception as e:
+            cache_path.write_text(
+                json.dumps({"text": result}, ensure_ascii=False), encoding="utf-8"
+            )
+        except Exception as e:  # noqa: BLE001 baseline
             logger.warning(f"Failed to write LLM cache at {cache_path}: {e}")
 
         return result
@@ -197,8 +201,14 @@ class DiskCachedStructuredLLM(StructuredLLM):
             # key and pass 2's key includes pass 1's output. execute_nl_to_format
             # calls back into predict_structured with DIRECT, which lands below.
             from episteme_pipeline.llm.structured import execute_nl_to_format
+
             return await execute_nl_to_format(
-                self, output_cls, prompt_bundle, fallback_behavior, llm_kwargs, **prompt_args
+                self,
+                output_cls,
+                prompt_bundle,
+                fallback_behavior,
+                llm_kwargs,
+                **prompt_args,
             )
 
         prompt = (
@@ -252,18 +262,24 @@ class DiskCachedStructuredLLM(StructuredLLM):
                     )
                 )
                 return parsed
-            except Exception as e:
-                logger.warning(f"Failed to read LLM cache at {cache_path}: {e}. Falling back to API.")
+            except Exception as e:  # noqa: BLE001 baseline
+                logger.warning(
+                    f"Failed to read LLM cache at {cache_path}: {e}. Falling back to API."
+                )
 
         logger.debug(f"LLM Cache MISS: {cache_path.name}")
         result = await self.base_llm.predict_structured(
-            output_cls, prompt_bundle, strategy=strategy, fallback_behavior=fallback_behavior, llm_kwargs=llm_kwargs, **prompt_args
+            output_cls,
+            prompt_bundle,
+            strategy=strategy,
+            fallback_behavior=fallback_behavior,
+            llm_kwargs=llm_kwargs,
+            **prompt_args,
         )
 
         try:
             cache_path.write_text(result.model_dump_json(), encoding="utf-8")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 baseline
             logger.warning(f"Failed to write LLM cache at {cache_path}: {e}")
 
         return result
-

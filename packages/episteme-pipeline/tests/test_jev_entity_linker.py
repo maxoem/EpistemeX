@@ -68,8 +68,15 @@ async def test_jev_entity_linker_matching():
     embed = MockEmbeddingModel()
     linker = JevEntityLinker(decision_engine=engine, embedding_model=embed, alpha=0.05)
 
-    candidate_kant = L2Entity(id="e_kant", name="Immanuel Kant", label="PERSON", description="German philosopher")
-    candidate_hegel = L2Entity(id="e_hegel", name="G.W.F. Hegel", label="PERSON", description="German idealist")
+    candidate_kant = L2Entity(
+        id="e_kant",
+        name="Immanuel Kant",
+        label="PERSON",
+        description="German philosopher",
+    )
+    candidate_hegel = L2Entity(
+        id="e_hegel", name="G.W.F. Hegel", label="PERSON", description="German idealist"
+    )
     mock_store = AsyncMock()
     mock_store.get_entities.return_value = [candidate_kant, candidate_hegel]
 
@@ -91,7 +98,9 @@ async def test_jev_entity_linker_matching():
     assert matched.id == "e_kant"
     assert matched.name == "Immanuel Kant"
 
-    retrieved_events = [e for e in events if isinstance(e, EntityLinkingCandidatesRetrieved)]
+    retrieved_events = [
+        e for e in events if isinstance(e, EntityLinkingCandidatesRetrieved)
+    ]
     reranked_events = [e for e in events if isinstance(e, EntityLinkingReranked)]
 
     assert len(retrieved_events) == 1
@@ -116,7 +125,12 @@ async def test_jev_entity_linker_out_of_ontology():
     embed = MockEmbeddingModel()
     linker = JevEntityLinker(decision_engine=engine, embedding_model=embed)
 
-    candidate_kant = L2Entity(id="e_kant", name="Immanuel Kant", label="PERSON", description="German philosopher")
+    candidate_kant = L2Entity(
+        id="e_kant",
+        name="Immanuel Kant",
+        label="PERSON",
+        description="German philosopher",
+    )
     mock_store = AsyncMock()
     mock_store.get_entities.return_value = [candidate_kant]
 
@@ -132,7 +146,9 @@ async def test_jev_entity_linker_out_of_ontology():
     emitter.register_observer(MagicMock(on_event=lambda e: events.append(e)))
     set_event_emitter(emitter)
 
-    matched, decision, is_ambiguous = await linker.link_with_decision(mention, mock_store)
+    matched, decision, is_ambiguous = await linker.link_with_decision(
+        mention, mock_store
+    )
 
     assert matched is None
     assert is_ambiguous is False
@@ -159,8 +175,18 @@ async def test_jev_entity_linker_ambiguous_escalation():
     embed = MockEmbeddingModel()
     linker = JevEntityLinker(decision_engine=engine, embedding_model=embed)
 
-    cand1 = L2Entity(id="e1", name="German Idealism", label="CONCEPT", description="Philosophical movement")
-    cand2 = L2Entity(id="e2", name="Transcendental Idealism", label="CONCEPT", description="Kant's doctrine")
+    cand1 = L2Entity(
+        id="e1",
+        name="German Idealism",
+        label="CONCEPT",
+        description="Philosophical movement",
+    )
+    cand2 = L2Entity(
+        id="e2",
+        name="Transcendental Idealism",
+        label="CONCEPT",
+        description="Kant's doctrine",
+    )
     mock_store = AsyncMock()
     mock_store.get_entities.return_value = [cand1, cand2]
 
@@ -171,7 +197,9 @@ async def test_jev_entity_linker_ambiguous_escalation():
         textual_envelope="The critique laid the foundation for modern [ENT] idealism [\\ENT].",
     )
 
-    matched, decision, is_ambiguous = await linker.link_with_decision(mention, mock_store)
+    matched, decision, is_ambiguous = await linker.link_with_decision(
+        mention, mock_store
+    )
 
     assert matched is None
     assert is_ambiguous is True
@@ -182,9 +210,13 @@ async def test_jev_entity_linker_ambiguous_escalation():
 async def test_jev_entity_linker_missing_envelope_raises():
     """Verify mention lacking textual envelope raises UnlinkableMentionError."""
     engine = MockJevDecisionEngine()
-    linker = JevEntityLinker(decision_engine=engine, embedding_model=MockEmbeddingModel())
+    linker = JevEntityLinker(
+        decision_engine=engine, embedding_model=MockEmbeddingModel()
+    )
 
-    mention_no_env = L2Entity(id="m4", name="Kant", label="PERSON", textual_envelope=None)
+    mention_no_env = L2Entity(
+        id="m4", name="Kant", label="PERSON", textual_envelope=None
+    )
     with pytest.raises(UnlinkableMentionError):
         await linker.link(mention_no_env, AsyncMock())
 
@@ -193,9 +225,13 @@ async def test_jev_entity_linker_missing_envelope_raises():
 async def test_jev_entity_linker_empty_candidates_returns_none():
     """Verify empty graph store returns None immediately."""
     engine = MockJevDecisionEngine()
-    linker = JevEntityLinker(decision_engine=engine, embedding_model=MockEmbeddingModel())
+    linker = JevEntityLinker(
+        decision_engine=engine, embedding_model=MockEmbeddingModel()
+    )
 
-    mention = L2Entity(id="m5", name="Kant", label="PERSON", textual_envelope="[ENT] Kant [\\ENT]")
+    mention = L2Entity(
+        id="m5", name="Kant", label="PERSON", textual_envelope="[ENT] Kant [\\ENT]"
+    )
     mock_store = AsyncMock()
     mock_store.get_entities.return_value = []
 
@@ -237,7 +273,9 @@ async def test_cascading_entity_linker_flow():
     jev_linker = JevEntityLinker(decision_engine=engine, embedding_model=embed)
 
     fallback_linker = AsyncMock(spec=EntityLinker)
-    fallback_entity = L2Entity(id="e_fallback", name="Resolved by CrossEncoder", label="PERSON")
+    fallback_entity = L2Entity(
+        id="e_fallback", name="Resolved by CrossEncoder", label="PERSON"
+    )
     fallback_linker.link.return_value = fallback_entity
 
     cascade = CascadingEntityLinker(primary=jev_linker, fallback=fallback_linker)
@@ -249,8 +287,10 @@ async def test_cascading_entity_linker_flow():
 
     # 1. Clear mention -> Handled by Jev, fallback NOT called
     mention_clear = L2Entity(
-        id="m_clear", name="ClearMention", label="PERSON",
-        textual_envelope="Context for [ENT] ClearMention [\\ENT]"
+        id="m_clear",
+        name="ClearMention",
+        label="PERSON",
+        textual_envelope="Context for [ENT] ClearMention [\\ENT]",
     )
     res_clear = await cascade.link(mention_clear, mock_store)
     assert res_clear is not None
@@ -259,8 +299,10 @@ async def test_cascading_entity_linker_flow():
 
     # 2. Out-of-Ontology mention -> Jev decisively declares OoO, fallback NOT called
     mention_novel = L2Entity(
-        id="m_novel", name="NovelMention", label="PERSON",
-        textual_envelope="Context for [ENT] NovelMention [\\ENT]"
+        id="m_novel",
+        name="NovelMention",
+        label="PERSON",
+        textual_envelope="Context for [ENT] NovelMention [\\ENT]",
     )
     res_novel = await cascade.link(mention_novel, mock_store)
     assert res_novel is None
@@ -268,8 +310,10 @@ async def test_cascading_entity_linker_flow():
 
     # 3. Ambiguous mention -> Jev prediction set > 1, cascades to fallback!
     mention_ambig = L2Entity(
-        id="m_ambig", name="AmbiguousMention", label="PERSON",
-        textual_envelope="Context for [ENT] AmbiguousMention [\\ENT]"
+        id="m_ambig",
+        name="AmbiguousMention",
+        label="PERSON",
+        textual_envelope="Context for [ENT] AmbiguousMention [\\ENT]",
     )
     res_ambig = await cascade.link(mention_ambig, mock_store)
     assert res_ambig is fallback_entity
@@ -281,12 +325,18 @@ async def test_cascading_entity_linker_stochastic_audit():
     """Verify stochastic audit forces fallback execution even when primary would succeed."""
     primary_mock = AsyncMock(spec=EntityLinker)
     fallback_mock = AsyncMock(spec=EntityLinker)
-    fallback_mock.link.return_value = L2Entity(id="e_audit", name="Audit Node", label="PERSON")
+    fallback_mock.link.return_value = L2Entity(
+        id="e_audit", name="Audit Node", label="PERSON"
+    )
 
     # audit_rate = 1.0 forces every call through fallback
-    cascade = CascadingEntityLinker(primary=primary_mock, fallback=fallback_mock, audit_rate=1.0)
+    cascade = CascadingEntityLinker(
+        primary=primary_mock, fallback=fallback_mock, audit_rate=1.0
+    )
 
-    mention = L2Entity(id="m_aud", name="Audit", label="PERSON", textual_envelope="[ENT] Audit [\\ENT]")
+    mention = L2Entity(
+        id="m_aud", name="Audit", label="PERSON", textual_envelope="[ENT] Audit [\\ENT]"
+    )
     result = await cascade.link(mention, AsyncMock())
 
     assert result is not None
@@ -298,6 +348,7 @@ async def test_cascading_entity_linker_stochastic_audit():
 @pytest.mark.asyncio
 async def test_cascading_entity_linker_polymorphic_non_jev_primary_novel_entity():
     """Verify CascadingEntityLinker handles non-Jev primary linkers polymorphically without escalating novel entities."""
+
     class CustomNonJevLinker(EntityLinker):
         def fingerprint(self) -> dict[str, Any]:
             return {"class": "CustomNonJevLinker"}
@@ -315,12 +366,21 @@ async def test_cascading_entity_linker_polymorphic_non_jev_primary_novel_entity(
 
     primary = CustomNonJevLinker()
     fallback_mock = AsyncMock(spec=EntityLinker)
-    fallback_entity = L2Entity(id="e_fallback", name="Should Not Be Called", label="PERSON")
+    fallback_entity = L2Entity(
+        id="e_fallback", name="Should Not Be Called", label="PERSON"
+    )
     fallback_mock.link.return_value = fallback_entity
 
-    cascade = CascadingEntityLinker(primary=primary, fallback=fallback_mock, audit_rate=0.0)
+    cascade = CascadingEntityLinker(
+        primary=primary, fallback=fallback_mock, audit_rate=0.0
+    )
 
-    mention = L2Entity(id="m_novel", name="NovelConcept", label="CONCEPT", textual_envelope="[ENT] NovelConcept [\\ENT]")
+    mention = L2Entity(
+        id="m_novel",
+        name="NovelConcept",
+        label="CONCEPT",
+        textual_envelope="[ENT] NovelConcept [\\ENT]",
+    )
     res = await cascade.link(mention, AsyncMock())
 
     # Confident novel entity declaration is preserved, fallback is NOT called!
@@ -351,4 +411,3 @@ def test_jev_entity_linker_requires_embedding_model():
     engine = MockJevDecisionEngine()
     with pytest.raises(ValueError, match="A valid EmbeddingModel must be provided"):
         JevEntityLinker(decision_engine=engine, embedding_model=None)
-

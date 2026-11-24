@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 class TAGARCClassifier(ARCClassifier):
     """
     Default ARCClassifier using TAG subgraph retrieval and LLM stance decoding.
-    
+
     This class orchestrates the classification of cross-chunk argument relations
     by pairing theory atoms and predicting relations via an LLM.
     """
@@ -137,9 +137,14 @@ class TAGARCClassifier(ARCClassifier):
             and fingerprints of LLM and embedding model.
         """
         from enum import Enum
+
         from episteme_pipeline.runs.fingerprints import fingerprint_method
 
-        strategy_str = self.strategy.value if isinstance(self.strategy, Enum) else str(self.strategy)
+        strategy_str = (
+            self.strategy.value
+            if isinstance(self.strategy, Enum)
+            else str(self.strategy)
+        )
         return {
             "class": self.__class__.__name__,
             "strategy": strategy_str,
@@ -189,7 +194,9 @@ class TAGARCClassifier(ARCClassifier):
             A list of successfully predicted global relations.
         """
         effective_schema = schema or SchemaConfig()
-        candidate_pairs = await self._cross_chunk_pairs(local_components, effective_schema)
+        candidate_pairs = await self._cross_chunk_pairs(
+            local_components, effective_schema
+        )
         logger.info(
             "ARC: %d components → %d cross-chunk candidate pairs",
             len(local_components),
@@ -242,12 +249,12 @@ class TAGARCClassifier(ARCClassifier):
             else self.checkpoint_store
         )
         effective_phase_tag = (
-            f"phase4_arc:{lineage_fingerprint}"
-            if lineage_fingerprint
-            else "phase4_arc"
+            f"phase4_arc:{lineage_fingerprint}" if lineage_fingerprint else "phase4_arc"
         )
 
-        async def _eval_pair(pair: tuple[TheoryAtom, TheoryAtom]) -> TheoryRelation | None:
+        async def _eval_pair(
+            pair: tuple[TheoryAtom, TheoryAtom],
+        ) -> TheoryRelation | None:
             return await self._classify_pair(
                 component_a=pair[0],
                 component_b=pair[1],
@@ -262,7 +269,9 @@ class TAGARCClassifier(ARCClassifier):
             checkpoint_store=effective_checkpoint_store,
             phase_tag=effective_phase_tag,
             batch_size=self.batch_size,
-            item_key_fn=lambda pair: f"arc::{min(pair[0].id, pair[1].id)}::{max(pair[0].id, pair[1].id)}",
+            item_key_fn=lambda pair: (
+                f"arc::{min(pair[0].id, pair[1].id)}::{max(pair[0].id, pair[1].id)}"
+            ),
             process_item_fn=_eval_pair,
             output_codec=PydanticOutputCodec(TheoryRelation),
             guard_systematic_failure=True,
@@ -323,7 +332,9 @@ class TAGARCClassifier(ARCClassifier):
             The selected pairs of components.
         """
         return build_cross_chunk_candidate_pairs(
-            components, schema, max_candidates_per_component=self.max_candidates_per_component
+            components,
+            schema,
+            max_candidates_per_component=self.max_candidates_per_component,
         )
 
     async def _get_pairs_by_embedding(

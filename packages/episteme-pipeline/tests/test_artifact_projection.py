@@ -1,8 +1,4 @@
 import pytest
-from tests.helpers.artifact_mappers import (
-    map_phase1_output_to_artifacts,
-    map_phase2_output_to_artifacts,
-)
 from episteme_pipeline.contracts.phase_contracts import (
     L1Chunk,
     L1Document,
@@ -11,6 +7,11 @@ from episteme_pipeline.contracts.phase_contracts import (
     Phase2Output,
 )
 from episteme_pipeline.projection.artifact_projector import ArtifactGraphProjector
+
+from tests.helpers.artifact_mappers import (
+    map_phase1_output_to_artifacts,
+    map_phase2_output_to_artifacts,
+)
 
 
 @pytest.mark.asyncio
@@ -52,7 +53,11 @@ async def test_project_phase1_artifacts_to_graph(graph_store):
 async def test_project_phase2_artifacts_to_graph(graph_store):
     artifacts = map_phase2_output_to_artifacts(
         Phase2Output(
-            entities=[L2Entity(id="e1", label="PERSON", name="Kant", source_chunk_ids=["chunk-1"])],
+            entities=[
+                L2Entity(
+                    id="e1", label="PERSON", name="Kant", source_chunk_ids=["chunk-1"]
+                )
+            ],
             local_triples=[],
         ),
         run_id="run-1",

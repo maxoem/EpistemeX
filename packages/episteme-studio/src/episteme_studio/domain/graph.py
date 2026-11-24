@@ -332,4 +332,3 @@ def reify_inferences(
 
     all_nodes = list(nodes_by_id.values()) + list(synthetic_nodes.values())
     return all_nodes, new_edges
-

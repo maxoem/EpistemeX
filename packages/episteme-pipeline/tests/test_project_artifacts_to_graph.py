@@ -23,7 +23,9 @@ class TrackingGraphStore(InMemoryGraphStore):
         self.write_calls.append(("upsert_node", label, node_id))
         await super().upsert_node(label, node_id, properties)
 
-    async def upsert_relation(self, from_id, relation_type, to_id, properties=None) -> None:
+    async def upsert_relation(
+        self, from_id, relation_type, to_id, properties=None
+    ) -> None:
         self.write_calls.append(("upsert_relation", from_id, relation_type, to_id))
         await super().upsert_relation(from_id, relation_type, to_id, properties)
 
@@ -36,7 +38,9 @@ class TrackingGraphStore(InMemoryGraphStore):
         await super().upsert_entity(entity)
 
     async def upsert_triple(self, triple) -> None:
-        self.write_calls.append(("upsert_triple", triple.subject_id, triple.predicate, triple.object_id))
+        self.write_calls.append(
+            ("upsert_triple", triple.subject_id, triple.predicate, triple.object_id)
+        )
         await super().upsert_triple(triple)
 
     async def upsert_theory_atom(self, component) -> None:

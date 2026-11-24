@@ -131,7 +131,7 @@ def fingerprint_method(method_obj: Any) -> str | None:
                     {"class": method_obj.__class__.__name__, "fingerprint": value}
                 )
         except Exception as ex:
-            logger.exception(ex)
+            logger.exception(ex)  # noqa: TRY401 baseline
 
     fingerprint_data: dict[str, Any] = {"class": method_obj.__class__.__name__}
     model_name = getattr(method_obj, "model_name", None)
@@ -352,22 +352,20 @@ def is_phase_unchanged(
     bool
         True if the phase's config and all associated method fingerprints are unchanged.
     """
-    if manifest.phase_config_fingerprints.get(phase_key) != prior_manifest.phase_config_fingerprints.get(phase_key):
+    if manifest.phase_config_fingerprints.get(
+        phase_key
+    ) != prior_manifest.phase_config_fingerprints.get(phase_key):
         return False
     for k, v in manifest.method_fingerprints.items():
         if (
-            (k.startswith(f"{phase_name}.") or k.startswith(f"{phase_key}."))
+            (k.startswith(f"{phase_name}.") or k.startswith(f"{phase_key}."))  # noqa: PIE810 baseline
             and prior_manifest.method_fingerprints.get(k) != v
         ):
             return False
     for k, v in prior_manifest.method_fingerprints.items():
         if (
-            (k.startswith(f"{phase_name}.") or k.startswith(f"{phase_key}."))
+            (k.startswith(f"{phase_name}.") or k.startswith(f"{phase_key}."))  # noqa: PIE810 baseline
             and manifest.method_fingerprints.get(k) != v
         ):
             return False
     return True
-
-
-
-

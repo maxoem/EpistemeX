@@ -124,7 +124,9 @@ def theory_relation_to_graph_properties(
     elif rel.weight_attack is not None and rel.weight_attack > 0:
         resolved_polarity = -1
     else:
-        fallback_pol = 1 if (rel.weight or 0) > 0 else (-1 if (rel.weight or 0) < 0 else 0)
+        fallback_pol = (
+            1 if (rel.weight or 0) > 0 else (-1 if (rel.weight or 0) < 0 else 0)
+        )
         resolved_polarity = effective_schema.relation_polarities.get(
             rel.relation_type, fallback_pol
         )
@@ -371,7 +373,9 @@ def theory_relation_from_graph_properties(
     """
     props = properties or {}
     raw_scope = props.get("scope", "global")
-    scope_val: Literal["local", "global"] = "local" if raw_scope == "local" else "global"
+    scope_val: Literal["local", "global"] = (
+        "local" if raw_scope == "local" else "global"
+    )
     weight_val = (
         float(props["weight"])
         if "weight" in props and props["weight"] is not None

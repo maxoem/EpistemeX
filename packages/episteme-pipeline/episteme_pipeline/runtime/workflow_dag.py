@@ -136,8 +136,10 @@ class WorkflowDAG(Fingerprintable):
 
             input_view = runner.input_view
             raw_reads = runner.reads_kinds
-            if not raw_reads and isinstance(input_view, type) and issubclass(
-                input_view, EpistemicStateView
+            if (
+                not raw_reads
+                and isinstance(input_view, type)
+                and issubclass(input_view, EpistemicStateView)
             ):
                 reads_kinds: frozenset[ArtifactKind] = frozenset(
                     input_view.allowed_kinds
@@ -226,7 +228,10 @@ class WorkflowDAG(Fingerprintable):
         """
         if isinstance(phase_or_key, PhaseRunner):
             for node in self._nodes:
-                if node.runner is phase_or_key or node.phase_key == phase_or_key.phase_key:
+                if (
+                    node.runner is phase_or_key
+                    or node.phase_key == phase_or_key.phase_key
+                ):
                     return node
             return None
 
@@ -292,9 +297,7 @@ class WorkflowDAG(Fingerprintable):
             if resolved_key in gate.target_phases or "*" in gate.target_phases
         )
 
-    def with_gates(
-        self, gates: Iterable[EpistemicQualityGate]
-    ) -> WorkflowDAG:
+    def with_gates(self, gates: Iterable[EpistemicQualityGate]) -> WorkflowDAG:
         """Return a new :class:`WorkflowDAG` with additional quality gates attached.
 
         Parameters
@@ -470,9 +473,7 @@ class WorkflowDAG(Fingerprintable):
                     ready.append(node_by_key[child_key])
 
         if len(ordered) != len(self._nodes):
-            raise ValueError(
-                "Cycle detected in WorkflowDAG phase dependencies."
-            )
+            raise ValueError("Cycle detected in WorkflowDAG phase dependencies.")
         return ordered
 
     def fingerprint(self) -> dict[str, Any]:

@@ -196,10 +196,9 @@ class SchemaMapper:
             relation_type in self.schema.relation_types
             or relation_type in self.schema.argument_relation_types
         )
-        definition = (
-            self.schema.relation_definitions.get(relation_type)
-            or self.schema.argument_relation_definitions.get(relation_type)
-        )
+        definition = self.schema.relation_definitions.get(
+            relation_type
+        ) or self.schema.argument_relation_definitions.get(relation_type)
         polarity = self.resolve_polarity(relation_type)
         alias_of = None
 

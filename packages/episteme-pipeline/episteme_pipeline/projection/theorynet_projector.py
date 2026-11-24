@@ -277,7 +277,9 @@ class TheoryNetProjector:
         TheoryNet
             Materialized TheoryNet with equilibrium justification plausibilities.
         """
-        active_perspective = perspective if perspective is not None else self.perspective
+        active_perspective = (
+            perspective if perspective is not None else self.perspective
+        )
         # Retrieve and filter all theory relations with decoupled weights
         source_relations = (
             view.canonical_theory_relations
@@ -353,7 +355,10 @@ class TheoryNetProjector:
         atoms: list[TheoryAtom] = []
         for c in source_atoms:
             atom = c.model_copy()
-            if "modal_prior" not in atom.model_fields_set and atom.resolver_type is None:
+            if (
+                "modal_prior" not in atom.model_fields_set
+                and atom.resolver_type is None
+            ):
                 atom.modal_prior = self.modal_resolver.resolve_modality_sync(atom)
             atoms.append(atom)
 
@@ -377,7 +382,10 @@ class TheoryNetProjector:
                     atom.equilibrium_strength = self.compute_weight(
                         atom, perspective=active_perspective
                     )
-                if solver_res.volatility_index and atom.id in solver_res.volatility_index:
+                if (
+                    solver_res.volatility_index
+                    and atom.id in solver_res.volatility_index
+                ):
                     atom.controversy_volatility = solver_res.volatility_index[atom.id]
 
         return TheoryNet(
@@ -406,14 +414,19 @@ class TheoryNetProjector:
                     -1
                     if any(
                         k in (rel.relation_type or "").upper()
-                        for k in ("ATTACK", "REFUTE", "CONTRADICT", "UNDERCUT", "INHIBIT", "REBUT")
+                        for k in (
+                            "ATTACK",
+                            "REFUTE",
+                            "CONTRADICT",
+                            "UNDERCUT",
+                            "INHIBIT",
+                            "REBUT",
+                        )
                     )
                     else 1
                 )
             ts_edge = (
-                float(rel.edge_tenability)
-                if rel.edge_tenability is not None
-                else 1.0
+                float(rel.edge_tenability) if rel.edge_tenability is not None else 1.0
             )
             if not rel.is_admissible:
                 solver_eff_weight = 0.0
@@ -478,7 +491,9 @@ class TheoryNetProjector:
                     include_suppositional=True,
                     perspective="all",
                 ),
-                modal_strength=atom.modal_prior if atom.modal_prior is not None else 0.6,
+                modal_strength=atom.modal_prior
+                if atom.modal_prior is not None
+                else 0.6,
                 intensional_mode=atom.intensional_mode,
                 attributed_to=atom.attributed_to,
                 description=atom.text,
@@ -500,10 +515,7 @@ class TheoryNetProjector:
         dict of str to float
             Mapping from atom identifier to tenability-modulated prior :math:`\\tilde{\\tau}_0(a)`.
         """
-        return {
-            atom.id: self.compute_weight(atom)
-            for atom in atoms
-        }
+        return {atom.id: self.compute_weight(atom) for atom in atoms}
 
     def compute_weight(
         self,
@@ -530,7 +542,9 @@ class TheoryNetProjector:
         float
             Assigned prior plausibility in ``[0.0, 1.0]``.
         """
-        active_perspective = perspective if perspective is not None else self.perspective
+        active_perspective = (
+            perspective if perspective is not None else self.perspective
+        )
         return atom.effective_base_prior(
             include_suppositional=not self.isolate_suppositional,
             perspective=active_perspective,

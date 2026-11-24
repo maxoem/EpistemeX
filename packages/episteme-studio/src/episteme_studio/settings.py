@@ -35,7 +35,7 @@ def _load_dotenv_files() -> None:
                 from dotenv import load_dotenv
 
                 load_dotenv(dotenv_path=cand, override=False)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
 
@@ -54,7 +54,7 @@ def _resolve_repo_root() -> Path:
         for candidate in [cwd, *cwd.parents]:
             if (candidate / ".git").exists() or (candidate / "AGENTS.md").exists():
                 return candidate
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 baseline
         pass
     return Path.cwd()
 
@@ -84,7 +84,7 @@ def _resolve_default_dir(name: str) -> Path:
             target = candidate / name
             if target.is_dir():
                 return target
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 baseline
         pass
     return Path(name)
 
@@ -108,7 +108,7 @@ def _resolve_extra_dirs(name: str) -> list[Path]:
                 if resolved not in seen:
                     seen.add(resolved)
                     extra.append(c)
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 baseline
         pass
     return extra
 
@@ -311,7 +311,7 @@ class StudioSettings(BaseSettings):
                     self.extra_runs_dirs = _resolve_extra_dirs(".pipeline_runs")
                 else:
                     self.extra_runs_dirs = []
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         try:
@@ -326,7 +326,7 @@ class StudioSettings(BaseSettings):
                     )
                 else:
                     self.extra_artifacts_dirs = []
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         if self.demo_mode:
@@ -345,7 +345,7 @@ class StudioSettings(BaseSettings):
                     and f_artifacts not in self.extra_artifacts_dirs
                 ):
                     self.extra_artifacts_dirs.append(f_artifacts)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
         return self

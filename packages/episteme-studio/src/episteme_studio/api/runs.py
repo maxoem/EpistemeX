@@ -93,7 +93,9 @@ async def create_run(
 
 
 @router.get("/{run_id}", response_model=RunDetail)
-async def get_run(run_id: str, service: RunService = Depends(get_run_service)) -> RunDetail:
+async def get_run(
+    run_id: str, service: RunService = Depends(get_run_service)
+) -> RunDetail:
     """Retrieve full detail for a run manifest by identifier.
 
     Parameters
@@ -137,7 +139,9 @@ async def cancel_run(
 async def stream_run_events(
     run_id: str,
     request: Request,
-    since: int | None = Query(None, description="Sequence number threshold to replay after"),
+    since: int | None = Query(
+        None, description="Sequence number threshold to replay after"
+    ),
     broker: EventBroker = Depends(get_broker),
     service: RunService = Depends(get_run_service),
 ) -> EventSourceResponse:
@@ -324,8 +328,12 @@ async def get_run_evaluation(
 @router.get("/{run_id}/evaluation/graph-overlay", response_model=EvaluationGraphOverlay)
 async def get_run_evaluation_graph_overlay(
     run_id: str,
-    include_ghosts: bool = Query(True, description="Whether to include synthesized ghost nodes for omissions"),
-    filter_status: str | None = Query(None, description="Optional alignment status filter"),
+    include_ghosts: bool = Query(
+        True, description="Whether to include synthesized ghost nodes for omissions"
+    ),
+    filter_status: str | None = Query(
+        None, description="Optional alignment status filter"
+    ),
     eval_service: EvaluationService = Depends(get_evaluation_service),
 ) -> EvaluationGraphOverlay:
     """Retrieve interactive graph canvas overlay projecting evaluation alignment for this run.
@@ -356,7 +364,9 @@ async def get_run_evaluation_graph_overlay(
 @router.get("/{run_id}/evaluation/calibration", response_model=CalibrationReportDetail)
 async def get_run_evaluation_calibration(
     run_id: str,
-    min_confidence: float = Query(0.85, description="Threshold for highlighting overconfident assertions"),
+    min_confidence: float = Query(
+        0.85, description="Threshold for highlighting overconfident assertions"
+    ),
     limit: int = Query(50, description="Max miscalibrated assertions to return"),
     eval_service: EvaluationService = Depends(get_evaluation_service),
 ) -> CalibrationReportDetail:
@@ -385,7 +395,10 @@ async def get_run_evaluation_calibration(
     )
 
 
-@router.get("/{run_id}/evaluation/evidence/{component_id}", response_model=GroundingEvaluationDetail)
+@router.get(
+    "/{run_id}/evaluation/evidence/{component_id}",
+    response_model=GroundingEvaluationDetail,
+)
 async def get_run_component_evidence(
     run_id: str,
     component_id: str,
@@ -407,10 +420,14 @@ async def get_run_component_evidence(
     GroundingEvaluationDetail
         Multi-modal evidence anchors and IoU score.
     """
-    return eval_service.get_evidence_detail(evaluation_id=run_id, component_id=component_id)
+    return eval_service.get_evidence_detail(
+        evaluation_id=run_id, component_id=component_id
+    )
 
 
-@router.get("/{run_id}/decisions/borderline", response_model=list[BorderlineDecisionItem])
+@router.get(
+    "/{run_id}/decisions/borderline", response_model=list[BorderlineDecisionItem]
+)
 async def get_run_borderline_decisions(
     run_id: str,
     eval_service: EvaluationService = Depends(get_evaluation_service),
@@ -432,7 +449,10 @@ async def get_run_borderline_decisions(
     return eval_service.get_borderline_decisions(run_id=run_id)
 
 
-@router.post("/{run_id}/decisions/{decision_id}/adjudicate", response_model=BorderlineDecisionItem)
+@router.post(
+    "/{run_id}/decisions/{decision_id}/adjudicate",
+    response_model=BorderlineDecisionItem,
+)
 async def adjudicate_run_decision(
     run_id: str,
     decision_id: str,
@@ -457,10 +477,15 @@ async def adjudicate_run_decision(
     BorderlineDecisionItem
         Updated decision item with recorded adjudication.
     """
-    return eval_service.adjudicate_decision(run_id=run_id, decision_id=decision_id, request=request)
+    return eval_service.adjudicate_decision(
+        run_id=run_id, decision_id=decision_id, request=request
+    )
 
 
-@router.post("/{run_id}/decisions/export-active-learning", response_model=ActiveLearningExportResponse)
+@router.post(
+    "/{run_id}/decisions/export-active-learning",
+    response_model=ActiveLearningExportResponse,
+)
 async def export_run_active_learning(
     run_id: str,
     dataset_name: str | None = Query(None, description="Optional dataset identifier"),
@@ -483,5 +508,3 @@ async def export_run_active_learning(
         Export metadata and payload.
     """
     return eval_service.export_active_learning(run_id=run_id, dataset_name=dataset_name)
-
-

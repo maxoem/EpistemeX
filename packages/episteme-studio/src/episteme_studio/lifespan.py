@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
 
@@ -48,6 +48,7 @@ def create_lifespan(settings: StudioSettings):
                 import asyncio
 
                 from neo4j import AsyncGraphDatabase
+
                 auth = (
                     (settings.neo4j_user, settings.neo4j_password)
                     if settings.neo4j_user
@@ -59,19 +60,20 @@ def create_lifespan(settings: StudioSettings):
                     async with asyncio.timeout(2.0):
                         await driver.verify_connectivity()
                     app.state.neo4j_available = True
-                except Exception:
+                except Exception:  # noqa: BLE001 baseline
                     app.state.neo4j_available = False
-            except Exception:
+            except Exception:  # noqa: BLE001 baseline
                 app.state.neo4j_driver = None
                 app.state.neo4j_available = False
         elif driver is not None:
             if getattr(app.state, "neo4j_available", None) is None:
                 try:
                     import asyncio
+
                     async with asyncio.timeout(2.0):
                         await driver.verify_connectivity()
                     app.state.neo4j_available = True
-                except Exception:
+                except Exception:  # noqa: BLE001 baseline
                     app.state.neo4j_available = False
         else:
             app.state.neo4j_driver = None
@@ -83,9 +85,12 @@ def create_lifespan(settings: StudioSettings):
             if neo4j_driver:
                 try:
                     await _seed_demo_neo4j(neo4j_driver, settings.neo4j_database)
-                except Exception as err:
+                except Exception as err:  # noqa: BLE001 baseline
                     import sys
-                    sys.stderr.write(f"Warning: Failed to seed demo datasets into Neo4j: {err}\n")
+
+                    sys.stderr.write(
+                        f"Warning: Failed to seed demo datasets into Neo4j: {err}\n"
+                    )
 
         try:
             yield
@@ -95,7 +100,7 @@ def create_lifespan(settings: StudioSettings):
             if neo4j_driver is not None:
                 try:
                     await neo4j_driver.close()
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 baseline
                     pass
 
             # Teardown: cancel or terminate any running subprocesses
@@ -106,7 +111,7 @@ def create_lifespan(settings: StudioSettings):
                         handle.process.terminate()
                         try:
                             handle.process.join(timeout=1.0)
-                        except Exception:
+                        except Exception:  # noqa: BLE001, S110 baseline
                             pass
                         if handle.process.is_alive():
                             handle.process.kill()
@@ -148,7 +153,9 @@ async def _seed_demo_neo4j(driver: Any, database: str | None = None) -> None:
                     continue
                 clean_lines.append(line)
             full_script = "\n".join(clean_lines)
-            statements = [stmt.strip() for stmt in full_script.split(";") if stmt.strip()]
+            statements = [
+                stmt.strip() for stmt in full_script.split(";") if stmt.strip()
+            ]
 
             for stmt in statements:
                 await session.run(stmt)

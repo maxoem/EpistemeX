@@ -3,6 +3,7 @@
 Provides task-local binding and retrieval of active `EventEmitter` instances,
 eliminating the need to pass `event_emitter` through every function and class constructor.
 """
+
 from __future__ import annotations
 
 from collections.abc import Generator
@@ -77,6 +78,6 @@ def use_event_emitter(emitter: EventEmitter | None) -> Generator[EventEmitter]:
         if isinstance(emitter, EventEmitter):
             try:
                 emitter.flush()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
         _CURRENT_EVENT_EMITTER.reset(token)

@@ -159,7 +159,7 @@ def collect_target_chunks(
     expanded = list(seeds)
     for cid in seeds:
         for nbr in chunk_neighbors.get(cid, ()):
-            expanded.append(nbr)
+            expanded.append(nbr)  # noqa: PERF402 baseline
     return dedup_preserve_order(expanded)
 
 

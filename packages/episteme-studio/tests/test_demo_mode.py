@@ -181,4 +181,3 @@ async def test_demo_mode_decision_engine_safeguards() -> None:
         assert len(test_data["prediction_set"]) >= 1
         assert test_data["tokens_saved_estimate"] > 0
         assert test_data["tier"] in ("fast_exit", "system1", "system2")
-

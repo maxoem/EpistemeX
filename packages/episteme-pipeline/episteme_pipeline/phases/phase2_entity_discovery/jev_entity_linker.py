@@ -29,7 +29,6 @@ from episteme_pipeline.phases.phase2_entity_discovery.candidate_cache import (
 )
 from episteme_pipeline.protocols.decision import (
     DecisionEngine,
-    DecisionScore,
     ensure_decision_engine,
 )
 from episteme_pipeline.protocols.extractors import (
@@ -78,12 +77,16 @@ class JevEntityLinker(EntityLinker):
     ) -> None:
         engine = ensure_decision_engine(decision_engine)
         if engine is None:
-            raise ValueError("A valid DecisionEngine must be provided to JevEntityLinker.")
+            raise ValueError(
+                "A valid DecisionEngine must be provided to JevEntityLinker."
+            )
         self.decision_engine: DecisionEngine = engine
 
         model = ensure_embedding_model(embedding_model)
         if model is None:
-            raise ValueError("A valid EmbeddingModel must be provided to JevEntityLinker.")
+            raise ValueError(
+                "A valid EmbeddingModel must be provided to JevEntityLinker."
+            )
         self.embedding_model: EmbeddingModel = model
 
         self.alpha = alpha
@@ -157,8 +160,13 @@ class JevEntityLinker(EntityLinker):
             conformal prediction set, empirical accuracy, and ambiguity status.
         """
         if not mention.textual_envelope:
-            logger.warning("Mention %s lacks textual envelope. Raising UnlinkableMentionError.", mention.name)
-            raise UnlinkableMentionError(f"Mention {mention.name} lacks textual envelope.")
+            logger.warning(
+                "Mention %s lacks textual envelope. Raising UnlinkableMentionError.",
+                mention.name,
+            )
+            raise UnlinkableMentionError(
+                f"Mention {mention.name} lacks textual envelope."
+            )
 
         effective_top_k = min(self.top_k if top_k is None else top_k, 5)
         effective_alpha = self.alpha if alpha is None else alpha
@@ -166,7 +174,9 @@ class JevEntityLinker(EntityLinker):
 
         candidates = await graph_store.get_entities()
         if not candidates:
-            return TriageDecision(value=None, decision=None, is_ambiguous=False, empirical_accuracy=1.0)
+            return TriageDecision(
+                value=None, decision=None, is_ambiguous=False, empirical_accuracy=1.0
+            )
 
         # 1. Bi-Encoder retrieval
         t_n = f"[{mention.label}] {mention.textual_envelope}"
@@ -178,7 +188,9 @@ class JevEntityLinker(EntityLinker):
 
         scores_arr = cosine_similarity_matrix(g_embs.numpy(), t_n_emb.numpy())
         scores = torch.as_tensor(scores_arr)
-        top_k_indices = torch.topk(scores, min(effective_top_k, len(candidates))).indices
+        top_k_indices = torch.topk(
+            scores, min(effective_top_k, len(candidates))
+        ).indices
 
         top_candidates = [candidates[i] for i in top_k_indices]
         top_scores = scores[top_k_indices].tolist()
@@ -219,7 +231,11 @@ class JevEntityLinker(EntityLinker):
 
         conformal_set = decision.prediction_set
         if conformal_set is None:
-            conformal_set = [str(decision.selected_option)] if decision.selected_option is not None else []
+            conformal_set = (
+                [str(decision.selected_option)]
+                if decision.selected_option is not None
+                else []
+            )
 
         # If conformal set contains multiple candidates or is empty (uncertain), mark ambiguous
         if len(conformal_set) > 1 or len(conformal_set) == 0:
@@ -240,7 +256,9 @@ class JevEntityLinker(EntityLinker):
 
         # Case: Confidently novel Out-of-Ontology
         if selected == "OUT_OF_ONTOLOGY":
-            logger.debug("JevEntityLinker: Out-of-Ontology declared for %s", mention.name)
+            logger.debug(
+                "JevEntityLinker: Out-of-Ontology declared for %s", mention.name
+            )
             self.event_emitter.emit(
                 EntityLinkingReranked(
                     mention_id=mention.id,
@@ -416,8 +434,13 @@ class CascadingEntityLinker(EntityLinker):
             else False
         )
         if is_audit:
-            logger.debug("CascadingEntityLinker: deterministic audit triggered for %s", mention.name)
-            return await self.fallback.link(mention, graph_store, top_k=top_k, threshold=threshold)
+            logger.debug(
+                "CascadingEntityLinker: deterministic audit triggered for %s",
+                mention.name,
+            )
+            return await self.fallback.link(
+                mention, graph_store, top_k=top_k, threshold=threshold
+            )
 
         triage = await self.primary.link_with_decision(
             mention, graph_store, top_k=top_k, threshold=threshold
@@ -429,4 +452,6 @@ class CascadingEntityLinker(EntityLinker):
             "CascadingEntityLinker: primary returned ambiguous decision for %s; escalating to fallback",
             mention.name,
         )
-        return await self.fallback.link(mention, graph_store, top_k=top_k, threshold=threshold)
+        return await self.fallback.link(
+            mention, graph_store, top_k=top_k, threshold=threshold
+        )

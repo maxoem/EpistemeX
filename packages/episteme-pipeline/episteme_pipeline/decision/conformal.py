@@ -128,7 +128,9 @@ class ConformalCalibrator(Fingerprintable):
         """
         if self.global_alpha is not None and self.risk_budget_weights:
             try:
-                allocated = self.allocate_risk_budget(self.global_alpha, self.risk_budget_weights)
+                allocated = self.allocate_risk_budget(
+                    self.global_alpha, self.risk_budget_weights
+                )
                 for candidate in PhaseRunner.related_identifiers(stage):
                     if candidate in allocated:
                         return allocated[candidate]
@@ -224,7 +226,9 @@ class ConformalCalibrator(Fingerprintable):
             If calibration_scores is empty.
         """
         if len(calibration_scores) == 0:
-            raise ValueError("calibration_scores cannot be empty for conformal calibration.")
+            raise ValueError(
+                "calibration_scores cannot be empty for conformal calibration."
+            )
 
         effective_alpha = self._resolve_effective_alpha(alpha, task_id)
         scores = np.sort(np.asarray(calibration_scores, dtype=np.float64))
@@ -279,9 +283,7 @@ class ConformalCalibrator(Fingerprintable):
         """
         norm_lang = language.lower() if language else None
         candidates = (
-            PhaseRunner.related_identifiers(task_id)
-            if task_id is not None
-            else (None,)
+            PhaseRunner.related_identifiers(task_id) if task_id is not None else (None,)
         )
 
         # 1. Exact match (or related PhaseRunner identifier with language)
@@ -348,12 +350,16 @@ class ConformalCalibrator(Fingerprintable):
                 return [str(score.selected_option)]
             return []
 
-        sorted_items = sorted(probabilities.items(), key=lambda item: item[1], reverse=True)
+        sorted_items = sorted(
+            probabilities.items(), key=lambda item: item[1], reverse=True
+        )
 
         if effective_q_hat is not None:
             # Calibrated quantile: C(x) = { y in Y | P_hat(y|x) >= 1 - q_hat }
             threshold = 1.0 - effective_q_hat
-            prediction_set = [label for label, prob in sorted_items if prob >= threshold]
+            prediction_set = [
+                label for label, prob in sorted_items if prob >= threshold
+            ]
             # Guarantee at least the argmax if none strictly exceed due to rounding
             if not prediction_set and sorted_items:
                 prediction_set = [sorted_items[0][0]]

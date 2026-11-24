@@ -478,6 +478,7 @@ def test_percolation_gate_phase5_respects_min_population_for_l2_vs_l3() -> None:
 
 def test_conformal_calibration_gate_healthy_vs_ood_spikes() -> None:
     """Verify ConformalCalibrationGate detects empty and ambiguous prediction set spikes purely."""
+
     def _make_rel_with_ps(idx: int, prediction_set: list[str]) -> Any:
         triple = L2Triple(
             subject_id=f"s_{idx}",
@@ -518,8 +519,7 @@ def test_conformal_calibration_gate_healthy_vs_ood_spikes() -> None:
 
     # 2. Empty set spike: 5 empty sets out of 10 (empty_rate=0.50 > 0.30)
     empty_spike_envs = [
-        _make_rel_with_ps(i, [] if i < 5 else ["SUPPORTS"])
-        for i in range(10)
+        _make_rel_with_ps(i, [] if i < 5 else ["SUPPORTS"]) for i in range(10)
     ]
     res_empty = gate.evaluate(
         "phase3",
@@ -613,9 +613,7 @@ def test_workflow_dag_topology_and_cycle_detection() -> None:
     p_join = _StubPhaseRunner(
         name="Phase Join",
         phase_key="phase_join",
-        reads_kinds=frozenset(
-            {ArtifactKind.LINKED_ENTITY, ArtifactKind.THEORY_ATOM}
-        ),
+        reads_kinds=frozenset({ArtifactKind.LINKED_ENTITY, ArtifactKind.THEORY_ATOM}),
         writes_kinds=frozenset({ArtifactKind.FUSION_DECISION}),
     )
 
@@ -736,7 +734,9 @@ def test_execution_engine_emits_warning_and_event_uniformly_for_custom_and_built
         def fingerprint(self) -> dict[str, Any]:
             return {"class": "_CustomWarnGate"}
 
-    config = PipelineConfig(quality_gates=QualityGatesConfig(enabled=True, on_violation="warn"))
+    config = PipelineConfig(
+        quality_gates=QualityGatesConfig(enabled=True, on_violation="warn")
+    )
     config.execution.runs_dir = str(tmp_path / "runs")
     config.execution.artifacts_dir = str(tmp_path / "artifacts")
 
@@ -814,9 +814,7 @@ async def test_execution_engine_halts_on_quality_gate_violation_before_downstrea
 
     chunk_env = _make_chunk_env("c1", "Philosophical text.")
     # All 6 entities have the exact same fallback type -> triggers OntologyEntropyGate halt
-    collapsed_entities = [
-        _make_linked_entity_env(f"e{i}", "Concept") for i in range(6)
-    ]
+    collapsed_entities = [_make_linked_entity_env(f"e{i}", "Concept") for i in range(6)]
 
     p1 = _StubPhaseRunner(
         name="Phase 1: Document Ingestion & Foundation",
@@ -852,7 +850,9 @@ async def test_execution_engine_halts_on_quality_gate_violation_before_downstrea
     doc_path = tmp_path / "sample.md"
     doc_path.write_text("# Sample\nText.", encoding="utf-8")
 
-    with pytest.raises(QualityGateViolationError, match="OntologyEntropyGate violation"):
+    with pytest.raises(
+        QualityGateViolationError, match="OntologyEntropyGate violation"
+    ):
         await pipeline.run(
             PipelineInput(source_paths=[str(doc_path)]),
             run_id="run-halt-test",
@@ -937,9 +937,7 @@ async def test_multi_branch_workflow_dag_execution_and_selective_reuse(
         version="v1",
         name="Phase Join",
         phase_key="phase_join",
-        reads_kinds=frozenset(
-            {ArtifactKind.LINKED_ENTITY, ArtifactKind.THEORY_ATOM}
-        ),
+        reads_kinds=frozenset({ArtifactKind.LINKED_ENTITY, ArtifactKind.THEORY_ATOM}),
         writes_kinds=frozenset({ArtifactKind.FUSION_DECISION}),
     )
 
@@ -950,7 +948,12 @@ async def test_multi_branch_workflow_dag_execution_and_selective_reuse(
     engine1 = ArtifactExecutionEngine(workflow=workflow1, config=config)
     res1 = await engine1.run(p_input, run_id="run-1")
     assert res1.manifest.status == RunStatus.COMPLETED
-    assert (p1.run_count, p2a.run_count, p2b.run_count, p_join.run_count) == (1, 1, 1, 1)
+    assert (p1.run_count, p2a.run_count, p2b.run_count, p_join.run_count) == (
+        1,
+        1,
+        1,
+        1,
+    )
 
     # Now mutate ONLY branch 2B's config fingerprint; p1 and p2a must be reused,
     # while p2b and its downstream dependent p_join must be invalidated and re-run!
@@ -959,7 +962,12 @@ async def test_multi_branch_workflow_dag_execution_and_selective_reuse(
     assert res2.manifest.status == RunStatus.COMPLETED
     assert res2.report.reused_phase_ordinals == [1, 2]
     assert res2.report.invalidated_phase_ordinals == [3, 4]
-    assert (p1.run_count, p2a.run_count, p2b.run_count, p_join.run_count) == (1, 1, 2, 2)
+    assert (p1.run_count, p2a.run_count, p2b.run_count, p_join.run_count) == (
+        1,
+        1,
+        2,
+        2,
+    )
 
 
 @pytest.mark.asyncio
@@ -1073,5 +1081,3 @@ async def test_phase_scoped_prediction_sets_do_not_bleed_across_phases() -> None
     res = gate.evaluate("phase3", ArtifactCollection([]), ArtifactCollection([]))
     assert res.passed is True
     assert res.metrics["sample_count"] == 0.0
-
-

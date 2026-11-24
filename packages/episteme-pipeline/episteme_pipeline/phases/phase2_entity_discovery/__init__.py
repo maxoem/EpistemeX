@@ -108,12 +108,7 @@ type _ChunkDiscoveryStepOutput = tuple[
 def _extract_stream_key(chunk: L1Chunk) -> tuple[str, str]:
     """Derive the ``(source_doc_id, chapter_id)`` sequential stream key for a chunk."""
     meta = chunk.metadata if isinstance(chunk.metadata, dict) else {}
-    chapter = (
-        chunk.chapter_id
-        or meta.get("chapter")
-        or meta.get("section_path")
-        or ""
-    )
+    chapter = chunk.chapter_id or meta.get("chapter") or meta.get("section_path") or ""
     return (chunk.source_doc_id, str(chapter))
 
 
@@ -251,8 +246,8 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
     ) -> EpisodicWorkingMemoryManager:
         """Retrieve or fork an episodic working memory manager scoped to ``stream_key``."""
         if stream_key not in self._stream_memory_managers:
-            self._stream_memory_managers[stream_key] = (
-                self.working_memory_manager.fork(anchor=anchor)
+            self._stream_memory_managers[stream_key] = self.working_memory_manager.fork(
+                anchor=anchor
             )
         return self._stream_memory_managers[stream_key]
 
@@ -307,7 +302,9 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         checkpoint_store = self.checkpoint_store
 
         if isinstance(context, ArtifactExecutionContext):
-            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase2(chunks)
+            hydration = context.hydrator(self.phase_key, self.name).hydrate_phase2(
+                chunks
+            )
             chunks = hydration.delta_chunks
             all_entities.extend(hydration.entities)
             all_triples.extend(hydration.triples)
@@ -524,14 +521,10 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                 existing = merged[target_id]
                 merged_members[target_id].append((entity.id, entity.name))
                 combined_chunks = list(
-                    dict.fromkeys(
-                        existing.source_chunk_ids + entity.source_chunk_ids
-                    )
+                    dict.fromkeys(existing.source_chunk_ids + entity.source_chunk_ids)
                 )
                 conf_candidates = [
-                    c
-                    for c in (existing.confidence, entity.confidence)
-                    if c is not None
+                    c for c in (existing.confidence, entity.confidence) if c is not None
                 ]
                 merged[target_id] = existing.model_copy(
                     update={
@@ -557,9 +550,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
 
         rewritten_triples: list[L2Triple] = []
         if triples:
-            deduped_triples: dict[
-                tuple[str, str, str, str, str | None], L2Triple
-            ] = {}
+            deduped_triples: dict[tuple[str, str, str, str, str | None], L2Triple] = {}
             for triple in triples:
                 new_subj = id_remap.get(triple.subject_id, triple.subject_id)
                 new_obj = id_remap.get(triple.object_id, triple.object_id)
@@ -700,7 +691,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                         node_id=chunk.id,
                         properties={f"{phase_tag}_skipped": True},
                     )
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 baseline
                     pass
             return (
                 [],
@@ -752,7 +743,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                     )
 
                 # Check cannot-link constraint
-                if canonical is not None and curation_ledger is not None:
+                if canonical is not None and curation_ledger is not None:  # noqa: SIM102 baseline
                     if curation_ledger.is_cannot_link(
                         entity.id, canonical.id, entity.name, canonical.name
                     ):
@@ -768,8 +759,7 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
                     # Append this chunk as a source of the canonical entity
                     canonical = canonical.model_copy(
                         update={
-                            "source_chunk_ids": canonical.source_chunk_ids
-                            + [chunk.id]
+                            "source_chunk_ids": canonical.source_chunk_ids + [chunk.id]
                         }
                     )
                     resolved_entities.append((canonical, entity.textual_envelope))
@@ -785,12 +775,8 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
         resolved_triples: list[L2Triple] = [
             triple.model_copy(
                 update={
-                    "subject_id": id_redirect.get(
-                        triple.subject_id, triple.subject_id
-                    ),
-                    "object_id": id_redirect.get(
-                        triple.object_id, triple.object_id
-                    ),
+                    "subject_id": id_redirect.get(triple.subject_id, triple.subject_id),
+                    "object_id": id_redirect.get(triple.object_id, triple.object_id),
                 }
             )
             for triple in triples
@@ -804,4 +790,3 @@ class Phase2Runner(PhaseRunner[Phase1ArtifactsView]):
             boundary_detected,
             transitional_summary,
         )
-

@@ -66,9 +66,7 @@ async def select_pending_chunks(
     if pending:
         return pending
 
-    processed = await graph_store.get_chunks(
-        filters={f"{phase_tag}_processed": True}
-    )
+    processed = await graph_store.get_chunks(filters={f"{phase_tag}_processed": True})
     processed_ids = {chunk.id for chunk in processed}
     return [chunk for chunk in view_chunks if chunk.id not in processed_ids]
 

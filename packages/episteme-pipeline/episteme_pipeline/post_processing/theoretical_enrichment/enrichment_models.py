@@ -135,7 +135,9 @@ class ClusterProjectionOutput(BaseModel):
         default_factory=dict,
         description="Estimated latent parameter values in [0.0, 1.0] under this theoretical lens",
     )
-    fit_rationale: str = Field(default="", description="Justification for the parameter estimation")
+    fit_rationale: str = Field(
+        default="", description="Justification for the parameter estimation"
+    )
 
 
 @dataclass(slots=True)
@@ -180,13 +182,14 @@ class TheoryLaw:
         if self.evaluator is not None:
             try:
                 return float(self.evaluator(parameters))
-            except Exception:
+            except Exception:  # noqa: BLE001 baseline
                 return 1.0
 
         if self.formula_expression:
             from episteme_pipeline.post_processing.theoretical_enrichment.solvers import (
                 evaluate_formula_safely,
             )
+
             return evaluate_formula_safely(self.formula_expression, parameters)
 
         return 0.0

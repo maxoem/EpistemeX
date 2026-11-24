@@ -140,14 +140,22 @@ def test_theory_relation_compute_effective_weight_gating_and_tenability() -> Non
     )
 
     # Hard gating: W = I * 1.0 * TS_edge = 0.80 * 1.0 * 0.50 = 0.40
-    assert rel.compute_effective_weight(gating_mode="hard", tau_p=0.70, tau_c=0.70) == pytest.approx(0.40)
+    assert rel.compute_effective_weight(
+        gating_mode="hard", tau_p=0.70, tau_c=0.70
+    ) == pytest.approx(0.40)
 
     # Soft gating: W = I * (P * C) * TS_edge = 0.80 * (0.90 * 0.85) * 0.50 = 0.306
-    assert rel.compute_effective_weight(gating_mode="soft", tau_p=0.70, tau_c=0.70) == pytest.approx(0.306)
+    assert rel.compute_effective_weight(
+        gating_mode="soft", tau_p=0.70, tau_c=0.70
+    ) == pytest.approx(0.306)
 
     # Inadmissible threshold: P < tau_p or C < tau_c -> 0.0
-    assert rel.compute_effective_weight(gating_mode="hard", tau_p=0.95, tau_c=0.70) == 0.0
-    assert rel.compute_effective_weight(gating_mode="soft", tau_p=0.70, tau_c=0.90) == 0.0
+    assert (
+        rel.compute_effective_weight(gating_mode="hard", tau_p=0.95, tau_c=0.70) == 0.0
+    )
+    assert (
+        rel.compute_effective_weight(gating_mode="soft", tau_p=0.70, tau_c=0.90) == 0.0
+    )
 
 
 def test_stratified_theory_atom_state_tuple_and_codec_roundtrip() -> None:
@@ -240,8 +248,12 @@ def test_stratified_theory_atom_state_tuple_and_codec_roundtrip() -> None:
         rel_unset, run_id="run-json", phase_name="P4", method="m"
     ).model_dump_json()
 
-    reloaded_atom_env = ArtifactEnvelope[TheoryAtomArtifact].model_validate_json(env_atom_json)
-    reloaded_rel_env = ArtifactEnvelope[TheoryRelationArtifact].model_validate_json(env_rel_json)
+    reloaded_atom_env = ArtifactEnvelope[TheoryAtomArtifact].model_validate_json(
+        env_atom_json
+    )
+    reloaded_rel_env = ArtifactEnvelope[TheoryRelationArtifact].model_validate_json(
+        env_rel_json
+    )
     assert reloaded_atom_env.payload.modal_prior is None
     assert reloaded_rel_env.payload.inferential_warrant is None
 
@@ -257,9 +269,13 @@ def test_stratified_theory_atom_state_tuple_and_codec_roundtrip() -> None:
 
 
 @pytest.mark.asyncio
-async def test_hybrid_modal_resolver_populates_resolver_type_and_syntax_bounds() -> None:
+async def test_hybrid_modal_resolver_populates_resolver_type_and_syntax_bounds() -> (
+    None
+):
     """Verify HybridModalResolver populates resolver_type, syntax_bounds, and modal_prior on TheoryAtom."""
-    resolver = HybridModalResolver.create(config={"mode": "structural_only"}, decision_engine=None)
+    resolver = HybridModalResolver.create(
+        config={"mode": "structural_only"}, decision_engine=None
+    )
     atom = TheoryAtom(
         id="atom_kant_axiom",
         text="Der Raum ist notwendig eine Vorstellung a priori.",
@@ -277,7 +293,9 @@ async def test_hybrid_modal_resolver_populates_resolver_type_and_syntax_bounds()
     assert atom.syntax_bounds[0] <= score <= atom.syntax_bounds[1]
 
 
-def test_projector_idempotency_and_stance_prob_preservation_under_edge_tenability() -> None:
+def test_projector_idempotency_and_stance_prob_preservation_under_edge_tenability() -> (
+    None
+):
     """Verify TheoryNetProjector does not double-penalize TS_edge^2 or drop perception_stance_prob."""
     projector = TheoryNetProjector(schema=DEFAULT_SCHEMA)
     assert projector.use_continuous is True
@@ -314,9 +332,15 @@ def test_projector_idempotency_and_stance_prob_preservation_under_edge_tenabilit
     assert edges[0].effective_weight == pytest.approx(0.20)
 
     # Projecting repeatedly must be strictly idempotent
-    net1 = projector.project(Phase4ArtifactsView(theory_atoms=[a1, a2], theory_relations=[rel]))
-    net2 = projector.project(Phase4ArtifactsView(theory_atoms=net1.atoms, theory_relations=net1.relations))
-    assert net1.atoms[1].equilibrium_strength == pytest.approx(net2.atoms[1].equilibrium_strength)
+    net1 = projector.project(
+        Phase4ArtifactsView(theory_atoms=[a1, a2], theory_relations=[rel])
+    )
+    net2 = projector.project(
+        Phase4ArtifactsView(theory_atoms=net1.atoms, theory_relations=net1.relations)
+    )
+    assert net1.atoms[1].equilibrium_strength == pytest.approx(
+        net2.atoms[1].equilibrium_strength
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -403,11 +427,16 @@ def test_projector_modulates_dqbaf_equilibrium_by_local_and_edge_tenability() ->
     assert atoms_bad["hyp_bad"].equilibrium_strength < 0.50
 
     # Downstream conclusion supported by falsified hypothesis & low-tenability edge is also degraded
-    assert atoms_good["claim_good"].equilibrium_strength > atoms_bad["claim_bad"].equilibrium_strength
+    assert (
+        atoms_good["claim_good"].equilibrium_strength
+        > atoms_bad["claim_bad"].equilibrium_strength
+    )
 
 
 @pytest.mark.asyncio
-async def test_theoretical_enrichment_runner_reconverges_dqbaf_on_falsified_hypothesis() -> None:
+async def test_theoretical_enrichment_runner_reconverges_dqbaf_on_falsified_hypothesis() -> (
+    None
+):
     """Verify TheoreticalEnrichmentRunner feeds TS_local/TS_edge back into D-QBAF equilibrium tau*."""
     # Empirical observation severely violates the theory's law:
     # Law requires DopamineDepletion == AmygdalaHyperactivity, but observation has 1.0 vs 0.0 -> dev = 0.9 -> TS_local = 0.10 < 0.5
@@ -457,17 +486,30 @@ async def test_theoretical_enrichment_runner_reconverges_dqbaf_on_falsified_hypo
     # Step 1: Run Phase 6 BEFORE Theoretical Enrichment (unmodulated prior = 0.88)
     initial_collection = ArtifactCollection(
         [
-            build_argument_component_artifact(obs_atom, run_id="run-issue-050", phase_name="P4", method="m"),
-            build_argument_component_artifact(hyp_atom, run_id="run-issue-050", phase_name="P4", method="m"),
-            build_argument_component_artifact(downstream_claim, run_id="run-issue-050", phase_name="P4", method="m"),
-            build_argument_relation_artifact(rel_support, run_id="run-issue-050", phase_name="P4", method="m"),
+            build_argument_component_artifact(
+                obs_atom, run_id="run-issue-050", phase_name="P4", method="m"
+            ),
+            build_argument_component_artifact(
+                hyp_atom, run_id="run-issue-050", phase_name="P4", method="m"
+            ),
+            build_argument_component_artifact(
+                downstream_claim, run_id="run-issue-050", phase_name="P4", method="m"
+            ),
+            build_argument_relation_artifact(
+                rel_support, run_id="run-issue-050", phase_name="P4", method="m"
+            ),
         ]
     )
     p5_view = Phase5ArtifactsView.from_collection(initial_collection)
-    p6_runner = Phase6Runner(config=Phase6Config(), schema=DEFAULT_SCHEMA, graph_store=None)
+    p6_runner = Phase6Runner(
+        config=Phase6Config(), schema=DEFAULT_SCHEMA, graph_store=None
+    )
     p6_out = await p6_runner.run(p5_view, ctx)
 
-    p6_atoms = {a.payload.component_id: a.payload for a in p6_out.of_kind(ArtifactKind.THEORY_ATOM)}
+    p6_atoms = {
+        a.payload.component_id: a.payload
+        for a in p6_out.of_kind(ArtifactKind.THEORY_ATOM)
+    }
     pre_enrichment_tau = p6_atoms["hyp_falsified_claim"].equilibrium_strength
     pre_downstream_tau = p6_atoms["claim_downstream"].equilibrium_strength
     assert pre_enrichment_tau == pytest.approx(0.88)
@@ -491,11 +533,15 @@ async def test_theoretical_enrichment_runner_reconverges_dqbaf_on_falsified_hypo
     registry = TheoryRegistry(seed_theories=[theory_def])
     mock_store = AsyncMock()
 
-    combined_after_p6 = ArtifactCollection(initial_collection.artifacts + p6_out.artifacts)
+    combined_after_p6 = ArtifactCollection(
+        initial_collection.artifacts + p6_out.artifacts
+    )
     view_for_enrichment = Phase5ArtifactsView.from_collection(combined_after_p6)
 
     te_runner = TheoreticalEnrichmentRunner(
-        config=TheoreticalEnrichmentConfig(enabled=True, induce_theories=False, tenability_threshold=0.5),
+        config=TheoreticalEnrichmentConfig(
+            enabled=True, induce_theories=False, tenability_threshold=0.5
+        ),
         schema=DEFAULT_SCHEMA,
         graph_store=mock_store,
         registry=registry,
@@ -516,14 +562,22 @@ async def test_theoretical_enrichment_runner_reconverges_dqbaf_on_falsified_hypo
     assert te_payload.equilibrium_strengths["hyp_falsified_claim"] < 0.50
 
     # Verify emitted TheoryAtomArtifact envelopes reflect degraded D-QBAF justification tau* < 0.50
-    final_collection = ArtifactCollection(combined_after_p6.artifacts + te_out.artifacts)
+    final_collection = ArtifactCollection(
+        combined_after_p6.artifacts + te_out.artifacts
+    )
     final_view = Phase5ArtifactsView.from_collection(final_collection)
     final_atoms = {a.id: a for a in final_view.canonical_theory_atoms}
 
     falsified_final = final_atoms["hyp_falsified_claim"]
     downstream_final = final_atoms["claim_downstream"]
-    assert falsified_final.local_tenability is not None and falsified_final.local_tenability < 0.50
-    assert falsified_final.equilibrium_strength is not None and falsified_final.equilibrium_strength < 0.50
+    assert (
+        falsified_final.local_tenability is not None
+        and falsified_final.local_tenability < 0.50
+    )
+    assert (
+        falsified_final.equilibrium_strength is not None
+        and falsified_final.equilibrium_strength < 0.50
+    )
     # Modal prior tau_0(a) remains preserved (0.88), while equilibrium tau*(a) is degraded (< 0.50)
     assert falsified_final.modal_prior == pytest.approx(0.88)
     # Downstream claim's justification also dropped relative to pre-enrichment
@@ -532,7 +586,10 @@ async def test_theoretical_enrichment_runner_reconverges_dqbaf_on_falsified_hypo
 
     # Verify Reverse Order (TheoreticalEnrichment -> Phase6Runner) produces the exact same equilibrium
     p6_after_te = await p6_runner.run(final_view, ctx)
-    p6_re_atoms = {a.payload.component_id: a.payload for a in p6_after_te.of_kind(ArtifactKind.THEORY_ATOM)}
+    p6_re_atoms = {
+        a.payload.component_id: a.payload
+        for a in p6_after_te.of_kind(ArtifactKind.THEORY_ATOM)
+    }
     assert p6_re_atoms["hyp_falsified_claim"].equilibrium_strength == pytest.approx(
         falsified_final.equilibrium_strength
     )
@@ -547,13 +604,17 @@ def test_adr_and_runtime_analysis_documentation_sync() -> None:
     """Verify ADR-0007, ADR-0022, docs/adr/index.md, and runtime_analysis.md are synchronized."""
     repo_root = Path(__file__).resolve().parents[3]
 
-    adr_0007 = (repo_root / "docs" / "adr" / "0007-tf-structural-correspondence.md").read_text(encoding="utf-8")
+    adr_0007 = (
+        repo_root / "docs" / "adr" / "0007-tf-structural-correspondence.md"
+    ).read_text(encoding="utf-8")
     assert "Partially Superseded" in adr_0007
     assert "ADR-0011" in adr_0007
     assert "ADR-0020" in adr_0007
     assert "ADR-0022" in adr_0007
 
-    adr_0022_path = repo_root / "docs" / "adr" / "0022-unified-stratified-epistemic-metamodel.md"
+    adr_0022_path = (
+        repo_root / "docs" / "adr" / "0022-unified-stratified-epistemic-metamodel.md"
+    )
     assert adr_0022_path.exists()
     adr_0022 = adr_0022_path.read_text(encoding="utf-8")
     assert "Stratified Epistemic State Tuple" in adr_0022
@@ -562,7 +623,9 @@ def test_adr_and_runtime_analysis_documentation_sync() -> None:
     assert "0022" in adr_index
     assert "Partially Superseded" in adr_index
 
-    runtime_doc = (repo_root / "docs" / "architecture" / "runtime_analysis.md").read_text(encoding="utf-8")
+    runtime_doc = (
+        repo_root / "docs" / "architecture" / "runtime_analysis.md"
+    ).read_text(encoding="utf-8")
     assert "I=5" not in runtime_doc
     assert "RK45" in runtime_doc
     assert "Radau" in runtime_doc

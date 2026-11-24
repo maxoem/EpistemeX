@@ -14,7 +14,6 @@ import inspect
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from episteme_pipeline.artifacts.execution import (
     ArtifactExecutionContext,
     Phase3ArtifactsView,
@@ -42,7 +41,6 @@ from episteme_pipeline.post_processing.theoretical_enrichment.solvers import (
 )
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 
-
 # ---------------------------------------------------------------------------
 # Defect 1: Phase4Runner Empty Chunks UnboundLocalError
 # ---------------------------------------------------------------------------
@@ -68,8 +66,12 @@ async def test_phase4_empty_chunks_no_unbound_local_error() -> None:
         global_extractor=None,
     )
 
-    empty_view = Phase3ArtifactsView(global_triples=[], relation_type_distribution={}, chunks=[])
-    ctx = ArtifactExecutionContext(run_id="run_empty", manifest=None, pipeline_input=None)
+    empty_view = Phase3ArtifactsView(
+        global_triples=[], relation_type_distribution={}, chunks=[]
+    )
+    ctx = ArtifactExecutionContext(
+        run_id="run_empty", manifest=None, pipeline_input=None
+    )
 
     collection = await runner.run(empty_view, ctx)
     assert len(collection.artifacts) == 0
@@ -170,8 +172,12 @@ async def test_theoretical_enrichment_cluster_order_invariance() -> None:
 
     solver = TenabilitySolver()
 
-    atom1 = TheoryAtom(id="hyp1", text="Hypothesis 1", component_type="CLAIM", source_chunk_id="c1")
-    atom2 = TheoryAtom(id="hyp2", text="Hypothesis 2", component_type="CLAIM", source_chunk_id="c2")
+    atom1 = TheoryAtom(
+        id="hyp1", text="Hypothesis 1", component_type="CLAIM", source_chunk_id="c1"
+    )
+    atom2 = TheoryAtom(
+        id="hyp2", text="Hypothesis 2", component_type="CLAIM", source_chunk_id="c2"
+    )
 
     rel = TheoryRelation(
         source_id="hyp1",
@@ -202,12 +208,16 @@ async def test_theoretical_enrichment_cluster_order_invariance() -> None:
     )
 
     # Run Order A: [cluster1, cluster2]
-    with patch.object(runner, "_identify_empirical_clusters", return_value=[cluster1, cluster2]):
+    with patch.object(
+        runner, "_identify_empirical_clusters", return_value=[cluster1, cluster2]
+    ):
         view_a = Phase4ArtifactsView(
             theory_atoms=[atom1, atom2],
             theory_relations=[rel],
         )
-        ctx = ArtifactExecutionContext(run_id="run_a", manifest=None, pipeline_input=None)
+        ctx = ArtifactExecutionContext(
+            run_id="run_a", manifest=None, pipeline_input=None
+        )
         res_a = await runner.run(view_a, ctx)
         edge_tenabilities_a = [
             a.payload.edge_tenabilities
@@ -216,12 +226,16 @@ async def test_theoretical_enrichment_cluster_order_invariance() -> None:
         ]
 
     # Run Order B: [cluster2, cluster1]
-    with patch.object(runner, "_identify_empirical_clusters", return_value=[cluster2, cluster1]):
+    with patch.object(
+        runner, "_identify_empirical_clusters", return_value=[cluster2, cluster1]
+    ):
         view_b = Phase4ArtifactsView(
             theory_atoms=[atom1, atom2],
             theory_relations=[rel],
         )
-        ctx = ArtifactExecutionContext(run_id="run_b", manifest=None, pipeline_input=None)
+        ctx = ArtifactExecutionContext(
+            run_id="run_b", manifest=None, pipeline_input=None
+        )
         res_b = await runner.run(view_b, ctx)
         edge_tenabilities_b = [
             a.payload.edge_tenabilities
@@ -230,8 +244,12 @@ async def test_theoretical_enrichment_cluster_order_invariance() -> None:
         ]
 
     rel_key = f"{rel.source_id}->{rel.relation_type}->{rel.target_id}"
-    score_a = next(scores[rel_key] for scores in edge_tenabilities_a if rel_key in scores)
-    score_b = next(scores[rel_key] for scores in edge_tenabilities_b if rel_key in scores)
+    score_a = next(
+        scores[rel_key] for scores in edge_tenabilities_a if rel_key in scores
+    )
+    score_b = next(
+        scores[rel_key] for scores in edge_tenabilities_b if rel_key in scores
+    )
 
     # In single-pass execution, score_a had target_params={} (delta_c=0.0 -> ts_edge=1.0)
     # whereas with populated target_params, delta_c = abs(0.85 - 0.80) = 0.05 -> ts_edge = 0.95!
@@ -268,6 +286,12 @@ def test_tenability_solver_zero_hardcoded_parameter_strings() -> None:
 
     # 2. Structural assertion: ensure forbidden strings are not present in solver source
     source_code = inspect.getsource(TenabilitySolver)
-    forbidden_tokens = ["RepressionMagnitude", "AmygdalaHyperactivity", "DopamineDepletion"]
+    forbidden_tokens = [
+        "RepressionMagnitude",
+        "AmygdalaHyperactivity",
+        "DopamineDepletion",
+    ]
     for token in forbidden_tokens:
-        assert token not in source_code, f"Found forbidden hardcoded token '{token}' in TenabilitySolver source"
+        assert token not in source_code, (
+            f"Found forbidden hardcoded token '{token}' in TenabilitySolver source"
+        )

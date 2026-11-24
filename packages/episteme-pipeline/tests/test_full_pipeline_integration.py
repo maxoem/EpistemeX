@@ -10,11 +10,6 @@ from episteme_pipeline.artifacts.execution import (
     Phase2ArtifactsView,
     Phase3ArtifactsView,
 )
-from tests.helpers.artifact_mappers import (
-    map_phase1_output_to_artifacts,
-    map_phase2_output_to_artifacts,
-    map_phase3_output_to_artifacts,
-)
 from episteme_pipeline.artifacts.models import ArtifactKind
 from episteme_pipeline.artifacts.store import JsonArtifactStore
 from episteme_pipeline.config import PipelineConfig
@@ -37,6 +32,12 @@ from episteme_pipeline.protocols.phase_runner import PhaseRunner
 from episteme_pipeline.runs.models import (
     ExecutionResult,
     RunStatus,
+)
+
+from tests.helpers.artifact_mappers import (
+    map_phase1_output_to_artifacts,
+    map_phase2_output_to_artifacts,
+    map_phase3_output_to_artifacts,
 )
 
 
@@ -284,9 +285,13 @@ async def test_full_run_through_all_phases(tmp_path: Path, graph_store):
     assert result.report.artifact_counts_by_kind[ArtifactKind.CHUNK.value] >= 1
     assert result.report.artifact_counts_by_kind[ArtifactKind.LINKED_ENTITY.value] >= 2
     assert result.report.artifact_counts_by_kind[ArtifactKind.LOCAL_RELATION.value] >= 1
-    assert result.report.artifact_counts_by_kind[ArtifactKind.GLOBAL_RELATION.value] >= 1
+    assert (
+        result.report.artifact_counts_by_kind[ArtifactKind.GLOBAL_RELATION.value] >= 1
+    )
     assert result.report.artifact_counts_by_kind[ArtifactKind.THEORY_ATOM.value] >= 2
-    assert result.report.artifact_counts_by_kind[ArtifactKind.THEORY_RELATION.value] >= 1
+    assert (
+        result.report.artifact_counts_by_kind[ArtifactKind.THEORY_RELATION.value] >= 1
+    )
 
 
 @pytest.mark.asyncio

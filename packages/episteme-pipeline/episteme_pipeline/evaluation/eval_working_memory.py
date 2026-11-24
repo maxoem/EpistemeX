@@ -130,10 +130,14 @@ class MockNERLLM:
             state_delta={
                 "active_entities": active_entities,
                 "unresolved_references": unresolved,
-                "current_argument_branch": f"Analysis of {active_entities[0]}" if active_entities else None,
+                "current_argument_branch": f"Analysis of {active_entities[0]}"
+                if active_entities
+                else None,
             },
             boundary_detected=boundary_detected,
-            transitional_summary="Completed Aesthetic analysis." if boundary_detected else None,
+            transitional_summary="Completed Aesthetic analysis."
+            if boundary_detected
+            else None,
         )
 
         return NERExtractionOutput(
@@ -160,7 +164,7 @@ def _count_tokens(text: str) -> int:
     try:
         enc = tiktoken.get_encoding("cl100k_base")
         return len(enc.encode(text, disallowed_special=()))
-    except Exception:
+    except Exception:  # noqa: BLE001 baseline
         return len(text.split())
 
 
@@ -185,7 +189,9 @@ async def evaluate_strategy(
         # Baseline (No working memory)
         manager = None
     else:
-        manager = EpisodicWorkingMemoryManager(anchor=anchor, state_strategy=strategy_name)
+        manager = EpisodicWorkingMemoryManager(
+            anchor=anchor, state_strategy=strategy_name
+        )
 
     llm = MockNERLLM()
     extractor = LLMNERExtractor(llm=llm)
@@ -216,7 +222,13 @@ async def evaluate_strategy(
         total_tokens += _count_tokens(prompt_ctx)
 
         # Run extraction step
-        _, _, memory_update, boundary_detected, transitional_summary = await extractor.extract(
+        (
+            _,
+            _,
+            memory_update,
+            boundary_detected,
+            transitional_summary,
+        ) = await extractor.extract(
             chunk_id=chunk.id,
             chunk_text=chunk.text,
             schema=DEFAULT_SCHEMA,
@@ -277,7 +289,19 @@ async def run_working_memory_benchmark(mock_mode: bool = True) -> list[StrategyM
 
 def print_summary_table(results: list[StrategyMetrics]) -> None:
     header = f"| {'Strategy':<22} | {'Avg Prompt Tokens/Chunk':<24} | {'Active Entities':<15} | {'Eviction Resets':<15} | {'Latency (s)':<12} |"
-    divider = "|:" + "-" * 23 + "|:" + "-" * 25 + "|:" + "-" * 16 + "|:" + "-" * 16 + "|:" + "-" * 13 + "|"
+    divider = (
+        "|:"
+        + "-" * 23
+        + "|:"
+        + "-" * 25
+        + "|:"
+        + "-" * 16
+        + "|:"
+        + "-" * 16
+        + "|:"
+        + "-" * 13
+        + "|"
+    )
     print(header)
     print(divider)
 
@@ -287,7 +311,10 @@ def print_summary_table(results: list[StrategyMetrics]) -> None:
     print("\n")
 
 
-def save_json_report(results: list[StrategyMetrics], output_path: str = "evaluation/reports/working_memory_eval_report.json") -> None:
+def save_json_report(
+    results: list[StrategyMetrics],
+    output_path: str = "evaluation/reports/working_memory_eval_report.json",
+) -> None:
     p = Path(output_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     report_data = {
@@ -300,9 +327,21 @@ def save_json_report(results: list[StrategyMetrics], output_path: str = "evaluat
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Episodic Working Memory Strategy Evaluation Benchmark")
-    parser.add_argument("--mock", action="store_true", default=True, help="Run in reproducible offline mock mode")
-    parser.add_argument("--out", type=str, default="evaluation/reports/working_memory_eval_report.json", help="Output JSON report path")
+    parser = argparse.ArgumentParser(
+        description="Episodic Working Memory Strategy Evaluation Benchmark"
+    )
+    parser.add_argument(
+        "--mock",
+        action="store_true",
+        default=True,
+        help="Run in reproducible offline mock mode",
+    )
+    parser.add_argument(
+        "--out",
+        type=str,
+        default="evaluation/reports/working_memory_eval_report.json",
+        help="Output JSON report path",
+    )
     args = parser.parse_args()
 
     results = asyncio.run(run_working_memory_benchmark(mock_mode=args.mock))

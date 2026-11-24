@@ -297,7 +297,7 @@ class MockJevDecisionEngine:
 
         matched_rule = None
         for rule in reversed(self._noul_rules):
-            if rule["question_pattern"] in q_str:
+            if rule["question_pattern"] in q_str:  # noqa: SIM102 baseline
                 if rule["state_pattern"] is None or rule["state_pattern"] in state_str:
                     matched_rule = rule
                     break
@@ -372,7 +372,7 @@ class MockJevDecisionEngine:
 
         matched_rule = None
         for rule in reversed(self._choice_rules):
-            if rule["question_pattern"] in q_str:
+            if rule["question_pattern"] in q_str:  # noqa: SIM102 baseline
                 if rule["state_pattern"] is None or rule["state_pattern"] in state_str:
                     matched_rule = rule
                     break
@@ -390,7 +390,9 @@ class MockJevDecisionEngine:
             emp_acc = matched_rule["empirical_accuracy"]
             pred_set = matched_rule["prediction_set"]
             if pred_set is None:
-                pred_set = compute_conformal_prediction_set(probs, alpha=effective_alpha)
+                pred_set = compute_conformal_prediction_set(
+                    probs, alpha=effective_alpha
+                )
             tokens_saved = matched_rule["tokens_saved_estimate"]
         else:
             selected = fallback_option
@@ -402,7 +404,9 @@ class MockJevDecisionEngine:
             class_prob = 0.85
             emp_acc = 0.88
             pred_set = compute_conformal_prediction_set(probs, alpha=effective_alpha)
-            tokens_saved = (len(str(state)) // 4) + (len(question) // 4) + (len(opt_list) * 8) + 50
+            tokens_saved = (
+                (len(str(state)) // 4) + (len(question) // 4) + (len(opt_list) * 8) + 50
+            )
 
         res = DecisionScore(
             selected_option=selected,
@@ -464,7 +468,7 @@ class MockJevDecisionEngine:
 
         matched_rule = None
         for rule in reversed(self._score_rules):
-            if rule["question_pattern"] in q_str:
+            if rule["question_pattern"] in q_str:  # noqa: SIM102 baseline
                 if rule["state_pattern"] is None or rule["state_pattern"] in state_str:
                     matched_rule = rule
                     break
@@ -478,7 +482,14 @@ class MockJevDecisionEngine:
             tokens_saved = matched_rule["tokens_saved_estimate"]
         else:
             selected = fallback_level
-            probs = {str(lvl): (0.75 if lvl == selected else round(0.25 / max(1, len(levels) - 1), 4)) for lvl in levels}
+            probs = {
+                str(lvl): (
+                    0.75
+                    if lvl == selected
+                    else round(0.25 / max(1, len(levels) - 1), 4)
+                )
+                for lvl in levels
+            }
             class_prob = 0.75
             emp_acc = 0.80
             pred_set = [str(selected)]

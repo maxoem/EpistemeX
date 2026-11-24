@@ -51,7 +51,11 @@ def test_schema_mapper_l2_definitions_and_edge_descriptors() -> None:
 def test_schema_mapper_with_predicate_aliases() -> None:
     """SchemaMapper respects custom open-vocabulary predicate aliases."""
     aliases = {
-        "WIDERSPRICHT": {"polarity": -1, "canonical": "ATTACKS", "definition": "German attack relation"},
+        "WIDERSPRICHT": {
+            "polarity": -1,
+            "canonical": "ATTACKS",
+            "definition": "German attack relation",
+        },
         "BELEGT": {"polarity": 1, "canonical": "SUPPORTS_ARG"},
     }
     mapper = SchemaMapper(predicate_aliases=aliases)
@@ -124,7 +128,9 @@ async def test_engine_settings_service_and_api(tmp_path: Path) -> None:
     app = create_app(StudioSettings())
     app.state.engine_settings_service = service
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # GET /api/engine/settings
         res = await client.get("/api/engine/settings")
         assert res.status_code == 200
@@ -181,7 +187,9 @@ async def test_decision_engine_playground_and_protocol_contract() -> None:
     """Verify POST /api/engine/decision/test accepts both playground and protocol payloads."""
     app = create_app(StudioSettings())
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # 1. Playground modal payload (using input_text, candidate_labels)
         pg_res = await client.post(
             "/api/engine/decision/test",
@@ -191,7 +199,9 @@ async def test_decision_engine_playground_and_protocol_contract() -> None:
                 "candidate_labels": ["Axiom", "Definition", "Lemma", "Theorem"],
             },
         )
-        assert pg_res.status_code == 200, f"Expected 200, got {pg_res.status_code}: {pg_res.text}"
+        assert pg_res.status_code == 200, (
+            f"Expected 200, got {pg_res.status_code}: {pg_res.text}"
+        )
         pg_data = pg_res.json()
         assert pg_data["primitive"] == "choice"
         assert "prediction" in pg_data
@@ -253,7 +263,9 @@ async def test_decision_engine_playground_read_only_docker_immunity() -> None:
     """Verify that in read-only mode, the playground runs safely via simulation stub without failing."""
     app = create_app(StudioSettings(read_only=True))
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         res = await client.post(
             "/api/engine/decision/test",
             json={
@@ -268,5 +280,3 @@ async def test_decision_engine_playground_read_only_docker_immunity() -> None:
         data = res.json()
         assert data["is_mock"] is True
         assert data["prediction"] is not None
-
-

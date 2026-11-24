@@ -105,8 +105,10 @@ async def test_lifespan_creates_single_driver_and_closes() -> None:
     app.state.neo4j_driver = mock_driver
     app.state.neo4j_available = True
 
-    async with app.router.lifespan_context(app):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with app.router.lifespan_context(app):  # noqa: SIM117 baseline
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             resp = await client.get("/api/capabilities")
             assert resp.status_code == 200
             assert resp.json()["neo4j"] is True
@@ -125,7 +127,9 @@ async def test_capabilities_reports_false_when_neo4j_down() -> None:
     app.state.neo4j_driver = None
     app.state.neo4j_available = False
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         resp = await client.get("/api/capabilities")
         assert resp.status_code == 200
         data = resp.json()
@@ -136,10 +140,17 @@ async def test_capabilities_reports_false_when_neo4j_down() -> None:
 @pytest.mark.asyncio
 async def test_read_only_violation_rejected_with_403() -> None:
     """A write statement is rejected with neo4j-read-only-violation via read access mode (D-23)."""
+
     async def write_rejection_handler(query: str, **params):
-        if "CREATE" in query.upper() or "MERGE" in query.upper() or "DELETE" in query.upper():
+        if (
+            "CREATE" in query.upper()
+            or "MERGE" in query.upper()
+            or "DELETE" in query.upper()
+        ):
             # Neo4j server raises ClientError when writing in read access mode
-            raise ClientError("Writing in read access mode not allowed. (Neo.ClientError.Statement.AccessMode)")
+            raise ClientError(
+                "Writing in read access mode not allowed. (Neo.ClientError.Statement.AccessMode)"
+            )
         return _MockAsyncResult(["n"], [])
 
     mock_driver = _MockAsyncDriver(run_handler=write_rejection_handler)
@@ -147,7 +158,9 @@ async def test_read_only_violation_rejected_with_403() -> None:
     app.state.neo4j_driver = mock_driver
     app.state.neo4j_available = True
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         payload = {"query": "CREATE (n:Test {name: 'WriteTest'}) RETURN n"}
         resp = await client.post("/api/graph/cypher", json=payload)
         assert resp.status_code == 403
@@ -161,17 +174,22 @@ async def test_read_only_violation_rejected_with_403() -> None:
 @pytest.mark.asyncio
 async def test_query_timeout_returns_504() -> None:
     """A cartesian-product query hits the timeout and returns query-timeout (status 504)."""
+
     async def slow_handler(query: str, **params):
         # Simulate long-running query
         await asyncio.sleep(0.5)
         return _MockAsyncResult(["n"], [])
 
     mock_driver = _MockAsyncDriver(run_handler=slow_handler)
-    app = create_app(StudioSettings(neo4j_url="bolt://127.0.0.1:7687", query_timeout_seconds=0.05))
+    app = create_app(
+        StudioSettings(neo4j_url="bolt://127.0.0.1:7687", query_timeout_seconds=0.05)
+    )
     app.state.neo4j_driver = mock_driver
     app.state.neo4j_available = True
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         resp = await client.post(
             "/api/graph/cypher",
             json={"query": "MATCH (a), (b), (c) RETURN a, b, c"},
@@ -194,7 +212,9 @@ async def test_row_cap_enforced_returns_413() -> None:
     app.state.neo4j_driver = mock_driver
     app.state.neo4j_available = True
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # Cap at 5 rows
         resp = await client.post(
             "/api/graph/cypher",
@@ -211,7 +231,9 @@ async def test_undercuts_reification() -> None:
     """UNDERCUTS reifies to a synthetic Inference node (D-21)."""
     nodes = [
         StudioNode(id="premise_1", layer=Layer.L3, type="Claim", label="Premise 1"),
-        StudioNode(id="conclusion_1", layer=Layer.L3, type="Claim", label="Conclusion 1"),
+        StudioNode(
+            id="conclusion_1", layer=Layer.L3, type="Claim", label="Conclusion 1"
+        ),
         StudioNode(id="attacker_1", layer=Layer.L3, type="Claim", label="Attacker 1"),
     ]
     edges = [
@@ -263,15 +285,35 @@ async def test_unmapped_predicates_ranking() -> None:
     ]
     # Relationships with open-vocabulary German predicates not in standard schema
     rels = [
-        {"source_id": "c1", "target_id": "c2", "rel_type": "WIDERSPRICHT", "rel_id": "r1", "props": {}},
-        {"source_id": "c2", "target_id": "c3", "rel_type": "WIDERSPRICHT", "rel_id": "r2", "props": {}},
-        {"source_id": "c1", "target_id": "c3", "rel_type": "BASIERT_AUF", "rel_id": "r3", "props": {}},
+        {
+            "source_id": "c1",
+            "target_id": "c2",
+            "rel_type": "WIDERSPRICHT",
+            "rel_id": "r1",
+            "props": {},
+        },
+        {
+            "source_id": "c2",
+            "target_id": "c3",
+            "rel_type": "WIDERSPRICHT",
+            "rel_id": "r2",
+            "props": {},
+        },
+        {
+            "source_id": "c1",
+            "target_id": "c3",
+            "rel_type": "BASIERT_AUF",
+            "rel_id": "r3",
+            "props": {},
+        },
     ]
 
     async def mock_run(query: str, **params):
         if "labels(n)" in query:
             return _MockAsyncResult(["id", "labels", "props"], nodes)
-        return _MockAsyncResult(["source_id", "target_id", "rel_type", "rel_id", "props"], rels)
+        return _MockAsyncResult(
+            ["source_id", "target_id", "rel_type", "rel_id", "props"], rels
+        )
 
     mock_driver = _MockAsyncDriver(run_handler=mock_run)
     reader = Neo4jReader(driver=mock_driver)
@@ -308,7 +350,9 @@ async def test_d18_identity_key_stability() -> None:
 
         assert len(keys_a) > 0, "Expected non-empty identity_keys in run A"
         # Exact 100% match across runs
-        assert keys_a == keys_b, f"identity_key drift detected between {run_a} and {run_b}"
+        assert keys_a == keys_b, (
+            f"identity_key drift detected between {run_a} and {run_b}"
+        )
 
 
 @pytest.mark.asyncio
@@ -322,13 +366,19 @@ async def test_dynamic_neo4j_connect_endpoint(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(Neo4jReader, "create_and_verify_driver", mock_create_and_verify)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         cap_resp = await client.get("/api/capabilities")
         assert cap_resp.json()["neo4j"] is False
 
         conn_resp = await client.post(
             "/api/graph/connect",
-            json={"url": "bolt://127.0.0.1:7687", "user": "neo4j", "password": "secretpassword"},
+            json={
+                "url": "bolt://127.0.0.1:7687",
+                "user": "neo4j",
+                "password": "secretpassword",
+            },
         )
         assert conn_resp.status_code == 200
         assert conn_resp.json()["status"] == "connected"
@@ -349,7 +399,9 @@ async def test_neo4j_status_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(Neo4jReader, "create_and_verify_driver", mock_create_and_verify)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # Initially disconnected
         resp = await client.get("/api/graph/status")
         assert resp.status_code == 200
@@ -358,18 +410,28 @@ async def test_neo4j_status_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
         # Connect
         await client.post(
             "/api/graph/connect",
-            json={"url": "bolt://127.0.0.1:7687", "user": "neo4j", "password": "secretpassword", "database": "neo4j"},
+            json={
+                "url": "bolt://127.0.0.1:7687",
+                "user": "neo4j",
+                "password": "secretpassword",
+                "database": "neo4j",
+            },
         )
 
         # Connected status reported
         resp_after = await client.get("/api/graph/status")
         assert resp_after.status_code == 200
-        assert resp_after.json() == {"connected": True, "url": "bolt://127.0.0.1:7687", "database": "neo4j"}
-
+        assert resp_after.json() == {
+            "connected": True,
+            "url": "bolt://127.0.0.1:7687",
+            "database": "neo4j",
+        }
 
 
 @pytest.mark.asyncio
-async def test_dynamic_neo4j_connect_failure_returns_400(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_dynamic_neo4j_connect_failure_returns_400(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """POST /api/graph/connect returns 400 ProblemDetail on unreachable database."""
     app = create_app(StudioSettings(demo_mode=True))
 
@@ -378,7 +440,9 @@ async def test_dynamic_neo4j_connect_failure_returns_400(monkeypatch: pytest.Mon
 
     monkeypatch.setattr(Neo4jReader, "create_and_verify_driver", mock_fail)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         conn_resp = await client.post(
             "/api/graph/connect",
             json={"url": "bolt://127.0.0.1:9999", "user": "neo4j", "password": "wrong"},
@@ -404,7 +468,12 @@ def test_settings_neo4j_env_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_neo4j_isolation_guard() -> None:
     """AST guard: Only adapters/ may import neo4j; domain/, services/, and api/ must not."""
     src_dir = Path(__file__).parent.parent / "src" / "episteme_studio"
-    forbidden_dirs = [src_dir / "domain", src_dir / "services", src_dir / "api", src_dir / "runtime"]
+    forbidden_dirs = [
+        src_dir / "domain",
+        src_dir / "services",
+        src_dir / "api",
+        src_dir / "runtime",
+    ]
 
     violations = []
     for d in forbidden_dirs:
@@ -414,12 +483,18 @@ def test_neo4j_isolation_guard() -> None:
                 if isinstance(node, ast.Import):
                     for alias in node.names:
                         if alias.name.split(".")[0] == "neo4j":
-                            violations.append(f"{py_file.name}:{node.lineno} imports '{alias.name}'")
-                elif isinstance(node, ast.ImportFrom) and node.module:
+                            violations.append(
+                                f"{py_file.name}:{node.lineno} imports '{alias.name}'"
+                            )
+                elif isinstance(node, ast.ImportFrom) and node.module:  # noqa: SIM102 baseline
                     if node.module.split(".")[0] == "neo4j":
-                        violations.append(f"{py_file.name}:{node.lineno} imports from '{node.module}'")
+                        violations.append(
+                            f"{py_file.name}:{node.lineno} imports from '{node.module}'"
+                        )
 
-    assert not violations, "Neo4j driver imported outside adapters/:\n" + "\n".join(violations)
+    assert not violations, "Neo4j driver imported outside adapters/:\n" + "\n".join(
+        violations
+    )
 
 
 @pytest.mark.asyncio
@@ -430,7 +505,9 @@ async def test_execute_cypher_sync_and_async_keys_support() -> None:
     are properly unpacked without raising TypeError.
     """
     driver_sync = _MockAsyncDriver(
-        lambda q, **kw: _MockAsyncResult(["col_a", "col_b"], [{"col_a": 1, "col_b": "two"}])
+        lambda q, **kw: _MockAsyncResult(
+            ["col_a", "col_b"], [{"col_a": 1, "col_b": "two"}]
+        )
     )
     reader_sync = Neo4jReader(driver=driver_sync)
     res_sync = await reader_sync.execute_cypher("RETURN 1 AS col_a, 'two' AS col_b")
@@ -458,7 +535,9 @@ async def test_disconnect_neo4j_endpoint() -> None:
     app.state.neo4j_driver = mock_driver
     app.state.neo4j_available = True
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         resp = await client.post("/api/graph/disconnect")
         assert resp.status_code == 200
         data = resp.json()
@@ -467,5 +546,3 @@ async def test_disconnect_neo4j_endpoint() -> None:
         assert app.state.neo4j_available is False
         assert app.state.neo4j_driver is None
         assert mock_driver.closed is True
-
-

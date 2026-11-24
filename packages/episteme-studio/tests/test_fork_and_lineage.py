@@ -38,10 +38,13 @@ def mock_run_lineage_workspace(tmp_path: Path) -> tuple[Path, Path, Path]:
 
     # Create dummy input document
     input_file = data_dir / "paper.txt"
-    input_file.write_text("Theoretical physics and epistemology of gravity.", encoding="utf-8")
+    input_file.write_text(
+        "Theoretical physics and epistemology of gravity.", encoding="utf-8"
+    )
 
     # Compute source fingerprint using pipeline fingerprinting logic
     from episteme_pipeline.runs.fingerprints import fingerprint_existing_sources
+
     source_fp = fingerprint_existing_sources([str(input_file)], [])
 
     parent_manifest: dict[str, Any] = {
@@ -129,7 +132,9 @@ def mock_run_lineage_workspace(tmp_path: Path) -> tuple[Path, Path, Path]:
     }
 
     # Write parent manifest
-    (runs_dir / "run-parent-100.json").write_text(json.dumps(parent_manifest), encoding="utf-8")
+    (runs_dir / "run-parent-100.json").write_text(
+        json.dumps(parent_manifest), encoding="utf-8"
+    )
 
     # Write parent artifact envelopes
     parent_art_dir = artifacts_dir / "run-parent-100"
@@ -143,7 +148,9 @@ def mock_run_lineage_workspace(tmp_path: Path) -> tuple[Path, Path, Path]:
         "created_at": "2026-09-12T10:00:01Z",
         "data": {"title": "Paper", "text": "Content"},
     }
-    (parent_art_dir / "doc-1.json").write_text(json.dumps(envelope_doc), encoding="utf-8")
+    (parent_art_dir / "doc-1.json").write_text(
+        json.dumps(envelope_doc), encoding="utf-8"
+    )
 
     envelope_entity = {
         "artifact_id": "art-ent-1",
@@ -159,7 +166,9 @@ def mock_run_lineage_workspace(tmp_path: Path) -> tuple[Path, Path, Path]:
             "layer": "L2",
         },
     }
-    (parent_art_dir / "ent-1.json").write_text(json.dumps(envelope_entity), encoding="utf-8")
+    (parent_art_dir / "ent-1.json").write_text(
+        json.dumps(envelope_entity), encoding="utf-8"
+    )
 
     # Create child manifest that forked from parent
     child_manifest: dict[str, Any] = {
@@ -190,12 +199,16 @@ def mock_run_lineage_workspace(tmp_path: Path) -> tuple[Path, Path, Path]:
         ],
         "config_snapshot": parent_manifest["config_snapshot"],
     }
-    (runs_dir / "run-child-200.json").write_text(json.dumps(child_manifest), encoding="utf-8")
+    (runs_dir / "run-child-200.json").write_text(
+        json.dumps(child_manifest), encoding="utf-8"
+    )
 
     return runs_dir, artifacts_dir, data_dir
 
 
-def test_artifact_reader_lineage_resolution(mock_run_lineage_workspace: tuple[Path, Path, Path]) -> None:
+def test_artifact_reader_lineage_resolution(
+    mock_run_lineage_workspace: tuple[Path, Path, Path],
+) -> None:
     """ArtifactReader resolves artifacts across the parent_run_id lineage chain.
 
     Parameters
@@ -228,7 +241,9 @@ def test_artifact_reader_lineage_resolution(mock_run_lineage_workspace: tuple[Pa
     assert run_detail.artifact_count >= 2
 
 
-def test_preview_invalidation_forked_run_unchanged(mock_run_lineage_workspace: tuple[Path, Path, Path]) -> None:
+def test_preview_invalidation_forked_run_unchanged(
+    mock_run_lineage_workspace: tuple[Path, Path, Path],
+) -> None:
     """Previewing invalidation for a forked run with identical inputs results in all-reused.
 
     Parameters
@@ -258,7 +273,9 @@ def test_preview_invalidation_forked_run_unchanged(mock_run_lineage_workspace: t
     assert preview.estimated_artifact_loss == 0
 
 
-def test_preview_invalidation_forked_run_source_changed(mock_run_lineage_workspace: tuple[Path, Path, Path]) -> None:
+def test_preview_invalidation_forked_run_source_changed(
+    mock_run_lineage_workspace: tuple[Path, Path, Path],
+) -> None:
     """Previewing invalidation when source input is changed invalidates from Phase 1 onward.
 
     Parameters
@@ -291,7 +308,9 @@ def test_preview_invalidation_forked_run_source_changed(mock_run_lineage_workspa
     assert preview.estimated_artifact_loss > 0
 
 
-def test_preview_invalidation_forked_run_phase2_config_changed(mock_run_lineage_workspace: tuple[Path, Path, Path]) -> None:
+def test_preview_invalidation_forked_run_phase2_config_changed(
+    mock_run_lineage_workspace: tuple[Path, Path, Path],
+) -> None:
     """Previewing invalidation when phase 2 config changes reuses Phase 1 and invalidates Phase 2+.
 
     Parameters
@@ -321,7 +340,9 @@ def test_preview_invalidation_forked_run_phase2_config_changed(mock_run_lineage_
     assert preview.invalidated_phases == list(range(2, 9))
 
 
-def test_preview_invalidation_models_patch_all_reused(mock_run_lineage_workspace: tuple[Path, Path, Path]) -> None:
+def test_preview_invalidation_models_patch_all_reused(
+    mock_run_lineage_workspace: tuple[Path, Path, Path],
+) -> None:
     """Changes to models.* config alone do not invalidate phases (per D-14).
 
     Parameters
@@ -352,7 +373,9 @@ def test_preview_invalidation_models_patch_all_reused(mock_run_lineage_workspace
 
 
 @pytest.mark.asyncio
-async def test_api_forked_run_lifecycle(mock_run_lineage_workspace: tuple[Path, Path, Path]) -> None:
+async def test_api_forked_run_lifecycle(
+    mock_run_lineage_workspace: tuple[Path, Path, Path],
+) -> None:
     """POST /api/config/invalidation-preview and POST /api/runs support parent_run_id.
 
     Parameters
@@ -365,10 +388,14 @@ async def test_api_forked_run_lifecycle(mock_run_lineage_workspace: tuple[Path, 
     None
     """
     runs_dir, artifacts_dir, data_dir = mock_run_lineage_workspace
-    settings = StudioSettings(runs_dir=runs_dir, artifacts_dir=artifacts_dir, demo_mode=True)
+    settings = StudioSettings(
+        runs_dir=runs_dir, artifacts_dir=artifacts_dir, demo_mode=True
+    )
     app = create_app(settings)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         # 1. Preview invalidation for parent run
         input_file = data_dir / "paper.txt"
         preview_resp = await client.post(
@@ -401,4 +428,3 @@ async def test_api_forked_run_lifecycle(mock_run_lineage_workspace: tuple[Path, 
 
         # Cancel run to clean up
         await client.post(f"/api/runs/{run_data['run_id']}/cancel")
-

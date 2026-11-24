@@ -21,7 +21,10 @@ from episteme_pipeline.decision.modal_resolver import HybridModalResolver
 from episteme_pipeline.decision.observable import ObservableDecisionEngine
 from episteme_pipeline.events import EventEmitter, NoOpEventEmitter
 from episteme_pipeline.llm.cache import DiskCachedStructuredLLM, default_cache_dir
-from episteme_pipeline.llm.structured import StructuredPredictable, ensure_structured_llm
+from episteme_pipeline.llm.structured import (
+    StructuredPredictable,
+    ensure_structured_llm,
+)
 from episteme_pipeline.protocols.decision import DecisionEngine, ensure_decision_engine
 from episteme_pipeline.protocols.extractors import (
     CrossEncoder,
@@ -376,9 +379,7 @@ class PipelineFactory(Fingerprintable):
                     resolved_linker = comp
                 if resolved_ner is None and isinstance(comp, NERExtractor):
                     resolved_ner = comp
-                if resolved_embedding is None and isinstance(
-                    comp, EmbeddingModel
-                ):
+                if resolved_embedding is None and isinstance(comp, EmbeddingModel):
                     resolved_embedding = comp
 
         resolved_modal = ensure_modal_strength_resolver(
@@ -390,7 +391,9 @@ class PipelineFactory(Fingerprintable):
         default_theorynet_projector = cls._build_theorynet_projector(
             config, resolved_modal
         )
-        resolved_detector = ensure_deficit_detector(detector) or TheoryNetDeficitDetector(
+        resolved_detector = ensure_deficit_detector(
+            detector
+        ) or TheoryNetDeficitDetector(
             config=config.refinement,
             schema=config.graph_schema,
         )
@@ -583,9 +586,7 @@ class PipelineFactory(Fingerprintable):
                     else None
                 ),
                 language=(
-                    config.decision_engine.language
-                    if config.decision_engine
-                    else None
+                    config.decision_engine.language if config.decision_engine else None
                 ),
                 calibrator=calibrator,
             )
@@ -730,7 +731,9 @@ class PipelineFactory(Fingerprintable):
                     enr_cfg = config.theoretical_enrichment
                     shared_theory_projector = LLMTheoryProjector(
                         llm=llm,
-                        prompts=enr_cfg.projection_prompts if enr_cfg is not None else None,
+                        prompts=enr_cfg.projection_prompts
+                        if enr_cfg is not None
+                        else None,
                         strategy=(
                             enr_cfg.decoding_strategy
                             if enr_cfg is not None

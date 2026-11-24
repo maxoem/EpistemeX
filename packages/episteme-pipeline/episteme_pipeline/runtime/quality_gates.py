@@ -86,9 +86,7 @@ def _build_gate_result(
         Pure evaluation outcome contract.
     """
     severity: Literal["pass", "warn", "halt"] = (
-        "pass"
-        if passed
-        else ("halt" if on_violation == "raise" else "warn")
+        "pass" if passed else ("halt" if on_violation == "raise" else "warn")
     )
     return QualityGateResult(
         gate_name=gate_name,
@@ -290,14 +288,16 @@ class OntologyEntropyGate:
                 reasons.append(
                     f"zero entity density (0 entities across {non_empty_chunks} non-empty chunks)"
                 )
-            elif self.min_entity_density > 0.0 and entity_density < self.min_entity_density:
+            elif (
+                self.min_entity_density > 0.0
+                and entity_density < self.min_entity_density
+            ):
                 reasons.append(
                     f"entity density {entity_density:.3f} < min_entity_density {self.min_entity_density:.3f}"
                 )
 
         multi_type_schema = (
-            self.schema_entity_type_count is None
-            or self.schema_entity_type_count > 1
+            self.schema_entity_type_count is None or self.schema_entity_type_count > 1
         )
         if entity_count >= self.min_entities and multi_type_schema:
             if entropy < self.min_entropy:
@@ -434,7 +434,9 @@ class PercolationQualityGate:
             rep = _resolve_alias_chain(node_id, alias_map)
             clusters.setdefault(rep, set()).add(node_id)
 
-        max_cluster_size = max((len(members) for members in clusters.values()), default=0)
+        max_cluster_size = max(
+            (len(members) for members in clusters.values()), default=0
+        )
         return len(population_ids), max_cluster_size, len(alias_map)
 
     def _compute_l3_percolation(
@@ -520,12 +522,8 @@ class PercolationQualityGate:
             max_sz = max((len(m) for m in clusters.values()), default=0)
             return len(pop), max_sz, len(alias), float(max_sz) / float(len(pop))
 
-        l3_pop_sz, l3_max_sz, l3_merges, l3_ratio = _eval_layer(
-            l3_population, l3_alias
-        )
-        l2_pop_sz, l2_max_sz, l2_merges, l2_ratio = _eval_layer(
-            l2_population, l2_alias
-        )
+        l3_pop_sz, l3_max_sz, l3_merges, l3_ratio = _eval_layer(l3_population, l3_alias)
+        l2_pop_sz, l2_max_sz, l2_merges, l2_ratio = _eval_layer(l2_population, l2_alias)
         l3_eligible = l3_pop_sz >= self.min_population and l3_merges > 0
         l2_eligible = l2_pop_sz >= self.min_population and l2_merges > 0
         if l2_eligible and not l3_eligible:
@@ -565,12 +563,12 @@ class PercolationQualityGate:
             phase_collection.of_kind(ArtifactKind.FUSION_DECISION, latest_only=True)
         )
         if phase_key == "phase5" or has_fusion:
-            population_size, max_cluster_size, merged_count = self._compute_l3_percolation(
-                phase_collection, cumulative_collection
+            population_size, max_cluster_size, merged_count = (
+                self._compute_l3_percolation(phase_collection, cumulative_collection)
             )
         else:
-            population_size, max_cluster_size, merged_count = self._compute_l2_percolation(
-                phase_collection, cumulative_collection
+            population_size, max_cluster_size, merged_count = (
+                self._compute_l2_percolation(phase_collection, cumulative_collection)
             )
 
         cluster_fraction = (

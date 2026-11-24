@@ -20,7 +20,7 @@ from uuid import uuid4
 try:  # pragma: no cover
     # Optional dependency; guarded to keep the pipeline importable without it
     from langfuse import get_client, propagate_attributes  # type: ignore
-except Exception:  # pragma: no cover
+except Exception:  # pragma: no cover  # noqa: BLE001 baseline
     get_client = None  # type: ignore
     propagate_attributes = None  # type: ignore
 
@@ -99,7 +99,7 @@ class LangfusePublisher(RunPublisher):
             # Publish quality scores if available
             trace_id = None
             if run_id:
-                trace_id = hashlib.md5(run_id.encode("utf-8")).hexdigest()
+                trace_id = hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:32]
 
             if hasattr(self.client, "create_score") and trace_id:
                 self.client.create_score(
@@ -110,13 +110,15 @@ class LangfusePublisher(RunPublisher):
                 )
 
             self.client.flush()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             # Silently ignore errors to ensure best-effort tracing
             pass
 
 
 @contextmanager
-def phase_span(client: object | None, *, name: str, ordinal: int | None = None) -> Iterator[None]:
+def phase_span(
+    client: object | None, *, name: str, ordinal: int | None = None
+) -> Iterator[None]:
     """Convenience context manager for phase boundaries.
 
     Parameters
@@ -143,7 +145,7 @@ def phase_span(client: object | None, *, name: str, ordinal: int | None = None) 
             input={"phase_ordinal": ordinal} if ordinal is not None else None,
         ):
             yield None
-    except Exception:
+    except Exception:  # noqa: BLE001 baseline
         yield None
 
 
@@ -201,12 +203,16 @@ def run_observability_context(
             lf_client = Langfuse(environment=environment)  # type: ignore
         else:
             lf_client = get_client()  # type: ignore
-    except Exception:
+    except Exception:  # noqa: BLE001 baseline
         yield None
         return
 
     resolved_session_id = session_id or run_id
-    trace_hex = hashlib.md5(run_id.encode("utf-8")).hexdigest() if run_id else uuid4().hex
+    trace_hex = (
+        hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:32]
+        if run_id
+        else uuid4().hex
+    )
 
     root_ctx = lf_client.start_as_current_observation(
         as_type="span",
@@ -231,7 +237,7 @@ def run_observability_context(
     finally:
         try:
             lf_client.flush()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
 
@@ -257,7 +263,9 @@ class LangfuseTraceSink:
 
         try:
             client = self.client or get_client()
-            with client.start_as_current_observation(as_type="span", name=name, input=input) as span:
+            with client.start_as_current_observation(
+                as_type="span", name=name, input=input
+            ) as span:
                 yield span
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             yield None

@@ -29,8 +29,6 @@ from typing import Any, get_args
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from pydantic import ValidationError
-
 from episteme_pipeline.artifacts import (
     ArtifactEnvelope,
     ArtifactKind,
@@ -71,7 +69,6 @@ from episteme_pipeline.contracts import (
     L1Chunk,
     L2Entity,
     L2Triple,
-    PipelineInput,
     RefinementDelta,
     TheoryAtom,
     TheoryRelation,
@@ -102,7 +99,7 @@ from episteme_pipeline.protocols import (
 from episteme_pipeline.runs.models import RunManifest, RunPhaseRecord, RunStatus
 from episteme_pipeline.runs.persistence import JsonRunManifestStore
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
-
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # 1. Domain Contracts
@@ -334,16 +331,38 @@ def test_builders_refinement_pass_provenance_and_dag_acyclicity() -> None:
     )
 
     chunk_env = build_chunk_artifact(
-        chunk, run_id="run-1", phase_name="Phase 1", method="chunker", refinement_pass=1, deficit_id="def-g1"
+        chunk,
+        run_id="run-1",
+        phase_name="Phase 1",
+        method="chunker",
+        refinement_pass=1,
+        deficit_id="def-g1",
     )
     ent_env = build_linked_entity_artifact(
-        ent, ["artifact::mention::ent-1::chunk-1"], run_id="run-1", phase_name="Refine", method="split", refinement_pass=1, deficit_id="def-p1"
+        ent,
+        ["artifact::mention::ent-1::chunk-1"],
+        run_id="run-1",
+        phase_name="Refine",
+        method="split",
+        refinement_pass=1,
+        deficit_id="def-p1",
     )
     loc_env = build_local_relation_artifact(
-        local_triple, run_id="run-1", phase_name="Refine", method="split", refinement_pass=1, deficit_id="def-p1"
+        local_triple,
+        run_id="run-1",
+        phase_name="Refine",
+        method="split",
+        refinement_pass=1,
+        deficit_id="def-p1",
     )
     glob_env = build_global_relation_artifact(
-        global_triple, {"REQUIRES": 1}, run_id="run-1", phase_name="Refine", method="split", refinement_pass=1, deficit_id="def-p1"
+        global_triple,
+        {"REQUIRES": 1},
+        run_id="run-1",
+        phase_name="Refine",
+        method="split",
+        refinement_pass=1,
+        deficit_id="def-p1",
     )
     claim_env = build_theory_atom_artifact(
         claim, run_id="run-1", phase_name="Phase 4", method="acc"
@@ -400,7 +419,9 @@ def test_views_hydrate_deficits_and_preserve_forward_reads_kinds() -> None:
         assert ArtifactKind.EPISTEMIC_DEFICIT not in forward_view._allowed_kinds
         assert ArtifactKind.EPISTEMIC_DEFICIT not in forward_view.allowed_kinds
 
-    assert ArtifactKind.EPISTEMIC_DEFICIT in EpistemicDeficitArtifactsView._allowed_kinds
+    assert (
+        ArtifactKind.EPISTEMIC_DEFICIT in EpistemicDeficitArtifactsView._allowed_kinds
+    )
 
     atom = TheoryAtom(
         id="atom-1",
@@ -443,7 +464,9 @@ def test_views_hydrate_deficits_and_preserve_forward_reads_kinds() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_run_manifest_and_phase_record_refinement_pass_roundtrip(tmp_path: Path) -> None:
+def test_run_manifest_and_phase_record_refinement_pass_roundtrip(
+    tmp_path: Path,
+) -> None:
     """Verify refinement_pass defaults, validation, and JsonRunManifestStore round-trip."""
     default_manifest = RunManifest(run_id="run-default")
     assert default_manifest.refinement_pass == 0
@@ -522,7 +545,9 @@ def test_hermeneutic_refinement_config_and_pipeline_wiring() -> None:
 
     assert cfg.get_phase_config("phase6") is cfg.phase6
     assert fingerprint_phase_config(cfg.phase6) == fingerprint_phase_config(
-        PipelineConfig(refinement=HermeneuticRefinementConfig(max_refinement_cycles=2)).phase6
+        PipelineConfig(
+            refinement=HermeneuticRefinementConfig(max_refinement_cycles=2)
+        ).phase6
     )
 
 
@@ -582,7 +607,7 @@ def test_refinement_events_and_all_observers(
     metrics_obs = MetricsObserver()
     jsonl_path = tmp_path / "events.jsonl"
 
-    with caplog.at_level(logging.INFO, logger="test.issue053.events"):
+    with caplog.at_level(logging.INFO, logger="test.issue053.events"):  # noqa: SIM117 baseline
         with JsonlRunObserver(jsonl_path) as jsonl_obs:
             for ev in (ev_detected, ev_started, ev_completed):
                 logging_obs.on_event(ev)
@@ -598,8 +623,7 @@ def test_refinement_events_and_all_observers(
     assert metrics_obs.refinement_deficits_resolved == 1
 
     lines = [
-        json.loads(line)
-        for line in jsonl_path.read_text(encoding="utf-8").splitlines()
+        json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines()
     ]
     assert [entry["_event_type"] for entry in lines] == [
         "EpistemicDeficitDetected",
@@ -616,8 +640,7 @@ def test_refinement_events_and_all_observers(
         lf_obs.on_event(ev)
 
     span_names = [
-        call.kwargs.get("name")
-        for call in mock_client.start_observation.call_args_list
+        call.kwargs.get("name") for call in mock_client.start_observation.call_args_list
     ]
     assert "refinement.deficit.detected" in span_names
     assert "refinement.cycle.started" in span_names
@@ -791,7 +814,7 @@ def test_zero_reflection_and_docstrings_in_step1_files() -> None:
     for py_file in full_audit_files:
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):  # noqa: SIM102 baseline
                 if node.func.id in {"getattr", "hasattr"}:
                     violations.append(
                         f"{py_file.relative_to(root_dir)}:{node.lineno} calls {node.func.id}"
@@ -806,11 +829,15 @@ def test_zero_reflection_and_docstrings_in_step1_files() -> None:
     ):
         tree = ast.parse(textwrap.dedent(src))
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):  # noqa: SIM102 baseline
                 if node.func.id in {"getattr", "hasattr"}:
-                    violations.append(f"events/langfuse_observer.py:{name} calls {node.func.id}")
+                    violations.append(
+                        f"events/langfuse_observer.py:{name} calls {node.func.id}"
+                    )
 
-    assert not violations, "Forbidden getattr/hasattr detected:\n" + "\n".join(violations)
+    assert not violations, "Forbidden getattr/hasattr detected:\n" + "\n".join(
+        violations
+    )
 
     # Verify NumPy-style docstrings exist on new Step 1 public classes & functions
     documented_symbols = [

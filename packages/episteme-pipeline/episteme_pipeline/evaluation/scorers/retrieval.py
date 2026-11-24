@@ -16,7 +16,9 @@ from episteme_pipeline.evaluation.extrinsic import (
 from episteme_pipeline.protocols.graph_store import GraphReader
 
 
-def default_deterministic_embedder(texts: list[str], dim: int = 128) -> list[list[float]]:
+def default_deterministic_embedder(
+    texts: list[str], dim: int = 128
+) -> list[list[float]]:
     """Generate deterministic normalized hash embeddings for offline evaluation.
 
     Parameters
@@ -123,7 +125,9 @@ class ExtrinsicRetrievalEvaluator:
         hits_3 = calculate_hits_at_k([retrieved_ids], [gold_node_ids], k=3)
         hits_10 = calculate_hits_at_k([retrieved_ids], [gold_node_ids], k=10)
         hits_k = calculate_hits_at_k([retrieved_ids], [gold_node_ids], k=top_k)
-        ndcg = calculate_ndcg([retrieved_ids], [{gid: 1.0 for gid in gold_node_ids}], k=top_k)
+        ndcg = calculate_ndcg(
+            [retrieved_ids], [{gid: 1.0 for gid in gold_node_ids}], k=top_k
+        )
         ap = self._calculate_average_precision(retrieved_ids, gold_node_ids)
 
         return {
@@ -194,7 +198,9 @@ class ExtrinsicRetrievalEvaluator:
         n = float(len(queries))
         return {k: v / n for k, v in scores_acc.items()}
 
-    def _calculate_average_precision(self, retrieved: list[str], gold: set[str]) -> float:
+    def _calculate_average_precision(
+        self, retrieved: list[str], gold: set[str]
+    ) -> float:
         """Calculate Average Precision (AP) for a retrieved ranked list against gold IDs.
 
         Parameters

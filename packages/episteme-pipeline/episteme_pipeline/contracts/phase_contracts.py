@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal, Sequence
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 from pydantic import BaseModel, Field
 
@@ -59,9 +60,7 @@ class RelationOverride(BaseModel):
 
         return DEFAULT_SCHEMA
 
-    def resolved_polarity_sign(
-        self, schema: SchemaConfig | None = None
-    ) -> int | None:
+    def resolved_polarity_sign(self, schema: SchemaConfig | None = None) -> int | None:
         """Parse optional ``polarity`` override via the configured ``SchemaConfig``.
 
         Parameters
@@ -336,7 +335,10 @@ class EpistemicCurationLedger(BaseModel):
                 if effective_predicate == "REJECTED" or pair in handled_pairs:
                     continue
                 updated = t.model_copy(
-                    update={"predicate": effective_predicate, "confidence": override.confidence}
+                    update={
+                        "predicate": effective_predicate,
+                        "confidence": override.confidence,
+                    }
                 )
                 filtered.append(updated)
                 handled_pairs.add(pair)
@@ -354,7 +356,10 @@ class EpistemicCurationLedger(BaseModel):
                 and pair not in existing_pairs
                 and (
                     valid_entity_ids is None
-                    or (override.source_id in valid_entity_ids and override.target_id in valid_entity_ids)
+                    or (
+                        override.source_id in valid_entity_ids
+                        and override.target_id in valid_entity_ids
+                    )
                 )
             ):
                 filtered.append(
@@ -460,7 +465,10 @@ class EpistemicCurationLedger(BaseModel):
                 and pair not in existing_pairs
                 and (
                     valid_atom_ids is None
-                    or (override.source_id in valid_atom_ids and override.target_id in valid_atom_ids)
+                    or (
+                        override.source_id in valid_atom_ids
+                        and override.target_id in valid_atom_ids
+                    )
                 )
             ):
                 pol_sign = override.resolved_polarity_sign(schema=schema)

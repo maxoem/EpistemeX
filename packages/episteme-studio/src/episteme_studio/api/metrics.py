@@ -146,7 +146,7 @@ async def submit_metric_execution(
                     graph_version=payload.graph_version or "empty-v0",
                     schema_version="v1",
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001 baseline
             graph_view = GraphView(
                 nodes=[],
                 edges=[],
@@ -156,7 +156,9 @@ async def submit_metric_execution(
             )
 
     if payload.graph_version:
-        graph_view = graph_view.model_copy(update={"graph_version": payload.graph_version})
+        graph_view = graph_view.model_copy(
+            update={"graph_version": payload.graph_version}
+        )
 
     job, completed_fast = await metric_service.submit_execution(
         metric_id=payload.metric_id,

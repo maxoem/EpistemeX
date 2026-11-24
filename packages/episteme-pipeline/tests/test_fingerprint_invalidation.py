@@ -80,7 +80,10 @@ async def test_choose_reuse_source_detects_phase_config_change(
         },
         phase_config_fingerprints={"phase1": "same", "phase2": "new"},
     )
-    pipeline.engine.phase_config_fingerprints = lambda: {"phase1": "same", "phase2": "new"}
+    pipeline.engine.phase_config_fingerprints = lambda: {
+        "phase1": "same",
+        "phase2": "new",
+    }
 
     decision = await pipeline.engine.choose_reuse_source(
         pipeline.engine.build_manifest(

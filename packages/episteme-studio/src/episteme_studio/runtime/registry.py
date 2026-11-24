@@ -90,7 +90,9 @@ class RunHandle(BaseModel):
             end = self.completed_at or datetime.now(UTC)
             duration = max(0.0, (end - self.started_at).total_seconds())
 
-        total_arts = sum(p.artifact_count for p in self.phase_records) or sum(self.artifact_counts_by_kind.values())
+        total_arts = sum(p.artifact_count for p in self.phase_records) or sum(
+            self.artifact_counts_by_kind.values()
+        )
 
         anchor_obj = None
         if self.structural_anchor:
@@ -191,7 +193,10 @@ class RunRegistry:
         bool
             True if an active run exists, False otherwise.
         """
-        return any(h.status in (RunStatus.PLANNED, RunStatus.RUNNING) for h in self._runs.values())
+        return any(
+            h.status in (RunStatus.PLANNED, RunStatus.RUNNING)
+            for h in self._runs.values()
+        )
 
     def get_active_run(self) -> RunHandle | None:
         """Get the currently active run handle if one exists.

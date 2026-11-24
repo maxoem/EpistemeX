@@ -24,14 +24,11 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-
 from episteme_pipeline.artifacts.builders import (
     build_argument_component_artifact,
-    build_argument_relation_artifact,
     build_chunk_artifact,
     build_entity_mention_artifact,
     build_linked_entity_artifact,
-    build_local_relation_artifact,
 )
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
@@ -62,7 +59,6 @@ from episteme_pipeline.contracts import (
     EpistemicDeficitKind,
     L1Chunk,
     L2Entity,
-    L2Triple,
     PipelineInput,
     RefinementDelta,
     SubGraph,
@@ -75,14 +71,10 @@ from episteme_pipeline.decision.observable import ObservableDecisionEngine
 from episteme_pipeline.phases.phase2_entity_discovery.jev_entity_linker import (
     CascadingEntityLinker,
 )
-from episteme_pipeline.phases.phase2_entity_discovery.ner_extractor import (
-    LLMNERExtractor,
-)
 from episteme_pipeline.phases.phase4_argument_mining.classifiers import (
     CascadingARCClassifier,
 )
 from episteme_pipeline.post_processing.theoretical_enrichment.projectors import (
-    GenericTheoryProjector,
     TheoryProjector,
 )
 from episteme_pipeline.projection.theorynet_projector import TheoryNetProjector
@@ -93,9 +85,6 @@ from episteme_pipeline.prompts.providers import (
 from episteme_pipeline.protocols.decision import (
     DecisionNoulResult,
     DecisionScore,
-)
-from episteme_pipeline.phases.phase3_global_relations.dense_retrieval_extractor import (
-    DenseRetrievalGlobalRelationExtractor,
 )
 from episteme_pipeline.protocols.extractors import (
     EmbeddingModel,
@@ -153,7 +142,14 @@ class _StructuredStub:
         llm_kwargs: dict[str, Any] | None = None,
         **prompt_args: Any,
     ) -> Any:
-        del output_cls, prompt_bundle, strategy, fallback_behavior, llm_kwargs, prompt_args
+        del (
+            output_cls,
+            prompt_bundle,
+            strategy,
+            fallback_behavior,
+            llm_kwargs,
+            prompt_args,
+        )
         self.calls += 1
         return self._output
 
@@ -251,22 +247,32 @@ def test_refinement_prompts_registered_and_fingerprinted_only_when_active(
         assert bundle.direct_template.strip()
         assert bundle.decision_template and bundle.decision_template.strip()
 
-    cfg_off = PipelineConfig(refinement=HermeneuticRefinementConfig(max_refinement_cycles=0))
+    cfg_off = PipelineConfig(
+        refinement=HermeneuticRefinementConfig(max_refinement_cycles=0)
+    )
     provider.populate_config(cfg_off)
     assert cfg_off.refinement.concept_split_prompts.name == "concept_split"
     assert cfg_off.refinement.premise_recovery_prompts.name == "premise_recovery"
     assert cfg_off.refinement.axiom_grounding_prompts.name == "axiom_grounding"
 
     workflow = PipelineFactory.build_workflow(task="knowledge_graph", phases=[])
-    fps_off = ArtifactExecutionEngine(workflow=workflow, config=cfg_off).prompt_fingerprints()
+    fps_off = ArtifactExecutionEngine(
+        workflow=workflow, config=cfg_off
+    ).prompt_fingerprints()
     assert "refinement" not in fps_off
     expected_forward_keys = set(fps_off.keys())
     assert {"phase2", "phase3", "phase4"}.issubset(expected_forward_keys)
 
     cfg_on = cfg_off.model_copy(
-        update={"refinement": cfg_off.refinement.model_copy(update={"max_refinement_cycles": 1})}
+        update={
+            "refinement": cfg_off.refinement.model_copy(
+                update={"max_refinement_cycles": 1}
+            )
+        }
     )
-    fps_on = ArtifactExecutionEngine(workflow=workflow, config=cfg_on).prompt_fingerprints()
+    fps_on = ArtifactExecutionEngine(
+        workflow=workflow, config=cfg_on
+    ).prompt_fingerprints()
     assert set(fps_on.keys()) == expected_forward_keys | {"refinement"}
     for phase_key in expected_forward_keys:
         assert fps_on[phase_key] == fps_off[phase_key]
@@ -280,15 +286,24 @@ def test_refinement_prompts_registered_and_fingerprinted_only_when_active(
     custom_dir = tmp_path / "prompts"
     custom_dir.mkdir(parents=True)
     custom_bundle = cfg_on.refinement.premise_recovery_prompts.model_copy(
-        update={"direct_template": "Custom recovery template for {theory_id}: {source_chunks}"}
+        update={
+            "direct_template": "Custom recovery template for {theory_id}: {source_chunks}"
+        }
     )
     (custom_dir / "premise_recovery.json").write_text(
         custom_bundle.model_dump_json(), encoding="utf-8"
     )
-    file_cfg = PipelineConfig(refinement=HermeneuticRefinementConfig(max_refinement_cycles=1))
+    file_cfg = PipelineConfig(
+        refinement=HermeneuticRefinementConfig(max_refinement_cycles=1)
+    )
     FilePromptProvider(custom_dir).populate_config(file_cfg)
-    fps_mutated = ArtifactExecutionEngine(workflow=workflow, config=file_cfg).prompt_fingerprints()
-    assert fps_mutated["refinement"]["premise_recovery"] != fps_on["refinement"]["premise_recovery"]
+    fps_mutated = ArtifactExecutionEngine(
+        workflow=workflow, config=file_cfg
+    ).prompt_fingerprints()
+    assert (
+        fps_mutated["refinement"]["premise_recovery"]
+        != fps_on["refinement"]["premise_recovery"]
+    )
     assert fps_mutated["phase2"] == fps_on["phase2"]
 
 
@@ -315,10 +330,28 @@ def test_schema_config_centralizes_partitions_and_polarities() -> None:
 
     detector = TheoryNetDeficitDetector(schema=custom_schema)
     state = EpistemicDeficitArtifactsView(
-        chunks=[L1Chunk(id="c1", text="Telemetry log", source_doc_id="d1", sequence_index=0, token_count=3)],
+        chunks=[
+            L1Chunk(
+                id="c1",
+                text="Telemetry log",
+                source_doc_id="d1",
+                sequence_index=0,
+                token_count=3,
+            )
+        ],
         theory_atoms=[
-            TheoryAtom(id="obs", text="Telemetry datum", component_type="FieldReport", source_chunk_id="c1"),
-            TheoryAtom(id="post", text="Core postulate", component_type="GrandPostulate", source_chunk_id="c1"),
+            TheoryAtom(
+                id="obs",
+                text="Telemetry datum",
+                component_type="FieldReport",
+                source_chunk_id="c1",
+            ),
+            TheoryAtom(
+                id="post",
+                text="Core postulate",
+                component_type="GrandPostulate",
+                source_chunk_id="c1",
+            ),
         ],
     )
     deficits = detector.detect_deficits(state)
@@ -338,10 +371,24 @@ def test_schema_config_centralizes_partitions_and_polarities() -> None:
 
 
 @pytest.mark.asyncio
-async def test_concept_splitter_decision_engine_prevents_univocal_disagreement_split() -> None:
+async def test_concept_splitter_decision_engine_prevents_univocal_disagreement_split() -> (
+    None
+):
     """High-confidence UNIVOCAL_DISAGREEMENT conformal set blocks spurious entity split."""
-    c1 = L1Chunk(id="c1", text="Author A affirms X.", source_doc_id="d1", sequence_index=0, token_count=4)
-    c2 = L1Chunk(id="c2", text="Author B critiques X.", source_doc_id="d2", sequence_index=0, token_count=4)
+    c1 = L1Chunk(
+        id="c1",
+        text="Author A affirms X.",
+        source_doc_id="d1",
+        sequence_index=0,
+        token_count=4,
+    )
+    c2 = L1Chunk(
+        id="c2",
+        text="Author B critiques X.",
+        source_doc_id="d2",
+        sequence_index=0,
+        token_count=4,
+    )
     ent = L2Entity(
         id="ent_x",
         label="Concept",
@@ -381,7 +428,9 @@ async def test_concept_splitter_decision_engine_prevents_univocal_disagreement_s
             empirical_accuracy=0.95,
         )
     )
-    cfg_no_audit = HermeneuticRefinementConfig(max_refinement_cycles=1, stochastic_audit_rate=0.0)
+    cfg_no_audit = HermeneuticRefinementConfig(
+        max_refinement_cycles=1, stochastic_audit_rate=0.0
+    )
     delta_blocked = await ConceptionConceptSplitter(
         decision_engine=engine_univocal,
         config=cfg_no_audit,
@@ -416,9 +465,22 @@ async def test_concept_splitter_decision_engine_prevents_univocal_disagreement_s
 @pytest.mark.asyncio
 async def test_premise_recoverer_preserves_adr0023_scoping_and_decision_gate() -> None:
     """Premise recoverer runs DecisionEngine gate, preserves scoping, and resolves modality."""
-    chunk = L1Chunk(id="ck1", text="Hume noted causation may be constant conjunction.", source_doc_id="d1", sequence_index=0, token_count=8)
-    claim = TheoryAtom(id="c_main", text="Causation requires necessity.", component_type="TheoreticalHypothesis", source_chunk_id="ck1")
-    state = EpistemicStateView(chunks=[chunk], theory_atoms=[claim], canonical_theory_atoms=[claim])
+    chunk = L1Chunk(
+        id="ck1",
+        text="Hume noted causation may be constant conjunction.",
+        source_doc_id="d1",
+        sequence_index=0,
+        token_count=8,
+    )
+    claim = TheoryAtom(
+        id="c_main",
+        text="Causation requires necessity.",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="ck1",
+    )
+    state = EpistemicStateView(
+        chunks=[chunk], theory_atoms=[claim], canonical_theory_atoms=[claim]
+    )
     deficit = EpistemicDeficit(
         deficit_id="enth::c_main",
         deficit_kind=EpistemicDeficitKind.ENTHYMEME_GAP,
@@ -451,14 +513,20 @@ async def test_premise_recoverer_preserves_adr0023_scoping_and_decision_gate() -
         def fingerprint(self) -> dict[str, Any]:
             return {"class": "_ModalStub"}
 
-        async def resolve_modality(self, atom: TheoryAtom, context: str | None = None) -> float:
+        async def resolve_modality(
+            self, atom: TheoryAtom, context: str | None = None
+        ) -> float:
             del atom, context
             return 0.62
 
-    cfg = HermeneuticRefinementConfig(max_refinement_cycles=1, stochastic_audit_rate=0.0)
+    cfg = HermeneuticRefinementConfig(
+        max_refinement_cycles=1, stochastic_audit_rate=0.0
+    )
     # High-confidence negative DecisionEngine gates out System 2 LLM call
     gate_off = _ScriptedDecisionEngine(
-        noul_result=DecisionNoulResult(probability=0.05, empirical_accuracy=0.95, passed=False)
+        noul_result=DecisionNoulResult(
+            probability=0.05, empirical_accuracy=0.95, passed=False
+        )
     )
     delta_skipped = await LLMTheoryGuidedPremiseRecoverer(
         llm=llm,
@@ -470,7 +538,9 @@ async def test_premise_recoverer_preserves_adr0023_scoping_and_decision_gate() -
 
     # Confident pass runs extraction, retains ADR-0023 scope, and resolves modal_prior
     gate_on = _ScriptedDecisionEngine(
-        noul_result=DecisionNoulResult(probability=0.92, empirical_accuracy=0.94, passed=True)
+        noul_result=DecisionNoulResult(
+            probability=0.92, empirical_accuracy=0.94, passed=True
+        )
     )
     delta_ok = await LLMTheoryGuidedPremiseRecoverer(
         llm=llm,
@@ -495,16 +565,46 @@ async def test_premise_recoverer_preserves_adr0023_scoping_and_decision_gate() -
 
 def test_split_parent_retirement_mentions_and_pass_aware_dag_acyclicity() -> None:
     """Full concept split retires parent entity/mentions and keeps multi-pass DAG acyclic."""
-    chunk_1 = L1Chunk(id="c1", text="Physics context.", source_doc_id="d1", sequence_index=0, token_count=3)
-    chunk_2 = L1Chunk(id="c2", text="Ethics context.", source_doc_id="d2", sequence_index=0, token_count=3)
-    ent_parent = L2Entity(id="ent_hub", label="Concept", name="Law", source_chunk_ids=["c1", "c2"])
-    m1 = build_entity_mention_artifact(ent_parent, "c1", run_id="r1", phase_name="P2", method="ner")
-    m2 = build_entity_mention_artifact(ent_parent, "c2", run_id="r1", phase_name="P2", method="ner")
-    ent_env = build_linked_entity_artifact(
-        ent_parent, [m1.artifact_id, m2.artifact_id], run_id="r1", phase_name="P2", method="ner"
+    chunk_1 = L1Chunk(
+        id="c1",
+        text="Physics context.",
+        source_doc_id="d1",
+        sequence_index=0,
+        token_count=3,
     )
-    atom_1 = TheoryAtom(id="a1", text="Physical claim", component_type="TheoreticalHypothesis", source_chunk_id="c1", entity_ids=["ent_hub"])
-    atom_env = build_argument_component_artifact(atom_1, run_id="r1", phase_name="P4", method="acc")
+    chunk_2 = L1Chunk(
+        id="c2",
+        text="Ethics context.",
+        source_doc_id="d2",
+        sequence_index=0,
+        token_count=3,
+    )
+    ent_parent = L2Entity(
+        id="ent_hub", label="Concept", name="Law", source_chunk_ids=["c1", "c2"]
+    )
+    m1 = build_entity_mention_artifact(
+        ent_parent, "c1", run_id="r1", phase_name="P2", method="ner"
+    )
+    m2 = build_entity_mention_artifact(
+        ent_parent, "c2", run_id="r1", phase_name="P2", method="ner"
+    )
+    ent_env = build_linked_entity_artifact(
+        ent_parent,
+        [m1.artifact_id, m2.artifact_id],
+        run_id="r1",
+        phase_name="P2",
+        method="ner",
+    )
+    atom_1 = TheoryAtom(
+        id="a1",
+        text="Physical claim",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="c1",
+        entity_ids=["ent_hub"],
+    )
+    atom_env = build_argument_component_artifact(
+        atom_1, run_id="r1", phase_name="P4", method="acc"
+    )
 
     base = ArtifactCollection(
         [
@@ -525,17 +625,38 @@ def test_split_parent_retirement_mentions_and_pass_aware_dag_acyclicity() -> Non
         refinement_pass=0,
     )
     def_env, _ = build_deficit_envelope(
-        deficit, base, run_id="r1", phase_name="Refine (Pass 1)", detector_method="Det", pass_idx=1
+        deficit,
+        base,
+        run_id="r1",
+        phase_name="Refine (Pass 1)",
+        detector_method="Det",
+        pass_idx=1,
     )
 
-    s1 = L2Entity(id="ent_hub__sense_1", label="Concept", name="Law (Physics)", source_chunk_ids=["c1"])
-    s2 = L2Entity(id="ent_hub__sense_2", label="Concept", name="Law (Ethics)", source_chunk_ids=["c2"])
+    s1 = L2Entity(
+        id="ent_hub__sense_1",
+        label="Concept",
+        name="Law (Physics)",
+        source_chunk_ids=["c1"],
+    )
+    s2 = L2Entity(
+        id="ent_hub__sense_2",
+        label="Concept",
+        name="Law (Ethics)",
+        source_chunk_ids=["c2"],
+    )
     delta = RefinementDelta(
         entities=[s1, s2],
         theory_atoms=[atom_1.model_copy(update={"entity_ids": ["ent_hub__sense_1"]})],
-        cannot_link_pairs=[("ent_hub", "ent_hub__sense_1"), ("ent_hub__sense_1", "ent_hub__sense_2")],
+        cannot_link_pairs=[
+            ("ent_hub", "ent_hub__sense_1"),
+            ("ent_hub__sense_1", "ent_hub__sense_2"),
+        ],
         retired_entity_ids=["ent_hub"],
-        split_entity_parents={"ent_hub__sense_1": "ent_hub", "ent_hub__sense_2": "ent_hub"},
+        split_entity_parents={
+            "ent_hub__sense_1": "ent_hub",
+            "ent_hub__sense_2": "ent_hub",
+        },
         resolved_deficit_ids=[deficit.deficit_id],
         refinement_pass=1,
     )
@@ -549,7 +670,9 @@ def test_split_parent_retirement_mentions_and_pass_aware_dag_acyclicity() -> Non
         method_name="ConceptionConceptSplitter",
         pass_idx=1,
     )
-    updated = overlay_collection(base, {e.artifact_id: e for e in [def_env, *delta_envs]})
+    updated = overlay_collection(
+        base, {e.artifact_id: e for e in [def_env, *delta_envs]}
+    )
 
     # Retired parent & stale mentions are excluded from active view while history persists
     view = Phase4ArtifactsView.from_collection(updated)
@@ -563,7 +686,8 @@ def test_split_parent_retirement_mentions_and_pass_aware_dag_acyclicity() -> Non
     assert all(
         e.payload.is_retired
         for e in updated.of_kind(ArtifactKind.ENTITY_MENTION, latest_only=True)
-        if isinstance(e.payload, EntityMentionArtifact) and e.payload.entity_id == "ent_hub"
+        if isinstance(e.payload, EntityMentionArtifact)
+        and e.payload.entity_id == "ent_hub"
     )
 
     # Full history including pass-0 deficit -> pass-1 atom remains acyclic WITH intact upstream lineage
@@ -578,13 +702,38 @@ def test_split_parent_retirement_mentions_and_pass_aware_dag_acyclicity() -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_slice_phase4_component_view_preserves_connected_component_and_excludes_unrelated() -> None:
+def test_slice_phase4_component_view_preserves_connected_component_and_excludes_unrelated() -> (
+    None
+):
     """Connected-component slicing isolates affected D-QBAF subnet cleanly."""
-    a1 = TheoryAtom(id="a1", text="A1", component_type="ObservationUnit", source_chunk_id="c1")
-    a2 = TheoryAtom(id="a2", text="A2", component_type="TheoreticalHypothesis", source_chunk_id="c1")
-    b1 = TheoryAtom(id="b1", text="Unrelated", component_type="TheoreticalHypothesis", source_chunk_id="c2")
-    rel_a = TheoryRelation(id="r_a", source_id="a1", target_id="a2", relation_type="SUPPORTS_ARG", confidence=0.9, scope="local")
-    rel_b = TheoryRelation(id="r_b", source_id="b1", target_id="b1", relation_type="SUPPORTS_ARG", confidence=0.9, scope="local")
+    a1 = TheoryAtom(
+        id="a1", text="A1", component_type="ObservationUnit", source_chunk_id="c1"
+    )
+    a2 = TheoryAtom(
+        id="a2", text="A2", component_type="TheoreticalHypothesis", source_chunk_id="c1"
+    )
+    b1 = TheoryAtom(
+        id="b1",
+        text="Unrelated",
+        component_type="TheoreticalHypothesis",
+        source_chunk_id="c2",
+    )
+    rel_a = TheoryRelation(
+        id="r_a",
+        source_id="a1",
+        target_id="a2",
+        relation_type="SUPPORTS_ARG",
+        confidence=0.9,
+        scope="local",
+    )
+    rel_b = TheoryRelation(
+        id="r_b",
+        source_id="b1",
+        target_id="b1",
+        relation_type="SUPPORTS_ARG",
+        confidence=0.9,
+        scope="local",
+    )
     view = Phase4ArtifactsView(
         theory_atoms=[a1, a2, b1],
         theory_relations=[rel_a, rel_b],
@@ -601,7 +750,9 @@ def test_slice_phase4_component_view_preserves_connected_component_and_excludes_
 # ---------------------------------------------------------------------------
 
 
-def test_pipeline_factory_shares_decision_engine_strategies_and_validates_projector() -> None:
+def test_pipeline_factory_shares_decision_engine_strategies_and_validates_projector() -> (
+    None
+):
     """PipelineFactory shares CascadingARCClassifier, EntityLinker, NER, ModalResolver, and TheoryProjector."""
     cfg = PipelineConfig(
         refinement=HermeneuticRefinementConfig(max_refinement_cycles=1),
@@ -671,4 +822,6 @@ def test_refactored_modules_zero_reflection_and_docstrings() -> None:
             if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
                 if node.name.startswith("__") and node.name.endswith("__"):
                     continue
-                assert ast.get_docstring(node), f"Missing docstring on {path.name}:{node.name}"
+                assert ast.get_docstring(node), (
+                    f"Missing docstring on {path.name}:{node.name}"
+                )

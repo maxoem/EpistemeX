@@ -61,7 +61,6 @@ from episteme_pipeline.phases.phase4_argument_mining import Phase4Runner
 from episteme_pipeline.phases.phase4_argument_mining.classifiers import (
     CascadingACCClassifier,
     JevACCClassifier,
-    JevARCClassifier,
 )
 from episteme_pipeline.phases.phase5_fusion.argument_clustering import (
     InterDocumentClusterVerifier,
@@ -74,7 +73,6 @@ from episteme_pipeline.runs.fingerprints import fingerprint_method
 from episteme_pipeline.runtime.pipeline_factory import PipelineFactory
 from episteme_pipeline.schema.default_schema import DEFAULT_SCHEMA
 from pydantic import BaseModel
-
 
 # ===========================================================================
 # AC 1: CascadingACCClassifier, JevACCClassifier & InterDocumentClusterVerifier
@@ -132,7 +130,9 @@ async def test_cascading_acc_fast_exits_multi_adu_and_entity_bearing_chunks() ->
 
 
 @pytest.mark.asyncio
-async def test_cascading_acc_short_circuits_before_jev_when_policy_requires_llm() -> None:
+async def test_cascading_acc_short_circuits_before_jev_when_policy_requires_llm() -> (
+    None
+):
     """Verify CascadingACCClassifier skips JevACCClassifier entirely when escalation flags are set."""
     fast_acc = MagicMock(spec=ACCClassifier)
     fast_acc.classify = AsyncMock()
@@ -180,7 +180,9 @@ async def test_cascading_acc_short_circuits_before_jev_when_policy_requires_llm(
 
 
 @pytest.mark.asyncio
-async def test_cascading_acc_preserves_confident_suppositional_mode_and_escalates_attributed() -> None:
+async def test_cascading_acc_preserves_confident_suppositional_mode_and_escalates_attributed() -> (
+    None
+):
     """Verify CascadingACCClassifier accepts confident suppositional mode from System 1 and escalates attributed."""
     mock_engine = MagicMock()
     mock_engine.evaluate_choice = AsyncMock(
@@ -259,7 +261,9 @@ def test_jev_acc_and_cascading_acc_expose_deterministic_fingerprints() -> None:
 
 
 @pytest.mark.asyncio
-async def test_inter_document_cluster_verifier_never_confirms_ambiguous_prediction_set() -> None:
+async def test_inter_document_cluster_verifier_never_confirms_ambiguous_prediction_set() -> (
+    None
+):
     """Verify InterDocumentClusterVerifier does not confirm len(pred_set) > 1 even when emp_acc >= threshold."""
     engine = MockJevDecisionEngine()
     engine.register_choice_response(
@@ -290,8 +294,12 @@ async def test_inter_document_cluster_verifier_never_confirms_ambiguous_predicti
         audit_rate=0.0,
     )
     nodes = [
-        TheoryAtom(id="a1", text="Claim 1", component_type="CLAIM", source_chunk_id="c1"),
-        TheoryAtom(id="a2", text="Claim 2", component_type="CLAIM", source_chunk_id="c2"),
+        TheoryAtom(
+            id="a1", text="Claim 1", component_type="CLAIM", source_chunk_id="c1"
+        ),
+        TheoryAtom(
+            id="a2", text="Claim 2", component_type="CLAIM", source_chunk_id="c2"
+        ),
     ]
 
     with use_event_emitter(emitter):
@@ -346,7 +354,9 @@ async def test_end_to_end_compositional_conformal_risk_budget_wiring() -> None:
     captured_alphas: list[tuple[str, float | None]] = []
     mock_engine = MagicMock()
 
-    async def _capture_choice(state: Any, question: str, options: Any, alpha: float | None = None) -> DecisionScore:
+    async def _capture_choice(
+        state: Any, question: str, options: Any, alpha: float | None = None
+    ) -> DecisionScore:
         captured_alphas.append((question, alpha))
         first_opt = next(iter(options))
         return DecisionScore(
@@ -367,7 +377,9 @@ async def test_end_to_end_compositional_conformal_risk_budget_wiring() -> None:
     )
     assert isinstance(runner.acc_classifier, CascadingACCClassifier)
     assert isinstance(runner.acc_classifier.fast_classifier, JevACCClassifier)
-    assert runner.acc_classifier.fast_classifier.conformal_alpha == pytest.approx(0.0125)
+    assert runner.acc_classifier.fast_classifier.conformal_alpha == pytest.approx(
+        0.0125
+    )
     assert runner.acc_classifier.fast_classifier.infer_intensional_mode is True
 
     # Run ACC and ARC and confirm evaluate_choice receives alpha=0.0125
@@ -423,7 +435,9 @@ def test_conformal_calibrator_predict_set_and_calibrate_use_allocated_alpha() ->
 async def test_phase3b_rejected_borderline_pair_blocks_transitive_merge() -> None:
     """Verify pairs rejected by BorderlinePairVerifier get sim=-1.0 and cannot merge transitively."""
     e0 = L2Entity(id="e0", name="Concept A", label="Concept", source_chunk_ids=["c1"])
-    e1 = L2Entity(id="e1", name="Concept B (Bridge)", label="Concept", source_chunk_ids=["c2"])
+    e1 = L2Entity(
+        id="e1", name="Concept B (Bridge)", label="Concept", source_chunk_ids=["c2"]
+    )
     e2 = L2Entity(id="e2", name="Concept C", label="Concept", source_chunk_ids=["c3"])
 
     store = AsyncMock()
@@ -477,7 +491,9 @@ async def test_phase3b_rejected_borderline_pair_blocks_transitive_merge() -> Non
 
 
 @pytest.mark.asyncio
-async def test_phase3b_csls_uses_raw_cosine_for_internal_similarity_and_diameter() -> None:
+async def test_phase3b_csls_uses_raw_cosine_for_internal_similarity_and_diameter() -> (
+    None
+):
     """Verify LatentGraphConsolidation with use_csls=True evaluates diameter/internal floor on raw cosine."""
     # 3 entities where e0 and e1 are nearly identical (cos = 0.99), and e2 is a nearby hub (cos = 0.92).
     # Under CSLS with k=2, high mean neighborhood similarity r_T(u) >= 0.95 subtracts ~0.95 from 2*cos,
@@ -506,7 +522,7 @@ async def test_phase3b_csls_uses_raw_cosine_for_internal_similarity_and_diameter
     v0 = [1.0, 0.0, 0.0]
     v1 = [0.98, 0.198997, 0.0]  # cos(0, 1) = 0.98
     v2 = [0.86, 0.510294, 0.0]  # cos(0, 2) = 0.86, cos(1, 2) = 0.9443
-    v3 = [0.0, 0.0, 1.0]        # orthogonal anchor
+    v3 = [0.0, 0.0, 1.0]  # orthogonal anchor
     embedding_model = AsyncMock()
     embedding_model.aget_text_embedding_batch.return_value = [v0, v1, v2, v3]
 
@@ -534,7 +550,9 @@ async def test_phase3b_csls_uses_raw_cosine_for_internal_similarity_and_diameter
 
 
 @pytest.mark.asyncio
-async def test_gleaning_gate_and_phase3_pair_gating_are_deterministic_under_concurrency() -> None:
+async def test_gleaning_gate_and_phase3_pair_gating_are_deterministic_under_concurrency() -> (
+    None
+):
     """Verify JevGleaningGate.should_continue and filter_candidate_pairs are 100% deterministic."""
     engine = MockJevDecisionEngine()
     engine.register_noul_response(
@@ -549,11 +567,10 @@ async def test_gleaning_gate_and_phase3_pair_gating_are_deterministic_under_conc
         seed=42,
     )
 
-    chunks = [f"Philosophical passage {i} on transcendental idealism." for i in range(30)]
-    run1 = [
-        (await gate.should_continue(text, [], pass_count=0))[0]
-        for text in chunks
+    chunks = [
+        f"Philosophical passage {i} on transcendental idealism." for i in range(30)
     ]
+    run1 = [(await gate.should_continue(text, [], pass_count=0))[0] for text in chunks]
     # Run concurrently in reversed order
     run2_rev = await asyncio.gather(
         *[gate.should_continue(text, [], pass_count=0) for text in reversed(chunks)]
@@ -607,7 +624,9 @@ async def test_gleaning_gate_and_phase3_pair_gating_are_deterministic_under_conc
 
 
 @pytest.mark.asyncio
-async def test_calibrator_preserves_global_alpha_and_observable_propagates_mondrian_strata() -> None:
+async def test_calibrator_preserves_global_alpha_and_observable_propagates_mondrian_strata() -> (
+    None
+):
     """Verify stratum calibration does not overwrite self.alpha and ObservableDecisionEngine uses task_id/language."""
     calibrator = ConformalCalibrator(alpha=0.05)
     # Stratum calibration with custom alpha=0.20 must NOT mutate global calibrator.alpha
@@ -628,7 +647,9 @@ async def test_calibrator_preserves_global_alpha_and_observable_propagates_mondr
         name = "raw_choice"
 
         async def evaluate_noul(self, state: Any, question: str) -> DecisionNoulResult:
-            return DecisionNoulResult(passed=True, probability=0.9, empirical_accuracy=0.9)
+            return DecisionNoulResult(
+                passed=True, probability=0.9, empirical_accuracy=0.9
+            )
 
         async def evaluate_choice(
             self, state: Any, question: str, options: Any, alpha: float | None = None
@@ -693,7 +714,9 @@ async def test_canonical_state_hash_predict_text_bundle_hash_seed_fp_and_docs(
         answer: str = "ok"
 
     class _CountingLLM:
-        async def predict_text(self, prompt: Any, llm_kwargs: Any = None, **kwargs: Any) -> str:
+        async def predict_text(
+            self, prompt: Any, llm_kwargs: Any = None, **kwargs: Any
+        ) -> str:
             calls["text"] += 1
             return f"reasoning_{calls['text']}"
 
@@ -747,15 +770,17 @@ async def test_canonical_state_hash_predict_text_bundle_hash_seed_fp_and_docs(
 
     # 4. Verify docs/architecture/conformal_prediction.md has no stale pre-refactor links
     repo_root = Path(__file__).resolve().parents[3]
-    doc_text = (repo_root / "docs" / "architecture" / "conformal_prediction.md").read_text(
-        encoding="utf-8"
-    )
+    doc_text = (
+        repo_root / "docs" / "architecture" / "conformal_prediction.md"
+    ).read_text(encoding="utf-8")
     assert "pipeline.py#L879-L891" not in doc_text
     assert "phase3b_consolidation/runner.py" not in doc_text
     assert "phase5_fusion/runner.py" not in doc_text
 
 
-def test_dynamic_workflow_dag_order_independent_sorting_and_class_based_phase_selection() -> None:
+def test_dynamic_workflow_dag_order_independent_sorting_and_class_based_phase_selection() -> (
+    None
+):
     """Verify WorkflowDAG infers dependencies from reads_kinds/writes_kinds regardless of input order and selects phases by class/classname."""
     from episteme_pipeline.phases.phase1_foundation import Phase1Runner
     from episteme_pipeline.phases.phase2_entity_discovery import Phase2Runner
@@ -830,10 +855,11 @@ def test_dynamic_workflow_dag_order_independent_sorting_and_class_based_phase_se
             "Phase4Runner": 0.75,
         },
     )
-    assert calibrator.get_allocated_alpha(Phase3bLatentConsolidationRunner) == pytest.approx(0.01)
+    assert calibrator.get_allocated_alpha(
+        Phase3bLatentConsolidationRunner
+    ) == pytest.approx(0.01)
     assert calibrator.get_allocated_alpha("phase3b") == pytest.approx(0.01)
     assert calibrator.get_allocated_alpha("p3b_merge") == pytest.approx(0.01)
     assert calibrator.get_allocated_alpha(Phase4Runner) == pytest.approx(0.03)
     assert calibrator.get_allocated_alpha("Phase4Runner") == pytest.approx(0.03)
     assert calibrator.get_allocated_alpha("p4_acc") == pytest.approx(0.03)
-

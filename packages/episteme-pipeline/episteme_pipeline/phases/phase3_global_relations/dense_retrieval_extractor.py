@@ -5,22 +5,22 @@ Strategy (Retrieve-then-Rerank-then-Extract):
 
 1. Global Candidate Generation (The Prior):
    Instead of chunk-bound co-occurrence, we embed entities globally (using their
-   name/description). We compute dense vector similarities to find entities that 
+   name/description). We compute dense vector similarities to find entities that
    are semantically related across the entire corpus, breaking document boundaries.
 
 2. Contextual Envelopes (Entity-in-Context):
    We retrieve the subgraph envelopes for each candidate entity. In a true SOTA
-   pipeline, we could also use marker tokens (e.g. `[E1] entity [/E1]`) to embed 
+   pipeline, we could also use marker tokens (e.g. `[E1] entity [/E1]`) to embed
    these contexts to focus attention dynamically on the entity within its chunk.
 
 3. Cross-Encoder Reranking (High Precision Filter):
-   We pass the paired entities and their envelopes to the `RelationReranker`. 
+   We pass the paired entities and their envelopes to the `RelationReranker`.
    Unlike a Bi-Encoder, a Cross-Encoder evaluates the pair jointly, allowing self-attention
    to deeply cross-reference concept k in chunk A with concept k in chunk B.
    Only candidate pairs that score above `reranker_threshold` proceed.
 
 4. LLM Triple Decoding (Edge Enhancement):
-   The LLM operates purely on high-probability candidate pairs to classify the 
+   The LLM operates purely on high-probability candidate pairs to classify the
    schema-aligned relationship (e.g., CAUSED_BY) using `GLOBAL_RELATION_PROMPT`.
 """
 
@@ -31,8 +31,10 @@ import inspect
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
+from pydantic import BaseModel
 
 from episteme_pipeline.config import Phase3Config
 from episteme_pipeline.contracts.domain import (
@@ -80,7 +82,6 @@ from episteme_pipeline.utils.similarity import (
     dynamic_k_effective,
     z_score_normalize,
 )
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -196,14 +197,14 @@ def make_reduce_depth_overflow_handler(
 
 class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
     """
-    SOTA GlobalRelationExtractor leveraging dense embeddings for candidate 
+    SOTA GlobalRelationExtractor leveraging dense embeddings for candidate
     generation and a cross-encoder for relational reranking prior to LLM extraction.
     """
 
     def __init__(
-        self, 
-        llm, 
-        embedding_model: EmbeddingModel, 
+        self,
+        llm,
+        embedding_model: EmbeddingModel,
         reranker: RelationReranker,
         config: Phase3Config,
         envelope_overflow_handler: EnvelopeOverflowHandler | None = None,
@@ -237,8 +238,11 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         )
         de_fp = (
             self.decision_engine.fingerprint()
-            if self.decision_engine and isinstance(self.decision_engine, Fingerprintable)
-            else fingerprint_method(self.decision_engine) if self.decision_engine else None
+            if self.decision_engine
+            and isinstance(self.decision_engine, Fingerprintable)
+            else fingerprint_method(self.decision_engine)
+            if self.decision_engine
+            else None
         )
         return {
             "class": self.__class__.__name__,
@@ -251,6 +255,7 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
     @property
     def event_emitter(self) -> EventEmitter:
         from episteme_pipeline.events.context import get_event_emitter
+
         return get_event_emitter()
 
     async def get_structural_neighborhood(
@@ -269,17 +274,19 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
     ) -> list[L2Triple]:
         if len(entities) < 2:
             return []
-            
+
         # Emit event for entity processing
         for entity in entities:
-            self.event_emitter.emit(EntityProcessed(
-                entity_id=entity.id,
-                entity_name=entity.name,
-                entity_type=entity.label,
-                run_id=None,
-                phase="phase3_dense"
-            ))
-            
+            self.event_emitter.emit(
+                EntityProcessed(
+                    entity_id=entity.id,
+                    entity_name=entity.name,
+                    entity_type=entity.label,
+                    run_id=None,
+                    phase="phase3_dense",
+                )
+            )
+
         # Optionally trace dense candidate generation
         with self.trace_sink.span(
             name="phase3.dense.candidates",
@@ -303,19 +310,26 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         )
 
         progress_task = f"Phase 3: {len(candidates)} global pairs"
-        self.event_emitter.emit(ProgressStarted(task_name=progress_task, total_items=len(candidates), description="Global Relations"))
+        self.event_emitter.emit(
+            ProgressStarted(
+                task_name=progress_task,
+                total_items=len(candidates),
+                description="Global Relations",
+            )
+        )
 
         sem = asyncio.Semaphore(50)
+
         async def _extract_with_sem(candidate: _DenseCandidate) -> L2Triple | None:
             async with sem:
                 res = await self._extract_pair(candidate, graph_store, schema)
-                self.event_emitter.emit(ProgressAdvanced(task_name=progress_task, advance=1))
+                self.event_emitter.emit(
+                    ProgressAdvanced(task_name=progress_task, advance=1)
+                )
                 return res
 
         try:
-            tasks = [
-                _extract_with_sem(candidate) for candidate in candidates
-            ]
+            tasks = [_extract_with_sem(candidate) for candidate in candidates]
             results = await asyncio.gather(*tasks, return_exceptions=True)
         finally:
             self.event_emitter.emit(ProgressCompleted(task_name=progress_task))
@@ -333,15 +347,10 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
             if result is not None:
                 triples.append(result)
 
-        logger.info(
-            "Phase 3 (Dense): extracted %d global triples",
-            len(triples)
-        )
+        logger.info("Phase 3 (Dense): extracted %d global triples", len(triples))
         return triples
 
-    async def candidate_pairs(
-        self, entities: list[L2Entity]
-    ) -> list[CandidatePair]:
+    async def candidate_pairs(self, entities: list[L2Entity]) -> list[CandidatePair]:
         """Generate candidate entity pairs via dense embedding retrieval.
 
         Parameters
@@ -402,13 +411,15 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         # Step 1: Embed textual envelopes (T_A x T_B proximity)
         # We fallback to name/description only if textual_envelope is mysteriously missing
         embed_texts = [
-            ent.textual_envelope if ent.textual_envelope else f"{ent.name} {ent.description or ''}".strip()
+            ent.textual_envelope
+            if ent.textual_envelope
+            else f"{ent.name} {ent.description or ''}".strip()
             for ent in entities
         ]
 
         # Note: In practice, we'd chunk these for large batches, but for
         # reasonable entity counts (<200), hitting the endpoint once is fine.
-        # Ideally this should use our new EnvelopeBiEncoder, but for compatibility 
+        # Ideally this should use our new EnvelopeBiEncoder, but for compatibility
         # with the existing embedding_model signature, we pass the text.
         embeddings = await self.embedding_model.aget_text_embedding_batch(embed_texts)
 
@@ -447,45 +458,59 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         # Collect top-k pairs per entity, or globally if preferred
         candidates: list[_DenseCandidate] = []
         for i in range(len(entities)):
-            row_scores = [(j, similarity_matrix[i, j]) for j in range(i + 1, len(entities))]
+            row_scores = [
+                (j, similarity_matrix[i, j]) for j in range(i + 1, len(entities))
+            ]
             row_scores.sort(key=lambda x: x[1], reverse=True)
             for j, score in row_scores[:k_eff]:
                 # Emit event for each candidate pair evaluation
-                candidates.append(_DenseCandidate(
-                    score=float(score),
-                    entity_a=entities[i],
-                    entity_b=entities[j],
-                ))
+                candidates.append(
+                    _DenseCandidate(
+                        score=float(score),
+                        entity_a=entities[i],
+                        entity_b=entities[j],
+                    )
+                )
 
         # Emit event for dense candidates generated
-        self.event_emitter.emit(DenseCandidatesGenerated(
-            candidate_count=len(candidates),
-            candidates=[{
-                "entity_a": candidate.entity_a.id,
-                "entity_b": candidate.entity_b.id,
-                "score": candidate.score
-            } for candidate in candidates[:10]],  # First 10 for brevity
-            entities_count=len(entities),
-            run_id=None,
-            phase="phase3_dense"
-        ))
-        
+        self.event_emitter.emit(
+            DenseCandidatesGenerated(
+                candidate_count=len(candidates),
+                candidates=[
+                    {
+                        "entity_a": candidate.entity_a.id,
+                        "entity_b": candidate.entity_b.id,
+                        "score": candidate.score,
+                    }
+                    for candidate in candidates[:10]
+                ],  # First 10 for brevity
+                entities_count=len(entities),
+                run_id=None,
+                phase="phase3_dense",
+            )
+        )
+
         # Filter candidates by z-score threshold or dense similarity threshold
         if self.config.z_score_threshold is not None and z_scores is not None:
             filtered_candidates = [
-                c for c in candidates
+                c
+                for c in candidates
                 if z_scores[entity_idx[c.entity_a.id], entity_idx[c.entity_b.id]]
                 >= self.config.z_score_threshold
             ]
         else:
             filtered_candidates = [
-                c for c in candidates if c.score >= self.config.dense_similarity_threshold
+                c
+                for c in candidates
+                if c.score >= self.config.dense_similarity_threshold
             ]
-        
+
         # Apply Jev pair gating if enabled
         return await self.filter_candidate_pairs(filtered_candidates)
 
-    async def filter_candidate_pairs(self, pairs: list[CandidatePair]) -> list[CandidatePair]:
+    async def filter_candidate_pairs(
+        self, pairs: list[CandidatePair]
+    ) -> list[CandidatePair]:
         """Fast Cartesian pair pre-gating using Decision Engine.
 
         Filters candidate entity pairs using fast binary decision evaluation
@@ -531,7 +556,9 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
 
             is_related = decision.passed
             threshold = self.config.pair_gating_threshold
-            p_has_relation = decision.probability if is_related else (1.0 - decision.probability)
+            p_has_relation = (
+                decision.probability if is_related else (1.0 - decision.probability)
+            )
 
             pair_key = f"{entity_a.id}:{entity_b.id}"
             is_audit = should_audit_deterministically(
@@ -563,7 +590,7 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
         # 1. Fetch contextual neighborhood envelopes for both entities
         try:
             env_a, env_b = await _fetch_envelopes(self.config.subgraph_depth)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.warning(
                 "Failed to fetch envelopes for pair (%s, %s): %s",
                 entity_a.name,
@@ -705,44 +732,48 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
                         "recovery_attempts": recovery_attempts,
                     }
                 )
-            
+
             # Emit reranker score event
-            self.event_emitter.emit(RerankerScoreAssigned(
-                candidate_pair=(entity_a.id, entity_b.id),
-                score=rerank_score,
-                accepted=rerank_score >= self.config.reranker_threshold,
-                threshold=self.config.reranker_threshold,
-                entity_a=_entity_summary(entity_a),
-                entity_b=_entity_summary(entity_b),
-                reranker_input=_reranker_input_summary(
-                    self.reranker,
-                    entity_a,
-                    env_a,
-                    entity_b,
-                    env_b,
-                ),
-                reranker_payload=(
-                    _reranker_trace_payload(entity_a, env_a, entity_b, env_b)
-                    if self.config.trace_dense_retrieval
-                    else None
-                ),
-                recovery_attempts=recovery_attempts,
-                run_id=None,
-                phase="phase3_dense"
-            ))
-            
-            # Emit rejection event if score is too low
-            if rerank_score < self.config.reranker_threshold:
-                self.event_emitter.emit(CandidateRejectedByThreshold(
+            self.event_emitter.emit(
+                RerankerScoreAssigned(
                     candidate_pair=(entity_a.id, entity_b.id),
                     score=rerank_score,
+                    accepted=rerank_score >= self.config.reranker_threshold,
                     threshold=self.config.reranker_threshold,
-                    reason="Below reranker threshold",
+                    entity_a=_entity_summary(entity_a),
+                    entity_b=_entity_summary(entity_b),
+                    reranker_input=_reranker_input_summary(
+                        self.reranker,
+                        entity_a,
+                        env_a,
+                        entity_b,
+                        env_b,
+                    ),
+                    reranker_payload=(
+                        _reranker_trace_payload(entity_a, env_a, entity_b, env_b)
+                        if self.config.trace_dense_retrieval
+                        else None
+                    ),
+                    recovery_attempts=recovery_attempts,
                     run_id=None,
-                    phase="phase3_dense"
-                ))
+                    phase="phase3_dense",
+                )
+            )
+
+            # Emit rejection event if score is too low
+            if rerank_score < self.config.reranker_threshold:
+                self.event_emitter.emit(
+                    CandidateRejectedByThreshold(
+                        candidate_pair=(entity_a.id, entity_b.id),
+                        score=rerank_score,
+                        threshold=self.config.reranker_threshold,
+                        reason="Below reranker threshold",
+                        run_id=None,
+                        phase="phase3_dense",
+                    )
+                )
                 return None  # Skip LLM extraction if reranker says no
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.warning(
                 "Phase 3 reranker failed for pair (%s, %s): %s",
                 entity_a.name,
@@ -777,18 +808,22 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
                     subgraph_envelope=envelope_text,
                 )
                 span.update(output=_global_relation_summary(raw))
-            
+
             # Emit LLM decoding event
-            self.event_emitter.emit(LLMRelationDecoded(
-                candidate_pair=(entity_a.id, entity_b.id),
-                relation=raw.relation,
-                direction=raw.direction,
-                confidence=raw.confidence,
-                raw_response=raw.model_dump() if isinstance(raw, BaseModel) else str(raw),
-                run_id=None,
-                phase="phase3_dense"
-            ))
-        except Exception as exc:
+            self.event_emitter.emit(
+                LLMRelationDecoded(
+                    candidate_pair=(entity_a.id, entity_b.id),
+                    relation=raw.relation,
+                    direction=raw.direction,
+                    confidence=raw.confidence,
+                    raw_response=raw.model_dump()
+                    if isinstance(raw, BaseModel)
+                    else str(raw),
+                    run_id=None,
+                    phase="phase3_dense",
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 baseline
             logger.warning(
                 "Phase 3 LLM call failed for pair (%s, %s): %s",
                 entity_a.name,
@@ -829,26 +864,24 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
                 entity_b.name,
             )
             # Emit schema validation rejection event
-            self.event_emitter.emit(SchemaValidationRejectedRelation(
-                candidate_pair=(entity_a.id, entity_b.id),
-                relation=raw.relation,
-                reason=f"Unknown relation type: {raw.relation}",
-                run_id=None,
-                phase="phase3_dense"
-            ))
+            self.event_emitter.emit(
+                SchemaValidationRejectedRelation(
+                    candidate_pair=(entity_a.id, entity_b.id),
+                    relation=raw.relation,
+                    reason=f"Unknown relation type: {raw.relation}",
+                    run_id=None,
+                    phase="phase3_dense",
+                )
+            )
             return None
 
         subj_id = entity_a.id if raw.direction == "A_to_B" else entity_b.id
         obj_id = entity_b.id if raw.direction == "A_to_B" else entity_a.id
 
-        # Since this is global extraction, chunks may differ. 
+        # Since this is global extraction, chunks may differ.
         # We fallback to 'global' if they don't share a source chunk.
         common = set(entity_a.source_chunk_ids) & set(entity_b.source_chunk_ids)
-        source_chunk_id = (
-            next(iter(common))
-            if common
-            else "global"
-        )
+        source_chunk_id = next(iter(common)) if common else "global"
 
         triple = L2Triple(
             subject_id=subj_id,
@@ -859,19 +892,21 @@ class DenseRetrievalGlobalRelationExtractor(GlobalRelationExtractor):
             scope="global",
             source_chunk_id=source_chunk_id,
         )
-        
+
         # Emit triple committed event
-        self.event_emitter.emit(TripleCommitted(
-            subject_id=triple.subject_id,
-            predicate=triple.predicate,
-            object_id=triple.object_id,
-            confidence=triple.confidence,
-            scope=triple.scope,
-            source_chunk_id=triple.source_chunk_id,
-            run_id=None,
-            phase="phase3_dense"
-        ))
-        
+        self.event_emitter.emit(
+            TripleCommitted(
+                subject_id=triple.subject_id,
+                predicate=triple.predicate,
+                object_id=triple.object_id,
+                confidence=triple.confidence,
+                scope=triple.scope,
+                source_chunk_id=triple.source_chunk_id,
+                run_id=None,
+                phase="phase3_dense",
+            )
+        )
+
         return triple
 
 

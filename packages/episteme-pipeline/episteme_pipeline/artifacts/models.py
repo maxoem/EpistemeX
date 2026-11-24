@@ -419,11 +419,11 @@ class FusionDecisionArtifact(BaseArtifactPayload):
 
     async def project_to_graph(self, graph_store: ProjectionGraph) -> None:
         """No-op direct projection for fusion decision audit records."""
-        return None
+        return
 
     def collect_for_projection(self, batch: ProjectionBatchAccumulator) -> None:
         """No-op batch projection for fusion decision audit records."""
-        return None
+        return
 
 
 class CanonicalizationArtifact(BaseArtifactPayload):
@@ -480,7 +480,9 @@ class TheoryAtomArtifact(DomainObjectPayload[TheoryAtom]):
     local_tenability: float | None = None
     equilibrium_strength: float | None = None
     controversy_volatility: float | None = None
-    intensional_mode: Literal["asserted", "attributed", "suppositional", "historical"] = "asserted"
+    intensional_mode: Literal[
+        "asserted", "attributed", "suppositional", "historical"
+    ] = "asserted"
     attributed_to: str | None = None
     resolver_type: str | None = None
     syntax_bounds: tuple[float, float] | None = None
@@ -619,7 +621,7 @@ class TheoreticalEnrichmentArtifact(BaseArtifactPayload):
 
     async def project_to_graph(self, graph_store: ProjectionGraph) -> None:
         """No-op direct single-envelope projection for enrichment summaries."""
-        return None
+        return
 
     def collect_for_projection(self, batch: ProjectionBatchAccumulator) -> None:
         """Register this theoretical enrichment payload into ``batch``."""
@@ -692,11 +694,11 @@ class EpistemicDeficitArtifact(DomainObjectPayload[EpistemicDeficit]):
 
     async def project_to_graph(self, graph_store: ProjectionGraph) -> None:
         """No-op direct projection for epistemic deficit audit payloads."""
-        return None
+        return
 
     def collect_for_projection(self, batch: ProjectionBatchAccumulator) -> None:
         """No-op batch projection for epistemic deficit audit payloads."""
-        return None
+        return
 
 
 ArtifactPayload = (

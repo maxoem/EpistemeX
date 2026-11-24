@@ -247,4 +247,3 @@ def z_score_normalize(
         if std == 0.0:
             std = 1e-10
         return np.asarray((sim - mean) / std, dtype=np.float32)
-

@@ -225,7 +225,9 @@ async def test_reused_phases_emit_phase_reused_events(tmp_path):
     pipeline.manifest_store.write_manifest(prior_manifest)
 
     invalidation_decision = InvalidationDecision(
-        resume_point=ResumePoint(run_id="run-prior", phase_ordinal=1, phase_name=runner1.name),
+        resume_point=ResumePoint(
+            run_id="run-prior", phase_ordinal=1, phase_name=runner1.name
+        ),
         reused_phase_ordinals=[1],
         invalidated_phase_ordinals=[],
         reason="clean-cache-hit",
@@ -346,12 +348,17 @@ def test_composite_observer_error_telemetry_propagates_to_emitter():
 
     emitter = SimpleEventEmitter()
     emitter.register_observer(composite)
-    emitter.emit(ComponentStarted(component_name="test_comp", phase="phase1", run_id="run-1"))
+    emitter.emit(
+        ComponentStarted(component_name="test_comp", phase="phase1", run_id="run-1")
+    )
     emitter.flush()
 
     telemetry = emitter.get_observer_telemetry()
     assert "FaultyObserver" in telemetry["observer_errors"]
-    assert "Observer disk full or network error" in telemetry["observer_errors"]["FaultyObserver"][0]
+    assert (
+        "Observer disk full or network error"
+        in telemetry["observer_errors"]["FaultyObserver"][0]
+    )
     assert telemetry["events_delivered"].get("RecordingObserver", 0) == 1
 
 
@@ -391,10 +398,8 @@ def test_langfuse_observer_handles_run_lifecycle_events():
     )
 
     span_names = [
-        call.kwargs.get("name")
-        for call in mock_client.start_observation.call_args_list
+        call.kwargs.get("name") for call in mock_client.start_observation.call_args_list
     ]
     assert "run.started" in span_names
     assert "run.completed" in span_names
     assert "run.failed" in span_names
-

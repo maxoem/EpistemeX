@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Callable, ClassVar, Iterator, TypeVar
+from typing import ClassVar, TypeVar
 
 from episteme_pipeline.artifacts.execution import (
     ArtifactCollection,
@@ -86,15 +87,15 @@ class PhaseRunner[InputT](ABC):
         ):
             try:
                 __import__(mod_path)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
     @classmethod
-    def _iter_subclasses(cls) -> Iterator[type["PhaseRunner[object]"]]:
+    def _iter_subclasses(cls) -> Iterator[type[PhaseRunner[object]]]:
         """Yield all concrete and abstract PhaseRunner subclasses recursively."""
         cls._ensure_builtin_runners_loaded()
         stack = list(cls.__subclasses__())
-        seen: set[type["PhaseRunner[object]"]] = set()
+        seen: set[type[PhaseRunner[object]]] = set()
         while stack:
             sub = stack.pop()
             if sub in seen:
@@ -106,7 +107,7 @@ class PhaseRunner[InputT](ABC):
     @classmethod
     def resolve_phase_key(
         cls,
-        target: type["PhaseRunner[object]"] | "PhaseRunner[object]" | str,
+        target: type[PhaseRunner[object]] | PhaseRunner[object] | str,
     ) -> str:
         """Resolve a PhaseRunner class, instance, class name, or task ID to its canonical ``phase_key``.
 
@@ -132,18 +133,14 @@ class PhaseRunner[InputT](ABC):
             key = sub.phase_key
             if not key:
                 continue
-            if (
-                target == key
-                or target == sub.__name__
-                or target in sub.conformal_tasks
-            ):
+            if target == key or target == sub.__name__ or target in sub.conformal_tasks:
                 return key
         return target
 
     @classmethod
     def related_identifiers(
         cls,
-        target: type["PhaseRunner[object]"] | "PhaseRunner[object]" | str,
+        target: type[PhaseRunner[object]] | PhaseRunner[object] | str,
     ) -> tuple[str, ...]:
         """Return all identifiers (``phase_key``, class name, and ``conformal_tasks``) for ``target``.
 
@@ -204,7 +201,9 @@ class PhaseRunner[InputT](ABC):
         return None
 
     @abstractmethod
-    async def run(self, input: InputT, context: ArtifactExecutionContext) -> ArtifactCollection: ...
+    async def run(
+        self, input: InputT, context: ArtifactExecutionContext
+    ) -> ArtifactCollection: ...
 
     @property
     def event_emitter(self) -> EventEmitter:
@@ -246,9 +245,7 @@ class PhaseRunner[InputT](ABC):
         )
 
         def advance(step: int = 1) -> None:
-            self.event_emitter.emit(
-                ProgressAdvanced(task_name=task_name, advance=step)
-            )
+            self.event_emitter.emit(ProgressAdvanced(task_name=task_name, advance=step))
 
         try:
             yield advance
@@ -265,7 +262,6 @@ class PhaseRunner[InputT](ABC):
             Checkpoint store instance, or None if not supported.
         """
         return None
-
 
     def components(self) -> dict[str, object]:
         """Discover all injected computational components attached to this runner.

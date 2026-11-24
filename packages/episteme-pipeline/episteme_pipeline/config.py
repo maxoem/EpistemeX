@@ -174,25 +174,30 @@ class Phase2Config(BaseModel):
     ner_confidence_threshold: float = 0.0
     local_relation_confidence_threshold: float = 0.0
     batch_size: int = 10
-    ner_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=NER_DIRECT_PROMPT,
-        reasoning_template=NER_REASONING_PROMPT,
-        format_template=NER_FORMAT_PROMPT,
-        gleaning_template=NER_GLEANING_PROMPT,
-        decision_template=DECISION_GLEANING_QUESTION,
-        name="ner_extraction",
-    ))
-    ner_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
+    ner_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=NER_DIRECT_PROMPT,
+            reasoning_template=NER_REASONING_PROMPT,
+            format_template=NER_FORMAT_PROMPT,
+            gleaning_template=NER_GLEANING_PROMPT,
+            decision_template=DECISION_GLEANING_QUESTION,
+            name="ner_extraction",
+        )
+    )
+    ner_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.NL_TO_FORMAT
+    )
     entity_linking_prompt_template: str = ENTITY_LINKING_PROMPT
-    entity_linking_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=ENTITY_LINKING_PROMPT,
-        name="entity_linking",
-    ))
+    entity_linking_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=ENTITY_LINKING_PROMPT,
+            name="entity_linking",
+        )
+    )
     jev_ooo_threshold: float = 0.75
     conformal_linking_alpha: float = 0.05
     max_concurrent_chapters: int = 4
     gleaning: GleaningConfig = Field(default_factory=GleaningConfig)
-
 
 
 class Phase3Config(BaseModel):
@@ -200,14 +205,18 @@ class Phase3Config(BaseModel):
     global_relation_confidence_threshold: float = 0.7
     max_candidates_per_entity_pair: int = 200
     subgraph_depth: int = 2
-    global_relation_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=GLOBAL_RELATION_DIRECT_PROMPT,
-        reasoning_template=GLOBAL_RELATION_REASONING_PROMPT,
-        format_template=GLOBAL_RELATION_FORMAT_PROMPT,
-        decision_template=PAIR_GATING_DECISION_PROMPT,
-        name="global_relation",
-    ))
-    global_relation_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
+    global_relation_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=GLOBAL_RELATION_DIRECT_PROMPT,
+            reasoning_template=GLOBAL_RELATION_REASONING_PROMPT,
+            format_template=GLOBAL_RELATION_FORMAT_PROMPT,
+            decision_template=PAIR_GATING_DECISION_PROMPT,
+            name="global_relation",
+        )
+    )
+    global_relation_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.NL_TO_FORMAT
+    )
     dense_similarity_threshold: float = 0.5
     reranker_threshold: float = 0.6
     trace_dense_retrieval: bool = True
@@ -289,8 +298,9 @@ class Phase3bConfig(BaseModel):
     z_score_threshold: float | None = None
     min_internal_similarity: float = 0.70
     max_diameter: float | None = None
-    verification: ConsolidationVerificationConfig = Field(default_factory=ConsolidationVerificationConfig)
-
+    verification: ConsolidationVerificationConfig = Field(
+        default_factory=ConsolidationVerificationConfig
+    )
 
 
 class Phase4EntityMaturationConfig(BaseModel):
@@ -323,6 +333,7 @@ class Phase4EntityMaturationConfig(BaseModel):
     entity_synthesis_decoding_strategy : StructuredDecodingStrategy
         Which decoding strategy the synthesis call routes through.
     """
+
     maturation_top_k: int = 5
     batch_size: int = 10
     enable_conception_stratification: bool = True
@@ -330,12 +341,15 @@ class Phase4EntityMaturationConfig(BaseModel):
     min_silhouette_score: float = Field(default=0.15, ge=-1.0, le=1.0)
     max_conceptions_per_entity: int = Field(default=4, ge=2, le=10)
     min_envelopes_for_stratification: int = Field(default=2, ge=2)
-    entity_synthesis_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=ENTITY_SYNTHESIS_PROMPT,
-        name="entity_synthesis",
-    ))
-    entity_synthesis_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.DIRECT
-
+    entity_synthesis_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=ENTITY_SYNTHESIS_PROMPT,
+            name="entity_synthesis",
+        )
+    )
+    entity_synthesis_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.DIRECT
+    )
 
 
 class ModalResolverConfig(BaseModel):
@@ -362,32 +376,44 @@ class ModalResolverConfig(BaseModel):
 
 class Phase4Config(BaseModel):
     adu_segmentation_prompt_template: str = ADU_SEGMENTATION_PROMPT
-    adu_segmentation_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=ADU_SEGMENTATION_PROMPT,
-        name="adu_segmentation",
-    ))
+    adu_segmentation_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=ADU_SEGMENTATION_PROMPT,
+            name="adu_segmentation",
+        )
+    )
     adu_confidence_threshold: float = 0.0
     acc_confidence_threshold: float = 0.0
     batch_size: int = 10
-    modal_resolver: ModalResolverConfig = Field(default_factory=lambda: ModalResolverConfig())
-    acc_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=ACC_DIRECT_PROMPT,
-        reasoning_template=ACC_REASONING_PROMPT,
-        format_template=ACC_FORMAT_PROMPT,
-        decision_template=DECISION_ACC_QUESTION,
-        decision_criteria=DECISION_ACC_CRITERIA,
-        name="acc_classification",
-    ))
-    acc_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
-    arc_prompts: StructuredPromptBundle = Field(default_factory=lambda: StructuredPromptBundle(
-        direct_template=ARC_DIRECT_PROMPT,
-        reasoning_template=ARC_REASONING_PROMPT,
-        format_template=ARC_FORMAT_PROMPT,
-        decision_template=DECISION_ARC_QUESTION,
-        decision_criteria=DECISION_ARC_CRITERIA,
-        name="arc_classification",
-    ))
-    arc_decoding_strategy: StructuredDecodingStrategy = StructuredDecodingStrategy.NL_TO_FORMAT
+    modal_resolver: ModalResolverConfig = Field(
+        default_factory=lambda: ModalResolverConfig()
+    )
+    acc_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=ACC_DIRECT_PROMPT,
+            reasoning_template=ACC_REASONING_PROMPT,
+            format_template=ACC_FORMAT_PROMPT,
+            decision_template=DECISION_ACC_QUESTION,
+            decision_criteria=DECISION_ACC_CRITERIA,
+            name="acc_classification",
+        )
+    )
+    acc_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.NL_TO_FORMAT
+    )
+    arc_prompts: StructuredPromptBundle = Field(
+        default_factory=lambda: StructuredPromptBundle(
+            direct_template=ARC_DIRECT_PROMPT,
+            reasoning_template=ARC_REASONING_PROMPT,
+            format_template=ARC_FORMAT_PROMPT,
+            decision_template=DECISION_ARC_QUESTION,
+            decision_criteria=DECISION_ARC_CRITERIA,
+            name="arc_classification",
+        )
+    )
+    arc_decoding_strategy: StructuredDecodingStrategy = (
+        StructuredDecodingStrategy.NL_TO_FORMAT
+    )
     arc_confidence_threshold: float = 0.65
     arc_subgraph_depth: int = 2
     arc_max_candidates_per_component: int = 10
@@ -466,7 +492,6 @@ class Phase5Config(BaseModel):
     gating: FusionGatingConfig = Field(default_factory=FusionGatingConfig)
 
 
-
 class Phase6Config(BaseModel):
     """Configuration for Phase 6: TheoryNet Materialization & Projection.
 
@@ -521,7 +546,9 @@ class Phase6Config(BaseModel):
     isolate_suppositional: bool = True
     isolate_attributed: bool = True
     conjunctive_t_norm: Literal["product", "godel"] = "product"
-    modal_resolver: ModalResolverConfig = Field(default_factory=lambda: ModalResolverConfig())
+    modal_resolver: ModalResolverConfig = Field(
+        default_factory=lambda: ModalResolverConfig()
+    )
 
 
 class TheoreticalEnrichmentConfig(BaseModel):
@@ -790,7 +817,6 @@ class ExecutionConfig(BaseModel):
         return mapping.get(phase_key, True)
 
 
-
 class DecisionEngineConfig(BaseModel):
     """Configuration for the System 1 Decision Engine (e.g. TypeSafe Jev / Laya).
 
@@ -915,17 +941,25 @@ class PipelineConfig(BaseModel):
 
     models: ModelConfig = Field(default_factory=ModelConfig)
 
-    graph_schema: SchemaConfig = Field(default_factory=lambda: DEFAULT_SCHEMA.model_copy())
+    graph_schema: SchemaConfig = Field(
+        default_factory=lambda: DEFAULT_SCHEMA.model_copy()
+    )
     phase1: Phase1Config = Field(default_factory=Phase1Config)
     phase2: Phase2Config = Field(default_factory=Phase2Config)
     phase3: Phase3Config = Field(default_factory=Phase3Config)
     phase3b: Phase3bConfig = Field(default_factory=Phase3bConfig)
-    phase4_maturation: Phase4EntityMaturationConfig = Field(default_factory=Phase4EntityMaturationConfig)
+    phase4_maturation: Phase4EntityMaturationConfig = Field(
+        default_factory=Phase4EntityMaturationConfig
+    )
     phase4: Phase4Config = Field(default_factory=Phase4Config)
     phase5: Phase5Config = Field(default_factory=Phase5Config)
     phase6: Phase6Config = Field(default_factory=Phase6Config)
-    theoretical_enrichment: TheoreticalEnrichmentConfig = Field(default_factory=TheoreticalEnrichmentConfig)
-    refinement: HermeneuticRefinementConfig = Field(default_factory=HermeneuticRefinementConfig)
+    theoretical_enrichment: TheoreticalEnrichmentConfig = Field(
+        default_factory=TheoreticalEnrichmentConfig
+    )
+    refinement: HermeneuticRefinementConfig = Field(
+        default_factory=HermeneuticRefinementConfig
+    )
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     quality_gates: QualityGatesConfig = Field(default_factory=QualityGatesConfig)
     decision_engine: DecisionEngineConfig | None = Field(default=None)
@@ -996,8 +1030,8 @@ class PipelineConfig(BaseModel):
         self.phase2.conformal_linking_alpha = self.decision_engine.get_allocated_alpha(
             "phase2_entity_discovery"
         )
-        self.phase3b.verification.conformal_alpha = self.decision_engine.get_allocated_alpha(
-            "phase3b_consolidation"
+        self.phase3b.verification.conformal_alpha = (
+            self.decision_engine.get_allocated_alpha("phase3b_consolidation")
         )
         self.phase4.conformal_alpha = self.decision_engine.get_allocated_alpha(
             "phase4_argument_mining"
@@ -1008,4 +1042,3 @@ class PipelineConfig(BaseModel):
         self.refinement.conformal_alpha = self.decision_engine.get_allocated_alpha(
             "refinement"
         )
-

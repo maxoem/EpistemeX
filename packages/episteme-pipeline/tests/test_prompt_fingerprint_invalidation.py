@@ -172,7 +172,9 @@ async def test_method_fingerprint_invalidates_on_prompt_change(tmp_path, graph_s
         input_fingerprint="same-input",
         method_fingerprints={
             f"{StubPhase.name}.llm": "llm-fp",
-            f"{StubPhase.name}.prompt.ner_extraction": default_fps["phase2"]["ner_extraction"],
+            f"{StubPhase.name}.prompt.ner_extraction": default_fps["phase2"][
+                "ner_extraction"
+            ],
         },
         phase_config_fingerprints={"phase2": default_fps},
         phase_records=[

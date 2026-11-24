@@ -7,12 +7,14 @@ import multiprocessing
 import queue
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from episteme_studio.domain.errors import ProblemDetail
 from episteme_studio.domain.runs import PhaseStatus, RunStatus
 from episteme_studio.runtime.broker import EventBroker
 from episteme_studio.runtime.registry import RunHandle, RunRegistry
+from episteme_studio.security import resolve_safe_child, validate_safe_identifier
 from episteme_studio.settings import get_env_var
 
 _DEFAULT_PHASES = [
@@ -29,7 +31,6 @@ _DEFAULT_PHASES = [
 
 class RunAlreadyActiveError(Exception):
     """Raised when an execution start is attempted while another run is active."""
-
 
 
 class PipelineExecutor:
@@ -96,9 +97,7 @@ class PipelineExecutor:
             raise RunAlreadyActiveError("A pipeline run is already active")
 
         target_run_id = (
-            run_id
-            or get_env_var("LANGFUSE_SESSION_ID")
-            or f"run-{uuid.uuid4()}"
+            run_id or get_env_var("LANGFUSE_SESSION_ID") or f"run-{uuid.uuid4()}"
         )
 
         initial_phases = [
@@ -111,7 +110,11 @@ class PipelineExecutor:
         ]
 
         models_info = {}
-        if config_dict and "models" in config_dict and isinstance(config_dict["models"], dict):
+        if (
+            config_dict
+            and "models" in config_dict
+            and isinstance(config_dict["models"], dict)
+        ):
             models_info = {k: str(v) for k, v in config_dict["models"].items() if v}
 
         handle = RunHandle(
@@ -137,6 +140,7 @@ class PipelineExecutor:
             target_fn = worker_target
         else:
             from episteme_studio.adapters.worker import run_pipeline_worker
+
             target_fn = run_pipeline_worker
 
         anchor_dict = (
@@ -162,14 +166,17 @@ class PipelineExecutor:
         handle.process = process
 
         try:
-            pid_dir = Path(".pipeline_runs") / target_run_id
+            safe_run_id = validate_safe_identifier(target_run_id, "run_id")
+            pid_dir = resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
             pid_dir.mkdir(parents=True, exist_ok=True)
             (pid_dir / "process.pid").write_text(str(process.pid), encoding="utf-8")
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 baseline
             pass
 
         # Start non-blocking background queue reader
-        task = asyncio.create_task(self._drain_queue(target_run_id, ipc_queue, handle, process))
+        task = asyncio.create_task(
+            self._drain_queue(target_run_id, ipc_queue, handle, process)
+        )
         handle.task = task
 
         return handle
@@ -201,7 +208,7 @@ class PipelineExecutor:
                 handle.process.terminate()
                 try:
                     await asyncio.to_thread(handle.process.join, 1.0)
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 baseline
                     pass
                 if handle.process.is_alive():
                     handle.process.kill()
@@ -210,8 +217,13 @@ class PipelineExecutor:
                 handle.task.cancel()
 
             try:
-                (Path(".pipeline_runs") / run_id / "process.pid").unlink(missing_ok=True)
-            except Exception:
+                safe_run_id = validate_safe_identifier(run_id, "run_id")
+                pid_file = (
+                    resolve_safe_child(Path(".pipeline_runs"), safe_run_id)
+                    / "process.pid"
+                )
+                pid_file.unlink(missing_ok=True)
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
             handle.status = RunStatus.ABORTED
@@ -267,7 +279,7 @@ class PipelineExecutor:
                     if not process.is_alive():
                         try:
                             await asyncio.to_thread(process.join, 1.0)
-                        except Exception:
+                        except Exception:  # noqa: BLE001, S110 baseline
                             pass
                         # Subprocess terminated; drain any remaining items
                         while True:
@@ -289,7 +301,7 @@ class PipelineExecutor:
             if handle.status == RunStatus.RUNNING:
                 try:
                     await asyncio.to_thread(process.join, 0.5)
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 baseline
                     pass
                 if process.exitcode != 0:
                     handle.status = RunStatus.FAILED
@@ -307,7 +319,7 @@ class PipelineExecutor:
                 self.broker.close_run(run_id)
         except asyncio.CancelledError:
             pass
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 baseline
             if handle.status == RunStatus.RUNNING:
                 handle.status = RunStatus.FAILED
                 handle.completed_at = datetime.now(UTC)
@@ -373,13 +385,13 @@ class PipelineExecutor:
         # Update phase records and live counts from domain event
         raw_type = item.get("_raw_type", "")
         phase_name = (
-            item.get("phase_name")
-            or item.get("phase")
-            or item.get("component_name")
+            item.get("phase_name") or item.get("phase") or item.get("component_name")
         )
         phase_ordinal = item.get("phase_ordinal")
 
-        def _matches_phase(p: PhaseStatus, target_name: str | None, target_ordinal: int | None) -> bool:
+        def _matches_phase(
+            p: PhaseStatus, target_name: str | None, target_ordinal: int | None
+        ) -> bool:
             if target_ordinal is not None and p.phase_ordinal == target_ordinal:
                 return True
             if not target_name:
@@ -389,11 +401,23 @@ class PipelineExecutor:
             if pn_clean == t_clean:
                 return True
             # Guard against cross-matching distinct phases that share prefix numbers
-            if ("maturation" in t_clean and "argument" in pn_clean) or ("argument" in t_clean and "maturation" in pn_clean):
+            if ("maturation" in t_clean and "argument" in pn_clean) or (
+                "argument" in t_clean and "maturation" in pn_clean
+            ):
                 return False
-            if ("3b" in t_clean and "3b" not in pn_clean) or ("3b" in pn_clean and "3b" not in t_clean):
+            if ("3b" in t_clean and "3b" not in pn_clean) or (
+                "3b" in pn_clean and "3b" not in t_clean
+            ):
                 return False
-            if t_clean in ("phase 1", "phase 2", "phase 3", "phase 4", "phase 5", "phase 6", "phase 7"):
+            if t_clean in (
+                "phase 1",
+                "phase 2",
+                "phase 3",
+                "phase 4",
+                "phase 5",
+                "phase 6",
+                "phase 7",
+            ):
                 return False
             return t_clean in pn_clean or pn_clean in t_clean
 
@@ -421,14 +445,26 @@ class PipelineExecutor:
 
         # Increment in-memory live artifact counts from fine-grained domain events
         if raw_type == "ChunksGenerated":
-            cnt = item.get("chunk_count") or (len(item.get("chunks", [])) if isinstance(item.get("chunks"), list) else 1)
-            handle.artifact_counts_by_kind["chunk"] = handle.artifact_counts_by_kind.get("chunk", 0) + cnt
+            cnt = item.get("chunk_count") or (
+                len(item.get("chunks", []))
+                if isinstance(item.get("chunks"), list)
+                else 1
+            )
+            handle.artifact_counts_by_kind["chunk"] = (
+                handle.artifact_counts_by_kind.get("chunk", 0) + cnt
+            )
         elif raw_type == "EntityProcessed":
-            handle.artifact_counts_by_kind["entity"] = handle.artifact_counts_by_kind.get("entity", 0) + 1
+            handle.artifact_counts_by_kind["entity"] = (
+                handle.artifact_counts_by_kind.get("entity", 0) + 1
+            )
         elif raw_type == "TripleCommitted":
-            handle.artifact_counts_by_kind["local_relation"] = handle.artifact_counts_by_kind.get("local_relation", 0) + 1
+            handle.artifact_counts_by_kind["local_relation"] = (
+                handle.artifact_counts_by_kind.get("local_relation", 0) + 1
+            )
         elif raw_type == "FusionDecisionMade":
-            handle.artifact_counts_by_kind["fusion_decision"] = handle.artifact_counts_by_kind.get("fusion_decision", 0) + 1
+            handle.artifact_counts_by_kind["fusion_decision"] = (
+                handle.artifact_counts_by_kind.get("fusion_decision", 0) + 1
+            )
 
         # Broadcast via broker
         self.broker.publish(run_id, item)

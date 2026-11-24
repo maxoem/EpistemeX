@@ -111,7 +111,7 @@ def theory_atom_changed(prior: TheoryAtom | None, current: TheoryAtom) -> bool:
         return True
     if (prior.tenability is None) != (current.tenability is None):
         return True
-    if prior.tenability is not None and current.tenability is not None:
+    if prior.tenability is not None and current.tenability is not None:  # noqa: SIM102 baseline
         if (
             float_differs(
                 prior.tenability.aggregated_score,
@@ -388,7 +388,9 @@ def build_delta_envelopes(
                 )
 
         if parent_id is not None:
-            parent_env = collection.latest_by_identity.get(f"linked_entity::{parent_id}")
+            parent_env = collection.latest_by_identity.get(
+                f"linked_entity::{parent_id}"
+            )
             if parent_env is not None:
                 upstreams.append(parent_env.artifact_id)
 
@@ -410,7 +412,9 @@ def build_delta_envelopes(
     for retired_id in sorted(retired_set):
         if retired_id in entity_art_ids:
             continue
-        prior_ent_env = collection.latest_by_identity.get(f"linked_entity::{retired_id}")
+        prior_ent_env = collection.latest_by_identity.get(
+            f"linked_entity::{retired_id}"
+        )
         if prior_ent_env is not None and isinstance(
             prior_ent_env.payload, LinkedEntityArtifact
         ):
@@ -640,7 +644,9 @@ def slice_phase4_component_view(
         component(s) reachable from ``seed_atom_ids``.
     """
     source_atoms = (
-        view.canonical_theory_atoms if view.canonical_theory_atoms else view.theory_atoms
+        view.canonical_theory_atoms
+        if view.canonical_theory_atoms
+        else view.theory_atoms
     )
     source_rels = (
         view.canonical_theory_relations
@@ -711,8 +717,10 @@ def slice_phase4_component_view(
             r.undercuts_relation_id is not None
             and r.undercuts_relation_id in rels_by_id
             and (
-                {*rels_by_id[r.undercuts_relation_id].effective_premise_ids,
-                 rels_by_id[r.undercuts_relation_id].target_id}
+                {
+                    *rels_by_id[r.undercuts_relation_id].effective_premise_ids,
+                    rels_by_id[r.undercuts_relation_id].target_id,
+                }
                 & component_atoms
             )
         )

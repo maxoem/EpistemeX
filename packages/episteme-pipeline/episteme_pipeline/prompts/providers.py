@@ -104,20 +104,48 @@ def _populate_pipeline_prompts(
         Populated configuration instance.
     """
     config.phase2.ner_prompts = provider.get_bundle("ner_extraction", label_or_version)
-    config.phase2.entity_linking_prompts = provider.get_bundle("entity_linking", label_or_version)
-    config.phase2.entity_linking_prompt_template = config.phase2.entity_linking_prompts.direct_template
-    config.phase3.global_relation_prompts = provider.get_bundle("global_relation", label_or_version)
-    config.phase4_maturation.entity_synthesis_prompts = provider.get_bundle("entity_synthesis", label_or_version)
-    config.phase4.adu_segmentation_prompts = provider.get_bundle("adu_segmentation", label_or_version)
-    config.phase4.adu_segmentation_prompt_template = config.phase4.adu_segmentation_prompts.direct_template
-    config.phase4.acc_prompts = provider.get_bundle("acc_classification", label_or_version)
-    config.phase4.arc_prompts = provider.get_bundle("arc_classification", label_or_version)
-    config.phase3b.verification.borderline_merge_prompts = provider.get_bundle("decision_borderline_merge", label_or_version)
-    config.phase3b.verification.canonical_election_prompts = provider.get_bundle("decision_canonical_election", label_or_version)
-    config.phase5.gating.prompt_bundle = provider.get_bundle("decision_theory_fusion", label_or_version)
-    config.refinement.concept_split_prompts = provider.get_bundle("concept_split", label_or_version)
-    config.refinement.premise_recovery_prompts = provider.get_bundle("premise_recovery", label_or_version)
-    config.refinement.axiom_grounding_prompts = provider.get_bundle("axiom_grounding", label_or_version)
+    config.phase2.entity_linking_prompts = provider.get_bundle(
+        "entity_linking", label_or_version
+    )
+    config.phase2.entity_linking_prompt_template = (
+        config.phase2.entity_linking_prompts.direct_template
+    )
+    config.phase3.global_relation_prompts = provider.get_bundle(
+        "global_relation", label_or_version
+    )
+    config.phase4_maturation.entity_synthesis_prompts = provider.get_bundle(
+        "entity_synthesis", label_or_version
+    )
+    config.phase4.adu_segmentation_prompts = provider.get_bundle(
+        "adu_segmentation", label_or_version
+    )
+    config.phase4.adu_segmentation_prompt_template = (
+        config.phase4.adu_segmentation_prompts.direct_template
+    )
+    config.phase4.acc_prompts = provider.get_bundle(
+        "acc_classification", label_or_version
+    )
+    config.phase4.arc_prompts = provider.get_bundle(
+        "arc_classification", label_or_version
+    )
+    config.phase3b.verification.borderline_merge_prompts = provider.get_bundle(
+        "decision_borderline_merge", label_or_version
+    )
+    config.phase3b.verification.canonical_election_prompts = provider.get_bundle(
+        "decision_canonical_election", label_or_version
+    )
+    config.phase5.gating.prompt_bundle = provider.get_bundle(
+        "decision_theory_fusion", label_or_version
+    )
+    config.refinement.concept_split_prompts = provider.get_bundle(
+        "concept_split", label_or_version
+    )
+    config.refinement.premise_recovery_prompts = provider.get_bundle(
+        "premise_recovery", label_or_version
+    )
+    config.refinement.axiom_grounding_prompts = provider.get_bundle(
+        "axiom_grounding", label_or_version
+    )
     return config
 
 
@@ -298,7 +326,9 @@ class DefaultPromptProvider:
         """
         canonical = self._normalize_name(prompt_name)
         if canonical not in self._bundles:
-            raise KeyError(f"Unknown prompt name {prompt_name!r}. Available: {sorted(self._bundles.keys())}")
+            raise KeyError(
+                f"Unknown prompt name {prompt_name!r}. Available: {sorted(self._bundles.keys())}"
+            )
         bundle = self._bundles[canonical]
         if isinstance(label_or_version, str) and label_or_version != "production":
             return bundle.model_copy(update={"label": label_or_version})
@@ -384,8 +414,9 @@ class LangfusePromptProvider:
         if self._client is None:
             try:
                 from langfuse import get_client
+
                 self._client = get_client()
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 baseline
                 logger.debug("Could not resolve default Langfuse client: %s", exc)
                 self._client = None
         return self._client
@@ -413,7 +444,7 @@ class LangfusePromptProvider:
         try:
             if hasattr(client, "get_prompt"):
                 return client.get_prompt(**kwargs)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             msg = (
                 f"Failed to fetch prompt {prompt_name!r} (label/version={label_or_version!r}) "
                 f"from Langfuse: {exc}; falling back to default provider."
@@ -470,9 +501,10 @@ class LangfusePromptProvider:
                 tags=tags or ["episteme", "default"],
                 type="text",
                 config=config,
-                commit_message=commit_message or f"Registered prompt {name} from Episteme",
+                commit_message=commit_message
+                or f"Registered prompt {name} from Episteme",
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 baseline
             msg = f"Failed to create prompt {name!r} in Langfuse: {exc}"
             logger.warning(msg)
             warnings.warn(msg, UserWarning, stacklevel=2)
@@ -613,8 +645,7 @@ class LangfusePromptProvider:
                 stacklevel=2,
             )
             return {
-                name: self.fallback.get_bundle(name, label)
-                for name in default_names
+                name: self.fallback.get_bundle(name, label) for name in default_names
             }
 
         for name in default_names:
@@ -624,14 +655,18 @@ class LangfusePromptProvider:
                 try:
                     if hasattr(client, "get_prompt"):
                         existing = client.get_prompt(name=name, label=label)
-                except Exception:
+                except Exception:  # noqa: BLE001 baseline
                     existing = None
 
                 if existing is not None:
                     synced[name] = self.get_bundle(name, label)
                     continue
 
-            logger.info("Uploading default prompt bundle %r to Langfuse (label=%r)...", name, label)
+            logger.info(
+                "Uploading default prompt bundle %r to Langfuse (label=%r)...",
+                name,
+                label,
+            )
             synced[name] = self.create_bundle(
                 name=name,
                 bundle=default_bundle,
@@ -666,8 +701,12 @@ class LangfusePromptProvider:
         elif hasattr(prompt_obj, "compile"):
             # TextPromptClient
             try:
-                text = prompt_obj.get_langchain_prompt() if hasattr(prompt_obj, "get_langchain_prompt") else str(prompt_obj)
-            except Exception:
+                text = (
+                    prompt_obj.get_langchain_prompt()
+                    if hasattr(prompt_obj, "get_langchain_prompt")
+                    else str(prompt_obj)
+                )
+            except Exception:  # noqa: BLE001 baseline
                 text = str(prompt_obj)
 
         if text is not None and self.convert_mustache:
@@ -700,15 +739,29 @@ class LangfusePromptProvider:
         direct_obj = self._fetch_langfuse_prompt(prompt_name, label_or_version)
         if direct_obj is None:
             # Check if auto-create is enabled and we have a valid client
-            if self.auto_create_missing and self.client is not None and hasattr(self.client, "create_prompt") and isinstance(label_or_version, str):
+            if (
+                self.auto_create_missing
+                and self.client is not None
+                and hasattr(self.client, "create_prompt")
+                and isinstance(label_or_version, str)
+            ):
                 try:
-                    fallback_bundle = self.fallback.get_bundle(prompt_name, label_or_version)
-                    logger.info("Auto-creating missing prompt bundle %r in Langfuse...", prompt_name)
-                    created = self.create_bundle(prompt_name, fallback_bundle, label=label_or_version)
+                    fallback_bundle = self.fallback.get_bundle(
+                        prompt_name, label_or_version
+                    )
+                    logger.info(
+                        "Auto-creating missing prompt bundle %r in Langfuse...",
+                        prompt_name,
+                    )
+                    created = self.create_bundle(
+                        prompt_name, fallback_bundle, label=label_or_version
+                    )
                     if created.provider == "langfuse":
                         return created
-                except Exception as exc:
-                    logger.warning("Failed to auto-create missing prompt in Langfuse: %s", exc)
+                except Exception as exc:  # noqa: BLE001 baseline
+                    logger.warning(
+                        "Failed to auto-create missing prompt in Langfuse: %s", exc
+                    )
 
             # Fall back to delegate
             logger.debug(
@@ -744,12 +797,21 @@ class LangfusePromptProvider:
         decision_text = self._extract_template_text(
             self._fetch_langfuse_prompt(f"{prompt_name}_decision", label_or_version)
         )
-        decision_criteria = metadata.get("decision_criteria") if isinstance(metadata, dict) else None
+        decision_criteria = (
+            metadata.get("decision_criteria") if isinstance(metadata, dict) else None
+        )
 
         # If companion templates are not in Langfuse, inspect if fallback provides them
-        if not reasoning_text or not format_text or not decision_text or not decision_criteria:
+        if (
+            not reasoning_text
+            or not format_text
+            or not decision_text
+            or not decision_criteria
+        ):
             try:
-                fallback_bundle = self.fallback.get_bundle(prompt_name, label_or_version)
+                fallback_bundle = self.fallback.get_bundle(
+                    prompt_name, label_or_version
+                )
                 if not reasoning_text:
                     reasoning_text = fallback_bundle.reasoning_template
                 if not format_text:
@@ -760,7 +822,7 @@ class LangfusePromptProvider:
                     decision_text = fallback_bundle.decision_template
                 if not decision_criteria:
                     decision_criteria = fallback_bundle.decision_criteria
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 baseline
                 pass
 
         return StructuredPromptBundle(
@@ -848,8 +910,10 @@ class FilePromptProvider:
                     payload.setdefault("provider", "file")
                     payload.setdefault("label", str(label_or_version))
                     return StructuredPromptBundle.model_validate(payload)
-                except Exception as exc:
-                    logger.warning("Failed to load prompt bundle from %s: %s", path, exc)
+                except Exception as exc:  # noqa: BLE001 baseline
+                    logger.warning(
+                        "Failed to load prompt bundle from %s: %s", path, exc
+                    )
 
         return self.fallback.get_bundle(prompt_name, label_or_version)
 

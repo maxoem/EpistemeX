@@ -15,10 +15,14 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ExtractedEntity(BaseModel):
-    id: str = Field(description="Local extraction ID, e.g. 'e1'. Used only to reference entities in triples.")
+    id: str = Field(
+        description="Local extraction ID, e.g. 'e1'. Used only to reference entities in triples."
+    )
     label: str = Field(description="Entity type label.")
     name: str = Field(description="Canonical, normalized entity name.")
-    mention_quote: str = Field(description="Exact verbatim quote of the original span text as it appears in the source chunk. Crucial for substring matching.")
+    mention_quote: str = Field(
+        description="Exact verbatim quote of the original span text as it appears in the source chunk. Crucial for substring matching."
+    )
     confidence: float = Field(ge=0.0, le=1.0, default=0.8)
 
     @field_validator("name")
@@ -87,7 +91,8 @@ class NERExtractionOutput(BaseModel):
         """
         valid_ids = {e.id for e in self.entities}
         valid_triples = [
-            t for t in self.triples
+            t
+            for t in self.triples
             if t.subject_id in valid_ids and t.object_id in valid_ids
         ]
         return NERExtractionOutput(

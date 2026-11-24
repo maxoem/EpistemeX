@@ -225,7 +225,7 @@ class HermeneuticRefinementCoordinator(Fingerprintable, Protocol):
         ...
 
 
-def _ensure_optional_protocol(
+def _ensure_optional_protocol(  # noqa: UP047 baseline
     candidate: Any | None,
     protocol_cls: type[ProtocolT],
     required_members: str,

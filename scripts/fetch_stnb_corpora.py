@@ -9,7 +9,7 @@ graph envelopes and token-level character anchors.
 This script verifies local text copies against cryptographic hashes (SHA-256)
 and validates that the declared character span offsets in benchmark JSON-LD files
 align exactly with the local source text.
-"""
+"""  # noqa: EXE001 baseline
 
 from __future__ import annotations
 
@@ -166,7 +166,9 @@ def display_info(corpus_key: str) -> None:
     """
     entry = CORPUS_REGISTRY.get(corpus_key)
     if not entry:
-        print(f"Unknown corpus: {corpus_key}. Available: {list(CORPUS_REGISTRY.keys())}")
+        print(
+            f"Unknown corpus: {corpus_key}. Available: {list(CORPUS_REGISTRY.keys())}"
+        )
         return
 
     print("=" * 70)
@@ -176,7 +178,9 @@ def display_info(corpus_key: str) -> None:
     print(f"Citation:     {entry.get('journal') or entry.get('publisher')}")
     print(f"DOI:          {entry['doi']}")
     print(f"Copyright:    {entry['copyright_notice']}")
-    print(f"Licensing:    {'Public Domain' if entry['public_domain'] else 'Restricted / Stand-Off Acquisition'}")
+    print(
+        f"Licensing:    {'Public Domain' if entry['public_domain'] else 'Restricted / Stand-Off Acquisition'}"
+    )
     if entry.get("expected_sha256"):
         print(f"SHA-256 Hash: {entry['expected_sha256']}")
     print("-" * 70)
@@ -225,7 +229,7 @@ def verify_corpus(corpus_key: str, input_path: Path | None = None) -> bool:
         return False
 
     print(f"🔍 Located local text at: {found_path}")
-    found_path.stat().st_size
+    found_path.stat().st_size  # noqa: B018 baseline
     file_hash = compute_sha256(found_path)
 
     expected_hash = entry.get("expected_sha256")
@@ -236,7 +240,9 @@ def verify_corpus(corpus_key: str, input_path: Path | None = None) -> bool:
             print("️   SHA-256 Hash Mismatch!")
             print(f"   Expected: {expected_hash}")
             print(f"   Found:    {file_hash}")
-            print("   The text may have different whitespace, encoding, or OCR variants.")
+            print(
+                "   The text may have different whitespace, encoding, or OCR variants."
+            )
 
     with open(found_path, "r", encoding="utf-8") as f:
         full_text = f.read()
@@ -244,7 +250,9 @@ def verify_corpus(corpus_key: str, input_path: Path | None = None) -> bool:
     benchmark_file = Path(entry["benchmark_file"])
     matched, total, diagnostics = verify_text_anchors(full_text, benchmark_file)
 
-    print(f"Text Anchor Grounding: {matched}/{total} spans perfectly aligned ({matched/total:.1%})")
+    print(
+        f"Text Anchor Grounding: {matched}/{total} spans perfectly aligned ({matched / total:.1%})"
+    )
     if diagnostics:
         print("Diagnostic failures:")
         for diag in diagnostics:

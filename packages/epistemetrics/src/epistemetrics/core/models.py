@@ -94,7 +94,9 @@ class CentralityResult(BaseModel, Mapping[str, float]):
         list[tuple[str, float]]
             List of (node_id, score) pairs sorted from highest to lowest.
         """
-        sorted_items = sorted(self.scores.items(), key=lambda item: item[1], reverse=True)
+        sorted_items = sorted(
+            self.scores.items(), key=lambda item: item[1], reverse=True
+        )
         return sorted_items[:k]
 
     @property
@@ -242,7 +244,10 @@ class NodeType(str, Enum):
     def __eq__(self, other: object) -> bool:
         """Compare enum instance with another enum or case-insensitive string."""
         if isinstance(other, str):
-            return self.value.lower() == other.lower() or self.name.lower() == other.lower()
+            return (
+                self.value.lower() == other.lower()
+                or self.name.lower() == other.lower()
+            )
         return super().__eq__(other)
 
     def __hash__(self) -> int:
@@ -273,7 +278,12 @@ class NodeType(str, Enum):
             cleaned = cleaned.split(":")[-1]
 
         s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", cleaned)
-        normalized = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower().replace("-", "_").replace(" ", "_")
+        normalized = (
+            re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1)
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
 
         for member in cls:
             if member.value == normalized or member.name.lower() == normalized:
@@ -306,7 +316,9 @@ class NodeType(str, Enum):
             "intendedapplication": cls.PARADIGM,
             "intended_application": cls.PARADIGM,
         }
-        cleaned_simple = cleaned.lower().replace("-", "").replace("_", "").replace(" ", "")
+        cleaned_simple = (
+            cleaned.lower().replace("-", "").replace("_", "").replace(" ", "")
+        )
         if cleaned_simple in alias_map:
             return alias_map[cleaned_simple]
         if normalized in alias_map:
@@ -338,7 +350,10 @@ class EpistemicStatus(str, Enum):
     def __eq__(self, other: object) -> bool:
         """Compare enum instance with another enum or case-insensitive string."""
         if isinstance(other, str):
-            return self.value.lower() == other.lower() or self.name.lower() == other.lower()
+            return (
+                self.value.lower() == other.lower()
+                or self.name.lower() == other.lower()
+            )
         return super().__eq__(other)
 
     def __hash__(self) -> int:
@@ -369,7 +384,12 @@ class EpistemicStatus(str, Enum):
             cleaned = cleaned.split(":")[-1]
 
         s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", cleaned)
-        normalized = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower().replace("-", "_").replace(" ", "_")
+        normalized = (
+            re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1)
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
 
         for member in cls:
             if member.value == normalized or member.name.lower() == normalized:
@@ -387,7 +407,9 @@ class EpistemicStatus(str, Enum):
             "anomaly": cls.ANOMALOUS,
             "anomalous": cls.ANOMALOUS,
         }
-        cleaned_simple = cleaned.lower().replace("-", "").replace("_", "").replace(" ", "")
+        cleaned_simple = (
+            cleaned.lower().replace("-", "").replace("_", "").replace(" ", "")
+        )
         if cleaned_simple in alias_map:
             return alias_map[cleaned_simple]
         if normalized in alias_map:
@@ -455,7 +477,10 @@ class RelationType(str, Enum):
     def __eq__(self, other: object) -> bool:
         """Compare enum instance with another enum or case-insensitive string."""
         if isinstance(other, str):
-            return self.value.lower() == other.lower() or self.name.lower() == other.lower()
+            return (
+                self.value.lower() == other.lower()
+                or self.name.lower() == other.lower()
+            )
         return super().__eq__(other)
 
     def __hash__(self) -> int:
@@ -512,7 +537,12 @@ class RelationType(str, Enum):
             cleaned = cleaned.split(":")[-1]
 
         s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", cleaned)
-        normalized = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower().replace("-", "_").replace(" ", "_")
+        normalized = (
+            re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1)
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
 
         for member in cls:
             if member.value == normalized or member.name.lower() == normalized:
@@ -539,7 +569,9 @@ class RelationType(str, Enum):
             "entails": cls.SUPPORTS,
             "deduces": cls.SUPPORTS,
         }
-        cleaned_simple = cleaned.lower().replace("-", "").replace("_", "").replace(" ", "")
+        cleaned_simple = (
+            cleaned.lower().replace("-", "").replace("_", "").replace(" ", "")
+        )
         if cleaned_simple in alias_map:
             return alias_map[cleaned_simple]
         if normalized in alias_map:
@@ -575,14 +607,27 @@ class TheoryNode(BaseModel):
 
     id: str = Field(..., description="Unique node identifier.")
     name: str = Field(..., description="Human-readable node label or name.")
-    node_type: NodeType = Field(default=NodeType.CONCEPT, description="Epistemic/ontological node type.")
+    node_type: NodeType = Field(
+        default=NodeType.CONCEPT, description="Epistemic/ontological node type."
+    )
     epistemic_status: EpistemicStatus = Field(
         default=EpistemicStatus.NEUTRAL, description="Lakatosian or epistemic status."
     )
-    confidence: float = Field(default=1.0, description="Extraction or validation confidence.")
-    modal_strength: float = Field(default=0.6, ge=0.0, le=1.0, description="Author propositional modal certainty M(phi).")
-    base_score: float = Field(default=0.6, ge=0.0, le=1.0, description="Prior plausibility tau_0 for QBAF.")
-    intensional_mode: Literal["asserted", "attributed", "suppositional", "historical"] = Field(
+    confidence: float = Field(
+        default=1.0, description="Extraction or validation confidence."
+    )
+    modal_strength: float = Field(
+        default=0.6,
+        ge=0.0,
+        le=1.0,
+        description="Author propositional modal certainty M(phi).",
+    )
+    base_score: float = Field(
+        default=0.6, ge=0.0, le=1.0, description="Prior plausibility tau_0 for QBAF."
+    )
+    intensional_mode: Literal[
+        "asserted", "attributed", "suppositional", "historical"
+    ] = Field(
         default="asserted",
         description="Intensional context mode ('asserted', 'attributed', 'suppositional', 'historical').",
     )
@@ -590,9 +635,15 @@ class TheoryNode(BaseModel):
         default=None,
         description="Optional agent, author, or school to whom the proposition is attributed.",
     )
-    description: str | None = Field(default=None, description="Detailed text or description.")
-    provenance: list[str] = Field(default_factory=list, description="Source chunk IDs or citation URIs.")
-    attributes: dict[str, Any] = Field(default_factory=dict, description="Arbitrary domain attributes.")
+    description: str | None = Field(
+        default=None, description="Detailed text or description."
+    )
+    provenance: list[str] = Field(
+        default_factory=list, description="Source chunk IDs or citation URIs."
+    )
+    attributes: dict[str, Any] = Field(
+        default_factory=dict, description="Arbitrary domain attributes."
+    )
 
     @property
     def type(self) -> NodeType:
@@ -627,7 +678,9 @@ class TheoryNode(BaseModel):
             return object.__getattribute__(self, key)
         if key in self.attributes:
             return self.attributes[key]
-        raise KeyError(f"Attribute or field '{key}' not found on TheoryNode '{self.id}'.")
+        raise KeyError(
+            f"Attribute or field '{key}' not found on TheoryNode '{self.id}'."
+        )
 
     def get(self, key: str, default: Any = None) -> Any:
         """Safely retrieve attribute or model field with a default value.
@@ -682,11 +735,15 @@ class TheoryEdge(BaseModel):
 
     source: str = Field(..., description="Source node domain identifier.")
     target: str = Field(..., description="Target node domain identifier.")
-    relation_type: RelationType = Field(default=RelationType.EXPLAINS, description="Canonical relation type.")
+    relation_type: RelationType = Field(
+        default=RelationType.EXPLAINS, description="Canonical relation type."
+    )
     confidence: float = Field(default=1.0, description="Confidence score.")
     weight: float = Field(default=1.0, description="Edge weight.")
     polarity: int = Field(default=1, description="Epistemic polarity (-1, 0, +1).")
-    id: str | None = Field(default=None, description="Optional identifier for this inference edge/warrant.")
+    id: str | None = Field(
+        default=None, description="Optional identifier for this inference edge/warrant."
+    )
     premise_ids: tuple[str, ...] = Field(
         default=(),
         description="Conjunctive premise node IDs when representing a multi-premise inference.",
@@ -695,16 +752,42 @@ class TheoryEdge(BaseModel):
         default=None,
         description="Target relation/inference ID when acting as a Pollockian undercutter.",
     )
-    inferential_force: float = Field(default=0.75, ge=0.0, le=1.0, description="Toulminian warrant validity I_(j->i).")
-    stance_probability: float | None = Field(default=None, description="Canonical perception class probability P(stance).")
-    model_confidence: float | None = Field(default=None, description="Perception calibration confidence score C.")
-    is_admissible: bool = Field(default=True, description="Admissibility status under active thresholds.")
-    active_weight: float = Field(default=0.75, ge=0.0, le=1.0, description="Net weight W_ji ingested by gradual semantics.")
-    class_probability: float | None = Field(default=None, description="Softmax probability P(stance).")
-    empirical_accuracy: float | None = Field(default=None, description="Calibrated empirical accuracy frequency.")
-    modal_strength: float = Field(default=1.0, description="Propositional modal strength in [0, 1].")
-    effective_weight: float | None = Field(default=None, description="Decoupled mathematical edge weight w = M * P.")
-    attributes: dict[str, Any] = Field(default_factory=dict, description="Arbitrary domain attributes.")
+    inferential_force: float = Field(
+        default=0.75,
+        ge=0.0,
+        le=1.0,
+        description="Toulminian warrant validity I_(j->i).",
+    )
+    stance_probability: float | None = Field(
+        default=None, description="Canonical perception class probability P(stance)."
+    )
+    model_confidence: float | None = Field(
+        default=None, description="Perception calibration confidence score C."
+    )
+    is_admissible: bool = Field(
+        default=True, description="Admissibility status under active thresholds."
+    )
+    active_weight: float = Field(
+        default=0.75,
+        ge=0.0,
+        le=1.0,
+        description="Net weight W_ji ingested by gradual semantics.",
+    )
+    class_probability: float | None = Field(
+        default=None, description="Softmax probability P(stance)."
+    )
+    empirical_accuracy: float | None = Field(
+        default=None, description="Calibrated empirical accuracy frequency."
+    )
+    modal_strength: float = Field(
+        default=1.0, description="Propositional modal strength in [0, 1]."
+    )
+    effective_weight: float | None = Field(
+        default=None, description="Decoupled mathematical edge weight w = M * P."
+    )
+    attributes: dict[str, Any] = Field(
+        default_factory=dict, description="Arbitrary domain attributes."
+    )
 
     @property
     def effective_premise_ids(self) -> tuple[str, ...]:
@@ -752,7 +835,9 @@ class TheoryEdge(BaseModel):
             return object.__getattribute__(self, key)
         if key in self.attributes:
             return self.attributes[key]
-        raise KeyError(f"Attribute or field '{key}' not found on TheoryEdge '{self.source}->{self.target}'.")
+        raise KeyError(
+            f"Attribute or field '{key}' not found on TheoryEdge '{self.source}->{self.target}'."
+        )
 
     def get(self, key: str, default: Any = None) -> Any:
         """Safely retrieve attribute or model field with a default value.
@@ -774,4 +859,3 @@ class TheoryEdge(BaseModel):
             if val is not None:
                 return val
         return self.attributes.get(key, default)
-

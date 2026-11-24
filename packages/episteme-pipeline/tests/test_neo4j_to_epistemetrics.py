@@ -22,18 +22,42 @@ class TestNeo4jToEpistemetricsAdapter:
     async def test_export_neo4j_to_theory_graph(self):
         mock_reader = AsyncMock()
         mock_reader.get_entities.return_value = [
-            L2Entity(id="e1", label="Axiom", name="Newton's First Law", description="Inertia"),
+            L2Entity(
+                id="e1", label="Axiom", name="Newton's First Law", description="Inertia"
+            ),
             L2Entity(id="e2", label="Phenomenon", name="Uniform Motion"),
         ]
         mock_reader.get_all_entity_triples.return_value = [
-            L2Triple(subject_id="e1", predicate="EXPLAINS", object_id="e2", confidence=0.95, scope="global"),
+            L2Triple(
+                subject_id="e1",
+                predicate="EXPLAINS",
+                object_id="e2",
+                confidence=0.95,
+                scope="global",
+            ),
         ]
         mock_reader.get_theory_atoms.return_value = [
-            TheoryAtom(id="a1", text="Bodies remain in uniform motion unless acted upon.", component_type="Claim", source_chunk_id="chunk1"),
-            TheoryAtom(id="a2", text="Empirical verification via frictionless planes.", component_type="Evidence", source_chunk_id="chunk1"),
+            TheoryAtom(
+                id="a1",
+                text="Bodies remain in uniform motion unless acted upon.",
+                component_type="Claim",
+                source_chunk_id="chunk1",
+            ),
+            TheoryAtom(
+                id="a2",
+                text="Empirical verification via frictionless planes.",
+                component_type="Evidence",
+                source_chunk_id="chunk1",
+            ),
         ]
         mock_reader.get_all_theory_relations.return_value = [
-            TheoryRelation(source_id="a2", target_id="a1", relation_type="SUPPORTS", confidence=0.9, scope="local"),
+            TheoryRelation(
+                source_id="a2",
+                target_id="a1",
+                relation_type="SUPPORTS",
+                confidence=0.9,
+                scope="local",
+            ),
         ]
 
         tg = await export_neo4j_to_theory_graph(mock_reader, name="TestExportedGraph")
