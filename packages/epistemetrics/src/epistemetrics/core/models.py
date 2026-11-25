@@ -150,6 +150,14 @@ class PartitionResult(BaseModel):
         ...,
         description="Underlying execution backend ('neo4j_gds' or 'networkx').",
     )
+    modularity: float | None = Field(
+        default=None,
+        description="Global partition modularity Q_mod or signed modularity Q_signed.",
+    )
+    community_modularities: dict[int, float] = Field(
+        default_factory=dict,
+        description="Additive per-community modularity contribution q_c per partition index.",
+    )
 
     @property
     def num_partitions(self) -> int:
@@ -473,6 +481,7 @@ class RelationType(str, Enum):
     HAS_PARADIGM = "has_paradigm"
     HAS_INTENDED_APPLICATION = "has_intended_application"
     EMPIRICALLY_EQUIVALENT = "empirically_equivalent"
+    ALTERNATIVE_READING_OF = "alternative_reading_of"
 
     def __eq__(self, other: object) -> bool:
         """Compare enum instance with another enum or case-insensitive string."""
@@ -509,6 +518,7 @@ class RelationType(str, Enum):
             RelationType.HAS_CONSTRAINT,
             RelationType.HAS_PARADIGM,
             RelationType.HAS_INTENDED_APPLICATION,
+            RelationType.ALTERNATIVE_READING_OF,
         }:
             return 0
         return 1
@@ -561,13 +571,17 @@ class RelationType(str, Enum):
             "equivalentto": cls.EQUIVALENT_TO,
             "empiricallyequivalent": cls.EMPIRICALLY_EQUIVALENT,
             "supportsarg": cls.SUPPORTS,
+            "backs": cls.SUPPORTS,
             "attacksarg": cls.ATTACKS,
             "rebuts": cls.ATTACKS,
             "undercuts": cls.ATTACKS,
+            "undermines": cls.ATTACKS,
             "refutes": cls.ATTACKS,
             "contradicts": cls.ATTACKS,
             "entails": cls.SUPPORTS,
             "deduces": cls.SUPPORTS,
+            "alternativereadingof": cls.ALTERNATIVE_READING_OF,
+            "alternative_reading_of": cls.ALTERNATIVE_READING_OF,
         }
         cleaned_simple = (
             cleaned.lower().replace("-", "").replace("_", "").replace(" ", "")
@@ -634,6 +648,16 @@ class TheoryNode(BaseModel):
     attributed_to: str | None = Field(
         default=None,
         description="Optional agent, author, or school to whom the proposition is attributed.",
+    )
+    reading_id: str | None = Field(
+        default=None,
+        description="Optional exegetical reading index rd(a) distinguishing competing textual interpretations.",
+    )
+    semantic_sentence_type: Literal["PURE_THEORETICAL", "MIXED", "EMPIRICAL"] | None = (
+        Field(
+            default=None,
+            description="Semantic stratification type: PURE_THEORETICAL (L_T), MIXED (mapping law), or EMPIRICAL (L_E).",
+        )
     )
     description: str | None = Field(
         default=None, description="Detailed text or description."

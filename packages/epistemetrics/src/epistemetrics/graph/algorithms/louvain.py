@@ -39,6 +39,7 @@ def networkx_louvain(
     resolution: float = 1.0,
     seed: int | None = None,
     weight_property: str | None = None,
+    support_only: bool = False,
 ) -> PartitionResult:
     """Detect modular communities using NetworkX Louvain implementation.
 
@@ -52,12 +53,21 @@ def networkx_louvain(
         Random seed for reproducible node traversal (default: None).
     weight_property : str | None, optional
         Edge attribute name for weights, or None.
+    support_only : bool, default False
+        When True, excludes negative-polarity / negative-weight adversarial
+        edges prior to clustering so dialectical opponents are not merged.
 
     Returns
     -------
     PartitionResult
-        Standardized partition result containing community sets and node mappings.
+        Standardized partition result containing community sets, node mappings,
+        global modularity ``Q_mod``, and additive per-community contributions
+        ``q_c``.
     """
+    from epistemetrics.graph.algorithms.community_metrics import (
+        per_community_modularity,
+    )
+
     g = extract_nx_graph(graph)
     if len(g) == 0:
         return PartitionResult(
@@ -65,16 +75,28 @@ def networkx_louvain(
             node_to_partition={},
             algorithm="louvain",
             backend="networkx",
+            modularity=0.0,
+            community_modularities={},
         )
 
     try:
-        undirected_g = g.to_undirected() if g.is_directed() else g
-        if isinstance(undirected_g, nx.MultiGraph):
-            undirected_g = nx.Graph(undirected_g)
+        work_g = nx.Graph()
+        work_g.add_nodes_from(g.nodes(data=True))
+        for u, v, data in g.edges(data=True):
+            pol = data.get("polarity")
+            w_val = float(data.get(weight_property, 1.0)) if weight_property else 1.0
+            if support_only and ((pol is not None and int(pol) < 0) or w_val < 0.0):
+                continue
+            if w_val <= 0.0:
+                continue
+            if work_g.has_edge(u, v):
+                work_g[u][v]["_louvain_w"] += w_val
+            else:
+                work_g.add_edge(u, v, _louvain_w=w_val)
 
         raw_communities = nx.community.louvain_communities(
-            undirected_g,
-            weight=weight_property,
+            work_g,
+            weight="_louvain_w",
             resolution=resolution,
             seed=seed,
         )
@@ -85,12 +107,20 @@ def networkx_louvain(
         node_to_partition = {
             node_id: idx for idx, comp in enumerate(communities) for node_id in comp
         }
+        q_total, q_by_comm = per_community_modularity(
+            work_g,
+            communities,
+            resolution=resolution,
+            weight_property="_louvain_w",
+        )
 
         return PartitionResult(
             partitions=communities,
             node_to_partition=node_to_partition,
             algorithm="louvain",
             backend="networkx",
+            modularity=q_total,
+            community_modularities=q_by_comm,
         )
     except Exception as exc:
         raise AlgorithmError(
@@ -216,6 +246,7 @@ def louvain_communities(
     resolution: float = 1.0,
     seed: int | None = None,
     weight_property: str | None = None,
+    support_only: bool = False,
     prefer_neo4j: bool = True,
     fallback_to_networkx: bool = True,
     **kwargs: Any,
@@ -237,6 +268,8 @@ def louvain_communities(
         Random seed for determinism (default: None).
     weight_property : str | None, optional
         Edge weight property, or None.
+    support_only : bool, default False
+        When True, excludes negative-polarity adversarial edges before clustering.
     prefer_neo4j : bool, optional
         Whether to attempt Neo4j GDS execution first (default: True).
     fallback_to_networkx : bool, optional
@@ -249,7 +282,7 @@ def louvain_communities(
     PartitionResult
         Detected community partitions and node mappings.
     """
-    if prefer_neo4j and client is not None:
+    if prefer_neo4j and client is not None and not support_only:
         try:
             if client.is_gds_available():
                 logger.debug("Executing Louvain via Neo4j GDS.")
@@ -276,4 +309,5 @@ def louvain_communities(
         resolution=resolution,
         seed=seed,
         weight_property=weight_property,
+        support_only=support_only,
     )

@@ -484,6 +484,10 @@ class TheoryAtomArtifact(DomainObjectPayload[TheoryAtom]):
         "asserted", "attributed", "suppositional", "historical"
     ] = "asserted"
     attributed_to: str | None = None
+    reading_id: str | None = None
+    semantic_sentence_type: Literal["PURE_THEORETICAL", "MIXED", "EMPIRICAL"] | None = (
+        None
+    )
     resolver_type: str | None = None
     syntax_bounds: tuple[float, float] | None = None
     text_anchor: TextAnchor | None = None

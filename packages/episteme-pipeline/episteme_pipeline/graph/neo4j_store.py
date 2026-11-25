@@ -925,6 +925,7 @@ class _Neo4jReadMixin:
             "n.equilibrium_strength as equilibrium_strength, "
             "n.controversy_volatility as controversy_volatility, "
             "n.intensional_mode as intensional_mode, n.attributed_to as attributed_to, "
+            "n.reading_id as reading_id, n.semantic_sentence_type as semantic_sentence_type, "
             "n.resolver_type as resolver_type, n.syntax_bounds as syntax_bounds, "
             "n.epistemic_status as epistemic_status, n.scope_type as scope_type, "
             "n.entity_ids as entity_ids, n.parameters as parameters, "
@@ -1031,6 +1032,8 @@ class _Neo4jReadMixin:
                 "controversy_volatility": row.get("controversy_volatility"),
                 "intensional_mode": row.get("intensional_mode") or "asserted",
                 "attributed_to": row.get("attributed_to"),
+                "reading_id": row.get("reading_id"),
+                "semantic_sentence_type": row.get("semantic_sentence_type"),
                 "resolver_type": row.get("resolver_type"),
                 "syntax_bounds": syntax_bounds,
                 "epistemic_status": row.get("epistemic_status"),

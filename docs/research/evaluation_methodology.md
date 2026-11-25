@@ -213,5 +213,5 @@ To maintain research integrity, evaluation in Episteme must **never**:
 * **Dataset Portfolio & Strategies**: [Datasets Strategy](datasets.md)
 * **Empirical Construction Metrics**: [Empirical Metrics & Validation](metrics.md)
 * **Epistemic Metrics Suite (5 Pillars)**: [Theory Metrics Overview](../concepts/theory/metrics/index.md)
-* **Philosophical Grounding**: [Epistemology & Wissenschaftstheorie](../concepts/epistemology.md)
+* **Philosophical Grounding**: [Epistemology & Philosophy of Science](../concepts/epistemology.md)
 * **Knowledge Graphs vs. Theory Graphs**: [Knowledge Graphs vs Theory Graphs](../concepts/kg_vs_tg.md)

@@ -14,10 +14,19 @@ from epistemetrics.graph.algorithms.betweenness import (
     gds_betweenness,
     networkx_betweenness,
 )
+from epistemetrics.graph.algorithms.community_metrics import (
+    participation_coefficient,
+    per_community_modularity,
+    signed_modularity,
+)
 from epistemetrics.graph.algorithms.eigenvector import (
     eigenvector_centrality,
     gds_eigenvector,
     networkx_eigenvector,
+)
+from epistemetrics.graph.algorithms.katz import (
+    katz_centrality,
+    networkx_katz,
 )
 from epistemetrics.graph.algorithms.louvain import (
     gds_louvain,
@@ -38,26 +47,27 @@ from epistemetrics.graph.algorithms.wcc import (
 )
 
 __all__ = [
-    # Engine interfaces & classes
     "AdaptiveAlgorithmsEngine",
     "GraphAlgorithmsEngine",
     "NetworkXAlgorithmsEngine",
-    # Adaptive dispatch entry points
     "betweenness_centrality",
     "eigenvector_centrality",
-    # GDS direct procedures
     "gds_betweenness",
     "gds_eigenvector",
     "gds_louvain",
     "gds_pagerank",
     "gds_wcc",
+    "katz_centrality",
     "louvain_communities",
-    # NetworkX direct implementations
     "networkx_betweenness",
     "networkx_eigenvector",
+    "networkx_katz",
     "networkx_louvain",
     "networkx_pagerank",
     "networkx_wcc",
     "page_rank",
+    "participation_coefficient",
+    "per_community_modularity",
+    "signed_modularity",
     "weakly_connected_components",
 ]

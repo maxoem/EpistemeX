@@ -10,7 +10,7 @@ tags:
 
 The **Explanatory Breadth (Consilience & Evidence Coverage)** metric favors hypotheses and theories that explain a
 broader spectrum and larger volume of distinct empirical evidence
-([Thagard, 1989, pp. 437, 442](zotero://select/library/items/8F6MW586); [Schurz, 2024, sec. 5.3](zotero://select/library/items/24SNSW2B)).
+([Thagard, 1989, pp. 437, 442](../../../references.md#thagard-1989); [Schurz, 2014, sec. 5.3](../../../references.md#schurz-2014)).
 
 Originally emphasized by William Whewell and formalized computationally in Thagard's Theory of Explanatory Coherence
 (TEC), consilience operates on the principle that a hypothesis gains epistemic credibility in proportion to the

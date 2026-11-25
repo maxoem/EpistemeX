@@ -10,7 +10,7 @@ tags:
 
 The **Kuhnian / Paradigm-Guidance** metric evaluates whether the historical evolution of a theory-net represents
 coherent "normal science" or erratic, ad-hoc shifts
-([Balzer et al., 1987, pp. 175–176](zotero://select/library/items/24SNSW2B); [Stegmüller, 1976, pp. 169–171, 194](zotero://select/library/items/2WXH9HSL)).
+([Balzer et al., 1987, pp. 175–176](../../../references.md#balzer-1987); [Stegmüller, 1976, pp. 169–171, 194](../../../references.md#stegmuller-1976)).
 
 In Kuhn's philosophy of science (as formalized structurally by Stegmüller), normal scientific research proceeds by
 developing specialized laws in the outer branches of a theory-net that strictly descend from an immutable paradigmatic

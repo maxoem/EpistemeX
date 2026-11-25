@@ -2,7 +2,7 @@
 
 Theoretical Enrichment is a modular post-processing subsystem implementing dynamic Theory-Element induction ($\Phi_{\text{spec}}$) and structuralist tenability evaluation ($TS_{\text{local}}, TS_{\text{edge}}$) for the Episteme pipeline.
 
-It bridges the domain-agnostic structural graph ($\Phi_{\text{gen}}$) produced by Phases 1–6 with formal structuralist metatheory ([Stegmüller, 1976](zotero://select/library/items/2WXH9HSL); [Balzer et al., 1987](zotero://select/library/items/24SNSW2B); [Schurz, 2024](zotero://select/library/items/24SNSW2B)), without hardcoding any domain-specific scientific frameworks.
+It bridges the domain-agnostic structural graph ($\Phi_{\text{gen}}$) produced by Phases 1–6 with formal structuralist metatheory ([Stegmüller, 1976](../concepts/references.md#stegmuller-1976); [Balzer et al., 1987](../concepts/references.md#balzer-1987); [Schurz, 2014](../concepts/references.md#schurz-2014)), without hardcoding any domain-specific scientific frameworks.
 
 ---
 

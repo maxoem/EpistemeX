@@ -106,41 +106,41 @@ $$w = M(\text{modal\_strength}) \times P(\text{stance})$$
 
 ---
 
-## Addendum 2 (2026-10-06): Decoupled QBAF Ontologies, Adaptive Continuous Solvers, and Corrected Step-Size Dynamics
+## Addendum 2 (2026-10-06): Decoupled D-QBAF Ontologies, Adaptive Continuous Solvers, and Step-Size Dynamics
 
-### Context & Structural Refactoring
-Following rigorous theoretical and numerical evaluation of ticket ISSUE-041 and its formal action plan, several critical defects in earlier gradual semantics models and graph projection pipelines were identified and resolved:
-1. **Conflation of Ontological Layers**: Earlier formulations ($w = M \times P$) conflated node-level propositional modality with relational extraction confidence, creating a pseudo-decoupling that quadratically double-penalized tentative premises ($M^2$).
-2. **DF-QuAD vs. Quadratic Energy Discontinuity**: Routing DAGs to DF-QuAD and cyclic graphs to Quadratic Energy created an unacceptable semantic discontinuity where adding a single cycle-completing edge shifted equilibrium scores across unrelated acyclic branches.
-3. **Numerical Stiffness in High-Degree Networks**: Fixed-step integration ($\delta = 0.01$) on Quadratic Energy models violates stability bounds on dense citation hubs ($\text{indegree} \gg 50$). Potyka's (2018) assertion that bounded derivatives $|\dot{s}_j| \le 1$ imply constant step stability is refuted via Gershgorin Circle bounds: the Jacobian spectral radius grows linearly with in-degree ($\rho(J) \le 1 + 0.65 \cdot \text{indegree}(i) \cdot \bar{W}$), necessitating adaptive step sizes.
-4. **Redundant Iterations past Equilibrium**: Integrating cyclic networks out to $t_{\max} = 50.0$ without stationary root-finding performed hundreds of redundant Jacobian evaluations on networks that stabilize by $t \approx 5.5$–$7.0$.
+### Architectural Requirements
+Evaluating Layer 3 Dialectical Argument Graphs ($\mathcal{D}$) requires four structural guarantees:
+1. **Ontological Separation of Uncertainty Dimensions**: Node-level descriptive authorial commitment $M_{\text{mod}}(\phi_a)$, relational inferential warrant force $I_{w_k}$, and perceptual extraction confidence $(P_{\text{stance}}, C_{\text{cal}})$ must remain decoupled to prevent $M_{\text{mod}}^2$ double-penalization.
+2. **Topological Continuity**: Using a single continuous Quadratic Energy formulation across both DAGs and cyclic subgraphs prevents semantic discontinuities when adding a cycle-completing edge.
+3. **Adaptive Step-Size Control on High-Degree Hubs**: In the Quadratic Energy ODE $\dot{\mathbf{s}} = \mathbf{f}(\mathbf{s})$, Gershgorin's circle theorem bounds the Jacobian spectral radius as $\rho(J) \le 1 + c \cdot \text{in-deg}_{\text{w}}(i)$ with $c = 3\sqrt{3}/8 \approx 0.65$ (linear in weighted in-degree). Any fixed explicit step $\delta$ violates linear stability on dense hubs where $\delta \cdot \rho(J)$ exceeds the method's stability region; adaptive step-size control eliminates manual step-size tuning and prevents explicit Euler oscillation.
+4. **Stationary Termination & Explicit Non-Convergence Reporting**: Cyclic integration terminates as soon as $\|\dot{\mathbf{s}}\|_\infty < \text{atol}$ via a root-finding event and explicitly reports `converged = False` with final residual $\|\dot{\mathbf{s}}(t_{\max})\|_\infty$ if $t_{\max}$ is reached prior to equilibrium.
 
 ### Decision Amendments
 
-1. **Formal Renaming & Ontological Stratification**:
-   - The dialectical theory graph layer is formally standardized as **Quantitative Bipolar Argumentation Frameworks (QBAF)**.
-   - Decoupled into three distinct physical layers:
-     - **Propositional Modality ($M(\phi) \in [0, 1]$)** on `TheoryAtom` as prior plausibility $\tau_0 \equiv w(a)$.
-     - **Inferential Warrant Force ($I_{j \to i} \in [0, 1]$)** on `TheoryRelation` as Toulminian inferential validity.
-     - **Perception Calibration ($P(\text{stance}), C \in [0, 1]$)** on `TheoryRelation` as extraction confidence.
+1. **Ontological Stratification**:
+   - The Layer 3 dialectical formalism is standardized as a **Decoupled Quantitative Bipolar Argumentation Framework (D-QBAF)**, strictly separated from the Layer 4 Structuralist Theory-Net ($\mathcal{N} = \langle N, \sigma \rangle$).
+   - Three orthogonal uncertainty dimensions are stored separately:
+     - **Authorial Propositional Commitment ($M_{\text{mod}}(\phi_a) \in [0, 1]$)** on `TheoryAtom`, decoupled from the configurable D-QBAF base prior $\beta(a)$ (`BasePriorPolicy`: `descriptive_authorial`, `normative_uniform`, or `normative_data_priority`) and tenability-modulated effective prior $\tilde{\beta}(a) = \beta(a) \cdot TS_{\text{local}}(a)$.
+     - **Inferential Warrant Force ($I_{w_k} \in [0, 1]$)** on `TheoryRelation` / `:TheoryInference` warrants.
+     - **Perception Calibration ($P_{\text{stance}}, C_{\text{cal}} \in [0, 1]$)** on `TheoryRelation`.
 2. **Unified Continuous Quadratic Energy Semantics**:
-   - Eliminated DF-QuAD dual routing; standardized on Quadratic Energy semantics across all topologies.
-   - **Acyclic Graphs (DAGs)**: Evaluated in closed form in $O(|V| + |E|)$ along a single topological pass (Proposition 5), eliminating numerical ODE integration on DAGs.
-   - **Cyclic Graphs**: Evaluated via continuous adaptive ODE integration (`WeightedQuadraticEnergySolver` using `scipy.integrate.solve_ivp` RK45 with implicit Radau fallback) equipped with terminal root-finding stationary event detection ($\|\dot{\mathbf{s}}\|_\infty < \text{atol}$ with `terminal=True, direction=-1`), halting integration when equilibrium is reached.
-3. **Correction to Potyka (2018) Stability Claim**:
-   - Proved that the Jacobian spectral radius $\rho(J)$ grows with in-degree, refuting the claim that fixed step size $\delta=0.01$ is unconditionally stable. Adaptive step control is strictly required.
-4. **Harmonized Bivariate Admissibility Gating**:
-   - **Mode 1 (`hard`)**: Enforces database-level pruning in Neo4j GDS projections via Cypher filtering (`WHERE r.stance_probability >= $tau_p AND r.model_confidence >= $tau_c`), delivering strictly qualified subgraphs.
-   - **Mode 2 (`soft`)**: Passes candidate subgraphs without Cypher `WHERE` filtering and applies continuous sigmoidal relaxation $\mathcal{F}_{\text{soft}}(r) = \sigma(20(P - \tau_P)) \cdot \sigma(20(C - \tau_C))$ in `epistemetrics`.
-5. **Keynes-Gärdenfors Orthogonal Telemetry**:
-   - `QBAFSolverResult` tracks gross epistemic weight of evidence $E_{\text{total}}$ and controversy volatility index $\mathcal{V}$, enabling Episteme Studio to differentiate heavily contested claims from unevidenced claims.
-6. **Explicit Scoping Decision**:
-   - Analytical right inverses are formally excluded from solver scope in favor of marginal graph ablation ($\Delta(u) = \rho(\text{focus}) - \rho_{-u}(\text{focus})$).
+   - Quadratic Energy semantics is applied uniformly across all topologies.
+   - **Acyclic Graphs (DAGs)**: Evaluated in exact closed form in $O(|V| + |E|)$ along a single topological pass, avoiding numerical ODE integration on DAGs.
+   - **Cyclic Graphs**: Evaluated via adaptive ODE integration (`WeightedQuadraticEnergySolver` using `scipy.integrate.solve_ivp` `RK45` with implicit `Radau` fallback on stiff systems) equipped with terminal root-finding stationary event detection ($\|\dot{\mathbf{s}}\|_\infty < \text{atol}$, `terminal=True, direction=-1`). When `t_max` is reached with residual above tolerance, `converged=False` and `final_delta` are returned explicitly.
+3. **Harmonized Bivariate Admissibility Gating**:
+   - **Mode 1 (`hard`)**: Enforces database-level pruning in Neo4j GDS projections via Cypher filtering (`WHERE r.perception_stance_prob >= $tau_p AND r.calibrated_confidence >= $tau_c`), delivering strictly qualified subgraphs.
+   - **Mode 2 (`soft`)**: Passes candidate subgraphs without Cypher `WHERE` filtering and applies smooth sigmoidal relaxation $\mathcal{F}_{\text{soft}}(r) = \sigma(k(P - \tau_P)) \cdot \sigma(k(C - \tau_C))$ ($k = 20$) in `epistemetrics`. Mode 2 trades strict threshold preservation for smooth parameter differentiability: at exact boundary values $P = \tau_P$ and $C = \tau_C$, $\sigma(0) = 0.5$ attenuates an edge to $0.25$ of its nominal warrant force.
+4. **Keynes–Gärdenfors Evidential Weight & Controversy Telemetry**:
+   - `QBAFSolverResult` tracks gross evidentiary weight $S^+(a_i) + S^-(a_i)$ and bounded controversy volatility:
+     $$\mathcal{V}(a_i) = \mathrm{Wt}(a_i) \cdot \mathrm{Controv}(a_i) = \frac{S^+(a_i) + S^-(a_i)}{1 + S^+(a_i) + S^-(a_i)} \cdot \left(1 - \frac{|S^+(a_i) - S^-(a_i)|}{S^+(a_i) + S^-(a_i)}\right) \in [0, 1]$$
+     (defined as $0$ when $S^+(a_i) + S^-(a_i) = 0$), cleanly distinguishing heavily contested claims from unevidenced or uncontested claims independent of $\beta(a_i)$.
+5. **Explicit Scoping Decision**:
+   - Analytical right inverses are excluded from solver scope in favor of marginal graph ablation ($\Delta(u) = s^*(\text{focus}) - s^*_{-u}(\text{focus})$).
 
 ### Consequences
-- Eliminates double-penalization of tentative premises while maintaining rigorous Toulmin warrant accounting.
-- Guarantees $O(|V| + |E|)$ execution for acyclic theory graphs while ensuring numerically stable, early-halting ODE relaxation for cyclic structures.
-- Provides complete mathematical harmony between database projections, runtime solvers, and visualization telemetry.
+- Eliminates $M_{\text{mod}}^2$ double-penalization while maintaining explicit Toulmin warrant accounting.
+- Guarantees $O(|V| + |E|)$ exact evaluation for acyclic graphs and adaptive, early-halting ODE relaxation with explicit non-convergence reporting for cyclic graphs.
+- Aligns database projections, `epistemetrics` solvers, and Studio telemetry under one mathematical specification.
 
 ---
 
@@ -169,6 +169,6 @@ Binary atom-to-atom edges cannot faithfully represent linked/conjunctive inferen
    - Inferences with $|\text{Prem}| > 1$ or targeted by an undercutter (`undercuts_relation_id`) or backing relation are materialized as intermediate `:TheoryInference` nodes connected via `HAS_PREMISE`, `CONCLUDES`, `UNDERCUTS`, and `BACKS` edges in a deterministic two-pass `ProjectionBatch.flush()`.
    - Untargeted unary inferences remain lightweight direct pairwise edges, keeping graph projection cost minimal.
 3. **Conjunctive T-Norms & Warrant State ODEs (`epistemetrics`)**:
-   - `WeightedQuadraticEnergySolver` and `QBAFGradualSemanticsSolver` accept `t_norm: Literal["product", "godel"] = "product"` (configured pipeline-wide via `Phase6Config.conjunctive_t_norm`), aggregating conjunctive premises via Product ($\prod$) or Gödel ($\min$) t-norms.
+   - `WeightedQuadraticEnergySolver` and `QBAFGradualSemanticsSolver` accept `t_norm: Literal["product", "godel"] = "product"` (configured pipeline-wide via `Phase6Config.conjunctive_t_norm`), aggregating conjunctive premises via Product ($\prod$) or Gödel ($\min$) t-norms. Under `t_norm = "product"`, the coupled ODE vector field is $C^1$; under `t_norm = "godel"`, it is globally Lipschitz continuous (non-$C^1$ across premise-tie hyperplanes $s_j = s_{j'}$), preserving Picard–Lindelöf uniqueness while requiring adaptive step control.
    - Reified warrants are modeled by `HyperedgeSpec` with dynamic warrant state $s(w_k, t)$ modulated by Toulmin backing and Pollockian undercutters in both topological closed-form DAG evaluation and coupled augmented ODE integration (`s_atoms` + `s_warrants`), reported in `QBAFSolverResult.warrant_states` and solver telemetry without polluting atom degree dictionaries.
    - Untargeted 1-premise `HyperedgeSpec` instances reduce numerically identically to pairwise weighted edges.

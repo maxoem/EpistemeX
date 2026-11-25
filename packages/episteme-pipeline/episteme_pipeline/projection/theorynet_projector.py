@@ -11,8 +11,9 @@ import logging
 import math
 from typing import Any, Literal
 
-from epistemetrics.core.models import RelationType, TheoryEdge, TheoryNode
+from epistemetrics.core.models import NodeType, RelationType, TheoryEdge, TheoryNode
 from epistemetrics.epistemic.qbaf import (
+    BasePriorPolicy,
     GradualSemanticsModel,
     QBAFGradualSemanticsSolver,
     WeightNormalizationMode,
@@ -189,6 +190,13 @@ class TheoryNetProjector:
         isolate_suppositional: bool = True,
         isolate_attributed: bool = True,
         t_norm: Literal["product", "godel"] = "product",
+        base_prior_policy: Literal[
+            "descriptive_authorial",
+            "normative_uniform",
+            "normative_data_priority",
+        ] = "descriptive_authorial",
+        normative_hypothesis_prior: float = 0.5,
+        normative_data_prior: float = 0.8,
     ) -> None:
         self.schema = schema or SchemaConfig()
         self.modal_resolver = modal_resolver or StructuralistModalResolver()
@@ -212,6 +220,13 @@ class TheoryNetProjector:
         self.isolate_suppositional = isolate_suppositional
         self.isolate_attributed = isolate_attributed
         self.t_norm: Literal["product", "godel"] = t_norm
+        self.base_prior_policy: Literal[
+            "descriptive_authorial",
+            "normative_uniform",
+            "normative_data_priority",
+        ] = base_prior_policy
+        self.normative_hypothesis_prior = float(normative_hypothesis_prior)
+        self.normative_data_prior = float(normative_data_prior)
         self.solver = solver or QBAFGradualSemanticsSolver(
             semantics_model=self.semantics_model,
             max_iterations=iterations,
@@ -223,6 +238,9 @@ class TheoryNetProjector:
             isolate_suppositional=isolate_suppositional,
             isolate_attributed=isolate_attributed,
             t_norm=self.t_norm,
+            base_prior_policy=BasePriorPolicy(self.base_prior_policy),
+            normative_hypothesis_prior=self.normative_hypothesis_prior,
+            normative_data_prior=self.normative_data_prior,
         )
 
     def fingerprint(self) -> dict[str, Any]:
@@ -250,6 +268,9 @@ class TheoryNetProjector:
             "isolate_suppositional": self.isolate_suppositional,
             "isolate_attributed": self.isolate_attributed,
             "t_norm": self.t_norm,
+            "base_prior_policy": self.base_prior_policy,
+            "normative_hypothesis_prior": self.normative_hypothesis_prior,
+            "normative_data_prior": self.normative_data_prior,
             "modal_resolver": (
                 self.modal_resolver.fingerprint()
                 if isinstance(self.modal_resolver, Fingerprintable)
@@ -408,17 +429,21 @@ class TheoryNetProjector:
         """
         theory_edges: list[TheoryEdge] = []
         for rel in relations:
+            rel_upper = (rel.relation_type or "").strip().upper()
+            if rel_upper == "ALTERNATIVE_READING_OF":
+                continue
             pol = self.schema.relation_polarities.get(rel.relation_type, 0)
             if pol == 0:
                 pol = (
                     -1
                     if any(
-                        k in (rel.relation_type or "").upper()
+                        k in rel_upper
                         for k in (
                             "ATTACK",
                             "REFUTE",
                             "CONTRADICT",
                             "UNDERCUT",
+                            "UNDERMINE",
                             "INHIBIT",
                             "REBUT",
                         )
@@ -487,17 +512,24 @@ class TheoryNetProjector:
             TheoryNode(
                 id=atom.id,
                 name=atom.id,
+                node_type=NodeType.from_str(atom.component_type),
                 base_score=atom.effective_base_prior(
                     include_suppositional=True,
                     perspective="all",
+                    base_prior_policy=self.base_prior_policy,
+                    normative_hypothesis_prior=self.normative_hypothesis_prior,
+                    normative_data_prior=self.normative_data_prior,
                 ),
                 modal_strength=atom.modal_prior
                 if atom.modal_prior is not None
                 else 0.6,
                 intensional_mode=atom.intensional_mode,
                 attributed_to=atom.attributed_to,
+                reading_id=atom.reading_id,
+                semantic_sentence_type=atom.semantic_sentence_type,
                 description=atom.text,
                 provenance=[atom.source_chunk_id] if atom.source_chunk_id else [],
+                attributes={"component_type": atom.component_type},
             )
             for atom in atoms
         ]
@@ -548,6 +580,9 @@ class TheoryNetProjector:
         return atom.effective_base_prior(
             include_suppositional=not self.isolate_suppositional,
             perspective=active_perspective,
+            base_prior_policy=self.base_prior_policy,
+            normative_hypothesis_prior=self.normative_hypothesis_prior,
+            normative_data_prior=self.normative_data_prior,
         )
 
     def compute_relation_weight(self, rel: TheoryRelation) -> float:

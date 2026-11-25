@@ -8,7 +8,7 @@ tags:
 
 ## Definition & Conceptual Goal
 
-The **Empirical Adequacy & Grounding** metric quantifies the degree of agreement between empirical observation data ($I$) and theoretical models ($M$), taking into account inevitable measurement errors, experimental approximations, and idealized boundary conditions ([Balzer et al., 1987, pp. 93, 215, 217](zotero://select/library/items/24SNSW2B); [Stegmüller, 1976, pp. 40–45, 120](zotero://select/library/items/2WXH9HSL)).
+The **Empirical Adequacy & Grounding** metric quantifies the degree of agreement between empirical observation data ($I$) and theoretical models ($M$), taking into account inevitable measurement errors, experimental approximations, and idealized boundary conditions ([Balzer et al., 1987, pp. 93, 215, 217](../../../references.md#balzer-1987); [Stegmüller, 1976, pp. 40–45, 120](../../../references.md#stegmuller-1976)).
 
 It integrates two fundamental levels of empirical validation:
 

@@ -10,7 +10,7 @@ tags:
 
 The **Unification** metric favors theoretical frameworks that repeatedly use a compact, unified set of core hypotheses
 and argument patterns to explain a large volume of diverse phenomena
-([Schurz, 2024, pp. 6, 317–320](zotero://select/library/items/24SNSW2B); [Thagard, 1989, p. 441](zotero://select/library/items/8F6MW586)).
+([Schurz, 2014, pp. 6, 317–320](../../../references.md#schurz-2014); [Thagard, 1989, p. 441](../../../references.md#thagard-1989)).
 
 In Kitcher's and Schurz's models of scientific explanation, explanatory unification maximizes the ratio of derived
 explanatory conclusions to the number of fundamental un-derived basic assumptions (axioms and initial facts).

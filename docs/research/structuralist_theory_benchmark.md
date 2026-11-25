@@ -11,7 +11,7 @@ partially ordered sets ($\alpha$), and intertheoretical reduction links ($\rho$)
 
 For the underlying mathematical foundations, Bourbaki structure species, and epistemology,
 see [Theory-Nets, Posets & Topologies](../concepts/theory_nets_and_topologies.md)
-and [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md).
+and [Formal Graph Schema & Argumentation Semantics](../concepts/formal_graph_model.md).
 
 ---
 

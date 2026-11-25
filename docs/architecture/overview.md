@@ -4,7 +4,7 @@ This document provides an architectural perspective on the **Episteme** codebase
 technical stack, core software layers, subsystem interactions, and cross-cutting concerns.
 
 *For domain concepts, scientific rationale, and phase-by-phase functional breakdowns,
-see [Pipeline Architecture](pipeline_architecture.md), [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md), and the [Documentation Index](../index.md).*
+see [Pipeline Architecture](pipeline_architecture.md), [Formal Graph Schema & Argumentation Semantics](../concepts/formal_graph_model.md), and the [Documentation Index](../index.md).*
 
 ---
 

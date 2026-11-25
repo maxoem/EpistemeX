@@ -4,7 +4,7 @@ The Episteme pipeline implements a **Synergized Bidirectional Reasoning Engine f
 in the roadmap framework of Pan et al., 2024). It combines LLMs and Knowledge Graphs in a mutually beneficial feedback
 loop to transform unstructured scientific text into formally structured theory graphs.
 
-*For formal mathematical models, epistemic foundations, and graph definitions, see [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md) and [Epistemic Grounding & Dense Alignment](../concepts/dense_alignment.md).*
+*For formal mathematical models, epistemic foundations, and graph definitions, see [Formal Graph Schema & Argumentation Semantics](../concepts/formal_graph_model.md) and [Epistemic Grounding & Dense Alignment](../concepts/dense_alignment.md).*
 
 ---
 
@@ -211,7 +211,7 @@ The theory-graph construction process is organized into sequential phase runners
   - Evaluates continuous D-QBAF gradual epistemic semantics (closed-form topological pass on DAGs; adaptive `RK45`/`Radau` ODE integration on cyclic graphs) from tenability-modulated prior $\tilde{\tau}_0(a) = \tau_0(a) \cdot TS_{\text{local}}(a)$ to equilibrium justification degree $\tau^*(a)$ (`equilibrium_strength` / `plausibility`) and controversy volatility $\mathcal{V}(a)$.
   - Calculates empirical content ratio of theoretical antecedents to empirical observation base ($B \cap P$).
 - **Emitted Artifacts**: Updated [`TheoryAtomArtifact`](../reference/artifacts.md) and [`TheoryRelationArtifact`](../reference/artifacts.md) envelopes with converged equilibrium justification scores.
-- **See**: [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md), [ADR-0022: Unified Stratified Epistemic Metamodel](../adr/0022-unified-stratified-epistemic-metamodel.md).
+- **See**: [Formal Graph Schema & Argumentation Semantics](../concepts/formal_graph_model.md), [ADR-0022: Unified Stratified Epistemic Metamodel](../adr/0022-unified-stratified-epistemic-metamodel.md).
 
 ---
 

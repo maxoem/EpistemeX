@@ -36,16 +36,20 @@ export const DEFAULT_L3_COMPONENT_DEFINITIONS: Record<string, string> = {
 };
 
 export const DEFAULT_L3_ARGUMENT_RELATION_DEFINITIONS: Record<string, string> = {
-  ATTACKS: "Argument component attacks another (critical relationship).",
-  SUPPORTS_ARG: "Argument component provides support for another.",
-  UNDERCUTS: "Argument component undermines the inference of another.",
-  SPECIALIZES: "Directed vertical edges forming a hierarchy where a specialized node inherits and restricts properties from its parent.",
-  CONSTRAINS: "Lateral/horizontal edges crossing overlapping applications to ensure intrinsic properties remain constant.",
-  REDUCES_TO: "Intertheoretical links connecting entirely separate theories, including strict reduction from older to newer theories.",
-  ENTAILS: "Intertheoretical links connecting entirely separate theories, including strict reduction from older to newer theories.",
-  DEDUCES: "Logical entailments between nodes such as Explanation Patterns (Erklärungsschema) and Falsification Patterns (Falsifikationsschema).",
-  COHERES_WITH: "Positive (excitatory) connections between hypotheses that explain evidence, or co-hypotheses that jointly explain a fact.",
-  INHIBITS: "Negative (inhibitory) weights representing incoherence between logically contradictory or competing hypotheses.",
+  ATTACKS: "Argument component attacks another (general dialectical opposition).",
+  REBUTS: "Argument component challenges the conclusion of another argument.",
+  UNDERMINES: "Argument component challenges a premise of another argument.",
+  SUPPORTS_ARG: "Argument component provides defeasible evidential or inferential support for another.",
+  UNDERCUTS: "Argument component attacks the inference warrant connecting premises to a conclusion.",
+  BACKS: "Argument component provides Toulmin backing strengthening an inference warrant.",
+  SPECIALIZES: "Directed vertical edge encoding BMS specialization from specialized element to parent.",
+  CONSTRAINS: "Intra-core global constraint requiring parameter invariance across overlapping applications.",
+  REDUCES_TO: "Intertheoretical link connecting distinct theories via structural reduction.",
+  ENTAILS: "Non-defeasible deductive entailment where the conclusion follows logically from the premises.",
+  DEDUCES: "Deductive derivation linking conjunctive premises to a derived consequence.",
+  COHERES_WITH: "Excitatory explanatory coherence link (ECHO lens).",
+  INHIBITS: "Inhibitory incompatibility link between competing hypotheses (ECHO lens).",
+  ALTERNATIVE_READING_OF: "Exegetical structural link between competing scholarly interpretations of the same passage (non-attack).",
 };
 
 export const DEFAULT_COMPONENT_PARTITIONS: Record<string, string> = {
@@ -65,8 +69,11 @@ export const DEFAULT_RELATION_POLARITIES: Record<string, number> = {
   IMPLIES: 1,
   CONTRADICTS: -1,
   ATTACKS: -1,
+  REBUTS: -1,
+  UNDERMINES: -1,
   SUPPORTS_ARG: 1,
   UNDERCUTS: -1,
+  BACKS: 1,
   SPECIALIZES: 0,
   CONSTRAINS: 0,
   REDUCES_TO: 1,
@@ -74,6 +81,7 @@ export const DEFAULT_RELATION_POLARITIES: Record<string, number> = {
   DEDUCES: 1,
   COHERES_WITH: 1,
   INHIBITS: -1,
+  ALTERNATIVE_READING_OF: 0,
 };
 
 export const THINKING_LEVEL_PRESETS: ThinkingLevelPreset[] = [

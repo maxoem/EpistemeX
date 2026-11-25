@@ -10,7 +10,7 @@ tags:
 
 The **System Coherence (Harmony, $H$)** metric measures the global explanatory stability and constraint-satisfaction
 state of the entire epistemological network
-([Thagard, 1989, p. 443](zotero://select/library/items/8F6MW586); [Schurz, 2024, sec. 5.3](zotero://select/library/items/24SNSW2B)).
+([Thagard, 1989, p. 443](../../../references.md#thagard-1989); [Schurz, 2014, sec. 5.3](../../../references.md#schurz-2014)).
 
 It quantifies how well the competing and supporting hypotheses satisfy mutual constraints: maximizing simultaneous
 activation of mutually supportive (excitatory) propositions while minimizing simultaneous activation of contradictory

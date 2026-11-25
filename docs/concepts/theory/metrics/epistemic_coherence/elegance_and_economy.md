@@ -9,7 +9,7 @@ tags:
 ## Definition & Conceptual Goal
 
 The **Elegance and Economy** metric evaluates the parsimony and mathematical efficiency of a theory's formalization
-([Balzer et al., 1987, p. xviii](zotero://select/library/items/24SNSW2B); [Schurz, 2024, sec. 5.2](zotero://select/library/items/24SNSW2B)).
+([Balzer et al., 1987, p. xviii](../../../references.md#balzer-1987); [Schurz, 2014, sec. 5.2](../../../references.md#schurz-2014)).
 
 Following the principle of Ockham's Razor, scientific theories should minimize unnecessary mathematical baggage,
 extraneous axioms, and surplus primitive concepts while maximizing descriptive power.

@@ -4,32 +4,28 @@ Status: Accepted (2026-10-07)
 
 ## Context
 
-In Episteme's TheoryNet architecture ([ADR 0011](0011-declarative-graph-metrics-and-qbaf-semantics.md)) dialectical
-arguments are formalized as a **Decoupled Quantitative Bipolar Argumentation Framework (D-QBAF)**.
-A core pillar of D-QBAF is the clean decoupling of three orthogonal dimensions of uncertainty:
+In Episteme's Layer 3 Dialectical Argument Graph ($\mathcal{D}$, [ADR 0011](0011-declarative-graph-metrics-and-qbaf-semantics.md)), arguments are formalized as a **Decoupled Quantitative Bipolar Argumentation Framework (D-QBAF)**.
+D-QBAF separates three orthogonal dimensions of uncertainty:
 
-1. **Authorial Propositional Modality** ($M (\phi_a) \equiv \tau_0 (a)$ on nodes): Grounded in Toulmin's (1958) *Modal
-   Qualifier* and Schurz's (2014) *Epistemic Status*.
-2. **Inferential Warrant Validity** ($\mathcal{I} (a_j \to a_i)$ on edges): Grounded in Toulmin's *Warrant and Backing*.
-3. **Perception Extraction Confidence** ($\mathcal{P} (\text{stance}), \mathcal{C}$): Classifier probability and
-   calibrated empirical precision.
+1. **Descriptive Authorial Commitment** ($M_{\text{mod}}(\phi_a) \in [0, 1]$ on nodes): Linguistic and structural commitment with which an author states proposition $\phi_a$ (modal auxiliaries, hedges, and syntactic scope). This is an Episteme-specific operationalization inspired by linguistic epistemic modality and informed by Schurz's (2014) syntactic statement classification (`ScopeType` and `EpistemicStatus`); it is distinct from Toulmin's (1958) *Modal Qualifier* (which qualifies the inferential step from data via warrant to claim) and from Schurz's non-numeric analytic/synthetic distinction.
+2. **Inferential Warrant Force** ($I_{w_k} \in [0, 1]$ on `:TheoryInference` warrants / edges): Conditional support or attack strength of the inference step (Toulmin's *Warrant* and *Backing*).
+3. **Perception Extraction Confidence** ($P_{\text{stance}}, C_{\text{cal}} \in [0, 1]$): Classifier probability and calibrated empirical precision.
 
-### The Problem with Static Hardcoded Heuristics
+### Separation Between Descriptive Commitment and Normative Base Prior
 
-Previously, node modality was derived via a rigid function (`derive_atom_modality`) that used coarse keyword matching on
-`component_type` (e.g., assigning $0.85$ to empirical observations, $0.60$ to hypotheses, and $0.35$ to conjectures).
-This suffered from three fundamental limitations:
+Descriptive authorial commitment $M_{\text{mod}}(\phi_a)$ measures how strongly a text *asserts* a proposition, not how justified the proposition *ought* to be. Coupling D-QBAF exclusively to $M_{\text{mod}}(\phi_a)$ would allow dogmatic phrasing to outweigh cautious, well-evidenced claims. Accordingly, D-QBAF separates $M_{\text{mod}}(\phi_a)$ from the configurable solver base prior $\beta(a) \in [0, 1]$ (`BasePriorPolicy`):
 
-1. **Context & Hedging Blindness:** Modality is expressed through linguistic hedges, modal auxiliaries (*may*, *might*,
-   *must*), and evidentials (*"we conclusively demonstrate"* vs. *"it is conceivable that"*). A hypothesis asserted as
-   almost certain and one posited as a wild guess both received $0.60$.
-2. **Ignoring Structuralist Syntax:** Episteme's schema ([docs/reference/schema.md](../reference/schema.md)) already
-   extracts fine-grained structuralist properties: `ScopeType` (`Essentieller Allsatz`, `Statistischer Allsatz`,
-   `Lokalisierter Existenzsatz`, `Existenzsatz`) and `EpistemicStatus` (`Analytisch` vs. `Synthetisch`). The old logic
-   ignored `ScopeType` entirely.
-3. **Bypassing the Dual-Process Architecture:** The System 1 `DecisionEngine`
-   ([ADR 0018](0018-decision-engine-architecture-and-contracts.md), [ADR 0019](0019-typesafe-jev-client-and-decision-observability.md))
-   was not utilized to evaluate authorial commitment, missing out on sub-second calibrated predictions.
+- `descriptive_authorial`: $\beta(a) = M_{\text{mod}}(\phi_a)$ (models the author's stated commitments).
+- `normative_uniform`: $\beta(a) = \beta_{\text{hyp}}$ (neutral prior, default $0.5$, isolating dialectical support/attack structure).
+- `normative_data_priority`: $\beta(a) = \beta_{\text{data}}$ (default $0.8$) for evidential base atoms (`ObservationUnit`) and $\beta_{\text{hyp}}$ (default $0.5$) for theoretical claims (defeasible Data Priority).
+
+### Limitations of Static Component-Type Heuristics
+
+Deriving $M_{\text{mod}}(\phi_a)$ solely from coarse keyword lookup on `component_type` fails along three axes:
+
+1. **Context & Hedging Blindness:** Linguistic hedges, modal auxiliaries (*may*, *might*, *must*), and evidential markers (*"we conclusively demonstrate"* vs. *"it is conceivable that"*) cannot be recovered from node type alone.
+2. **Unused Syntactic Classification:** Episteme's schema ([docs/reference/schema.md](../reference/schema.md)) extracts `ScopeType` (`Essentieller Allsatz`, `Statistischer Allsatz`, `Lokalisierter Existenzsatz`, `Existenzsatz`) and `EpistemicStatus` (`Analytisch` vs. `Synthetisch`), providing structured upper/lower sanity bounds for authorial commitment.
+3. **Underutilized System 1 Calibration:** The calibrated System 1 `DecisionEngine` ([ADR 0018](0018-decision-engine-architecture-and-contracts.md), [ADR 0019](0019-typesafe-jev-client-and-decision-observability.md)) enables sub-second contextual commitment estimation.
 
 ---
 
@@ -90,15 +86,12 @@ We implement a modular, pluggable **Propositional Modal Strength Resolution Fram
 
 ### Positive
 
-- **Neuro-Symbolic Rigor:** Combines theoretical constraints from philosophy of science (Schurz 2014) with calibrated
-  machine learning (System 1 Jev).
-- **Context-Sensitive Modality:** Nuanced authorial hedging (*"we tentatively hypothesize"*) accurately modulates
-  initial claim standing in QBAF.
-- **Full Inversion of Control:** Resolvers can be mocked, swapped, or tuned via configuration without touching phase
-  logic.
-- **Clean Decoupling:** Replaces ad-hoc string regexes with a typed, observable protocol backed by unit tests.
-- **Orthogonal to Intensional Scoping ([ADR 0023](0023-intensional-perspectival-scoping-and-conception-stratification.md)):** `ModalStrengthResolver` computes intrinsic modal certainty $\tau_0(a) = M(\phi_a)$ independently of whether the claim is `asserted`, `suppositional` (*Reductio*), `attributed` to another philosopher, or `historical`; downstream D-QBAF projection applies perspective and supposition gating (`effective_base_prior` and `QBAFGradualSemanticsSolver`) without altering $M(\phi_a)$.
-- **Orthogonal to Warrant Reification, Backing & Undercutting (`ISSUE-055`):** Toulmin's *Backing* (`BACKS`) and Pollockian *Undercutters* (`UNDERCUTS`) target reified `:TheoryInference` warrant nodes $\mathcal{W}$ via `UNDERCUTS` / `BACKS` edges, modulating dynamic inferential validity $s(w_k, t)$ in QBAF without altering node-level authorial modal certainty $\tau_0(a) = M(\phi_a)$.
+- **Neuro-Symbolic Guardrailing:** Combines syntactic statement-type bounds (inspired by Schurz 2014's statement taxonomy) with calibrated linguistic estimation (System 1 Jev).
+- **Context-Sensitive Descriptive Commitment:** Nuanced authorial hedging (*"we tentatively hypothesize"*) is captured in $M_{\text{mod}}(\phi_a)$ without forcing normative D-QBAF priors to equate rhetorical confidence with epistemic warrant.
+- **Full Inversion of Control:** Resolvers can be mocked, swapped, or tuned via configuration without modifying phase logic.
+- **Typed Observable Contract:** Exposes a typed protocol emitting `ModalStrengthResolved` telemetry events.
+- **Orthogonal to Intensional Scoping ([ADR 0023](0023-intensional-perspectival-scoping-and-conception-stratification.md)):** `ModalStrengthResolver` computes descriptive commitment $M_{\text{mod}}(\phi_a)$ independently of whether the claim is `asserted`, `suppositional` (*Reductio*), `attributed` to another philosopher, or `historical`; downstream D-QBAF projection applies `BasePriorPolicy`, perspective filtering, and supposition gating (`effective_base_prior` and `QBAFGradualSemanticsSolver`) without mutating $M_{\text{mod}}(\phi_a)$.
+- **Orthogonal to Warrant Reification, Backing & Undercutting:** Toulmin's *Backing* (`BACKS`) and Pollockian *Undercutters* (`UNDERCUTS`) target reified `:TheoryInference` warrant nodes $\mathcal{W}$, modulating dynamic inferential validity $s(w_k, t)$ in D-QBAF without altering node-level descriptive commitment $M_{\text{mod}}(\phi_a)$.
 
 ### Negative / Trade-offs
 

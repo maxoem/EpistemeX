@@ -35,7 +35,7 @@ Building an automated conflict resolver would obscure real-world disagreements i
 - Consumers of the graph must query relational edges rather than expecting a single flattened attribute value per entity.
 
 ## Related Documents
-- [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md)
+- [Formal Graph Schema & Argumentation Semantics](../concepts/formal_graph_model.md)
 - [ADR 0006: QBAF Weight Computation Deferred](0006-qbaf-mapping-deferred.md)
 - [ADR 0005: Two-Pass Fusion Strategy](0005-two-pass-fusion-strategy.md)
 - [ADR 0023: Intensional & Perspectival Scoping and Conception Stratification](0023-intensional-perspectival-scoping-and-conception-stratification.md)

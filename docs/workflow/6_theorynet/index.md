@@ -18,7 +18,7 @@ epistemological projection:
 
 ## Theoretical Foundation
 
-See [Formal Graph Schema (TheoryNet)](../../concepts/formal_graph_model.md)
+See [Formal Graph Schema & Argumentation Semantics](../../concepts/formal_graph_model.md)
 and [Theory-Nets, Posets & Topologies](../../concepts/theory_nets_and_topologies.md):
 
 - Formal representation: $T = \langle \mathcal{A}, \mathcal{R}, \rho, \alpha \rangle$
@@ -120,6 +120,6 @@ Configuration is managed via `Phase6Config` in `episteme_pipeline/config.py`:
 
 ## Related
 
-- **Theory**: [Formal Graph Schema (TheoryNet)](../../concepts/formal_graph_model.md)
+- **Theory**: [Formal Graph Schema & Argumentation Semantics](../../concepts/formal_graph_model.md)
 - **Previous Phase**: [Phase 5: Alignment & Theory Fusion](../5_inter_document_argument_web/)
 - **Post-Processing**: [Theoretical Enrichment & Tenability Evaluation](../post_processing/theoretical_enrichment.md)

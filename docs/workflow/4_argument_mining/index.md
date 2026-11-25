@@ -15,7 +15,7 @@ ground theoretical hypotheses.
 
 ## Theoretical Foundation
 
-See [Formal Graph Schema (TheoryNet)](../../concepts/formal_graph_model.md) and the following ADRs:
+See [Formal Graph Schema & Argumentation Semantics](../../concepts/formal_graph_model.md) and the following ADRs:
 
 - [ADR 0004: ACC Outputs Triples Single Pass](../../adr/0004-acc-outputs-triples-single-pass.md) — Fusing ADU
   classification and local relation identification into a single LLM call.
@@ -125,7 +125,7 @@ Configuration is managed via `Phase4Config` in `episteme_pipeline/config.py`:
 
 ## Related
 
-- **Theory**: [Formal Graph Schema (TheoryNet)](../../concepts/formal_graph_model.md)
+- **Theory**: [Formal Graph Schema & Argumentation Semantics](../../concepts/formal_graph_model.md)
 -
 **ADRs**: [ADR 0004 (ACC Single Pass)](../../adr/0004-acc-outputs-triples-single-pass.md), [ADR 0007 (TF Representation)](../../adr/0007-tf-structural-correspondence.md)
 - **Previous Phase**: [Phase 4: Entity Maturation](../4_entity_maturation/)

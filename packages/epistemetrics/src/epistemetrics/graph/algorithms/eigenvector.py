@@ -40,8 +40,13 @@ def networkx_eigenvector(
     max_iter: int = 100,
     tolerance: float = 1e-6,
     weight_property: str | None = None,
+    fallback_to_katz: bool = False,
 ) -> CentralityResult:
-    """Compute Eigenvector Centrality using NetworkX with NumPy eigensolver fallback.
+    """Compute Eigenvector Centrality using NetworkX with DAG and sign guards.
+
+    On directed acyclic graphs (nilpotent adjacency matrix, all eigenvalues
+    zero) or signed graphs with negative weights (Perron-Frobenius does not
+    apply), raises :class:`AlgorithmError` unless ``fallback_to_katz=True``.
 
     Parameters
     ----------
@@ -53,14 +58,20 @@ def networkx_eigenvector(
         Convergence tolerance (default: 1e-6).
     weight_property : str | None, optional
         Edge weight attribute name, or None.
+    fallback_to_katz : bool, default False
+        When True, falls back to Katz centrality on DAGs instead of raising.
 
     Returns
     -------
     CentralityResult
-        Standardized mapping from node IDs to eigenvector scores.
+        Standardized mapping from node IDs to eigenvector scores (or Katz
+        scores if ``fallback_to_katz=True`` on a DAG).
 
     Raises
     ------
+    AlgorithmError
+        If the graph contains negative edge weights or is a non-empty DAG with
+        ``fallback_to_katz=False``.
     AlgorithmConvergenceError
         If both power iteration and NumPy eigensolvers fail to converge.
     """
@@ -71,6 +82,26 @@ def networkx_eigenvector(
     calc_graph = g
     if isinstance(g, (nx.MultiGraph, nx.MultiDiGraph)):
         calc_graph = nx.DiGraph(g) if g.is_directed() else nx.Graph(g)
+
+    if weight_property is not None:
+        for _, _, data in calc_graph.edges(data=True):
+            w_val = data.get(weight_property)
+            if w_val is not None and float(w_val) < 0.0:
+                raise AlgorithmError(
+                    "Eigenvector centrality is undefined on signed graphs with "
+                    "negative edge weights; use Katz or PageRank on an unsigned "
+                    "positive projection."
+                )
+
+    if calc_graph.is_directed() and nx.is_directed_acyclic_graph(calc_graph):
+        if fallback_to_katz:
+            from epistemetrics.graph.algorithms.katz import networkx_katz
+
+            return networkx_katz(calc_graph, weight_property=weight_property)
+        raise AlgorithmError(
+            "Eigenvector centrality degenerates on directed acyclic graphs "
+            "(nilpotent adjacency matrix); use katz_centrality or page_rank."
+        )
 
     try:
         raw_scores = nx.eigenvector_centrality(
@@ -212,6 +243,7 @@ def eigenvector_centrality(
     weight_property: str | None = None,
     prefer_neo4j: bool = True,
     fallback_to_networkx: bool = True,
+    fallback_to_katz: bool = False,
     **kwargs: Any,
 ) -> CentralityResult:
     """Adaptive entry point for Eigenvector Centrality.
@@ -270,4 +302,5 @@ def eigenvector_centrality(
         max_iter=max_iter,
         tolerance=tolerance,
         weight_property=weight_property,
+        fallback_to_katz=fallback_to_katz,
     )

@@ -8,7 +8,7 @@ tags:
 
 ## Definition & Conceptual Goal
 
-The **Hierarchical Conformity** metric (or *Theory-Tree Conformity*) evaluates whether a directed specialization graph strictly conforms to a single-rooted hierarchical branching structure ([Balzer et al., 1987, p. 175](https://www.google.com/search?q=zotero://select/library/items/24SNSW2B)).
+The **Hierarchical Conformity** metric (or *Theory-Tree Conformity*) evaluates whether a directed specialization graph strictly conforms to a single-rooted hierarchical branching structure ([Balzer et al., 1987, p. 175](../../../references.md#balzer-1987)).
 
 In the structuralist architecture of scientific theories, a mature and well-founded scientific theory does not have multiple conflicting foundational cores; rather, it is anchored in a unique, fundamental root theory-element ($T_0$) from which all further domain-specific laws branch out via successive specializations. This metric measures the macroscopic structural integrity of this deductive specialization hierarchy.
 

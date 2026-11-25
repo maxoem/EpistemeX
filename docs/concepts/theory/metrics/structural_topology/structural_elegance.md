@@ -27,7 +27,7 @@ minimum necessary inter-theoretical claims (high Modesty).
 
 ## Theoretical Grounding & Model Formulation
 
-In structuralist philosophy of science ([Balzer et al., 1987](zotero://select/library/items/24SNSW2B)), a scientific
+In structuralist philosophy of science ([Balzer et al., 1987](../../../references.md#balzer-1987)), a scientific
 theory must logically connect back to common roots (Connectedness). However, as Novacek (2015) argues, a theory that
 indiscriminately asserts relationships between all entities is "immodest" and risks redundancy.
 

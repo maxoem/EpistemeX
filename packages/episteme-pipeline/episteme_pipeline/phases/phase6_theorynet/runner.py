@@ -138,6 +138,9 @@ class Phase6Runner(PhaseRunner[Phase4ArtifactsView]):
             isolate_suppositional=config.isolate_suppositional,
             isolate_attributed=config.isolate_attributed,
             t_norm=config.conjunctive_t_norm,
+            base_prior_policy=config.base_prior_policy,
+            normative_hypothesis_prior=config.normative_hypothesis_prior,
+            normative_data_prior=config.normative_data_prior,
         )
 
     async def run(

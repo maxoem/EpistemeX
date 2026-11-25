@@ -3,7 +3,7 @@
 Documentation of the theory graph schema and entity/relationship types.
 
 !!! info "Theoretical Foundations"
-See [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md) and [Theory-Nets, Posets & Topologies](../concepts/theory_nets_and_topologies.md) for the
+See [Formal Graph Schema & Argumentation Semantics](../concepts/formal_graph_model.md) and [Theory-Nets, Posets & Topologies](../concepts/theory_nets_and_topologies.md) for the
 structuralist philosophy, coherence models, and formal graph representations that inform this schema's design.
 
 ## Graph Schema Configuration

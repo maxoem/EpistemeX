@@ -47,8 +47,8 @@ class SchemaMapper:
             },
             "modal_strength": {
                 "type": "float",
-                "label": "Modal Strength M(φ)",
-                "description": "Authorial propositional modal certainty (necessity □ vs possibility ◊)",
+                "label": "Modal Strength M_mod(φ)",
+                "description": "Descriptive authorial modal commitment expressed in text",
                 "domain": [0.0, 1.0],
             },
             "inferential_force": {
@@ -59,20 +59,20 @@ class SchemaMapper:
             },
             "qbaf_tau": {
                 "type": "float",
-                "label": "QBAF Equilibrium Standing τ*",
-                "description": "Asymptotic justification standing evaluated by continuous Quadratic Energy semantics",
+                "label": "QBAF Equilibrium Acceptability s*",
+                "description": "Asymptotic dialectical acceptability evaluated by continuous Quadratic Energy semantics",
                 "domain": [0.0, 1.0],
             },
             "total_weight_of_evidence": {
                 "type": "float",
-                "label": "Gross Evidentiary Volume E_total",
+                "label": "Gross Evidentiary Volume S+ + S-",
                 "description": "Gross weight of evidence across all supporting and attacking warrants (Keynes/Gärdenfors)",
                 "domain": [0.0, None],
             },
             "volatility_index": {
                 "type": "float",
                 "label": "Epistemic Controversy V",
-                "description": "Controversy tension index quantifying evenly contested evidence",
+                "description": "Bounded controversy tension index Wt(a) * (1 - |S+ - S-| / (S+ + S-)) in [0, 1]",
                 "domain": [0.0, 1.0],
             },
             "decision_tier": {

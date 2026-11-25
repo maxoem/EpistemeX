@@ -412,6 +412,42 @@ class IntensionalMode(str, Enum):
         return cls.ASSERTED
 
 
+class SemanticSentenceType(str, Enum):
+    """Semantic stratification of Layer 3 propositions.
+
+    Distinguishes pure theoretical statements (:math:`L_T`), object-level
+    mixed mapping laws (*Zuordnungsgesetze*, combining :math:`L_T` and
+    :math:`L_E`), and pre-theoretical empirical statements (:math:`L_E`).
+    """
+
+    PURE_THEORETICAL = "PURE_THEORETICAL"
+    MIXED = "MIXED"
+    EMPIRICAL = "EMPIRICAL"
+
+    @classmethod
+    def from_str(
+        cls, val: str | SemanticSentenceType | None
+    ) -> SemanticSentenceType | None:
+        """Parse or normalize a semantic sentence type label."""
+        if val is None:
+            return None
+        if isinstance(val, cls):
+            return val
+        s = str(val).strip().upper().replace("-", "_").replace(" ", "_")
+        if not s:
+            return None
+        for member in cls:
+            if s == member.value:
+                return member
+        if "MIX" in s or "ZUORDNUNG" in s or "BRIDGE" in s or "MAPPING" in s:
+            return cls.MIXED
+        if "EMPIR" in s or "OBSERV" in s or s == "L_E":
+            return cls.EMPIRICAL
+        if "THEOR" in s or "PURE" in s or s == "L_T":
+            return cls.PURE_THEORETICAL
+        return None
+
+
 class TheoryAtom(BaseModel):
     """Propositional claim, hypothesis, axiom, or observation unit (Layer 3).
 
@@ -506,6 +542,16 @@ class TheoryAtom(BaseModel):
         default=None,
         description="Optional agent, author, or school identifier when claim is attributed.",
     )
+    reading_id: str | None = Field(
+        default=None,
+        description="Optional exegetical reading index rd(a) distinguishing competing interpretations.",
+    )
+    semantic_sentence_type: Literal["PURE_THEORETICAL", "MIXED", "EMPIRICAL"] | None = (
+        Field(
+            default=None,
+            description="Semantic stratification type (PURE_THEORETICAL, MIXED mapping law, or EMPIRICAL).",
+        )
+    )
     resolver_type: str | None = None
     syntax_bounds: tuple[float, float] | None = None
     entity_ids: list[str] = Field(default_factory=list)
@@ -530,6 +576,21 @@ class TheoryAtom(BaseModel):
         if normalized == "historical":
             return "historical"
         return "asserted"
+
+    @field_validator("semantic_sentence_type", mode="before")
+    @classmethod
+    def normalize_semantic_sentence_type(
+        cls, v: Any
+    ) -> Literal["PURE_THEORETICAL", "MIXED", "EMPIRICAL"] | None:
+        """Normalize semantic_sentence_type via SemanticSentenceType enum."""
+        parsed = SemanticSentenceType.from_str(v)
+        if parsed is None:
+            return None
+        if parsed == SemanticSentenceType.MIXED:
+            return "MIXED"
+        if parsed == SemanticSentenceType.EMPIRICAL:
+            return "EMPIRICAL"
+        return "PURE_THEORETICAL"
 
     @field_validator("scope_type", mode="before")
     @classmethod
@@ -570,19 +631,30 @@ class TheoryAtom(BaseModel):
         *,
         include_suppositional: bool = False,
         perspective: str | None = None,
+        base_prior_policy: Literal[
+            "descriptive_authorial",
+            "normative_uniform",
+            "normative_data_priority",
+        ] = "descriptive_authorial",
+        normative_hypothesis_prior: float = 0.5,
+        normative_data_prior: float = 0.8,
     ) -> float:
-        """Compute tenability-modulated prior :math:`\\tilde{\\tau}_0(a) = \\tau_0(a) \\cdot TS_{\\text{local}}(a)` with intensional scoping.
+        """Compute tenability-modulated prior :math:`\\tilde{\\beta}(a) = \\beta(a) \\cdot TS_{\\text{local}}(a)` with intensional scoping.
 
         Parameters
         ----------
         include_suppositional : bool, default False
-            When False, atoms with ``intensional_mode == "suppositional"`` return
-            ``0.0`` so counterfactual or *Reductio* premises do not contribute
-            unconditioned prior weight to the author's asserted theory base.
+            When False, atoms with ``intensional_mode == "suppositional"`` return ``0.0``.
         perspective : str or None, optional
-            Optional perspective filter (``"author"``, ``"asserted"``, or an
-            attributed agent/school identifier). When specified, atoms outside the
-            requested perspective return ``0.0``.
+            Optional perspective filter (``"author"``, ``"asserted"``, or agent ID).
+        base_prior_policy : {"descriptive_authorial", "normative_uniform", "normative_data_priority"}, default "descriptive_authorial"
+            Policy deriving base prior :math:`\\beta(a)` from authorial commitment or
+            normative uniform/Data-Priority priors.
+        normative_hypothesis_prior : float, default 0.5
+            Neutral prior assigned to theoretical hypotheses in normative modes.
+        normative_data_prior : float, default 0.8
+            Defeasible Data-Priority prior assigned to evidential base atoms in
+            ``"normative_data_priority"`` mode.
 
         Returns
         -------
@@ -623,7 +695,32 @@ class TheoryAtom(BaseModel):
                 if attr_norm != active_perspective and not is_shared_historical:
                     return 0.0
 
-        prior = self.modal_prior if self.modal_prior is not None else 0.6
+        if base_prior_policy == "normative_uniform":
+            prior = float(normative_hypothesis_prior)
+        elif base_prior_policy == "normative_data_priority":
+            comp_norm = (self.component_type or "").strip().lower()
+            is_evidential = (
+                self.semantic_sentence_type == "EMPIRICAL"
+                or comp_norm
+                in {
+                    "observationunit",
+                    "observation_unit",
+                    "empiricalstatement",
+                    "empirical_statement",
+                    "observation",
+                    "empiricalevidence",
+                    "datum",
+                    "evidence",
+                }
+            )
+            prior = (
+                float(normative_data_prior)
+                if is_evidential
+                else float(normative_hypothesis_prior)
+            )
+        else:
+            prior = self.modal_prior if self.modal_prior is not None else 0.6
+
         ts_local = (
             self.local_tenability
             if self.local_tenability is not None

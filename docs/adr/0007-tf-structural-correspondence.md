@@ -4,9 +4,9 @@ Status: Partially Superseded by [ADR-0011 (Addendum 2)](0011-declarative-graph-m
 Supersedes: ADR-0006 (QBAF Weight Computation Deferred)
 
 > [!IMPORTANT]
-> **Supersession Scope**:
-> - **Superseded**: Section 1's deprecation of QBAF in favor of unweighted `TF` scalar ratios ($TF(a) = |S(a)| / (|S(a)| + |A(a)| + 1)$) and legacy `plausibility` propagation are superseded by the Continuous Dynamic QBAF (`D-QBAF`) gradual semantics in [ADR-0011 Addendum 2](0011-declarative-graph-metrics-and-qbaf-semantics.md), the Propositional Modal Strength Resolver ($\tau_0(a) \equiv M(\phi_a)$) in [ADR-0020](0020-propositional-modal-strength-resolver.md), and the Unified Stratified Epistemic Metamodel in [ADR-0022](0022-unified-stratified-epistemic-metamodel.md).
-> - **Active & Retained**: $\kappa$-Structural Correspondence (`structural_correspondence` on `TheoryRelation` edges) and the Sneed/Stegmüller/Balzer structuralist poset hierarchy remain active.
+> **Architectural Scope & Disambiguation**:
+> - **Superseded**: Section 1's deprecation of QBAF in favor of unweighted `TF` scalar ratios ($TF(a) = |S(a)| / (|S(a)| + |A(a)| + 1)$) is superseded by the **Layer 3 Dialectical Argument Graph ($\mathcal{D}$)** evaluated under Continuous Dynamic QBAF (`D-QBAF`) in [ADR-0011 Addendum 2](0011-declarative-graph-metrics-and-qbaf-semantics.md), the Propositional Modal Strength Resolver ($M_{\text{mod}}(\phi_a)$) in [ADR-0020](0020-propositional-modal-strength-resolver.md), and the Unified Stratified Epistemic Metamodel in [ADR-0022](0022-unified-stratified-epistemic-metamodel.md). Layer 3 ($\mathcal{D}$, statement-view argumentation) is strictly separated from the **Layer 4 Structuralist Theory-Net ($\mathcal{N} = \langle N, \sigma \rangle$)** (see [`docs/concepts/formal_graph_model.md`](../concepts/formal_graph_model.md)).
+> - **Active & Retained**: Construction-time $\kappa$-Structural Correspondence ($\mathrm{ov}_{\text{str}}$, stored as `structural_correspondence` on `TheoryRelation` edges) and the structuralist statement-scope taxonomy (`ScopeType`) remain active. $\mathrm{ov}_{\text{str}}$ is strictly a **construction-time graph-admissibility heuristic** checking neighborhood overlap between an L3 atom and its L2 entity image; it is distinct from object-level *Zuordnungsgesetze* (bridge/mapping laws), which are represented as Layer 3 atoms with `semantic_sentence_type = "MIXED"`.
 
 ---
 

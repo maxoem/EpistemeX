@@ -58,6 +58,10 @@ def theory_atom_to_graph_properties(atom: TheoryAtom) -> dict[str, Any]:
     }
     if atom.attributed_to is not None:
         props["attributed_to"] = atom.attributed_to
+    if atom.reading_id is not None:
+        props["reading_id"] = atom.reading_id
+    if atom.semantic_sentence_type is not None:
+        props["semantic_sentence_type"] = atom.semantic_sentence_type
     if atom.local_tenability is not None:
         props["local_tenability"] = atom.local_tenability
     if atom.equilibrium_strength is not None:

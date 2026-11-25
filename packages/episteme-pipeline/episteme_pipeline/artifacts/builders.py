@@ -607,6 +607,8 @@ def build_theory_atom_artifact(
                 "scope_type": component.scope_type,
                 "intensional_mode": component.intensional_mode,
                 "attributed_to": component.attributed_to,
+                "reading_id": component.reading_id,
+                "semantic_sentence_type": component.semantic_sentence_type,
             }
         ),
     )

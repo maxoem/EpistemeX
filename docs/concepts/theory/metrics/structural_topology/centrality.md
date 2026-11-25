@@ -10,7 +10,7 @@ tags:
 
 The **Centrality & Argumentative Discrepancy** metric evaluates the systemic epistemic importance of hypotheses within a
 theory-net and compares this structural prominence against textual emphasis
-([Schurz, 2024, p. 119](zotero://select/library/items/24SNSW2B)).
+([Schurz, 2014, p. 119](../../../references.md#schurz-2014)).
 
 A key phenomenon in theory reconstruction is **Argumentative Discrepancy**
 (*[Argumentative Diskrepanz](../../../glossary.md#argumentative-diskrepanz)*): structurally vital, foundational axioms (such as

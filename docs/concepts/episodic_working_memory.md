@@ -134,7 +134,7 @@ Process per chunk iteration:
 
 - **ADR**: [ADR 0009: SOTA Dual-Memory Architecture](../adr/0009-sota-dual-memory-episodic-working-memory.md)
 - **Dense Alignment & Maturation**: [Dense Alignment & Grounding](dense_alignment.md)
-- **Formal Graph Schema**: [Formal Graph Schema (TheoryNet)](formal_graph_model.md)
+- **Formal Graph Schema**: [Formal Graph Schema & Argumentation Semantics](formal_graph_model.md)
 - **Topologies & Leiden Clustering**: [Theory-Nets, Posets & Topologies](theory_nets_and_topologies.md)
 - **Pipeline Architecture**: [Pipeline Architecture](../architecture/pipeline_architecture.md)
 - **Phase 2 Workflow**: [Phase 2: Entity Discovery Workflow](../workflow/2_entity_discovery/pipeline_explanation.md)

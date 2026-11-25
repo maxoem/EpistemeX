@@ -149,6 +149,8 @@ class TheoryGraph:
         confidence: float = 1.0,
         description: str | None = None,
         provenance: list[str] | None = None,
+        reading_id: str | None = None,
+        semantic_sentence_type: str | None = None,
         attributes: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> TheoryNode:
@@ -170,6 +172,11 @@ class TheoryGraph:
             Verbatim quote, proposition, or definition.
         provenance : list[str] | None, optional
             List of chunk identifiers or source citations.
+        reading_id : str | None, optional
+            Optional exegetical reading identifier for alternative interpretations.
+        semantic_sentence_type : str | None, optional
+            Optional sentence classification (``PURE_THEORETICAL``, ``MIXED``,
+            or ``EMPIRICAL``).
         attributes : dict[str, Any] | None, optional
             Dictionary of arbitrary extra domain attributes.
         **kwargs : Any
@@ -195,6 +202,8 @@ class TheoryGraph:
             confidence=confidence,
             description=description,
             provenance=resolved_prov,
+            reading_id=reading_id,
+            semantic_sentence_type=semantic_sentence_type,  # type: ignore[arg-type]
             attributes=merged_attrs,
         )
 
@@ -210,6 +219,8 @@ class TheoryGraph:
                 "confidence",
                 "description",
                 "provenance",
+                "reading_id",
+                "semantic_sentence_type",
             }
         }
         self._nodes[node_id] = node
@@ -222,6 +233,8 @@ class TheoryGraph:
             confidence=confidence,
             description=description,
             provenance=resolved_prov,
+            reading_id=reading_id,
+            semantic_sentence_type=semantic_sentence_type,
             **nx_attrs,
         )
         return node

@@ -204,7 +204,7 @@ observability sink (Langfuse):
 
 ## Related Documentation
 
-- **Formal Model**: [Formal Graph Schema (TheoryNet)](formal_graph_model.md)
+- **Formal Model**: [Formal Graph Schema & Argumentation Semantics](formal_graph_model.md)
 - **Episodic Memory**: [Episodic Working Memory](episodic_working_memory.md)
 - **Pipeline Implementation**: [Pipeline Architecture](../architecture/pipeline_architecture.md)
 - **Phase 2 Workflow**: [Entity Discovery Workflow](../workflow/2_entity_discovery/index.md)

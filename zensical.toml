@@ -120,7 +120,7 @@ nav = [
             { "Degeneration Index & Immunization" = "concepts/theory/metrics/theory_dynamics/degeneration_index.md" },
             { "Paradigm Guidance" = "concepts/theory/metrics/theory_dynamics/paradigm_guidance.md" },
             { "Progressiveness & Perfectness" = "concepts/theory/metrics/theory_dynamics/progressiveness.md" },
-            { "Cognitive Weight" = "concepts/theory/metrics/metatheoretical/foundations/cognitive_weight.md" }
+            { "Cognitive Weight" = "concepts/theory/metrics/theory_dynamics/foundations/cognitive_weight.md" }
         ] },
         { "Metatheoretical Framework" = [
             { "Analogical Support" = "concepts/theory/metrics/metatheoretical/analogical_support.md" },
@@ -141,16 +141,20 @@ nav = [
     { "Research & Epistemology" = [
         { "Conceptual Overview" = "concepts/index.md" },
         { "Epistemic Foundations" = [
-            { "From Knowledge Graphs to Theory Graphs" = "concepts/kg_vs_tg.md" },
-            { "Epistemology & Wissenschaftstheorie" = "concepts/epistemology.md" },
+            { "From Factual KGs to Epistemic Theory Graphs" = "concepts/kg_vs_tg.md" },
+            { "Epistemology & Philosophy of Science" = "concepts/epistemology.md" },
             { "Assumptions & Limitations" = "concepts/assumptions_limitations.md" }
         ] },
         { "Formal Mathematical Models" = [
-            { "Formal Graph Schema (TheoryNet)" = "concepts/formal_graph_model.md" },
+            { "Formal Graph Schema & Argumentation Semantics" = "concepts/formal_graph_model.md" },
             { "Dense Alignment & Grounding" = "concepts/dense_alignment.md" },
             { "Theory-Nets, Posets & Topologies" = "concepts/theory_nets_and_topologies.md" },
             { "LPG-ECHO Algorithm" = "concepts/theory/metrics/adapted_echo_algorithm.md" },
             { "Episodic Working Memory" = "concepts/episodic_working_memory.md" }
+        ] },
+        { "Notation & References" = [
+            { "Canonical Notation & Symbols" = "concepts/notation.md" },
+            { "References" = "concepts/references.md" }
         ] },
         { "Publications & Agenda" = [
             { "Project & Research Roadmap" = "roadmap.md" },
@@ -221,7 +225,9 @@ nav = [
             { "Refinement & Deficit Detection" = "reference/refinement.md" }
         ] },
         { "Domain Glossaries" = [
-            { "Glossary" = "concepts/glossary.md" }
+            { "Glossary" = "concepts/glossary.md" },
+            { "Canonical Notation & Symbols" = "concepts/notation.md" },
+            { "Consolidated References" = "concepts/references.md" }
         ] }
     ] }
 ]

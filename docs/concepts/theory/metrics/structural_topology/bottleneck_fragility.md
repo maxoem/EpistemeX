@@ -26,7 +26,7 @@ It unifies three related properties to form a complete fragility diagnostic:
 ## Theoretical Grounding & Model Formulation
 
 A robust scientific theory should distribute its explanatory burden. According
-to [Schurz (2024)](zotero://select/library/items/24SNSW2B), a theory-holon should possess structural homogeneity,
+to [Schurz (2014)](../../../references.md#schurz-2014), a theory-holon should possess structural homogeneity,
 avoiding pathological skewness.
 
 When Homogeneity is very low, the theory structure resembles a "star network" heavily reliant on a single central hub.

@@ -10,7 +10,7 @@ tags:
 
 The **Higher-Level Warrant** metric models how scientific hypotheses gain indirect credibility and justification when
 they are themselves explained by deeper, higher-level fundamental theories
-([Thagard, 1989, p. 441](zotero://select/library/items/8F6MW586); [Schurz, 2024, sec. 5.3](zotero://select/library/items/24SNSW2B)).
+([Thagard, 1989, p. 441](../../../references.md#thagard-1989); [Schurz, 2014, sec. 5.3](../../../references.md#schurz-2014)).
 
 An empirical hypothesis (such as Kepler's laws of planetary motion) does not solely rely on direct observational data;
 its epistemic warrant is substantially amplified once it is deductively derived from or explained by a superordinate

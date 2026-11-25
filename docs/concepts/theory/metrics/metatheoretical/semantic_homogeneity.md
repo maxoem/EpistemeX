@@ -10,7 +10,7 @@ tags:
 
 The **Semantic & Axiomatic Homogeneity** metric evaluates the logical unity of a theory, ensuring it cannot be
 factorized into disjoint, non-interacting sub-theories
-([Schurz, 2024, pp. 11, 73](zotero://select/library/items/24SNSW2B)).
+([Schurz, 2014, pp. 11, 73](../../../references.md#schurz-2014)).
 
 It prevents the famous **[Tacking Paradox (Tacking-Paradoxie)](../../../glossary.md#tacking-paradoxie)** in philosophy of
 science: the illegitimate conjunctive combination of two completely unrelated theories ($T_1 \land T_2$, e.g., Newtonian

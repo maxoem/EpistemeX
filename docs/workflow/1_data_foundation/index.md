@@ -15,7 +15,7 @@ sources.
 ## Theoretical Foundation
 
 See [Pipeline Architecture](../../architecture/pipeline_architecture.md)
-and [Formal Graph Schema (TheoryNet)](../../concepts/formal_graph_model.md) for the theoretical background on layered
+and [Formal Graph Schema & Argumentation Semantics](../../concepts/formal_graph_model.md) for the theoretical background on layered
 graph architecture and epistemic purity constraints.
 
 ## Components
@@ -96,6 +96,6 @@ Configuration is managed via `Phase1Config` in `episteme_pipeline/config.py`:
 
 ## Related
 
-- **Theory**: [Formal Graph Schema (TheoryNet)](../../concepts/formal_graph_model.md) - Layer 1 specification
+- **Theory**: [Formal Graph Schema & Argumentation Semantics](../../concepts/formal_graph_model.md) - Layer 1 specification
 - **Next Phase**: [Phase 2: Entity Discovery](../2_entity_discovery/)
 - **Architecture**: [Design Patterns & Standards](../../architecture/design_patterns_and_standards.md) | [Pipeline Architecture](../../architecture/pipeline_architecture.md)

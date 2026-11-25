@@ -11,8 +11,9 @@ application, scholarly interpretation, and empirical verification.
 |:---------------------------------|:----------------------------------------------------------------------------------|:------------------------------------------------------------------------------------------------------------------|
 | **Text as Theory Repository**    | Authorial ambiguity, informal prose, and unstated enthymemes.                     | Episodic working memory context, verbatim character span provenance, and confidence scoring.                      |
 | **LLM Competence**               | Generative hallucination, self-affirmation bias, and reasoning drift.             | Optimal Edit Paths (OEP) error quantification, schema-constrained decoding, and human expert review rubrics.      |
-| **Compositional Structure**      | Oversimplification or loss of emergent holism when theories are graph-decomposed. | Multi-layer stratification (Layers 1 & 2 for facts/triples, Layer 3 for TheoryNets and defeasible argument webs). |
-| **Cross-Document Consistency**   | Polysemy, exegetical attribution, and conceptual drift across historical periods and schools of thought. | Spherical polysemy stratification into `EntityConception` facets (ADR 0023), Layer 3 `intensional_mode` / `attributed_to` scoping, and author-centric empirical bases ($B(t)$). |
+| **Compositional Structure**      | Oversimplification or loss of emergent holism when theories are graph-decomposed. | Four-layer stratification ($L_1$ provenance, $L_2$ ontological entities, $L_3$ Dialectical Argument Graph $\mathcal{D}$, $L_4$ Structuralist Theory-Net $\mathcal{N}$). |
+| **Domain Scope**                 | Empirical-science criteria (empirical creativity, novel prediction, degeneration) do not transfer literally to purely normative, conceptual, or interpretive works. | Scope empirical criteria strictly to empirical theories; parameterize evidential base $B$ per domain (e.g., considered judgments / reflective equilibrium in normative philosophy as an explicit, qualified analogy). |
+| **Cross-Document Consistency**   | Polysemy, exegetical attribution, and conceptual drift across historical periods and schools of thought. | Spherical polysemy stratification into `EntityConception` facets (ADR 0023), Layer 3 `intensional_mode` / `attributed_to` / `reading_id` scoping (`ALTERNATIVE_READING_OF`), and historical evidential horizons ($\mathcal{B}_{\text{hist}}(t)$). |
 | **Scalability vs. Expressivity** | Combinatorial explosion in global cross-document link candidate generation.       | Dense retrieval candidate pruning, cross-encoder reranking (ADR 0002), and asynchronous Neo4j driver pooling.     |
 
 ---
@@ -92,17 +93,18 @@ To ensure responsible scholarly use of pipeline outputs:
    via the provenance metadata.
 2. **Inspect Confidence & Calibration:** Pay close attention to relation confidence scores and calibration metrics.
 3. **Account for Historical Context:** Avoid presentist bias by interpreting theoretical assertions relative to the
-   author's contemporary empirical horizon ($B (t)$), rather than modern scientific consensus.
+   author's contemporary empirical horizon ($\mathcal{B}_{\text{hist}}(t)$), rather than modern scientific consensus.
 4. **Treat Graphs as Hypotheses:** Regard generated Theory Graphs as structured interpretative hypotheses that serve as
    starting points for human hermeneutic analysis.
-5. **Inspect Intensional Scopes & Stratified Conceptions:** When reviewing multi-perspective debates or *Reductio* arguments, distinguish `asserted`, `suppositional`, and `attributed` Layer 3 propositions (`intensional_mode` / `attributed_to`) and inspect Layer 2 `EntityConception` facets rather than relying solely on the joined summary string ([ADR 0023](../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)).
+5. **Inspect Intensional Scopes & Stratified Conceptions:** When reviewing multi-perspective debates or *Reductio* arguments, distinguish `asserted`, `suppositional`, and `attributed` Layer 3 propositions (`intensional_mode` / `attributed_to` / `reading_id`), verify `ALTERNATIVE_READING_OF` exegetical links, and inspect Layer 2 `EntityConception` facets rather than relying solely on the joined summary string ([ADR 0023](../adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)).
 
 ---
 
 ## Related Documentation
 
-* **Epistemological Criteria**: [Epistemology & Wissenschaftstheorie](epistemology.md)
-* **Knowledge Graphs vs. Theory Graphs**: [Knowledge Graphs vs Theory Graphs](kg_vs_tg.md)
+* **Epistemological Criteria**: [Epistemology & Philosophy of Science](epistemology.md)
+* **Knowledge Graphs vs. Theory Graphs**: [From Factual Knowledge Graphs to Epistemic Theory Graphs](kg_vs_tg.md)
+* **Formal Graph Schema**: [Formal Graph Schema & Argumentation Semantics](formal_graph_model.md)
 * **Evaluation Methodology**: [Evaluation Methodology](../research/evaluation_methodology.md)
 * **Empirical Construction Metrics**: [Empirical Metrics & Validation](../research/metrics.md)
 * **Pipeline Runtime Analysis**: [Pipeline Runtime Analysis](../architecture/runtime_analysis.md)

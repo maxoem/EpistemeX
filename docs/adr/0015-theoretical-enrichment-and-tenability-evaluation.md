@@ -4,14 +4,13 @@ Status: Accepted (2026-09-08)
 
 ## Context
 
-Scientific theories cannot be adequately characterized as flat collections of linguistic assertions. In the structuralist metatheory of science ([Stegmüller, 1976]; [Balzer et al., 1987]; [Schurz, 2024]), a theory is formalized as a system of model classes $T = \langle K, I \rangle$, comprising a formal core $K = \langle M_p, M, M_{pp}, GC, GL \rangle$ and a domain of intended applications $I \subseteq M_{pp}$.
+Scientific theories cannot be adequately characterized as flat collections of linguistic assertions. In the structuralist metatheory of science ([Stegmüller, 1976]; [Balzer et al., 1987]; [Schurz, 2014]), a theory-element is formalized as $T = \langle K, I \rangle$, comprising a formal core $K = \langle M_p, M, M_{pp}, GC, GL \rangle$ and a domain of intended applications $I \subseteq M_{pp}$.
 
-Initial NLP ingestion and argument mining phases (Phases 1–4) must remain strictly domain-agnostic ($\Phi_{\text{gen}}$). If extraction prompts were hardcoded to extract domain-specific parameters (e.g. neurological fMRI BOLD signals vs. psychoanalytic repression intensities):
-1. The extraction pipeline would become brittle, requiring new prompt schemas for every scientific discipline.
-2. Token budgets would balloon, and models would hallucinate numeric parameters not present in the source text.
-3. Multi-theoretical texts (e.g. neuropsychoanalysis combining Neurology and Freudian psychology) would suffer catastrophic type collisions when attempting to force heterogeneous concepts into a single parametric model.
+Episteme operationalizes structuralism across three tiers: universal **Tier A (*Structuralism Light*)** capturing specialization posets $\langle N, \sigma \rangle$ and $T$-theoreticity ($M_p / M_{pp}$); **Tier B (Parametric Enrichment)** defined in this ADR for domains possessing explicit quantitative or symbolic laws; and **Tier C (Full BMS Model Theory)** as a regulative ideal.
 
-Furthermore, evaluating whether an empirical application satisfies a theory requires continuous approximation rather than binary truth values ([Stegmüller, 1976, pp. 75, 110]; [Balzer et al., 1987, pp. 209–217]). Using Bourbaki's **uniform spaces** and **admissible blurs ($\mathcal{A}$)**, tenability evaluates the tightest inaccuracy neighborhood $\delta$ under which theoretical parameters satisfy core laws $M$ and intertheoretical constraints $GL$.
+Initial NLP ingestion and argument mining phases (Phases 1–4) must remain strictly domain-agnostic ($\Phi_{\text{gen}}$). Hardcoding domain-specific parameter extraction into core prompts degrades pipeline generality, inflates token budgets with hallucinated parameters, and causes type collisions in multi-theoretical texts (e.g., neuropsychoanalysis combining neurology and psychoanalysis).
+
+Evaluating whether an empirical application satisfies a theory requires continuous approximation rather than binary truth values ([Stegmüller, 1976]; [Balzer et al., 1987, Ch. VII]). Using Bourbaki's **uniform spaces** and **admissible blurs ($\mathfrak{A}$)**, tenability evaluates the tightest inaccuracy neighborhood $\delta$ under which projected parameters satisfy core laws $M$, empirical consequence $\operatorname{Cn}_{\text{str}}(K)$, and intertheoretical constraints $GC, GL$.
 
 ## Decision
 
@@ -48,7 +47,7 @@ $$TS_{\text{edge}}(e) = \sup \{ 1 - \delta_C \mid (\Phi(y_a), \Phi(y_b)) \in v_{
 * Core laws are evaluated safely via an AST-based formula evaluator (`SafeFormulaEvaluator`), eliminating `eval()` security risks while supporting non-linear and functional constraints.
 
 ### 6. Closed-Loop D-QBAF Re-Convergence & Top-Down Deficit Emission ([ADR-0022](0022-unified-stratified-epistemic-metamodel.md), [ADR-0024](0024-closed-loop-hermeneutic-refinement.md))
-* Following Step 4 (`TS_edge` evaluation), `TheoreticalEnrichmentRunner` executes Step 4.5 via `TheoryNetProjector.project(...)` to propagate $TS_{\text{local}}$ and $TS_{\text{edge}}$ back into D-QBAF equilibrium justification $\tau^*(a)$ and controversy volatility $\mathcal{V}(a)$ ([ADR-0022](0022-unified-stratified-epistemic-metamodel.md)).
+* Following Step 4 (`TS_edge` evaluation), `TheoreticalEnrichmentRunner` executes Step 4.5 via `TheoryNetProjector.project(...)` to propagate $TS_{\text{local}}$ and $TS_{\text{edge}}$ back into D-QBAF equilibrium acceptability $s^*(a)$ and controversy volatility $\mathcal{V}(a)$ ([ADR-0022](0022-unified-stratified-epistemic-metamodel.md)).
 * When configured with an `EpistemicDeficitDetector` (`TheoryNetDeficitDetector`), `TheoreticalEnrichmentRunner` translates failing empirical/structural criteria ($TS_{\text{local}} < 0.5$, `is_tenable == False`, missing $M_{pp}$ `required_dimensions`, or $TS_{\text{edge}} < 0.5$ / elevated $\mathcal{V}$ bridging incompatible clusters) into typed `EpistemicDeficitArtifact` signals (`UNGROUNDED_AXIOM`, `POLYSEMY_COLLISION`, `ENTHYMEME_GAP`) triggering localized top-down recovery ([ADR-0024](0024-closed-loop-hermeneutic-refinement.md)).
 
 ## Alternatives Considered

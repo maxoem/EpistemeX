@@ -1785,7 +1785,6 @@ class EvaluationAdapter:
         core_ids = set(request.core_node_ids) if request.core_node_ids else None
         dyn_res = em.evaluate_diachronic_dynamics(
             snapshots,
-            epsilon=request.epsilon,
             core_node_ids=core_ids,
         )
 
@@ -1808,7 +1807,8 @@ class EvaluationAdapter:
             "delta_empirical_series": [s.delta_empirical for s in steps],
             "anomalies_series": [s.anomalies_count for s in steps],
             "overall_degeneration_index": dyn_res.degeneration_index,
-            "progressive_threshold": 1.0,
+            "empirical_failure_rate": dyn_res.empirical_failure_rate,
+            "progressive_threshold": 0.5,
             "is_progressive": dyn_res.is_progressive,
             "core_invariant": dyn_res.core_invariant,
         }

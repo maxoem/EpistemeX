@@ -10,7 +10,7 @@ tags:
 
 The **Reduction Capacity** metric formalizes the rational mechanism by which a successor theory-net ($T'$) supersedes,
 subsumes, and replaces an older predecessor theory-net ($T$)
-([Balzer et al., 1987, p. 372](zotero://select/library/items/24SNSW2B); [Stegmüller, 1976, pp. 131, 277–278](zotero://select/library/items/2WXH9HSL)).
+([Balzer et al., 1987, p. 372](../../../references.md#balzer-1987); [Stegmüller, 1976, pp. 131, 277–278](../../../references.md#stegmuller-1976)).
 
 Rather than falsifying and obliterating the predecessor, inter-theoretic reduction explains why the older theory worked
 within its limited observational domain while translating its core functions and preserving its empirical claims under

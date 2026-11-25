@@ -156,7 +156,7 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
       // Construct realistic fallback matching domain model
       const isProgressive = preset.id !== "core_violation_degenerating";
       const isCoreInvariant = preset.id !== "core_violation_degenerating";
-      const diVal = isProgressive ? 0.333 : 1.5;
+      const diVal = isProgressive ? 0.25 : 1.0;
 
       const fallback: DynamicsTrajectoryResponse = {
         degeneration_index: diVal,
@@ -184,7 +184,7 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
                 delta_auxiliary: 1,
                 anomalies_count: 0,
                 delta_empirical: 2,
-                step_degeneration_index: 0.5,
+                step_degeneration_index: 0.333,
               },
               {
                 step: "T₁ → T₂",
@@ -200,18 +200,18 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
                 delta_auxiliary: 3,
                 anomalies_count: 2,
                 delta_empirical: 0,
-                step_degeneration_index: 1.5,
+                step_degeneration_index: 1.0,
               },
             ],
         chart_data: {
           epochs: isProgressive ? ["T₀ (1687)", "T₁ (1736)", "T₂ (1799)"] : ["T₀ (1687)", "T₁ (Ad-Hoc)"],
           steps: isProgressive ? ["T₀ → T₁", "T₁ → T₂"] : ["T₀ → T₁"],
-          di_series: isProgressive ? [0.5, 0.0] : [1.5],
+          di_series: isProgressive ? [0.333, 0.0] : [1.0],
           delta_auxiliary_series: isProgressive ? [1, 0] : [3],
           delta_empirical_series: isProgressive ? [2, 1] : [0],
           anomalies_series: isProgressive ? [0, 0] : [2],
           overall_degeneration_index: diVal,
-          progressive_threshold: 1.0,
+          progressive_threshold: 0.5,
           is_progressive: isProgressive,
           core_invariant: isCoreInvariant,
         },
@@ -547,7 +547,7 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
               </span>
             </div>
             <span className="text-[10px] text-app-muted font-mono">
-              DI = ΔAuxiliary / ΔEmpirical (Lakatosian Heuristic)
+              D_deg = |Fail_b| / (|Succ^nov| + |Fail_b|) ∈ [0, 1]
             </span>
           </div>
 
@@ -580,7 +580,7 @@ export const LongitudinalTrajectoryStudio: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-app-border/40 font-mono text-[11px]">
                   {trajectoryData.trajectory.map((step, idx) => {
-                    const isStepProgressive = step.step_degeneration_index < 1.0;
+                    const isStepProgressive = step.step_degeneration_index < 0.5;
                     return (
                       <tr key={idx} className="h-10 hover:bg-app-subtle transition-colors">
                         <td className="px-6 font-semibold text-app-heading font-mono">

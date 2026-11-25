@@ -8,44 +8,43 @@ Extends: ADR-0003 (Coreference Absorbed into Fusion), ADR-0011 (D-QBAF Gradual S
 
 ## Context
 
-Scientific monographs and philosophical treatises frequently interleave three rhetorically distinct registers alongside the author's own positive assertions:
+Scientific monographs and philosophical treatises interleave three rhetorically distinct registers alongside the author's positive assertions:
 
 1. **Suppositional / Counterfactual / *Reductio ad Absurdum* Premises** (Layer 3): Hypothetical premises introduced strictly to derive an absurdity or test an implication before refutation (*"Suppose for the sake of argument that space is merely an empirical abstraction..."*).
-2. **Exegetical / Opponent Attributions** (Layer 3): Extended reconstructions of another thinker's or school's commitments (*"According to Leibniz, space is merely an order of coexistences..."*) preceding critique.
+2. **Exegetical / Opponent Attributions** (Layer 3): Extended reconstructions of another thinker's or school's commitments (*"According to Leibniz, space is merely an order of coexistences..."*) preceding critique, as well as competing scholarly readings of the same primary passage.
 3. **Theory-Laden Doctrinal Polysemy Across Texts** (Layer 2): Foundational theoretical terms (*Space*, *Substance*, *Causality*, *Entropy*) sharing a canonical referential topic (`L2Entity`) across works or epochs while receiving incompatible intensional definitions across distinct frameworks.
 
-Prior to this decision:
-- Layer 3 `TheoryAtom` carried a single unconditional prior $\tau_0(a) = M(\phi_a)$ (`ADR-0020`) without intensional mode or asserting-agent attribution, allowing *Reductio* assumptions and opponent summaries to pollute authorial D-QBAF justification degrees $\tau^*$.
-- Layer 2 `Phase4EntityMaturationRunner` averaged all mention embeddings into a single unconditional centroid to synthesize one flattened canonical description per `L2Entity`, erasing doctrinal shifts across perspectives.
+Without intensional scoping and conception stratification, *Reductio* assumptions and opponent summaries pollute authorial D-QBAF equilibrium acceptability $s^*(a)$, and averaging all mention embeddings into one centroid per `L2Entity` erases doctrinal shifts across frameworks.
 
 ---
 
 ## Decision
 
-We introduce **Layer 3 Intensional & Perspectival Scoping** and **Layer 2 Referent-vs-Conception Stratification** without breaking canonical entity identity or backward-compatible schema normalization:
+We implement **Layer 3 Intensional & Perspectival Scoping** and **Layer 2 Referent-vs-Conception Stratification** (symbols follow [`docs/concepts/notation.md`](../concepts/notation.md)):
 
-### 1. Intensional Mode & Attribution on Layer 3 Atoms
+### 1. Intensional Mode, Attribution & Exegetical Reading Index on Layer 3 Atoms
 
-- Extended `TheoryAtom`, `TheoryAtomArtifact`, `ExtractedComponent`, and `epistemetrics.core.models.TheoryNode` with:
-  - `intensional_mode: Literal["asserted", "attributed", "suppositional", "historical"] = "asserted"` (canonicalized via `IntensionalMode.from_str`, mapping aliases such as `reductio` and `counterfactual` to `suppositional`, and `exegetical` to `attributed`).
-  - `attributed_to: str | None = None` identifying the cited author or school when `intensional_mode == "attributed"`.
-- Updated `LLMACCClassifier`, `ACC_*_PROMPT` templates, lossless `TheoryAtomCodec`, dependency fingerprinting in `build_theory_atom_artifact`, and Neo4j mappers (`theory_atom_to_graph_properties`, `Neo4jStore.get_theory_atoms`) to preserve and index both fields end-to-end.
+- `TheoryAtom`, `TheoryAtomArtifact`, `ExtractedComponent`, and `epistemetrics.core.models.TheoryNode` carry:
+  - `intensional_mode` ($\iota(a) \in \{\text{asserted}, \text{attributed}, \text{suppositional}, \text{historical}\}$, canonicalized via `IntensionalMode.from_str`).
+  - `attributed_to` ($\operatorname{agent}(a) \in \mathcal{P} \cup \{\bot\}$) identifying the cited author or school when `intensional_mode == "attributed"`.
+  - `reading_id` ($\operatorname{rd}(a)$, optional) indexing competing exegetical readings of the same primary passage. Alternative interpretations are linked via structural relation `ALTERNATIVE_READING_OF` (polarity `0`, in $\mathcal{R}_{\text{str}}$ and excluded from $\mathcal{R}_{\text{att}}$) so interpretive pluralism is not fabricated into dialectical attacks.
+- `LLMACCClassifier`, `ACC_*_PROMPT` templates, lossless `TheoryAtomCodec`, dependency fingerprinting in `build_theory_atom_artifact`, and Neo4j mappers (`theory_atom_to_graph_properties`, `Neo4jStore.get_theory_atoms`) preserve and index these fields end-to-end.
 
 ### 2. Perspective-Filtered & Supposition-Aware D-QBAF Evaluation
 
-- Updated `TheoryAtom.effective_base_prior(include_suppositional=..., perspective=...)` and `epistemetrics.epistemic.qbaf.QBAFGradualSemanticsSolver` (including `solve_qbaf_gradual_semantics`, `solve_continuous_qbaf`, `TheoryNetProjector`, and `Phase6Config` / `Phase6Runner`) with:
+- `TheoryAtom.effective_base_prior(include_suppositional=..., perspective=..., base_prior_policy=...)` and `epistemetrics.epistemic.qbaf.QBAFGradualSemanticsSolver` (including `solve_qbaf_gradual_semantics`, `solve_continuous_qbaf`, `TheoryNetProjector`, and `Phase6Config` / `Phase6Runner`) support:
   - `perspective`: `"author"` (or `None`), `"<Agent>"`, `"all"`, or `"suppositional"`.
-  - `isolate_suppositional: bool = True`: Isolates `suppositional` nodes from contributing unconditioned prior mass ($\tilde{\tau}_0(a) = 0$) or spurious support/attack weight into non-suppositional claims.
-  - `isolate_attributed: bool = True`: Prevents cross-perspective `attributed` nodes from contaminating authorial claims unless explicitly evaluating `"all"` or the matching `perspective="<Agent>"` subgraph $\mathcal{G}_{\text{agent}}$.
+  - `isolate_suppositional: bool = True`: Isolates `suppositional` nodes from contributing unconditioned prior mass ($\tilde{\beta}(a) = 0$) or spurious support/attack weight into non-suppositional claims.
+  - `isolate_attributed: bool = True`: Prevents cross-perspective `attributed` nodes from contaminating authorial claims unless explicitly evaluating `"all"` or the matching `perspective="<Agent>"` subgraph $\mathcal{D}_{\text{agent}}$.
 - `QBAFSolverResult` reports `perspective`, `suppositional_isolated_count`, and `perspective_filtered_count` for auditability.
 
 ### 3. Referent-vs-Conception Stratification in Phase 4 Entity Maturation
 
-- Introduced `EntityConception` (`id`, `entity_id`, `perspective`, `description`, `representative_envelopes`, `source_chunk_ids`, `centroid_dispersion`, `confidence`) alongside `L2Entity.conceptions` and `L2Entity.polysemy_variance` (persisted in `LinkedEntityArtifact`, `LinkedEntityCodec`, and Neo4j `upsert_entities` / `_entity_from_row`).
-- Implemented `ConceptionClusterer(Fingerprintable)` inside `Phase4EntityMaturationRunner`:
-  - Normalizes contextual mention embeddings onto the unit hypersphere and measures spherical dispersion $V = 1 - \|\frac{1}{N} \sum_{i=1}^N \hat{\mathbf{e}}_i\|_2$.
-  - When $V > \tau_{\text{polysemy}}$ (`Phase4EntityMaturationConfig.polysemy_variance_threshold`), partitions envelopes along explicit document/theory perspectives (when centroids diverge beyond threshold) or via deterministic farthest-first spherical $k$-means scored by cosine silhouette coherence (`min_silhouette_score`).
-  - Preserves the single unified `L2Entity` as the canonical **Referential Topic** while synthesizing separate `EntityConception` facets per coherent cluster and emitting `EntityConceptionStratified`. Uni-modal entities continue to synthesize a single canonical description with zero overhead.
+- `EntityConception` (`id`, `entity_id`, `perspective`, `description`, `representative_envelopes`, `source_chunk_ids`, `centroid_dispersion`, `confidence`) alongside `L2Entity.conceptions` and `L2Entity.polysemy_variance` (persisted in `LinkedEntityArtifact`, `LinkedEntityCodec`, and Neo4j `upsert_entities` / `_entity_from_row`).
+- `ConceptionClusterer(Fingerprintable)` inside `Phase4EntityMaturationRunner`:
+  - Normalizes contextual mention embeddings onto the unit hypersphere and measures spherical dispersion $v_{\text{poly}}(e) = 1 - \|\frac{1}{N} \sum_{i=1}^N \hat{\mathbf{e}}_i\|_2$.
+  - When $v_{\text{poly}}(e) > \tau_{\text{polysemy}}$ (`Phase4EntityMaturationConfig.polysemy_variance_threshold`), partitions envelopes along explicit document/theory perspectives (when centroids diverge beyond threshold) or via deterministic farthest-first spherical $k$-means scored by cosine silhouette coherence (`min_silhouette_score`).
+  - Preserves the single unified `L2Entity` as the canonical **Referential Topic** while synthesizing separate `EntityConception` facets per coherent cluster and emitting `EntityConceptionStratified`. Uni-modal entities synthesize a single canonical description with zero overhead.
 
 ---
 
@@ -74,7 +73,7 @@ We introduce **Layer 3 Intensional & Perspectival Scoping** and **Layer 2 Refere
 ## Related
 
 - [ISSUE-054: Intensional & Perspectival Scoping](../../issues/archived/09-architecture-workflow-domain/resolved/ISSUE-054-intensional-perspectival-scoping-and-conception-stratification.md)
-- [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md)
+- [Formal Graph Schema & Argumentation Semantics](../concepts/formal_graph_model.md)
 - [Assumptions and Limitations](../concepts/assumptions_limitations.md)
 - [ADR-0003: Coreference Resolution Absorbed into Phase 3b](0003-coreference-absorbed-into-fusion.md)
 - [ADR-0016: Attribute Alignment Deferred](0016-attribute-alignment-deferred.md)

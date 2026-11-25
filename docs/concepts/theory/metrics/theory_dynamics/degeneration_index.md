@@ -1,5 +1,5 @@
 ---
-status: needs_verification
+status: completed
 tags:
   - Metrics
 ---
@@ -8,87 +8,97 @@ tags:
 
 ## Definition & Conceptual Goal
 
-The **Degeneration Index & Immunization Tracking** metric suite measures the Lakatosian degeneration of a scientific research program across historical theory versions and detects ad-hoc immunizing stratagems ([Balzer et al., 1987, pp. 333–338](zotero://select/library/items/24SNSW2B); [Stegmüller, 1976, p. 184](zotero://select/library/items/2WXH9HSL); [Schurz, 2024, pp. 51, 59, 61, 265](zotero://select/library/items/24SNSW2B)).
+The **Degeneration Index & Immunization Tracking** metric suite evaluates Lakatosian research-programme degeneration across chronological theory-net snapshots $T^{(0)}, \dots, T^{(m)}$ and detects ad-hoc$_1$ immunizing stratagems ([Balzer et al., 1987, pp. 333–338](../../../references.md#balzer-1987); [Stegmüller, 1976, p. 184](../../../references.md#stegmuller-1976); [Schurz, 2014](../../../references.md#schurz-2014); [Lakatos, 1978](../../../references.md#lakatos-1978)). See [Epistemology & Philosophy of Science](../../../epistemology.md#42-bounded-degeneration-proxy-episteme-operationalization) and [Canonical Notation](../../../notation.md) for the formal epistemological grounding and domain-scope constraints (empirical scientific theories).
 
-It diagnoses two interconnected layers of non-progressive theory evolution:
+It diagnoses two interconnected levels of non-progressive evolution:
 
-1. **Micro-Level (Node Immunization)**: Detects when a new auxiliary hypothesis or core expansion ($K_{i+1}$) absorbs an empirical anomaly ($a \in I$) but generates zero independent excess empirical content ($\operatorname{Cn}(K_{i+1}) \setminus \{a\} \subseteq \operatorname{Cn}(K_i)$).
-2. **Macro-Level (Programme Degeneration Index $D$)**: Quantifies the ratio of ad-hoc resolved anomalies ([Typ-b failures](../../../glossary.md#misserfolg-typ-b-immunisierter-misserfolg-scheinbarer-erfolg)) to the sum of genuine empirical successes and honest direct empirical refutations ([Typ-a failures](../../../glossary.md#misserfolg-typ-a-direkter-widerspruch)).
-
----
-## Theoretical Grounding & Model Formulation
-
-In Schurz's reconstruction of Lakatos's methodology of scientific research programmes:
-For each historical version $V_j$ of a theory:
-
-* **$S (V_j)$ (Genuine Successes)**: Phenomena successfully predicted or explained without ad-hoc adjustments.
-* **$F_{\text{Typ a}} (V_j)$ (Direct Failures)**: Well-established empirical phenomena that directly contradict $V_j$ logically or probabilistically.
-* **$F_{\text{Typ b}} (V_j)$ (Immunized / Ad-Hoc Failures)**: Phenomena that contradicted a prior version $V_{j-1}$, but were absorbed in $V_j$ via auxiliary hypotheses lacking independent empirical confirmation.
-
-An anomaly resolution $E_{i+1} = \langle K_{i+1}, I_{i+1} \rangle$ is an **ad-hoc immunization** if:
-$$
-\Delta_{\text{anom}} > 0 \quad \text{and} \quad \Delta_{\text{content}} = |\operatorname{Cn} (K_{i+1}) \setminus \operatorname{Cn} (K_i)| = 0
-$$
+1. **Micro-Level (Node Immunization $II$)**: Identifies newly added auxiliary hypotheses ($K_{i+1}$) that resolve an empirical anomaly without generating independent novel empirical content ($\operatorname{Cn}_{\text{str}}(K_{i+1}) \setminus \{a\} \subseteq \operatorname{Cn}_{\text{str}}(K_i)$).
+2. **Macro-Level (Bounded Degeneration Proxy $D_{\text{deg}}$ & Empirical Failure Rate $R_{\text{fail}}$)**: Quantifies the share of ad-hoc$_1$ immunizations relative to corroborated novel predictions ($D_{\text{deg}} \in [0, 1]$), paired with the overall failure share ($R_{\text{fail}} \in [0, 1]$).
 
 ---
-## Mathematical Specification & Graph Formulation
+
+## Theoretical Grounding & Partitioning
+
+For each historical epoch $T^{(j)}$ of an empirical research programme, empirical outcomes are partitioned into four disjoint sets:
+
+* **$\mathsf{Succ}^{\text{nov}}(T^{(j)})$ (Corroborated Novel Predictions)**: Empirically confirmed predictions not already used to construct or calibrate the auxiliary modification (Worrall/Zahar use-novelty).
+* **$\mathsf{Succ}^{\text{acc}}(T^{(j)})$ (Accommodated Explanations)**: Retrodictions or post-hoc fits of already known phenomena; tracked separately so they do not inflate novel progress.
+* **$\mathsf{Fail}_a(T^{(j)})$ ([Direct Refutations / Failure Type a](../../../glossary.md#misserfolg-typ-a-direkter-widerspruch))**: Open empirical anomalies contradicting $T^{(j)}$ without ad-hoc shielding.
+* **$\mathsf{Fail}_b(T^{(j)})$ ([Ad-Hoc$_1$ Immunizations / Failure Type b](../../../glossary.md#misserfolg-typ-b-immunisierter-misserfolg-scheinbarer-erfolg))**: Auxiliary adjustments that absorb prior anomalies while producing zero independent corroborated excess empirical content.
+
+---
+
+## Mathematical Specification
 
 ### Node-Level Immunization Index ($II$)
 
-For an auxiliary modification introducing new laws resolving anomalies:
+For an auxiliary modification resolving $\Delta_{\text{anom}}$ anomalies while yielding $\Delta_{\text{content}} = \Delta |\mathsf{Succ}^{\text{nov}}|$ corroborated novel predictions:
 
-$$II (K_i, K_{i+1}) = \begin{cases} 1.0 & \text{if } \Delta_{\text{anom}} > 0 \land \Delta_{\text{content}} = 0 \\ \frac{\Delta_{\text{anom}}}{\Delta_{\text{anom}} + \Delta_{\text{content}}} & \text{otherwise} \end{cases}$$
+$$II(K_i, K_{i+1}) = \begin{cases} 1.0 & \text{if } \Delta_{\text{anom}} > 0 \land \Delta_{\text{content}} = 0 \\ \dfrac{\Delta_{\text{anom}}}{\Delta_{\text{anom}} + \Delta_{\text{content}}} & \text{otherwise} \end{cases}$$
 
 ### Ratio of Progressive to Immunizing Nodes ($RPI$)
 
-Across the entire evolution sequence $\mathcal{E}$:
+Across an evolution sequence $\mathcal{E}$:
 
-$$RPI (\mathcal{E}) = \frac{|V_{\text{progressive}}|}{|V_{\text{progressive}}| + |V_{\text{immunizing}}|}$$
+$$RPI(\mathcal{E}) = \frac{|V_{\text{progressive}}|}{|V_{\text{progressive}}| + |V_{\text{immunizing}}|}$$
 
-### Schurz's Degeneration Index ($D$)
+### Bounded Degeneration Proxy ($D_{\text{deg}}$) & Empirical Failure Rate ($R_{\text{fail}}$)
 
-For historical theory version $V_j$:
+Implemented in `epistemetrics.epistemic.dynamics.compute_bounded_degeneration_proxy`:
 
-$$D (V_j) = \frac{|F_{\text{Typ b}} (V_j)|}{|S (V_j)| + |F_{\text{Typ a}} (V_j)|}$$
+$$D_{\text{deg}}(T^{(j)}) = \frac{|\mathsf{Fail}_b(T^{(j)})|}{|\mathsf{Succ}^{\text{nov}}(T^{(j)})| + |\mathsf{Fail}_b(T^{(j)})|} \in [0, 1]$$
 
-### Programme Trajectory Trend ($\Delta D$)
+$$R_{\text{fail}}(T^{(j)}) = \frac{|\mathsf{Fail}_a(T^{(j)})| + |\mathsf{Fail}_b(T^{(j)})|}{|\mathsf{Succ}^{\text{nov}}(T^{(j)})| + |\mathsf{Fail}_a(T^{(j)})| + |\mathsf{Fail}_b(T^{(j)})|} \in [0, 1]$$
 
-Over a sequence of versions $V_1, V_2, \dots, V_m$:
+Both ratios return $0.0$ when their denominator is zero. Separating $D_{\text{deg}}$ from $R_{\text{fail}}$ ensures exact monotonicity:
+- $\partial D_{\text{deg}} / \partial |\mathsf{Fail}_b| > 0$ (ad-hoc immunizations strictly increase degeneration),
+- $\partial D_{\text{deg}} / \partial |\mathsf{Succ}^{\text{nov}}| < 0$ (novel empirical successes strictly decrease degeneration),
+- $\partial D_{\text{deg}} / \partial |\mathsf{Fail}_a| = 0$ (direct unresolved refutations increase $R_{\text{fail}}$ without artificially lowering $D_{\text{deg}}$).
 
-$$\Delta D = \frac{D (V_m) - D (V_1)}{m - 1}$$
+### Programme Trajectory Trend ($\Delta D_{\text{deg}}$)
 
-* $\Delta D > 0$: **Degenerating Research Programme** (ad-hoc immunizations accumulate faster than real progress).
-* $\Delta D \le 0$: **Progressive Research Programme** (genuine successes outpace anomalies).
+Over a chronological sequence $T^{(0)}, T^{(1)}, \dots, T^{(m)}$:
+
+$$\Delta D_{\text{deg}} = D_{\text{deg}}(T^{(m)}) - D_{\text{deg}}(T^{(0)})$$
+
+* $\Delta D_{\text{deg}} > 0$: Increasing ad-hoc immunization burden across epochs.
+* $\Delta D_{\text{deg}} \le 0$: Stable or improving ratio of novel predictions to ad-hoc adjustments.
 
 ---
+
 ## Measurement & Graph Implementation
 
-1. **Detect Ad-Hoc Nodes**:
-   - Trace incoming `:RESOLVES_ANOMALY` edges connected to new auxiliary hypothesis nodes.
-   - Query for outgoing `:PREDICTS_NOVEL` edges. Auxiliary nodes with incoming anomaly resolutions but zero novel predictions are labeled `:AdHocImmunization` (Typ-b failure).
-2. **Compute Version Degeneration ($D$)**:
+1. **Detect Ad-Hoc$_1$ Nodes**:
+   - Identify newly added auxiliary hypotheses carrying `:RESOLVES_ANOMALY` links but zero outgoing `:PREDICTS_NOVEL` links (`is_adhoc` / `failure_type = "b"`).
+2. **Compute Bounded Degeneration Proxy & Failure Rate**:
    ```cypher
    MATCH (v:TheoryVersion {id: $version_id})
-   OPTIONAL MATCH (v)-[:HAS_SUCCESS]->(s:Success)
+   OPTIONAL MATCH (v)-[:HAS_NOVEL_SUCCESS]->(s:Success)
    OPTIONAL MATCH (v)-[:HAS_FAILURE_A]->(fa:FailureTypA)
    OPTIONAL MATCH (v)-[:HAS_FAILURE_B]->(fb:FailureTypB)
-   WITH count(DISTINCT s) AS s_count, count(DISTINCT fa) AS fa_count, count(DISTINCT fb) AS fb_count
-   RETURN fb_count * 1.0 / (s_count + fa_count + 1e-6) AS degeneration_index
+   WITH count(DISTINCT s) AS n_nov, count(DISTINCT fa) AS n_fa, count(DISTINCT fb) AS n_fb
+   RETURN
+     CASE WHEN (n_nov + n_fb) = 0 THEN 0.0 ELSE toFloat(n_fb) / (n_nov + n_fb) END AS d_deg,
+     CASE WHEN (n_nov + n_fa + n_fb) = 0 THEN 0.0 ELSE toFloat(n_fa + n_fb) / (n_nov + n_fa + n_fb) END AS r_fail
    ```
 
 ---
+
 ## Diagnostic & Metascientific Value
 
-| Measurement Indicator        | Programme Dynamic        | Metascientific Interpretation                                         |
-|:-----------------------------|:-------------------------|:----------------------------------------------------------------------|
-| $\Delta D \le 0, D < 0.3$    | Progressive Programme    | Healthy Lakatosian growth; true empirical successes dominate.         |
-| $\Delta D \approx 0, D \sim 0.5$ | Stagnant Programme   | Defensive maintenance; new predictions roughly balance anomaly patches.|
-| $\Delta D > 0, D > 1.0$      | Degenerating Programme   | Defensive crisis; majority of modifications are ad-hoc immunizations. |
-| $II = 1.0$ (Node Level)      | Pure Immunizing Patch    | Auxiliary node shields theory from falsification without advancing science. |
+| Measurement Indicator | Programme Dynamic | Metascientific Interpretation |
+| :--- | :--- | :--- |
+| Hard core invariant, $D_{\text{deg}} < 0.3$, $R_{\text{fail}} < 0.5$ | Progressive Programme | Corroborated novel predictions dominate; auxiliary adjustments remain content-increasing. |
+| Hard core invariant, $0.3 \le D_{\text{deg}} < 0.5$ | Transitional / Contested | Novel predictions still outnumber ad-hoc patches, but defensive adjustments are rising. |
+| $D_{\text{deg}} \ge 0.5$ or $R_{\text{fail}} \ge 0.5$ | Degenerating Programme | Ad-hoc immunizations or unresolved refutations equal or exceed corroborated novel predictions. |
+| Hard core mutated | Programme Rupture | Foundational core laws were altered or dropped; continuity of the research programme is broken. |
+| $II = 1.0$ (Node Level) | Pure Immunizing Patch | Auxiliary node absorbs an anomaly without generating independent novel empirical content. |
 
 ---
+
 ## Grounding References
 
-* **[Schurz, 2024]** Schurz, G. (2024). *Philosophy of Science: A Unified Approach*. Routledge, pp. 51, 59, 61, 265.
-* **[Balzer et al., 1987]** Balzer, W., Moulines, C. U., & Sneed, J. D. (1987). *An Architectonic for Science*. Reidel Publishing, pp. 333–338.
-* **[Stegmüller, 1976]** Stegmüller, W. (1976). *The Structure and Dynamics of Theories*. Springer-Verlag, p. 184.
+* **[Lakatos, 1978]** [Lakatos, I. (1978)](../../../references.md#lakatos-1978). *The Methodology of Scientific Research Programmes: Philosophical Papers, Volume 1*. Cambridge University Press.
+* **[Schurz, 2014]** [Schurz, G. (2014)](../../../references.md#schurz-2014). *Philosophy of Science: A Unified Approach*. Routledge.
+* **[Balzer et al., 1987]** [Balzer, W., Moulines, C. U., & Sneed, J. D. (1987)](../../../references.md#balzer-1987). *An Architectonic for Science*. Reidel Publishing, pp. 333–338.
+* **[Stegmüller, 1976]** [Stegmüller, W. (1976)](../../../references.md#stegmuller-1976). *The Structure and Dynamics of Theories*. Springer-Verlag, p. 184.

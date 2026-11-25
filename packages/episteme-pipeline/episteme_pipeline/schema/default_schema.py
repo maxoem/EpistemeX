@@ -68,7 +68,7 @@ L2_RELATION_DEFINITIONS: dict[str, str] = {
     "PART_OF": "Mereological containment or constituent sub-component.",
     "SUBCLASS_OF": "Taxonomic specialization or categorical subsumption.",
     "SUPPORTS": "Entity evidence or premise positively contributes to another.",
-    "REFUTES": "Entity evidence or counterargument denies or falsifies another.",
+    "REFUTES": "Entity counterargument challenges or opposes another (non-factive).",
     "IMPLIES": "Logical, causal, or inferential entailment from source to target.",
     "CONTRADICTS": "Direct propositional inconsistency or mutual exclusivity.",
 }
@@ -81,6 +81,8 @@ L3_COMPONENT_TYPES: list[str] = [
 ]
 L3_RELATION_TYPES: list[str] = [
     "ATTACKS",
+    "REBUTS",
+    "UNDERMINES",
     "SUPPORTS_ARG",
     "UNDERCUTS",
     "BACKS",
@@ -91,27 +93,31 @@ L3_RELATION_TYPES: list[str] = [
     "DEDUCES",
     "COHERES_WITH",
     "INHIBITS",
+    "ALTERNATIVE_READING_OF",
 ]
 
 L3_COMPONENT_DEFINITIONS: dict[str, str] = {
-    "ObservationUnit": "Singular or localized statements containing exclusively observational terms. Act as raw data nodes.",
-    "EmpiricalStatement": "Statements containing only logical and empirical concepts.",
-    "TheoreticalHypothesis": "Statements containing theoretical concepts or whose quantifiers have theoretical scope. These represent core laws or abstract hypotheses.",
-    "CoreExpansion": "Special auxiliary laws and constraints that form a shifting superstructure around the stable theory core.",
+    "ObservationUnit": "Singular or localized statements containing pre-theoretical terms (evidential base B).",
+    "EmpiricalStatement": "General statements formulated in logical and pre-theoretical vocabulary (evidential base B).",
+    "TheoreticalHypothesis": "Statements containing T-theoretical terms or theoretical quantifiers (partition H).",
+    "CoreExpansion": "Specialized auxiliary laws and constraints formulating specializations or protective-belt revisions.",
 }
 
 L3_RELATION_DEFINITIONS: dict[str, str] = {
-    "ATTACKS": "Argument component attacks another (critical relationship).",
-    "SUPPORTS_ARG": "Argument component provides support for another.",
-    "UNDERCUTS": "Argument component undermines the inference of another.",
-    "BACKS": "Argument component provides warrant backing for an inference step.",
-    "SPECIALIZES": "Directed vertical edges forming a hierarchy where a specialized node inherits and restricts properties from its parent.",
-    "CONSTRAINS": "Lateral/horizontal edges crossing overlapping applications to ensure intrinsic properties remain constant.",
-    "REDUCES_TO": "Intertheoretical links connecting entirely separate theories, including strict reduction from older to newer theories.",
-    "ENTAILS": "Intertheoretical links connecting entirely separate theories, including strict reduction from older to newer theories.",
-    "DEDUCES": "Logical entailments between nodes such as Explanation Patterns (Erklärungsschema) and Falsification Patterns (Falsifikationsschema).",
-    "COHERES_WITH": "Positive (excitatory) connections between hypotheses that explain evidence, or co-hypotheses that jointly explain a fact.",
-    "INHIBITS": "Negative (inhibitory) weights representing incoherence between logically contradictory or competing hypotheses.",
+    "ATTACKS": "Argument component attacks another (general dialectical opposition).",
+    "REBUTS": "Argument component challenges the conclusion of another argument.",
+    "UNDERMINES": "Argument component challenges a premise of another argument.",
+    "SUPPORTS_ARG": "Argument component provides defeasible evidential or inferential support for another.",
+    "UNDERCUTS": "Argument component attacks the inference warrant connecting premises to a conclusion.",
+    "BACKS": "Argument component provides Toulmin backing strengthening an inference warrant.",
+    "SPECIALIZES": "Directed vertical Hasse edge encoding BMS specialization from specialized element to parent.",
+    "CONSTRAINS": "Intra-core global constraint requiring parameter invariance across overlapping applications.",
+    "REDUCES_TO": "Intertheoretical link connecting distinct theories via structural reduction.",
+    "ENTAILS": "Non-defeasible deductive entailment where the conclusion follows logically from the premises.",
+    "DEDUCES": "Deductive derivation linking conjunctive premises to a derived consequence.",
+    "COHERES_WITH": "Excitatory explanatory coherence link (ECHO lens).",
+    "INHIBITS": "Inhibitory incompatibility link between competing hypotheses (ECHO lens).",
+    "ALTERNATIVE_READING_OF": "Exegetical structural link between competing scholarly interpretations of the same passage (non-attack).",
 }
 
 RELATION_POLARITIES: dict[str, int] = {
@@ -124,6 +130,8 @@ RELATION_POLARITIES: dict[str, int] = {
     "IMPLIES": 1,
     "CONTRADICTS": -1,
     "ATTACKS": -1,
+    "REBUTS": -1,
+    "UNDERMINES": -1,
     "SUPPORTS_ARG": 1,
     "UNDERCUTS": -1,
     "BACKS": 1,
@@ -134,7 +142,14 @@ RELATION_POLARITIES: dict[str, int] = {
     "DEDUCES": 1,
     "COHERES_WITH": 1,
     "INHIBITS": -1,
+    "ALTERNATIVE_READING_OF": 0,
 }
+
+SEMANTIC_SENTENCE_TYPES: list[str] = [
+    "PURE_THEORETICAL",
+    "MIXED",
+    "EMPIRICAL",
+]
 
 
 COMPONENT_PARTITIONS: dict[str, str] = {
@@ -214,6 +229,9 @@ class SchemaConfig(BaseModel):
     scope_types: list[str] = Field(default_factory=lambda: list(SCOPE_TYPES))
     epistemic_statuses: list[str] = Field(
         default_factory=lambda: list(EPISTEMIC_STATUSES)
+    )
+    semantic_sentence_types: list[str] = Field(
+        default_factory=lambda: list(SEMANTIC_SENTENCE_TYPES)
     )
 
     def node_types_str(self) -> str:

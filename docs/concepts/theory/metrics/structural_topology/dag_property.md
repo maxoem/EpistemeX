@@ -9,7 +9,7 @@ tags:
 ## Definition & Conceptual Goal
 
 The **Non-Cyclic Form (DAG Property)** metric assesses whether the intra-theory specialization and derivation relations
-strictly form a **Directed Acyclic Graph** ([Balzer et al., 1987, pp. 172–173](zotero://select/library/items/24SNSW2B)).
+strictly form a **Directed Acyclic Graph** ([Balzer et al., 1987, pp. 172–173](../../../references.md#balzer-1987)).
 
 In formal philosophy of science and epistemology, specializations $\alpha$ and logical derivations must be asymmetric
 and strictly irreflexive. Circular specialization ($T_1 \alpha T_2 \alpha \dots \alpha T_1$) represents a fatal logical
@@ -30,7 +30,7 @@ Consequently, a valid theory-net graph $G = (V, E_{spec})$ is mathematically req
 ---
 ## Mathematical Specification & Graph Formulation
 
-Let $G$ be a theory graph as defined in the **[Formal Graph Schema (TheoryNet)](../../../formal_graph_model.md)**.
+Let $G$ be a theory graph as defined in the **[Formal Graph Schema & Argumentation Semantics](../../../formal_graph_model.md)**.
 We evaluate acyclicity on the subgraph restricted to hierarchical edge types, i.e., where $\lambda_e(e) \in \{\mathsf{specializes}, \mathsf{derives\_from}, \mathsf{explains}\}$.
 
 ### Binary Acyclicity Check

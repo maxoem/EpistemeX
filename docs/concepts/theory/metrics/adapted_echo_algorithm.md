@@ -5,37 +5,32 @@ tags:
   - Metrics
 ---
 
-# The LPG-ECHO Algorithm
+# The Symmetrized LPG-ECHO Lens
 
-## Overview & Inspiration
+## Overview & Role in Episteme
 
-The **LPG-ECHO Algorithm** (_echo for large property graphs_) is the central computational engine for resolving belief
-propagation, conflict resolution, and global coherence within our theory graph. It is heavily inspired by Paul Thagard's
-original ECHO connectionist architecture (Thagard, 1989), which modeled explanatory coherence as a parallel constraint
-satisfaction problem.
+The **Symmetrized LPG-ECHO Lens** (*ECHO for Large Property Graphs*) is a **secondary analytical coherence lens** complementing Episteme's primary directed **Continuous D-QBAF** engine ([Formal Graph Schema & Argumentation Semantics](../../formal_graph_model.md#3-uncertainty-ontology-and-d-qbaf-gradual-semantics)). Grounded in Paul Thagard's Theory of Explanatory Coherence ([Thagard, 1989](../../references.md#thagard-1989); [Thagard, 1992](../../references.md#thagard-1992)), it evaluates global explanatory constraint satisfaction via parallel activation relaxation over an explicitly symmetrized projection of the Layer 3 Dialectical Argument Graph ($\mathcal{D}$).
 
-While Thagard's original ECHO was designed for small-scale cognitive modeling of scientific revolutions, our *LPG-ECHO*
-is scaled for large, heterogeneous property graphs (like Neo4j) and incorporates multi-relational weights (e.g.,
-analogical, hierarchical, and varying claim strengths like MAJOR/MINOR).
+## Explicit Symmetrization Map ($\mathcal{D} \to \text{ECHO}$)
 
-By running a synchronous or asynchronous relaxation loop over the entire graph, the algorithm assigns a continuous
-epistemic status (activation) to every single node. This means that instead of manually computing dozens of local
-metrics, the LPG-ECHO algorithm organically and implicitly captures the complex interplay of numerous epistemic
-virtues simultaneously.
+Because Episteme's Layer 3 graph $\mathcal{D}$ is directed and bipartite (carrying conjunctive premise warrants $w_k \in \mathcal{W}$), projecting into ECHO applies a deterministic symmetrization map (`epistemetrics.epistemic.lenses.project_to_echo_network`):
+
+- **Explanatory Support with Co-Hypothesis Dilution (TEC Principle E2):** Each supporting warrant with $m = |\operatorname{Prem}(w_k)|$ conjunctive premises explaining conclusion $q$ creates symmetric excitatory weights $w_{pq}^{\text{echo}} = (\epsilon^+ / m) W_{w_k}$ between each premise $p \in \operatorname{Prem}(w_k)$ and $q$, and between every pair of co-hypotheses $(p, p')$.
+- **Dialectical Contradiction / Attack (TEC Principle E5):** Each attacking warrant contributes symmetric inhibitory weight $w_{pq}^{\text{echo}} = -\epsilon^- W_{w_k}$.
+- **Defeasible Data Priority (TEC Principle E4):** Evidential base atoms (`ObservationUnit` / `EMPIRICAL`) receive excitatory input from a fixed special evidence unit clamped at $+1.0$ (rather than hard-clamping observation nodes themselves, preserving defeasibility under overwhelming contradiction).
+- **Structural Exclusions:** Polarity-`0` structural relations (including `ALTERNATIVE_READING_OF`) are excluded from the signed ECHO matrix.
 
 ---
 
-## The Core Mechanism
+## Relaxation Dynamics & Global Harmony
 
-In the LPG-ECHO model, the graph is treated as a neural network:
+In the symmetrized ECHO network:
 
-* **Nodes (Units)**: Represent propositions, hypotheses, axioms, and empirical evidence. Evidence nodes are clamped to
-  positive activation.
-* **Edges (Weights)**: Excitatory weights ($w > 0$) for explanatory, deductive, or supportive relationships. Inhibitory
-  weights ($w < 0$) for contradictions, mutually exclusive hypotheses, or falsifications.
-* **Activation Loop**: At each discrete time step $t$, a node updates its activation $a_j (t) \in [-1, 1]$ based on the
-  weighted sum of activations from its neighbors, minus a decay factor.
-* **Convergence**: The system relaxes into a state of maximum "Harmony" (global energy minimum).
+* **Nodes (Units)**: Represent propositions, hypotheses, axioms, and evidential base units with continuous activation $a_j^{\text{echo}}(t) \in [-1, 1]$.
+* **Edges (Symmetric Weights)**: Undirected excitatory ($w_{ij}^{\text{echo}} > 0$) and inhibitory ($w_{ij}^{\text{echo}} < 0$) weights with $w_{ij}^{\text{echo}} = w_{ji}^{\text{echo}}$.
+* **Bounded Synchronous Update**: At each iteration $t$, with $\text{net}_j(t) = \sum_i w_{ij}^{\text{echo}} a_i^{\text{echo}}(t)$:
+  $$a_j^{\text{echo}}(t+1) = a_j^{\text{echo}}(t)(1 - \theta) + \begin{cases} \text{net}_j(t)\,(1 - a_j^{\text{echo}}(t)) & \text{if } \text{net}_j(t) > 0 \\ \text{net}_j(t)\,(a_j^{\text{echo}}(t) + 1) & \text{if } \text{net}_j(t) \le 0 \end{cases}$$
+* **Global Harmony ($\mathcal{H}_{\text{echo}}$)**: At convergence $t^*$, the Hopfield-type global coherence score is $\mathcal{H}_{\text{echo}}(t^*) = \sum_{i,j} w_{ij}^{\text{echo}} a_i^{\text{echo}}(t^*) a_j^{\text{echo}}(t^*)$.
 
 ---
 
@@ -108,5 +103,6 @@ metrics. By running this single algorithm, we implicitly collect or account for 
 
 ## Grounding References
 
-* **[Thagard, 1989]** Thagard, P. (1989). Explanatory Coherence. *Behavioral and Brain Sciences*, 12 (3), 435–467.
-* **[Schurz, 2024]** Schurz, G. (2024). *Philosophy of Science: A Unified Approach*. Routledge.
+* **[Thagard, 1989]** [Thagard, P. (1989)](../../references.md#thagard-1989). Explanatory Coherence. *Behavioral and Brain Sciences*, 12(3), 435–467.
+* **[Thagard, 1992]** [Thagard, P. (1992)](../../references.md#thagard-1992). *Conceptual Revolutions*. Princeton University Press.
+* **[Schurz, 2014]** [Schurz, G. (2014)](../../references.md#schurz-2014). *Philosophy of Science: A Unified Approach*. Routledge.

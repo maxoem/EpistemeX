@@ -14,7 +14,7 @@ and applies hierarchical community detection to detect theoretical paradigms.
 
 ## Theoretical Foundation
 
-See [Formal Graph Schema (TheoryNet)](../../concepts/formal_graph_model.md)
+See [Formal Graph Schema & Argumentation Semantics](../../concepts/formal_graph_model.md)
 and [ADR 0005: Two-Pass Fusion Strategy](../../adr/0005-two-pass-fusion-strategy.md):
 
 - Argument component clustering via dense vector cosine similarity
@@ -124,6 +124,6 @@ Configuration is managed via `Phase5Config` in `pipeline/config.py`:
 
 ## Related
 
-- **Theory**: [Formal Graph Schema (TheoryNet)](../../concepts/formal_graph_model.md)
+- **Theory**: [Formal Graph Schema & Argumentation Semantics](../../concepts/formal_graph_model.md)
 - **Previous Phase**: [Phase 4b: Argument Mining](../4_argument_mining/)
 - **Next Phase**: [Phase 6: TheoryNet Projection](../6_theorynet/)

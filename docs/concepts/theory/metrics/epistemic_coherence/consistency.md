@@ -10,7 +10,7 @@ tags:
 
 The **Consistency** metric evaluates whether theoretical concepts and relational definitions maintain logical and
 semantic coherence across documents and argumentative contexts
-([Balzer et al., 1987, p. xviii](zotero://select/library/items/24SNSW2B); [Schurz, 2024, sec. 5.2](zotero://select/library/items/24SNSW2B)).
+([Balzer et al., 1987, p. xviii](../../../references.md#balzer-1987); [Schurz, 2014, sec. 5.2](../../../references.md#schurz-2014)).
 
 It detects **semantic drift** and **polysemy**, ensuring that a theoretical term (e.g., "mass", "entropy", "utility")
 does not implicitly switch definitions or adopt mutually conflicting axiomatizations within the same reconstructed

@@ -11,7 +11,7 @@ tags:
 The **Node Activation (Acceptability)** metric represents the final, equilibrium epistemic status—acceptance, rejection,
 or neutrality—of an individual proposition or hypothesis after global network relaxation. Here, "final" means the steady
 state reached when the network converges, defined mathematically as $a_i^* = \lim_{t \to \infty} a_i (t)$
-([Thagard, 1989, p. 439](zotero://select/library/items/8F6MW586); [Schurz, 2024, sec. 5.3](zotero://select/library/items/24SNSW2B)).
+([Thagard, 1989, p. 439](../../../references.md#thagard-1989); [Schurz, 2014, sec. 5.3](../../../references.md#schurz-2014)).
 
 Rather than evaluating hypotheses in isolation, node activation models how empirical data cascades through explanatory,
 analogical, and contradictory links until each node settles into a continuous equilibrium value $a_i^* \in [-1, 1]$.

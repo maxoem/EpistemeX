@@ -20,7 +20,7 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 from scipy.integrate import solve_ivp
 
-from epistemetrics.core.models import RelationType, TheoryEdge, TheoryNode
+from epistemetrics.core.models import NodeType, RelationType, TheoryEdge, TheoryNode
 from epistemetrics.graph.theory_graph import TheoryGraph
 
 _VALID_T_NORMS = frozenset({"product", "godel"})
@@ -144,20 +144,59 @@ class GradualSemanticsModel(str, Enum):
 
 
 class WeightNormalizationMode(str, Enum):
-    """Weight normalization mode for QBAF iterative solving.
+    """Weight normalization mode for QBAF solving.
 
     Attributes
     ----------
     CALIBRATED_MODAL : str
-        Continuous edge weights modulated by inferential warrant, stance
-        probability, and edge tenability (retaining optional legacy
-        ``modal_strength`` factor on standalone ``TheoryEdge`` models).
+        Continuous edge weights modulated by inferential warrant, admissibility
+        gating, and edge tenability.
     UNWEIGHTED_BINARY : str
-        Standard uncalibrated binary edge weights (:math:`w = 1.0` for all active edges).
+        Unit binary edge weights (:math:`w = 1.0` for all active edges).
     """
 
     CALIBRATED_MODAL = "calibrated_modal"
     UNWEIGHTED_BINARY = "unweighted_binary"
+
+
+class BasePriorPolicy(str, Enum):
+    """Policy deriving atom base prior :math:`\\beta(a) \\in [0, 1]` before propagation.
+
+    Decouples descriptive authorial commitment :math:`M_{\\text{mod}}(\\phi_a)`
+    from normative epistemic priors so evaluative acceptability does not track
+    rhetorical hedging conventions.
+
+    Attributes
+    ----------
+    DESCRIPTIVE_AUTHORIAL : str
+        Sets :math:`\\beta(a) = M_{\\text{mod}}(\\phi_a)` (or node ``base_score``)
+        to reconstruct authorial commitment weights within a text.
+    NORMATIVE_UNIFORM : str
+        Assigns a uniform neutral prior (default ``0.5``) to all active atoms.
+    NORMATIVE_DATA_PRIORITY : str
+        Assigns a defeasible Data-Priority prior (default ``0.8``) to evidential
+        base atoms (:math:`B`) and a neutral prior (default ``0.5``) to
+        theoretical hypotheses (:math:`H`).
+    """
+
+    DESCRIPTIVE_AUTHORIAL = "descriptive_authorial"
+    NORMATIVE_UNIFORM = "normative_uniform"
+    NORMATIVE_DATA_PRIORITY = "normative_data_priority"
+
+
+_EVIDENTIAL_NODE_TYPES: frozenset[str] = frozenset(
+    {
+        "evidence",
+        "observationunit",
+        "observation_unit",
+        "empiricalstatement",
+        "empirical_statement",
+        "observation",
+        "empiricalevidence",
+        "empirical_evidence",
+        "datum",
+    }
+)
 
 
 class QBAFSolverResult(BaseModel, Mapping[str, float]):
@@ -252,7 +291,11 @@ class QBAFSolverResult(BaseModel, Mapping[str, float]):
     )
     warrant_states: dict[str, float] = Field(
         default_factory=dict,
-        description="Converged justification degrees s(w_k) for reified TheoryInference warrants.",
+        description="Converged validity degrees s_W(xi_k) for reified inference warrants.",
+    )
+    base_prior_policy: BasePriorPolicy = Field(
+        default=BasePriorPolicy.DESCRIPTIVE_AUTHORIAL,
+        description="Base prior policy applied before dialectical propagation.",
     )
 
     @property
@@ -676,6 +719,7 @@ class WeightedQuadraticEnergySolver:
                     "total_weight_of_evidence": empty,
                     "volatility_index": empty,
                     "warrant_states": empty,
+                    "final_residual": np.array([0.0], dtype=np.float64),
                 },
             )
 
@@ -704,8 +748,9 @@ class WeightedQuadraticEnergySolver:
                 elif 0 <= spec.target_idx < n:
                     g_nx.add_edge(w_node, spec.target_idx)
 
+        final_residual = 0.0
         if nx.is_directed_acyclic_graph(g_nx):
-            # Fast-path: O(|V| + |W| + |E|) closed-form topological evaluation (Proposition 5)
+            # Exact closed-form evaluation along topological order in O(|A| + |W| + |E|)
             topo_order = list(nx.topological_sort(g_nx))
             s_final = self._solve_dag_closed_form(
                 w, g_supp_t, g_att_t, topo_order, hyperedges=hyper_list
@@ -713,7 +758,7 @@ class WeightedQuadraticEnergySolver:
             s_w = self._compute_warrant_states(s_final, hyper_list)
             converged = True
         else:
-            # Cyclic topology: Adaptive continuous ODE integration over [atoms, warrants]
+            # Cyclic topology: adaptive continuous ODE integration over [atoms, warrants]
             w_warrants = (
                 np.array(
                     [np.clip(h.base_warrant, 0.0, 1.0) for h in hyper_list],
@@ -724,10 +769,12 @@ class WeightedQuadraticEnergySolver:
             )
             s0 = np.concatenate([w, w_warrants]) if m > 0 else w.copy()
             ds0 = self._derivatives(0.0, s0, w, g_supp_t, g_att_t, hyper_list)
+            init_residual = float(np.max(np.abs(ds0)))
 
-            if np.max(np.abs(ds0)) < self.atol:
+            if init_residual < self.atol:
                 s_final = np.clip(s0[:n], 0.0, 1.0)
                 s_w = np.clip(s0[n:], 0.0, 1.0)
+                final_residual = init_residual
                 converged = True
             else:
                 event_tol = max(self.atol, 1e-4)
@@ -761,7 +808,7 @@ class WeightedQuadraticEnergySolver:
                     events=stationary_event,
                 )
 
-                # Fallback to implicit Radau if stiffness or divergence is encountered
+                # Fallback to implicit Radau if stiffness or integration failure occurs
                 if not sol.success or sol.status < 0:
                     sol = solve_ivp(
                         fun=self._derivatives,
@@ -774,15 +821,23 @@ class WeightedQuadraticEnergySolver:
                         events=stationary_event,
                     )
 
-                s_final = np.clip(sol.y[:n, -1], 0.0, 1.0)
+                y_end = sol.y[:, -1]
+                ds_end = self._derivatives(
+                    float(sol.t[-1]), y_end, w, g_supp_t, g_att_t, hyper_list
+                )
+                final_residual = float(np.max(np.abs(ds_end)))
+                s_final = np.clip(y_end[:n], 0.0, 1.0)
                 s_w = (
-                    np.clip(sol.y[n : n + m, -1], 0.0, 1.0)
+                    np.clip(y_end[n : n + m], 0.0, 1.0)
                     if m > 0
                     else np.array([], dtype=np.float64)
                 )
-                converged = bool(sol.status >= 0)
+                converged = bool(
+                    sol.success
+                    and (sol.status == 1 or final_residual <= max(event_tol * 2.0, 1e-3))
+                )
 
-        # Compute orthogonal telemetry: Weight of Evidence E_total and Volatility V
+        # Compute evidentiary weight Wt and support/attack controversy volatility V
         e_supp = np.array(g_supp_t @ s_final, dtype=np.float64)
         e_att = np.array(g_att_t @ s_final, dtype=np.float64)
         for k, spec in enumerate(hyper_list):
@@ -799,9 +854,14 @@ class WeightedQuadraticEnergySolver:
                 e_att[spec.target_idx] += contrib
 
         e_total = e_supp + e_att
-        denom = 1.0 + e_total
-        safe_denom = np.where(denom > 0, denom, 1.0)
-        volatility = (e_total / safe_denom) * (1.0 - 2.0 * np.abs(s_final - 0.5))
+        safe_total = np.where(e_total > 0.0, e_total, 1.0)
+        weight_of_evidence = np.where(e_total > 0.0, e_total / (1.0 + e_total), 0.0)
+        controversy = np.where(
+            e_total > 0.0,
+            1.0 - np.abs(e_supp - e_att) / safe_total,
+            0.0,
+        )
+        volatility = weight_of_evidence * controversy
 
         telemetry = {
             "support_energy": e_supp,
@@ -809,6 +869,7 @@ class WeightedQuadraticEnergySolver:
             "total_weight_of_evidence": e_total,
             "volatility_index": volatility,
             "warrant_states": s_w,
+            "final_residual": np.array([final_residual], dtype=np.float64),
         }
         return s_final, converged, telemetry
 
@@ -871,10 +932,15 @@ class QBAFGradualSemanticsSolver:
         isolate_suppositional: bool = True,
         isolate_attributed: bool = True,
         t_norm: Literal["product", "godel"] = "product",
+        base_prior_policy: BasePriorPolicy | str = BasePriorPolicy.DESCRIPTIVE_AUTHORIAL,
+        normative_hypothesis_prior: float = 0.5,
+        normative_data_prior: float = 0.8,
         continuous_solver: WeightedQuadraticEnergySolver | None = None,
     ) -> None:
         if isinstance(semantics_model, str):
             semantics_model = GradualSemanticsModel(semantics_model.lower())
+        if isinstance(base_prior_policy, str):
+            base_prior_policy = BasePriorPolicy(base_prior_policy.strip().lower())
         self.semantics_model = semantics_model
         self.max_iterations = max_iterations
         self.tolerance = tolerance
@@ -888,6 +954,11 @@ class QBAFGradualSemanticsSolver:
         self.isolate_suppositional = isolate_suppositional
         self.isolate_attributed = isolate_attributed
         self.t_norm = _validate_t_norm(t_norm)
+        self.base_prior_policy = base_prior_policy
+        self.normative_hypothesis_prior = float(
+            max(0.0, min(1.0, normative_hypothesis_prior))
+        )
+        self.normative_data_prior = float(max(0.0, min(1.0, normative_data_prior)))
         self.continuous_solver = continuous_solver or WeightedQuadraticEnergySolver(
             rtol=self.tolerance,
             atol=max(self.tolerance * 0.01, 1e-6),
@@ -917,6 +988,9 @@ class QBAFGradualSemanticsSolver:
             "isolate_suppositional": self.isolate_suppositional,
             "isolate_attributed": self.isolate_attributed,
             "t_norm": self.t_norm,
+            "base_prior_policy": self.base_prior_policy.value,
+            "normative_hypothesis_prior": self.normative_hypothesis_prior,
+            "normative_data_prior": self.normative_data_prior,
             "continuous_solver": self.continuous_solver.fingerprint(),
         }
 
@@ -1104,37 +1178,9 @@ class QBAFGradualSemanticsSolver:
         perspective: str | None = None,
         isolate_suppositional: bool | None = None,
         isolate_attributed: bool | None = None,
+        base_prior_policy: BasePriorPolicy | str | None = None,
     ) -> QBAFSolverResult:
-        """Compute equilibrium justification degrees over an argumentation network.
-
-        Parameters
-        ----------
-        nodes : TheoryGraph or Mapping of str to float or Sequence of TheoryNode/dict/tuple
-            Argument nodes with initial prior plausibilities or complete TheoryGraph container.
-        edges : Sequence of TheoryEdge, dict, or tuple, optional
-            Dialectical edges connecting nodes. Inferred from TheoryGraph if omitted.
-        normalization_mode : WeightNormalizationMode or str, default CALIBRATED_MODAL
-            Weight calculation mode ('calibrated_modal' or 'unweighted_binary').
-        admissibility_mode : Literal["hard", "soft"], optional
-            Gating mode ('hard' pruning vs. 'soft' sigmoidal relaxation). Defaults to instance mode.
-        tau_p : float, optional
-            Stance probability threshold override.
-        tau_c : float, optional
-            Model confidence threshold override.
-        continuous : bool, optional
-            Whether to solve using continuous WeightedQuadraticEnergySolver. Defaults to instance setting.
-        perspective : str or None, optional
-            Optional perspective filter overriding instance setting.
-        isolate_suppositional : bool or None, optional
-            Optional supposition-isolation override.
-        isolate_attributed : bool or None, optional
-            Optional attribution-isolation override.
-
-        Returns
-        -------
-        QBAFSolverResult
-            Equilibrium justification states and convergence statistics.
-        """
+        """Compute equilibrium justification degrees over an argumentation network."""
         if continuous is True or (continuous is None and self.use_continuous):
             return self.solve_continuous(
                 nodes=nodes,
@@ -1146,11 +1192,17 @@ class QBAFGradualSemanticsSolver:
                 perspective=perspective,
                 isolate_suppositional=isolate_suppositional,
                 isolate_attributed=isolate_attributed,
+                base_prior_policy=base_prior_policy,
             )
 
         if isinstance(normalization_mode, str):
             normalization_mode = WeightNormalizationMode(normalization_mode.lower())
 
+        eff_policy = (
+            BasePriorPolicy(base_prior_policy.strip().lower())
+            if isinstance(base_prior_policy, str)
+            else (base_prior_policy or self.base_prior_policy)
+        )
         active_adm_mode = admissibility_mode or self.admissibility_mode
         active_tau_p = tau_p if tau_p is not None else self.tau_p
         active_tau_c = tau_c if tau_c is not None else self.tau_c
@@ -1174,6 +1226,7 @@ class QBAFGradualSemanticsSolver:
             perspective=perspective,
             isolate_suppositional=isolate_suppositional,
             isolate_attributed=isolate_attributed,
+            base_prior_policy=eff_policy,
         )
 
         node_list = list(base_tau.keys())
@@ -1296,15 +1349,16 @@ class QBAFGradualSemanticsSolver:
                 converged = True
                 break
 
-        # Compute orthogonal telemetry: Weight of Evidence E_total and Volatility V
+        # Compute evidentiary weight Wt and support/attack controversy volatility V
         total_evidence: dict[str, float] = {}
         volatility: dict[str, float] = {}
         for nid in base_tau:
-            e_tot = support_energy[nid] + attack_energy[nid]
-            deg = tau_current[nid]
+            e_supp = support_energy[nid]
+            e_att = attack_energy[nid]
+            e_tot = e_supp + e_att
             vol = (
-                (e_tot / (1.0 + e_tot)) * (1.0 - 2.0 * abs(deg - 0.5))
-                if e_tot > 0
+                (e_tot / (1.0 + e_tot)) * (1.0 - abs(e_supp - e_att) / e_tot)
+                if e_tot > 0.0
                 else 0.0
             )
             total_evidence[nid] = round(e_tot, 6)
@@ -1326,6 +1380,7 @@ class QBAFGradualSemanticsSolver:
             suppositional_isolated_count=suppositional_isolated,
             perspective_filtered_count=perspective_filtered,
             warrant_states={k: round(v, 6) for k, v in warrant_states.items()},
+            base_prior_policy=eff_policy,
         )
 
     def solve_continuous(
@@ -1340,42 +1395,17 @@ class QBAFGradualSemanticsSolver:
         perspective: str | None = None,
         isolate_suppositional: bool | None = None,
         isolate_attributed: bool | None = None,
+        base_prior_policy: BasePriorPolicy | str | None = None,
     ) -> QBAFSolverResult:
-        """Solve QBAF equilibrium using the unified continuous WeightedQuadraticEnergySolver.
-
-        Evaluates DAG topologies in closed form along a topological sort in O(|V| + |E|)
-        (Proposition 5), and cyclic topologies via adaptive ODE integration (RK45 with
-        Radau fallback) and root-finding early stationary termination.
-
-        Parameters
-        ----------
-        nodes : TheoryGraph or Mapping or Sequence
-            Argument nodes or TheoryGraph container with base plausibilities.
-        edges : Sequence or None, optional
-            Argument relations. Inferred from TheoryGraph if omitted.
-        normalization_mode : WeightNormalizationMode or str, default CALIBRATED_MODAL
-            Weight calculation mode.
-        admissibility_mode : Literal["hard", "soft"], optional
-            Gating mode override.
-        tau_p : float, optional
-            Stance probability threshold override.
-        tau_c : float, optional
-            Model confidence threshold override.
-        perspective : str or None, optional
-            Optional perspective filter overriding instance setting.
-        isolate_suppositional : bool or None, optional
-            Optional supposition-isolation override.
-        isolate_attributed : bool or None, optional
-            Optional attribution-isolation override.
-
-        Returns
-        -------
-        QBAFSolverResult
-            Equilibrium justifications, energy totals, and volatility telemetry.
-        """
+        """Solve QBAF equilibrium using the unified continuous WeightedQuadraticEnergySolver."""
         if isinstance(normalization_mode, str):
             normalization_mode = WeightNormalizationMode(normalization_mode.lower())
 
+        eff_policy = (
+            BasePriorPolicy(base_prior_policy.strip().lower())
+            if isinstance(base_prior_policy, str)
+            else (base_prior_policy or self.base_prior_policy)
+        )
         active_adm_mode = admissibility_mode or self.admissibility_mode
         active_tau_p = tau_p if tau_p is not None else self.tau_p
         active_tau_c = tau_c if tau_c is not None else self.tau_c
@@ -1399,6 +1429,7 @@ class QBAFGradualSemanticsSolver:
             perspective=perspective,
             isolate_suppositional=isolate_suppositional,
             isolate_attributed=isolate_attributed,
+            base_prior_policy=eff_policy,
         )
 
         node_list = list(base_tau.keys())
@@ -1468,11 +1499,18 @@ class QBAFGradualSemanticsSolver:
             else {}
         )
 
+        final_res_arr = telemetry.get("final_residual")
+        final_delta_val = (
+            round(float(final_res_arr[0]), 8)
+            if final_res_arr is not None and len(final_res_arr) > 0
+            else 0.0
+        )
+
         return QBAFSolverResult(
             degrees=degrees,
             iterations=1,
             converged=converged,
-            final_delta=0.0,
+            final_delta=final_delta_val,
             normalization_mode=normalization_mode,
             semantics_model=GradualSemanticsModel.QUADRATIC,
             support_sums=support_sums,
@@ -1484,6 +1522,7 @@ class QBAFGradualSemanticsSolver:
             suppositional_isolated_count=suppositional_isolated,
             perspective_filtered_count=perspective_filtered,
             warrant_states=warrant_states,
+            base_prior_policy=eff_policy,
         )
 
     def compare_weight_modes(
@@ -1911,37 +1950,9 @@ class QBAFGradualSemanticsSolver:
         perspective: str | None = None,
         isolate_suppositional: bool | None = None,
         isolate_attributed: bool | None = None,
+        base_prior_policy: BasePriorPolicy | None = None,
     ) -> tuple[dict[str, float], list[_AdmissibleEdge], int, int, int]:
-        """Normalize node base plausibilities, apply intensional scoping, and filter edges.
-
-        Parameters
-        ----------
-        nodes : TheoryGraph or Mapping or Sequence
-            Argument nodes or complete TheoryGraph container.
-        edges : Sequence or None
-            Dialectical relations between nodes (inferred from TheoryGraph if omitted).
-        normalization_mode : WeightNormalizationMode
-            Weight calculation mode.
-        active_adm_mode : Literal["hard", "soft"]
-            Gating mode ('hard' pruning vs. 'soft' sigmoidal relaxation).
-        active_tau_p : float
-            Stance probability threshold.
-        active_tau_c : float
-            Model confidence threshold.
-        perspective : str or None, optional
-            Optional epistemic perspective filter overriding instance setting.
-        isolate_suppositional : bool or None, optional
-            Optional override controlling whether suppositional nodes are isolated.
-        isolate_attributed : bool or None, optional
-            Optional override controlling whether attributed nodes are isolated from
-            asserted authorial claims.
-
-        Returns
-        -------
-        tuple of (dict[str, float], list[_AdmissibleEdge], int, int, int)
-            Normalized node base priors, filtered admissible edges, admissibility-pruned
-            edge count, isolated suppositional node count, and filtered perspective node count.
-        """
+        """Normalize node base plausibilities, apply intensional scoping, and filter edges."""
         if isinstance(nodes, TheoryGraph):
             raw_nodes: Mapping[str, Any] | Sequence[Any] = nodes.nodes
             raw_edges: Sequence[Any] = edges if edges is not None else nodes.edges
@@ -1949,6 +1960,7 @@ class QBAFGradualSemanticsSolver:
             raw_nodes = nodes
             raw_edges = edges if edges is not None else ()
 
+        eff_policy = base_prior_policy or self.base_prior_policy
         eff_perspective = perspective if perspective is not None else self.perspective
         active_perspective = (
             eff_perspective.strip().lower() if eff_perspective is not None else None
@@ -1964,9 +1976,31 @@ class QBAFGradualSemanticsSolver:
             else isolate_attributed
         )
 
+        def _is_evidential_node(obj: Any) -> bool:
+            if isinstance(obj, TheoryNode):
+                if obj.node_type == NodeType.EVIDENCE:
+                    return True
+                if obj.semantic_sentence_type == "EMPIRICAL":
+                    return True
+                comp_t = str(obj.attributes.get("component_type", "")).strip().lower()
+                return comp_t in _EVIDENTIAL_NODE_TYPES
+            if isinstance(obj, BaseModel):
+                return _is_evidential_node(obj.model_dump())
+            if isinstance(obj, Mapping):
+                if str(obj.get("semantic_sentence_type", "")).upper() == "EMPIRICAL":
+                    return True
+                nt = (
+                    str(obj.get("node_type") or obj.get("component_type") or "")
+                    .strip()
+                    .lower()
+                )
+                return nt in _EVIDENTIAL_NODE_TYPES
+            return False
+
         raw_base_tau: dict[str, float] = {}
         node_modes: dict[str, str] = {}
         node_attributions: dict[str, str | None] = {}
+        evidential_nodes: set[str] = set()
 
         if isinstance(raw_nodes, Mapping):
             for nid, val in raw_nodes.items():
@@ -1980,18 +2014,33 @@ class QBAFGradualSemanticsSolver:
                     raw_base_tau[nid_str] = max(0.0, min(1.0, extracted_tau))
                     node_modes[nid_str] = mode
                     node_attributions[nid_str] = attr
+                    if _is_evidential_node(val):
+                        evidential_nodes.add(nid_str)
         else:
             for item in raw_nodes:
                 nid, val, mode, attr = self._extract_node_spec(item)
                 raw_base_tau[nid] = max(0.0, min(1.0, val))
                 node_modes[nid] = mode
                 node_attributions[nid] = attr
+                if _is_evidential_node(item):
+                    evidential_nodes.add(nid)
 
-        # Parse all edges first and distinguish warrant modifiers from atom targets
+        if eff_policy == BasePriorPolicy.NORMATIVE_UNIFORM:
+            for nid in list(raw_base_tau.keys()):
+                raw_base_tau[nid] = self.normative_hypothesis_prior
+        elif eff_policy == BasePriorPolicy.NORMATIVE_DATA_PRIORITY:
+            for nid in list(raw_base_tau.keys()):
+                raw_base_tau[nid] = (
+                    self.normative_data_prior
+                    if nid in evidential_nodes
+                    else self.normative_hypothesis_prior
+                )
+
+        # Parse all edges and skip non-dialectical structural edges (e.g. ALTERNATIVE_READING_OF)
         parsed_edges: list[_ParsedEdge] = []
         for edge_item in raw_edges:
             parsed = self._parse_edge(edge_item)
-            if not parsed:
+            if not parsed or parsed.polarity == 0:
                 continue
             parsed_edges.append(parsed)
 
@@ -2407,6 +2456,8 @@ class QBAFGradualSemanticsSolver:
         """
         # 1. First-class TheoryEdge domain object
         if isinstance(edge, TheoryEdge):
+            if edge.relation_type == RelationType.ALTERNATIVE_READING_OF:
+                return None
             pol = edge.polarity
             if pol == 0:
                 pol = (
@@ -2531,14 +2582,19 @@ class QBAFGradualSemanticsSolver:
             return 1 if polarity > 0 else -1
 
         if isinstance(relation_type, RelationType):
+            if relation_type == RelationType.ALTERNATIVE_READING_OF:
+                return 0
             pol = relation_type.default_polarity
             return pol if pol != 0 else 1
 
         if relation_type is not None:
             r_str = str(relation_type).upper()
+            if r_str == "ALTERNATIVE_READING_OF":
+                return 0
             if r_str in {
                 "SUPPORTS",
                 "SUPPORTS_ARG",
+                "BACKS",
                 "ENTAILS",
                 "IMPLIES",
                 "DEDUCES",
@@ -2547,9 +2603,11 @@ class QBAFGradualSemanticsSolver:
                 return 1
             if r_str in {
                 "ATTACKS",
+                "REBUTS",
                 "REFUTES",
                 "CONTRADICTS",
                 "UNDERCUTS",
+                "UNDERMINES",
                 "INHIBITS",
             }:
                 return -1
@@ -2687,47 +2745,11 @@ def solve_qbaf_gradual_semantics(
     isolate_suppositional: bool = True,
     isolate_attributed: bool = True,
     t_norm: Literal["product", "godel"] = "product",
+    base_prior_policy: BasePriorPolicy | str = BasePriorPolicy.DESCRIPTIVE_AUTHORIAL,
+    normative_hypothesis_prior: float = 0.5,
+    normative_data_prior: float = 0.8,
 ) -> QBAFSolverResult:
-    """Convenience functional interface for solving QBAF gradual semantics.
-
-    Parameters
-    ----------
-    nodes : TheoryGraph or Mapping or Sequence
-        Target argument nodes or complete TheoryGraph container.
-    edges : Sequence or None, optional
-        Dialectical relations. Inferred from TheoryGraph if omitted.
-    semantics_model : GradualSemanticsModel or str, default QUADRATIC
-        Convergence update formulation.
-    normalization_mode : WeightNormalizationMode or str, default CALIBRATED_MODAL
-        Edge weighting mode.
-    admissibility_threshold : float, default 0.0
-        Empirical accuracy admissibility gate.
-    admissibility_mode : Literal["hard", "soft"], default "hard"
-        Gating strategy (Mode 1 hard pruning vs. Mode 2 continuous sigmoidal relaxation).
-    tau_p : float, default 0.0
-        Stance probability threshold.
-    tau_c : float, default 0.0
-        Model confidence threshold.
-    max_iterations : int, default 50
-        Maximum iteration limit.
-    tolerance : float, default 1e-4
-        Numerical convergence threshold.
-    continuous : bool, default False
-        Whether to solve via unified continuous WeightedQuadraticEnergySolver.
-    perspective : str or None, optional
-        Optional epistemic perspective filter ('author', agent name, or None).
-    isolate_suppositional : bool, default True
-        Whether suppositional nodes are isolated from contributing positive prior weight.
-    isolate_attributed : bool, default True
-        Whether attributed nodes are isolated from directly inflating asserted claims.
-    t_norm : Literal["product", "godel"], default "product"
-        Conjunctive t-norm operator applied across multi-premise inferences.
-
-    Returns
-    -------
-    QBAFSolverResult
-        Equilibrium justification results.
-    """
+    """Convenience functional interface for solving QBAF gradual semantics."""
     solver = QBAFGradualSemanticsSolver(
         semantics_model=semantics_model,
         max_iterations=max_iterations,
@@ -2741,6 +2763,9 @@ def solve_qbaf_gradual_semantics(
         isolate_suppositional=isolate_suppositional,
         isolate_attributed=isolate_attributed,
         t_norm=t_norm,
+        base_prior_policy=base_prior_policy,
+        normative_hypothesis_prior=normative_hypothesis_prior,
+        normative_data_prior=normative_data_prior,
     )
     return solver.solve(
         nodes=nodes,
@@ -2753,6 +2778,7 @@ def solve_qbaf_gradual_semantics(
         perspective=perspective,
         isolate_suppositional=isolate_suppositional,
         isolate_attributed=isolate_attributed,
+        base_prior_policy=base_prior_policy,
     )
 
 
@@ -2769,39 +2795,11 @@ def solve_continuous_qbaf(
     isolate_suppositional: bool = True,
     isolate_attributed: bool = True,
     t_norm: Literal["product", "godel"] = "product",
+    base_prior_policy: BasePriorPolicy | str = BasePriorPolicy.DESCRIPTIVE_AUTHORIAL,
+    normative_hypothesis_prior: float = 0.5,
+    normative_data_prior: float = 0.8,
 ) -> QBAFSolverResult:
-    """Convenience functional interface for continuous Quadratic Energy QBAF solving.
-
-    Parameters
-    ----------
-    nodes : TheoryGraph or Mapping or Sequence
-        Target argument nodes or TheoryGraph container.
-    edges : Sequence or None, optional
-        Dialectical relations. Inferred from TheoryGraph if omitted.
-    normalization_mode : WeightNormalizationMode or str, default CALIBRATED_MODAL
-        Edge weighting mode.
-    admissibility_mode : Literal["hard", "soft"], default "hard"
-        Gating strategy (Mode 1 hard pruning vs. Mode 2 continuous sigmoidal relaxation).
-    tau_p : float, default 0.0
-        Stance probability threshold.
-    tau_c : float, default 0.0
-        Model confidence threshold.
-    tolerance : float, default 1e-4
-        Numerical convergence threshold.
-    perspective : str or None, optional
-        Optional epistemic perspective filter ('author', agent name, or None).
-    isolate_suppositional : bool, default True
-        Whether suppositional nodes are isolated from contributing positive prior weight.
-    isolate_attributed : bool, default True
-        Whether attributed nodes are isolated from directly inflating asserted claims.
-    t_norm : Literal["product", "godel"], default "product"
-        Conjunctive t-norm operator applied across multi-premise inferences.
-
-    Returns
-    -------
-    QBAFSolverResult
-        Equilibrium justification results.
-    """
+    """Convenience functional interface for continuous Quadratic Energy QBAF solving."""
     solver = QBAFGradualSemanticsSolver(
         semantics_model=GradualSemanticsModel.QUADRATIC,
         tolerance=tolerance,
@@ -2812,6 +2810,9 @@ def solve_continuous_qbaf(
         isolate_suppositional=isolate_suppositional,
         isolate_attributed=isolate_attributed,
         t_norm=t_norm,
+        base_prior_policy=base_prior_policy,
+        normative_hypothesis_prior=normative_hypothesis_prior,
+        normative_data_prior=normative_data_prior,
     )
     return solver.solve_continuous(
         nodes=nodes,
@@ -2820,6 +2821,105 @@ def solve_continuous_qbaf(
         perspective=perspective,
         isolate_suppositional=isolate_suppositional,
         isolate_attributed=isolate_attributed,
+        base_prior_policy=base_prior_policy,
+    )
+
+
+class QBAFPriorSensitivityResult(BaseModel):
+    """Sensitivity analysis across normative and descriptive base-prior policies.
+
+    Parameters
+    ----------
+    results_by_policy : dict of str to QBAFSolverResult
+        Equilibrium results keyed by :class:`BasePriorPolicy` value.
+    max_drift_descriptive_vs_uniform : float
+        Maximum absolute acceptability difference between descriptive authorial
+        priors and uniform normative priors.
+    mean_drift_descriptive_vs_uniform : float
+        Mean absolute acceptability shift between descriptive and uniform modes.
+    rank_reversals_descriptive_vs_uniform : int
+        Count of argument pairs whose acceptability ordering flips between
+        descriptive authorial and uniform normative priors.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    results_by_policy: dict[str, QBAFSolverResult] = Field(default_factory=dict)
+    max_drift_descriptive_vs_uniform: float = Field(default=0.0)
+    mean_drift_descriptive_vs_uniform: float = Field(default=0.0)
+    rank_reversals_descriptive_vs_uniform: int = Field(default=0)
+
+
+def compare_prior_policies(
+    nodes: TheoryGraph | Mapping[str, float] | Sequence[Any],
+    edges: Sequence[Any] | None = None,
+    *,
+    continuous: bool = True,
+    normative_hypothesis_prior: float = 0.5,
+    normative_data_prior: float = 0.8,
+    t_norm: Literal["product", "godel"] = "product",
+) -> QBAFPriorSensitivityResult:
+    """Evaluate QBAF sensitivity across descriptive, uniform, and Data-Priority priors.
+
+    Parameters
+    ----------
+    nodes : TheoryGraph or Mapping or Sequence
+        Argument nodes.
+    edges : Sequence or None, optional
+        Dialectical inferences.
+    continuous : bool, default True
+        Whether to use continuous Quadratic Energy solving.
+    normative_hypothesis_prior : float, default 0.5
+        Neutral prior assigned to hypotheses under normative policies.
+    normative_data_prior : float, default 0.8
+        Defeasible Data-Priority prior assigned to evidential base atoms.
+    t_norm : Literal["product", "godel"], default "product"
+        Conjunctive t-norm operator.
+
+    Returns
+    -------
+    QBAFPriorSensitivityResult
+        Per-policy equilibria and drift/rank-reversal diagnostics.
+    """
+    results: dict[str, QBAFSolverResult] = {}
+    for policy in (
+        BasePriorPolicy.DESCRIPTIVE_AUTHORIAL,
+        BasePriorPolicy.NORMATIVE_UNIFORM,
+        BasePriorPolicy.NORMATIVE_DATA_PRIORITY,
+    ):
+        results[policy.value] = solve_qbaf_gradual_semantics(
+            nodes=nodes,
+            edges=edges,
+            continuous=continuous,
+            t_norm=t_norm,
+            base_prior_policy=policy,
+            normative_hypothesis_prior=normative_hypothesis_prior,
+            normative_data_prior=normative_data_prior,
+        )
+
+    desc = results[BasePriorPolicy.DESCRIPTIVE_AUTHORIAL.value]
+    unif = results[BasePriorPolicy.NORMATIVE_UNIFORM.value]
+    all_nodes = list(desc.degrees.keys())
+    drifts = [abs(desc.degrees[n] - unif.degrees[n]) for n in all_nodes]
+    max_drift = max(drifts) if drifts else 0.0
+    mean_drift = float(np.mean(drifts)) if drifts else 0.0
+
+    reversals = 0
+    for i in range(len(all_nodes)):
+        for j in range(i + 1, len(all_nodes)):
+            u, v = all_nodes[i], all_nodes[j]
+            d_diff = desc.degrees[u] - desc.degrees[v]
+            u_diff = unif.degrees[u] - unif.degrees[v]
+            if (d_diff > 1e-4 and u_diff < -1e-4) or (
+                d_diff < -1e-4 and u_diff > 1e-4
+            ):
+                reversals += 1
+
+    return QBAFPriorSensitivityResult(
+        results_by_policy=results,
+        max_drift_descriptive_vs_uniform=round(max_drift, 6),
+        mean_drift_descriptive_vs_uniform=round(mean_drift, 6),
+        rank_reversals_descriptive_vs_uniform=reversals,
     )
 
 

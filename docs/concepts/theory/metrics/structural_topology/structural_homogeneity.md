@@ -9,7 +9,7 @@ tags:
 ## Definition & Conceptual Goal
 
 The **Structural Homogeneity** metric assesses the degree of structural balance and topological uniformity across a
-theory-net or theory-holon ([Schurz, 2024, sec. 5.1](zotero://select/library/items/24SNSW2B)).
+theory-net or theory-holon ([Schurz, 2014, sec. 5.1](../../../references.md#schurz-2014)).
 
 It determines whether empirical indicators and specialization branches are uniformly integrated across the graph or
 whether the topology exhibits pathological skewness (e.g., hyper-concentrated hub bottlenecks or severely

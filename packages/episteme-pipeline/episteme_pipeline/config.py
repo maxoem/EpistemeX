@@ -489,6 +489,8 @@ class Phase5Config(BaseModel):
     max_diameter: float | None = None
     max_cluster_size: int = 100
     cluster_layer: Literal["theory_atoms", "l2_entities", "both"] = "theory_atoms"
+    edge_projection: Literal["support_only", "signed", "unsigned"] = "support_only"
+    resolution: float = 1.0
     gating: FusionGatingConfig = Field(default_factory=FusionGatingConfig)
 
 
@@ -546,6 +548,13 @@ class Phase6Config(BaseModel):
     isolate_suppositional: bool = True
     isolate_attributed: bool = True
     conjunctive_t_norm: Literal["product", "godel"] = "product"
+    base_prior_policy: Literal[
+        "descriptive_authorial",
+        "normative_uniform",
+        "normative_data_priority",
+    ] = "descriptive_authorial"
+    normative_hypothesis_prior: float = 0.5
+    normative_data_prior: float = 0.8
     modal_resolver: ModalResolverConfig = Field(
         default_factory=lambda: ModalResolverConfig()
     )

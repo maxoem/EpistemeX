@@ -128,5 +128,5 @@ Automated graph validation ensures that the constructed graph satisfies formal r
 * **Evaluation Harness Architecture**: [Evaluation Harness](evaluation_harness.md)
 * **Dataset Portfolio & Strategies**: [Datasets Strategy](datasets.md)
 * **Epistemic & Theory Graph Metrics (5 Pillars)**: [Theory Metrics Overview](../concepts/theory/metrics/index.md)
-* **Formal Graph Model**: [Formal Graph Schema (TheoryNet)](../concepts/formal_graph_model.md)
+* **Formal Graph Model**: [Formal Graph Schema & Argumentation Semantics](../concepts/formal_graph_model.md)
 * **Observability Integration**: [ADR 0012: Langfuse Integration](../adr/0012-phase-config-redesign-and-langfuse-integration.md)

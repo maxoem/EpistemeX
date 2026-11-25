@@ -10,7 +10,7 @@ tags:
 
 The **Community-Bridges** metric evaluates the nature of cross-community connections in the global
 *[theory-holon](../../../glossary.md#theorie-holon)*
-([Balzer et al., 1987, pp. 224–225, 317, 324](zotero://select/library/items/24SNSW2B)).
+([Balzer et al., 1987, pp. 224–225, 317, 324](../../../references.md#balzer-1987)).
 
 It identifies nodes that act as structural bridges between distinct scientific communities and checks whether these
 bridge nodes represent **genuine theoretical translations/constraints** ($C$) or merely superficial, ad-hoc lexical
@@ -29,7 +29,7 @@ scientific network loses its **global homogeneity** and structural cohesion.
 ---
 ## Mathematical Specification & Graph Formulation
 
-Let $G$ be a theory graph as defined in the **[Formal Graph Schema (TheoryNet)](../../../formal_graph_model.md)**, partitioned into communities such that each node $v \in V$ is assigned to a community $c(v)$.
+Let $G$ be a theory graph as defined in the **[Formal Graph Schema & Argumentation Semantics](../../../formal_graph_model.md)**, partitioned into communities such that each node $v \in V$ is assigned to a community $c(v)$.
 
 Let $E_{\text{cross}} = \{ e = (u, v) \in E \mid c(u) \neq c(v)\}$ be the set of inter-community boundary edges.
 Let $\Lambda_{\text{formal}} = \{\mathsf{specializes}, \mathsf{derives\_from}, \mathsf{explains}\}$ be the set of formal inter-theoretical relation types.

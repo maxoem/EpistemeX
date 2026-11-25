@@ -10,7 +10,7 @@ tags:
 
 The **Connectedness & Cohesion** metric evaluates whether a *theory-net* maintains a unified, non-anarchical logical
 lineage and measures its resilience against fragmentation. In structuralist philosophy of science
-([Balzer et al., 1987, p. 173](zotero://select/library/items/24SNSW2B)), a scientific theory is not a random collection
+([Balzer et al., 1987, p. 173](../../../references.md#balzer-1987)), a scientific theory is not a random collection
 of disjoint laws; all specialized laws must logically connect back to common theoretical roots.
 
 Beyond basic topological reachability, cohesion measures evaluate the **Quinean Web of Belief** (Quine, 1951)—how well
