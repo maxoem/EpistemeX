@@ -34,8 +34,11 @@ flowchart TD
     Active["Active Episode Flush (ADR-0009) or Studio Curation (ADR-0021)"] --> Propose["1. PROPOSE: EpistemicChangeset"]
     Batch["Batch Post-Forward View (ADR-0024)"] --> Propose
     Propose --> Interceptor["EpistemicCommitInterceptor (Unit of Work)"]
-    Interceptor --> Select["2. SELECT: SubgraphSelector (Poset Roots + k-Hop + Contrastive Anchors)"]
+    Interceptor --> Router{"EpistemicNodeRouter (Hume's Fork)"}
+    Router -->|"Partition B / Synthetisch (ISSUE-115)"| Empirical["EmpiricalOperationalizer -> DomainWorldModelPort -> TS_local"]
+    Router -->|"Partition A / Analytisch or A |- b_hat"| Select["2. SELECT: SubgraphSelector (Poset Roots + k-Hop + Contrastive Anchors)"]
     Select --> Cascade{"3. COMPUTE: CalibratedCascade"}
+    Empirical --> Update["4. UPDATE: Pure StateReducer -> RefinementDelta (cascade_depth <= 2)"]
     Cascade -->|"Mode 1 (< 20ms)"| WM["GraphWorldModelEvaluator (E_WM, s_z)"]
     WM -->|"Clear Accept & No Audit"| Reduce
     WM -->|"High Energy / Ambiguous / Audited"| Lean["Mode 2: LeanFormalEvaluator (Pantograph + Read-Back + SMT)"]
@@ -160,6 +163,18 @@ class EpistemicEvaluator(Fingerprintable, Protocol):
         context: ScopedVerificationContext,
         changeset: EpistemicChangeset,
     ) -> VerificationVerdict: ...
+
+
+@runtime_checkable
+class EpistemicNodeRouter(Fingerprintable, Protocol):
+    """Dispatches candidate items along Partition A/formal vs. Partition B/empirical tracks (ISSUE-115)."""
+
+    def route(
+        self,
+        component_type: str,
+        epistemic_status: str | None,
+        is_formal_prediction: bool = False,
+    ) -> str: ...
 
 
 @runtime_checkable
