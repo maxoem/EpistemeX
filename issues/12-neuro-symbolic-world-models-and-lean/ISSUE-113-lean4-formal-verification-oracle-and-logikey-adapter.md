@@ -1,155 +1,158 @@
-# [ISSUE-113] Lean 4 Deductive Verification Oracle, LogiKEy Embeddings & Faithfulness Auditing (`packages/episteme-formal`)
+# [ISSUE-113] Opt-In Lean 4 Integration: Consistency Checking, Calculation & Deductive Verification (`packages/episteme-formal`)
 
 | Metadata | Details |
 | :--- | :--- |
 | **Issue ID** | `ISSUE-113` |
-| **Domain / Category** | `12-Neuro-Symbolic World Models & Lean` (Automated Theorem Proving, Formal Philosophy, SMT) |
-| **Target Package(s)** | `packages/episteme-formal` (new package), `episteme-pipeline` (adapter ports) |
+| **Domain / Category** | `12-Neuro-Symbolic World Models & Lean` (Opt-In Formal Verification, Formal Calculation, SMT) |
+| **Target Package(s)** | `packages/episteme-formal` (new symbolic-only package), `packages/episteme-contracts` |
 | **Priority** | **High** |
 | **Status** | `Research` |
 | **Roadmap Horizon** | Horizon 2 & 3 |
-| **Governing ADR** | [ADR-0025 Proposal](ADR-0025-PROPOSAL-epistemic-commit-cascade-and-world-models.md) |
+| **Governing ADR & Plan** | [ADR-0025 Proposal](ADR-0025-PROPOSAL-epistemic-commit-cascade-and-world-models.md) \| [Execution Plan](EXECUTION-PLAN.md) |
 
 ---
 
-## 1. Why Binary Theorem Proving Fails on Philosophical Knowledge Graphs
+## 1. Strategic Positioning: Native Opt-In Integration, Not Universal Autoformalization
 
-A naive Lean 4 integration asks: *"Does the new node $\phi$ follow from the existing graph $\Gamma$ ($\Gamma \vdash \phi$)?"* On philosophical and scientific corpora, this binary framing fails immediately because logical compatibility is **four-valued**:
+Episteme does **not** claim to automatically translate arbitrary qualitative or hermeneutic philosophical prose into faithful Lean 4 theorems. Natural-language philosophy contains open-textured concepts and *ceteris paribus* rules that belong in Episteme's defeasible `D-QBAF` layer ([ADR-0022](../../docs/adr/0022-unified-stratified-epistemic-metamodel.md)).
+
+Instead, `packages/episteme-formal/` provides a **native, opt-in Lean 4 integration** for users and domains where formal checking adds genuine rigor (analytic philosophy, formal epistemology, logic, game/decision theory, economics, physics, structuralist $M_p \to M$ laws):
+- **Check consistency, entailment, or calculations in Lean 4** directly against Episteme's perspective-scoped Theory Graph cones (`ScopedVerificationContext`) and canonical `FormalSignatureLedger`.
+- **Gate *when* and *what* to formalize with `DecisionEngine` ([ADR-0018](../../docs/adr/0018-decision-engine-architecture-and-contracts.md)):** Episteme's calibrated System-1 `DecisionEngine` (`evaluate_noul` / `evaluate_choice`) filters out non-formalizable prose up front so Lean 4 budget is spent only on formally structured subgraphs.
+- **Support three explicit provenance tiers (`FormalProvenance`):**
+  1. **`human_verified`:** Scholar-authored Lean 4 definitions/theorems attached in `episteme-studio` and verified automatically against the scoped graph cone.
+  2. **`hybrid_reviewed`:** Machine-drafted Lean 4 specifications audited and approved by a human researcher.
+  3. **`machine_draft`:** Assisted autoformalization gated by `DecisionEngine`, non-triviality checks, and Blind Read-Back (never conflated with human-certified proofs).
+
+---
+
+## 2. Four-Valued Compatibility (Why Binary Theorem Proving Fails)
+
+A naive Lean 4 integration asks only *"Does $\Gamma \vdash \phi$ hold?"* On scientific and philosophical knowledge graphs, logical compatibility is **four-valued** (plus `unverified` for timeouts, SMT `unknown`, or gate rejections):
 
 | Outcome | Formal Condition | Epistemic Meaning in Episteme | Pipeline Action |
 | :--- | :--- | :--- | :--- |
-| **`entailed`** | $\Gamma \vdash \phi$ (`sorry`-free, $\Gamma \not\vdash \bot$) | Deductively guaranteed theorem / valid inference step. | Set `inferential_warrant = 1.0`; certify derivation in Neo4j. |
-| **`sketch_verified`** | $\Gamma \cup \Delta \vdash \phi$ (`sorry`-free modulo minimal open lemmas $\Delta = \{z_1, \dots, z_k\}$) | Valid argument structure *modulo explicit missing premises* (*Prove2Me* §4.2). | Emit `EpistemicDeficitKind.ENTHYMEME_GAP` carrying the formal Lean types of $\Delta$ to `ClosedLoopRefinementCoordinator` ([ADR-0024](../../docs/adr/0024-closed-loop-hermeneutic-refinement.md)). |
-| **`consistent_independent`** | $\Gamma \not\vdash \phi \land \Gamma \not\vdash \neg\phi$ (certified via SMT / finite model witness) | **Logically consistent new axiom, empirical observation ($B$), or specialization ($\alpha$).** | Admit cleanly! Almost all genuine new empirical/theoretical knowledge belongs here. |
-| **`refuted`** | $\Gamma \vdash \neg\phi$ (with vacuity check $\Gamma \not\vdash \bot$ passed) | Hard logical contradiction against active perspective cone $\Gamma$. | **Do not discard!** Emit `LOGICAL_CONTRADICTION`: retype edge to `ATTACKS`/`REFUTES`, escalate `POLYSEMY_COLLISION`, or flag aporia in Studio. |
+| **`entailed`** | $\Gamma \vdash \phi$ (`sorry`-free, $\Gamma \not\vdash \bot$) | Deductively guaranteed theorem / valid inference step. | Certify `inferential_warrant = 1.0` in `EpistemicVerificationMetadata`. |
+| **`sketch_verified`** | $\Gamma \cup \Delta \vdash \phi$ (`sorry`-free modulo minimal open lemmas $\Delta = \{z_1, \dots, z_k\}$) | Valid argument structure *modulo explicit missing premises* (*Prove2Me* §4.2). | Emit `EpistemicDeficitKind.ENTHYMEME_GAP` carrying formal Lean types of $\Delta$ to `ClosedLoopRefinementCoordinator` ([ADR-0024](../../docs/adr/0024-closed-loop-hermeneutic-refinement.md)). |
+| **`consistent_independent`** | $\Gamma \not\vdash \phi \land \Gamma \not\vdash \neg\phi$ (**strictly certified** via finite model witness; SMT `unknown` $\to$ `unverified`) | **Logically consistent new axiom, empirical observation ($B$), or specialization ($\alpha$).** | Admit cleanly—most genuine new theoretical/empirical knowledge belongs here. |
+| **`refuted`** | $\Gamma \vdash \neg\phi$ (with $\Gamma \not\vdash \bot$ passed) | Hard logical contradiction against active perspective cone $\Gamma$. | **Do not discard!** Emit `LOGICAL_CONTRADICTION`: retype edge to `ATTACKS`/`REFUTES`, escalate `POLYSEMY_COLLISION`, or flag aporia in Studio. |
+| **`unverified`** | Timeout, SMT `unknown`, budget cap hit, or Gate 2/3 rejection | No kernel guarantee achieved. | Leave `D-QBAF` weights untouched; log diagnostic reason. |
 
 ---
 
-## 2. Formalizing Philosophy & Structuralism in Lean 4
+## 3. Formalizing Logic, Structuralism & Executable Models in Lean 4
 
-### 2.1 LogiKEy Shallow Semantical Embeddings (`EpistemeLogic.Modal`)
-Philosophical arguments rely heavily on **modal** ($\Box, \Diamond$), **deontic**, and **intensional/perspectival** operators (*"Leibniz holds that..."*, *"Necessarily..."*, *"Suppose for reductio..."*). Rather than building bespoke theorem provers for each non-classical logic, we adopt the **LogiKEy** methodology (Benzmüller et al., 2020) via shallow semantical embeddings in Lean 4's higher-order dependent type theory—directly reflecting Episteme's `intensional_mode` and `attributed_to` fields ([ADR-0023](../../docs/adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)):
+### 3.1 Configurable LogiKEy Modal Frames (`EpistemeLogic.Modal`)
+Philosophical arguments use **modal** ($\Box, \Diamond$), **deontic**, and **doxastic/perspectival** operators (*"Leibniz holds that..."*, *"Necessarily..."*). Following LogiKEy (Benzmüller et al., 2020), `EpistemeLogic.Modal` provides Shallow Semantical Embeddings with **explicitly selectable modal frame classes** (`K`, `T`, `S4`, `S5`, `KD45`) so accessibility relations are never silently under-axiomatized:
 
 ```lean4
 -- EpistemeLogic/Modal.lean (Base compiled .olean preamble)
 namespace EpistemeLogic
 
-opaque World : Type
-opaque Agent : Type
-opaque R_alethic : World -> World -> Prop
-opaque R_doxastic : Agent -> World -> World -> Prop
+structure ModalFrame where
+  World : Type
+  Agent : Type
+  R_alethic : World -> World -> Prop
+  R_doxastic : Agent -> World -> World -> Prop
 
-abbrev ModalProp := World -> Prop
+class ReflexiveFrame (F : ModalFrame) : Prop where
+  refl : ∀ w, F.R_alethic w w  -- Modal logic T
 
-def box (p : ModalProp) : ModalProp := fun w => ∀ v, R_alethic w v -> p v
-def dia (p : ModalProp) : ModalProp := fun w => ∃ v, R_alethic w v ∧ p v
-def believes (a : Agent) (p : ModalProp) : ModalProp := fun w => ∀ v, R_doxastic a w v -> p v
+class TransitiveFrame (F : ModalFrame) : Prop where
+  trans : ∀ w u v, F.R_alethic w u -> F.R_alethic u v -> F.R_alethic w v  -- S4
 
--- Prevents cross-author explosion: Leibniz's and Kant's axioms live under separate `believes` modalities.
-def valid (p : ModalProp) : Prop := ∀ w, p w
+abbrev ModalProp (F : ModalFrame) := F.World -> Prop
+
+def box {F : ModalFrame} (p : ModalProp F) : ModalProp F :=
+  fun w => ∀ v, F.R_alethic w v -> p v
+
+def believes {F : ModalFrame} (a : F.Agent) (p : ModalProp F) : ModalProp F :=
+  fun w => ∀ v, F.R_doxastic a w v -> p v
+
+def valid {F : ModalFrame} (p : ModalProp F) : Prop := ∀ w, p w
 
 end EpistemeLogic
 ```
 
-### 2.2 Bourbaki / Sneed Structuralist Theory-Elements (`ADR-0015`) as Lean Dependent Types
-Episteme's structuralist metatheory ($T = \langle K, I \rangle$ with $M_{pp}, M_p, M$, [Formal Graph Model](../../docs/concepts/formal_graph_model.md)) maps natively onto Lean 4 `structure` inheritance and `class` law constraints—upgrading [`SafeFormulaEvaluator`](../../docs/adr/0015-theoretical-enrichment-and-tenability-evaluation.md#L48) into type-checked theory specialization posets ($\alpha$):
+### 3.2 Bourbaki / Sneed Structuralist Theory-Elements & Executable Calculations
+Episteme's structuralist metatheory ($T = \langle K, I \rangle$ with $M_{pp}, M_p, M$, [Formal Graph Model](../../docs/concepts/formal_graph_model.md)) maps cleanly onto Lean 4 `structure` inheritance and `class` law constraints—enabling both type-checked specialization posets ($\alpha$) and **executable formal calculations** (`#eval` / kernel-verified arithmetic and discrete state transitions):
 
 ```lean4
--- Example structuralist hierarchy: M_pp -> M_p -> M -> Specialization alpha
 structure PartialPotentialModel where
   domain : Type
-  position : domain -> Real
+  position : domain -> Float
 
 structure PotentialModel extends PartialPotentialModel where
-  mass : domain -> Real
-  force : domain -> Real
+  mass : domain -> Float
+  force : domain -> Float
 
 class ActualLawModel (m : PotentialModel) : Prop where
-  newton_second_law : ∀ x : m.domain, m.force x = m.mass x * m.position x -- schematic
-
--- Specialization (alpha): strictly inherits PotentialModel & ActualLawModel
-class HarmonicSpecialization (m : PotentialModel) extends ActualLawModel m where
-  spring_k : Real
-  hooke_law : ∀ x : m.domain, m.force x = -spring_k * m.position x
+  law_holds : ∀ x : m.domain, m.force x = m.mass x * m.position x
 ```
 
-### 2.3 Symbolic-vs-Quantitative Dual Refinement (`AlphaProof Code` Pattern)
-
-Inspired by **AlphaProof Code** (Chaudhuri et al., Google DeepMind, 2026), which couples symbolic state-transition semantics (`DyLean`) with quantitative probabilistic/distributional semantics (`VCVio`) via a one-way abstraction/concretization homomorphism $\gamma$, `EpistemeLogic` cleanly partitions each structuralist model across two refinement levels:
-- **Symbolic Layer (`Lean 4`):** Discrete deductive structure (`PotentialModel`, `ActualLawModel`, modal/deontic operators, structuralist `alpha` specialization). Checked deterministically via Lean 4 + SMT (`Gate 4`).
-- **Quantitative Refinement Layer (`TenabilitySolver` / Type-B `DomainWorldModelPort`):** Empirical parameters, differential residuals, and bounded uncertainty scores (`empirical_tenability_ts` via `ISSUE-115`), linked back through an explicit homomorphism so purely symbolic deductions never silently overclaim quantitative precision.
+### 3.3 Deterministic IR $\to$ Lean 4 Transpiler (Connecting to [ISSUE-115](ISSUE-115-epistemic-node-router-and-programmatic-empirical-world-models.md))
+When `packages/episteme-formal/` is enabled alongside Regime B2 ([ISSUE-115](ISSUE-115-epistemic-node-router-and-programmatic-empirical-world-models.md)), a deterministic transpiler compiles Episteme's **Declarative Typed Transition Graph IR** (`OperationalizedScenarioArtifact`) into total Lean 4 `structure State` + `def step (s : State) (a : Action) : State` modules—enabling both deterministic simulation ($\phi_1$) and formal reachability/invariant verification ($\phi_2$) without ever executing untrusted LLM-generated Python.
 
 ---
 
-## 3. Solving the Autoformalization Faithfulness & Spec-Hardening Crisis: The 5-Gate Pipeline
+## 4. Hardened Verification Pipeline (With MCS Pre-Repair & Anti-Skeleton Checks)
 
-Two empirical findings motivate defensive kernel-and-specification engineering in `packages/episteme-formal/`:
-1. **Autoformalization Unfaithfulness (~43% baseline):** As documented in *Prove2Me* (Chen et al., 2026, §2 & §3.3, citing Bourigault et al., 2026), LLM-as-judge audits find **only ~43% of AI-formalized and kernel-proved statements faithful** to the source natural-language claim.
-2. **Specification Weakening & Swarm `False`-Injection Contagion (*AlphaProof Code*, Chaudhuri et al., Nov 2026, §3 & §7 p. 26):** *"Once proofs become cheap, the hard question is what to prove."* While ~6.5M lines of agent proofs can remain untrusted, specifications are the **Trusted Computing Base (TCB)** (~18K spec lines + ~8K ISA semantics). During parallel agentic search, AlphaProof Code observed **specification-weakening contagion** (cf. Paglieri et al., 2026; ImpossibleBench): an agent redefined an upstream hypothesis predicate to `False` and the trick propagated rapidly across the swarm!
-
-`packages/episteme-formal/` enforces a strict **5-Gate Pipeline** plus a **Blind Critic Amendment Protocol**:
+To prevent the ~43% baseline autoformalization unfaithfulness (*Bourigault et al.*, 2026), propositional-skeleton degeneracy (`opaque P : Prop; P -> Q`), cone poisoning from prior *ceteris paribus* clashes, and swarm specification weakening (*AlphaProof Code*, 2026), `packages/episteme-formal/` enforces a budgeted **5-Gate Pipeline**:
 
 ```mermaid
 flowchart TD
-    In["ScopedVerificationContext + EpistemicChangeset"] --> G1["Gate 1: Held-Out Read-Only TCB & Canonical Signature Injection"]
-    G1 --> AF["Autoformalizer Agent (Text -> Lean 4 Theorem + Proof-Sketch)"]
-    AF --> G2["Gate 2: Hygiene, Reachability & Mutation Check (no sorry, no native_decide, Ex m Gamma m)"]
-    G2 -->|"Vacuous / Axiom / Mutation Fail"| Reject["Reject & Re-Prompt / Unverified"]
-    G2 -->|"Clean"| G3["Gate 3: Blind Sub-Agent Read-Back + Cross-Family Reviewer + Jev Gate"]
+    In["ScopedVerificationContext + EpistemicChangeset (Gated by DecisionEngine)"] --> G0["Pre-Check: Consistency Cone & MCS / Unsat-Core Isolation"]
+    G0 --> G1["Gate 1: Held-Out Read-Only FormalSignatureLedger TCB Injection"]
+    G1 --> Source{"Manual Lean Spec or Assisted Autoformalization?"}
+    Source -->|"Human-Authored"| G2
+    Source -->|"Machine Draft"| AF["Autoformalizer Agent (Budgeted <= 3 retries)"]
+    AF --> G2["Gate 2: Hygiene, Anti-Skeleton Structural Check, Reachability Witness & Mutation Test"]
+    G2 -->|"Vacuous / Skeleton / Axiom Fail"| Reject["Return unverified + Diagnostic"]
+    G2 -->|"Clean"| G3["Gate 3: Cross-Family Blind Read-Back + Calibrated Equivalence Gate (Machine Drafts)"]
     G3 -->|"Drift Detected"| Reject
-    G3 -->|"Faithful (phi == NL')"| G4["Gate 4: Falsify-Before-Prove Triage & Warm Pantograph + SMT"]
-    G4 -->|"Counterexample or Refutation"| Out["VerificationVerdict -> VerificationTrajectoryStore"]
-    G4 -->|"Proved Artifact"| G5["Gate 5: Fresh-Env leanprover/comparator (+ nanoda_lib) Audit"]
+    G3 -->|"Faithful (or Human-Verified)"| G4["Gate 4: Falsify-Before-Prove (SMT/Plausible) + Warm Pantograph REPL"]
+    G4 -->|"SMT unknown / Timeout"| Reject
+    G4 -->|"Counterexample or Refutation"| Out["VerificationVerdict -> Trajectory Sink"]
+    G4 -->|"Proved Artifact"| G5["Gate 5: Fresh-Env leanprover/comparator Audit (no sorry / no native_decide)"]
     G5 --> Out
 ```
 
-### Gate Details
-1. **Gate 1 — Held-Out Read-Only TCB & Canonical Signature Injection (*AlphaProof Code* §4 + *Prove2Me* §4.4):**
-   - Inject immutable declarations from `FormalSignatureLedger` (`L2Entity` / `EntityConception` bindings) as a **read-only held-out TCB module** completely separate from agent-writable proof files. Prover agents may never edit canonical definitions, axioms, or target theorem signatures.
-2. **Gate 2 — Hygiene, Positive Reachability Witnesses & Semantic Mutation Testing (*AlphaProof Code* §4–§5):**
-   - Verify $\Gamma \not\vdash \text{False}$ **plus positive non-vacuity / reachability witnesses** ($\exists m,\ \Gamma(m)$) proving that a non-trivial concrete model actually satisfies the antecedents.
-   - Run **Semantic Mutation Testing**: automatically inject intentional defects into candidate definitions/proof targets ($\phi_{\text{mut}}$) and confirm `Lean 4` / spec invariants reject $\phi_{\text{mut}}$, detecting vacuous tautologies or hidden `False` antecedents early.
-   - Forbid `sorry`, ad-hoc `axiom`, **`native_decide`** (which bypasses kernel reduction), and unused-hypothesis vacuities.
-3. **Gate 3 — Blind Sub-Agent Read-Back, Cross-Model-Family Skeptical Reviewer & `Jev` Gate (*Prove2Me* §3.3 & *AlphaProof Code* §5.2):**
-   - An independent **cross-model-family auditor** (strictly different model family from the autoformalizer/prover to avoid shared correlated blind spots) receives **strictly the Lean 4 declaration and unfolded definitions—never the original German/English source text**—and translates what the Lean code *literally asserts* back into natural language $\phi'$ (making quantifiers, edge cases, and empty-set conventions explicit).
-   - Episteme's calibrated `DecisionEngine.evaluate_noul` (`Jev`) verifies semantic equivalence $\phi \equiv \phi'$ within conformal confidence bounds before trusting any proof.
-4. **Gate 4 — Falsify-Before-Prove Triage + Warm `Pantograph` REPL + SMT (*AlphaProof Code* §7 & *Prove2Me* §4.1):**
-   - **Falsify Before Prove:** Before expending expensive Mode-2 proof budgets, run fast SMT / property-testing falsification (`Z3` / `CVC5` / `lean-smt` / `plausible`). Most malformed formalizations admit cheap counterexamples within seconds.
-   - **Stateful Warm `Pantograph` REPL:** Avoids cold `lake env lean` recompilation cones by holding `EpistemeLogic` + per-document `.olean` environments warm in memory for incremental tactic execution and multi-solver disproof/model-finding.
-5. **Gate 5 — Held-Out Fresh-Env `leanprover/comparator` Kernel Audit (*AlphaProof Code* §4):**
-   - Every accepted proof is replayed in a completely clean Lean environment via **`leanprover/comparator`** against the immutable held-out spec (optionally cross-checked with an external kernel such as `nanoda_lib`), strictly rejecting `sorry`, unapproved axioms, and `native_decide`.
-
-### Blind Critic Protocol for Specification Amendments (*AlphaProof Code* §6.1)
-
-Philosophical corpus modeling occasionally uncovers genuine ambiguities in `FormalSignatureLedger` specs. Never let prover agents weaken definitions ad hoc; instead require a **4-condition Blind Critic gate** (critic never sees proof attempts):
-1. **Backed by Disproof:** A failing proof trace or concrete SMT/property counterexample demonstrates the spec genuinely blocks intended valid models.
-2. **Non-Weakening:** The amendment does not weaken security/logical guarantees (verified via semantic diff / invariant preservation).
-3. **Witness Preserving:** All existing positive reachability witnesses ($\exists m,\ \Gamma(m)$) remain valid.
-4. **Minimal & Logged:** The diff is minimal and recorded as a versioned `FormalSignatureAmendment` event in `VerificationTrajectoryStore`.
+### Key Safeguards
+1. **Pre-Check — Consistency Cone & MCS / Unsat-Core Isolation:**
+   - Before checking $\phi$, test $\Gamma \not\vdash \bot$. If $\Gamma$ itself is already inconsistent (e.g., due to an existing philosophical aporia or unguarded *ceteris paribus* clash), do **not** silently fail all future checks with `unverified`: extract a **minimal unsatisfiable core**, emit `LOGICAL_CONTRADICTION` for the core, and evaluate $\phi$ against the **Maximal Consistent Subset (MCS)** excluding the conflicting core (clearly flagged in `formal_assumptions`).
+2. **Gate 1 — Held-Out Read-Only `FormalSignatureLedger` TCB (*AlphaProof Code* §4 + *Prove2Me* §4.4):**
+   - Versioned `FormalSignatureLedger` bindings are passed explicitly on `PipelineInput` and fingerprinted into `RunManifest.signature_ledger_fingerprint` (mirroring `EpistemicCurationLedger`), then injected as a read-only module separate from agent-writable proof files. Provers may never edit canonical definitions or target theorem signatures.
+3. **Gate 2 — Hygiene, Anti-Skeleton Non-Triviality, Reachability & Mutation Checks:**
+   - **Anti-Skeleton Structural Check:** Reject degenerate machine drafts that merely wrap raw prose in `opaque ClaimA : Prop; opaque ClaimB : Prop; axiom h : ClaimA -> ClaimB` without shared predicates, quantifiers, or `FormalSignatureLedger` bindings.
+   - **Reachability Witness & Mutation Test:** Verify positive non-vacuity ($\exists m, \Gamma(m)$) and confirm semantic mutants ($\phi_{\text{mut}}$) fail verification. Forbid `sorry`, ad-hoc `axiom`, and `native_decide`.
+4. **Gate 3 — Cross-Family Blind Read-Back & Calibrated Equivalence (For `machine_draft`):**
+   - A cross-model-family auditor receives **only** the Lean 4 declaration + unfolded definitions (never the original prose) and translates it back to natural language $\phi'$, checked via a task-calibrated equivalence gate (bypassed when `formal_provenance == "human_verified"`).
+5. **Gate 4 & Gate 5 — Budgeted Falsify-Before-Prove + Warm `Pantograph` + `leanprover/comparator`:**
+   - Run fast SMT/property falsification first (`Z3`/`CVC5`/`lean-smt`/`plausible`), strictly mapping SMT `unknown` to `unverified` (never `consistent_independent`).
+   - Use a stateful warm `Pantograph` REPL pool governed by `max_lean_seconds_per_run` and per-episode timeouts. Interactive HITL runs in `episteme-studio` ALWAYS dispatch via **async `sse-starlette` background jobs** so multi-second Lean runs never block FastAPI endpoints.
+   - Replay accepted proofs in a clean environment via `leanprover/comparator` (optionally cross-checked with `nanoda_lib`).
+6. **4-Condition Blind Critic Protocol for `FormalSignatureLedger` Amendments (*AlphaProof Code* §6.1):**
+   - Any canonical signature update requires: (1) concrete disproof/counterexample, (2) non-weakening semantic diff, (3) preservation of existing reachability witnesses, and (4) minting a **new versioned `FormalSignatureLedger` artifact** on a child run (`parent_run_id`) rather than mutating the running ledger in place.
 
 ---
 
-## 4. Annotated Research Guide & Primary Literature
+## 5. Annotated Research Guide & Primary Literature
 
-| Paper / System | Core Contribution | What to Adopt / Study for `episteme-formal` |
+| Paper / System | Core Contribution | What to Adopt for `episteme-formal` |
 | :--- | :--- | :--- |
-| **Chen et al. (2026)**, *Prove2Me: An Open Collaborative Platform for Scaling Math Formalization* (`arXiv:2608.28433v2`) | Immutable statement/proof separation; `proof-sketches` importing open child lemmas; Milestone consensus; **Sub-Agent Read-Back**. | **§3.2–3.3** (Read-back auditing, Fig. 3), **§4.1–4.4** (Recompilation bottleneck & `proof-sketch` DAGs), **§4.5** (Disproof-driven boundary repair, Fig. 8). |
-| **Bourigault et al. (2026)**, *Risk-Controlled Lean-as-Judge for Natural-Language Mathematical Reasoning* (`arXiv:2605.28365`) | Empirical measurement of unfaithful autoformalization (~43% baseline faithfulness) + conformal risk control. | Conformal threshold calibration for our Blind Read-Back + `Jev` equivalence gate. |
-| **Benzmüller, Parent, & van der Torre (2020)**, *Designing Normative Theories for Ethical and Legal Reasoning: LogiKEy Framework* (*Artificial Intelligence* 287) | Shallow Semantical Embeddings (SSE) of modal, deontic, and conditional logics in classical HOL. | Design of `EpistemeLogic.Modal` and Lean 4 ports of Gödel/Scott ontological proofs (`#print axioms` dependency tracking). |
-| **Kirchner, Benzmüller, & Zalta (2019)**, *Computer Science and Metaphysics: A Cross-Fertilization* (`arXiv:1905.00787`) | Automated verification of Zalta's **Abstract Object Theory (AOT)** (*exemplification* vs. *encoding*) and paradox detection. | Handling fictional, abstract, and non-existent philosophical objects without quantifier paradoxes. |
-| **Aniva et al. (2024)**, *Pantograph: A Machine-to-Machine Interaction Interface for Lean 4* (`arXiv:2410.16429`) & **Yang et al. (2023)** (*LeanDojo*, `arXiv:2306.15626`) | Stateful programmatic Lean 4 REPL server supporting branching tactic search, `sorry` extraction, and persistent environments. | Core execution engine for `packages/episteme-formal/` instead of slow CLI invocations. |
-| **Jiang et al. (ICLR 2023)**, *Draft, Sketch, and Prove* (`arXiv:2210.12283`) & **Meadows et al. (ACL 2026)** (*FormalScience*) | Hierarchical proof sketching + human-in-the-loop scientific autoformalization in Lean. | Translating informal philosophical proof prose into structured `proof-sketches` with explicit missing-lemma placeholders. |
-| **Pan et al. (EMNLP 2023)** (*Logic-LM*, `arXiv:2305.12295`) & **Olausson et al. (EMNLP 2023)** (*LINC*, `arXiv:2310.15164`) | Coupling LLM autoformalizers with external symbolic solvers (Z3, Prover9, Isabelle) and self-refinement on solver error traces. | Error-trace feedback loop during Mode-2 autoformalization retries. |
-| **Chaudhuri et al. (Google DeepMind, Nov 2026)** (*AlphaProof Code: Verifying Signal's Security at the Machine-Code Level*) | Held-out read-only TCB checked via `leanprover/comparator` + external verifier (`nanoda_lib`), banning `native_decide`, positive reachability witnesses + semantic mutation testing, Blind Critic amendment protocol, falsify-before-prove triage, cross-family reviewers, `DyLean`+`VCVio` refinement $\gamma$, and swarm `False`-injection contagion defense. | Architectural foundation for `ISSUE-113`'s 5-Gate TCB hardening, `comparator` gate, and symbolic/quantitative separation. |
-| **Paglieri et al. (2026)** (`arXiv:2609.04170`) & **Zhong et al. (2025)** (*ImpossibleBench*, `arXiv:2510.20270`) | Empirical analysis of agentic specification hacking, test manipulation, and upstream `False`-predicate contagion across agent swarms. | Motivates immutable held-out `FormalSignatureLedger` TCB and mutation testing in Gate 2. |
-| **`leanprover/comparator` (2025)** & **Kohlhase et al. / `DyLean` (2026)** | Fresh-environment Lean proof verification banning extra axioms / `native_decide`; executable state-transition semantics in Lean 4 paired with probabilistic refinements (`VCVio`). | Implementation reference for Gate 5 audit and §2.3 dual symbolic/quantitative formalization. |
+| **Chen et al. (2026)**, *Prove2Me* (`arXiv:2608.28433v2`) | Immutable statement/proof separation; `proof-sketches` importing open child lemmas; **Sub-Agent Read-Back**. | Read-back auditing, `proof-sketch` DAGs, and disproof-driven boundary repair. |
+| **Bourigault et al. (2026)**, *Risk-Controlled Lean-as-Judge* (`arXiv:2605.28365`) | Empirical measurement of unfaithful autoformalization (~43% baseline) + conformal risk control. | Conformal calibration for Read-Back equivalence gating. |
+| **Benzmüller, Parent, & van der Torre (2020)**, *LogiKEy* (*AIJ* 287) | Shallow Semantical Embeddings (SSE) of modal/deontic logics in HOL. | Configurable `EpistemeLogic.Modal` frame classes. |
+| **Aniva et al. (2024)** (*Pantograph*, `arXiv:2410.16429`) & **Yang et al. (2023)** (*LeanDojo*, `arXiv:2306.15626`) | Stateful programmatic Lean 4 REPL server supporting persistent `.olean` environments. | Core execution engine avoiding cold `lake env lean` recompilation cones. |
+| **Chaudhuri et al. (Google DeepMind, Nov 2026)** (*AlphaProof Code*) | Held-out read-only TCB checked via `leanprover/comparator` + `nanoda_lib`, banning `native_decide`, reachability witnesses, mutation testing, Blind Critic amendments, falsify-before-prove, `DyLean`+`VCVio` refinement. | TCB hardening, comparator audit, and symbolic/executable separation. |
+| **Pan et al. (EMNLP 2023)** (*Logic-LM*) & **Olausson et al. (EMNLP 2023)** (*LINC*) | Coupling LLM autoformalizers with external symbolic solvers (Z3, Prover9, Isabelle). | Lightweight Z3/FOL Stage-0 baseline and solver error-trace retry loop. |
 
 ---
 
-## 5. Acceptance Criteria
+## 6. Acceptance Criteria
 
-- [ ] Scaffold `packages/episteme-formal/` with `pyproject.toml`, `EpistemeLogic` Lean 4 base library, and `Pantograph` REPL client adapter.
-- [ ] Implement the 5-Gate Verification Pipeline (held-out `FormalSignatureLedger` TCB, positive reachability witnesses + semantic mutation checks banning `native_decide`, Blind Sub-Agent cross-family Read-Back + `Jev` gate, falsify-before-prove + Lean/SMT dual solver, and fresh-environment `leanprover/comparator` audit).
-- [ ] Implement the 4-condition Blind Critic protocol (`FormalSignatureAmendment`) guarding all canonical signature updates against swarm `False`-injection contagion.
-- [ ] Emit `proof-sketch` child lemmas as `EpistemicDeficitKind.ENTHYMEME_GAP` and hard refutations as `EpistemicDeficitKind.LOGICAL_CONTRADICTION`.
-- [ ] Pass Stage-0 benchmark on 15–20 DE/EN `TheoryNet` subgraphs with `< 15%` semantic drift after Read-Back + mutation filtering.
+- [ ] Scaffold `packages/episteme-formal/` depending solely on `episteme-contracts` (zero PyTorch/GNN dependencies), kept **out of mandatory root `pyproject.toml` dependencies**, with `EpistemeLogic` Lean 4 library and warm `Pantograph` REPL adapter.
+- [ ] Support `human_verified`, `hybrid_reviewed`, and `DecisionEngine`-gated `machine_draft` workflows with per-run/per-episode time budgets and non-blocking async `episteme-studio` background jobs (`sse-starlette`).
+- [ ] Implement MCS / Unsat-Core cone pre-repair, anti-skeleton non-triviality checks, Blind Read-Back auditing, strict SMT `unknown -> unverified` handling, and `leanprover/comparator` Gate 5 audit + immutable versioned `FormalSignatureLedger` handling.
+- [ ] Implement deterministic IR $\to$ Lean 4 transpiler for [ISSUE-115](ISSUE-115-epistemic-node-router-and-programmatic-empirical-world-models.md)'s Declarative Typed Transition Graph IR.
+- [ ] Pass Stage-0 go/no-go benchmark (formalizability precision, non-triviality anti-skeleton rate, Read-Back `< 15%` drift, and comparison against a Z3/FOL baseline).

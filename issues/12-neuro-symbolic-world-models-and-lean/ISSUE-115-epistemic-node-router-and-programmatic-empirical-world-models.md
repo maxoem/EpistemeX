@@ -1,167 +1,178 @@
-# ISSUE-115: `EpistemicNodeRouter` & Programmatic Empirical World Models (Hume's Fork)
+# ISSUE-115: `EpistemicNodeRouter` (2×2 Hume's Fork) & Declarative Transition Graph World Models
 
 - **Status:** `Research` / `Proposal`
-- **Target Packages:** `packages/episteme-pipeline`, `packages/epistemetrics`, `packages/episteme-worldmodel` (Horizon 3)
-- **Horizon / Priority:** Horizon 3 | High
-- **Related ADR & Issues:** [ADR-0025-PROPOSAL](ADR-0025-PROPOSAL-epistemic-commit-cascade-and-world-models.md), [ISSUE-111](ISSUE-111-core-epistemic-commit-interceptor-and-operator-algebra.md), [ISSUE-112](ISSUE-112-inductive-graph-world-model-and-jepa-capabilities.md), [ISSUE-113](ISSUE-113-lean4-formal-verification-oracle-and-logikey-adapter.md), [ISSUE-114](ISSUE-114-neuro-symbolic-interaction-dynamics-and-distillation.md), [ISSUE-094](../../issues/11-epistemetrics-formal-concept/epistemic_coherence/ISSUE-094-TENABILITY.md)
+- **Target Packages:** `packages/episteme-contracts`, `packages/episteme-pipeline`, `packages/episteme-worldmodel`, `packages/episteme-formal` (optional IR $\to$ Lean 4 backend), `packages/episteme-studio`
+- **Horizon / Priority:** Horizon 2 & 3 | High
+- **Related ADR & Issues:** [ADR-0025-PROPOSAL](ADR-0025-PROPOSAL-epistemic-commit-cascade-and-world-models.md), [Execution Plan](EXECUTION-PLAN.md), [ISSUE-111](ISSUE-111-core-epistemic-commit-interceptor-and-operator-algebra.md), [ISSUE-112](ISSUE-112-inductive-graph-world-model-and-jepa-capabilities.md), [ISSUE-113](ISSUE-113-lean4-formal-verification-oracle-and-logikey-adapter.md), [ISSUE-114](ISSUE-114-neuro-symbolic-interaction-dynamics-and-distillation.md), [ISSUE-094](../../issues/11-epistemetrics-formal-concept/epistemic_coherence/ISSUE-094-TENABILITY.md)
 - **Grounded In Repo:**
-  - [default_schema.py](../../packages/episteme-pipeline/episteme_pipeline/schema/default_schema.py) (`L3_COMPONENT_TYPES` Partitions `"A"` vs. `"B"`, `EPISTEMIC_STATUSES` `"Analytisch"` / `"Synthetisch"`)
+  - [default_schema.py](../../packages/episteme-pipeline/episteme_pipeline/schema/default_schema.py) (`COMPONENT_PARTITIONS` `"A"` vs. `"B"`, `EPISTEMIC_STATUSES` `"Analytisch"` / `"Synthetisch"`)
   - [0022-unified-stratified-epistemic-metamodel.md](../../docs/adr/0022-unified-stratified-epistemic-metamodel.md) (`Partition A`, `Partition B`, `TS_local`)
-  - [runner.py](../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py) (`TheoreticalEnrichmentRunner`, `TenabilitySolver`)
+  - [runner.py](../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py) (`TheoreticalEnrichmentRunner`, 882 lines)
   - [solvers.py](../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/solvers.py) (`SafeFormulaEvaluator`, `TenabilitySolver`)
   - [roadmap.md](../../docs/roadmap.md) ("World Models for Empirical Node Validation")
 
 ---
 
-## 1. Motivation & Epistemic Diagnosis (Hume's Fork)
+## 1. Motivation & Epistemic Diagnosis: Correcting the 2×2 Hume's Fork Matrix
 
-Episteme separates every scientific theory net $T$ into two logically distinct strata (matching [default_schema.py](../../packages/episteme-pipeline/episteme_pipeline/schema/default_schema.py) and [ADR-0022](../../docs/adr/0022-unified-stratified-epistemic-metamodel.md)):
+In Episteme's schema ([default_schema.py](../../packages/episteme-pipeline/episteme_pipeline/schema/default_schema.py#L140-L174)), **two orthogonal axes** classify `TheoryAtom` nodes—and must **never** be conflated:
+1. **Vocabulary Partition (`Partition A` vs. `Partition B`):**
+   - `Partition A` (`TheoreticalHypothesis`, `CoreExpansion`): contains theoretical terms/laws.
+   - `Partition B` (`ObservationUnit`, `EmpiricalStatement`): contains observational/empirical terms.
+2. **Epistemic Status (`Analytisch` vs. `Synthetisch`):**
+   - `Analytisch`: truth/validity depends on definitions, logic, or mathematical structure.
+   - `Synthetisch`: truth depends on empirical facts, mechanisms, or external reality.
 
-1. **Relations of Ideas (`Analytisch` / `Partition A`):** Core axioms, structural definitions, and mathematical laws (`TheoreticalHypothesis`, `CoreExpansion`, deductive entailments). Compatibility is deterministic and formal: given axioms $\Gamma$ and candidate $\phi$, does $\Gamma \vdash \phi$ or $\Gamma \vdash \neg\phi$ hold? This is served by **Type-A World Models** ([ISSUE-112](ISSUE-112-inductive-graph-world-model-and-jepa-capabilities.md) Graph-JEPA inductive prior + [ISSUE-113](ISSUE-113-lean4-formal-verification-oracle-and-logikey-adapter.md) Lean 4 / SMT oracle).
-2. **Matters of Fact (`Synthetisch` / `Partition B` + Derived Predictions):** Empirical observations (`ObservationUnit`, `EmpiricalStatement`), social/behavioral mechanisms (e.g., an empathy or coordination theory), and empirical predictions $\hat{b}$ deduced by Lean 4 from `Partition A` (`A ⊢ b̂`). **Lean 4 cannot verify synthetic truth.** Asking a proof assistant whether an empathy theory produces higher cooperation in human groups mistakes syntactic consistency for world-compatibility.
+Crucially, **most scientific and philosophical hypotheses live in the `(Partition A, Synthetisch)` quadrant** (e.g., *"Dopamine depletion causes anhedonia"*, *"Central planning without price signals causes allocation drift"*). Routing must handle all four quadrants explicitly—gated by Episteme's **`DecisionEngine` ([ADR-0018](../../docs/adr/0018-decision-engine-architecture-and-contracts.md))** so qualitative prose is never forced into Lean 4:
 
-Simultaneously, the *World Models for Empirical Node Validation* note in [roadmap.md](../../docs/roadmap.md) and recent empirical LLM simulation literature expose **three critical failure modes** if an empirical world model is naively wrapped around an LLM prompt:
-
-| Failure Mode | Empirical Evidence | Episteme Architectural Consequence |
+| Vocabulary Partition | `Analytisch` (Formal / Conceptual) | `Synthetisch` (Empirical / Mechanistic) |
 | :--- | :--- | :--- |
-| **1. Direct LLM Elicitation Calibration Collapse** | Manning, Zhu, & Horton (2024, *Automated Social Science*, §2.3 & §3.2): querying an LLM directly to predict outcomes gives auction clearing price `MSE = 8,628` vs. `128` for economic theory (**~67× worse**), and `predict-beta` overestimates true regression magnitudes in **10 of 12** causal paths by an average of **13.2×**. | Never prompt an LLM directly for *"Is empirical claim X plausible in the world?"* (`score in [0,1]`). |
-| **2. Unstructured Discovery & Bad Controls** | Manning et al. (2024, §4.2, Fig. 7b & Fig. 8): letting LLM agents converse freely and running ex-post causal discovery (GES) falls into collider/mediator conditioning bias and Markov equivalence ambiguity. | Empirical tests must specify an **ex-ante Structural Causal Model (SCM)** with typed exogenous treatments (`do(X=x)`), pre-specified measurement instruments, and factorial experimental sweeps. |
-| **3. Conflating Operationalization with the World Oracle (Duhem–Quine)** | If empirical distillation/operationalization happens hidden inside a World Model API client, a failure in bridge-principle translation looks identical to empirical falsification of the core theory, breaking determinism, provenance, and `Fingerprintable` caching. | **Operationalization must be an explicit, fingerprintable pipeline step** emitting an auditable `OperationalizedScenarioArtifact` before any Type-B oracle executes. |
+| **`Partition A`** (Theoretical) | **`FORMAL_CASCADE`** (if `DecisionEngine` marks formalizable or manual Lean spec attached) else **`DQBAF_ONLY`** | **`BRIDGE_SYNTHESIS`** (if formal entailment $A \vdash \hat{b}$ exists: verify entailment in Lean, test $\hat{b}$ via Type-B) OR **`EMPIRICAL_WORLD`** (if operationalizable) else **`DQBAF_ONLY`** |
+| **`Partition B`** (Observational) | **`FORMAL_CASCADE`** (rare: definitional/measurement identity) else **`DQBAF_ONLY`** | **`EMPIRICAL_WORLD`** (Corpus B1 / Declarative Transition Graph B2 feeding `TS_local`) |
+
+Simultaneously, empirical LLM simulation literature exposes **four critical failure modes** to engineer around:
+
+| Failure Mode | Evidence / Risk | Episteme Architectural Safeguard |
+| :--- | :--- | :--- |
+| **1. Direct LLM Elicitation Collapse** | Manning, Zhu, & Horton (2024, *Automated Social Science*): direct LLM scoring gives `MSE = 8,628` vs. `128` (**~67× worse**) and `13.2×` $\hat{\beta}$ inflation. | Never prompt an LLM directly for *"Is empirical claim X plausible?"* (`score in [0, 1]`). |
+| **2. Arbitrary Python Code Execution (RCE / Auditability)** | Synthesizing and executing raw Python scripts (*WorldCoder*) creates security, sandboxing, determinism, and UI-auditability hazards. | **Never output raw Python.** Regime B2 targets a **Declarative Typed Transition / Causal Graph IR** (closed Pydantic AST extending `SafeFormulaEvaluator`), with an optional **IR $\to$ Lean 4 transpiler**. |
+| **3. Duhem–Quine Conflation** | Hiding operationalization inside a Type-B client conflates bridge-law translation defects ($H_{\text{bridge}}$) with world falsification ($H_{\text{world}}$). | Standalone **`EmpiricalOperationalizationRunner`** (`PhaseRunner` / `PostForwardStage`) emitting a persisted, `Fingerprintable` `OperationalizedScenarioArtifact`. |
+| **4. Self-Referential LLM Priors in `TS_local`** | Writing LLM-simulated social trials (`in_silico_scm`) automatically into `TS_local` multiplies `TheoryAtom.modal_prior` with the LLM's own RLHF/pretraining biases. | Keep Regime B3 (`in_silico_scm`) strictly as an **interactive `episteme-studio` sensitivity/exploration workbench tool**—never an automated pipeline write-back into `TS_local`. |
 
 ---
 
 ## 2. Two Orthogonal World-Model Concepts: Type-A vs. Type-B
 
-Episteme explicitly separates two distinct meanings of *"World Model"* so neither conflates internal graph coherence with external reality:
-
 ```mermaid
 flowchart LR
-    Node["Candidate L3 Node or Axiom-Derived Prediction"] --> Router["EpistemicNodeRouter"]
-    Router -->|"Analytisch or Partition A"| TypeA["Type-A: Internal Graph World Model (JEPA + Lean 4 + SMT)"]
-    Router -->|"Synthetisch or Partition B"| Stage1["Stage 1: Explicit Post-Processor Operationalization"]
-    Stage1 --> Artifact["OperationalizedScenarioArtifact (Fingerprintable Bridge Laws)"]
-    Artifact --> TypeB["Type-B: DomainWorldModelPort (Harness / WorldCoder / Ex-Ante SCM)"]
-    TypeB -->|"EmpiricalCompatibilityReport"| Bridge["Bridge to Partition A and TenabilitySolver (TS_local)"]
+    Node["Candidate L3 Atom or Derived Prediction"] --> Router["EpistemicNodeRouter (2x2 Matrix + DecisionEngine Gate)"]
+    Router -->|"Qualitative / Non-Formalizable"| QBAF["DQBAF_ONLY (No Formal/Sim Overhead)"]
+    Router -->|"Formalizable Analytic / Manual Lean"| TypeA["Type-A: DecisionEngine Triage + Opt-In Lean 4 (episteme-formal)"]
+    Router -->|"Operationalizable Synthetic / Empirical"| Stage1["Standalone EmpiricalOperationalizationRunner"]
+    Stage1 --> Artifact["OperationalizedScenarioArtifact (Typed Transition / Causal Graph IR)"]
+    Artifact --> TypeB["Type-B: DomainWorldModelPort (Corpus B1 / Graph IR Interpreter B2 / Optional Lean 4 Transpiler)"]
+    TypeB -->|"EmpiricalCompatibilityReport"| Bridge["Bridge to TenabilitySolver (TS_local)"]
     TypeA --> Verdict["VerificationVerdict + RefinementDelta"]
     Bridge --> Verdict
 ```
 
-| Dimension | **Type-A: Epistemic Graph World Model** ([ISSUE-112](ISSUE-112-inductive-graph-world-model-and-jepa-capabilities.md)) | **Type-B: External Domain World Model** (`ISSUE-115`) |
-| :--- | :--- | :--- |
-| **Domain of Discourse** | Episteme's own formal theory graph $G = (L_1, L_2, L_3)$ | Physical, biological, computational, or social reality external to $G$ |
-| **Input State** | Local poset roots, $k$-hop $L_3$ subgraph, schema constraints | `OperationalizedScenarioArtifact` (initial state $s_0$, action/intervention $a$, observable $y$) |
-| **Oracle Mechanism** | Graph-JEPA latent energy + Warm `Pantograph` Lean 4 / Z3 | Three plugged regimes via `DomainWorldModelPort` (B1 Corpus, B2 *WorldCoder*, B3 Ex-Ante SCM) |
-| **Core Question Answered** | *"Does $\phi$ entail or contradict $\Gamma$ inside $T$?"* | *"Under bridge laws $\beta$, does domain world $\mathcal{W}$ permit transition/intervention outcome $\hat{b}$?"* |
-
 ---
 
-## 3. Architectural Decision: Explicit Post-Processor Operationalization vs. In-API Translation
+## 3. Standalone `EmpiricalOperationalizationRunner` (`PostForwardStage`, Decoupled from `TheoreticalEnrichmentRunner`)
 
 > [!IMPORTANT]
-> **Hard Architectural Boundary:** Bridge-principle distillation and scenario operationalization **MUST NOT** be hidden inside an external `WorldModelClient` adapter. They belong inside an explicit pipeline post-processor step (`EmpiricalOperationalizer` inside `TheoreticalEnrichmentRunner`) that emits a persisted, `Fingerprintable` `OperationalizedScenarioArtifact`.
+> **Hard Architectural Boundary:** Bridge-principle distillation **MUST NOT** be hidden inside an external `DomainWorldModelPort` adapter **nor** crammed into the already 882-line [`TheoreticalEnrichmentRunner`](../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py#L98). It runs inside its own standalone **`EmpiricalOperationalizationRunner`** wrapped as **`EmpiricalOperationalizationStage` (`PostForwardStage`)** in `PostForwardRunner` ([ISSUE-111](ISSUE-111-core-epistemic-commit-interceptor-and-operator-algebra.md)), executing after refinement/formal verification stabilize and emitting `ArtifactKind.OPERATIONALIZED_SCENARIO`.
 
-### Why This Boundary Is Mandatory (Duhem–Quine Decomposition)
-
-Consider evaluating an empathy claim $c$: *"Higher shared vulnerability increases altruistic helping in teams."* Testing $c$ against an external world model involves two falsifiable hypotheses:
-1. **Translation / Bridge Hypothesis ($H_{\text{bridge}}$):** $c$ operationalizes into treatment $X := \text{vulnerability\_disclosure} \in \{0,1\}$, mediator/confounder guard, outcome $Y := \text{allocation\_share} \in [0, 1]$, and population prior $\mathcal{D}$.
-2. **Empirical Truth Hypothesis ($H_{\text{world}}$):** Given exact inputs $(X, Y, \mathcal{D})$, simulator/corpus/program $\mathcal{W}$ yields $\mathbb{E}[Y \mid do(X=1)] > \mathbb{E}[Y \mid do(X=0)]$.
-
-Keeping Step 1 inside `episteme-pipeline` guarantees:
-- **Deterministic Replay & Content-Addressed Caching:** `DomainWorldModelPort` receives structured, schema-validated `OperationalizedScenarioArtifact` objects keyed by `(scenario_hash, domain_spec_version, seed)`. Re-running a deterministic regime B1/B2/B3 needs zero LLM calls.
-- **Popper/Schurz 2-Stage Falsification:** When a claim fails (`COMPATIBLE = False`), Episteme preserves trace separation between *"the LLM mistranslated the philosophical prose into scenario parameters"* ($H_{\text{bridge}}$ defect) and *"even under valid operationalization, the domain model refutes prediction $\hat{b}$"* ($H_{\text{world}}$ falsification feeding [ISSUE-094](../../issues/11-epistemetrics-formal-concept/epistemic_coherence/ISSUE-094-TENABILITY.md)).
-- **Hermeneutic Historicism Preserved:** Historical context $B(t)$ ([assumptions_limitations.md](../../docs/concepts/assumptions_limitations.md)) governs whether an empirical mismatch triggers an `ANACHRONISM_GUARD` annotation rather than anachronistically penalizing an ancient treatise's internal validity.
+Keeping operationalization as an explicit artifact stage guarantees:
+- **Deterministic Replay & Content-Addressed Caching:** `DomainWorldModelPort` receives schema-validated Pydantic `OperationalizedScenarioArtifact` objects keyed by `(scenario_hash, domain_spec_version, seed)`. Re-running B1/B2 requires zero LLM calls.
+- **Popper/Schurz 2-Stage Falsification:** Preserves clean provenance between *"bridge translation failed"* ($H_{\text{bridge}}$) and *"under valid operationalization, the domain model refutes $\hat{b}$"* ($H_{\text{world}}$).
+- **Hermeneutic Historicism:** Historical context $B(t)$ ([assumptions_limitations.md](../../docs/concepts/assumptions_limitations.md)) triggers an `ANACHRONISM_GUARD` annotation rather than anachronistically penalizing historical treatises.
 
 ---
 
-## 4. The `EpistemicNodeRouter` & Hexagonal Port Contracts
+## 4. Declarative Typed Transition / Causal Graph IR & Hexagonal Contracts (All Pydantic v2)
 
-### 4.1 Routing Rules (`EpistemicNodeRouter`)
-
-`EpistemicNodeRouter` sits at stage 1 of `EpistemicCommitInterceptor` ([ISSUE-111](ISSUE-111-core-epistemic-commit-interceptor-and-operator-algebra.md)) and routes each candidate `L3` node or derived edge across three explicit pathways based on `L3_COMPONENT_TYPES`, `EPISTEMIC_STATUSES`, and origin metadata:
+All contracts use **Pydantic v2 `BaseModel`** (consistent with `contracts/domain.py` and `BaseArtifactPayload` in `artifacts/models.py`) and `VerificationTrack` from [ISSUE-111](ISSUE-111-core-epistemic-commit-interceptor-and-operator-algebra.md):
 
 ```python
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Literal, Protocol, runtime_checkable
 
-from episteme_pipeline.protocols import Fingerprintable
+from pydantic import BaseModel, Field
+
+from episteme_contracts.domain import TheoryAtom
+from episteme_contracts.fingerprint import Fingerprintable
+from episteme_contracts.verification import VerificationTrack
 
 
-class VerificationTrack(StrEnum):
-    """Target verification pathway selected by Hume's Fork routing."""
+class StateVariableSpec(BaseModel):
+    """Typed state or observable variable in a declarative transition/causal graph."""
 
-    FORMAL_CASCADE = "formal_cascade"       # Partition A / Analytisch -> JEPA + Lean 4 (ISSUE-111..114)
-    EMPIRICAL_WORLD = "empirical_world"     # Partition B / Synthetisch -> Operationalizer + Type-B WM
-    BRIDGE_SYNTHESIS = "bridge_synthesis"   # A |- b_hat -> Verify formal entailment, then test b_hat empirically
+    name: str
+    var_type: Literal["float", "int", "bool", "categorical"]
+    domain_bounds: tuple[float, float] | None = None
+    allowed_values: tuple[str, ...] = ()
+    initial_value: float | int | bool | str | None = None
 
 
-@dataclass(frozen=True)
-class OperationalizedScenarioArtifact:
-    """Explicit, content-addressed bridge translation from prose claim to Type-B scenario.
+class TransitionRuleEdge(BaseModel):
+    """Safe declarative transition or causal update rule (closed AST, zero Python exec)."""
 
-    Notes
-    -----
-    Produced exclusively by ``EmpiricalOperationalizer`` inside
-    ``TheoreticalEnrichmentRunner`` so bridge-law drift can be audited
-    independently of Type-B simulation execution.
+    rule_id: str
+    source_vars: tuple[str, ...]
+    target_var: str
+    guard_expr: str | None = None          # Evaluated via SafeFormulaEvaluator AST
+    update_expr: str                       # Evaluated via SafeFormulaEvaluator AST
+    action_trigger: str | None = None      # Optional intervention / action label
+
+
+class TransitionGraphIR(BaseModel):
+    """Declarative Typed Transition / Causal Graph IR replacing raw Python synthesis.
+
+    Safe by construction (closed AST, bounded rollout steps), natively renderable
+    and editable in ``episteme-studio``, and optionally transpilable to total
+    Lean 4 ``structure State`` / ``def step`` modules in ``packages/episteme-formal/``.
     """
+
+    ir_version: str = "v1"
+    variables: tuple[StateVariableSpec, ...] = ()
+    rules: tuple[TransitionRuleEdge, ...] = ()
+    invariants: tuple[str, ...] = ()       # SafeFormulaEvaluator boolean/residual constraints
+    max_rollout_steps: int = Field(default=64, ge=1, le=1024)
+
+
+class OperationalizedScenarioArtifact(BaseModel):
+    """Explicit, content-addressed bridge translation from prose claim to Type-B scenario."""
 
     artifact_id: str
     source_node_id: str
     theory_id: str
-    domain_kind: Literal["empirical_corpus", "programmatic_mdp", "social_scm"]
-    exogenous_variables: dict[str, tuple[float, float]]
-    treatment_intervention: dict[str, str]
+    domain_kind: Literal["empirical_corpus", "transition_graph_ir", "studio_scm_dag"]
+    transition_graph: TransitionGraphIR | None = None
+    treatment_intervention: dict[str, str] = Field(default_factory=dict)
     target_observable: str
     expected_direction: Literal["gt", "lt", "approx_eq", "reachable", "impossible"]
-    bridge_assumptions: tuple[str, ...]
+    bridge_assumptions: tuple[str, ...] = ()
     historical_regime: str | None = None
     content_fingerprint: str = ""
 
 
-@dataclass(frozen=True)
-class EmpiricalCompatibilityReport:
+class EmpiricalCompatibilityReport(BaseModel):
     """Deterministic Type-B evaluation outcome returned by ``DomainWorldModelPort``."""
 
     scenario_id: str
-    regime: Literal["empirical_corpus_b", "worldcoder_program", "in_silico_scm"]
-    evidence_modality: Literal["empirical_data", "deterministic_program", "in_silico_scm"]
-    compatibility_score: float
+    regime: Literal["empirical_corpus_b", "transition_graph_interpreter", "lean4_transition_model"]
+    evidence_modality: Literal["empirical_data", "declarative_graph_ir", "lean4_executable_model"]
+    compatibility_score: float = Field(ge=0.0, le=1.0)
     prediction_satisfied: bool
-    empirical_tenability_ts: float
-    counterexample_trace: tuple[str, ...] = field(default_factory=tuple)
-    causal_effect_estimate: float | None = None
-    uncertainty_bounds: tuple[float, float] | None = None
+    empirical_tenability_ts: float = Field(ge=0.0, le=1.0)
+    counterexample_trace: tuple[str, ...] = ()
     artifact_fingerprint: str = ""
 
 
 @runtime_checkable
 class EpistemicNodeRouter(Fingerprintable, Protocol):
-    """Routes Partition A/B and analytic/synthetic nodes to the correct verification track."""
+    """Routes candidate atoms via 2x2 Hume's Fork + DecisionEngine formalizability gate."""
 
-    def route(
+    async def route(
         self,
-        component_type: str,
-        epistemic_status: str | None,
+        atom: TheoryAtom,
+        *,
         is_formal_prediction: bool = False,
-    ) -> VerificationTrack:
-        """Select the deterministic routing track for a candidate epistemic item."""
-        ...
+        has_manual_lean_spec: bool = False,
+    ) -> VerificationTrack: ...
 
 
 @runtime_checkable
 class EmpiricalOperationalizer(Fingerprintable, Protocol):
-    """Pipeline post-processor that compiles synthetic/derived claims into Type-B scenarios."""
+    """Compiles synthetic/derived claims into typed OperationalizedScenarioArtifact IR."""
 
     async def operationalize(
         self,
         claim_text: str,
         theory_context: dict[str, str],
-    ) -> OperationalizedScenarioArtifact:
-        """Translate natural-language empirical content into a structured Type-B scenario."""
-        ...
+    ) -> OperationalizedScenarioArtifact: ...
 
 
 @runtime_checkable
@@ -173,60 +184,42 @@ class DomainWorldModelPort(Fingerprintable, Protocol):
         scenario: OperationalizedScenarioArtifact,
         *,
         seed: int = 0,
-    ) -> EmpiricalCompatibilityReport:
-        """Execute deterministic or factorial empirical compatibility checking."""
-        ...
+    ) -> EmpiricalCompatibilityReport: ...
 ```
 
-### 4.2 Bridging Type-B Results Back into `TenabilitySolver` & `TheoryNet`
-
-Inspection of [runner.py](../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/runner.py) and [solvers.py](../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/solvers.py) confirms that `TenabilitySolver` currently computes quantitative formula residuals over `BaseLaw` expressions (returning `(1.0, 0.0, [])` when laws are empty and `0.0` for unbound parameters), while `ADR-0022` already defines `TS_local` for empirical partition coherence. `ISSUE-115` connects `EmpiricalCompatibilityReport` directly into `TS_local` without replacing `TenabilitySolver`:
-- **Formulaic empirical laws (`BaseLaw` present):** `TenabilitySolver` remains the zero-cost deterministic evaluator.
-- **Qualitative / behavioral / state-transition claims (`BaseLaw` absent):** `DomainWorldModelPort` runs the operationalized scenario across Regimes B1–B3, writes `empirical_tenability_ts` to `TS_local`, and records `evidence_modality` so real observational records (`empirical_data`) always outrank simulated social trials (`in_silico_scm`).
+### Bridging Type-B Results Into `TenabilitySolver` & `TheoryNet`
+- **Formulaic empirical laws (`BaseLaw` present):** [`TenabilitySolver`](../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/solvers.py#L142) remains the zero-cost deterministic evaluator.
+- **Qualitative / mechanistic claims (`BaseLaw` absent):** `DomainWorldModelPort` runs Regime B1 or B2 over `OperationalizedScenarioArtifact`, writes `empirical_tenability_ts` to `TS_local`, and preserves `evidence_modality` so real `empirical_data` always outranks model-derived checks.
 
 ---
 
-## 5. Three Type-B Domain World Model Regimes
+## 5. Type-B Domain World Model Regimes (No Arbitrary Python, No Automated LLM-Prior Write-Back)
 
-### Regime B1 — Corpus-Grounded `Partition B` / `TS_local` Check (`empirical_corpus_b`)
+### Regime B1 — Corpus-Grounded `Partition B` Check (`empirical_corpus_b`)
+First-line, lowest-cost empirical check: retrieves real `ObservationUnit` / `EmpiricalStatement` nodes inside Episteme's own `Partition B` (or linked benchmark datasets) matching `target_observable`, checks directional/support compatibility via `TenabilitySolver` + D-QBAF evidence polarity, and assigns `evidence_modality = "empirical_data"`.
 
-First-line, lowest-cost empirical check: retrieves real `ObservationUnit` / `EmpiricalStatement` nodes inside Episteme's own `Partition B` (or linked benchmark datasets) matching `OperationalizedScenarioArtifact.target_observable`, checks directional/support compatibility via `TenabilitySolver` + D-QBAF evidence polarity, and assigns `evidence_modality = "empirical_data"`.
-
-### Regime B2 — Programmatic World Models via Code Synthesis (*WorldCoder*, Tang, Key, & Ellis, 2024)
-
-For mechanistic domains (physical systems, interactive game-theoretic environments, institutional rule sets, state-transition theories), an LLM does **not** act as a black-box neural simulator on every step. Following **WorldCoder** (`arXiv:2402.12275v3`):
-
-1. **World Model as Explicit Python Code:** The agent synthesizes an explicit, human-auditable deterministic transition program $\hat{T}(s, a) \to (s', r)$ representing the theory's causal rules.
+### Regime B2 — Declarative Transition Graph World Models (Safe *WorldCoder* Adaptation)
+Inspired by **WorldCoder** (Tang, Key, & Ellis, 2024, `arXiv:2402.12275v3`), but **never synthesizing or executing arbitrary Python**:
+1. **Constrained Episteme Target Format (`TransitionGraphIR`):** The agent synthesizes a schema-validated `TransitionGraphIR` (typed variables + guarded update rules using Episteme's closed [`SafeFormulaEvaluator`](../../packages/episteme-pipeline/episteme_pipeline/post_processing/theoretical_enrichment/solvers.py#L26-L135) AST + bounded `max_rollout_steps`).
 2. **Dual Epistemic Synthesis Objective ($\phi_1 \land \phi_2$):**
-   - **Data Consistency ($\phi_1$):** $\hat{T}$ must deterministically reproduce *all* observed transitions $(s, a, s', r)$ already established in `Partition B` / harness traces.
-   - **Optimism / Non-Vacuity Constraint ($\phi_2$):** $\hat{T}$ must actually reach the predicted goal or phenomenon under some valid policy/intervention. **Critically, $\phi_2$ prevents trivial or vacuous "no-op" world models** (the exact empirical analogue of `ISSUE-113`'s positive reachability witness $\exists m, \Gamma(m)$ and [ISSUE-094](../../issues/11-epistemetrics-formal-concept/epistemic_coherence/ISSUE-094-TENABILITY.md) anti-vacuity).
-3. **`REx` Refinement & Amortized $\mathcal{O}(1)$ LLM Cost:**
-   - WorldCoder uses **Refine, Explore, and Exploit (`REx`)**—bandit Thompson-sampling over program AST nodes—to prioritize refining high-yield buggy rule branches on concrete counterexample transitions $(s, a, s'_{\text{obs}}) \neq \hat{T}(s, a)$.
-   - Once $\hat{T}$ passes verification, rolling out thousands of counterfactual claims costs **zero LLM tokens** (pure deterministic Python execution).
-   - **Theoretical Efficiency Guarantee (Tang et al., 2024, Theorem 2.4):** When environment rules exhibit compositional independence $K_{\perp\!\!\!\perp \mathcal{M}}$, sample complexity bounds scale polynomially in $D_{S,A,T} \cdot (K_{\perp\!\!\!\perp \mathcal{M}} + 1)$ rather than exponentially over joint state spaces—matching `TheoryNet`'s modular specialization lattice (`T_0 -> T_1 -> ...`)!
+   - **Data Consistency ($\phi_1$):** The deterministic graph interpreter reproduces observed transitions $(s, a, s')$ from `Partition B` / harness traces.
+   - **Optimism / Non-Vacuity ($\phi_2$):** The predicted phenomenon/state is actually reachable under a valid intervention—preventing vacuous "no-op" transition graphs.
+3. **Two Safe Execution Backends:**
+   - **Default (Zero External Deps):** Pure-Python deterministic **Transition Graph Interpreter** inside `packages/episteme-worldmodel/` (zero `eval`/`exec`, guaranteed termination via `max_rollout_steps`, directly visualizable and editable as a graph in `episteme-studio`).
+   - **Optional Formal Backend (`packages/episteme-formal/`):** Deterministic **`TransitionGraphIR` $\to$ Lean 4 Transpiler** generating total `structure State` + `def step` modules for kernel-checked reachability ($\phi_2$) and global invariant proofs—unifying Type-A and Type-B under Lean 4!
+4. **`REx`-Style Rule Refinement:** Refine individual buggy `TransitionRuleEdge` nodes on concrete counterexample traces with amortized $\mathcal{O}(1)$ LLM cost once verified.
 
-### Regime B3 — Ex-Ante Structural Causal Models (*Automated Social Science*, Manning, Zhu, & Horton, 2024)
-
-For philosophical, ethical, sociological, and political theories making causal claims about human agents (e.g., *empathy $\to$ fairness*, *institutional design $\to$ polarization*), Manning, Zhu, & Horton (`arXiv:2404.11794v2`) demonstrate both **why naive LLM prediction fails** and **the rigorous experimental protocol required**:
-
-1. **Mandatory Ex-Ante SCM Compilation:** Never ask an LLM to score a social claim directly or run free-form agent chat without structural constraints. Instead, compile the theory claim into an explicit Directed Acyclic Graph (DAG) specifying:
-   - Exogenous background factors $U$,
-   - Randomized/orthogonal treatment assignments $T_1, \dots, T_k$ (explicitly forbidding collider/mediator conditioning unless testing mediation blocks),
-   - Pre-registered scenario templates and quantitative survey/choice measurement instruments $Y$.
-2. **Factorial *In Silico* Simulation (`homo silicus`):** Instantiate calibrated persona priors parameterized by context variables (anchored on demographic/historical constraints $B(t)$), run randomized factorial interventions `do(X = x)`, and estimate average treatment effects $\widehat{\text{ATE}} = \mathbb{E}[Y \mid do(X=1)] - \mathbb{E}[Y \mid do(X=0)]$ using standard econometric estimators (avoiding GES Markov-equivalence pitfalls).
-3. **Strict Epistemic Labeling & Safeguards:**
-   - All Regime B3 outcomes are tagged `evidence_modality = "in_silico_scm"` with **bounded inferential weight** $\le 0.35$ relative to `empirical_data` (`1.0`).
-   - Manning et al. explicitly warn that LLMs replicate training-corpus social priors and stereotypes (*social desirability / RLHF bias*) and exhibit large level/magnitude miscalibration; therefore B3 validates **ordinal directional robustness and structural boundary conditions** inside a candidate social model, **never ground-truth external human sociology without empirical data**.
+### Regime B3 — Interactive Studio Ex-Ante SCM Workbench (`studio_scm_dag` — Exploration Only)
+For social, ethical, and political claims (e.g., *empathy $\to$ cooperation*), Manning, Zhu, & Horton (2024, *Automated Social Science*, `arXiv:2404.11794v2`) show that unstructured LLM scoring fails badly and even structured `homo silicus` trials inherit LLM pretraining/RLHF priors.
+- **Strict Epistemic Policy:** Regime B3 compiles claims into the same declarative `TransitionGraphIR` DAG format (exogenous factors $U$, orthogonal treatments `do(X=x)`, no bad collider/mediator controls), but runs **strictly as an interactive `episteme-studio` sensitivity/exploration tool**—clearly labeled as *LLM prior probing* and **never automatically mutating `TS_local` or `TheoryAtom.effective_base_prior`**.
 
 ---
 
-## 6. Cross-Link to Lean 4: Checking Theory-Implied Empirical Predictions (`BRIDGE_SYNTHESIS`)
+## 6. Cross-Link to Lean 4: Two-Stage Falsification (`BRIDGE_SYNTHESIS`)
 
-A core synergy unlocked by combining [ISSUE-113](ISSUE-113-lean4-formal-verification-oracle-and-logikey-adapter.md) and `ISSUE-115` is **two-stage Popper/Schurz falsification chaining**:
-
-1. **Formal Step (`Lean 4`):** Given `Partition A` axioms $\Gamma_A$ and bridge assumptions $\beta$, verify $\Gamma_A \land \beta \vdash \hat{b}$ (is prediction $\hat{b}$ genuinely *entailed* by the theory, or is the author making an invalid leap from their own axioms?).
-2. **Empirical Step (`Type-B WM`):** Route the **verified entailment** $\hat{b}$ via `BRIDGE_SYNTHESIS` into `EmpiricalOperationalizer` $\to$ `DomainWorldModelPort` to test whether $\hat{b}$ survives empirical/programmatic/SCM stress-testing.
-3. **Diagnostic Precision:** If step 1 fails $\implies$ `ENTHYMEME_GAP` / `LOGICAL_CONTRADICTION` (internal logical defect). If step 1 succeeds and step 2 fails $\implies$ either `BRIDGE_DEFECT` ($H_{\text{bridge}}$) or empirical anomaly (`EMPIRICAL_FALSIFICATION` candidate edge attaching to the *Falsifikationsschema* in [theory_nets_and_topologies.md](../../docs/concepts/theory_nets_and_topologies.md)).
+1. **Formal Step (`packages/episteme-formal/`):** Given `Partition A` axioms $\Gamma_A$ and bridge assumptions $\beta$, verify $\Gamma_A \land \beta \vdash \hat{b}$ in Lean 4.
+2. **Empirical Step (`Type-B WM`):** Route the verified entailment $\hat{b}$ through `EmpiricalOperationalizationRunner` $\to$ `DomainWorldModelPort` (Regime B1/B2).
+3. **Diagnostic Precision:** Step 1 fails $\implies$ internal logical defect (`ENTHYMEME_GAP` / `LOGICAL_CONTRADICTION`). Step 1 succeeds and Step 2 fails $\implies$ either `BRIDGE_DEFECT` ($H_{\text{bridge}}$) or empirical anomaly (`EMPIRICAL_FALSIFICATION`).
 
 ---
 
@@ -234,16 +227,15 @@ A core synergy unlocked by combining [ISSUE-113](ISSUE-113-lean4-formal-verifica
 
 | Source | Key Concept / Empirical Finding | Role in Episteme (`ISSUE-115`) |
 | :--- | :--- | :--- |
-| **Tang, Key, & Ellis (2024)** (*WorldCoder: Model-Based LLM Agent Building World Models by Writing Code*, `arXiv:2402.12275v3`) | Synthesizes Python transition programs $\hat{T}$ with data-consistency + optimism objectives ($\phi_1 \land \phi_2$), `REx` AST bandit refinement, and compositional complexity bound $D_{S,A,T} \cdot (K_{\perp\!\!\!\perp \mathcal{M}}+1)$ (Thm. 2.4). | Blueprint for **Regime B2** programmatic mechanistic world models with $\mathcal{O}(1)$ amortized evaluation cost and anti-vacuity reachability $\phi_2$. |
-| **Manning, Zhu, & Horton (2024)** (*Automated Social Science: Language Models as Scientist and Subjects*, `arXiv:2404.11794v2`) | Quantifies massive direct LLM calibration failures (`MSE = 8,628` vs. `128`, `13.2x` $\hat{\beta}$ inflation) and ex-post GES bad-control pitfalls; introduces **ex-ante SCM** + factorial `in silico` agents (`homo silicus`). | Blueprint & safety guardrails for **Regime B3** social/philosophical claim simulation. |
-| **LeCun (2022)** (*A Path Towards Autonomous Machine Intelligence*, v0.9.2) | Joint Embedding Predictive Architecture (JEPA), latent trajectory rollouts, and Actor–Cost–World-Model separation. | Conceptual basis for separating internal latent predictor ([ISSUE-112](ISSUE-112-inductive-graph-world-model-and-jepa-capabilities.md)) from operationalized action/state interventions (`ISSUE-115`). |
-| **Duhem (1906) / Quine (1951)** (*Holism / Auxiliary Hypotheses*) & **Schurz / Lakatos** ([formal_graph_model.md](../../docs/concepts/formal_graph_model.md), [theory_nets_and_topologies.md](../../docs/concepts/theory_nets_and_topologies.md)) | Empirical refutation always targets $(T \land \beta_{\text{bridge}})$, requiring explicit provenance for bridge hypotheses ($M_{pp}$ / *Zuordnungsgesetze*). | Direct rationale for isolating `EmpiricalOperationalizer` as a `Fingerprintable` post-processor stage rather than hiding it inside an API adapter. |
+| **Tang, Key, & Ellis (2024)** (*WorldCoder*, `arXiv:2402.12275v3`) | Dual data-consistency + optimism synthesis ($\phi_1 \land \phi_2$), `REx` refinement, compositional complexity bound (Thm. 2.4). | Adapted safely onto Episteme's **Declarative Typed Transition Graph IR** (+ optional Lean 4 transpiler) instead of raw Python execution. |
+| **Manning, Zhu, & Horton (2024)** (*Automated Social Science*, `arXiv:2404.11794v2`) | Quantifies direct LLM calibration collapse (`67×` MSE, `13.2×` $\hat{\beta}$ inflation) and bad-control pitfalls; introduces ex-ante SCMs. | Motivates banning direct LLM scoring and isolating Regime B3 strictly as an interactive Studio exploration workbench. |
+| **Duhem (1906) / Quine (1951)** & **Schurz / Lakatos** ([formal_graph_model.md](../../docs/concepts/formal_graph_model.md)) | Empirical refutation targets $(T \land \beta_{\text{bridge}})$, requiring explicit provenance for bridge hypotheses ($M_{pp}$). | Direct rationale for standalone `EmpiricalOperationalizationRunner` emitting `OperationalizedScenarioArtifact`. |
 
 ---
 
 ## 8. Acceptance Criteria
 
-- [ ] Define `EpistemicNodeRouter`, `EmpiricalOperationalizer`, `DomainWorldModelPort`, `OperationalizedScenarioArtifact`, and `EmpiricalCompatibilityReport` protocols in `episteme-pipeline` following SOLID / DIP (`Fingerprintable`, zero `getattr`).
-- [ ] Integrate `BRIDGE_SYNTHESIS` handoff between `LeanFormalEvaluator` (`A ⊢ b̂`) and `EmpiricalOperationalizer` inside `TheoreticalEnrichmentRunner`, writing calibrated outcomes to `TS_local` with explicit `evidence_modality`.
-- [ ] Implement and benchmark a **Regime B2 (`WorldCoder`)** prototype with $\phi_1 \land \phi_2$ synthesis + deterministic zero-token replay on 5–10 mechanistic philosophical/decision-theoretic toy domains.
-- [ ] Implement a **Regime B3 (`Ex-Ante SCM`)** harness prototype requiring pre-specified DAG/treatment schemas (rejecting free-form direct-scoring prompts) with explicit `in_silico_scm` weight cap (`<= 0.35`).
+- [ ] Define Pydantic v2 `TransitionGraphIR`, `OperationalizedScenarioArtifact`, `EmpiricalCompatibilityReport`, `EpistemicNodeRouter`, `EmpiricalOperationalizer`, and `DomainWorldModelPort` in `episteme-contracts` (`Fingerprintable.fingerprint()`, zero `getattr`).
+- [ ] Implement 2×2 Hume's Fork + `DecisionEngine` formalizability routing covering all four `(Partition A/B × Analytisch/Synthetisch)` quadrants.
+- [ ] Implement standalone `EmpiricalOperationalizationRunner` (decoupled from `TheoreticalEnrichmentRunner`) and safe deterministic `TransitionGraphIR` interpreter (zero Python `exec`/`eval`) + optional IR $\to$ Lean 4 transpiler in `packages/episteme-formal/`.
+- [ ] Keep Regime B3 (`studio_scm_dag`) isolated as an interactive `episteme-studio` exploration tool with zero automated write-back to `TS_local`.

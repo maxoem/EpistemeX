@@ -1,108 +1,113 @@
-# [ISSUE-111] Core Pipeline Architecture: Epistemic Commit Interceptor & Unified Operator Algebra (`Propose -> Select -> Compute -> Update`)
+# [ISSUE-111] Neuro-Symbolic Verification Contracts, `EpistemicVerificationService` & Sidecar Verdicts
 
 | Metadata | Details |
 | :--- | :--- |
 | **Issue ID** | `ISSUE-111` |
-| **Domain / Category** | `12-Neuro-Symbolic World Models & Lean` (Core Pipeline Architecture, Hexagonal Ports, Transaction Middleware) |
-| **Target Package(s)** | `episteme-pipeline` (`protocols/`, `contracts/domain.py`, `runtime/`, `refinement/`, `events/`) |
+| **Domain / Category** | `12-Neuro-Symbolic World Models & Lean` (Verification Domain Service, Sidecar Artifacts, Versioned Signature Ledger) |
+| **Target Package(s)** | `episteme-contracts` (`verification.py`, `signatures.py`), `episteme-pipeline` (`artifacts/`, `refinement/`, `config.py`), `episteme-studio` (`jobs/`) |
 | **Priority** | **High** |
 | **Status** | `Proposal` |
 | **Roadmap Horizon** | Horizon 2 |
-| **Governing ADR** | [ADR-0025 Proposal](ADR-0025-PROPOSAL-epistemic-commit-cascade-and-world-models.md) |
-| **Related Docs & ADRs** | [Overview](../../docs/architecture/overview.md), [Design Patterns](../../docs/architecture/design_patterns_and_standards.md), [ADR-0009](../../docs/adr/0009-sota-dual-memory-episodic-working-memory.md), [ADR-0017](../../docs/adr/0017-explicit-batch-contracts-and-bulk-io.md), [ADR-0024](../../docs/adr/0024-closed-loop-hermeneutic-refinement.md) |
+| **Upstream Platform Prerequisites** | [ISSUE-116 (`episteme-contracts`)](../13-core-architecture-and-docs-refactoring/ISSUE-116-extract-episteme-contracts-and-workspace-dependency-inversion.md), [ISSUE-117 (`PostForwardStage`)](../13-core-architecture-and-docs-refactoring/ISSUE-117-execution-engine-decomposition-and-post-forward-stage-port.md), [ISSUE-118 (`PipelineBuilder`)](../13-core-architecture-and-docs-refactoring/ISSUE-118-pipeline-builder-typed-port-bundles-and-component-discovery.md) |
+| **Governing ADR & Plan** | [ADR-0025 Proposal](ADR-0025-PROPOSAL-epistemic-commit-cascade-and-world-models.md) \| [Execution Plan (`Phase 1C`)](EXECUTION-PLAN.md) |
+| **Related Docs & ADRs** | [Overview](../../docs/architecture/overview.md), [Design Patterns](../../docs/architecture/design_patterns_and_standards.md), [ADR-0017](../../docs/adr/0017-explicit-batch-contracts-and-bulk-io.md), [ADR-0021](../../docs/adr/0021-incremental-corpus-evolution-and-persistent-hitl-constraint-ledger.md), [ADR-0023](../../docs/adr/0023-intensional-perspectival-scoping-and-conception-stratification.md), [ADR-0024](../../docs/adr/0024-closed-loop-hermeneutic-refinement.md) |
 
 ---
 
-## 1. Architectural Motivation & Current Pipeline Boundaries
+## 1. Architectural Scope (Post-`13-core-architecture-and-docs-refactoring/`)
 
-Inspection of the current `episteme-pipeline` core shows why neither Lean 4 verification nor Graph World Model evaluation should be wired directly into [`EventEmitter`](../../packages/episteme-pipeline/episteme_pipeline/events/bus.py) or inside raw chunk-level extractors:
+General workspace dependency inversion (`episteme-contracts`), the 5-service decomposition of `ArtifactExecutionEngine` (`ManifestTracker`, `RunHydrationService`, `PhaseExecutor`, `ProjectionCoordinator`, `PostForwardRunner` + `PostForwardStage`), and `PipelineBuilder` port bundles are specified cleanly in Suite 13 ([`ISSUE-116`](../13-core-architecture-and-docs-refactoring/ISSUE-116-extract-episteme-contracts-and-workspace-dependency-inversion.md)–[`ISSUE-118`](../13-core-architecture-and-docs-refactoring/ISSUE-118-pipeline-builder-typed-port-bundles-and-component-discovery.md)).
 
-1. **Immutable Artifact-Native Execution:** [`Pipeline`](../../packages/episteme-pipeline/episteme_pipeline/pipeline.py) and [`ArtifactExecutionEngine`](../../packages/episteme-pipeline/episteme_pipeline/runtime/execution_engine.py) execute a strictly acyclic `WorkflowDAG`, collecting immutable `ArtifactCollection`s ([`execution.py`](../../packages/episteme-pipeline/episteme_pipeline/artifacts/execution.py)) and projecting them in topological bulk batches ([ADR-0017](../../docs/adr/0017-explicit-batch-contracts-and-bulk-io.md)).
-2. **Passive Event Bus:** `EventObserver.on_event(event) -> None` is purely an observability sink (Langfuse, JSONL logs, progress bars) and is suppressed under `NoOpEventEmitter`.
-3. **Existing Hook Point Already Proven:** [ADR-0024](../../docs/adr/0024-closed-loop-hermeneutic-refinement.md) already established `ArtifactCollection.latest_by_identity` overlays, `RefinementDelta` reduction, `EpistemicDeficitArtifact`, and `ClosedLoopRefinementCoordinator`.
-
-To support **both** an **Active / Intra-Document Episode Mode** (evaluating statements as working-memory episodes flush into the graph or when curated interactively in `episteme-studio`) **and** the **Batch Post-Forward Mode**, `episteme-pipeline` requires a first-class, `Fingerprintable` transactional middleware layer: **`EpistemicCommitInterceptor`**.
+`ISSUE-111` focuses strictly on the **neuro-symbolic verification layer** built on top of that foundation:
+1. Adding verification domain contracts (`VerificationTrack`, `FormalProvenance`, `FormalStatus`, `EpistemicChangeset`, `ScopedVerificationContext`, `VerificationVerdict`, `EpistemicVerificationMetadata`, `FormalSignatureLedger`, `VerificationTrajectoryRecord`) to `episteme-contracts`.
+2. Implementing the pure domain service **`EpistemicVerificationService`** (`Route -> Select -> Compute -> Update`) operating over `TheorySubgraphQuery` (implemented by `EpistemicStateView` and `episteme-studio` session snapshots).
+3. Plugging verification cleanly into batch runs via `PostForwardStage` adapters (`VerificationDeficitDetector` inside `ClosedLoopRefinementStage`, standalone `FormalVerificationStage`) and interactive HITL curation via an async `episteme-studio` background job (`sse-starlette`).
+4. Persisting verdicts via sidecar **`ArtifactKind.VERIFICATION_VERDICT`** envelopes so Phase 4/6 `TheoryAtomArtifact` IDs stay invariant when verification is off or re-run.
 
 ---
 
-## 2. The Unified Operator Algebra
+## 2. Verification Operator Flow & Non-Redundant Post-Forward Composition
 
-Both the Graph World Model ([ISSUE-112](ISSUE-112-inductive-graph-world-model-and-jepa-capabilities.md)) and the Lean 4 Formal Oracle ([ISSUE-113](ISSUE-113-lean4-formal-verification-oracle-and-logikey-adapter.md)) share the exact same four-stage operator composition $\mathcal{T} = \mathcal{U} \circ \mathcal{C} \circ \mathcal{S}$ on an incoming proposal $\Delta_{\text{prop}}$:
+Phases 1–6 remain strictly **batch and artifact-native**. Verification executes after the forward DAG via `PostForwardRunner` ([ISSUE-117](../13-core-architecture-and-docs-refactoring/ISSUE-117-execution-engine-decomposition-and-post-forward-stage-port.md)) or asynchronously in `episteme-studio`:
 
 ```mermaid
 flowchart TD
-    Active["Active Episode Flush (ADR-0009) or Studio Curation (ADR-0021)"] --> Propose["1. PROPOSE: EpistemicChangeset"]
-    Batch["Batch Post-Forward View (ADR-0024)"] --> Propose
-    Propose --> Interceptor["EpistemicCommitInterceptor (Unit of Work)"]
-    Interceptor --> Router{"EpistemicNodeRouter (Hume's Fork)"}
-    Router -->|"Partition B / Synthetisch (ISSUE-115)"| Empirical["EmpiricalOperationalizer -> DomainWorldModelPort -> TS_local"]
-    Router -->|"Partition A / Analytisch or A |- b_hat"| Select["2. SELECT: SubgraphSelector (Poset Roots + k-Hop + Contrastive Anchors)"]
-    Select --> Cascade{"3. COMPUTE: CalibratedCascade"}
-    Empirical --> Update["4. UPDATE: Pure StateReducer -> RefinementDelta (cascade_depth <= 2)"]
-    Cascade -->|"Mode 1 (< 20ms)"| WM["GraphWorldModelEvaluator (E_WM, s_z)"]
-    WM -->|"Clear Accept & No Audit"| Reduce
-    WM -->|"High Energy / Ambiguous / Audited"| Lean["Mode 2: LeanFormalEvaluator (Pantograph + Read-Back + SMT)"]
-    Lean --> Replay["Log to VerificationTrajectoryStore"]
-    Lean --> Reduce["4. UPDATE: Pure StateReducer (max_depth <= 2)"]
-    Reduce --> Delta["Immutable RefinementDelta -> ArtifactCollection Overlay"]
+    DAG["Forward Workflow DAG (Phases 1-6 Batch Artifact-Native)"] --> Post["PostForwardRunner (ManifestTracker + PostForwardStage Lineage)"]
+    Post --> S1["Stage 1: ClosedLoopRefinementStage (Includes VerificationDeficitDetector when cycles > 0)"]
+    S1 --> S2["Stage 2: FormalVerificationStage (Post-Refinement or Standalone Certification)"]
+    S2 --> S3["Stage 3: EmpiricalOperationalizationStage (Standalone EmpiricalOperationalizationRunner)"]
+    Studio["Async episteme-studio Job (sse-starlette HITL Curation)"] --> VService["Pure EpistemicVerificationService (TheorySubgraphQuery + EpistemicChangeset)"]
+    S1 --> VService
+    S2 --> VService
+    VService --> Router["EpistemicNodeRouter (2x2 Hume's Fork + DecisionEngine)"]
+    Router -->|"Analytic / Formalizable"| Select["SubgraphSelector (Poset T0 + Intensional Cone + Contrastive Anchors)"]
+    Select --> Cascade{"CalibratedCascade (Tier-1 Triage / Mode-2 Lean + SMT)"}
+    Cascade --> Sidecar["ArtifactKind.VERIFICATION_VERDICT Sidecars + RefinementDelta"]
+    Cascade -.->|"Write-Only (Unfingerprinted)"| Sink["VerificationTrajectoryStore (IPW Calibration Sink)"]
 ```
 
-### Why Episode/Changeset Granularity Is Mandatory
-- **Solves *Modus Tollens* Non-Commutativity:** Evaluating a coherent episode changeset (`{A, A -> B, ¬B}`) instead of isolated sentences avoids falsely rejecting premises introduced solely for refutation.
-- **Solves Joint Inconsistency (*Trilemmas*):** Multi-statement changesets expose sets $\{P, Q, R\}$ where every pair is consistent yet $P \land Q \land R \vdash \bot$.
-- **Guarantees Termination:** `EpistemicCommitInterceptor` executes a bounded, acyclic overlay reduction (`max_cascade_depth = 1..2`), preventing `Insert -> Event -> Update -> Event` infinite cascades.
+### Avoiding Double Execution Across Refinement and Final Certification
+- **When `max_refinement_cycles > 0`:** `VerificationDeficitDetector` runs inside `ClosedLoopRefinementStage`, emitting `EpistemicDeficitKind.LOGICAL_CONTRADICTION` and `ENTHYMEME_GAP` (carrying formal Lean `proof-sketch` lemmas in `theory_lens`) so `ClosedLoopRefinementCoordinator` can trigger L1/L2 premise recovery or polysemy splitting. Downstream `FormalVerificationStage` checks sidecar verdict lineage hashes and skips already-verified unchanged items.
+- **When `max_refinement_cycles == 0`:** `FormalVerificationStage` executes standalone certification and emits sidecar `VerificationVerdictArtifact` records cleanly without invoking LLM text re-extraction.
+- **After stabilization:** `EmpiricalOperationalizationStage` ([ISSUE-115](ISSUE-115-epistemic-node-router-and-programmatic-empirical-world-models.md)) operationalizes only stabilized synthetic claims and certified `A |- b_hat` formal entailments.
 
 ---
 
-## 3. Detailed Technical Contracts & Protocol Specifications
+## 3. Verification Contracts, Port Bundle & Sidecar Persistence
 
-### 3.1 Canonical Formal Signature Ledger (Extending `domain.py`)
-To prevent cross-chunk type fragmentation in Lean 4 (*Prove2Me*, §4.4), canonical `L2Entity` and `EntityConception` nodes carry persistent formal signature bindings:
+### 3.1 Pure Contracts (`episteme_contracts/verification.py` & `signatures.py`)
 
 ```python
-class FormalSignatureEntry(BaseModel):
-    """Canonical formal type/predicate binding anchored to an L2Entity or EntityConception.
+from __future__ import annotations
 
-    Parameters
-    ----------
-    signature_id : str
-        Deterministic identifier ``sig::<entity_id>[::<conception_id>]``.
-    entity_id : str
-        Canonical parent L2Entity identifier.
-    conception_id : str | None, optional
-        Optional EntityConception identifier when polysemous senses diverge.
-    lean_symbol : str
-        Valid Lean 4 identifier (e.g., ``Episteme.Kant.Causality``).
-    lean_type_signature : str
-        Immutable Lean 4 declaration signature (e.g., ``Event -> Event -> Prop``).
-    import_module : str
-        Compiled Lean module path exposing this symbol.
-    """
+from enum import StrEnum
+from typing import Literal, Protocol, runtime_checkable
 
-    signature_id: str
-    entity_id: str
-    conception_id: str | None = None
-    lean_symbol: str
-    lean_type_signature: str
-    import_module: str
-```
+from pydantic import BaseModel, Field
 
-### 3.2 `EpistemicChangeset` & `ScopedVerificationContext` (`Propose` & `Select`)
-```python
+from episteme_contracts.domain import (
+    L2Entity,
+    RefinementDelta,
+    TheoryAtom,
+    TheoryRelation,
+)
+from episteme_contracts.fingerprint import Fingerprintable
+from episteme_contracts.protocols.query import TheorySubgraphQuery
+from episteme_contracts.signatures import FormalSignatureEntry
+
+FormalProvenance = Literal["human_verified", "hybrid_reviewed", "machine_draft"]
+FormalStatus = Literal[
+    "entailed",               # Gamma |- phi (sorry-free)
+    "sketch_verified",        # Gamma U Delta |- phi via sorry-free proof-sketch
+    "consistent_independent", # Gamma |/- phi and Gamma |/- ~phi (model witness found)
+    "refuted",                # Gamma |- ~phi under Gamma |/- False
+    "unverified",             # Timeout, SMT unknown, gate rejection, or disabled
+]
+
+
+class VerificationTrack(StrEnum):
+    """Routing branch selected by ``EpistemicNodeRouter`` (2x2 Hume's Fork + DecisionEngine)."""
+
+    FORMAL_CASCADE = "formal_cascade"     # Partition A / Analytisch or manual Lean spec
+    EMPIRICAL_WORLD = "empirical_world"   # Operationalizable Synthetisch -> Type-B World Model
+    BRIDGE_SYNTHESIS = "bridge_synthesis" # A |- b_hat -> Verify entailment in Lean, test empirically
+    DQBAF_ONLY = "dqbaf_only"             # Qualitative prose -> remains solely in D-QBAF
+
+
 class EpistemicChangeset(BaseModel):
-    """Atomic or episode-level candidate insertion/modification proposed to the graph."""
+    """Coherent batch connected-component or Studio HITL curation changeset."""
 
     changeset_id: str
-    mode: Literal["active_episode", "batch_refinement", "hitl_curation"]
+    mode: Literal["batch_refinement", "post_forward_certification", "studio_hitl_job"]
     atoms: list[TheoryAtom] = Field(default_factory=list)
     relations: list[TheoryRelation] = Field(default_factory=list)
     entities: list[L2Entity] = Field(default_factory=list)
     perspective: str = "author"
-    source_episode_id: str | None = None
+    theory_id: str | None = None
 
 
 class ScopedVerificationContext(BaseModel):
-    """Perspective-isolated, anti-confirmation-bias subgraph context for evaluation."""
+    """Perspective-isolated, anti-confirmation-bias L3 subgraph context for evaluation."""
 
     perspective: str
     active_theory_id: str | None = None
@@ -112,116 +117,133 @@ class ScopedVerificationContext(BaseModel):
     contrastive_anchor_atoms: list[TheoryAtom]
     signature_ledger: list[FormalSignatureEntry]
     excluded_suppositional_ids: tuple[str, ...] = ()
-```
-
-### 3.3 `SubgraphSelector` (`Select` Operator)
-`SubgraphSelector` MUST implement `Fingerprintable` and combine **three mandatory retrieval channels** (countering dense-retrieval confirmation bias):
-1. **Structuralist Poset Ancestors:** Traverse specialization/entailment ancestors up to root theory-elements $T_0$ ([Theory-Nets](../../docs/concepts/theory_nets_and_topologies.md)), ensuring core axioms are always in $\Gamma$.
-2. **Perspective-Filtered $k$-Hop Neighborhood:** Traverse $k$-hop argumentative dependencies strictly restricted to the matching `perspective` and `intensional_mode` ([ADR-0023](../../docs/adr/0023-intensional-perspectival-scoping-and-conception-stratification.md)), excluding unbound `suppositional` (*Reductio*) nodes.
-3. **Contrastive Polarity-Opposed Anchors:** Retrieve existing `asserted` atoms sharing canonical `L2Entity` referents that carry opposite stance/polarity or high `controversy_volatility`.
-
-### 3.4 `VerificationVerdict`, `EpistemicEvaluator`, and `EpistemicCommitInterceptor`
-```python
-FormalStatus = Literal[
-    "entailed",               # Gamma |- phi (sorry-free)
-    "sketch_verified",        # Gamma U Delta |- phi via sorry-free proof-sketch
-    "consistent_independent", # Gamma |/- phi and Gamma |/- ~phi (model witness found)
-    "refuted",                # Gamma |- ~phi under Gamma |/- False
-    "unverified",             # Timeout, faithfulness gate rejection, or disabled
-]
 
 
-class VerificationVerdict(BaseModel):
-    """Unified output emitted by Mode-1 World Models and Mode-2 Formal Evaluators."""
+class EpistemicVerificationMetadata(BaseModel):
+    """Compact orthogonal sub-model attached to hydrated TheoryAtom/TheoryRelation views."""
 
-    changeset_id: str
-    evaluator_mode: Literal["mode1_world_model", "mode2_formal_oracle", "cascade_hybrid"]
+    formal_provenance: FormalProvenance = "machine_draft"
     formal_status: FormalStatus = "unverified"
     world_model_energy: float | None = Field(default=None, ge=0.0, le=1.0)
     logical_energy: float | None = Field(default=None, ge=0.0, le=1.0)
+    formal_assumptions: tuple[str, ...] = ()
+    formal_trace_ref: str | None = None
+
+
+class VerificationVerdict(BaseModel):
+    """Output emitted by Mode-1 triage, Mode-2 Lean/SMT oracle, or hybrid cascade."""
+
+    changeset_id: str
+    target_ids: tuple[str, ...] = ()
+    evaluator_mode: Literal["mode1_triage", "mode2_formal_oracle", "cascade_hybrid"]
+    metadata: EpistemicVerificationMetadata = Field(default_factory=EpistemicVerificationMetadata)
     faithfulness_passed: bool | None = None
     vacuity_check_passed: bool | None = None
+    anti_skeleton_passed: bool | None = None
     unproved_sketch_lemmas: list[str] = Field(default_factory=list)
-    predicted_enthymeme_vector: list[float] | None = None
     conflicting_atom_ids: list[str] = Field(default_factory=list)
-    formal_trace_ref: str | None = None
+    propensity_score: float = Field(default=1.0, gt=0.0, le=1.0)
 
 
 @runtime_checkable
 class SubgraphSelector(Fingerprintable, Protocol):
+    """Selects a perspective-isolated ``ScopedVerificationContext`` from ``TheorySubgraphQuery``."""
+
     async def select(
         self,
         changeset: EpistemicChangeset,
-        reader: GraphReader,
-    ) -> ScopedVerificationContext: ...
+        query: TheorySubgraphQuery,
+        signature_ledger: list[FormalSignatureEntry],
+    ) -> ScopedVerificationContext:
+        """Assemble Poset roots, perspective-filtered cone, and contrastive anchors."""
+        ...
 
 
 @runtime_checkable
 class EpistemicEvaluator(Fingerprintable, Protocol):
+    """Evaluates a changeset against a ``ScopedVerificationContext``."""
+
     async def evaluate(
         self,
         context: ScopedVerificationContext,
         changeset: EpistemicChangeset,
-    ) -> VerificationVerdict: ...
+    ) -> VerificationVerdict:
+        """Return a deterministic verdict and propensity metadata."""
+        ...
 
 
 @runtime_checkable
-class EpistemicNodeRouter(Fingerprintable, Protocol):
-    """Dispatches candidate items along Partition A/formal vs. Partition B/empirical tracks (ISSUE-115)."""
+class EpistemicVerificationService(Fingerprintable, Protocol):
+    """Pure verification domain service invoked by refinement, stages, or Studio jobs."""
 
-    def route(
+    async def verify(
         self,
-        component_type: str,
-        epistemic_status: str | None,
-        is_formal_prediction: bool = False,
-    ) -> str: ...
-
-
-@runtime_checkable
-class EpistemicCommitInterceptor(Fingerprintable, Protocol):
-    async def intercept(
-        self,
+        query: TheorySubgraphQuery,
         changeset: EpistemicChangeset,
-        reader: GraphReader,
         *,
         cascade_depth: int = 0,
-    ) -> tuple[VerificationVerdict, RefinementDelta]: ...
+    ) -> tuple[VerificationVerdict, RefinementDelta]:
+        """Execute Route -> Select -> Compute -> Update cleanly on immutable state."""
+        ...
+
+
+@runtime_checkable
+class VerificationTrajectorySink(Protocol):
+    """Write-only replay sink intentionally NOT Fingerprintable (excluded from cache hashes)."""
+
+    async def record(
+        self,
+        context: ScopedVerificationContext,
+        changeset: EpistemicChangeset,
+        verdict: VerificationVerdict,
+        delta: RefinementDelta,
+    ) -> None:
+        """Persist immutable Mode-2 trajectory + propensity_score for offline IPW calibration."""
+        ...
 ```
 
-### 3.5 Extending `EpistemicDeficitKind` & Replay Trajectory Persistence
-1. **New Deficit Kind in [`domain.py`](../../packages/episteme-pipeline/episteme_pipeline/contracts/domain.py#L1050-L1065):**
-   Add `LOGICAL_CONTRADICTION = "logical_contradiction"` to `EpistemicDeficitKind` so `ClosedLoopRefinementCoordinator` can route formal refutations ($\Gamma \vdash \neg\phi$) either to relation polarity repair (`ATTACKS`/`REFUTES`), `ConceptionConceptSplitter` (`POLYSEMY_COLLISION`), or HITL flagging without deleting nodes.
-2. **Orthogonal Fields on `TheoryAtom` / `TheoryRelation`:**
-   Store `world_model_energy`, `formal_status`, `logical_energy`, and `formal_assumptions` alongside existing `ADR-0022` fields (`modal_prior`, `inferential_warrant`, `local_tenability`, `equilibrium_strength`).
-3. **Replay Buffer (`VerificationTrajectoryStore`):**
-   ```python
-   class VerificationTrajectoryRecord(BaseModel):
-       """Immutable training record emitted on every Mode-2 evaluation for Mode-1 distillation."""
+### 3.2 `VerificationPorts` Bundle Plugging Into `PipelineBuilder` ([ISSUE-118](../13-core-architecture-and-docs-refactoring/ISSUE-118-pipeline-builder-typed-port-bundles-and-component-discovery.md))
 
-       trajectory_id: str
-       context_fingerprint: str
-       changeset_fingerprint: str
-       context: ScopedVerificationContext
-       changeset: EpistemicChangeset
-       verdict: VerificationVerdict
-       resulting_delta: RefinementDelta
-       toolchain_version: str
-   ```
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass(frozen=True)
+class VerificationPorts:
+    """Opt-in neuro-symbolic verification, routing, and empirical world-model collaborators."""
+
+    node_router: Any | None = None
+    verification_service: Any | None = None
+    operationalizer: Any | None = None
+    domain_world_model: Any | None = None
+    trajectory_sink: Any | None = None
+```
+
+Registered cleanly via `PipelineBuilder(...).with_extension("verification", verification_ports)` (traversed cleanly by dataclass-aware `find_components()`, while skipping `trajectory_sink` because it does not implement `Fingerprintable`).
+
+### 3.3 Sidecar `ArtifactKind.VERIFICATION_VERDICT`, Versioned `FormalSignatureLedger` & Slim `TheoryAtom`
+
+1. **Sidecar Verdict Envelopes ([`artifacts/models.py`](../../packages/episteme-pipeline/episteme_pipeline/artifacts/models.py#L132-L145)):** Add `ArtifactKind.VERIFICATION_VERDICT = "verification_verdict"` carrying `VerificationVerdictArtifact(BaseArtifactPayload)` (`identity_key = f"verification::{target_id}"`). `ProjectionCoordinator` joins verdicts onto existing Neo4j `TheoryAtom` / `TheoryRelation` nodes/edges without altering `TheoryAtomArtifact` IDs. Hydrated read views MAY attach optional `verification: EpistemicVerificationMetadata | None = None` without changing serialized Phase 4/6 `TheoryAtom` artifacts.
+2. **Versioned `FormalSignatureLedger` ([`phase_contracts.py`](../../packages/episteme-pipeline/episteme_pipeline/contracts/phase_contracts.py#L105)):** Modeled directly after `EpistemicCurationLedger`, carried on `PipelineInput.formal_signature_ledger` and hashed into `RunManifest.signature_ledger_fingerprint`. Blind-Critic-approved amendments (`FormalSignatureAmendment`) mint a new versioned ledger for a child run (`parent_run_id`), enforcing an immutable held-out TCB inside every run.
+3. **New Deficit Kind in `domain.py`:** Add `EpistemicDeficitKind.LOGICAL_CONTRADICTION = "logical_contradiction"` alongside `ENTHYMEME_GAP` (carrying formal Lean `proof-sketch` lemma hints inside `EpistemicDeficit.theory_lens`).
 
 ---
 
 ## 4. Mandatory System Hooks (`AGENTS.md` §2 & [ADR-0017](../../docs/adr/0017-explicit-batch-contracts-and-bulk-io.md))
 
-- **Deterministic Fingerprinting:** `SubgraphSelector`, `EpistemicEvaluator`, and `EpistemicCommitInterceptor` MUST implement `Fingerprintable.component_metadata()` and bind in `__init__` / `PipelineFactory` so `find_components()` detects config, model-weight, or Lean-toolchain changes.
-- **Caching:** Content-addressed cache keyed by `(context_fingerprint, changeset_fingerprint, evaluator_fingerprint)` avoids re-running Lean or World Model inference on unchanged subgraphs.
-- **Domain Events & Observability:** Emit new typed `PipelineEvent` variants (`CommitInterceptionStarted`, `WorldModelEnergyEvaluated`, `FormalVerificationCompleted`, `LogicalContradictionDetected`, `VerificationTrajectoryRecorded`) through `EventEmitter` / `LangfuseObserver` strictly for telemetry—never for control flow.
-- **Configuration Opt-In:** Add `VerificationConfig` (`enabled: bool = False`, `active_episode_mode: bool = False`, `max_cascade_depth: int = 1`, `world_model_accept_threshold`, `audit_rate`) to `PipelineConfig`, preserving identical fingerprints when `enabled = False`.
+- **Zero `getattr` Dispatch:** All port validation, stage dispatch, and `BaseArtifactPayload` projection rely on `@runtime_checkable` protocols and polymorphism.
+- **Telemetry Only on `EventEmitter`:** Emit `VerificationStageStarted`, `WorldModelTriaged`, `FormalVerificationCompleted`, and `LogicalContradictionDetected` strictly for observability.
+- **Write-Only Sink Exclusion:** `VerificationTrajectorySink` omits `Fingerprintable` and is ignored by `ManifestTracker`.
+- **Zero-Diff Opt-Out (`VerificationConfig.enabled = False`):** Default disabled settings produce byte-identical Phase 1–6 manifests and fingerprints.
 
 ---
 
 ## 5. Acceptance Criteria
 
-- [ ] Define `FormalSignatureEntry`, `EpistemicChangeset`, `ScopedVerificationContext`, `VerificationVerdict`, and `EpistemicDeficitKind.LOGICAL_CONTRADICTION` in `episteme-pipeline/contracts/`.
-- [ ] Define `SubgraphSelector`, `EpistemicEvaluator`, `EpistemicCommitInterceptor`, and `VerificationTrajectoryStore` protocols in `episteme-pipeline/protocols/`.
-- [ ] Implement deterministic `MockEpistemicEvaluator` and `NoOpCommitInterceptor` with full non-LLM unit tests (`rtk uv run pytest`).
-- [ ] Wire `EpistemicCommitInterceptor` into `PipelineFactory` (`Pipeline.for_task`) and `ClosedLoopRefinementCoordinator` with `max_cascade_depth` termination guard and Langfuse observability spans.
+- [ ] Add `verification.py` and `signatures.py` contracts to `episteme-contracts` alongside `VerificationTrajectorySink` and `EpistemicVerificationService` protocols.
+- [ ] Implement `SubgraphSelector(TheorySubgraphQuery)`, `EpistemicVerificationService`, `VerificationDeficitDetector` (`ClosedLoopRefinementStage`), and standalone `FormalVerificationStage` (`PostForwardStage`) in `episteme-pipeline`.
+- [ ] Implement `ArtifactKind.VERIFICATION_VERDICT` sidecar projection and `PipelineInput.formal_signature_ledger` + `RunManifest.signature_ledger_fingerprint` hashing.
+- [ ] Wire `VerificationPorts` into `PipelineBuilder` and expose async `episteme-studio` HITL background job routes (`sse-starlette`), verified with deterministic mock tests (`rtk uv run pytest`).
