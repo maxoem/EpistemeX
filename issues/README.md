@@ -27,7 +27,9 @@ issues/
 ├── 07-evaluation-harness/                     # Benchmark integrity, alignment & hallucination scoring
 ├── 08-pipeline-enhancements/                  # Macro community synthesis & chunking hygiene
 ├── 09-evaluation-workbench/                   # User analytics, coupled views & Studio API endpoints
-└── 10-decision-engine-and-jev/                # TypeSafe Jev, System 1 decision engine & dynamic gating
+├── 10-decision-engine-and-jev/                # TypeSafe Jev, System 1 decision engine & dynamic gating
+├── 11-epistemetrics-formal-concept/           # Formal & mathematical audit of epistemetrics suite
+└── 12-neuro-symbolic-world-models-and-lean/   # Graph-JEPA world models, Lean 4 oracle & commit cascade
 ```
 
 ---
@@ -81,3 +83,7 @@ issues/
 | [**ISSUE-043**](10-decision-engine-and-jev/ISSUE-043-dense-entity-linking-and-ooo-gating.md)                | Dense Entity Linking: Jev Candidate Disambiguation & Out-of-Ontology Gating | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | High     | `Open`        |
 | [**ISSUE-044**](10-decision-engine-and-jev/ISSUE-044-phase1-epistemic-relevance-and-noise-gating.md)       | Phase 1 Data Foundation: Epistemic Ingestion Relevance & Noise Gating | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | Medium   | `Open`        |
 | [**ISSUE-045**](10-decision-engine-and-jev/ISSUE-045-phase3b-consolidation-merge-verification.md)          | Phase 3b Latent Graph Consolidation: Borderline Cluster Merge & Canonical Election | 10-Decision Engine & Jev | `episteme-pipeline`                     | Horizon 2       | Medium   | `Open`        |
+| [**ISSUE-111**](12-neuro-symbolic-world-models-and-lean/ISSUE-111-core-epistemic-commit-interceptor-and-operator-algebra.md) | Core Epistemic Commit Interceptor & Unified Operator Algebra (`Propose -> Select -> Compute -> Update`) | 12-Neuro-Symbolic & Lean | `episteme-pipeline`                     | Horizon 2       | High     | `Proposal`    |
+| [**ISSUE-112**](12-neuro-symbolic-world-models-and-lean/ISSUE-112-inductive-graph-world-model-and-jepa-capabilities.md) | Inductive Graph World Models (Graph-JEPA / EBM): Architecture, Capabilities & Research Guide | 12-Neuro-Symbolic & Lean | `episteme-formal` / `episteme-pipeline` | Horizon 2 & 3   | High     | `Research`    |
+| [**ISSUE-113**](12-neuro-symbolic-world-models-and-lean/ISSUE-113-lean4-formal-verification-oracle-and-logikey-adapter.md) | Lean 4 Deductive Verification Oracle, LogiKEy Embeddings & Faithfulness Auditing | 12-Neuro-Symbolic & Lean | `episteme-formal` / `episteme-pipeline` | Horizon 2 & 3   | High     | `Research`    |
+| [**ISSUE-114**](12-neuro-symbolic-world-models-and-lean/ISSUE-114-neuro-symbolic-interaction-dynamics-and-distillation.md) | Neuro-Symbolic Synergy: Cross-System Interaction Dynamics, Logical Energy & Distillation | 12-Neuro-Symbolic & Lean | `episteme-formal` / `episteme-pipeline` / `epistemetrics` | Horizon 3 | High | `Research`    |
